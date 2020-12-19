@@ -48,6 +48,21 @@ module.exports = [
         module: {
             rules: [
                 {
+                    test: /\.(png|jpe?g|gif|mov|pdf)$/i,
+                    use: [
+                        {
+                            loader: 'file-loader',
+                        },
+                    ],
+                },
+                {
+                    test: /\.css$/,
+                    use: [
+                      'style-loader',
+                      'css-loader',
+                    ],
+                },
+                {
                     test: /\.ts(x?)$/,
                     include: /source/,
                     use: [
@@ -56,14 +71,6 @@ module.exports = [
                         },
                     ],
                 },
-                {
-                    test: /\.(png|jpe?g|gif|mov|pdf)$/i,
-                    use: [
-                        {
-                            loader: 'file-loader',
-                        },
-                    ],
-                  },
             ],
         },
         output: {
