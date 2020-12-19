@@ -71,6 +71,8 @@ const Video: React.FC<VideoProperties> = (
             <EnhancedVideo
                 type={type}
                 src={src}
+                controls={true}
+                mask="legacy"
             />
         </StyledVideo>
     );

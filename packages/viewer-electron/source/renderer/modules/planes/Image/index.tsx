@@ -59,7 +59,7 @@ const Image: React.FC<ImageProperties> = (
     // } = properties;
 
     // get from state based on the id
-    const src = '';
+    const src = 'https://raw.githubusercontent.com/plurid/enhanced-image/master/about/assets/identity/enhanced-image-logo.png';
     // #endregion properties
 
 
