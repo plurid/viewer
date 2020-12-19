@@ -9,6 +9,8 @@
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import EnhancedImage from '@plurid/enhanced-image-react';
     // #endregion libraries
 
 
@@ -55,13 +57,27 @@ const Image: React.FC<ImageProperties> = (
         // stateInteractionTheme,
         // // #endregion state
     // } = properties;
+
+    // get from state based on the id
+    const src = '';
     // #endregion properties
 
 
     // #region render
     return (
         <StyledImage>
-            Image
+            <div
+                style={
+                    {
+                        width: 900,
+                        margin: '150px auto',
+                    }
+                }
+            >
+                <EnhancedImage
+                    src={src}
+                />
+            </div>
         </StyledImage>
     );
     // #endregion render
