@@ -17,9 +17,10 @@
 
 
     // #region external
-    import FilesPlane from '~renderer-planes/Files';
     import ImagePlane from '~renderer-planes/Image';
     import VideoPlane from '~renderer-planes/Video';
+    import TextPlane from '~renderer-planes/Text';
+    import FilesPlane from '~renderer-planes/Files';
 
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
@@ -83,6 +84,28 @@ const Space: React.FC<SpaceProperties> = (
                         },
                     },
                     {
+                        route: '/videos/1',
+                        component: {
+                            kind: 'react',
+                            element: () => {
+                                return (
+                                    <VideoPlane />
+                                );
+                            },
+                        },
+                    },
+                    {
+                        route: '/texts/1',
+                        component: {
+                            kind: 'react',
+                            element: () => {
+                                return (
+                                    <TextPlane />
+                                );
+                            },
+                        },
+                    },
+                    {
                         route: '/files/1',
                         component: {
                             kind: 'react',
@@ -96,6 +119,8 @@ const Space: React.FC<SpaceProperties> = (
                 ]}
                 view={[
                     '/images/1',
+                    '/videos/1',
+                    '/texts/1',
                     '/files/1',
                 ]}
             />

@@ -9,8 +9,6 @@
     import {
         Theme,
     } from '@plurid/plurid-themes';
-
-    import EnhancedVideo from '@plurid/enhanced-video-react';
     // #endregion libraries
 
 
@@ -24,32 +22,30 @@
 
     // #region internal
     import {
-        StyledVideo,
+        StyledText,
     } from './styled';
-
-    import video from './assets/video.mov';
     // #endregion internal
 // #endregion imports
 
 
 
 // #region module
-export interface VideoOwnProperties {
+export interface TextOwnProperties {
 }
 
-export interface VideoStateProperties {
+export interface TextStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
 }
 
-export interface VideoDispatchProperties {
+export interface TextDispatchProperties {
 }
 
-export type VideoProperties = VideoOwnProperties
-    & VideoStateProperties
-    & VideoDispatchProperties;
+export type TextProperties = TextOwnProperties
+    & TextStateProperties
+    & TextDispatchProperties;
 
-const Video: React.FC<VideoProperties> = (
+const Text: React.FC<TextProperties> = (
     properties,
 ) => {
     // #region properties
@@ -59,20 +55,14 @@ const Video: React.FC<VideoProperties> = (
         // stateInteractionTheme,
         // // #endregion state
     // } = properties;
-
-    const type = 'video/mp4';
-    const src = video;
     // #endregion properties
 
 
     // #region render
     return (
-        <StyledVideo>
-            <EnhancedVideo
-                type={type}
-                src={src}
-            />
-        </StyledVideo>
+        <StyledText>
+            Text
+        </StyledText>
     );
     // #endregion render
 }
@@ -80,7 +70,7 @@ const Video: React.FC<VideoProperties> = (
 
 const mapStateToProperties = (
     state: AppState,
-): VideoStateProperties => ({
+): TextStateProperties => ({
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
 });
@@ -88,22 +78,22 @@ const mapStateToProperties = (
 
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
-): VideoDispatchProperties => ({
+): TextDispatchProperties => ({
 });
 
 
-const ConnectedVideo = connect(
+const ConnectedText = connect(
     mapStateToProperties,
     mapDispatchToProperties,
     null,
     {
         context: StateContext,
     },
-)(Video);
+)(Text);
 // #endregion module
 
 
 
 // #region exports
-export default ConnectedVideo;
+export default ConnectedText;
 // #endregion exports
