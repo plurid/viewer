@@ -32,9 +32,6 @@
     "files": [
         "distribution"
     ],
-    "bin": {
-        "viewer": "binder/viewer"
-    },
     "scripts": {
         "clean": "rm -rf ./build",
         "test": "jest",
