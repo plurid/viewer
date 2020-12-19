@@ -1,6 +1,7 @@
 // #region imports
     // #region libraries
     import React, {
+        useRef,
         useState,
     } from 'react';
 
@@ -12,6 +13,7 @@
         Document,
         Page,
     } from 'react-pdf/dist/esm/entry.webpack';
+
     import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 
     import {
@@ -68,9 +70,100 @@ const Text: React.FC<TextProperties> = (
     // #endregion properties
 
 
+    // #region references
+    const ref = useRef<any>(null);
+    // #endregion references
+
+
     // #region handlers
-    const onDocumentLoadSuccess = ({ numPages }: any) => {
+    const onDocumentLoadSuccess = (
+        data: any,
+    ) => {
+        const {
+            numPages,
+            loadingTask,
+        } = data;
+
         setNumPages(numPages);
+
+        ref.current = loadingTask;
+    }
+
+    const onRenderSuccess = (
+    ) => {
+        console.log('onRenderSuccess');
+
+        const loadingTask = ref.current;
+        console.log('onRenderSuccess', loadingTask);
+
+        if (!loadingTask) {
+            return;
+        }
+
+        loadingTask.promise.then(
+            (
+                pdf: any,
+            ) => {
+                console.log('pdf', pdf);
+                var pageNumber = 1;
+
+                pdf.getPage(pageNumber).then(
+                    (
+                        page: any,
+                    ) => {
+                        console.log('Page loaded');
+
+                        var scale = 1;
+                        var viewport = page.getViewport(scale);
+
+                        console.log('page', page);
+                        console.log('viewport', viewport);
+
+                        // Prepare canvas using PDF page dimensions
+                        // if (!ref.current) {
+                        //     return;
+                        // }
+
+                        // console.log('ref.current', ref.current);
+
+                        // const canvas: any = document.getElementById('the-canvas');
+                        const canvas: HTMLCanvasElement | null = document.querySelector('.pdf-page canvas');
+                        console.log('canvas', canvas);
+
+                        if (!canvas) {
+                            return;
+                        }
+
+                        const context = canvas.getContext('2d');
+                        // canvas.height = viewport.height;
+                        // canvas.width = viewport.width;
+                        canvas.height = 792;
+                        canvas.width = 612;
+
+                        // Render PDF page into canvas context
+                        const renderContext = {
+                            canvasContext: context,
+                            // Use transparent background!
+                            background: 'hsl(220, 10%, 26%)',
+                            viewport,
+                        };
+
+                        const renderTask = page.render(renderContext);
+                        console.log('renderTask', renderTask);
+
+                        // renderTask.then(() => {
+                        //     console.log('Page rendered');
+                        // });
+                    }
+                );
+            },
+            (
+                reason: any,
+            ) => {
+                // PDF loading error
+                console.error(reason);
+            }
+        );
     }
     // #endregion handlers
 
@@ -96,6 +189,9 @@ const Text: React.FC<TextProperties> = (
             >
                 <Page
                     pageNumber={pageNumber}
+                    // ref={ref}
+                    className="pdf-page"
+                    onRenderSuccess={onRenderSuccess}
                 />
             </Document>
 
