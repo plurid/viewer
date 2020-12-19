@@ -6,6 +6,8 @@
     import { connect } from 'react-redux';
     import { ThunkDispatch } from 'redux-thunk';
 
+    import pdfjs from 'pdfjs-dist';
+
     import {
         Theme,
     } from '@plurid/plurid-themes';
@@ -24,6 +26,8 @@
     import {
         StyledText,
     } from './styled';
+
+    import example from './assets/example.pdf';
     // #endregion internal
 // #endregion imports
 
