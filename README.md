@@ -15,7 +15,7 @@
 
 
 <h3 align="center">
-    Enhanced Image and Video Viewer
+    Enhanced Image, Video, and Text Viewer Application
 </h3>
 
 
