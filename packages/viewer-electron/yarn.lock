@@ -599,6 +599,11 @@
   resolved "https://npm.plurid.cloud/@plurid%2fenhanced-image-react/-/enhanced-image-react-0.0.0-0.tgz#43867b4d2a6c80c9f24205c4a17b4b17772aa340"
   integrity sha512-7uVtzhqXUEeq8e3u3N77/iOT//7wzOWnGga4lJX0T3zYZxN1wuXSP1bJeH9dUmCkRznBLDoA+LE7juwy0tmp1A==
 
+"@plurid/enhanced-video-react@^0.0.0-0":
+  version "0.0.0-0"
+  resolved "https://npm.plurid.cloud/@plurid%2fenhanced-video-react/-/enhanced-video-react-0.0.0-0.tgz#e5b3e41e18657e1ee347359a9c81d93e2840cbce"
+  integrity sha512-BWKSirrcQUaCJDySDj5XLwDyY2Xa2rq6HmHP/C149APx2URO7JkCtSlXg4iXjkHEf3itWKIU0tLtSgdxHk6V1w==
+
 "@plurid/plurid-data@^0.0.0-0":
   version "0.0.0-0"
   resolved "https://npm.plurid.cloud/@plurid%2fplurid-data/-/plurid-data-0.0.0-0.tgz#e547b4351bc7126cccbfa3ec50afc094171defd4"

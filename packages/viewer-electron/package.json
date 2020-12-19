@@ -51,6 +51,7 @@
         "@apollo/client": "^3.3.6",
         "@plurid/detoolbar-react": "^0.0.0-0",
         "@plurid/enhanced-image-react": "^0.0.0-0",
+        "@plurid/enhanced-video-react": "^0.0.0-0",
         "@plurid/plurid-data": "^0.0.0-0",
         "@plurid/plurid-engine": "^0.0.0-0",
         "@plurid/plurid-functions": "^0.0.0-0",
