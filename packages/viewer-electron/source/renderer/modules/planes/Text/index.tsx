@@ -1,12 +1,15 @@
 // #region imports
     // #region libraries
-    import React from 'react';
+    import React, {
+        useState,
+    } from 'react';
 
     import { AnyAction } from 'redux';
     import { connect } from 'react-redux';
     import { ThunkDispatch } from 'redux-thunk';
 
-    import pdfjs from 'pdfjs-dist';
+    import { Document, Page } from 'react-pdf/dist/esm/entry.webpack';
+    import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 
     import {
         Theme,
@@ -27,7 +30,7 @@
         StyledText,
     } from './styled';
 
-    import example from './assets/example.pdf';
+    import pdf from './assets/example.pdf';
     // #endregion internal
 // #endregion imports
 
@@ -62,10 +65,38 @@ const Text: React.FC<TextProperties> = (
     // #endregion properties
 
 
+    // #region handlers
+    const onDocumentLoadSuccess = ({ numPages }: any) => {
+        setNumPages(numPages);
+    }
+    // #endregion handlers
+
+
+    // #region state
+    const [
+        numPages,
+        setNumPages,
+    ] = useState(null);
+    const [
+        pageNumber,
+        setPageNumber,
+    ] = useState(1);
+    // #endregion state
+
+
     // #region render
     return (
         <StyledText>
-            Text
+            <Document
+                file={pdf}
+                onLoadSuccess={onDocumentLoadSuccess}
+            >
+                <Page
+                    pageNumber={pageNumber}
+                />
+            </Document>
+
+            <p>Page {pageNumber} of {numPages}</p>
         </StyledText>
     );
     // #endregion render
