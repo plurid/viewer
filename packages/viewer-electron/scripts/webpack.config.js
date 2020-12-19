@@ -45,11 +45,27 @@ module.exports = [
                 }),
             ],
         },
-        module: { rules: [{
-            test: /\.ts(x?)$/,
-            include: /source/,
-            use: [{ loader: 'ts-loader' }]
-        }] },
+        module: {
+            rules: [
+                {
+                    test: /\.ts(x?)$/,
+                    include: /source/,
+                    use: [
+                        {
+                            loader: 'ts-loader',
+                        },
+                    ],
+                },
+                {
+                    test: /\.(png|jpe?g|gif|mov|pdf)$/i,
+                    use: [
+                        {
+                            loader: 'file-loader',
+                        },
+                    ],
+                  },
+            ],
+        },
         output: {
             path: path.join(__dirname, '../build'),
             filename: 'renderer.js'
