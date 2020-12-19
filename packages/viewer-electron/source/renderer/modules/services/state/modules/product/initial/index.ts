@@ -17,6 +17,7 @@ const initialState: Types.State = {
         },
     },
     language: 'english',
+    spaces: [],
 };
 // #endregion module
 

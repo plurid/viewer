@@ -1,3 +1,13 @@
+// #region imports
+    // #region external
+    import {
+        Space,
+    } from '~renderer-data/interfaces';
+    // #endregion external
+// #endregion imports
+
+
+
 // #region module
 export const SET_PRODUCT = 'SET_PRODUCT';
 export interface SetProductAction {
@@ -34,8 +44,9 @@ export interface SetFieldAction {
 export interface State {
     ui: {
         toolbars: any;
-    },
+    };
     language: string;
+    spaces: Space[];
 }
 
 
