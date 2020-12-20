@@ -2,13 +2,14 @@
     // #region libraries
     import {
         app,
-        // BrowserView,
         BrowserWindow,
     } from 'electron';
     // #endregion libraries
 
 
     // #region internal
+    import setMenu from './menu';
+
     import {
         loadDatabase,
     } from './database';
@@ -26,6 +27,8 @@ let server: any;
 (global as any).loadDatabase = loadDatabase;
 
 
+
+setMenu();
 
 const createWindow = () => {
     // Create the browser window.
