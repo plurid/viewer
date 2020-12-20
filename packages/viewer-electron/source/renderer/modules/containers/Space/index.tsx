@@ -220,8 +220,6 @@ const Space: React.FC<SpaceProperties> = (
                     extension,
                 } = getFileType(file);
 
-                // handle kind with a strategy for each extension
-
                 const strategy = new FileStrategy(
                     kind,
                     extension,
