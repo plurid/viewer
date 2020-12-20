@@ -10,6 +10,7 @@ export type PlaneKind =
     | 'video'
     | 'sound'
     | 'text'
+    | 'unknown'
     | 'files';
 
 
@@ -52,6 +53,14 @@ export interface PlaneText extends PlaneBase {
 }
 
 
+export interface PlaneUnknown extends PlaneBase {
+    kind: 'unknown';
+    data: {
+        source: string;
+    };
+}
+
+
 export interface PlaneFiles extends PlaneBase {
     kind: 'files';
     data: {
@@ -65,6 +74,7 @@ export type Plane =
     | PlaneVideo
     | PlaneSound
     | PlaneText
+    | PlaneUnknown
     | PlaneFiles;
 
 

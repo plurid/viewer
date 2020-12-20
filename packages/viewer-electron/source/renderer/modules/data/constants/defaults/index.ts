@@ -50,7 +50,7 @@ const soundExtensions = [
 ];
 
 const textExtensions = [
-    '.pdf',
+    // markup files
     '.md',
     '.pluridoc',
 

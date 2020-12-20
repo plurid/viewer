@@ -17,10 +17,10 @@
     } from '~renderer-data/interfaces';
 
     import ImageStrategy from '~renderer-services/logic/objects/ImageStrategy';
-    import VideoStrategy from '~renderer-services/logic/objects/ImageStrategy';
-    import SoundStrategy from '~renderer-services/logic/objects/ImageStrategy';
-    import TextStrategy from '~renderer-services/logic/objects/ImageStrategy';
-    import UnknownStrategy from '~renderer-services/logic/objects/ImageStrategy';
+    import VideoStrategy from '~renderer-services/logic/objects/VideoStrategy';
+    import SoundStrategy from '~renderer-services/logic/objects/SoundStrategy';
+    import TextStrategy from '~renderer-services/logic/objects/TextStrategy';
+    import UnknownStrategy from '~renderer-services/logic/objects/UnknownStrategy';
     // #endregion external
 // #endregion imports
 
