@@ -3644,6 +3644,11 @@ interpret@^2.2.0:
   resolved "https://npm.plurid.cloud/interpret/-/interpret-2.2.0.tgz#1a78a0b5965c40a5416d007ad6f50ad27c417df9"
   integrity sha512-Ju0Bz/cEia55xDwUWEa8+olFpCiQoypjnQySseKtmjNrnps3P+xfpUmGr90T7yjlVJmOtybRvPXhKMbHr+fWnw==
 
+iobuffer@^5.0.2:
+  version "5.0.2"
+  resolved "https://npm.plurid.cloud/iobuffer/-/iobuffer-5.0.2.tgz#90f6ead2afd24cc9d2f2befbbb2a501552d70d4f"
+  integrity sha512-FwwzAUZkapfHq76amLGSaEigB2nRSZR+ADc+zRcIRm2MsofDJAiIEPGbw+is/lI+kW32fM5jezmJ8dVQnd1UbA==
+
 ip-regex@^2.1.0:
   version "2.1.0"
   resolved "https://npm.plurid.cloud/ip-regex/-/ip-regex-2.1.0.tgz#fa78bf5d2e6913c911ce9f819ee5146bb6d844e9"
@@ -5191,6 +5196,11 @@ package-json@^6.3.0:
     registry-url "^5.0.0"
     semver "^6.2.0"
 
+pako@^2.0.2:
+  version "2.0.2"
+  resolved "https://npm.plurid.cloud/pako/-/pako-2.0.2.tgz#8a72af7a93431ef22aa97e0d53b0acaa3c689220"
+  integrity sha512-9e8DRI3+dRLomCmMBAH30B2ejh+blwXr7VmMEx/pVFZlSDA7oyI8uKMhKXr8IrZpoxBF2YlxUvhqRXzTT1i0NA==
+
 param-case@^3.0.3:
   version "3.0.4"
   resolved "https://npm.plurid.cloud/param-case/-/param-case-3.0.4.tgz#7d17fe4aa12bde34d4a77d91acfb6219caad01c5"
@@ -6491,6 +6501,14 @@ throat@^5.0.0:
   version "5.0.0"
   resolved "https://npm.plurid.cloud/throat/-/throat-5.0.0.tgz#c5199235803aad18754a667d659b5e72ce16764b"
   integrity sha512-fcwX4mndzpLQKBS1DVYhGAcYaYt7vsHNIvQV+WXMvnow5cgjPphq5CaayLaGsjRdSCKZFNGt7/GYAuXaNOiYCA==
+
+tiff@^4.3.0:
+  version "4.3.0"
+  resolved "https://npm.plurid.cloud/tiff/-/tiff-4.3.0.tgz#6cac340c017698122b0dda51bc9f47b5ea7f6640"
+  integrity sha512-uLk+J44bY7HQfoW0wU9j0MfTczmARGTfsgee8jJYAlGqJks/EQ5rJBsDpoijQuJAG5q93x3Ap5kQfqofr3upVQ==
+  dependencies:
+    iobuffer "^5.0.2"
+    pako "^2.0.2"
 
 tiny-each-async@2.0.3:
   version "2.0.3"
