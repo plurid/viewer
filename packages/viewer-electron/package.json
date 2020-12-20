@@ -1,7 +1,7 @@
 {
     "name": "@plurid/viewer",
     "version": "0.0.0-0",
-    "description": "Enhanced Image, Video, and Text Viewer Application",
+    "description": "Enhanced Image, Video, Sound, and Text Viewer Application",
     "keywords": [
         "viewer",
         "enhanced image",
@@ -32,6 +32,16 @@
     "files": [
         "distribution"
     ],
+    "build": {
+        "fileAssociations": [
+            {
+                "ext": "eimg",
+                "name": "Enhaced Image File",
+                "role": "Editor",
+                "perMachine": true
+            }
+        ]
+    },
     "scripts": {
         "clean": "rm -rf ./build",
         "test": "jest",
