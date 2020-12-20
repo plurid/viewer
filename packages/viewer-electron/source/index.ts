@@ -21,14 +21,11 @@
 // #region module
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
-let win: any;
-let server: any;
+let win: BrowserWindow | null;
 
 (global as any).loadDatabase = loadDatabase;
 
 
-
-setMenu();
 
 const createWindow = () => {
     // Create the browser window.
@@ -73,6 +70,13 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', createWindow);
+
+
+
+// Setup Menu.
+app.whenReady().then(() => {
+    setMenu(win);
+});
 
 
 // Quit when all windows are closed.

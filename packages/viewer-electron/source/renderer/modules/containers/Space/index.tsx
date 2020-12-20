@@ -10,8 +10,16 @@
     import { ThunkDispatch } from 'redux-thunk';
 
     import {
+        ipcRenderer,
+    } from 'electron';
+
+    import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        uuid,
+    } from '@plurid/plurid-functions';
 
     import {
         PluridApplication,
@@ -33,7 +41,7 @@
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
-    // import actions from '~renderer-services/state/actions';
+    import actions from '~renderer-services/state/actions';
     // #endregion external
 
 
@@ -128,11 +136,13 @@ export interface SpaceStateProperties {
 }
 
 export interface SpaceDispatchProperties {
+    dispatchProductAddPlane: typeof actions.product.addPlane;
 }
 
 export type SpaceProperties = SpaceOwnProperties
     & SpaceStateProperties
     & SpaceDispatchProperties;
+
 
 const Space: React.FC<SpaceProperties> = (
     properties,
@@ -144,6 +154,10 @@ const Space: React.FC<SpaceProperties> = (
         // stateInteractionTheme,
         stateSpaces,
         // #endregion state
+
+        // #region dispatch
+        dispatchProductAddPlane,
+        // #endregion dispatch
     } = properties;
 
     const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
@@ -171,8 +185,36 @@ const Space: React.FC<SpaceProperties> = (
         setPluridView(view);
     }, [
         activeSpace,
-        activeSpace?.planes,
+        activeSpace?.planes.length,
     ]);
+
+
+    /**
+     * IPC Renderer.
+     */
+    useEffect(() => {
+        ipcRenderer.on('MENU_FILE_OPEN', (
+            _,
+            files: string[],
+        ) => {
+            if (!activeSpace) {
+                return;
+            }
+
+            for (const file of files) {
+                dispatchProductAddPlane({
+                    spaceID: activeSpace.id,
+                    data: {
+                        id: uuid.generate(),
+                        kind: 'image',
+                        data: {
+                            source: file,
+                        },
+                    },
+                });
+            }
+        });
+    }, []);
     // #endregion effects
 
 
@@ -203,6 +245,11 @@ const mapStateToProperties = (
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
 ): SpaceDispatchProperties => ({
+    dispatchProductAddPlane: (
+        payload,
+    ) => dispatch(
+        actions.product.addPlane(payload),
+    ),
 });
 
 

@@ -6,6 +6,8 @@
         Menu,
         MenuItem,
         MenuItemConstructorOptions,
+
+        BrowserWindow,
     } from 'electron';
     // #endregion libraries
 // #endregion imports
@@ -13,7 +15,13 @@
 
 
 // #region module
-const setMenu = () => {
+const setMenu = (
+    window: BrowserWindow | null,
+) => {
+    if (!window) {
+        return;
+    }
+
     const isMac = process.platform === 'darwin'
 
     const template: (MenuItem | MenuItemConstructorOptions)[] = [
@@ -48,11 +56,16 @@ const setMenu = () => {
                             ],
                         });
 
-                        if (filesData.canceled) {
+                        const {
+                            canceled,
+                            filePaths,
+                        } = filesData;
+
+                        if (canceled) {
                             return;
                         }
 
-                        console.log(filesData.filePaths);
+                        window.webContents.send('MENU_FILE_OPEN', filePaths);
                     }
                 },
                 { type: 'separator' },
