@@ -31,6 +31,7 @@
 
     import ImagePlane from '~renderer-planes/Image';
     import VideoPlane from '~renderer-planes/Video';
+    import SoundPlane from '~renderer-planes/Sound';
     import TextPlane from '~renderer-planes/Text';
     import FilesPlane from '~renderer-planes/Files';
 
@@ -73,6 +74,13 @@ const pluridPlanes: PluridPlane[] = [
         },
     },
     {
+        route: '/sounds/:id',
+        component: {
+            kind: 'react',
+            element: SoundPlane,
+        },
+    },
+    {
         route: '/texts/:id',
         component: {
             kind: 'react',
@@ -109,6 +117,7 @@ const computePluridData = (
         const types = {
             image: 'images',
             video: 'videos',
+            sound: 'sounds',
             text: 'texts',
             files: 'files',
         };

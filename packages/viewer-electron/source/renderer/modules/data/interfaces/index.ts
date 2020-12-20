@@ -5,7 +5,12 @@ export interface Space {
 }
 
 
-export type PlaneKind = 'image' | 'video' | 'text' | 'files';
+export type PlaneKind =
+    | 'image'
+    | 'video'
+    | 'sound'
+    | 'text'
+    | 'files';
 
 
 export interface PlaneBase {
@@ -31,6 +36,14 @@ export interface PlaneVideo extends PlaneBase {
 }
 
 
+export interface PlaneSound extends PlaneBase {
+    kind: 'sound';
+    data: {
+        source: string;
+    };
+}
+
+
 export interface PlaneText extends PlaneBase {
     kind: 'text';
     data: {
@@ -50,6 +63,7 @@ export interface PlaneFiles extends PlaneBase {
 export type Plane =
     | PlaneImage
     | PlaneVideo
+    | PlaneSound
     | PlaneText
     | PlaneFiles;
 // #endregion module
