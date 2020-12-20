@@ -2,14 +2,14 @@
     // #region libraries
     import {
         Reader,
-    } from '@plurid/enhanced-image-io`;
+    } from '@plurid/enhanced-image-io';
     // #endregion libraries
 // #endregion imports
 
 
 
 // #region module
-const eimgLoad = (
+const eimgLoad = async (
     filepath: string,
 ) =>  {
     const reader = new Reader(filepath);
