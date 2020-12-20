@@ -85,7 +85,7 @@ class FileStrategy {
         let text = '';
 
         if (!plane) {
-            text = `Could not access file '${this.kind}': '${this.file}'`;
+            text = `Could not access ${this.kind}: '${this.file}'`;
         } else {
             text = `Opened ${this.kind}: '${this.file}'`;
         }
