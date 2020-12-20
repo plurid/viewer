@@ -206,7 +206,7 @@ const Space: React.FC<SpaceProperties> = (
      * IPC Renderer.
      */
     useEffect(() => {
-        ipcRenderer.on('MENU_FILE_OPEN', (
+        ipcRenderer.on('MENU_FILE_OPEN', async (
             _,
             files: string[],
         ) => {
@@ -230,7 +230,7 @@ const Space: React.FC<SpaceProperties> = (
                 const {
                     plane,
                     notification,
-                } = strategy.apply();
+                } = await strategy.apply();
 
                 dispatchProductAddPlane({
                     spaceID: activeSpace.id,

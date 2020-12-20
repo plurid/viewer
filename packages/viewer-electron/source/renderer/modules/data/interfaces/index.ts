@@ -66,4 +66,10 @@ export type Plane =
     | PlaneSound
     | PlaneText
     | PlaneFiles;
+
+
+
+export interface Strategy {
+    compute(): Promise<Plane | undefined>;
+}
 // #endregion module

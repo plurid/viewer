@@ -8,6 +8,20 @@
         notifications,
     } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
+
+
+    // #region external
+    import {
+        Plane,
+        Strategy as IStrategy,
+    } from '~renderer-data/interfaces';
+
+    import ImageStrategy from '~renderer-services/logic/objects/ImageStrategy';
+    import VideoStrategy from '~renderer-services/logic/objects/ImageStrategy';
+    import SoundStrategy from '~renderer-services/logic/objects/ImageStrategy';
+    import TextStrategy from '~renderer-services/logic/objects/ImageStrategy';
+    import UnknownStrategy from '~renderer-services/logic/objects/ImageStrategy';
+    // #endregion external
 // #endregion imports
 
 
@@ -29,25 +43,60 @@ class FileStrategy {
     }
 
 
-    public apply() {
-        const plane = {
-            id: uuid.generate(),
-            kind: this.kind,
-            data: {
-                source: this.file,
-            },
-        };
-
-        const notification: notifications.Types.Notification = {
-            id: uuid.generate(),
-            text: `Opened file '${this.kind}': '${this.file}'`,
-            timeout: 4500,
-        };
+    public async apply() {
+        const plane = await this.strategy();
+        const notification = this.notification(plane);
 
         return {
             plane,
             notification,
         };
+    }
+
+
+    private async strategy() {
+        const strategies = {
+            image: ImageStrategy,
+            video: VideoStrategy,
+            sound: SoundStrategy,
+            text: TextStrategy,
+            unknown: UnknownStrategy,
+        };
+        const Strategy = strategies[this.kind];
+
+        if (!Strategy) {
+            return;
+        }
+
+        const strategy = new Strategy(
+            this.extension,
+            this.file,
+        );
+        const plane = await strategy.compute();
+
+        return plane;
+    }
+
+    private notification(
+        plane: Plane | undefined,
+    ) {
+        const id = uuid.generate();
+        const timeout = 4500;
+        let text = '';
+
+        if (!plane) {
+            text = `Could not access file '${this.kind}': '${this.file}'`;
+        } else {
+            text = `Opened ${this.kind}: '${this.file}'`;
+        }
+
+        const notification: notifications.Types.Notification = {
+            id,
+            text,
+            timeout,
+        };
+
+        return notification;
     }
 }
 // #endregion module
