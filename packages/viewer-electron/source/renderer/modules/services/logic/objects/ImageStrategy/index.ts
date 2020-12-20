@@ -26,7 +26,7 @@
     import SvgImageStrategy from './strategies/PngImageStrategy';
     import TiffImageStrategy from './strategies/PngImageStrategy';
     import WebpImageStrategy from './strategies/PngImageStrategy';
-    import EimgImageStrategy from './strategies/PngImageStrategy';
+    import EimgImageStrategy from './strategies/EimgImageStrategy';
     // #endregion internal
 // #endregion imports
 
