@@ -1,7 +1,7 @@
 // #region imports
     // #region libraries
     import {
-        Reader,
+        loadEnhancedImage,
     } from '@plurid/enhanced-image-io';
     // #endregion libraries
 // #endregion imports
@@ -12,8 +12,7 @@
 const eimgLoad = async (
     filepath: string,
 ) =>  {
-    const reader = new Reader(filepath);
-    const data = await reader.read();
+    const data = await loadEnhancedImage(filepath);
 
     return data;
 }
