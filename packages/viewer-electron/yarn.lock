@@ -606,8 +606,8 @@
 
 "@plurid/enhanced-image-io@^0.0.0-0":
   version "0.0.0-0"
-  resolved "https://npm.plurid.cloud/@plurid%2fenhanced-image-io/-/enhanced-image-io-0.0.0-0.tgz#5936a84ba5e4dba18cbe2689600ac5cfa84cc5be"
-  integrity sha512-reKO+cSR75cG0GSFoWAk4eC9MgbMpZ89h0xYfGHTmdIzgcC+IArVgiYP7fQj/+xiV7Q6jHRXwhZ9vQSD90nPig==
+  resolved "https://npm.plurid.cloud/@plurid%2fenhanced-image-io/-/enhanced-image-io-0.0.0-0.tgz#06628cde316aedb3ecc740017a1fb610e469821b"
+  integrity sha512-GpJ9vuBhADKumWgQs8yYu3EoDNYPn5X81BqObBGAk6ahXYbHPn1Hg3J+xswVIo5npO7Pwwjy+1q00pgYcdAWZA==
   dependencies:
     "@plurid/deon" "^0.0.0-0"
     commander "^6.2.1"
@@ -1812,9 +1812,9 @@ camelize@^1.0.0:
   integrity sha1-FkpUg+Yw+kMh5a8HAg5TGDGyYJs=
 
 caniuse-lite@^1.0.30001165:
-  version "1.0.30001168"
-  resolved "https://npm.plurid.cloud/caniuse-lite/-/caniuse-lite-1.0.30001168.tgz#6fcd098c139d003b9bd484cbb9ca26cb89907f9a"
-  integrity sha512-P2zmX7swIXKu+GMMR01TWa4csIKELTNnZKc+f1CjebmZJQtTAEXmpQSoKVJVVcvPGAA0TEYTOUp3VehavZSFPQ==
+  version "1.0.30001170"
+  resolved "https://npm.plurid.cloud/caniuse-lite/-/caniuse-lite-1.0.30001170.tgz#0088bfecc6a14694969e391cc29d7eb6362ca6a7"
+  integrity sha512-Dd4d/+0tsK0UNLrZs3CvNukqalnVTRrxb5mcQm8rHL49t7V5ZaTygwXkrq+FB+dVDf++4ri8eJnFEJAB8332PA==
 
 capture-exit@^2.0.0:
   version "2.0.0"
