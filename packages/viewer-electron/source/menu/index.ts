@@ -24,22 +24,57 @@ const setMenu = (
 
     const isMac = process.platform === 'darwin'
 
+    const appMenu: any = isMac
+        ? [
+            {
+                label: app.name,
+                submenu: [
+                    { role: 'about' },
+                    { type: 'separator' },
+                    { role: 'services' },
+                    { type: 'separator' },
+                    { role: 'hide' },
+                    { role: 'hideothers' },
+                    { role: 'unhide' },
+                    { type: 'separator' },
+                    { role: 'quit' },
+                ],
+            }
+        ] : [];
+
+    const editMenuEnding: any = isMac
+        ? [
+            { role: 'pasteAndMatchStyle' },
+            { role: 'delete' },
+            { role: 'selectAll' },
+            { type: 'separator' },
+            {
+                label: 'Speech',
+                submenu: [
+                    { role: 'startSpeaking' },
+                    { role: 'stopSpeaking' },
+                ],
+            },
+        ] : [
+            { role: 'delete' },
+            { type: 'separator' },
+            { role: 'selectAll' },
+        ];
+
+    const windowMenuEnding = isMac
+        ? [
+            { type: 'separator' },
+            { role: 'front' },
+            { type: 'separator' },
+            { role: 'window' },
+        ] : [
+            { role: 'close' },
+        ];
+
+
     const template: (MenuItem | MenuItemConstructorOptions)[] = [
         // { role: 'appMenu' }
-        // ...(isMac ? [{
-        //     label: app.name,
-        //     submenu: [
-        //         { role: 'about' },
-        //         { type: 'separator' },
-        //         { role: 'services' },
-        //         { type: 'separator' },
-        //         { role: 'hide' },
-        //         { role: 'hideothers' },
-        //         { role: 'unhide' },
-        //         { type: 'separator' },
-        //         { role: 'quit' }
-        //     ]
-        // }] : []),
+        ...appMenu,
 
         // { role: 'fileMenu' }
         {
@@ -69,8 +104,7 @@ const setMenu = (
                     }
                 },
                 { type: 'separator' },
-                // isMac ? { role: 'close' } : { role: 'quit' },
-                { role: 'quit' }
+                isMac ? { role: 'close' } : { role: 'quit' },
             ],
         },
 
@@ -84,25 +118,10 @@ const setMenu = (
                 { role: 'cut' },
                 { role: 'copy' },
                 { role: 'paste' },
-                // ...(isMac ? [
-                //     { role: 'pasteAndMatchStyle' },
-                //     { role: 'delete' },
-                //     { role: 'selectAll' },
-                //     { type: 'separator' },
-                //     {
-                //     label: 'Speech',
-                //     submenu: [
-                //         { role: 'startSpeaking' },
-                //         { role: 'stopSpeaking' }
-                //     ]
-                //     }
-                // ] : [
-                //     { role: 'delete' },
-                //     { type: 'separator' },
-                //     { role: 'selectAll' }
-                // ])
+                ...editMenuEnding,
             ]
         },
+
         // { role: 'viewMenu' }
         {
             label: 'View',
@@ -118,21 +137,15 @@ const setMenu = (
                 { role: 'togglefullscreen' }
             ]
         },
+
         // { role: 'windowMenu' }
         {
             label: 'Window',
             submenu: [
                 { role: 'minimize' },
                 { role: 'zoom' },
-                // ...(isMac ? [
-                //     { type: 'separator' },
-                //     { role: 'front' },
-                //     { type: 'separator' },
-                //     { role: 'window' }
-                // ] : [
-                //     { role: 'close' }
-                // ])
-            ]
+                ...windowMenuEnding,
+            ],
         },
         {
             role: 'help',
@@ -143,9 +156,9 @@ const setMenu = (
                         const { shell } = require('electron');
 
                         await shell.openExternal('https://github.com/plurid/viewer');
-                    }
-                }
-            ]
+                    },
+                },
+            ],
         },
     ];
 
