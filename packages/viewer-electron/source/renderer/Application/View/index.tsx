@@ -17,6 +17,7 @@
 
 
     // #region external
+    import TopBar from '~renderer-components/TopBar';
     import ToolbarGeneral from '~renderer-components/Toolbar/General';
 
     import Space from '~renderer-containers/Space';
@@ -100,6 +101,8 @@ const View: React.FC<ViewProperties> = (
             <GlobalStyles
                 theme={stateGeneralTheme}
             />
+
+            <TopBar />
 
             <ToolbarGeneral />
 
