@@ -3,6 +3,10 @@
     import {
         uuid,
     } from '@plurid/plurid-functions';
+
+    import {
+        notifications,
+    } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 // #endregion imports
 
@@ -34,9 +38,10 @@ class FileStrategy {
             },
         };
 
-        const notification = {
+        const notification: notifications.Types.Notification = {
             id: uuid.generate(),
             text: `Added file ${this.kind}: ${this.file}`,
+            timeout: 3000,
         };
 
         return {
