@@ -61,12 +61,83 @@ export const setField = (
 }
 
 
+export const addPlane = (
+    state: Types.State,
+    action: Types.AddPlaneAction,
+): Types.State => {
+    const {
+        spaceID,
+        data,
+    } = action.payload;
+
+    const spaces = state.spaces.map(space => {
+        if (space.id === spaceID) {
+            return {
+                ...space,
+                planes: [
+                    ...space.planes,
+                    {
+                        ...data,
+                    },
+                ],
+            };
+        }
+
+        return {
+            ...space,
+        };
+    });
+
+    const newState = {
+        ...state,
+        spaces,
+    };
+
+    return newState;
+}
+
+
+export const removePlane = (
+    state: Types.State,
+    action: Types.RemovePlaneAction,
+): Types.State => {
+    const {
+        spaceID,
+        planeID,
+    } = action.payload;
+
+    const spaces = state.spaces.map(space => {
+        if (spaceID === space.id) {
+            const planes = space.planes.filter(plane => plane.id !== planeID);
+
+            return {
+                ...space,
+                planes,
+            };
+        }
+
+        return {
+            ...space,
+        };
+    });
+
+    const newState = {
+        ...state,
+        spaces,
+    };
+
+    return newState;
+}
+
+
 
 const resolvers = {
     setProduct,
     unsetProduct,
     setLanguage,
     setField,
+    addPlane,
+    removePlane,
 };
 // #endregion module
 

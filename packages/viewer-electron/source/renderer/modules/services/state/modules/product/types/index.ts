@@ -2,6 +2,7 @@
     // #region external
     import {
         Space,
+        Plane,
     } from '~renderer-data/interfaces';
     // #endregion external
 // #endregion imports
@@ -40,6 +41,28 @@ export interface SetFieldAction {
 }
 
 
+export const ADD_PLANE = 'ADD_PLANE';
+export interface AddPlanePayload {
+    spaceID: string;
+    data: Plane;
+}
+export interface AddPlaneAction {
+    type: typeof ADD_PLANE;
+    payload: AddPlanePayload;
+}
+
+
+export const REMOVE_PLANE = 'REMOVE_PLANE';
+export interface RemovePlanePayload {
+    spaceID: string;
+    planeID: string;
+}
+export interface RemovePlaneAction {
+    type: typeof REMOVE_PLANE;
+    payload: RemovePlanePayload;
+}
+
+
 
 export interface State {
     ui: {
@@ -54,5 +77,7 @@ export type Actions =
     | SetProductAction
     | UnsetProductAction
     | SetLanguageAction
-    | SetFieldAction;
+    | SetFieldAction
+    | AddPlaneAction
+    | RemovePlaneAction;
 // #endregion module

@@ -1,4 +1,11 @@
 // #region imports
+    // #region imports
+    import {
+        uuid,
+    } from '@plurid/plurid-functions';
+    // #endregion imports
+
+
     // #region external
     import * as Types from '../types';
     // #endregion external
@@ -17,7 +24,12 @@ const initialState: Types.State = {
         },
     },
     language: 'english',
-    spaces: [],
+    spaces: [
+        {
+            id: uuid.generate(),
+            planes: [],
+        },
+    ],
 };
 // #endregion module
 

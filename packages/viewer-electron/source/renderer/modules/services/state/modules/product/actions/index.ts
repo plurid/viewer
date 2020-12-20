@@ -44,12 +44,34 @@ export const setField = (
 }
 
 
+export const addPlane = (
+    payload: Types.AddPlanePayload,
+): Types.AddPlaneAction => {
+    return {
+        type: Types.ADD_PLANE,
+        payload,
+    };
+}
+
+
+export const removePlane = (
+    payload: Types.RemovePlanePayload,
+): Types.RemovePlaneAction => {
+    return {
+        type: Types.REMOVE_PLANE,
+        payload,
+    };
+}
+
+
 
 export const actions = {
     setProduct,
     unsetProduct,
     setLanguage,
     setField,
+    addPlane,
+    removePlane,
 };
 // #endregion module
 

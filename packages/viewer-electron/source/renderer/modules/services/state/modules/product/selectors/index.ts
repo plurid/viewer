@@ -12,12 +12,14 @@
 const getProduct = (state: AppState) => state.product;
 const getProductUI = (state: AppState) => state.product.ui;
 const getLanguage = (state: AppState) => state.product.language;
+const getSpaces = (state: AppState) => state.product.spaces;
 
 
 const selectors = {
     getProduct,
     getProductUI,
     getLanguage,
+    getSpaces,
 };
 // #endregion module
 

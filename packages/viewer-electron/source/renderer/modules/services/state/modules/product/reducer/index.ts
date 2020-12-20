@@ -24,6 +24,10 @@ export const reducer = (
             return resolvers.setLanguage(state, action);
         case Types.SET_FIELD:
             return resolvers.setField(state, action);
+        case Types.ADD_PLANE:
+            return resolvers.addPlane(state, action);
+        case Types.REMOVE_PLANE:
+            return resolvers.removePlane(state, action);
         default:
             return {
                 ...state,
