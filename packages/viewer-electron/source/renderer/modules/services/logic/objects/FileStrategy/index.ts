@@ -1,0 +1,54 @@
+// #region imports
+    // #region libraries
+    import {
+        uuid,
+    } from '@plurid/plurid-functions';
+    // #endregion libraries
+// #endregion imports
+
+
+
+// #region module
+class FileStrategy {
+    private kind: string;
+    private extension: string;
+    private file: string;
+
+    constructor(
+        kind: string,
+        extension: string,
+        file: string,
+    ) {
+        this.kind = kind;
+        this.extension = extension;
+        this.file = file;
+    }
+
+
+    public apply() {
+        const plane = {
+            id: uuid.generate(),
+            kind: this.kind,
+            data: {
+                source: this.file,
+            },
+        };
+
+        const notification = {
+            id: uuid.generate(),
+            text: `Added file ${this.kind}: ${this.file}`,
+        };
+
+        return {
+            plane,
+            notification,
+        };
+    }
+}
+// #endregion module
+
+
+
+// #region exports
+export default FileStrategy;
+// #endregion exports

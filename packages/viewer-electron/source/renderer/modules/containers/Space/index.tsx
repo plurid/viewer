@@ -18,10 +18,6 @@
     } from '@plurid/plurid-themes';
 
     import {
-        uuid,
-    } from '@plurid/plurid-functions';
-
-    import {
         PluridApplication,
         PluridPlane,
     } from '@plurid/plurid-react';
@@ -37,6 +33,12 @@
     import VideoPlane from '~renderer-planes/Video';
     import TextPlane from '~renderer-planes/Text';
     import FilesPlane from '~renderer-planes/Files';
+
+    import {
+        getFileType,
+    } from '~renderer-services/logic/general';
+
+    import FileStrategy from '~renderer-services/logic/objects/FileStrategy';
 
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
@@ -137,6 +139,7 @@ export interface SpaceStateProperties {
 
 export interface SpaceDispatchProperties {
     dispatchProductAddPlane: typeof actions.product.addPlane;
+    dispatchAddNotification: typeof actions.notifications.addNotification;
 }
 
 export type SpaceProperties = SpaceOwnProperties
@@ -157,6 +160,7 @@ const Space: React.FC<SpaceProperties> = (
 
         // #region dispatch
         dispatchProductAddPlane,
+        dispatchAddNotification,
         // #endregion dispatch
     } = properties;
 
@@ -202,16 +206,30 @@ const Space: React.FC<SpaceProperties> = (
             }
 
             for (const file of files) {
+                const {
+                    kind,
+                    extension,
+                } = getFileType(file);
+
+                // handle kind with a strategy for each extension
+
+                const strategy = new FileStrategy(
+                    kind,
+                    extension,
+                    file,
+                );
+                const {
+                    plane,
+                    notification,
+                } = strategy.apply();
+
                 dispatchProductAddPlane({
                     spaceID: activeSpace.id,
-                    data: {
-                        id: uuid.generate(),
-                        kind: 'image',
-                        data: {
-                            source: file,
-                        },
-                    },
+                    data: plane as any,
                 });
+                dispatchAddNotification(
+                    notification,
+                );
             }
         });
     }, []);
@@ -249,6 +267,11 @@ const mapDispatchToProperties = (
         payload,
     ) => dispatch(
         actions.product.addPlane(payload),
+    ),
+    dispatchAddNotification: (
+        payload,
+    ) => dispatch(
+        actions.notifications.addNotification(payload),
     ),
 });
 
