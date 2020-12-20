@@ -118,9 +118,9 @@ const Space: React.FC<SpaceProperties> = (
                     },
                 ]}
                 view={[
-                    '/texts/1',
                     '/images/1',
                     '/videos/1',
+                    '/texts/1',
                     '/files/1',
                 ]}
             />
