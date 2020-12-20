@@ -40,8 +40,8 @@ class FileStrategy {
 
         const notification: notifications.Types.Notification = {
             id: uuid.generate(),
-            text: `Added file ${this.kind}: ${this.file}`,
-            timeout: 3000,
+            text: `Opened file '${this.kind}': '${this.file}'`,
+            timeout: 4500,
         };
 
         return {
