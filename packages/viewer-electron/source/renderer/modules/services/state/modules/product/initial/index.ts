@@ -27,7 +27,15 @@ const initialState: Types.State = {
     spaces: [
         {
             id: uuid.generate(),
-            planes: [],
+            planes: [
+                {
+                    id: uuid.generate(),
+                    kind: 'image',
+                    data: {
+                        source: 'https://raw.githubusercontent.com/plurid/enhanced-image/master/about/assets/identity/enhanced-image-logo.png',
+                    },
+                }
+            ],
         },
     ],
 };

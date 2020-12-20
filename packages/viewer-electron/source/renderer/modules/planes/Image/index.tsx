@@ -10,11 +10,19 @@
         Theme,
     } from '@plurid/plurid-themes';
 
+    import {
+        PluridComponentProperty,
+    } from '@plurid/plurid-react';
+
     import EnhancedImage from '@plurid/enhanced-image-react';
     // #endregion libraries
 
 
     // #region external
+    import {
+        Space,
+    } from '~renderer-data/interfaces';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -33,11 +41,13 @@
 
 // #region module
 export interface ImageOwnProperties {
+    plurid: PluridComponentProperty,
 }
 
 export interface ImageStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
+    stateSpaces: Space[];
 }
 
 export interface ImageDispatchProperties {
@@ -51,15 +61,36 @@ const Image: React.FC<ImageProperties> = (
     properties,
 ) => {
     // #region properties
-    // const {
-        // // #region state
+    const {
+        // #region required
+            // #region values
+            plurid,
+            // #endregion values
+
+            // #region methods
+            // #endregion methods
+        // #endregion required
+
+        // #region state
         // stateGeneralTheme,
         // stateInteractionTheme,
-        // // #endregion state
-    // } = properties;
+        stateSpaces,
+        // #endregion state
+    } = properties;
 
     // get from state based on the id
-    const src = 'https://raw.githubusercontent.com/plurid/enhanced-image/master/about/assets/identity/enhanced-image-logo.png';
+    const id = plurid.route.plane.parameters.id;
+
+    const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
+    const activePlane = activeSpace
+        ? activeSpace.planes.find(plane => plane.id === id)
+        : undefined;
+
+    const planeData = activePlane && activePlane.kind === 'image'
+        ? activePlane
+        : undefined;
+
+    const src = planeData?.data.source || '';
     // #endregion properties
 
 
@@ -89,6 +120,7 @@ const mapStateToProperties = (
 ): ImageStateProperties => ({
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
+    stateSpaces: selectors.product.getSpaces(state),
 });
 
 
