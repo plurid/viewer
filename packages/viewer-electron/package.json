@@ -1,11 +1,13 @@
 {
-    "name": "@plurid/viewer",
+    "name": "viewer",
     "version": "0.0.0-0",
     "description": "Enhanced Image, Video, Sound, and Text Viewer Application",
     "keywords": [
         "viewer",
         "enhanced image",
-        "enhanced video"
+        "enhanced video",
+        "enhanced sound",
+        "enhanced text"
     ],
     "author": "ly3xqhl8g9 <ly3xqhl8g9@plurid.com> (https://plurid.com)",
     "license": "SEE LICENSE IN LICENSE",
@@ -26,24 +28,70 @@
         "node": ">=12",
         "npm": ">=6"
     },
-    "main": "distribution/index.js",
-    "module": "distribution/index.es.js",
-    "typings": "distribution/index.d.ts",
-    "files": [
-        "distribution"
-    ],
     "build": {
+        "extends": null,
+        "productName": "viewer",
+        "appId": "com.plurid.viewer",
+        "files": [
+            "node_modules/**/*",
+            "build/**/*",
+            "package.json"
+        ],
+        "mac": {
+            "target": [
+                "dmg"
+            ],
+            "type": "distribution",
+            "hardenedRuntime": true,
+            "entitlements": "assets/entitlements.mac.plist",
+            "entitlementsInherit": "assets/entitlements.mac.plist",
+            "gatekeeperAssess": false
+        },
+        "dmg": {
+            "contents": [
+                {
+                    "x": 130,
+                    "y": 220
+                },
+                {
+                    "x": 410,
+                    "y": 220,
+                    "type": "link",
+                    "path": "/Applications"
+                }
+            ]
+        },
+        "win": {
+            "target": [
+                "nsis"
+            ]
+        },
+        "linux": {
+            "target": [
+                "AppImage"
+            ],
+            "category": "Utility"
+        },
+        "directories": {
+            "buildResources": "./assets/",
+            "output": "./release/"
+        },
+        "extraResources": [
+            "./assets/**/*"
+        ],
+        "extraMetadata": {
+            "main": "./build/index.js"
+        },
         "fileAssociations": [
             {
                 "ext": "eimg",
                 "name": "Enhaced Image File",
-                "role": "Editor",
-                "perMachine": true
+                "role": "Editor"
             }
         ]
     },
     "scripts": {
-        "clean": "rm -rf ./build",
+        "clean": "rm -rf ./build && rm -rf ./release",
         "test": "jest",
         "watch": "yarn clean && webpack --watch --config ./scripts/webpack.config.js --env dev",
         "develop": "yarn clean && webpack --config ./scripts/webpack.config.js",
@@ -53,7 +101,9 @@
         "electron.linux": "yarn build && electron-packager ./build/ viewer --overwrite --asar=true --platform=linux --arch=x64 --icon=./build/assets/meta/viewer.png --prune=true --out=viewer",
         "electron.mac": "yarn build && electron-packager ./build/ --overwrite --platform=darwin --arch=x64 --icon=./build/assets/meta/viewer.icns --prune=true --out=viewer",
         "electron.mac.dmg": "electron-installer-dmg ./viewer/viewer-darwin-x64/viewer.app/ viewer",
-        "electron.windows": "yarn build && electron-packager ./build/ viewer --overwrite --asar=true --platform=win32 --arch=ia32 --icon=./build/assets/meta/viewer.ico --prune=true --out=viewer --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"viewer\""
+        "electron.windows": "yarn build && electron-packager ./build/ viewer --overwrite --asar=true --platform=win32 --arch=ia32 --icon=./build/assets/meta/viewer.ico --prune=true --out=viewer --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"viewer\"",
+        "builder": "electron-builder build --publish never",
+        "package": "yarn build && yarn builder"
     },
     "dependencies": {
         "@apollo/client": "^3.3.6",

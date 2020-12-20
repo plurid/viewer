@@ -41,6 +41,7 @@ const createWindow = () => {
             enableRemoteModule: true,
             nodeIntegration: true,
             contextIsolation: false,
+            webSecurity: false,
         },
         show: false,
     });
