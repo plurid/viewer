@@ -90,7 +90,7 @@ const Video: React.FC<VideoProperties> = (
         : undefined;
 
     const type = 'video/mp4';
-    const src = planeData?.data.source || '';;
+    const src = planeData?.data.source || '';
     // #endregion properties
 
 

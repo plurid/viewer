@@ -19,10 +19,18 @@
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        PluridComponentProperty,
+    } from '@plurid/plurid-react';
     // #endregion libraries
 
 
     // #region external
+    import {
+        Space,
+    } from '~renderer-data/interfaces';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -34,8 +42,6 @@
     import {
         StyledText,
     } from './styled';
-
-    import pdf from './assets/example.pdf';
     // #endregion internal
 // #endregion imports
 
@@ -43,11 +49,13 @@
 
 // #region module
 export interface TextOwnProperties {
+    plurid: PluridComponentProperty,
 }
 
 export interface TextStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
+    stateSpaces: Space[];
 }
 
 export interface TextDispatchProperties {
@@ -61,12 +69,35 @@ const Text: React.FC<TextProperties> = (
     properties,
 ) => {
     // #region properties
-    // const {
-        // // #region state
+    const {
+        // #region required
+            // #region values
+            plurid,
+            // #endregion values
+
+            // #region methods
+            // #endregion methods
+        // #endregion required
+
+        // #region state
         // stateGeneralTheme,
         // stateInteractionTheme,
-        // // #endregion state
-    // } = properties;
+        stateSpaces,
+        // #endregion state
+    } = properties;
+
+    const id = plurid.route.plane.parameters.id;
+
+    const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
+    const activePlane = activeSpace
+        ? activeSpace.planes.find(plane => plane.id === id)
+        : undefined;
+
+    const planeData = activePlane && activePlane.kind === 'text'
+        ? activePlane
+        : undefined;
+
+    const file = planeData?.data.source || '';
     // #endregion properties
 
 
@@ -184,7 +215,7 @@ const Text: React.FC<TextProperties> = (
     return (
         <StyledText>
             <Document
-                file={pdf}
+                file={file}
                 onLoadSuccess={onDocumentLoadSuccess}
             >
                 <Page
@@ -207,6 +238,7 @@ const mapStateToProperties = (
 ): TextStateProperties => ({
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
+    stateSpaces: selectors.product.getSpaces(state),
 });
 
 
