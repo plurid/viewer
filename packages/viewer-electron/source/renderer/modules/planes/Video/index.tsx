@@ -10,11 +10,19 @@
         Theme,
     } from '@plurid/plurid-themes';
 
+    import {
+        PluridComponentProperty,
+    } from '@plurid/plurid-react';
+
     import EnhancedVideo from '@plurid/enhanced-video-react';
     // #endregion libraries
 
 
     // #region external
+    import {
+        Space,
+    } from '~renderer-data/interfaces';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -26,8 +34,6 @@
     import {
         StyledVideo,
     } from './styled';
-
-    import video from './assets/video.mov';
     // #endregion internal
 // #endregion imports
 
@@ -35,11 +41,13 @@
 
 // #region module
 export interface VideoOwnProperties {
+    plurid: PluridComponentProperty,
 }
 
 export interface VideoStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
+    stateSpaces: Space[];
 }
 
 export interface VideoDispatchProperties {
@@ -53,15 +61,36 @@ const Video: React.FC<VideoProperties> = (
     properties,
 ) => {
     // #region properties
-    // const {
-        // // #region state
+    const {
+        // #region required
+            // #region values
+            plurid,
+            // #endregion values
+
+            // #region methods
+            // #endregion methods
+        // #endregion required
+
+        // #region state
         // stateGeneralTheme,
         // stateInteractionTheme,
-        // // #endregion state
-    // } = properties;
+        stateSpaces,
+        // #endregion state
+    } = properties;
+
+    const id = plurid.route.plane.parameters.id;
+
+    const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
+    const activePlane = activeSpace
+        ? activeSpace.planes.find(plane => plane.id === id)
+        : undefined;
+
+    const planeData = activePlane && activePlane.kind === 'video'
+        ? activePlane
+        : undefined;
 
     const type = 'video/mp4';
-    const src = video;
+    const src = planeData?.data.source || '';;
     // #endregion properties
 
 
@@ -85,6 +114,7 @@ const mapStateToProperties = (
 ): VideoStateProperties => ({
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
+    stateSpaces: selectors.product.getSpaces(state),
 });
 
 
