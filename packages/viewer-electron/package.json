@@ -52,6 +52,7 @@
         "electron.run": "yarn develop && yarn electron",
         "electron.linux": "yarn build && electron-packager ./build/ viewer --overwrite --asar=true --platform=linux --arch=x64 --icon=./build/assets/meta/viewer.png --prune=true --out=viewer",
         "electron.mac": "yarn build && electron-packager ./build/ --overwrite --platform=darwin --arch=x64 --icon=./build/assets/meta/viewer.icns --prune=true --out=viewer",
+        "electron.mac.dmg": "electron-installer-dmg ./viewer/viewer-darwin-x64/viewer.app/ viewer",
         "electron.windows": "yarn build && electron-packager ./build/ viewer --overwrite --asar=true --platform=win32 --arch=ia32 --icon=./build/assets/meta/viewer.ico --prune=true --out=viewer --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"viewer\""
     },
     "dependencies": {
