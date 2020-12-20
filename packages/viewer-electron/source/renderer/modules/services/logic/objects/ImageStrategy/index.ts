@@ -16,16 +16,16 @@
 
     // #region internal
     import AiImageStrategy from './strategies/PngImageStrategy';
-    import BmpImageStrategy from './strategies/PngImageStrategy';
-    import GifImageStrategy from './strategies/PngImageStrategy';
-    import IcoImageStrategy from './strategies/PngImageStrategy';
-    import JpegImageStrategy from './strategies/PngImageStrategy';
+    import BmpImageStrategy from './strategies/BmpImageStrategy';
+    import GifImageStrategy from './strategies/GifImageStrategy';
+    import IcoImageStrategy from './strategies/IcoImageStrategy';
+    import JpegImageStrategy from './strategies/JpegImageStrategy';
     import PngImageStrategy from './strategies/PngImageStrategy';
     import PsImageStrategy from './strategies/PngImageStrategy';
     import PsdImageStrategy from './strategies/PngImageStrategy';
-    import SvgImageStrategy from './strategies/PngImageStrategy';
-    import TiffImageStrategy from './strategies/PngImageStrategy';
-    import WebpImageStrategy from './strategies/PngImageStrategy';
+    import SvgImageStrategy from './strategies/SvgImageStrategy';
+    import TiffImageStrategy from './strategies/TiffImageStrategy';
+    import WebpImageStrategy from './strategies/WebpImageStrategy';
     import EimgImageStrategy from './strategies/EimgImageStrategy';
     // #endregion internal
 // #endregion imports

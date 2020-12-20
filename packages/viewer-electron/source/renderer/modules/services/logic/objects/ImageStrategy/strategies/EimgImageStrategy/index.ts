@@ -29,8 +29,15 @@ class EimgImageStrategy {
                 image,
             } = data;
 
-            const blob = new Blob([image]);
-            const url = URL.createObjectURL(blob);
+            const blob = new Blob(
+                [image],
+                {
+                    type: 'image/' + (header.type || 'png'),
+                },
+            );
+            const url = URL.createObjectURL(
+                blob,
+            );
 
             return {
                 source: url,
