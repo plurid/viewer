@@ -606,8 +606,8 @@
 
 "@plurid/enhanced-image-io@^0.0.0-0":
   version "0.0.0-0"
-  resolved "https://npm.plurid.cloud/@plurid%2fenhanced-image-io/-/enhanced-image-io-0.0.0-0.tgz#06628cde316aedb3ecc740017a1fb610e469821b"
-  integrity sha512-GpJ9vuBhADKumWgQs8yYu3EoDNYPn5X81BqObBGAk6ahXYbHPn1Hg3J+xswVIo5npO7Pwwjy+1q00pgYcdAWZA==
+  resolved "https://npm.plurid.cloud/@plurid%2fenhanced-image-io/-/enhanced-image-io-0.0.0-0.tgz#1b9ce03a231b51a5f6b7cb45c859c5ff02101f6c"
+  integrity sha512-XRs1yHNaSaMvrAlcj+JeqPs7MzGQceE4PFc3D9K2SvuFsdUsTPVVGaRhw6QF5DwVzDw/Trc7AVRMp38d/3uMhQ==
   dependencies:
     "@plurid/deon" "^0.0.0-0"
     commander "^6.2.1"
