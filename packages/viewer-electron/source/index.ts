@@ -30,6 +30,9 @@ let window: BrowserWindow | null;
 
 
 const createWindow = () => {
+    const isMac = process.platform === 'darwin';
+
+
     // Create the browser window.
     window = new BrowserWindow({
         width: 1000,
@@ -38,8 +41,7 @@ const createWindow = () => {
         minHeight: 500,
         minWidth: 300,
         title: 'viewer',
-        titleBarStyle: 'hidden',
-        // titleBarStyle: 'customButtonsOnHover',
+        // titleBarStyle: 'hidden',
         frame: false,
         webPreferences: {
             enableRemoteModule: true,

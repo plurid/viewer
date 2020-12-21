@@ -19,7 +19,7 @@ const setMenu = (
     window: BrowserWindow | null,
     createWindow: () => void,
 ) => {
-    const isMac = process.platform === 'darwin'
+    const isMac = process.platform === 'darwin';
 
     const appMenu: any = isMac
         ? [
