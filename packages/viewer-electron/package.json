@@ -48,6 +48,8 @@
             "gatekeeperAssess": false
         },
         "dmg": {
+            "title": "${productName}",
+            "backgroundColor": "#3c4049",
             "contents": [
                 {
                     "x": 130,
@@ -59,7 +61,11 @@
                     "type": "link",
                     "path": "/Applications"
                 }
-            ]
+            ],
+            "window": {
+                "width": 500,
+                "height": 400
+            }
         },
         "win": {
             "target": [
@@ -83,6 +89,56 @@
             "main": "./build/index.js"
         },
         "fileAssociations": [
+            {
+                "ext": "bmp",
+                "name": "Bmp File",
+                "role": "Editor"
+            },
+            {
+                "ext": "gif",
+                "name": "Gif File",
+                "role": "Editor"
+            },
+            {
+                "ext": "ico",
+                "name": "Ico File",
+                "role": "Editor"
+            },
+            {
+                "ext": "jpeg",
+                "name": "Jpeg File",
+                "role": "Editor"
+            },
+            {
+                "ext": "jpg",
+                "name": "Jpeg File",
+                "role": "Editor"
+            },
+            {
+                "ext": "png",
+                "name": "Png File",
+                "role": "Editor"
+            },
+            {
+                "ext": "svg",
+                "name": "Svg File",
+                "role": "Editor"
+            },
+            {
+                "ext": "tif",
+                "name": "Tiff File",
+                "role": "Editor"
+            },
+            {
+                "ext": "tiff",
+                "name": "Tiff File",
+                "role": "Editor"
+            },
+            {
+                "ext": "webp",
+                "name": "Webp File",
+                "role": "Editor"
+            },
             {
                 "ext": "eimg",
                 "name": "Enhaced Image File",
