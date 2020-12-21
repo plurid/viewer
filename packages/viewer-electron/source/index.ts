@@ -27,7 +27,7 @@ let window: BrowserWindow | null;
 
 
 
-const createWindow = async () => {
+const createWindow = () => {
     // Create the browser window.
     window = new BrowserWindow({
         width: 1000,
