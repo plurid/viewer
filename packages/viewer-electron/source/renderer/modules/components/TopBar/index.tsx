@@ -17,6 +17,10 @@
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        PluridIconAdd,
+    } from '@plurid/plurid-icons-react';
     // #endregion libraries
 
 
@@ -252,14 +256,14 @@ const TopBar: React.FC<TopBarProperties> = (
                     );
                 })}
 
-                <StyledSpace
-                    active={false}
-                    onClick={() => {
-                        // add space
-                    }}
-                >
-                    +
-                </StyledSpace>
+                {show && (
+                    <PluridIconAdd
+                        atClick={() => {
+                            // add space
+                        }}
+                        size={14}
+                    />
+                )}
             </StyledSpaces>
         </StyledTopBar>
     );
