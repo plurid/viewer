@@ -221,11 +221,15 @@ const TopBar: React.FC<TopBarProperties> = (
             <StyledSpaces
                 show={show}
             >
-                <StyledSpace>
+                <StyledSpace
+                    active={true}
+                >
                     space 1
                 </StyledSpace>
 
-                <StyledSpace>
+                <StyledSpace
+                    active={false}
+                >
                     space 2
                 </StyledSpace>
             </StyledSpaces>

@@ -83,8 +83,23 @@ export const StyledSpaces = styled.div<IStyledSpaces>`
 `;
 
 
-export const StyledSpace = styled.div`
+export interface IStyledSpace {
+    active: boolean;
+}
+
+export const StyledSpace = styled.div<IStyledSpace>`
     margin-right: 10px;
     max-width: 200px;
+    padding: 0.4rem 0;
+
+    border-bottom: 1px solid ${
+        (properties: IStyledSpace) => {
+            if (properties.active) {
+                return 'white';
+            }
+
+            return 'transparent';
+        }
+    };
 `;
 // #region module
