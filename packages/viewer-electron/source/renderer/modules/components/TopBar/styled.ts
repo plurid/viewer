@@ -63,6 +63,14 @@ export const StyledWindowButtons = styled.div`
 `;
 
 
+export const StyledWindowButton = styled.div`
+    display: grid;
+    place-content: center;
+    width: 15px;
+    height: 15px;
+`;
+
+
 export interface IStyledSpaces {
     show: boolean;
 }
@@ -91,6 +99,7 @@ export const StyledSpace = styled.div<IStyledSpace>`
     margin-right: 15px;
     max-width: 200px;
     padding: 0.4rem;
+    cursor: pointer;
 
     border-bottom: 1px solid ${
         (properties: IStyledSpace) => {

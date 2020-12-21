@@ -36,6 +36,7 @@
     import {
         StyledTopBar,
         StyledWindowButtons,
+        StyledWindowButton,
         StyledSpaces,
         StyledSpace,
     } from './styled';
@@ -191,23 +192,23 @@ const TopBar: React.FC<TopBarProperties> = (
             <StyledWindowButtons>
                 {show && (
                     <>
-                        <div
+                        <StyledWindowButton
                             onClick={() => {
                                 remote.BrowserWindow.getFocusedWindow()?.close();
                             }}
                         >
                             &times;
-                        </div>
+                        </StyledWindowButton>
 
-                        <div
+                        <StyledWindowButton
                             onClick={() => {
                                 remote.BrowserWindow.getFocusedWindow()?.minimize();
                             }}
                         >
                             &#95;
-                        </div>
+                        </StyledWindowButton>
 
-                        <div
+                        <StyledWindowButton
                             onClick={() => {
                                 const window = remote.BrowserWindow.getFocusedWindow();
 
@@ -223,7 +224,7 @@ const TopBar: React.FC<TopBarProperties> = (
                             }}
                         >
                             +
-                        </div>
+                        </StyledWindowButton>
                     </>
                 )}
             </StyledWindowButtons>
@@ -242,11 +243,23 @@ const TopBar: React.FC<TopBarProperties> = (
                         <StyledSpace
                             key={id}
                             active={stateActiveSpace === id}
+                            onClick={() => {
+                                // activate space
+                            }}
                         >
                             {name}
                         </StyledSpace>
                     );
                 })}
+
+                <StyledSpace
+                    active={false}
+                    onClick={() => {
+                        // add space
+                    }}
+                >
+                    +
+                </StyledSpace>
             </StyledSpaces>
         </StyledTopBar>
     );
