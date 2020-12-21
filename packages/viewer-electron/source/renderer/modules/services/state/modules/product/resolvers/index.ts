@@ -160,6 +160,21 @@ export const addSpace = (
 }
 
 
+export const removeSpace = (
+    state: Types.State,
+    action: Types.RemoveSpaceAction,
+): Types.State => {
+    const spaces = state.spaces.filter(space => space.id !== action.payload);
+
+    const newState = {
+        ...state,
+        spaces,
+    };
+
+    return newState;
+}
+
+
 
 const resolvers = {
     setProduct,
@@ -169,6 +184,7 @@ const resolvers = {
     addPlane,
     removePlane,
     addSpace,
+    removeSpace,
 };
 // #endregion module
 

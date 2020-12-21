@@ -67,6 +67,7 @@ export interface TopBarStateProperties {
 export interface TopBarDispatchProperties {
     dispatchProductSetField: typeof actions.product.setField;
     dispatchProductAddSpace: typeof actions.product.addSpace;
+    dispatchProductRemoveSpace: typeof actions.product.removeSpace;
 }
 
 export type TopBarProperties = TopBarOwnProperties
@@ -89,6 +90,7 @@ const TopBar: React.FC<TopBarProperties> = (
         // #region dispatch
         dispatchProductSetField,
         dispatchProductAddSpace,
+        dispatchProductRemoveSpace,
         // #endregion dispatch
     } = properties;
     // #endregion properties
@@ -256,23 +258,27 @@ const TopBar: React.FC<TopBarProperties> = (
                     return (
                         <StyledSpace
                             key={id}
-                            onClick={() => {
-                                if (stateActiveSpace !== id) {
-                                    dispatchProductSetField({
-                                        field: 'activeSpace',
-                                        data: id,
-                                    });
-                                }
-                            }}
                         >
                             <StyledSpaceName
                                 active={stateActiveSpace === id}
                             >
-                                <div>
+                                <div
+                                    onClick={() => {
+                                        if (stateActiveSpace !== id) {
+                                            dispatchProductSetField({
+                                                field: 'activeSpace',
+                                                data: id,
+                                            });
+                                        }
+                                    }}
+                                >
                                     {name}
                                 </div>
 
                                 <div
+                                    onClick={() => {
+                                        dispatchProductRemoveSpace(id);
+                                    }}
                                     style={{
                                         marginLeft: '5px',
                                     }}
@@ -325,6 +331,11 @@ const mapDispatchToProperties = (
     ),
     dispatchProductAddSpace: () => dispatch(
         actions.product.addSpace(),
+    ),
+    dispatchProductRemoveSpace: (
+        payload,
+    ) => dispatch(
+        actions.product.removeSpace(payload),
     ),
 });
 

@@ -69,6 +69,13 @@ export interface AddSpaceAction {
 }
 
 
+export const REMOVE_SPACE = 'REMOVE_SPACE';
+export interface RemoveSpaceAction {
+    type: typeof REMOVE_SPACE;
+    payload: string;
+}
+
+
 
 export interface State {
     ui: {
@@ -87,5 +94,6 @@ export type Actions =
     | SetFieldAction
     | AddPlaneAction
     | RemovePlaneAction
-    | AddSpaceAction;
+    | AddSpaceAction
+    | RemoveSpaceAction;
 // #endregion module
