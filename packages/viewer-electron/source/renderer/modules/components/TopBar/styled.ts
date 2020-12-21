@@ -96,7 +96,6 @@ export const StyledSpaces = styled.div<IStyledSpaces>`
 
 
 export const StyledSpace = styled.div`
-    margin-right: 15px;
     max-width: 200px;
     height: 100%;
     cursor: pointer;
@@ -112,8 +111,9 @@ export const StyledSpaceName = styled.div<IStyledSpaceName>`
     max-width: 200px;
     padding: 0.4rem;
     height: 100%;
-    display: grid;
-    place-content: center;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
 
     border-bottom: 1px solid ${
         (properties: IStyledSpaceName) => {
@@ -124,5 +124,15 @@ export const StyledSpaceName = styled.div<IStyledSpaceName>`
             return 'transparent';
         }
     };
+`;
+
+
+export const StyledAddButton = styled.div`
+    height: 100%;
+    cursor: pointer;
+    display: grid;
+    place-content: center;
+    width: 40px;
+    margin-left: 10px;
 `;
 // #region module

@@ -44,6 +44,7 @@
         StyledSpaces,
         StyledSpace,
         StyledSpaceName,
+        StyledAddButton,
     } from './styled';
     // #endregion internal
 // #endregion imports
@@ -266,19 +267,28 @@ const TopBar: React.FC<TopBarProperties> = (
                             <StyledSpaceName
                                 active={stateActiveSpace === id}
                             >
-                                {name}
+                                <div>
+                                    {name}
+                                </div>
+
+                                <div>
+                                    x
+                                </div>
                             </StyledSpaceName>
                         </StyledSpace>
                     );
                 })}
 
                 {show && (
-                    <PluridIconAdd
-                        atClick={() => {
+                    <StyledAddButton
+                        onClick={() => {
                             dispatchProductAddSpace();
                         }}
-                        size={14}
-                    />
+                    >
+                        <PluridIconAdd
+                            size={14}
+                        />
+                    </StyledAddButton>
                 )}
             </StyledSpaces>
         </StyledTopBar>
