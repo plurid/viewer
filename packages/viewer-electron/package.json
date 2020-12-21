@@ -149,18 +149,14 @@
     "scripts": {
         "clean": "rm -rf ./build && rm -rf ./release",
         "test": "jest",
-        "watch": "yarn clean && webpack --watch --config ./scripts/webpack.config.js --env dev",
         "develop": "yarn clean && webpack --config ./scripts/webpack.config.js",
-        "build.clean": "rm -rf `find ./build/ -type d -name __tests__` && rm -rf `find ./build/ -type d -name .DS_STORE`",
         "build": "yarn clean && webpack --config ./scripts/webpack.config.js --env prod --progress",
+        "build.clean": "rm -rf `find ./build/ -type d -name __tests__` && rm -rf `find ./build/ -type d -name .DS_STORE`",
+        "builder": "electron-builder build --publish never",
         "electron": "electron ./build/",
         "electron.run": "yarn develop && yarn electron",
-        "electron.linux": "yarn build && electron-packager ./build/ viewer --overwrite --asar=true --platform=linux --arch=x64 --icon=./build/assets/meta/viewer.png --prune=true --out=viewer",
-        "electron.mac": "yarn build && electron-packager ./build/ --overwrite --platform=darwin --arch=x64 --icon=./build/assets/meta/viewer.icns --prune=true --out=viewer",
-        "electron.mac.dmg": "electron-installer-dmg ./viewer/viewer-darwin-x64/viewer.app/ viewer",
-        "electron.windows": "yarn build && electron-packager ./build/ viewer --overwrite --asar=true --platform=win32 --arch=ia32 --icon=./build/assets/meta/viewer.ico --prune=true --out=viewer --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"viewer\"",
-        "builder": "electron-builder build --publish never",
-        "package": "yarn build && yarn build.clean && yarn builder"
+        "package": "yarn build && yarn builder",
+        "package.clean": "yarn build && yarn build.clean && yarn builder"
     },
     "dependencies": {
         "@apollo/client": "^3.3.6",
@@ -209,7 +205,6 @@
         "css-loader": "^5.0.1",
         "electron": "^11.0.3",
         "electron-builder": "^22.9.1",
-        "electron-packager": "^15.1.0",
         "file-loader": "^6.2.0",
         "html-webpack-plugin": "^4.5.0",
         "jest": "^26.6.3",
