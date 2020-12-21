@@ -6,6 +6,8 @@
         app as application,
         BrowserWindow,
     } from 'electron';
+
+    import contextMenu from 'electron-context-menu';
     // #endregion libraries
 
 
@@ -27,6 +29,18 @@ let window: BrowserWindow | null;
 
 (global as any).loadDatabase = loadDatabase;
 
+
+
+contextMenu({
+    menu: (
+        defaultActions,
+        params,
+        browserWindow,
+    ) => [
+        defaultActions.copy({}),
+        defaultActions.paste({}),
+    ],
+});
 
 
 const createWindow = () => {
