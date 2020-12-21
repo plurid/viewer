@@ -182,6 +182,7 @@
         "@plurid/plurid-ui-state-react": "^0.0.0-0",
         "cross-fetch": "^3.0.6",
         "draft-js": "^0.11.7",
+        "electron-context-menu": "^2.3.1",
         "graphql": "^15.4.0",
         "graphql-tag": "^2.11.0",
         "hammerjs": "^2.0.8",
