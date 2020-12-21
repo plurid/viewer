@@ -65,9 +65,11 @@ const createWindow = () => {
     window.maximize();
 
     window.webContents.on('did-finish-load', () => {
-        if (window) {
-            window.show();
+        if (!window) {
+            return;
         }
+
+        window.show();
     });
 
     // Emitted when the window is closed.
@@ -89,7 +91,10 @@ application.on('ready', createWindow);
 
 // Setup Menu.
 application.whenReady().then(() => {
-    setMenu(window);
+    setMenu(
+        window,
+        createWindow,
+    );
 });
 
 
@@ -113,4 +118,32 @@ application.on('activate', () => {
 
 
 application.allowRendererProcessReuse = true;
+
+
+
+application.on(
+    'open-file',
+    async (
+        _,
+        path,
+    ) => {
+        if (!window) {
+            createWindow();
+        }
+
+        if (!window) {
+            await new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve(true);
+                }, 2_000);
+            });
+        }
+
+        if (!window) {
+            return;
+        }
+
+        window.webContents.send('FILES_OPEN', [path]);
+    }
+);
 // #endregion module

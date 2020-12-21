@@ -206,7 +206,7 @@ const Space: React.FC<SpaceProperties> = (
      * IPC Renderer.
      */
     useEffect(() => {
-        ipcRenderer.on('MENU_FILE_OPEN', async (
+        ipcRenderer.on('FILES_OPEN', async (
             _,
             files: string[],
         ) => {

@@ -17,11 +17,8 @@
 // #region module
 const setMenu = (
     window: BrowserWindow | null,
+    createWindow: () => void,
 ) => {
-    if (!window) {
-        return;
-    }
-
     const isMac = process.platform === 'darwin'
 
     const appMenu: any = isMac
@@ -81,9 +78,24 @@ const setMenu = (
             label: 'File',
             submenu: [
                 {
-                    label: 'Open File...',
+                    label: 'New Window',
+                    accelerator: 'Shift+CmdOrCtrl+N',
+                    click: async () => {
+                        if (!window) {
+                            createWindow();
+                        }
+                    },
+                    enabled: !window,
+                },
+                { type: 'separator' },
+                {
+                    label: 'Open...',
                     accelerator: 'CmdOrCtrl+O',
                     click: async () => {
+                        if (!window) {
+                            createWindow();
+                        }
+
                         const filesData = await dialog.showOpenDialog({
                             properties: [
                                 'openFile',
@@ -100,7 +112,11 @@ const setMenu = (
                             return;
                         }
 
-                        window.webContents.send('MENU_FILE_OPEN', filePaths);
+                        if (!window) {
+                            return;
+                        }
+
+                        window.webContents.send('FILES_OPEN', filePaths);
                     }
                 },
                 { type: 'separator' },
