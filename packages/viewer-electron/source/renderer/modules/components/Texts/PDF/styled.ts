@@ -29,5 +29,7 @@ export const StyledPDF = styled.div<IStyledPDF>`
         }
     };
     min-height: 900px;
+    max-height: 900px;
+    overflow: scroll;
 `;
 // #region module

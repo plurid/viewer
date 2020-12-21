@@ -195,12 +195,19 @@ const PDF: React.FC<PDFProperties> = (
                 file={file}
                 onLoadSuccess={onDocumentLoadSuccess}
             >
-                <Page
-                    pageNumber={pageNumber}
-                    // ref={ref}
-                    className="pdf-page"
-                    onRenderSuccess={onRenderSuccess}
-                />
+                {
+                    Array.apply(null, Array(numPages))
+                        .map((x, i) => i + 1)
+                        .map(page => (
+                            <Page
+                                key={page}
+                                pageNumber={page}
+                                className="pdf-page"
+                                onRenderSuccess={onRenderSuccess}
+                                // ref={ref}
+                            />
+                        ))
+                }
             </Document>
 
             <p>Page {pageNumber} of {numPages}</p>
