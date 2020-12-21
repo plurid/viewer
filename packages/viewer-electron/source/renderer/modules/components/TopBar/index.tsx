@@ -177,7 +177,7 @@ const TopBar: React.FC<TopBarProperties> = (
             isDraggable={draggable}
         >
             <StyledWindowButtons>
-                {mouseOver && (
+                {show && (
                     <>
                         <div
                             onClick={() => {
