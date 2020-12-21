@@ -67,6 +67,14 @@ const PDF: React.FC<PDFProperties> = (
     // #endregion references
 
 
+    // #region state
+    const [
+        renderComplete,
+        setRenderComplete,
+    ] = useState(false);
+    // #endregion state
+
+
     // #region handlers
     const onDocumentLoadSuccess = (
         data: any,
@@ -81,12 +89,11 @@ const PDF: React.FC<PDFProperties> = (
         ref.current = loadingTask;
     }
 
-    const onRenderSuccess = (
-    ) => {
-        console.log('onRenderSuccess');
+    const onRenderSuccess = () => {
+        // console.log('onRenderSuccess');
 
         const loadingTask = ref.current;
-        console.log('onRenderSuccess', loadingTask);
+        // console.log('onRenderSuccess', loadingTask);
 
         if (!loadingTask) {
             return;
@@ -96,22 +103,22 @@ const PDF: React.FC<PDFProperties> = (
             (
                 pdf: any,
             ) => {
-                console.log('pdf', pdf);
+                // console.log('pdf', pdf);
                 var pageNumber = 1;
 
                 pdf.getPage(pageNumber).then(
                     (
                         page: any,
                     ) => {
-                        console.log('Page loaded');
+                        // console.log('Page loaded');
 
-                        var scale = 1.5;
-                        var viewport = page.getViewport({
+                        const scale = 1.5;
+                        const viewport = page.getViewport({
                             scale,
                         });
 
-                        console.log('page', page);
-                        console.log('viewport', viewport);
+                        // console.log('page', page);
+                        // console.log('viewport', viewport);
 
                         // Prepare canvas using PDF page dimensions
                         // if (!ref.current) {
@@ -122,7 +129,7 @@ const PDF: React.FC<PDFProperties> = (
 
                         // const canvas: any = document.getElementById('the-canvas');
                         const canvas: HTMLCanvasElement | null = document.querySelector('.pdf-page canvas');
-                        console.log('canvas', canvas);
+                        // console.log('canvas', canvas);
 
                         if (!canvas) {
                             return;
@@ -140,12 +147,14 @@ const PDF: React.FC<PDFProperties> = (
                         const renderContext = {
                             canvasContext: context,
                             // Use transparent background!
-                            background: 'hsl(220, 10%, 26%)',
+                            background: theme.backgroundColorSecondary,
                             viewport,
                         };
 
                         const renderTask = page.render(renderContext);
-                        console.log('renderTask', renderTask);
+                        // console.log('renderTask', renderTask);
+
+                        setRenderComplete(true);
 
                         // renderTask.then(() => {
                         //     console.log('Page rendered');
@@ -157,7 +166,7 @@ const PDF: React.FC<PDFProperties> = (
                 reason: any,
             ) => {
                 // PDF loading error
-                console.error(reason);
+                // console.error(reason);
             }
         );
     }
@@ -180,6 +189,7 @@ const PDF: React.FC<PDFProperties> = (
     return (
         <StyledPDF
             theme={theme}
+            show={renderComplete}
         >
             <Document
                 file={file}
