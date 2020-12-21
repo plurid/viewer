@@ -132,7 +132,7 @@ export const StyledAddButton = styled.div`
     cursor: pointer;
     display: grid;
     place-content: center;
-    width: 40px;
+    width: 30px;
     margin-left: 10px;
 `;
 // #region module

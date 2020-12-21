@@ -271,8 +271,12 @@ const TopBar: React.FC<TopBarProperties> = (
                                     {name}
                                 </div>
 
-                                <div>
-                                    x
+                                <div
+                                    style={{
+                                        marginLeft: '5px',
+                                    }}
+                                >
+                                    &times;
                                 </div>
                             </StyledSpaceName>
                         </StyledSpace>
