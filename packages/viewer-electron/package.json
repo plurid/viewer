@@ -53,17 +53,17 @@
             "contents": [
                 {
                     "x": 130,
-                    "y": 220
+                    "y": 180
                 },
                 {
                     "x": 410,
-                    "y": 220,
+                    "y": 180,
                     "type": "link",
                     "path": "/Applications"
                 }
             ],
             "window": {
-                "width": 500,
+                "width": 530,
                 "height": 400
             }
         },
@@ -151,6 +151,7 @@
         "test": "jest",
         "watch": "yarn clean && webpack --watch --config ./scripts/webpack.config.js --env dev",
         "develop": "yarn clean && webpack --config ./scripts/webpack.config.js",
+        "build.clean": "rm -rf `find ./build/ -type d -name __tests__` && rm -rf `find ./build/ -type d -name .DS_STORE`",
         "build": "yarn clean && webpack --config ./scripts/webpack.config.js --env prod --progress",
         "electron": "electron ./build/",
         "electron.run": "yarn develop && yarn electron",
@@ -159,7 +160,7 @@
         "electron.mac.dmg": "electron-installer-dmg ./viewer/viewer-darwin-x64/viewer.app/ viewer",
         "electron.windows": "yarn build && electron-packager ./build/ viewer --overwrite --asar=true --platform=win32 --arch=ia32 --icon=./build/assets/meta/viewer.ico --prune=true --out=viewer --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"viewer\"",
         "builder": "electron-builder build --publish never",
-        "package": "yarn build && yarn builder"
+        "package": "yarn build && yarn build.clean && yarn builder"
     },
     "dependencies": {
         "@apollo/client": "^3.3.6",
