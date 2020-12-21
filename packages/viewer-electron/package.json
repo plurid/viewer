@@ -81,6 +81,7 @@
                 "AppImage",
                 "deb"
             ],
+            "icon": "./assets/512x512.png",
             "category": "Utility"
         },
         "directories": {
