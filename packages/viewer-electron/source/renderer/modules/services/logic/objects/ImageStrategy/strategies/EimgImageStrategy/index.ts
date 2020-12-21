@@ -2,7 +2,7 @@
     // #region libraries
     import {
         loadEnhancedImage,
-    } from '@plurid/enhanced-image-io';
+    } from '@plurid/enhanced-image-in-out';
     // #endregion libraries
 // #endregion imports
 

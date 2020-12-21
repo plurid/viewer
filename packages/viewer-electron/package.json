@@ -165,7 +165,7 @@
     "dependencies": {
         "@apollo/client": "^3.3.6",
         "@plurid/detoolbar-react": "^0.0.0-0",
-        "@plurid/enhanced-image-io": "^0.0.0-0",
+        "@plurid/enhanced-image-in-out": "^0.0.0-0",
         "@plurid/enhanced-image-react": "^0.0.0-0",
         "@plurid/enhanced-video-react": "^0.0.0-0",
         "@plurid/plurid-data": "^0.0.0-0",
@@ -209,7 +209,6 @@
         "css-loader": "^5.0.1",
         "electron": "^11.0.3",
         "electron-builder": "^22.9.1",
-        "electron-installer-debian": "^3.1.0",
         "electron-packager": "^15.1.0",
         "file-loader": "^6.2.0",
         "html-webpack-plugin": "^4.5.0",
