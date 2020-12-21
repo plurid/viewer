@@ -105,8 +105,10 @@ const PDF: React.FC<PDFProperties> = (
                     ) => {
                         console.log('Page loaded');
 
-                        var scale = 1;
-                        var viewport = page.getViewport(scale);
+                        var scale = 1.5;
+                        var viewport = page.getViewport({
+                            scale,
+                        });
 
                         console.log('page', page);
                         console.log('viewport', viewport);
@@ -129,8 +131,10 @@ const PDF: React.FC<PDFProperties> = (
                         const context = canvas.getContext('2d');
                         // canvas.height = viewport.height;
                         // canvas.width = viewport.width;
-                        canvas.height = 792;
-                        canvas.width = 612;
+                        canvas.height = viewport.height || viewport.viewBox[3]; /* viewport.height is NaN */
+                        canvas.width = viewport.width || viewport.viewBox[2];  /* viewport.width is also NaN */
+                        // canvas.height = 792;
+                        // canvas.width = 612;
 
                         // Render PDF page into canvas context
                         const renderContext = {
