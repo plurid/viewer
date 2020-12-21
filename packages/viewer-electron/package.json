@@ -74,8 +74,10 @@
         },
         "linux": {
             "target": [
-                "AppImage"
+                "AppImage",
+                "deb"
             ],
+            "icon": "./assets/icon-1000x1000.png",
             "category": "Utility"
         },
         "directories": {
