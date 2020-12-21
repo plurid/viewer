@@ -166,6 +166,17 @@ export const removeSpace = (
 ): Types.State => {
     const spaces = state.spaces.filter(space => space.id !== action.payload);
 
+    if (spaces.length === 0) {
+        spaces.push(
+            {
+                id: uuid.generate(),
+                name: 'new space',
+                order: state.spaces.length,
+                planes: [],
+            },
+        );
+    }
+
     const newState = {
         ...state,
         spaces,
