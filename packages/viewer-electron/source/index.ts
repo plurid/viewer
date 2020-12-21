@@ -38,7 +38,9 @@ const createWindow = () => {
         minHeight: 500,
         minWidth: 300,
         title: 'viewer',
-        titleBarStyle: 'hiddenInset',
+        titleBarStyle: 'hidden',
+        // titleBarStyle: 'customButtonsOnHover',
+        frame: false,
         webPreferences: {
             enableRemoteModule: true,
             nodeIntegration: true,

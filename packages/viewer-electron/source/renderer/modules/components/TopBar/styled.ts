@@ -14,10 +14,20 @@
 export interface IStyledTopBar {
     theme: Theme;
     show: boolean;
+    isDraggable: boolean;
 }
 
 export const StyledTopBar = styled.div<IStyledTopBar>`
-    -webkit-app-region: drag;
+    -webkit-app-region: ${
+        (properties: IStyledTopBar) => {
+            if (properties.isDraggable) {
+                return 'drag';
+            }
+
+            return 'no-drag';
+        }
+    };
+    -webkit-user-select: none;
 
     position: absolute;
     top: 0;
@@ -25,6 +35,11 @@ export const StyledTopBar = styled.div<IStyledTopBar>`
     right: 0;
     height: 40px;
     z-index: 9999;
+
+    display: grid;
+    grid-template-columns: 90px auto;
+    grid-gap: 1rem;
+    align-items: center;
 
     background-color: ${
         (properties: IStyledTopBar) => {
@@ -35,5 +50,15 @@ export const StyledTopBar = styled.div<IStyledTopBar>`
             return 'transparent';
         }
     };
+`;
+
+
+export const StyledWindowButtons = styled.div`
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-gap: 0.1rem;
+    justify-items: center;
+    align-items: center;
+    margin: 0 10px;
 `;
 // #region module

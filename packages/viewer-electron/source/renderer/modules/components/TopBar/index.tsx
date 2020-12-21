@@ -11,6 +11,10 @@
     import { ThunkDispatch } from 'redux-thunk';
 
     import {
+        remote,
+    } from 'electron';
+
+    import {
         Theme,
     } from '@plurid/plurid-themes';
     // #endregion libraries
@@ -27,6 +31,7 @@
     // #region internal
     import {
         StyledTopBar,
+        StyledWindowButtons,
     } from './styled';
     // #endregion internal
 // #endregion imports
@@ -64,6 +69,7 @@ const TopBar: React.FC<TopBarProperties> = (
 
     // #region references
     const hoverOutTimeout = useRef<NodeJS.Timeout | null>(null);
+    const pressTimer = useRef<NodeJS.Timeout | null>(null);
     // #endregion references
 
 
@@ -76,6 +82,21 @@ const TopBar: React.FC<TopBarProperties> = (
     const [
         show,
         setShow,
+    ] = useState(false);
+
+    const [
+        clicked,
+        setClicked,
+    ] = useState(false);
+
+    const [
+        longpress,
+        setLongpress,
+    ] = useState(false);
+
+    const [
+        draggable,
+        setDraggable,
     ] = useState(false);
     // #endregion state
 
@@ -104,8 +125,29 @@ const TopBar: React.FC<TopBarProperties> = (
     }, [
         mouseOver,
     ]);
-    // #endregion effects
 
+    // useEffect(() => {
+    //     setLongpress(false);
+
+    //     if (!pressTimer.current) {
+    //         pressTimer.current = setTimeout(function() {
+    //             setLongpress(true);
+    //         }, 1000);
+    //     }
+    // }, [
+
+    // ]);
+
+    // useEffect(() => {
+    //     if (longpress) {
+    //         setDraggable(true);
+    //     } else {
+    //         setDraggable(false);
+    //     }
+    // }, [
+    //     longpress,
+    // ]);
+    // #endregion effects
 
     // #region render
     return (
@@ -113,10 +155,70 @@ const TopBar: React.FC<TopBarProperties> = (
             onMouseEnter={() => setMouseOver(true)}
             onMouseLeave={() => setMouseOver(false)}
             onMouseMove={() => !mouseOver ? setMouseOver(true) : undefined}
+            onClick={(event) => {
+                // if (
+                //     event.type === 'click'
+                //     && event.button !== 0
+                // ) {
+                //     return;
+                // }
+
+                // setClicked(true);
+            }}
+            onMouseUp={() => {
+                // if (pressTimer.current) {
+                //     clearTimeout(pressTimer.current);
+                //     setLongpress(false);
+                // }
+            }}
 
             theme={stateGeneralTheme}
             show={show}
+            isDraggable={draggable}
         >
+            <StyledWindowButtons>
+                {mouseOver && (
+                    <>
+                        <div
+                            onClick={() => {
+                                remote.BrowserWindow.getFocusedWindow()?.close();
+                            }}
+                        >
+                            &times;
+                        </div>
+
+                        <div
+                            onClick={() => {
+                                remote.BrowserWindow.getFocusedWindow()?.minimize();
+                            }}
+                        >
+                            &#95;
+                        </div>
+
+                        <div
+                            onClick={() => {
+                                const window = remote.BrowserWindow.getFocusedWindow();
+
+                                if (!window) {
+                                    return;
+                                }
+
+                                if (window.isMaximized()) {
+                                    window.unmaximize();
+                                } else {
+                                    window.maximize();
+                                }
+                            }}
+                        >
+                            +
+                        </div>
+                    </>
+                )}
+            </StyledWindowButtons>
+
+            <div>
+                spaces
+            </div>
         </StyledTopBar>
     );
     // #endregion render
