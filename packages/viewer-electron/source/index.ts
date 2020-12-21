@@ -1,5 +1,7 @@
 // #region imports
     // #region libraries
+    import path from 'path';
+
     import {
         app as application,
         BrowserWindow,
@@ -48,7 +50,13 @@ const createWindow = () => {
 
 
     // and load the index.html of the app.
-    window.loadFile('index.html');
+    const indexRender = path.join(
+        __dirname,
+        'index.html',
+    );
+    window.loadFile(
+        indexRender,
+    );
 
     // Open the DevTools.
     // window.webContents.openDevTools();
