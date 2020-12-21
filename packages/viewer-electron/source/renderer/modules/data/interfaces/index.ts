@@ -1,6 +1,8 @@
 // #region module
 export interface Space {
     id: string;
+    name: string;
+    order: number;
     planes: Plane[];
 }
 

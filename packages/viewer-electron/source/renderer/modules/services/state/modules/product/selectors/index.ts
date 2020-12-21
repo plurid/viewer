@@ -13,6 +13,7 @@ const getProduct = (state: AppState) => state.product;
 const getProductUI = (state: AppState) => state.product.ui;
 const getLanguage = (state: AppState) => state.product.language;
 const getSpaces = (state: AppState) => state.product.spaces;
+const getActiveSpace = (state: AppState) => state.product.activeSpace;
 
 
 const selectors = {
@@ -20,6 +21,7 @@ const selectors = {
     getProductUI,
     getLanguage,
     getSpaces,
+    getActiveSpace,
 };
 // #endregion module
 

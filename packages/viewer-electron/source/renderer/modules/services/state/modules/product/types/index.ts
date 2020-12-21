@@ -70,6 +70,7 @@ export interface State {
     };
     language: string;
     spaces: Space[];
+    activeSpace: string;
 }
 
 

@@ -33,7 +33,7 @@ export const StyledTopBar = styled.div<IStyledTopBar>`
     top: 0;
     left: 0;
     right: 0;
-    height: 40px;
+    height: 45px;
     z-index: 9999;
 
     display: grid;
@@ -88,9 +88,9 @@ export interface IStyledSpace {
 }
 
 export const StyledSpace = styled.div<IStyledSpace>`
-    margin-right: 10px;
+    margin-right: 15px;
     max-width: 200px;
-    padding: 0.4rem 0;
+    padding: 0.4rem;
 
     border-bottom: 1px solid ${
         (properties: IStyledSpace) => {

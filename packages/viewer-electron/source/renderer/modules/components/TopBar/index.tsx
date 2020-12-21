@@ -21,6 +21,10 @@
 
 
     // #region external
+    import {
+        Space,
+    } from '~renderer-data/interfaces';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -47,6 +51,9 @@ export interface TopBarOwnProperties {
 export interface TopBarStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
+    stateSpaces: Space[];
+    stateActiveSpace: string;
+    stateGeneralView: string;
 }
 
 export interface TopBarDispatchProperties {
@@ -64,6 +71,9 @@ const TopBar: React.FC<TopBarProperties> = (
         // #region state
         stateGeneralTheme,
         // stateInteractionTheme,
+        stateSpaces,
+        stateActiveSpace,
+        stateGeneralView,
         // #endregion state
     } = properties;
     // #endregion properties
@@ -158,14 +168,14 @@ const TopBar: React.FC<TopBarProperties> = (
             onMouseLeave={() => setMouseOver(false)}
             onMouseMove={() => !mouseOver ? setMouseOver(true) : undefined}
             onClick={(event) => {
-                // if (
-                //     event.type === 'click'
-                //     && event.button !== 0
-                // ) {
-                //     return;
-                // }
+                if (
+                    event.type === 'click'
+                    && event.button !== 0
+                ) {
+                    return;
+                }
 
-                // setClicked(true);
+                setClicked(true);
             }}
             onMouseUp={() => {
                 // if (pressTimer.current) {
@@ -221,17 +231,22 @@ const TopBar: React.FC<TopBarProperties> = (
             <StyledSpaces
                 show={show}
             >
-                <StyledSpace
-                    active={true}
-                >
-                    space 1
-                </StyledSpace>
+                {stateGeneralView === '/space'
+                && stateSpaces.map(space => {
+                    const {
+                        id,
+                        name,
+                    } = space;
 
-                <StyledSpace
-                    active={false}
-                >
-                    space 2
-                </StyledSpace>
+                    return (
+                        <StyledSpace
+                            key={id}
+                            active={stateActiveSpace === id}
+                        >
+                            {name}
+                        </StyledSpace>
+                    );
+                })}
             </StyledSpaces>
         </StyledTopBar>
     );
@@ -244,6 +259,9 @@ const mapStateToProperties = (
 ): TopBarStateProperties => ({
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
+    stateSpaces: selectors.product.getSpaces(state),
+    stateActiveSpace: selectors.product.getActiveSpace(state),
+    stateGeneralView: selectors.views.getGeneralView(state),
 });
 
 
