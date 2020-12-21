@@ -61,4 +61,30 @@ export const StyledWindowButtons = styled.div`
     align-items: center;
     margin: 0 10px;
 `;
+
+
+export interface IStyledSpaces {
+    show: boolean;
+}
+
+export const StyledSpaces = styled.div<IStyledSpaces>`
+    display: flex;
+    align-items: center;
+
+    opacity: ${
+        (properties: IStyledSpaces) => {
+            if (properties.show) {
+                return '1';
+            }
+
+            return '0.3';
+        }
+    };
+`;
+
+
+export const StyledSpace = styled.div`
+    margin-right: 10px;
+    max-width: 200px;
+`;
 // #region module

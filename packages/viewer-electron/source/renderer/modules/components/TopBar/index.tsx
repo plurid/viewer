@@ -32,6 +32,8 @@
     import {
         StyledTopBar,
         StyledWindowButtons,
+        StyledSpaces,
+        StyledSpace,
     } from './styled';
     // #endregion internal
 // #endregion imports
@@ -216,9 +218,17 @@ const TopBar: React.FC<TopBarProperties> = (
                 )}
             </StyledWindowButtons>
 
-            <div>
-                spaces
-            </div>
+            <StyledSpaces
+                show={show}
+            >
+                <StyledSpace>
+                    space 1
+                </StyledSpace>
+
+                <StyledSpace>
+                    space 2
+                </StyledSpace>
+            </StyledSpaces>
         </StyledTopBar>
     );
     // #endregion render
