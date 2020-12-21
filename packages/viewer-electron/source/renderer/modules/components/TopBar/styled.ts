@@ -1,13 +1,22 @@
 // #region imports
     // #region libraries
     import styled from 'styled-components';
-    // #endregion libraries
-// #endregion imports
+
+    import {
+        Theme,
+    } from '@plurid/plurid-themes';
+    // #region libraries
+// #region imports
 
 
 
 // #region module
-export const StyledTopBar: any = styled.div`
+export interface IStyledTopBar {
+    theme: Theme;
+    show: boolean;
+}
+
+export const StyledTopBar = styled.div<IStyledTopBar>`
     -webkit-app-region: drag;
 
     position: absolute;
@@ -16,11 +25,15 @@ export const StyledTopBar: any = styled.div`
     right: 0;
     height: 40px;
     z-index: 9999;
-    background-color: ${(props: any) => {
-        if (props.mouseOver) {
-            return props.theme.backgroundColorDark;
+
+    background-color: ${
+        (properties: IStyledTopBar) => {
+            if (properties.show) {
+                return properties.theme.backgroundColorDark;
+            }
+
+            return 'transparent';
         }
-        return 'transparent';
-    }};
+    };
 `;
-// #endregion module
+// #region module

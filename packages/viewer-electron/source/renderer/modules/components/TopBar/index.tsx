@@ -92,7 +92,7 @@ const TopBar: React.FC<TopBarProperties> = (
                 () => {
                     setShow(false);
                 },
-                500,
+                750,
             );
         }
 
@@ -113,8 +113,9 @@ const TopBar: React.FC<TopBarProperties> = (
             onMouseEnter={() => setMouseOver(true)}
             onMouseLeave={() => setMouseOver(false)}
             onMouseMove={() => !mouseOver ? setMouseOver(true) : undefined}
-            show={show}
+
             theme={stateGeneralTheme}
+            show={show}
         >
         </StyledTopBar>
     );
