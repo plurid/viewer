@@ -45,6 +45,7 @@
         StyledSpace,
         StyledSpaceName,
         StyledAddButton,
+        StyledDragZone,
     } from './styled';
     // #endregion internal
 // #endregion imports
@@ -294,6 +295,8 @@ const TopBar: React.FC<TopBarProperties> = (
                         />
                     </StyledAddButton>
                 )}
+
+                <StyledDragZone />
             </StyledSpaces>
         </StyledTopBar>
     );

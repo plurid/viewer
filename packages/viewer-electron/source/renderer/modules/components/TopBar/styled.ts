@@ -20,7 +20,7 @@ export interface IStyledTopBar {
 export const StyledTopBar = styled.div<IStyledTopBar>`
     -webkit-app-region: ${
         (properties: IStyledTopBar) => {
-            return 'drag';
+            return 'no-drag';
             // if (properties.isDraggable) {
             //     return 'drag';
             // }
@@ -134,5 +134,13 @@ export const StyledAddButton = styled.div`
     place-content: center;
     width: 30px;
     margin-left: 10px;
+`;
+
+
+export const StyledDragZone = styled.div`
+    height: 100%;
+    min-width: 90px;
+    flex: 1;
+    -webkit-app-region: drag;
 `;
 // #region module
