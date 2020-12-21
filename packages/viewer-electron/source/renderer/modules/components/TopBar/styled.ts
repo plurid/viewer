@@ -20,11 +20,12 @@ export interface IStyledTopBar {
 export const StyledTopBar = styled.div<IStyledTopBar>`
     -webkit-app-region: ${
         (properties: IStyledTopBar) => {
-            if (properties.isDraggable) {
-                return 'drag';
-            }
+            return 'drag';
+            // if (properties.isDraggable) {
+            //     return 'drag';
+            // }
 
-            return 'no-drag';
+            // return 'no-drag';
         }
     };
     -webkit-user-select: none;
@@ -60,6 +61,7 @@ export const StyledWindowButtons = styled.div`
     justify-items: center;
     align-items: center;
     margin: 0 10px;
+    -webkit-app-region: no-drag;
 `;
 
 
@@ -78,6 +80,7 @@ export interface IStyledSpaces {
 export const StyledSpaces = styled.div<IStyledSpaces>`
     display: flex;
     align-items: center;
+    height: 100%;
 
     opacity: ${
         (properties: IStyledSpaces) => {
@@ -91,18 +94,28 @@ export const StyledSpaces = styled.div<IStyledSpaces>`
 `;
 
 
-export interface IStyledSpace {
+export const StyledSpace = styled.div`
+    margin-right: 15px;
+    max-width: 200px;
+    height: 100%;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+`;
+
+
+export interface IStyledSpaceName {
     active: boolean;
 }
 
-export const StyledSpace = styled.div<IStyledSpace>`
-    margin-right: 15px;
+export const StyledSpaceName = styled.div<IStyledSpaceName>`
     max-width: 200px;
     padding: 0.4rem;
-    cursor: pointer;
+    height: 100%;
+    display: grid;
+    place-content: center;
 
     border-bottom: 1px solid ${
-        (properties: IStyledSpace) => {
+        (properties: IStyledSpaceName) => {
             if (properties.active) {
                 return 'white';
             }

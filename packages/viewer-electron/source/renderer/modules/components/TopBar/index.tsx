@@ -43,6 +43,7 @@
         StyledWindowButton,
         StyledSpaces,
         StyledSpace,
+        StyledSpaceName,
     } from './styled';
     // #endregion internal
 // #endregion imports
@@ -246,12 +247,15 @@ const TopBar: React.FC<TopBarProperties> = (
                     return (
                         <StyledSpace
                             key={id}
-                            active={stateActiveSpace === id}
                             onClick={() => {
                                 // activate space
                             }}
                         >
-                            {name}
+                            <StyledSpaceName
+                                active={stateActiveSpace === id}
+                            >
+                                {name}
+                            </StyledSpaceName>
                         </StyledSpace>
                     );
                 })}
