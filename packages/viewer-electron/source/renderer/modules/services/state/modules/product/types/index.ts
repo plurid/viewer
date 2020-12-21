@@ -63,6 +63,12 @@ export interface RemovePlaneAction {
 }
 
 
+export const ADD_SPACE = 'ADD_SPACE';
+export interface AddSpaceAction {
+    type: typeof ADD_SPACE;
+}
+
+
 
 export interface State {
     ui: {
@@ -80,5 +86,6 @@ export type Actions =
     | SetLanguageAction
     | SetFieldAction
     | AddPlaneAction
-    | RemovePlaneAction;
+    | RemovePlaneAction
+    | AddSpaceAction;
 // #endregion module

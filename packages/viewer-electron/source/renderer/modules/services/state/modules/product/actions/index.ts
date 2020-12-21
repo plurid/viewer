@@ -64,6 +64,13 @@ export const removePlane = (
 }
 
 
+export const addSpace = (): Types.AddSpaceAction => {
+    return {
+        type: Types.ADD_SPACE,
+    };
+}
+
+
 
 export const actions = {
     setProduct,
@@ -72,6 +79,7 @@ export const actions = {
     setField,
     addPlane,
     removePlane,
+    addSpace,
 };
 // #endregion module
 

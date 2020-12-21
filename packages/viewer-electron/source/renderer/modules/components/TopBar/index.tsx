@@ -32,7 +32,7 @@
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
-    // import actions from '~renderer-services/state/actions';
+    import actions from '~renderer-services/state/actions';
     // #endregion external
 
 
@@ -63,6 +63,8 @@ export interface TopBarStateProperties {
 }
 
 export interface TopBarDispatchProperties {
+    dispatchProductSetField: typeof actions.product.setField;
+    dispatchProductAddSpace: typeof actions.product.addSpace;
 }
 
 export type TopBarProperties = TopBarOwnProperties
@@ -81,6 +83,11 @@ const TopBar: React.FC<TopBarProperties> = (
         stateActiveSpace,
         stateGeneralView,
         // #endregion state
+
+        // #region dispatch
+        dispatchProductSetField,
+        dispatchProductAddSpace,
+        // #endregion dispatch
     } = properties;
     // #endregion properties
 
@@ -248,7 +255,12 @@ const TopBar: React.FC<TopBarProperties> = (
                         <StyledSpace
                             key={id}
                             onClick={() => {
-                                // activate space
+                                if (stateActiveSpace !== id) {
+                                    dispatchProductSetField({
+                                        field: 'activeSpace',
+                                        data: id,
+                                    });
+                                }
                             }}
                         >
                             <StyledSpaceName
@@ -263,7 +275,7 @@ const TopBar: React.FC<TopBarProperties> = (
                 {show && (
                     <PluridIconAdd
                         atClick={() => {
-                            // add space
+                            dispatchProductAddSpace();
                         }}
                         size={14}
                     />
@@ -289,6 +301,14 @@ const mapStateToProperties = (
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
 ): TopBarDispatchProperties => ({
+    dispatchProductSetField: (
+        payload,
+    ) => dispatch(
+        actions.product.setField(payload),
+    ),
+    dispatchProductAddSpace: () => dispatch(
+        actions.product.addSpace(),
+    ),
 });
 
 

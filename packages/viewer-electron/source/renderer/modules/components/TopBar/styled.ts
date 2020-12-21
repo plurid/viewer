@@ -70,6 +70,7 @@ export const StyledWindowButton = styled.div`
     place-content: center;
     width: 15px;
     height: 15px;
+    cursor: pointer;
 `;
 
 

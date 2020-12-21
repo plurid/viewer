@@ -1,4 +1,11 @@
 // #region imports
+    // #region libraries
+    import {
+        uuid,
+    } from '@plurid/plurid-functions';
+    // #endregion libraries
+
+
     // #region internal
     import initialState from '../initial';
 
@@ -130,6 +137,29 @@ export const removePlane = (
 }
 
 
+export const addSpace = (
+    state: Types.State,
+    action: Types.AddSpaceAction,
+): Types.State => {
+    const spaces = [
+        ...state.spaces,
+        {
+            id: uuid.generate(),
+            name: 'new space',
+            order: state.spaces.length,
+            planes: [],
+        },
+    ];
+
+    const newState = {
+        ...state,
+        spaces,
+    };
+
+    return newState;
+}
+
+
 
 const resolvers = {
     setProduct,
@@ -138,6 +168,7 @@ const resolvers = {
     setField,
     addPlane,
     removePlane,
+    addSpace,
 };
 // #endregion module
 

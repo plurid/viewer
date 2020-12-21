@@ -28,6 +28,8 @@ export const reducer = (
             return resolvers.addPlane(state, action);
         case Types.REMOVE_PLANE:
             return resolvers.removePlane(state, action);
+        case Types.ADD_SPACE:
+            return resolvers.addSpace(state, action);
         default:
             return {
                 ...state,
