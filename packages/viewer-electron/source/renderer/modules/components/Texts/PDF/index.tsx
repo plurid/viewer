@@ -89,7 +89,9 @@ const PDF: React.FC<PDFProperties> = (
         ref.current = loadingTask;
     }
 
-    const onRenderSuccess = () => {
+    const onRenderSuccess = (
+        pageNumber: number,
+    ) => {
         // console.log('onRenderSuccess');
 
         const loadingTask = ref.current;
@@ -103,9 +105,6 @@ const PDF: React.FC<PDFProperties> = (
             (
                 pdf: any,
             ) => {
-                // console.log('pdf', pdf);
-                var pageNumber = 1;
-
                 pdf.getPage(pageNumber).then(
                     (
                         page: any,
@@ -203,14 +202,11 @@ const PDF: React.FC<PDFProperties> = (
                                 key={page}
                                 pageNumber={page}
                                 className="pdf-page"
-                                onRenderSuccess={onRenderSuccess}
-                                // ref={ref}
+                                onRenderSuccess={() => onRenderSuccess(page)}
                             />
                         ))
                 }
             </Document>
-
-            <p>Page {pageNumber} of {numPages}</p>
         </StyledPDF>
     );
     // #endregion render
