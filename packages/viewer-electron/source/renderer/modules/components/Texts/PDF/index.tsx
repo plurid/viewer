@@ -23,6 +23,7 @@
 
     import {
         useThrottledCallback,
+        useDebouncedCallback,
     } from '@plurid/plurid-functions-react';
     // #endregion libraries
 
@@ -88,7 +89,7 @@ const PDF: React.FC<PDFProperties> = (
         // #endregion required
     } = properties;
 
-    const renderingWindow = 5;
+    const renderingWindow = 4;
     // #endregion properties
 
 
@@ -227,7 +228,26 @@ const PDF: React.FC<PDFProperties> = (
         );
     }
 
-    const debouncedScroll = useThrottledCallback(() => {
+    const debouncedScroll = useDebouncedCallback(() => {
+        if (
+            !pdfReference.current
+            || !numPages
+        ) {
+            return;
+        }
+
+        const {
+            scrollTop,
+        } = pdfReference.current;
+
+        const currentPage = Math.floor(
+            scrollTop / 670 + 1,
+        );
+
+        setCurrentPage(currentPage);
+    }, 300);
+
+    const throttledScroll = useThrottledCallback(() => {
         if (
             !pdfReference.current
             || !numPages
@@ -310,7 +330,10 @@ const PDF: React.FC<PDFProperties> = (
             theme={theme}
             show={renderComplete}
             inversion={inversion}
-            onScroll={() => debouncedScroll()}
+            onScroll={() => {
+                debouncedScroll();
+                throttledScroll();
+            }}
             ref={pdfReference}
         >
             <Document
@@ -348,6 +371,11 @@ const PDF: React.FC<PDFProperties> = (
                             key={`rendered-${page}`}
                             pageNumber={page}
                             className={`pdf-page-${page}`}
+                            loading={(
+                                <PluridSpinner
+                                    theme={theme}
+                                />
+                            )}
                         />
                     );
                 })}
