@@ -71,11 +71,59 @@ const PDF: React.FC<PDFProperties> = (
     const [
         renderComplete,
         setRenderComplete,
-    ] = useState(false);
+    ] = useState(true);
+
+    const [
+        numPages,
+        setNumPages,
+    ] = useState(null);
+
+    const [
+        currentPage,
+        setCurrentPage,
+    ] = useState(1);
     // #endregion state
 
 
     // #region handlers
+    const handlePdfPage = (
+        pdf: any,
+        pageNumber: number,
+    ) => {
+        pdf.getPage(pageNumber).then(
+            (
+                page: any,
+            ) => {
+                const scale = 1;
+                const viewport = page.getViewport({
+                    scale,
+                });
+
+                const canvas: HTMLCanvasElement | null = document
+                    .querySelector(`.pdf-page-${pageNumber} canvas`);
+
+                if (!canvas) {
+                    return;
+                }
+
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height || viewport.viewBox[3];
+                canvas.width = viewport.width || viewport.viewBox[2];
+
+                // Render PDF page into canvas context
+                const renderContext = {
+                    canvasContext: context,
+                    background: theme.backgroundColorSecondary,
+                    viewport,
+                };
+
+                page.render(renderContext);
+
+                setRenderComplete(true);
+            }
+        );
+    }
+
     const onDocumentLoadSuccess = (
         data: any,
     ) => {
@@ -92,11 +140,7 @@ const PDF: React.FC<PDFProperties> = (
     const onRenderSuccess = (
         pageNumber: number,
     ) => {
-        // console.log('onRenderSuccess');
-
         const loadingTask = ref.current;
-        // console.log('onRenderSuccess', loadingTask);
-
         if (!loadingTask) {
             return;
         }
@@ -104,84 +148,10 @@ const PDF: React.FC<PDFProperties> = (
         loadingTask.promise.then(
             (
                 pdf: any,
-            ) => {
-                pdf.getPage(pageNumber).then(
-                    (
-                        page: any,
-                    ) => {
-                        // console.log('Page loaded');
-
-                        const scale = 1.5;
-                        const viewport = page.getViewport({
-                            scale,
-                        });
-
-                        // console.log('page', page);
-                        // console.log('viewport', viewport);
-
-                        // Prepare canvas using PDF page dimensions
-                        // if (!ref.current) {
-                        //     return;
-                        // }
-
-                        // console.log('ref.current', ref.current);
-
-                        // const canvas: any = document.getElementById('the-canvas');
-                        const canvas: HTMLCanvasElement | null = document.querySelector('.pdf-page canvas');
-                        // console.log('canvas', canvas);
-
-                        if (!canvas) {
-                            return;
-                        }
-
-                        const context = canvas.getContext('2d');
-                        // canvas.height = viewport.height;
-                        // canvas.width = viewport.width;
-                        canvas.height = viewport.height || viewport.viewBox[3]; /* viewport.height is NaN */
-                        canvas.width = viewport.width || viewport.viewBox[2];  /* viewport.width is also NaN */
-                        // canvas.height = 792;
-                        // canvas.width = 612;
-
-                        // Render PDF page into canvas context
-                        const renderContext = {
-                            canvasContext: context,
-                            // Use transparent background!
-                            background: theme.backgroundColorSecondary,
-                            viewport,
-                        };
-
-                        const renderTask = page.render(renderContext);
-                        // console.log('renderTask', renderTask);
-
-                        setRenderComplete(true);
-
-                        // renderTask.then(() => {
-                        //     console.log('Page rendered');
-                        // });
-                    }
-                );
-            },
-            (
-                reason: any,
-            ) => {
-                // PDF loading error
-                // console.error(reason);
-            }
+            ) => handlePdfPage(pdf, pageNumber),
         );
     }
     // #endregion handlers
-
-
-    // #region state
-    const [
-        numPages,
-        setNumPages,
-    ] = useState(null);
-    const [
-        pageNumber,
-        setPageNumber,
-    ] = useState(1);
-    // #endregion state
 
 
     // #region render
@@ -201,7 +171,7 @@ const PDF: React.FC<PDFProperties> = (
                             <Page
                                 key={page}
                                 pageNumber={page}
-                                className="pdf-page"
+                                className={`pdf-page-${page}`}
                                 onRenderSuccess={() => onRenderSuccess(page)}
                             />
                         ))

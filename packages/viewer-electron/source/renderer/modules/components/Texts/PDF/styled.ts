@@ -17,6 +17,11 @@ export interface IStyledPDF {
 }
 
 export const StyledPDF = styled.div<IStyledPDF>`
+    width: 100%;
+    min-height: 900px;
+    max-height: 900px;
+    overflow: scroll;
+
     opacity: ${
         ({
             show,
@@ -28,8 +33,5 @@ export const StyledPDF = styled.div<IStyledPDF>`
             return '0';
         }
     };
-    min-height: 900px;
-    max-height: 900px;
-    overflow: scroll;
 `;
 // #region module
