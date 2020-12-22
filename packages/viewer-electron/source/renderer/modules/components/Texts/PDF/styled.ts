@@ -55,6 +55,7 @@ export const StyledPDFDocument = styled.div<IStyledPDFDocument>`
             margin: 1em;
 
             canvas {
+                min-width: 900px;
                 max-width: 100%;
                 height: auto !important;
             }

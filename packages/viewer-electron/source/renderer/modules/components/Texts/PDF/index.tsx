@@ -159,15 +159,15 @@ const PDF: React.FC<PDFProperties> = (
             (
                 page: PDFPageProxy,
             ) => {
-                const scale = 1;
+                const scale = 1.5;
                 const viewport = page.getViewport({
                     scale,
                 });
 
-                let posY = 0;
-                let posX = 0;
-                let pY = viewport.transforms[5] * zoom + posY;
-                viewport.transforms = [zoom, 0, 0, -zoom, posX, pY];
+                // let posY = 0;
+                // let posX = 0;
+                // let pY = viewport.transforms[5] * zoom + posY;
+                // viewport.transforms = [zoom, 0, 0, -zoom, posX, pY];
 
                 const canvas: HTMLCanvasElement | null = document
                     .querySelector(`.pdf-page-${pageNumber} canvas`);
@@ -180,6 +180,8 @@ const PDF: React.FC<PDFProperties> = (
                     return;
                 }
                 // canvas.height = viewport.height;
+                canvas.height = 1200;
+                canvas.width = 1000;
                 // canvas.width = viewport.width;
 
                 // Render PDF page into canvas context
@@ -347,7 +349,7 @@ const PDF: React.FC<PDFProperties> = (
                 inversion={inversion}
                 onScroll={() => {
                     debouncedScroll();
-                    throttledScroll();
+                    // throttledScroll();
                 }}
                 ref={pdfReference}
             >
