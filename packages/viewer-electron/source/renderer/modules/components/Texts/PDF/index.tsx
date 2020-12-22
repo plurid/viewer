@@ -31,6 +31,7 @@
     // #region external
     import {
         PluridSpinner,
+        PluridPureButton,
     } from '~renderer-services/styled';
     // #endregion external
 
@@ -41,6 +42,8 @@
         StyledUnrenderedPageContainer,
         StyledUnrenderedPage,
     } from './styled';
+
+    import Toolbar from './components/Toolbar';
     // #endregion internal
 // #region imports
 
@@ -135,6 +138,11 @@ const PDF: React.FC<PDFProperties> = (
 
 
     const [
+        zoom,
+        setZoom,
+    ] = useState(1);
+
+    const [
         inversion,
         setInversion,
     ] = useState(1);
@@ -150,7 +158,7 @@ const PDF: React.FC<PDFProperties> = (
             (
                 page: PDFPageProxy,
             ) => {
-                const scale = 1;
+                const scale = zoom;
                 const viewport = page.getViewport({
                     scale,
                 });
@@ -165,8 +173,8 @@ const PDF: React.FC<PDFProperties> = (
                 if (!context) {
                     return;
                 }
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
+                // canvas.height = viewport.height;
+                // canvas.width = viewport.width;
 
                 // Render PDF page into canvas context
                 const renderContext: any = {
@@ -178,21 +186,6 @@ const PDF: React.FC<PDFProperties> = (
                 page.render(renderContext);
 
                 setRenderComplete(true);
-            }
-        );
-
-
-        pdf.getPage(pageNumber).then(
-            (
-                page: any,
-            ) => {
-                page.getOperatorList().then(
-                    (
-                        opList: any,
-                    ) => {
-                        console.log(opList);
-                    }
-                );
             }
         );
     }
@@ -320,8 +313,12 @@ const PDF: React.FC<PDFProperties> = (
         setRenderRange(numPages);
     }, [
         currentPage,
+        zoom,
     ]);
     // #endregion effects
+
+
+    console.log('zoom', zoom);
 
 
     // #region render
@@ -376,10 +373,33 @@ const PDF: React.FC<PDFProperties> = (
                                     theme={theme}
                                 />
                             )}
+                            onRenderSuccess={() => onRenderSuccess(page)}
                         />
                     );
                 })}
             </Document>
+
+            <Toolbar />
+
+            <div
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                }}
+            >
+                <PluridPureButton
+                    text="zoom -"
+                    atClick={() => setZoom(zoom / 1.5)}
+                    level={2}
+                />
+
+                <PluridPureButton
+                    text="zoom +"
+                    atClick={() => setZoom(zoom * 1.5)}
+                    level={2}
+                />
+            </div>
         </StyledPDF>
     );
     // #endregion render

@@ -21,6 +21,7 @@ export const StyledPDF = styled.div<IStyledPDF>`
     display: flex;
     flex-direction: column;
     align-items: center;
+    position: relative;
     margin: 0;
     padding: 0;
 
