@@ -20,6 +20,10 @@
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        useThrottledCallback,
+    } from '@plurid/plurid-functions-react';
     // #endregion libraries
 
 
@@ -84,12 +88,13 @@ const PDF: React.FC<PDFProperties> = (
         // #endregion required
     } = properties;
 
-    const inversion = 1;
+    const renderingWindow = 5;
     // #endregion properties
 
 
     // #region references
     const ref = useRef<any>(null);
+    const pdfReference = useRef<HTMLDivElement | null>(null);
     // #endregion references
 
 
@@ -126,6 +131,12 @@ const PDF: React.FC<PDFProperties> = (
             1, 1,
         ),
     );
+
+
+    const [
+        inversion,
+        setInversion,
+    ] = useState(1);
     // #endregion state
 
 
@@ -209,7 +220,46 @@ const PDF: React.FC<PDFProperties> = (
         loadingTask.promise.then(
             (
                 pdf: any,
-            ) => handlePdfPage(pdf, pageNumber),
+            ) => handlePdfPage(
+                pdf,
+                pageNumber,
+            ),
+        );
+    }
+
+    const debouncedScroll = useThrottledCallback(() => {
+        if (
+            !pdfReference.current
+            || !numPages
+        ) {
+            return;
+        }
+
+        const {
+            scrollTop,
+        } = pdfReference.current;
+
+        const currentPage = Math.floor(
+            scrollTop / 670 + 1,
+        );
+
+        setCurrentPage(currentPage);
+    }, 100);
+
+    const setRenderRange = (
+        numPages: number,
+    ) => {
+        const startRange = currentPage - renderingWindow < 1
+            ? 1
+            : currentPage - renderingWindow;
+        const endRange = currentPage + renderingWindow > numPages
+            ? numPages
+            : currentPage + renderingWindow;
+
+        setRenderPages(
+            createRange(
+                startRange, endRange,
+            ),
         );
     }
     // #endregion handlers
@@ -227,7 +277,7 @@ const PDF: React.FC<PDFProperties> = (
             ),
         );
 
-        if (numPages < 20) {
+        if (numPages < renderingWindow) {
             setRenderPages(
                 createRange(
                     1, numPages,
@@ -236,13 +286,20 @@ const PDF: React.FC<PDFProperties> = (
             return;
         }
 
-        setRenderPages(
-            createRange(
-                20, 40,
-            ),
-        );
+        setRenderRange(numPages);
     }, [
         numPages,
+    ]);
+
+
+    useEffect(() => {
+        if (!numPages) {
+            return;
+        }
+
+        setRenderRange(numPages);
+    }, [
+        currentPage,
     ]);
     // #endregion effects
 
@@ -253,6 +310,8 @@ const PDF: React.FC<PDFProperties> = (
             theme={theme}
             show={renderComplete}
             inversion={inversion}
+            onScroll={() => debouncedScroll()}
+            ref={pdfReference}
         >
             <Document
                 file={file}
@@ -289,7 +348,6 @@ const PDF: React.FC<PDFProperties> = (
                             key={`rendered-${page}`}
                             pageNumber={page}
                             className={`pdf-page-${page}`}
-                            // onRenderSuccess={() => onRenderSuccess(page)}
                         />
                     );
                 })}
