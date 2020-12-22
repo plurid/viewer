@@ -39,6 +39,7 @@
     // #region internal
     import {
         StyledPDF,
+        StyledPDFDocument,
         StyledUnrenderedPageContainer,
         StyledUnrenderedPage,
     } from './styled';
@@ -173,8 +174,8 @@ const PDF: React.FC<PDFProperties> = (
                 if (!context) {
                     return;
                 }
-                // canvas.height = viewport.height;
-                // canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
 
                 // Render PDF page into canvas context
                 const renderContext: any = {
@@ -320,61 +321,63 @@ const PDF: React.FC<PDFProperties> = (
 
     // #region render
     return (
-        <StyledPDF
-            theme={theme}
-            show={renderComplete}
-            inversion={inversion}
-            onScroll={() => {
-                debouncedScroll();
-                throttledScroll();
-            }}
-            ref={pdfReference}
-        >
-            <Document
-                file={file}
-                onLoadSuccess={onDocumentLoadSuccess}
-                loading={(
-                    <PluridSpinner
-                        theme={theme}
-                    />
-                )}
+        <StyledPDF>
+            <StyledPDFDocument
+                theme={theme}
+                show={renderComplete}
+                inversion={inversion}
+                onScroll={() => {
+                    debouncedScroll();
+                    throttledScroll();
+                }}
+                ref={pdfReference}
             >
-                {allRenderPages.map(page => {
-                    if (!numPages) {
-                        return;
-                    }
-
-                    if (page > numPages) {
-                        return;
-                    }
-
-                    if (!renderPages.includes(page)) {
-                        return (
-                            <StyledUnrenderedPageContainer
-                                key={`unrendered-${page}`}
-                            >
-                                <StyledUnrenderedPage
-                                    inversion={inversion}
-                                />
-                            </StyledUnrenderedPageContainer>
-                        );
-                    }
-
-                    return (
-                        <Page
-                            key={`rendered-${page}`}
-                            pageNumber={page}
-                            className={`pdf-page-${page}`}
-                            loading={(
-                                <PluridSpinner
-                                    theme={theme}
-                                />
-                            )}
-                            onRenderSuccess={() => onRenderSuccess(page)}
+                <Document
+                    file={file}
+                    onLoadSuccess={onDocumentLoadSuccess}
+                    loading={(
+                        <PluridSpinner
+                            theme={theme}
                         />
-                    );
-                })}
-            </Document>
+                    )}
+                >
+                    {allRenderPages.map(page => {
+                        if (!numPages) {
+                            return;
+                        }
+
+                        if (page > numPages) {
+                            return;
+                        }
+
+                        if (!renderPages.includes(page)) {
+                            return (
+                                <StyledUnrenderedPageContainer
+                                    key={`unrendered-${page}`}
+                                >
+                                    <StyledUnrenderedPage
+                                        inversion={inversion}
+                                    />
+                                </StyledUnrenderedPageContainer>
+                            );
+                        }
+
+                        return (
+                            <Page
+                                key={`rendered-${page}`}
+                                pageNumber={page}
+                                className={`pdf-page-${page}`}
+                                loading={(
+                                    <PluridSpinner
+                                        theme={theme}
+                                    />
+                                )}
+                                onRenderSuccess={() => onRenderSuccess(page)}
+                            />
+                        );
+                    })}
+                </Document>
+            </StyledPDFDocument>
 
             <Toolbar />
 

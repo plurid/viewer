@@ -11,17 +11,24 @@
 
 
 // #region module
-export interface IStyledPDF {
+export const StyledPDF = styled.div`
+    width: 100%;
+    min-height: 900px;
+    max-height: 900px;
+    position: relative;
+`;
+
+
+export interface IStyledPDFDocument {
     theme: Theme;
     show: boolean;
     inversion: number;
 }
 
-export const StyledPDF = styled.div<IStyledPDF>`
+export const StyledPDFDocument = styled.div<IStyledPDFDocument>`
     display: flex;
     flex-direction: column;
     align-items: center;
-    position: relative;
     margin: 0;
     padding: 0;
 
