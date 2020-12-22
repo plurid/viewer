@@ -18,10 +18,41 @@ export interface IStyledPDF {
 }
 
 export const StyledPDF = styled.div<IStyledPDF>`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+
     width: 100%;
     min-height: 900px;
     max-height: 900px;
-    overflow: scroll;
+    overflow-y: scroll;
+
+    .react-pdf {
+        &__Document {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        &__Page {
+            /* max-width: calc(~"100% - 2em"); */
+            max-width: calc('100% - 2em');
+            box-shadow: 0 0 8px rgba(0, 0, 0, .5);
+            margin: 1em;
+
+            canvas {
+                max-width: 100%;
+                height: auto !important;
+            }
+        }
+
+        &__message {
+            padding: 20px;
+            color: white;
+        }
+    }
 
     opacity: ${
         ({

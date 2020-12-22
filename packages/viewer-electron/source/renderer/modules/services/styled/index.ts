@@ -38,6 +38,9 @@ const {
     typography: {
         Heading: PluridHeading,
     },
+    markers: {
+        Spinner: PluridSpinner,
+    }
 } = universal;
 
 
@@ -130,6 +133,8 @@ export {
     PluridInputLine,
 
     PluridHeading,
+
+    PluridSpinner,
 
     StyledH2Heading,
     StyledH3Heading,

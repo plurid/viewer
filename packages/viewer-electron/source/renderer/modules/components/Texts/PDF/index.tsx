@@ -15,7 +15,6 @@
 
     import {
         PDFPageProxy,
-        PDFRenderParams,
     } from 'pdfjs-dist';
 
     import {
@@ -25,6 +24,9 @@
 
 
     // #region external
+    import {
+        PluridSpinner,
+    } from '~renderer-services/styled';
     // #endregion external
 
 
@@ -255,6 +257,11 @@ const PDF: React.FC<PDFProperties> = (
             <Document
                 file={file}
                 onLoadSuccess={onDocumentLoadSuccess}
+                loading={(
+                    <PluridSpinner
+                        theme={theme}
+                    />
+                )}
             >
                 {allRenderPages.map(page => {
                     if (!numPages) {
