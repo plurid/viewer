@@ -62,6 +62,8 @@ export interface IStyledUnrenderedPage {
 
 export const StyledUnrenderedPage = styled.div<IStyledUnrenderedPage>`
     background: white;
+    height: 100%;
+    width: 100%;
 
     filter: ${
         ({
