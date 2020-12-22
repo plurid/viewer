@@ -318,9 +318,6 @@ const PDF: React.FC<PDFProperties> = (
     // #endregion effects
 
 
-    console.log('zoom', zoom);
-
-
     // #region render
     return (
         <StyledPDF
