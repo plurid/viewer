@@ -159,10 +159,15 @@ const PDF: React.FC<PDFProperties> = (
             (
                 page: PDFPageProxy,
             ) => {
-                const scale = zoom;
+                const scale = 1;
                 const viewport = page.getViewport({
                     scale,
                 });
+
+                let posY = 0;
+                let posX = 0;
+                let pY = viewport.transforms[5] * zoom + posY;
+                viewport.transforms = [zoom, 0, 0, -zoom, posX, pY];
 
                 const canvas: HTMLCanvasElement | null = document
                     .querySelector(`.pdf-page-${pageNumber} canvas`);
@@ -174,8 +179,8 @@ const PDF: React.FC<PDFProperties> = (
                 if (!context) {
                     return;
                 }
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
+                // canvas.height = viewport.height;
+                // canvas.width = viewport.width;
 
                 // Render PDF page into canvas context
                 const renderContext: any = {
@@ -184,7 +189,7 @@ const PDF: React.FC<PDFProperties> = (
                     viewport,
                 };
 
-                page.render(renderContext);
+                page.render(renderContext).promise;
 
                 setRenderComplete(true);
             }
@@ -262,13 +267,14 @@ const PDF: React.FC<PDFProperties> = (
 
     const setRenderRange = (
         numPages: number,
+        offset: number = 0,
     ) => {
         const startRange = currentPage - renderingWindow < 1
             ? 1
-            : currentPage - renderingWindow;
+            : currentPage - renderingWindow + offset;
         const endRange = currentPage + renderingWindow > numPages
             ? numPages
-            : currentPage + renderingWindow;
+            : currentPage + renderingWindow + offset;
 
         setRenderPages(
             createRange(
@@ -305,7 +311,6 @@ const PDF: React.FC<PDFProperties> = (
         numPages,
     ]);
 
-
     useEffect(() => {
         if (!numPages) {
             return;
@@ -314,6 +319,18 @@ const PDF: React.FC<PDFProperties> = (
         setRenderRange(numPages);
     }, [
         currentPage,
+    ]);
+
+    useEffect(() => {
+        if (!numPages) {
+            return;
+        }
+
+        setRenderRange(
+            numPages,
+            1,
+        );
+    }, [
         zoom,
     ]);
     // #endregion effects
@@ -321,7 +338,9 @@ const PDF: React.FC<PDFProperties> = (
 
     // #region render
     return (
-        <StyledPDF>
+        <StyledPDF
+            theme={theme}
+        >
             <StyledPDFDocument
                 theme={theme}
                 show={renderComplete}

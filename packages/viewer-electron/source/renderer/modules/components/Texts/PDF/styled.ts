@@ -11,7 +11,11 @@
 
 
 // #region module
-export const StyledPDF = styled.div`
+export interface IStyledPDF {
+    theme: Theme;
+}
+
+export const StyledPDF = styled.div<IStyledPDF>`
     width: 100%;
     min-height: 900px;
     max-height: 900px;
