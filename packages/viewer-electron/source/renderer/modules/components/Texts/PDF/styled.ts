@@ -14,6 +14,7 @@
 export interface IStyledPDF {
     theme: Theme;
     show: boolean;
+    inversion: number;
 }
 
 export const StyledPDF = styled.div<IStyledPDF>`
@@ -25,13 +26,47 @@ export const StyledPDF = styled.div<IStyledPDF>`
     opacity: ${
         ({
             show,
-        }: IStyledPDF) => {
+        }) => {
             if (show) {
                 return '1';
             }
 
             return '0';
         }
+    };
+
+    canvas {
+        filter: ${
+            ({
+                inversion,
+            }) => `invert(${inversion})`
+        };
+    }
+`;
+
+
+export interface IStyledUnrenderedPageContainer {
+}
+
+export const StyledUnrenderedPageContainer = styled.div<IStyledUnrenderedPageContainer>`
+    box-shadow: 0 0 8px rgba(0,0,0,.5);
+    height: 663px;
+    width: 442px;
+    margin: 1em;
+`;
+
+
+export interface IStyledUnrenderedPage {
+    inversion: number;
+}
+
+export const StyledUnrenderedPage = styled.div<IStyledUnrenderedPage>`
+    background: white;
+
+    filter: ${
+        ({
+            inversion,
+        }) => `invert(${inversion})`
     };
 `;
 // #region module

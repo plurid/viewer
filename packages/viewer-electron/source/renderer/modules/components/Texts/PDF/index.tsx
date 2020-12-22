@@ -1,6 +1,7 @@
 // #region imports
     // #region libraries
     import React, {
+        useEffect,
         useRef,
         useState,
     } from 'react';
@@ -11,6 +12,11 @@
     } from 'react-pdf/dist/esm/entry.webpack';
 
     import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+
+    import {
+        PDFPageProxy,
+        PDFRenderParams,
+    } from 'pdfjs-dist';
 
     import {
         Theme,
@@ -25,6 +31,8 @@
     // #region internal
     import {
         StyledPDF,
+        StyledUnrenderedPageContainer,
+        StyledUnrenderedPage,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -32,6 +40,20 @@
 
 
 // #region module
+const createRange = (
+    start: number,
+    end: number | null,
+): number[] => {
+    const endNumber = end || 1;
+
+    const data = Array
+        .apply(null, Array(endNumber))
+        .map((_, i) => start + i);
+
+    return data;
+}
+
+
 export interface PDFProperties {
     // #region required
         // #region values
@@ -59,6 +81,8 @@ const PDF: React.FC<PDFProperties> = (
             // #endregion methods
         // #endregion required
     } = properties;
+
+    const inversion = 1;
     // #endregion properties
 
 
@@ -76,12 +100,30 @@ const PDF: React.FC<PDFProperties> = (
     const [
         numPages,
         setNumPages,
-    ] = useState(null);
+    ] = useState<number | null>(null);
 
     const [
         currentPage,
         setCurrentPage,
     ] = useState(1);
+
+    const [
+        renderPages,
+        setRenderPages,
+    ] = useState(
+        createRange(
+            1, 1,
+        ),
+    );
+
+    const [
+        allRenderPages,
+        setAllRenderPages,
+    ] = useState(
+        createRange(
+            1, 1,
+        ),
+    );
     // #endregion state
 
 
@@ -92,7 +134,7 @@ const PDF: React.FC<PDFProperties> = (
     ) => {
         pdf.getPage(pageNumber).then(
             (
-                page: any,
+                page: PDFPageProxy,
             ) => {
                 const scale = 1;
                 const viewport = page.getViewport({
@@ -101,25 +143,42 @@ const PDF: React.FC<PDFProperties> = (
 
                 const canvas: HTMLCanvasElement | null = document
                     .querySelector(`.pdf-page-${pageNumber} canvas`);
-
                 if (!canvas) {
                     return;
                 }
 
                 const context = canvas.getContext('2d');
-                canvas.height = viewport.height || viewport.viewBox[3];
-                canvas.width = viewport.width || viewport.viewBox[2];
+                if (!context) {
+                    return;
+                }
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
 
                 // Render PDF page into canvas context
-                const renderContext = {
+                const renderContext: any = {
                     canvasContext: context,
-                    background: theme.backgroundColorSecondary,
+                    // background: theme.backgroundColorSecondary,
                     viewport,
                 };
 
                 page.render(renderContext);
 
                 setRenderComplete(true);
+            }
+        );
+
+
+        pdf.getPage(pageNumber).then(
+            (
+                page: any,
+            ) => {
+                page.getOperatorList().then(
+                    (
+                        opList: any,
+                    ) => {
+                        console.log(opList);
+                    }
+                );
             }
         );
     }
@@ -154,28 +213,79 @@ const PDF: React.FC<PDFProperties> = (
     // #endregion handlers
 
 
+    // #region effects
+    useEffect(() => {
+        if (!numPages) {
+            return;
+        }
+
+        setAllRenderPages(
+            createRange(
+                1, numPages,
+            ),
+        );
+
+        if (numPages < 20) {
+            setRenderPages(
+                createRange(
+                    1, numPages,
+                ),
+            );
+            return;
+        }
+
+        setRenderPages(
+            createRange(
+                20, 40,
+            ),
+        );
+    }, [
+        numPages,
+    ]);
+    // #endregion effects
+
+
     // #region render
     return (
         <StyledPDF
             theme={theme}
             show={renderComplete}
+            inversion={inversion}
         >
             <Document
                 file={file}
                 onLoadSuccess={onDocumentLoadSuccess}
             >
-                {
-                    Array.apply(null, Array(numPages))
-                        .map((x, i) => i + 1)
-                        .map(page => (
-                            <Page
-                                key={page}
-                                pageNumber={page}
-                                className={`pdf-page-${page}`}
-                                onRenderSuccess={() => onRenderSuccess(page)}
-                            />
-                        ))
-                }
+                {allRenderPages.map(page => {
+                    if (!numPages) {
+                        return;
+                    }
+
+                    if (page > numPages) {
+                        return;
+                    }
+
+                    if (!renderPages.includes(page)) {
+                        return (
+                            <StyledUnrenderedPageContainer
+                                key={`unrendered-${page}`}
+                            >
+                                <StyledUnrenderedPage
+                                    inversion={inversion}
+                                />
+                            </StyledUnrenderedPageContainer>
+                        );
+                    }
+
+                    return (
+                        <Page
+                            key={`rendered-${page}`}
+                            pageNumber={page}
+                            className={`pdf-page-${page}`}
+                            // onRenderSuccess={() => onRenderSuccess(page)}
+                        />
+                    );
+                })}
             </Document>
         </StyledPDF>
     );
