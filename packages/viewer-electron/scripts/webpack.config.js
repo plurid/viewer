@@ -86,6 +86,7 @@ module.exports = [
                     { from: './source/window/package.json', to: './package.json' },
                     { from: './source/assets/', to: './assets/' },
                     { from: './yarn.lock', to: './' },
+                    { from: './libraries/', to: './libraries/' },
                 ],
             }),
         ],
