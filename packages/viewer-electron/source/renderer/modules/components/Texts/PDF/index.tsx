@@ -278,6 +278,13 @@ const PDF: React.FC<PDFProperties> = (
             ? numPages
             : currentPage + renderingWindow + offset;
 
+        if (
+            startRange === renderPages[0]
+            && endRange === renderPages[renderPages.length - 1]
+        ) {
+            return;
+        }
+
         setRenderPages(
             createRange(
                 startRange, endRange,
