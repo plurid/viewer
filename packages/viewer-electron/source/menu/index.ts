@@ -1,5 +1,7 @@
 // #region imports
     // #region libraries
+    import path from 'path';
+
     import {
         app,
         dialog,
@@ -20,6 +22,7 @@ const setMenu = (
     createWindow: () => void,
 ) => {
     const isMac = process.platform === 'darwin';
+    let lastOpenPath = '';
 
     const appMenu: any = isMac
         ? [
@@ -97,6 +100,7 @@ const setMenu = (
                         }
 
                         const filesData = await dialog.showOpenDialog({
+                            defaultPath: lastOpenPath,
                             properties: [
                                 'openFile',
                                 'multiSelections',
@@ -115,6 +119,8 @@ const setMenu = (
                         if (!window) {
                             return;
                         }
+
+                        lastOpenPath = path.dirname(filePaths[0]);
 
                         window.webContents.send('FILES_OPEN', filePaths);
                     }

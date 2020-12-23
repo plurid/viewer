@@ -13,6 +13,7 @@
 // #region module
 export interface IStyledPDF {
     theme: Theme;
+    disabledPointer: boolean;
 }
 
 export const StyledPDF = styled.div<IStyledPDF>`
@@ -27,9 +28,17 @@ export const StyledPDF = styled.div<IStyledPDF>`
         width: 100%;
         height: 100%;
 
-        canvas {
-            filter: invert(1);
-        }
+        pointer-events: ${
+            ({
+                disabledPointer,
+            }) => {
+                if (disabledPointer) {
+                    return 'auto';
+                }
+
+                return 'all';
+            }
+        };
     }
 `;
 
