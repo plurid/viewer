@@ -179,10 +179,10 @@ const PDF: React.FC<PDFProperties> = (
                 if (!context) {
                     return;
                 }
-                // canvas.height = viewport.height;
-                canvas.height = 1200;
-                canvas.width = 1000;
-                // canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                // canvas.height = 1200;
+                // canvas.width = 1000;
 
                 // Render PDF page into canvas context
                 const renderContext: any = {
@@ -241,11 +241,11 @@ const PDF: React.FC<PDFProperties> = (
             scrollTop,
         } = pdfReference.current;
 
-        const currentPage = Math.floor(
-            scrollTop / 670 + 1,
+        const currentPageCompute = Math.floor(
+            scrollTop / 900 + 1,
         );
 
-        setCurrentPage(currentPage);
+        setCurrentPage(currentPageCompute);
     }, 300);
 
     const throttledScroll = useThrottledCallback(() => {
@@ -278,12 +278,14 @@ const PDF: React.FC<PDFProperties> = (
             ? numPages
             : currentPage + renderingWindow + offset;
 
-        if (
-            startRange === renderPages[0]
-            && endRange === renderPages[renderPages.length - 1]
-        ) {
-            return;
-        }
+        console.log('startRange - endRange', startRange, endRange);
+
+        // if (
+        //     startRange === renderPages[0]
+        //     && endRange === renderPages[renderPages.length - 1]
+        // ) {
+        //     return;
+        // }
 
         setRenderPages(
             createRange(
@@ -328,20 +330,21 @@ const PDF: React.FC<PDFProperties> = (
         setRenderRange(numPages);
     }, [
         currentPage,
-    ]);
-
-    useEffect(() => {
-        if (!numPages) {
-            return;
-        }
-
-        setRenderRange(
-            numPages,
-            1,
-        );
-    }, [
         zoom,
     ]);
+
+    // useEffect(() => {
+    //     if (!numPages) {
+    //         return;
+    //     }
+
+    //     setRenderRange(
+    //         numPages,
+    //         1,
+    //     );
+    // }, [
+    //     zoom,
+    // ]);
     // #endregion effects
 
 
