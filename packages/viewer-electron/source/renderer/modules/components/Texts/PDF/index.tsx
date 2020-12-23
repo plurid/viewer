@@ -22,20 +22,6 @@
 
 
 // #region module
-const createRange = (
-    start: number,
-    end: number | null,
-): number[] => {
-    const endNumber = end || 1;
-
-    const data = Array
-        .apply(null, Array(endNumber))
-        .map((_, i) => start + i);
-
-    return data;
-}
-
-
 export interface PDFProperties {
     // #region required
         // #region values
