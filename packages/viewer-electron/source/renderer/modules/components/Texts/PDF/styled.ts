@@ -20,6 +20,17 @@ export const StyledPDF = styled.div<IStyledPDF>`
     min-height: 900px;
     max-height: 900px;
     position: relative;
+
+    iframe {
+        position: absolute;
+        border: none;
+        width: 100%;
+        height: 100%;
+
+        canvas {
+            filter: invert(1);
+        }
+    }
 `;
 
 

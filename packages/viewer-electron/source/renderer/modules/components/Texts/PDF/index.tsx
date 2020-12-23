@@ -353,7 +353,14 @@ const PDF: React.FC<PDFProperties> = (
         <StyledPDF
             theme={theme}
         >
-            <StyledPDFDocument
+            <iframe
+                src={
+                    'libraries/pdfjs/web/viewer.html?file=' + encodeURIComponent(file)
+                }
+            />
+
+
+            {/* <StyledPDFDocument
                 theme={theme}
                 show={renderComplete}
                 inversion={inversion}
@@ -430,7 +437,7 @@ const PDF: React.FC<PDFProperties> = (
                     atClick={() => setZoom(zoom * 1.5)}
                     level={2}
                 />
-            </div>
+            </div> */}
         </StyledPDF>
     );
     // #endregion render
