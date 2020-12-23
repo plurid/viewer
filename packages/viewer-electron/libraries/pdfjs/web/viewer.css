@@ -343,6 +343,9 @@
 .pdfViewer .page canvas {
   margin: 0;
   display: block;
+
+  /* ADDED */
+  filter: invert(1);
 }
 
 .pdfViewer .page canvas[hidden] {
@@ -2400,16 +2403,16 @@ html[dir='rtl'] #documentPropertiesOverlay .row > * {
 
 
 ::-webkit-scrollbar-track {
-  background: #1e1e1e; 
+  background: #1e1e1e;
   border: 1px solid #444444;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #444444; 
+  background: #444444;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555555; 
+  background: #555555;
 }
 
 ::-webkit-scrollbar-corner {
