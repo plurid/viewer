@@ -97,7 +97,11 @@ const Text: React.FC<TextProperties> = (
     // #region render
     return (
         <StyledText>
-            <PDF
+            {/* <PDF
+                file={file}
+                theme={stateGeneralTheme}
+            /> */}
+            <Epub
                 file={file}
                 theme={stateGeneralTheme}
             />
