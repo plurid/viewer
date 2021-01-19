@@ -30,7 +30,6 @@
     import DocTextStrategy from './strategies/PdfTextStrategy';
     import DocxTextStrategy from './strategies/PdfTextStrategy';
     import OdtTextStrategy from './strategies/PdfTextStrategy';
-    import PdfTextStrategy from './strategies/PdfTextStrategy';
     import RtfTextStrategy from './strategies/PdfTextStrategy';
     import TexTextStrategy from './strategies/PdfTextStrategy';
     import TxtTextStrategy from './strategies/PdfTextStrategy';
@@ -41,6 +40,10 @@
     import XlsTextStrategy from './strategies/PdfTextStrategy';
     import XlsmTextStrategy from './strategies/PdfTextStrategy';
     import XlsxTextStrategy from './strategies/PdfTextStrategy';
+
+    // reading files
+    import EpubTextStrategy from './strategies/EpubTextStrategy';
+    import PdfTextStrategy from './strategies/PdfTextStrategy';
     // #endregion internal
 // #endregion imports
 
@@ -96,7 +99,6 @@ class TextStrategy implements Strategy {
             '.doc': DocTextStrategy,
             '.docx': DocxTextStrategy,
             '.odt': OdtTextStrategy,
-            '.pdf': PdfTextStrategy,
             '.rtf': RtfTextStrategy,
             '.tex': TexTextStrategy,
             '.txt': TxtTextStrategy,
@@ -107,6 +109,10 @@ class TextStrategy implements Strategy {
             '.xls': XlsTextStrategy,
             '.xlsm': XlsmTextStrategy,
             '.xlsx': XlsxTextStrategy,
+
+            // reading files
+            '.epub': EpubTextStrategy,
+            '.pdf': PdfTextStrategy,
         };
         const Strategy = strategies[this.extension];
 

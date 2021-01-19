@@ -21,6 +21,7 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import Epub from '~renderer-components/Texts/Epub';
     import PDF from '~renderer-components/Texts/PDF';
 
     import { AppState } from '~renderer-services/state/store';

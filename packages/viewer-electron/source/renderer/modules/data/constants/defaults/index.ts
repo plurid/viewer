@@ -65,7 +65,6 @@ const textExtensions = [
     '.doc',
     '.docx',
     '.odt',
-    '.pdf',
     '.rtf',
     '.tex',
     '.txt',
@@ -76,6 +75,10 @@ const textExtensions = [
     '.xls',
     '.xlsm',
     '.xlsx',
+
+    // reading files
+    '.pdf',
+    '.epub',
 ];
 // #endregion module
 
