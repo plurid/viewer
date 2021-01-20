@@ -81,6 +81,40 @@ const Epub: React.FC<EpubProperties> = (
 
 
     // #region handlers
+    const setupStyles = (
+        rendition: Rendition,
+    ) => {
+        rendition.themes.register({
+            'plurid': {
+                body: {
+                    color: 'white',
+                },
+                h1: {
+                    color: '#999999',
+                },
+                h2: {
+                    color: '#999999',
+                },
+                h3: {
+                    color: '#999999',
+                },
+                h4: {
+                    color: '#999999',
+                },
+                h5: {
+                    color: '#999999',
+                },
+                h6: {
+                    color: '#999999',
+                },
+                a: {
+                    color: '#999999',
+                },
+            },
+        });
+        rendition.themes.select('plurid');
+    }
+
     const onReaderLoad = (
         ebook: any,
         rendition: Rendition,
@@ -94,7 +128,7 @@ const Epub: React.FC<EpubProperties> = (
         rendition.display();
         // cfi ? rendition.display(cfi) : rendition.display()
 
-        // setupStyles(rendition)
+        setupStyles(rendition);
 
         ebook.ready.then(async () => {
             const { package: { metadata = {} } = {} } = ebook
@@ -116,7 +150,7 @@ const Epub: React.FC<EpubProperties> = (
         // onNext && onNext(rendition);
     }
 
-      const handlePrevious = () => {
+    const handlePrevious = () => {
         if (!rendition) {
             return;
         }
