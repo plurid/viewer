@@ -52,6 +52,7 @@ const Djvu: React.FC<DjvuProperties> = (
         // #region required
             // #region values
             theme,
+            file,
             // #endregion values
 
             // #region methods
@@ -79,6 +80,7 @@ const Djvu: React.FC<DjvuProperties> = (
             viewerInstance.render(
                 document.querySelector("#djvu_viewer"),
             );
+            viewerInstance.loadDocumentByUrl(file);
         };
     }, []);
     // #endregion effects
