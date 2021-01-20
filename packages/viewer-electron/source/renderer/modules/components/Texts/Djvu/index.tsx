@@ -1,12 +1,17 @@
 // #region imports
     // #region libraries
     import React, {
+        useRef,
         useEffect,
     } from 'react';
 
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        uuid,
+    } from '@plurid/plurid-functions';
     // #endregion libraries
 
 
@@ -67,17 +72,19 @@ const Djvu: React.FC<DjvuProperties> = (
             // #endregion methods
         // #endregion optional
     } = properties;
+
+    const viewerID = useRef<string>('djvu-viewer-' + uuid.generate());
     // #endregion properties
 
 
     // #region effects
     useEffect(() => {
         const viewerInstance = new DjVu.Viewer();
-        console.log(DjVu),
-        // render into the element
+
         viewerInstance.render(
-            document.querySelector("#djvu_viewer"),
+            document.querySelector('#' + viewerID.current),
         );
+
         viewerInstance.loadDocumentByUrl(file);
     }, []);
     // #endregion effects
@@ -92,7 +99,7 @@ const Djvu: React.FC<DjvuProperties> = (
                 style={{
                     height: '900px',
                 }}
-                id="djvu_viewer"
+                id={viewerID.current}
             />
         </StyledDjvu>
     );
