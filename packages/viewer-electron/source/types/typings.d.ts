@@ -56,6 +56,3 @@ declare module '*.mov' {
     const value: any;
     export default value;
 }
-
-
-declare module 'react-epubjs';

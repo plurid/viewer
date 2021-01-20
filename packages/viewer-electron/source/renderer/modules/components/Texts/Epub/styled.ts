@@ -16,5 +16,6 @@ export interface IStyledEpub {
 }
 
 export const StyledEpub = styled.div<IStyledEpub>`
+    height: 700px;
 `;
 // #region module
