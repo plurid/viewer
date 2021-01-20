@@ -80,6 +80,8 @@ const textExtensions = [
     '.epub',
     '.djvu',
     '.pdf',
+    '.plurid',
+    '.pluridoc',
 ];
 // #endregion module
 
