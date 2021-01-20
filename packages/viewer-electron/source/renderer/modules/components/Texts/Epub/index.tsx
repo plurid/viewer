@@ -5,7 +5,7 @@
         useState,
     } from 'react';
 
-    import EpubReader from 'epub';
+    import ReactEpubjs from 'react-epubjs';
 
     import {
         Theme,
@@ -37,14 +37,6 @@ export interface EpubProperties {
         // #region methods
         // #endregion methods
     // #endregion required
-
-    // #region optional
-        // #region values
-        // #endregion values
-
-        // #region methods
-        // #endregion methods
-    // #endregion optional
 }
 
 const Epub: React.FC<EpubProperties> = (
@@ -61,17 +53,7 @@ const Epub: React.FC<EpubProperties> = (
             // #region methods
             // #endregion methods
         // #endregion required
-
-        // #region optional
-            // #region values
-            // #endregion values
-
-            // #region methods
-            // #endregion methods
-        // #endregion optional
     } = properties;
-
-    const epubReader = new EpubReader(file);
 
     const [
         text,
@@ -82,13 +64,6 @@ const Epub: React.FC<EpubProperties> = (
 
     // #region effects
     useEffect(() => {
-        const chapters = epubReader.flow;
-        console.log('chapters', chapters);
-
-        // epubReader.getChapter(chapters[0].id, (error, text) => {
-        //     console.log(text);
-        //     setText(text);
-        // });
     }, []);
     // #endregion effects
 
@@ -98,7 +73,9 @@ const Epub: React.FC<EpubProperties> = (
         <StyledEpub
             theme={theme}
         >
-            Epub
+            <ReactEpubjs
+                url={file}
+            />
         </StyledEpub>
     );
     // #endregion render
