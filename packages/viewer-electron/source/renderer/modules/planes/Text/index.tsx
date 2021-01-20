@@ -21,6 +21,7 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import Djvu from '~renderer-components/Texts/Djvu';
     import Epub from '~renderer-components/Texts/Epub';
     import PDF from '~renderer-components/Texts/PDF';
 
@@ -97,14 +98,18 @@ const Text: React.FC<TextProperties> = (
     // #region render
     return (
         <StyledText>
+            <Djvu
+                file={file}
+                theme={stateGeneralTheme}
+            />
+            {/* <Epub
+                file={file}
+                theme={stateGeneralTheme}
+            /> */}
             {/* <PDF
                 file={file}
                 theme={stateGeneralTheme}
             /> */}
-            <Epub
-                file={file}
-                theme={stateGeneralTheme}
-            />
         </StyledText>
     );
     // #endregion render

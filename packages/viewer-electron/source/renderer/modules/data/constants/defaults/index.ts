@@ -77,8 +77,9 @@ const textExtensions = [
     '.xlsx',
 
     // reading files
-    '.pdf',
     '.epub',
+    '.djvu',
+    '.pdf',
 ];
 // #endregion module
 

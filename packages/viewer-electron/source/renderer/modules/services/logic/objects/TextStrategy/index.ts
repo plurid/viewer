@@ -42,6 +42,7 @@
     import XlsxTextStrategy from './strategies/PdfTextStrategy';
 
     // reading files
+    import DjvuTextStrategy from './strategies/DjvuTextStrategy';
     import EpubTextStrategy from './strategies/EpubTextStrategy';
     import PdfTextStrategy from './strategies/PdfTextStrategy';
     // #endregion internal
@@ -112,6 +113,7 @@ class TextStrategy implements Strategy {
 
             // reading files
             '.epub': EpubTextStrategy,
+            '.djvu': DjvuTextStrategy,
             '.pdf': PdfTextStrategy,
         };
         const Strategy = strategies[this.extension];
