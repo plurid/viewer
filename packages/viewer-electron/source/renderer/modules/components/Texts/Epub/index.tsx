@@ -106,6 +106,25 @@ const Epub: React.FC<EpubProperties> = (
             // onRelocated && rendition.on('relocated', handleRelocated(ebook))
         })
     }
+
+    const handleNext = () => {
+        if (!rendition) {
+            return;
+        }
+
+        rendition.next()
+        // onNext && onNext(rendition);
+    }
+
+      const handlePrevious = () => {
+        if (!rendition) {
+            return;
+        }
+
+        rendition.prev();
+        // onPrevious && onPrevious(rendition);
+    }
+
     // #endregion handlers
 
 
@@ -141,6 +160,20 @@ const Epub: React.FC<EpubProperties> = (
             <div
                 ref={epubElement}
             />
+
+            <div>
+                <div
+                    onClick={() => handlePrevious()}
+                >
+                    previous
+                </div>
+
+                <div
+                    onClick={() => handleNext()}
+                >
+                    next
+                </div>
+            </div>
         </StyledEpub>
     );
     // #endregion render
