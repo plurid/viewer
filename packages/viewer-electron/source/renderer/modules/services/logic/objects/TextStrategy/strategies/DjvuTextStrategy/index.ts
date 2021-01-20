@@ -22,6 +22,7 @@ class DjvuTextStrategy {
     public async compute() {
         return {
             source: this.file,
+            type: '.djvu',
         };
     }
 }

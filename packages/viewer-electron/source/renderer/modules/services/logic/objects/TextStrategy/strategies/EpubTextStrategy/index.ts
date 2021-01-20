@@ -22,6 +22,7 @@ class EpubTextStrategy {
     public async compute() {
         return {
             source: this.file,
+            type: '.epub',
         };
     }
 }

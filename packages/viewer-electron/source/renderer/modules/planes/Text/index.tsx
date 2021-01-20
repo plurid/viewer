@@ -87,31 +87,51 @@ const Text: React.FC<TextProperties> = (
         ? activeSpace.planes.find(plane => plane.id === id)
         : undefined;
 
-    const planeData = activePlane && activePlane.kind === 'text'
+    const resolvedPlane = activePlane && activePlane.kind === 'text'
         ? activePlane
         : undefined;
 
-    const file = planeData?.data.source || '';
+    if (!resolvedPlane) {
+        return (<></>);
+    }
+
+    const file = resolvedPlane.data.source;
+    const type = resolvedPlane.data.type;
     // #endregion properties
 
 
     // #region render
-    return (
-        <StyledText>
-            <Djvu
-                file={file}
-                theme={stateGeneralTheme}
-            />
-            {/* <Epub
-                file={file}
-                theme={stateGeneralTheme}
-            /> */}
-            {/* <PDF
-                file={file}
-                theme={stateGeneralTheme}
-            /> */}
-        </StyledText>
-    );
+    switch (type) {
+        case '.djvu':
+            return (
+                <StyledText>
+                    <Djvu
+                        file={file}
+                        theme={stateGeneralTheme}
+                    />
+                </StyledText>
+            );
+        case '.epub':
+            return (
+                <StyledText>
+                    <Epub
+                        file={file}
+                        theme={stateGeneralTheme}
+                    />
+                </StyledText>
+            );
+        case '.pdf':
+            return (
+                <StyledText>
+                    <PDF
+                        file={file}
+                        theme={stateGeneralTheme}
+                    />
+                </StyledText>
+            );
+        default:
+            return (<></>);
+    }
     // #endregion render
 }
 

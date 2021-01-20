@@ -51,6 +51,7 @@ export interface PlaneText extends PlaneBase {
     kind: 'text';
     data: {
         source: string;
+        type: string;
     };
 }
 
