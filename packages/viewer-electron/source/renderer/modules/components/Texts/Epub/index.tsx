@@ -158,7 +158,6 @@ const Epub: React.FC<EpubProperties> = (
         rendition.prev();
         // onPrevious && onPrevious(rendition);
     }
-
     // #endregion handlers
 
 
