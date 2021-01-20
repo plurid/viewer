@@ -70,18 +70,15 @@ const Djvu: React.FC<DjvuProperties> = (
     // #endregion properties
 
 
-
     // #region effects
     useEffect(() => {
-        window.onload = function() {
-            // save as a global value
-            const viewerInstance = new DjVu.Viewer();
-            // render into the element
-            viewerInstance.render(
-                document.querySelector("#djvu_viewer"),
-            );
-            viewerInstance.loadDocumentByUrl(file);
-        };
+        const viewerInstance = new DjVu.Viewer();
+        console.log(DjVu),
+        // render into the element
+        viewerInstance.render(
+            document.querySelector("#djvu_viewer"),
+        );
+        viewerInstance.loadDocumentByUrl(file);
     }, []);
     // #endregion effects
 
