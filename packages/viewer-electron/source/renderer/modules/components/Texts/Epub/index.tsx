@@ -158,6 +158,9 @@ const Epub: React.FC<EpubProperties> = (
             theme={theme}
         >
             <div
+                style={{
+                    height: '1000px',
+                }}
                 ref={epubElement}
             />
 
