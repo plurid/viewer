@@ -207,6 +207,7 @@ const Space: React.FC<SpaceProperties> = (
         setPluridView(view);
     }, [
         activeSpace,
+        activeSpace?.planes.length,
     ]);
 
     useEffect(() => {
