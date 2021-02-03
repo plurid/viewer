@@ -144,6 +144,7 @@ export interface SpaceStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
     stateSpaces: Space[];
+    activeSpaceID: string;
 }
 
 export interface SpaceDispatchProperties {
@@ -165,6 +166,7 @@ const Space: React.FC<SpaceProperties> = (
         // stateGeneralTheme,
         // stateInteractionTheme,
         stateSpaces,
+        activeSpaceID,
         // #endregion state
 
         // #region dispatch
@@ -173,13 +175,20 @@ const Space: React.FC<SpaceProperties> = (
         // #endregion dispatch
     } = properties;
 
-    const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
+    const activeSpaceInitial = stateSpaces.find(space => space.id === activeSpaceID);
 
-    const pluridData = computePluridData(activeSpace);
+    const pluridData = computePluridData(activeSpaceInitial);
     // #endregion properties
 
 
     // #region state
+    const [
+        activeSpace,
+        setActiveSpace,
+    ] = useState(
+        stateSpaces.find(space => space.id === activeSpaceID),
+    );
+
     const [
         pluridView,
         setPluridView,
@@ -198,7 +207,13 @@ const Space: React.FC<SpaceProperties> = (
         setPluridView(view);
     }, [
         activeSpace,
-        activeSpace?.planes.length,
+    ]);
+
+    useEffect(() => {
+        const activeSpace = stateSpaces.find(space => space.id === activeSpaceID);
+        setActiveSpace(activeSpace);
+    }, [
+        activeSpaceID,
     ]);
 
 
@@ -264,6 +279,7 @@ const mapStateToProperties = (
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
     stateSpaces: selectors.product.getSpaces(state),
+    activeSpaceID: selectors.product.getActiveSpace(state),
 });
 
 
