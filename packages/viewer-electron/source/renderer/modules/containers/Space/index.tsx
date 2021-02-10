@@ -20,6 +20,8 @@
     import {
         PluridApplication,
         PluridPlane,
+        PluridPubSub,
+        TOPICS,
     } from '@plurid/plurid-react';
     // #endregion libraries
 
@@ -135,6 +137,8 @@ const computePluridData = (
         view,
     };
 }
+
+const pluridPubSub = new PluridPubSub();
 
 
 export interface SpaceOwnProperties {
@@ -255,6 +259,26 @@ const Space: React.FC<SpaceProperties> = (
                 );
             }
         });
+
+        ipcRenderer.on('TOUCHBAR_SLIDER', (
+            _,
+            value,
+        ) => {
+            console.log('value', value);
+
+            // pluridPubSub.publish(
+            //     TOPICS.SPACE_ROTATE_Y_TO, 
+            //     {
+            //         value: value * 360 / 100,
+            //     },
+            // );
+            pluridPubSub.publish(
+                TOPICS.SPACE_ROTATE_Y_WITH, 
+                {
+                    value: 3,
+                },
+            );
+        });
     }, []);
     // #endregion effects
 
@@ -266,6 +290,7 @@ const Space: React.FC<SpaceProperties> = (
                 <PluridApplication
                     planes={pluridPlanes}
                     view={pluridView}
+                    pubsub={pluridPubSub}
                 />
             )}
         </StyledSpace>

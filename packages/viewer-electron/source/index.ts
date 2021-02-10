@@ -18,7 +18,7 @@
         loadDatabase,
     } from './database';
 
-    import touchBar from './extras/touchbar';
+    import generateTouchBar from './extras/touchbar';
     // #endregion internal
 // #endregion imports
 
@@ -100,7 +100,9 @@ const createWindow = () => {
         window = null;
     });
 
-    window.setTouchBar(touchBar);
+    window.setTouchBar(
+        generateTouchBar(window),
+    );
 }
 
 

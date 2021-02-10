@@ -1,4 +1,5 @@
 import { 
+    BrowserWindow,
     TouchBar,
 } from 'electron';
 
@@ -11,47 +12,54 @@ const {
 } = TouchBar;
 
 
-const segmentedControlTypes = new TouchBarSegmentedControl({
-    change: (index, isSelected) => {
-        console.log('change', index, isSelected);
-    },
-    mode: 'multiple',
-    segments: [
-        {
-            label: 'translate',
+const generateTouchBar = (
+    window: BrowserWindow,
+) => {
+    const segmentedControlTypes = new TouchBarSegmentedControl({
+        change: (index, isSelected) => {
+            console.log('change', index, isSelected);
         },
-        {
-            label: 'rotate',
+        mode: 'multiple',
+        segments: [
+            {
+                label: 'translate',
+            },
+            {
+                label: 'rotate',
+            },
+            {
+                label: 'scale',
+            },
+        ],
+    });
+    
+    
+    const transformType = new TouchBarButton({
+         label: 'up/down',
+    });
+    
+    let sliderValue = 50;
+    
+    const slider = new TouchBarSlider({
+        minValue: 0,
+        maxValue: 100,
+        value: sliderValue,
+        change: (newValue) => {
+            console.log('newValue', newValue);
+            window.webContents.send('TOUCHBAR_SLIDER', newValue);
         },
-        {
-            label: 'scale',
-        },
-    ],
-});
+    });
+    
+    const touchBar = new TouchBar({
+        items: [
+            segmentedControlTypes,
+            slider,
+        ],
+    });
 
-
-const transformType = new TouchBarButton({
-     label: 'up/down',
-});
-
-let sliderValue = 50;
-
-const slider = new TouchBarSlider({
-    minValue: 0,
-    maxValue: 100,
-    value: sliderValue,
-    change: (newValue) => {
-        console.log('newValue', newValue);
-    },
-});
-
-
-const touchBar = new TouchBar({
-    items: [
-        segmentedControlTypes,
-    ],
-});
+    return touchBar;
+}
 
 
 
-export default touchBar;
+export default generateTouchBar;
