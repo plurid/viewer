@@ -17,6 +17,8 @@
     import {
         loadDatabase,
     } from './database';
+
+    import touchBar from './extras/touchbar';
     // #endregion internal
 // #endregion imports
 
@@ -97,6 +99,8 @@ const createWindow = () => {
         // when you should delete the corresponding element.
         window = null;
     });
+
+    window.setTouchBar(touchBar);
 }
 
 
