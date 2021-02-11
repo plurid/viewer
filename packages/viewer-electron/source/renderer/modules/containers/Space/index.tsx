@@ -1,6 +1,7 @@
 // #region imports
     // #region libraries
     import React, {
+        useRef,
         useState,
         useEffect,
     } from 'react';
@@ -185,6 +186,9 @@ const Space: React.FC<SpaceProperties> = (
     // #endregion properties
 
 
+    const currentAngle = useRef(0);
+
+
     // #region state
     const [
         activeSpace,
@@ -272,10 +276,21 @@ const Space: React.FC<SpaceProperties> = (
             //         value: value * 360 / 100,
             //     },
             // );
+            
+            // 0 - 0
+            // 25 - -90
+            // 50 - 0
+            // 75 - 90
+            // 100 - 0
+
+            let newValue = ( (value - 50) / 100 ) * 2 * 180;
+            let updateValue = currentAngle.current - newValue;
+            // console.log(currentAngle.current, newValue, updateValue);
+            currentAngle.current = newValue;
             pluridPubSub.publish(
                 TOPICS.SPACE_ROTATE_Y_WITH, 
                 {
-                    value: 3,
+                    value: -1 * updateValue,
                 },
             );
         });

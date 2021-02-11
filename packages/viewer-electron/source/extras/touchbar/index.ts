@@ -45,7 +45,6 @@ const generateTouchBar = (
         maxValue: 100,
         value: sliderValue,
         change: (newValue) => {
-            console.log('newValue', newValue);
             window.webContents.send('TOUCHBAR_SLIDER', newValue);
         },
     });
