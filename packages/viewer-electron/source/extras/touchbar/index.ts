@@ -26,28 +26,44 @@ const generateTouchBar = (
     window: BrowserWindow,
     regenerate: () => void,
 ) => {
-    const transformSelector = new TouchBarSegmentedControl({
-        change: (index, isSelected) => {
-            if (isSelected) {
-                transformType = index;
-            } else {
-                transformType = -1;
-            }
-            console.log('change', index, isSelected);
+    const transformSelect = (
+        index: number,
+    ) => {
+        if (index !== transformType) {
+            transformType = index;
+        } else {
+            transformType = -1;
+        }
+    }
+
+    const transformSelectorTranslate = new TouchBarButton({
+        label: 'translate',
+        click: () => {
+            transformSelect(0);
+            regenerate();
         },
-        selectedIndex: transformType,
-        mode: 'multiple',
-        segments: [
-            {
-                label: 'translate',
-            },
-            {
-                label: 'rotate',
-            },
-            {
-                label: 'scale',
-            },
-        ],
+        backgroundColor: transformType === 0 ? 'Selected' : '',
+        accessibilityLabel: 'translate',
+    });
+
+    const transformSelectorRotate = new TouchBarButton({
+        label: 'rotate',
+        click: () => {
+            transformSelect(1);
+            regenerate();
+        },
+        backgroundColor: transformType === 1 ? 'Selected' : '',
+        accessibilityLabel: 'rotate',
+    });
+
+    const transformSelectorScale = new TouchBarButton({
+        label: 'scale',
+        click: () => {
+            transformSelect(2);
+            regenerate();
+        },
+        backgroundColor: transformType === 2 ? 'Selected' : '',
+        accessibilityLabel: 'scale',
     });
 
 
@@ -67,6 +83,7 @@ const generateTouchBar = (
             console.log('mode clicked', transformModeValue);
             regenerate();
         },
+        enabled: false,
     });
 
     const slider = new TouchBarSlider({
@@ -81,7 +98,9 @@ const generateTouchBar = (
 
     const touchBar = new TouchBar({
         items: [
-            transformSelector,
+            transformSelectorTranslate,
+            transformSelectorRotate,
+            transformSelectorScale,
             spacer,
             transformMode,
             slider,
