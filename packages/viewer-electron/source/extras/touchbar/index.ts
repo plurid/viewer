@@ -13,6 +13,10 @@ const {
 } = TouchBar;
 
 
+// 0: 'translate'
+// 1: 'rotate'
+// 2: 'scale'
+let transformType = 0;
 
 let transformModeValue = 'left/right';
 
@@ -22,8 +26,14 @@ const generateTouchBar = (
 ) => {
     const transformSelector = new TouchBarSegmentedControl({
         change: (index, isSelected) => {
+            if (isSelected) {
+                transformType = index;
+            } else {
+                transformType = -1;
+            }
             console.log('change', index, isSelected);
         },
+        selectedIndex: transformType,
         mode: 'multiple',
         segments: [
             {
