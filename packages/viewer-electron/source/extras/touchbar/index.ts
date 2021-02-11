@@ -1,6 +1,7 @@
 import {
     BrowserWindow,
     TouchBar,
+    nativeImage,
 } from 'electron';
 
 
@@ -9,7 +10,6 @@ const {
     TouchBarButton,
     TouchBarSlider,
     TouchBarSpacer,
-    TouchBarSegmentedControl,
 } = TouchBar;
 
 
@@ -21,6 +21,39 @@ let transformType = 0;
 let transformModeValue = 'left/right';
 
 let sliderValue = 50;
+
+const sizing = {
+    height: 16,
+    width: 16,
+};
+
+const rotateIcon = nativeImage
+    .createFromPath(__dirname + '/assets/rotate.png')
+    .resize(sizing);
+const rotateIconInvert = nativeImage
+    .createFromPath(__dirname + '/assets/rotate-invert.png')
+    .resize(sizing);
+const scaleIcon = nativeImage
+    .createFromPath(__dirname + '/assets/scale.png')
+    .resize(sizing);
+const scaleIconInvert = nativeImage
+    .createFromPath(__dirname + '/assets/scale-invert.png')
+    .resize(sizing);
+const translateIcon = nativeImage
+    .createFromPath(__dirname + '/assets/translate.png')
+    .resize(sizing);
+const translateIconInvert = nativeImage
+    .createFromPath(__dirname + '/assets/translate-invert.png')
+    .resize(sizing);
+
+const upDownIcon = nativeImage
+    .createFromPath(__dirname + '/assets/up-down.png')
+    .resize(sizing);
+const leftRightIcon = nativeImage
+    .createFromPath(__dirname + '/assets/left-right.png')
+    .resize(sizing);
+
+const showLabels = false;
 
 const generateTouchBar = (
     window: BrowserWindow,
@@ -36,18 +69,10 @@ const generateTouchBar = (
         }
     }
 
-    const transformSelectorTranslate = new TouchBarButton({
-        label: 'translate',
-        click: () => {
-            transformSelect(0);
-            regenerate();
-        },
-        backgroundColor: transformType === 0 ? 'Selected' : '',
-        accessibilityLabel: 'translate',
-    });
-
     const transformSelectorRotate = new TouchBarButton({
-        label: 'rotate',
+        icon: transformType === 1 ? rotateIconInvert : rotateIcon,
+        iconPosition: showLabels ? 'left' : 'overlay',
+        label: showLabels ? 'rotate' : '',
         click: () => {
             transformSelect(1);
             regenerate();
@@ -57,13 +82,27 @@ const generateTouchBar = (
     });
 
     const transformSelectorScale = new TouchBarButton({
-        label: 'scale',
+        icon: transformType === 2 ? scaleIconInvert : scaleIcon,
+        iconPosition: showLabels ? 'left' : 'overlay',
+        label: showLabels ? 'scale' : '',
         click: () => {
             transformSelect(2);
             regenerate();
         },
         backgroundColor: transformType === 2 ? 'Selected' : '',
         accessibilityLabel: 'scale',
+    });
+
+    const transformSelectorTranslate = new TouchBarButton({
+        icon: transformType === 0 ? translateIconInvert : translateIcon,
+        iconPosition: showLabels ? 'left' : 'overlay',
+        label: showLabels ? 'translate' : '',
+        click: () => {
+            transformSelect(0);
+            regenerate();
+        },
+        backgroundColor: transformType === 0 ? 'Selected' : '',
+        accessibilityLabel: 'translate',
     });
 
 
@@ -73,17 +112,16 @@ const generateTouchBar = (
 
 
     const transformMode = new TouchBarButton({
-        label: transformModeValue,
+        icon: transformModeValue === 'up/down' ? upDownIcon : leftRightIcon,
+        iconPosition: showLabels ? 'left' : 'overlay',
+        label: showLabels ? transformModeValue : '',
         click: () => {
-            console.log('mode clicked');
-            console.log('mode clicked', transformModeValue);
             transformModeValue = transformModeValue === 'up/down'
                 ? 'left/right'
                 : 'up/down';
-            console.log('mode clicked', transformModeValue);
             regenerate();
         },
-        enabled: false,
+        // enabled: false,
     });
 
     const slider = new TouchBarSlider({
@@ -98,9 +136,9 @@ const generateTouchBar = (
 
     const touchBar = new TouchBar({
         items: [
-            transformSelectorTranslate,
             transformSelectorRotate,
             transformSelectorScale,
+            transformSelectorTranslate,
             spacer,
             transformMode,
             slider,
