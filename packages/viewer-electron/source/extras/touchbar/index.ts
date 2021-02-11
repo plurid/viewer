@@ -20,6 +20,8 @@ let transformType = 0;
 
 let transformModeValue = 'left/right';
 
+let sliderValue = 50;
+
 const generateTouchBar = (
     window: BrowserWindow,
     regenerate: () => void,
@@ -50,7 +52,7 @@ const generateTouchBar = (
 
 
     const spacer = new TouchBarSpacer({
-        size: 'large',
+        size: 'small',
     });
 
 
@@ -67,14 +69,13 @@ const generateTouchBar = (
         },
     });
 
-    let sliderValue = 50;
-
     const slider = new TouchBarSlider({
         minValue: 0,
         maxValue: 100,
         value: sliderValue,
         change: (newValue) => {
             window.webContents.send('TOUCHBAR_SLIDER', newValue);
+            sliderValue = newValue;
         },
     });
 
