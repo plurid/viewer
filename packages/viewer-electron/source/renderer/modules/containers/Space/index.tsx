@@ -150,6 +150,7 @@ export interface SpaceStateProperties {
     stateInteractionTheme: Theme;
     stateSpaces: Space[];
     activeSpaceID: string;
+    stateProductUI: any;
 }
 
 export interface SpaceDispatchProperties {
@@ -172,6 +173,7 @@ const Space: React.FC<SpaceProperties> = (
         // stateInteractionTheme,
         stateSpaces,
         activeSpaceID,
+        stateProductUI,
         // #endregion state
 
         // #region dispatch
@@ -268,10 +270,10 @@ const Space: React.FC<SpaceProperties> = (
             _,
             value,
         ) => {
-            console.log('value', value);
-
-            const type = 'translate';
-            const topic = TOPICS.SPACE_ROTATE_Y_WITH;
+            console.log('stateProductUI', stateProductUI);
+            const topic = stateProductUI.touchbar.mode === 'up/down'
+                ? TOPICS.SPACE_ROTATE_X_WITH
+                : TOPICS.SPACE_ROTATE_Y_WITH;
 
             // pluridPubSub.publish(
             //     TOPICS.SPACE_ROTATE_Y_TO,
@@ -291,13 +293,15 @@ const Space: React.FC<SpaceProperties> = (
             // console.log(currentAngle.current, newValue, updateValue);
             currentAngle.current = newValue;
             pluridPubSub.publish(
-                TOPICS.SPACE_ROTATE_Y_WITH,
+                topic,
                 {
                     value: -1 * updateValue,
                 },
             );
         });
-    }, []);
+    }, [
+        stateProductUI,
+    ]);
     // #endregion effects
 
 
@@ -324,6 +328,7 @@ const mapStateToProperties = (
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
     stateSpaces: selectors.product.getSpaces(state),
     activeSpaceID: selectors.product.getActiveSpace(state),
+    stateProductUI: selectors.product.getProductUI(state),
 });
 
 

@@ -1,10 +1,16 @@
 // #region imports
     // #region libraries
-    import React from 'react';
+    import React, {
+        useEffect,
+    } from 'react';
 
     import { AnyAction } from 'redux';
     import { connect } from 'react-redux';
     import { ThunkDispatch } from 'redux-thunk';
+
+    import {
+        ipcRenderer,
+    } from 'electron';
 
     import {
         Theme,
@@ -31,7 +37,7 @@
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
-    // import actions from '~renderer-services/state/actions';
+    import actions from '~renderer-services/state/actions';
     // #endregion external
 // #endregion imports
 
@@ -51,9 +57,11 @@ export interface ViewOwnProperties {
 export interface ViewStateProperties {
     stateGeneralTheme: Theme;
     stateGeneralView: string;
+    stateProductUI: any;
 }
 
 export interface ViewDispatchProperties {
+    dispatchProductSetField: typeof actions.product.setField;
 }
 
 export type ViewProperties = ViewOwnProperties
@@ -69,9 +77,61 @@ const View: React.FC<ViewProperties> = (
         // #region state
         stateGeneralTheme,
         stateGeneralView,
+        stateProductUI,
         // #endregion state
+
+        // #region dispatch
+        dispatchProductSetField,
+        // #endregion dispatch
     } = properties;
     // #endregion properties
+
+
+    // #region effects
+    useEffect(() => {
+        const touchbarTransform = (
+            _: any,
+            value: any,
+        ) => {
+            dispatchProductSetField({
+                field: 'ui',
+                data: {
+                    ...stateProductUI,
+                    touchbar: {
+                        ...stateProductUI.touchbar,
+                        transformType: value.active ? value.type : -1,
+                    },
+                },
+            });
+        }
+
+        const touchbarMode = (
+            _: any,
+            value: any,
+        ) => {
+            dispatchProductSetField({
+                field: 'ui',
+                data: {
+                    ...stateProductUI,
+                    touchbar: {
+                        ...stateProductUI.touchbar,
+                        mode: value,
+                    },
+                },
+            });
+        }
+
+        ipcRenderer.on('TOUCHBAR_TRANSFORM', touchbarTransform);
+        ipcRenderer.on('TOUCHBAR_MODE', touchbarMode);
+
+        return () => {
+            ipcRenderer.off('TOUCHBAR_TRANSFORM', touchbarTransform);
+            ipcRenderer.off('TOUCHBAR_MODE', touchbarMode);
+        }
+    }, [
+        stateProductUI,
+    ]);
+    // #endregion effects
 
 
     // #region render
@@ -123,12 +183,18 @@ const mapStateToProperties = (
 ): ViewStateProperties => ({
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateGeneralView: selectors.views.getGeneralView(state),
+    stateProductUI: selectors.product.getProductUI(state),
 });
 
 
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
 ): ViewDispatchProperties => ({
+    dispatchProductSetField: (
+        payload,
+    ) => dispatch(
+        actions.product.setField(payload),
+    ),
 });
 
 

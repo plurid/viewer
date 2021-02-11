@@ -15,6 +15,10 @@ const initialState: Types.State = {
             showNames: true,
             scaleIcons: true,
         },
+        touchbar: {
+            transformType: -1,
+            mode: '',
+        },
     },
     language: 'english',
     spaces: [

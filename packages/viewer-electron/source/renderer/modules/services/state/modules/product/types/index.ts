@@ -80,6 +80,10 @@ export interface RemoveSpaceAction {
 export interface State {
     ui: {
         toolbars: any;
+        touchbar: {
+            transformType: number;
+            mode: string;
+        };
     };
     language: string;
     spaces: Space[];
