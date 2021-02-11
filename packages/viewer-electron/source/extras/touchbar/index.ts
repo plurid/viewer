@@ -1,21 +1,26 @@
-import { 
+import {
     BrowserWindow,
     TouchBar,
 } from 'electron';
 
 
 
-const { 
-    TouchBarButton, 
-    TouchBarSlider, 
-    TouchBarSegmentedControl, 
+const {
+    TouchBarButton,
+    TouchBarSlider,
+    TouchBarSpacer,
+    TouchBarSegmentedControl,
 } = TouchBar;
 
 
+
+let transformModeValue = 'left/right';
+
 const generateTouchBar = (
     window: BrowserWindow,
+    regenerate: () => void,
 ) => {
-    const segmentedControlTypes = new TouchBarSegmentedControl({
+    const transformSelector = new TouchBarSegmentedControl({
         change: (index, isSelected) => {
             console.log('change', index, isSelected);
         },
@@ -32,14 +37,28 @@ const generateTouchBar = (
             },
         ],
     });
-    
-    
-    const transformType = new TouchBarButton({
-         label: 'up/down',
+
+
+    const spacer = new TouchBarSpacer({
+        size: 'large',
     });
-    
+
+
+    const transformMode = new TouchBarButton({
+        label: transformModeValue,
+        click: () => {
+            console.log('mode clicked');
+            console.log('mode clicked', transformModeValue);
+            transformModeValue = transformModeValue === 'up/down'
+                ? 'left/right'
+                : 'up/down';
+            console.log('mode clicked', transformModeValue);
+            regenerate();
+        },
+    });
+
     let sliderValue = 50;
-    
+
     const slider = new TouchBarSlider({
         minValue: 0,
         maxValue: 100,
@@ -48,10 +67,12 @@ const generateTouchBar = (
             window.webContents.send('TOUCHBAR_SLIDER', newValue);
         },
     });
-    
+
     const touchBar = new TouchBar({
         items: [
-            segmentedControlTypes,
+            transformSelector,
+            spacer,
+            transformMode,
             slider,
         ],
     });

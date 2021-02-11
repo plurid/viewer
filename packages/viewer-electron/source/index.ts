@@ -100,8 +100,24 @@ const createWindow = () => {
         window = null;
     });
 
+    const regenerate = () => {
+        if (!window) {
+            return;
+        }
+
+        window.setTouchBar(
+            generateTouchBar(
+                window,
+                regenerate,
+            )
+        );
+    }
+
     window.setTouchBar(
-        generateTouchBar(window),
+        generateTouchBar(
+            window,
+            regenerate,
+        ),
     );
 }
 
