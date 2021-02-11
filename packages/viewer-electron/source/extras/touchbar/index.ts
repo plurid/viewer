@@ -16,7 +16,7 @@ const {
 // 0: 'translate'
 // 1: 'rotate'
 // 2: 'scale'
-let transformType = 0;
+let transformType = -1;
 
 let transformModeValue = 'left/right';
 
@@ -74,6 +74,10 @@ const generateTouchBar = (
         iconPosition: showLabels ? 'left' : 'overlay',
         label: showLabels ? 'rotate' : '',
         click: () => {
+            window.webContents.send('TOUCHBAR_TRANSFORM', {
+                type: 1,
+                active: transformType !== 1,
+            });
             transformSelect(1);
             regenerate();
         },
@@ -86,6 +90,10 @@ const generateTouchBar = (
         iconPosition: showLabels ? 'left' : 'overlay',
         label: showLabels ? 'scale' : '',
         click: () => {
+            window.webContents.send('TOUCHBAR_TRANSFORM', {
+                type: 2,
+                active: transformType !== 2,
+            });
             transformSelect(2);
             regenerate();
         },
@@ -98,6 +106,10 @@ const generateTouchBar = (
         iconPosition: showLabels ? 'left' : 'overlay',
         label: showLabels ? 'translate' : '',
         click: () => {
+            window.webContents.send('TOUCHBAR_TRANSFORM', {
+                type: 0,
+                active: transformType !== 0,
+            });
             transformSelect(0);
             regenerate();
         },
