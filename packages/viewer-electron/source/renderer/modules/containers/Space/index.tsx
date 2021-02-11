@@ -270,13 +270,16 @@ const Space: React.FC<SpaceProperties> = (
         ) => {
             console.log('value', value);
 
+            const type = 'translate';
+            const topic = TOPICS.SPACE_ROTATE_Y_WITH;
+
             // pluridPubSub.publish(
-            //     TOPICS.SPACE_ROTATE_Y_TO, 
+            //     TOPICS.SPACE_ROTATE_Y_TO,
             //     {
             //         value: value * 360 / 100,
             //     },
             // );
-            
+
             // 0 - 0
             // 25 - -90
             // 50 - 0
@@ -288,7 +291,7 @@ const Space: React.FC<SpaceProperties> = (
             // console.log(currentAngle.current, newValue, updateValue);
             currentAngle.current = newValue;
             pluridPubSub.publish(
-                TOPICS.SPACE_ROTATE_Y_WITH, 
+                TOPICS.SPACE_ROTATE_Y_WITH,
                 {
                     value: -1 * updateValue,
                 },

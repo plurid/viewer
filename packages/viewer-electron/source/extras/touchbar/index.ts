@@ -128,6 +128,7 @@ const generateTouchBar = (
         iconPosition: showLabels ? 'left' : 'overlay',
         label: showLabels ? transformModeValue : '',
         click: () => {
+            window.webContents.send('TOUCHBAR_MODE', transformModeValue);
             transformModeValue = transformModeValue === 'up/down'
                 ? 'left/right'
                 : 'up/down';
