@@ -125,8 +125,8 @@ const View: React.FC<ViewProperties> = (
         ipcRenderer.on('TOUCHBAR_MODE', touchbarMode);
 
         return () => {
-            ipcRenderer.off('TOUCHBAR_TRANSFORM', touchbarTransform);
-            ipcRenderer.off('TOUCHBAR_MODE', touchbarMode);
+            ipcRenderer.removeListener('TOUCHBAR_TRANSFORM', touchbarTransform);
+            ipcRenderer.removeListener('TOUCHBAR_MODE', touchbarMode);
         }
     }, [
         stateProductUI,

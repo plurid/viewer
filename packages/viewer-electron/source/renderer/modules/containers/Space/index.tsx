@@ -317,10 +317,10 @@ const Space: React.FC<SpaceProperties> = (
         ipcRenderer.on('TOUCHBAR_SLIDER', transformSpace);
 
         return () => {
-            ipcRenderer.off('TOUCHBAR_SLIDER', transformSpace);
+            ipcRenderer.removeListener('TOUCHBAR_SLIDER', transformSpace);
         }
     }, [
-        stateProductUI.touchbar.mode,
+        // stateProductUI.touchbar.mode,
     ]);
     // #endregion effects
 

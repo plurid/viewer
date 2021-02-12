@@ -17,7 +17,7 @@ const initialState: Types.State = {
         },
         touchbar: {
             transformType: -1,
-            mode: 'up/down',
+            mode: 'left/right',
         },
     },
     language: 'english',
