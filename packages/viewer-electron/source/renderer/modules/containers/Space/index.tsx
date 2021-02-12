@@ -188,7 +188,8 @@ const Space: React.FC<SpaceProperties> = (
     // #endregion properties
 
 
-    const currentAngle = useRef(0);
+    const currentYAngle = useRef(0);
+    const currentXAngle = useRef(0);
 
 
     // #region state
@@ -265,22 +266,23 @@ const Space: React.FC<SpaceProperties> = (
                 );
             }
         });
+    }, [
+    ]);
 
-        ipcRenderer.on('TOUCHBAR_SLIDER', (
-            _,
-            value,
+    useEffect(() => {
+        const transformSpace = (
+            _: any,
+            value: any,
         ) => {
-            console.log('stateProductUI', stateProductUI);
-            const topic = stateProductUI.touchbar.mode === 'up/down'
+            const mode = stateProductUI.touchbar.mode;
+            // console.log('stateProductUI', stateProductUI);
+            const topic = mode === 'up/down'
                 ? TOPICS.SPACE_ROTATE_X_WITH
                 : TOPICS.SPACE_ROTATE_Y_WITH;
 
-            // pluridPubSub.publish(
-            //     TOPICS.SPACE_ROTATE_Y_TO,
-            //     {
-            //         value: value * 360 / 100,
-            //     },
-            // );
+            const currentAngle = mode === 'up/down'
+                ? currentYAngle.current
+                : currentXAngle.current;
 
             // 0 - 0
             // 25 - -90
@@ -289,18 +291,36 @@ const Space: React.FC<SpaceProperties> = (
             // 100 - 0
 
             let newValue = ( (value - 50) / 100 ) * 2 * 180;
-            let updateValue = currentAngle.current - newValue;
+            let updateValue = currentAngle - newValue;
             // console.log(currentAngle.current, newValue, updateValue);
-            currentAngle.current = newValue;
+            if (mode === 'up/down') {
+                currentXAngle.current = newValue;
+            } else {
+                currentYAngle.current = newValue;
+            }
+
             pluridPubSub.publish(
                 topic,
                 {
                     value: -1 * updateValue,
                 },
             );
-        });
+
+            // pluridPubSub.publish(
+            //     TOPICS.SPACE_ROTATE_Y_TO,
+            //     {
+            //         value: value * 360 / 100,
+            //     },
+            // );
+        }
+
+        ipcRenderer.on('TOUCHBAR_SLIDER', transformSpace);
+
+        return () => {
+            ipcRenderer.off('TOUCHBAR_SLIDER', transformSpace);
+        }
     }, [
-        stateProductUI,
+        stateProductUI.touchbar.mode,
     ]);
     // #endregion effects
 
