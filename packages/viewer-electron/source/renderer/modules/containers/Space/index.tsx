@@ -188,8 +188,10 @@ const Space: React.FC<SpaceProperties> = (
     // #endregion properties
 
 
-    const currentYAngle = useRef(0);
     const currentXAngle = useRef(0);
+    const currentYAngle = useRef(0);
+    const currentXCoord = useRef(0);
+    const currentYCoord = useRef(0);
 
 
     // #region state
@@ -330,21 +332,43 @@ const Space: React.FC<SpaceProperties> = (
                     pluridPubSub.publish(
                         TOPICS.SPACE_SCALE_DOWN,
                         {
-                            value: endValue
+                            value: endValue,
                         },
                     );
                 } else {
                     pluridPubSub.publish(
                         TOPICS.SPACE_SCALE_UP,
                         {
-                            value: endValue
+                            value: endValue,
                         },
                     );
                 }
             }
 
             const handleTranslate = () => {
+                const topic = mode === 'up/down'
+                    ? TOPICS.SPACE_TRANSLATE_Y_WITH
+                    : TOPICS.SPACE_TRANSLATE_X_WITH;
 
+                const currentCoord = mode === 'up/down'
+                    ? currentYCoord.current
+                    : currentXCoord.current;
+
+                let newValue = ( (value - 50) / 100 ) * 2 * 500;
+                let updateValue = currentCoord - newValue;
+                // console.log(currentCoord.current, newValue, updateValue);
+                if (mode === 'up/down') {
+                    currentXCoord.current = newValue;
+                } else {
+                    currentYCoord.current = newValue;
+                }
+
+                pluridPubSub.publish(
+                    topic,
+                    {
+                        value: -1 * updateValue,
+                    },
+                );
             }
 
             switch (transformType) {
