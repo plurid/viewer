@@ -147,14 +147,42 @@ const generateTouchBar = (
         },
     });
 
+    // translate/rotate
+    if (transformType === 0 || transformType === 1) {
+        const touchBar = new TouchBar({
+            items: [
+                transformSelectorRotate,
+                transformSelectorScale,
+                transformSelectorTranslate,
+                spacer,
+                transformMode,
+                slider,
+            ],
+        });
+
+        return touchBar;
+    }
+
+    // scale
+    if (transformType === 2) {
+        const touchBar = new TouchBar({
+            items: [
+                transformSelectorRotate,
+                transformSelectorScale,
+                transformSelectorTranslate,
+                spacer,
+                slider,
+            ],
+        });
+
+        return touchBar;
+    }
+
     const touchBar = new TouchBar({
         items: [
             transformSelectorRotate,
             transformSelectorScale,
             transformSelectorTranslate,
-            spacer,
-            transformMode,
-            slider,
         ],
     });
 
