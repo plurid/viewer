@@ -274,44 +274,54 @@ const Space: React.FC<SpaceProperties> = (
             _: any,
             value: any,
         ) => {
-            const mode = stateProductUI.touchbar.mode;
-            // console.log('stateProductUI', stateProductUI);
-            const topic = mode === 'up/down'
-                ? TOPICS.SPACE_ROTATE_X_WITH
-                : TOPICS.SPACE_ROTATE_Y_WITH;
+            const {
+                transformType,
+                mode,
+            } = stateProductUI.touchbar;
 
-            const currentAngle = mode === 'up/down'
-                ? currentYAngle.current
-                : currentXAngle.current;
+            const handleRotation = () => {
+                // console.log('stateProductUI', stateProductUI);
+                const topic = mode === 'up/down'
+                    ? TOPICS.SPACE_ROTATE_X_WITH
+                    : TOPICS.SPACE_ROTATE_Y_WITH;
 
-            // 0 - 0
-            // 25 - -90
-            // 50 - 0
-            // 75 - 90
-            // 100 - 0
+                const currentAngle = mode === 'up/down'
+                    ? currentYAngle.current
+                    : currentXAngle.current;
 
-            let newValue = ( (value - 50) / 100 ) * 2 * 180;
-            let updateValue = currentAngle - newValue;
-            // console.log(currentAngle.current, newValue, updateValue);
-            if (mode === 'up/down') {
-                currentXAngle.current = newValue;
-            } else {
-                currentYAngle.current = newValue;
+                // 0 - 0
+                // 25 - -90
+                // 50 - 0
+                // 75 - 90
+                // 100 - 0
+
+                let newValue = ( (value - 50) / 100 ) * 2 * 180;
+                let updateValue = currentAngle - newValue;
+                // console.log(currentAngle.current, newValue, updateValue);
+                if (mode === 'up/down') {
+                    currentXAngle.current = newValue;
+                } else {
+                    currentYAngle.current = newValue;
+                }
+
+                pluridPubSub.publish(
+                    topic,
+                    {
+                        value: -1 * updateValue,
+                    },
+                );
+
+                // pluridPubSub.publish(
+                //     TOPICS.SPACE_ROTATE_Y_TO,
+                //     {
+                //         value: value * 360 / 100,
+                //     },
+                // );
             }
 
-            pluridPubSub.publish(
-                topic,
-                {
-                    value: -1 * updateValue,
-                },
-            );
-
-            // pluridPubSub.publish(
-            //     TOPICS.SPACE_ROTATE_Y_TO,
-            //     {
-            //         value: value * 360 / 100,
-            //     },
-            // );
+            if (transformType === 1) {
+                handleRotation();
+            }
         }
 
         ipcRenderer.on('TOUCHBAR_SLIDER', transformSpace);
@@ -320,7 +330,8 @@ const Space: React.FC<SpaceProperties> = (
             ipcRenderer.removeListener('TOUCHBAR_SLIDER', transformSpace);
         }
     }, [
-        // stateProductUI.touchbar.mode,
+        stateProductUI.touchbar.transformType,
+        stateProductUI.touchbar.mode,
     ]);
     // #endregion effects
 
