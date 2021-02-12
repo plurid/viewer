@@ -79,7 +79,7 @@ const createWindow = () => {
     );
 
     // Open the DevTools.
-    // window.webContents.openDevTools();
+    window.webContents.openDevTools();
 
     // Handle load and show without flickering.
     window.maximize();

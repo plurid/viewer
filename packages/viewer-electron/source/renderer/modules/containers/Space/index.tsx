@@ -182,7 +182,9 @@ const Space: React.FC<SpaceProperties> = (
         // #endregion dispatch
     } = properties;
 
+    // console.log('activeSpaceID', activeSpaceID);
     const activeSpaceInitial = stateSpaces.find(space => space.id === activeSpaceID);
+    // console.log('activeSpaceInitial', activeSpaceInitial);
 
     const pluridData = computePluridData(activeSpaceInitial);
     // #endregion properties
@@ -215,16 +217,29 @@ const Space: React.FC<SpaceProperties> = (
     useEffect(() => {
         const {
             view,
-        } = computePluridData(activeSpace);
+        } = computePluridData(activeSpaceInitial);
+        // console.log('view activeSpaceInitial', view);
 
         setPluridView(view);
     }, [
-        activeSpace,
-        activeSpace?.planes.length,
+        activeSpaceInitial?.planes,
+    ]);
+
+    useEffect(() => {
+        const {
+            view,
+        } = computePluridData(activeSpace);
+        // console.log('view activeSpace', view);
+
+        setPluridView(view);
+    }, [
+        activeSpace?.planes,
     ]);
 
     useEffect(() => {
         const activeSpace = stateSpaces.find(space => space.id === activeSpaceID);
+        // console.log('activeSpace set', activeSpace);
+
         setActiveSpace(activeSpace);
     }, [
         activeSpaceID,
@@ -401,6 +416,7 @@ const Space: React.FC<SpaceProperties> = (
         <StyledSpace>
             {activeSpace && (
                 <PluridApplication
+                    key={activeSpaceID}
                     planes={pluridPlanes}
                     view={pluridView}
                     pubsub={pluridPubSub}

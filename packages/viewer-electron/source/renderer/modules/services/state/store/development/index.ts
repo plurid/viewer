@@ -48,18 +48,19 @@ const store = (preloadedState: any) => {
         ),
     );
 
-    // _store.subscribe(
-    //     () => {
-    //         const localState = localStorage.loadState();
-    //         localStorage.saveState({
-    //             ...localState,
-    //             product: _store.getState().product,
-    //             themes: _store.getState().themes,
-    //             // user: _store.getState().user,
-    //             views: _store.getState().views,
-    //         });
-    //     },
-    // );
+    _store.subscribe(
+        () => {
+            console.log('REDUX STATE', _store.getState());
+            // const localState = localStorage.loadState();
+            // localStorage.saveState({
+            //     ...localState,
+            //     product: _store.getState().product,
+            //     themes: _store.getState().themes,
+            //     // user: _store.getState().user,
+            //     views: _store.getState().views,
+            // });
+        },
+    );
 
     return _store;
 }
