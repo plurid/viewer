@@ -279,7 +279,7 @@ const Space: React.FC<SpaceProperties> = (
                 mode,
             } = stateProductUI.touchbar;
 
-            const handleRotation = () => {
+            const handleRotate = () => {
                 // console.log('stateProductUI', stateProductUI);
                 const topic = mode === 'up/down'
                     ? TOPICS.SPACE_ROTATE_X_WITH
@@ -319,8 +319,44 @@ const Space: React.FC<SpaceProperties> = (
                 // );
             }
 
-            if (transformType === 1) {
-                handleRotation();
+            const handleScale = () => {
+                let newValue = ( (value - 50) / 100 ) * 2 * 3;
+
+                const endValue = newValue < 0
+                    ? 1.01 - (((newValue * -1) * 33.33) / 100)
+                    : newValue + 1;
+
+                if (newValue < 0) {
+                    pluridPubSub.publish(
+                        TOPICS.SPACE_SCALE_DOWN,
+                        {
+                            value: endValue
+                        },
+                    );
+                } else {
+                    pluridPubSub.publish(
+                        TOPICS.SPACE_SCALE_UP,
+                        {
+                            value: endValue
+                        },
+                    );
+                }
+            }
+
+            const handleTranslate = () => {
+
+            }
+
+            switch (transformType) {
+                case 0:
+                    handleTranslate();
+                    break;
+                case 1:
+                    handleRotate();
+                    break;
+                case 2:
+                    handleScale();
+                    break;
             }
         }
 
