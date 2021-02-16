@@ -19,6 +19,10 @@
     } from './database';
 
     import generateTouchBar from './extras/touchbar';
+
+    import {
+        handleURLNavigation,
+    } from './utilities';
     // #endregion internal
 // #endregion imports
 
@@ -118,6 +122,11 @@ const createWindow = () => {
             window,
             regenerate,
         ),
+    );
+
+    window.webContents.on(
+        'will-navigate',
+        handleURLNavigation,
     );
 }
 
