@@ -5,9 +5,14 @@ const TsconfigPathsPlugin = require('tsconfig-paths-webpack-plugin');
 
 
 
+const mode = process.env.NODE_ENV === 'production'
+    ? 'production'
+    : 'development';
+
+
 module.exports = [
     {
-        mode: 'development',
+        mode,
         entry: './source/index.ts',
         target: 'electron-main',
         resolve: {
@@ -32,7 +37,7 @@ module.exports = [
         }
     },
     {
-        mode: 'development',
+        mode,
         entry: './source/renderer/index.tsx',
         target: 'electron-renderer',
         devtool: 'source-map',
