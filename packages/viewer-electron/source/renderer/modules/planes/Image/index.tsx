@@ -11,7 +11,7 @@
     } from '@plurid/plurid-themes';
 
     import {
-        PluridComponentProperty,
+        PluridPlaneComponentProperty,
     } from '@plurid/plurid-react';
 
     import EnhancedImage from '@plurid/enhanced-image-react';
@@ -41,7 +41,7 @@
 
 // #region module
 export interface ImageOwnProperties {
-    plurid: PluridComponentProperty,
+    plurid: PluridPlaneComponentProperty;
 }
 
 export interface ImageStateProperties {
@@ -79,7 +79,7 @@ const Image: React.FC<ImageProperties> = (
     } = properties;
 
     // get from state based on the id
-    const id = plurid.route.plane.parameters.id;
+    const id = plurid.plane.parameters.id;
 
     const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
     const activePlane = activeSpace

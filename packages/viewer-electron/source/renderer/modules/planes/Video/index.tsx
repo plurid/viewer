@@ -11,7 +11,7 @@
     } from '@plurid/plurid-themes';
 
     import {
-        PluridComponentProperty,
+        PluridPlaneComponentProperty,
     } from '@plurid/plurid-react';
 
     import EnhancedVideo from '@plurid/enhanced-video-react';
@@ -41,7 +41,7 @@
 
 // #region module
 export interface VideoOwnProperties {
-    plurid: PluridComponentProperty,
+    plurid: PluridPlaneComponentProperty;
 }
 
 export interface VideoStateProperties {
@@ -78,7 +78,7 @@ const Video: React.FC<VideoProperties> = (
         // #endregion state
     } = properties;
 
-    const id = plurid.route.plane.parameters.id;
+    const id = plurid.plane.parameters.id;
 
     const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
     const activePlane = activeSpace

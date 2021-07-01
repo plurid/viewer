@@ -11,7 +11,7 @@
     } from '@plurid/plurid-themes';
 
     import {
-        PluridComponentProperty,
+        PluridPlaneComponentProperty,
     } from '@plurid/plurid-react';
     // #endregion libraries
 
@@ -43,7 +43,7 @@
 
 // #region module
 export interface TextOwnProperties {
-    plurid: PluridComponentProperty,
+    plurid: PluridPlaneComponentProperty;
 }
 
 export interface TextStateProperties {
@@ -80,7 +80,7 @@ const Text: React.FC<TextProperties> = (
         // #endregion state
     } = properties;
 
-    const id = plurid.route.plane.parameters.id;
+    const id = plurid.plane.parameters.id;
 
     const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
     const activePlane = activeSpace

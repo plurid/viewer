@@ -20,9 +20,9 @@
 
     import {
         PluridApplication,
-        PluridPlane,
+        PluridReactPlane,
         PluridPubSub,
-        TOPICS,
+        PLURID_PUBSUB_TOPIC,
     } from '@plurid/plurid-react';
     // #endregion libraries
 
@@ -61,41 +61,26 @@
 
 
 // #region module
-const pluridPlanes: PluridPlane[] = [
+const pluridPlanes: PluridReactPlane[] = [
     {
         route: '/images/:id',
-        component: {
-            kind: 'react',
-            element: ImagePlane,
-        },
+        component: ImagePlane,
     },
     {
         route: '/videos/:id',
-        component: {
-            kind: 'react',
-            element: VideoPlane,
-        },
+        component: VideoPlane,
     },
     {
         route: '/sounds/:id',
-        component: {
-            kind: 'react',
-            element: SoundPlane,
-        },
+        component: SoundPlane,
     },
     {
         route: '/texts/:id',
-        component: {
-            kind: 'react',
-            element: TextPlane,
-        },
+        component: TextPlane,
     },
     {
         route: '/files/:id',
-        component: {
-            kind: 'react',
-            element: FilesPlane,
-        },
+        component: FilesPlane,
     },
 ];
 
@@ -299,8 +284,8 @@ const Space: React.FC<SpaceProperties> = (
             const handleRotate = () => {
                 // console.log('stateProductUI', stateProductUI);
                 const topic = mode === 'up/down'
-                    ? TOPICS.SPACE_ROTATE_X_WITH
-                    : TOPICS.SPACE_ROTATE_Y_WITH;
+                    ? PLURID_PUBSUB_TOPIC.SPACE_ROTATE_X_WITH
+                    : PLURID_PUBSUB_TOPIC.SPACE_ROTATE_Y_WITH;
 
                 const currentAngle = mode === 'up/down'
                     ? currentYAngle.current
@@ -321,12 +306,12 @@ const Space: React.FC<SpaceProperties> = (
                     currentYAngle.current = newValue;
                 }
 
-                pluridPubSub.publish(
-                    topic,
-                    {
-                        value: -1 * updateValue,
-                    },
-                );
+                // pluridPubSub.publish(
+                //     topic,
+                //     {
+                //         value: -1 * updateValue,
+                //     },
+                // );
 
                 // pluridPubSub.publish(
                 //     TOPICS.SPACE_ROTATE_Y_TO,
@@ -343,27 +328,27 @@ const Space: React.FC<SpaceProperties> = (
                     ? 1.01 - (((newValue * -1) * 33.33) / 100)
                     : newValue + 1;
 
-                if (newValue < 0) {
-                    pluridPubSub.publish(
-                        TOPICS.SPACE_SCALE_DOWN,
-                        {
-                            value: endValue,
-                        },
-                    );
-                } else {
-                    pluridPubSub.publish(
-                        TOPICS.SPACE_SCALE_UP,
-                        {
-                            value: endValue,
-                        },
-                    );
-                }
+                // if (newValue < 0) {
+                //     pluridPubSub.publish(
+                //         TOPICS.SPACE_SCALE_DOWN,
+                //         {
+                //             value: endValue,
+                //         },
+                //     );
+                // } else {
+                //     pluridPubSub.publish(
+                //         TOPICS.SPACE_SCALE_UP,
+                //         {
+                //             value: endValue,
+                //         },
+                //     );
+                // }
             }
 
             const handleTranslate = () => {
                 const topic = mode === 'up/down'
-                    ? TOPICS.SPACE_TRANSLATE_Y_WITH
-                    : TOPICS.SPACE_TRANSLATE_X_WITH;
+                    ? PLURID_PUBSUB_TOPIC.SPACE_TRANSLATE_Y_WITH
+                    : PLURID_PUBSUB_TOPIC.SPACE_TRANSLATE_X_WITH;
 
                 const currentCoord = mode === 'up/down'
                     ? currentYCoord.current
@@ -378,12 +363,12 @@ const Space: React.FC<SpaceProperties> = (
                     currentYCoord.current = newValue;
                 }
 
-                pluridPubSub.publish(
-                    topic,
-                    {
-                        value: -1 * updateValue,
-                    },
-                );
+                // pluridPubSub.publish(
+                //     topic,
+                //     {
+                //         value: -1 * updateValue,
+                //     },
+                // );
             }
 
             switch (transformType) {
