@@ -180,7 +180,7 @@
         "@plurid/plurid-pubsub": "^0.0.0-5",
         "@plurid/plurid-react": "^0.0.0-5",
         "@plurid/plurid-themes": "^0.0.0-0",
-        "@plurid/plurid-ui-components-react": "^0.0.0-1",
+        "@plurid/plurid-ui-components-react": "^0.0.0-2",
         "@plurid/plurid-ui-state-react": "^0.0.0-0",
         "cross-fetch": "^3.1.4",
         "draft-js": "^0.11.7",

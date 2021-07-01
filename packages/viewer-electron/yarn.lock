@@ -731,10 +731,10 @@
   resolved "https://npm.plurid.cloud/@plurid%2fplurid-themes/-/plurid-themes-0.0.0-0.tgz#a478114a291ebbade70ff030b81feb49beb48294"
   integrity sha512-f/2TIKZzu4QMyhNpN64U8imAKJtacZBzaQjFhfO3ldODYWnSAAGgR8c18Qg1sd5V5CHbFxVlszLFVlqxLUh2uQ==
 
-"@plurid/plurid-ui-components-react@^0.0.0-1":
-  version "0.0.0-1"
-  resolved "https://npm.plurid.cloud/@plurid%2fplurid-ui-components-react/-/plurid-ui-components-react-0.0.0-1.tgz#e756f63e625c842a384505a6204b17c76bf6c548"
-  integrity sha512-gbjCzLQ4wqK8Qac7DzOHKv63Tw+oRcON5RfJglv9vQQ2xgMeE2523eN1tW8Jot8utretj8C7Dojj9t6/UlcVRw==
+"@plurid/plurid-ui-components-react@^0.0.0-2":
+  version "0.0.0-2"
+  resolved "https://npm.plurid.cloud/@plurid%2fplurid-ui-components-react/-/plurid-ui-components-react-0.0.0-2.tgz#a277f467d3bf5d320dfeee74a0f18a1518667bf9"
+  integrity sha512-NndowR+rlSoDC7r2BlB1Pm+ivcxRtxPgOBmkejLSuI/3gDp5E2ye6Bz1vK0AICFH8/9Qc667MFw18l6HQUQUUw==
 
 "@plurid/plurid-ui-state-react@^0.0.0-0":
   version "0.0.0-0"
