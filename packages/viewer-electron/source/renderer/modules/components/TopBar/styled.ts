@@ -96,6 +96,7 @@ export const StyledSpaces = styled.div<IStyledSpaces>`
 
 
 export const StyledSpace = styled.div`
+    font-size: 0.9rem;
     max-width: 200px;
     height: 100%;
     cursor: pointer;
