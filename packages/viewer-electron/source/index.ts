@@ -24,6 +24,8 @@
         handleURLNavigation,
         environment,
     } from './utilities';
+
+    import debug from './utilities/debug';
     // #endregion internal
 // #endregion imports
 
@@ -189,30 +191,17 @@ application.on(
         }
 
         if (!window) {
-            createWindow();
-        }
+            application.on('ready', async () => {
+                createWindow();
 
-        let timeWaited = 0;
-
-        do {
-            await new Promise((resolve) => {
-                setTimeout(() => {
-                    resolve(true);
-                }, 1_000);
+                await new Promise((resolve) => {
+                    setTimeout(() => {
+                        (window as BrowserWindow).webContents.send('FILES_OPEN', [path]);
+                        resolve(true);
+                    }, 3_000);
+                });
             });
-            timeWaited += 1;
-
-            if (timeWaited > 30) {
-                return;
-            }
-        } while (!window);
-
-        await new Promise((resolve) => {
-            setTimeout(() => {
-                resolve(true);
-            }, 2_000);
-        });
-        (window as BrowserWindow).webContents.send('FILES_OPEN', [path]);
+        }
     }
 );
 // #endregion module
