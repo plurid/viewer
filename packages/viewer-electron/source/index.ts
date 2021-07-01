@@ -179,23 +179,52 @@ application.on(
         _,
         path,
     ) => {
+        const files = [
+            path,
+        ];
+
+        if (window) {
+            window.webContents.send('FILES_OPEN', files);
+            return;
+        }
+
         if (!window) {
             createWindow();
         }
 
-        if (!window) {
+        let timeWaited = 0;
+
+        while (!window) {
             await new Promise((resolve) => {
                 setTimeout(() => {
                     resolve(true);
-                }, 2_000);
+                }, 1_000);
             });
+            timeWaited += 1;
+
+            if (timeWaited > 30) {
+                return;
+            }
         }
 
-        if (!window) {
-            return;
-        }
+        (window as BrowserWindow).webContents.on('did-finish-load', () => {
+            console.log('did-finish-load', path);
 
-        window.webContents.send('FILES_OPEN', [path]);
+            if (!window) {
+                return;
+            }
+
+            window.webContents.send('FILES_OPEN', [path]);
+        });
+
+        (window as BrowserWindow).on('show', () => {
+            console.log('show', path);
+            if (!window) {
+                return;
+            }
+
+            window.webContents.send('FILES_OPEN', files);
+        });
     }
 );
 // #endregion module

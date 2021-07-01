@@ -239,6 +239,8 @@ const Space: React.FC<SpaceProperties> = (
             _,
             files: string[],
         ) => {
+            console.log('files', files);
+
             if (!activeSpace) {
                 return;
             }
