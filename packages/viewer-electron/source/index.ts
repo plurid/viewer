@@ -194,7 +194,7 @@ application.on(
 
         let timeWaited = 0;
 
-        while (!window) {
+        do {
             await new Promise((resolve) => {
                 setTimeout(() => {
                     resolve(true);
@@ -205,26 +205,14 @@ application.on(
             if (timeWaited > 30) {
                 return;
             }
-        }
+        } while (!window);
 
-        (window as BrowserWindow).webContents.on('did-finish-load', () => {
-            console.log('did-finish-load', path);
-
-            if (!window) {
-                return;
-            }
-
-            window.webContents.send('FILES_OPEN', [path]);
+        await new Promise((resolve) => {
+            setTimeout(() => {
+                resolve(true);
+            }, 2_000);
         });
-
-        (window as BrowserWindow).on('show', () => {
-            console.log('show', path);
-            if (!window) {
-                return;
-            }
-
-            window.webContents.send('FILES_OPEN', files);
-        });
+        (window as BrowserWindow).webContents.send('FILES_OPEN', [path]);
     }
 );
 // #endregion module
