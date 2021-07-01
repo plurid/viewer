@@ -22,6 +22,7 @@
 
     import {
         handleURLNavigation,
+        environment,
     } from './utilities';
     // #endregion internal
 // #endregion imports
@@ -82,8 +83,10 @@ const createWindow = () => {
         indexRender,
     );
 
-    // Open the DevTools.
-    window.webContents.openDevTools();
+    if (!environment.production) {
+        // Open the DevTools.
+        window.webContents.openDevTools();
+    }
 
     // Handle load and show without flickering.
     window.maximize();
