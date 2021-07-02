@@ -90,6 +90,13 @@ const setMenu = (
                     },
                     enabled: !window,
                 },
+                {
+                    label: 'New Space',
+                    accelerator: 'CommandOrControl+T',
+                    click: async () => {
+
+                    },
+                },
                 { type: 'separator' },
                 {
                     label: 'Open...',
@@ -130,6 +137,14 @@ const setMenu = (
                             console.log(error);
                         }
                     }
+                },
+                { type: 'separator' },
+                {
+                    label: 'Close Space',
+                    accelerator: 'CommandOrControl+W',
+                    click: async () => {
+
+                    },
                 },
                 { type: 'separator' },
                 isMac ? { role: 'close' } : { role: 'quit' },
