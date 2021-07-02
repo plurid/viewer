@@ -94,7 +94,7 @@ const setMenu = (
                     label: 'New Space',
                     accelerator: 'CommandOrControl+T',
                     click: async () => {
-
+                        console.log('New Space : CommandOrControl+T is pressed');
                     },
                 },
                 {

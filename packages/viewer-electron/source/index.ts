@@ -34,20 +34,20 @@
 
 // #region module
 const setShortcuts = () => {
-    // new space
-    globalShortcut.register('CommandOrControl+T', () => {
-        console.log('CommandOrControl+T is pressed');
-    });
+    // // new space
+    // globalShortcut.register('CommandOrControl+T', () => {
+    //     console.log('CommandOrControl+T is pressed');
+    // });
 
-    // close space
-    globalShortcut.register('CommandOrControl+W', () => {
-        console.log('CommandOrControl+W is pressed');
-    });
+    // // close space
+    // globalShortcut.register('CommandOrControl+W', () => {
+    //     console.log('CommandOrControl+W is pressed');
+    // });
 
-    // quit
-    globalShortcut.register('CommandOrControl+Q', () => {
-        console.log('CommandOrControl+Q is pressed');
-    });
+    // // quit
+    // globalShortcut.register('CommandOrControl+Q', () => {
+    //     console.log('CommandOrControl+Q is pressed');
+    // });
 }
 
 
