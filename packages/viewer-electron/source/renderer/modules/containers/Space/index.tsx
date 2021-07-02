@@ -167,10 +167,7 @@ const Space: React.FC<SpaceProperties> = (
         // #endregion dispatch
     } = properties;
 
-    console.log('activeSpaceID', activeSpaceID);
-
     const activeSpace = stateSpaces.find(space => space.id === activeSpaceID);
-    console.log('activeSpace', activeSpace);
     if (!activeSpace) {
         return (<></>);
     }
@@ -188,13 +185,6 @@ const Space: React.FC<SpaceProperties> = (
 
 
     // #region state
-    // const [
-    //     activeSpace,
-    //     setActiveSpace,
-    // ] = useState(
-    //     stateSpaces.find(space => space.id === activeSpaceID),
-    // );
-
     const [
         pluridView,
         setPluridView,
@@ -205,37 +195,15 @@ const Space: React.FC<SpaceProperties> = (
 
 
     // #region effects
-    // useEffect(() => {
-    //     const {
-    //         view,
-    //     } = computePluridData(activeSpaceInitial);
-    //     console.log('view activeSpaceInitial', view);
-
-    //     setPluridView(view);
-    // }, [
-    //     activeSpaceInitial?.planes,
-    // ]);
-
     useEffect(() => {
         const {
             view,
         } = computePluridData(activeSpace);
-        console.log('view activeSpace', view);
 
         setPluridView(view);
     }, [
         activeSpace?.planes,
     ]);
-
-    // useEffect(() => {
-    //     const activeSpace = stateSpaces.find(space => space.id === activeSpaceID);
-    //     console.log('activeSpace set', activeSpace);
-
-    //     setActiveSpace(activeSpace);
-    // }, [
-    //     activeSpaceID,
-    // ]);
-
 
     /**
      * IPC Renderer.
@@ -249,7 +217,6 @@ const Space: React.FC<SpaceProperties> = (
             if (!activeSpace) {
                 return;
             }
-            console.log('FILES_OPEN', activeSpace);
 
             for (const file of files) {
                 const {
