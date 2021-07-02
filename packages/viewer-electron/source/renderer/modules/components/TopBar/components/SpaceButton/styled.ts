@@ -25,7 +25,9 @@ export const StyledSpaceButton = styled.div<IStyledSpaceButton>`
 
 
 export interface IStyledSpaceName {
+    theme: Theme;
     active: boolean;
+    editable: boolean;
 }
 
 export const StyledSpaceName = styled.div<IStyledSpaceName>`
@@ -34,6 +36,19 @@ export const StyledSpaceName = styled.div<IStyledSpaceName>`
     white-space: nowrap;
     display: flex;
     align-items: center;
+
+    background-color: ${
+        ({
+            theme,
+            editable,
+        }: IStyledSpaceName) => {
+            if (editable) {
+                return theme.backgroundColorSecondary;
+            }
+
+            return 'initial';
+        }
+    };
 
     border-bottom: 1px solid ${
         (properties: IStyledSpaceName) => {

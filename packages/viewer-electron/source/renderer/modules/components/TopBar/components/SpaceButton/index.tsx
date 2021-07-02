@@ -1,6 +1,7 @@
 // #region imports
     // #region libraries
     import React, {
+        useRef,
         useState,
     } from 'react';
 
@@ -82,12 +83,43 @@ const SpaceButton: React.FC<SpaceButtonProperties> = (
     // #endregion properties
 
 
+    // #region references
+    const textNode = useRef<HTMLDivElement | null>(null);
+    // #endregion references
+
+
     // #region state
     const [
         mouseOver,
         setMouseOver,
     ] = useState(false);
+
+    const [
+        editable,
+        setEditable,
+    ] = useState(false);
     // #endregion state
+
+
+    // #region handlers
+    const handleKeyDown = () => {
+        if (!textNode.current) {
+            return;
+        }
+
+        if (!editable) {
+            return;
+        }
+
+        const text = textNode.current.innerText;
+
+        if (!text) {
+            textNode.current.innerText = 'new space';
+        }
+
+        console.log(textNode.current.innerText);
+    }
+    // #endregion handlers
 
 
     // #region render
@@ -98,7 +130,9 @@ const SpaceButton: React.FC<SpaceButtonProperties> = (
             onMouseLeave={() => setMouseOver(false)}
         >
             <StyledSpaceName
+                theme={stateGeneralTheme}
                 active={stateActiveSpace === id}
+                editable={editable}
             >
                 <div
                     style={{
@@ -107,6 +141,7 @@ const SpaceButton: React.FC<SpaceButtonProperties> = (
                 />
 
                 <div
+                    ref={textNode}
                     onClick={() => {
                         if (stateActiveSpace !== id) {
                             dispatchProductSetField({
@@ -115,10 +150,23 @@ const SpaceButton: React.FC<SpaceButtonProperties> = (
                             });
                         }
                     }}
+                    onDoubleClick={() => {
+                        if (!textNode.current) {
+                            return;
+                        }
+
+                        setEditable(editable => !editable);
+                    }}
+                    onKeyDown={() => handleKeyDown()}
                     style={{
                         marginBottom: '-0.9rem',
                         paddingBottom: '0.9rem',
+                        outline: 'none',
+                        maxWidth: '150px',
+                        overflow: 'scroll',
                     }}
+                    contentEditable={editable}
+                    suppressContentEditableWarning={true}
                 >
                     {name}
                 </div>
