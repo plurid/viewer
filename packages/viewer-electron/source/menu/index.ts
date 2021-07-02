@@ -98,7 +98,7 @@ const setMenu = (
                     },
                 },
                 {
-                    label: 'Restore Closed Space',
+                    label: 'Restore Space',
                     accelerator: 'Shift+CommandOrControl+T',
                     click: async () => {
 
