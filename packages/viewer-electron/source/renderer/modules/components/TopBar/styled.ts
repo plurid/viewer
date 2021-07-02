@@ -99,7 +99,7 @@ export const StyledSpace = styled.div`
     font-size: 0.9rem;
     max-width: 200px;
     height: 100%;
-    cursor: pointer;
+    /* cursor: pointer; */
     -webkit-app-region: no-drag;
 `;
 
@@ -130,7 +130,7 @@ export const StyledSpaceName = styled.div<IStyledSpaceName>`
 
 export const StyledAddButton = styled.div`
     height: 100%;
-    cursor: pointer;
+    /* cursor: pointer; */
     display: grid;
     place-content: center;
     width: 30px;
