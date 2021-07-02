@@ -62,6 +62,7 @@ export const StyledSpaces = styled.div<IStyledSpaces>`
     display: flex;
     align-items: center;
     height: 100%;
+    width: 100%;
     margin-left: 85px;
 
     opacity: ${
