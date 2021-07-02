@@ -33,6 +33,9 @@
 
 
 // #region module
+require('v8-compile-cache');
+
+
 const setShortcuts = () => {
     // // new space
     // globalShortcut.register('CommandOrControl+T', () => {
