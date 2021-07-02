@@ -5,10 +5,6 @@
     import { AnyAction } from 'redux';
     import { connect } from 'react-redux';
     import { ThunkDispatch } from 'redux-thunk';
-
-    import {
-        Theme,
-    } from '@plurid/plurid-themes';
     // #endregion libraries
 
 
@@ -16,14 +12,20 @@
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
-    // import actions from '~renderer-services/state/actions';
+    import actions from '~renderer-services/state/actions';
     // #endregion external
 
 
     // #region internal
     import {
+        StyledSettingsView,
+        StyledSettingsContainer,
         StyledSettings,
     } from './styled';
+
+    import Header from './components/Header';
+    import Body from './components/Body';
+    import Footer from './components/Footer';
     // #endregion internal
 // #endregion imports
 
@@ -34,35 +36,37 @@ export interface SettingsOwnProperties {
 }
 
 export interface SettingsStateProperties {
-    stateGeneralTheme: Theme;
-    stateInteractionTheme: Theme;
 }
 
 export interface SettingsDispatchProperties {
 }
 
-export type SettingsProperties = SettingsOwnProperties
+export type SettingsProperties =
+    & SettingsOwnProperties
     & SettingsStateProperties
     & SettingsDispatchProperties;
+
 
 const Settings: React.FC<SettingsProperties> = (
     properties,
 ) => {
-    // #region properties
-    // const {
-        // // #region state
-        // stateGeneralTheme,
-        // stateInteractionTheme,
-        // // #endregion state
-    // } = properties;
-    // #endregion properties
-
-
     // #region render
     return (
-        <StyledSettings>
-            Settings
-        </StyledSettings>
+        <StyledSettingsView>
+            <StyledSettingsContainer>
+                <h1>
+                    viewer settings
+                </h1>
+
+                <StyledSettings>
+                    <Header />
+
+                    <Body />
+
+                    <Footer />
+                </StyledSettings>
+            </StyledSettingsContainer>
+        </StyledSettingsView>
     );
     // #endregion render
 }
@@ -70,15 +74,13 @@ const Settings: React.FC<SettingsProperties> = (
 
 const mapStateToProperties = (
     state: AppState,
-): SettingsStateProperties => ({
-    stateGeneralTheme: selectors.themes.getGeneralTheme(state),
-    stateInteractionTheme: selectors.themes.getInteractionTheme(state),
+) => ({
 });
 
 
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
-): SettingsDispatchProperties => ({
+) => ({
 });
 
 
