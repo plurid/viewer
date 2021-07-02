@@ -149,6 +149,21 @@
                 "ext": "eimg",
                 "name": "Enhaced Image File",
                 "role": "Editor"
+            },
+            {
+                "ext": "mp4",
+                "name": "mp4 File",
+                "role": "Editor"
+            },
+            {
+                "ext": "mkv",
+                "name": "mkv File",
+                "role": "Editor"
+            },
+            {
+                "ext": "mov",
+                "name": "mov File",
+                "role": "Editor"
             }
         ]
     },
