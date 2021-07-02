@@ -30,7 +30,6 @@ export interface IStyledSpaceName {
 
 export const StyledSpaceName = styled.div<IStyledSpaceName>`
     max-width: 200px;
-    padding: 0.4rem;
     height: 100%;
     white-space: nowrap;
     display: flex;

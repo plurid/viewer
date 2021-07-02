@@ -101,6 +101,12 @@ const SpaceButton: React.FC<SpaceButtonProperties> = (
                 active={stateActiveSpace === id}
             >
                 <div
+                    style={{
+                        minWidth: '16px',
+                    }}
+                />
+
+                <div
                     onClick={() => {
                         if (stateActiveSpace !== id) {
                             dispatchProductSetField({
