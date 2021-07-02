@@ -146,8 +146,14 @@ const setMenu = (
 
                     },
                 },
-                { type: 'separator' },
                 isMac ? { role: 'close' } : { role: 'quit' },
+                isMac ? {
+                    label: 'Quit',
+                    accelerator: 'CommandOrControl+Q',
+                    click: async () => {
+
+                    },
+                } : undefined,
             ],
         },
 
