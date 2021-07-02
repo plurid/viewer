@@ -177,7 +177,7 @@ const setMenu = (
                     click: async () => {
                         const { shell } = require('electron');
 
-                        await shell.openExternal('https://github.com/plurid/viewer');
+                        await shell.openExternal('https://plurid.com/viewer');
                     },
                 },
             ],
