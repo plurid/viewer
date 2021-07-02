@@ -302,6 +302,9 @@ const TopBar: React.FC<TopBarProperties> = (
                     >
                         <PluridIconAdd
                             size={14}
+                            style={{
+                                cursor: 'default !important',
+                            }}
                         />
                     </StyledAddButton>
                 )}
