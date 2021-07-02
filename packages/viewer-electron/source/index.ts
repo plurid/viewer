@@ -5,6 +5,7 @@
     import {
         app as application,
         BrowserWindow,
+        globalShortcut,
     } from 'electron';
 
     import contextMenu from 'electron-context-menu';
@@ -32,6 +33,24 @@
 
 
 // #region module
+const setShortcuts = () => {
+    // new space
+    globalShortcut.register('CommandOrControl+T', () => {
+        console.log('CommandOrControl+T is pressed');
+    });
+
+    // close space
+    globalShortcut.register('CommandOrControl+W', () => {
+        console.log('CommandOrControl+W is pressed');
+    });
+
+    // quit
+    globalShortcut.register('CommandOrControl+Q', () => {
+        console.log('CommandOrControl+Q is pressed');
+    });
+}
+
+
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let window: BrowserWindow | null;
@@ -154,6 +173,8 @@ application.whenReady().then(() => {
         window,
         createWindow,
     );
+
+    setShortcuts();
 });
 
 
@@ -209,4 +230,10 @@ application.on(
         }
     }
 );
+
+
+
+application.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+})
 // #endregion module
