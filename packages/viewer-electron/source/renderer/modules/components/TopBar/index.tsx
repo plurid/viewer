@@ -59,14 +59,14 @@ export interface TopBarStateProperties {
 }
 
 export interface TopBarDispatchProperties {
-    dispatchProductSetField: typeof actions.product.setField;
     dispatchProductAddSpace: typeof actions.product.addSpace;
-    dispatchProductRemoveSpace: typeof actions.product.removeSpace;
 }
 
-export type TopBarProperties = TopBarOwnProperties
+export type TopBarProperties =
+    & TopBarOwnProperties
     & TopBarStateProperties
     & TopBarDispatchProperties;
+
 
 const TopBar: React.FC<TopBarProperties> = (
     properties,
@@ -82,9 +82,7 @@ const TopBar: React.FC<TopBarProperties> = (
         // #endregion state
 
         // #region dispatch
-        dispatchProductSetField,
         dispatchProductAddSpace,
-        dispatchProductRemoveSpace,
         // #endregion dispatch
     } = properties;
     // #endregion properties
@@ -172,6 +170,7 @@ const TopBar: React.FC<TopBarProperties> = (
     // ]);
     // #endregion effects
 
+
     // #region render
     return (
         <StyledTopBar
@@ -253,18 +252,8 @@ const mapStateToProperties = (
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
 ): TopBarDispatchProperties => ({
-    dispatchProductSetField: (
-        payload,
-    ) => dispatch(
-        actions.product.setField(payload),
-    ),
     dispatchProductAddSpace: () => dispatch(
         actions.product.addSpace(),
-    ),
-    dispatchProductRemoveSpace: (
-        payload,
-    ) => dispatch(
-        actions.product.removeSpace(payload),
     ),
 });
 
