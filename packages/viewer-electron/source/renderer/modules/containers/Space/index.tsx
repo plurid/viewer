@@ -167,27 +167,33 @@ const Space: React.FC<SpaceProperties> = (
         // #endregion dispatch
     } = properties;
 
-    // console.log('activeSpaceID', activeSpaceID);
-    const activeSpaceInitial = stateSpaces.find(space => space.id === activeSpaceID);
-    // console.log('activeSpaceInitial', activeSpaceInitial);
+    console.log('activeSpaceID', activeSpaceID);
 
-    const pluridData = computePluridData(activeSpaceInitial);
+    const activeSpace = stateSpaces.find(space => space.id === activeSpaceID);
+    console.log('activeSpace', activeSpace);
+    if (!activeSpace) {
+        return (<></>);
+    }
+
+    const pluridData = computePluridData(activeSpace);
     // #endregion properties
 
 
+    // #region references
     const currentXAngle = useRef(0);
     const currentYAngle = useRef(0);
     const currentXCoord = useRef(0);
     const currentYCoord = useRef(0);
+    // #endregion references
 
 
     // #region state
-    const [
-        activeSpace,
-        setActiveSpace,
-    ] = useState(
-        stateSpaces.find(space => space.id === activeSpaceID),
-    );
+    // const [
+    //     activeSpace,
+    //     setActiveSpace,
+    // ] = useState(
+    //     stateSpaces.find(space => space.id === activeSpaceID),
+    // );
 
     const [
         pluridView,
@@ -199,51 +205,51 @@ const Space: React.FC<SpaceProperties> = (
 
 
     // #region effects
-    useEffect(() => {
-        const {
-            view,
-        } = computePluridData(activeSpaceInitial);
-        // console.log('view activeSpaceInitial', view);
+    // useEffect(() => {
+    //     const {
+    //         view,
+    //     } = computePluridData(activeSpaceInitial);
+    //     console.log('view activeSpaceInitial', view);
 
-        setPluridView(view);
-    }, [
-        activeSpaceInitial?.planes,
-    ]);
+    //     setPluridView(view);
+    // }, [
+    //     activeSpaceInitial?.planes,
+    // ]);
 
     useEffect(() => {
         const {
             view,
         } = computePluridData(activeSpace);
-        // console.log('view activeSpace', view);
+        console.log('view activeSpace', view);
 
         setPluridView(view);
     }, [
         activeSpace?.planes,
     ]);
 
-    useEffect(() => {
-        const activeSpace = stateSpaces.find(space => space.id === activeSpaceID);
-        // console.log('activeSpace set', activeSpace);
+    // useEffect(() => {
+    //     const activeSpace = stateSpaces.find(space => space.id === activeSpaceID);
+    //     console.log('activeSpace set', activeSpace);
 
-        setActiveSpace(activeSpace);
-    }, [
-        activeSpaceID,
-    ]);
+    //     setActiveSpace(activeSpace);
+    // }, [
+    //     activeSpaceID,
+    // ]);
 
 
     /**
      * IPC Renderer.
      */
     useEffect(() => {
-        ipcRenderer.on('FILES_OPEN', async (
-            _,
+        const addPlane = async (
+            _: any,
             files: string[],
         ) => {
-            console.log('files', files);
-
+            const activeSpace = stateSpaces.find(space => space.id === activeSpaceID);
             if (!activeSpace) {
                 return;
             }
+            console.log('FILES_OPEN', activeSpace);
 
             for (const file of files) {
                 const {
@@ -262,15 +268,22 @@ const Space: React.FC<SpaceProperties> = (
                 } = await strategy.apply();
 
                 dispatchProductAddPlane({
-                    spaceID: activeSpace.id,
+                    spaceID: activeSpaceID,
                     data: plane as any,
                 });
                 dispatchAddNotification(
                     notification,
                 );
             }
-        });
+        }
+
+        ipcRenderer.on('FILES_OPEN', addPlane);
+
+        return () => {
+            ipcRenderer.removeListener('FILES_OPEN', addPlane);
+        }
     }, [
+        activeSpaceID,
     ]);
 
     useEffect(() => {

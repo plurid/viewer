@@ -48,6 +48,7 @@ export interface ImageStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
     stateSpaces: Space[];
+    stateActiveSpaceID: string;
 }
 
 export interface ImageDispatchProperties {
@@ -75,22 +76,41 @@ const Image: React.FC<ImageProperties> = (
         // stateGeneralTheme,
         // stateInteractionTheme,
         stateSpaces,
+        stateActiveSpaceID,
         // #endregion state
     } = properties;
 
-    // get from state based on the id
     const id = plurid.plane.parameters.id;
 
-    const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
-    const activePlane = activeSpace
-        ? activeSpace.planes.find(plane => plane.id === id)
-        : undefined;
+    const getActiveSpace = (
+        spaces: any[],
+    ) => {
+        if (spaces.length === 0) {
+            return;
+        }
 
-    const planeData = activePlane && activePlane.kind === 'image'
+        const activeSpace = stateSpaces.find(space => space.id === stateActiveSpaceID);
+        return activeSpace;
+    }
+
+    const activeSpace = getActiveSpace(stateSpaces);
+    if (!activeSpace) {
+        return (<></>);
+    }
+
+    const activePlane = activeSpace.planes.find(plane => plane.id === id);
+    if (!activePlane) {
+        return (<></>);
+    }
+
+    const planeData = activePlane.kind === 'image'
         ? activePlane
         : undefined;
+    if (!planeData) {
+        return (<></>);
+    }
 
-    const src = planeData?.data.source || '';
+    const src = planeData.data.source;
     // #endregion properties
 
 
@@ -121,6 +141,7 @@ const mapStateToProperties = (
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
     stateSpaces: selectors.product.getSpaces(state),
+    stateActiveSpaceID: selectors.product.getActiveSpace(state),
 });
 
 
