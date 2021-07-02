@@ -37,9 +37,7 @@ export const StyledTopBar = styled.div<IStyledTopBar>`
     height: 40px;
     z-index: 9999;
 
-    display: grid;
-    grid-template-columns: 90px auto;
-    grid-gap: 1rem;
+    display: flex;
     align-items: center;
 
     background-color: ${
