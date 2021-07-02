@@ -157,6 +157,12 @@ const createWindow = () => {
         window,
         createWindow,
     );
+
+    window.webContents.setWindowOpenHandler(({ url }) => {
+        require('electron').shell.openExternal(url);
+
+        return { action: 'deny' };
+    });
 }
 
 
