@@ -271,6 +271,10 @@ const TopBar: React.FC<TopBarProperties> = (
                                             });
                                         }
                                     }}
+                                    style={{
+                                        marginBottom: '-0.9rem',
+                                        paddingBottom: '0.9rem',
+                                    }}
                                 >
                                     {name}
                                 </div>
