@@ -25,11 +25,14 @@ const {
     form: {
         FormLeftRight: PluridFormLeftRight,
         Formbutton: PluridFormbutton,
+        Formitem: PluridFormitem,
+        Formline: PluridFormline,
     },
     general: {
         GlobalStyles: PluridGlobalStyles,
     },
     inputs: {
+        Textline: PluridTextline,
         Switch: PluridSwitch,
         Dropdown: PluridDropdown,
         InputSwitch: PluridInputSwitch,
@@ -39,8 +42,12 @@ const {
         Heading: PluridHeading,
     },
     markers: {
+        HR: PluridHR,
         Spinner: PluridSpinner,
-    }
+    },
+    varia: {
+        CopyableLine: PluridCopyableLine,
+    },
 } = universal;
 
 
@@ -50,37 +57,58 @@ export interface IGlobalStyles {
 }
 
 const GlobalStyles = createGlobalStyle<IGlobalStyles>`
-    body {
-        background: radial-gradient(ellipse at center,
-            ${({ theme }: IGlobalStyles) => {
-                if (theme.type === 'dark') {
-                    return theme.backgroundColorTertiary;
-                } else {
-                    return theme.backgroundColorPrimary;
-                }
-            }} 0%,
-            ${({ theme }: IGlobalStyles) => {
-                if (theme.type === 'dark') {
-                    return theme.backgroundColorPrimary;
-                } else {
-                    return theme.backgroundColorTertiary;
-                }
-            }} 100%
-        );
-
-        overflow: hidden;
-
-        /* to be used in production (?) */
-        /* cursor: none; */
+    *, *::after, *::before {
+        box-sizing: border-box;
     }
 
-    #ceris {
-        padding: 4rem;
-        box-sizing: border-box;
-        overflow: auto;
+    html {
         height: 100%;
+    }
 
-        overflow-y: overlay;
+    body {
+        height: 100%;
+        overflow: hidden;
+        margin: 0;
+        padding: 0;
+        font-family: ${(props: IGlobalStyles) => {
+            return props.theme.fontFamilySansSerif;
+        }};
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        color: ${
+            ({
+                theme,
+            }: IGlobalStyles) => theme.colorPrimary
+        };
+
+        background-color: ${(props: IGlobalStyles) => {
+            return props.theme.backgroundColorPrimary;
+        }};
+        background: radial-gradient(
+            ellipse at 50% 60%,
+            ${(props: IGlobalStyles) => {
+                if (props.theme.type === 'dark') {
+                    return props.theme.backgroundColorTertiary;
+                }
+                return props.theme.backgroundColorPrimary;
+            }},
+            ${(props: IGlobalStyles) => {
+                if (props.theme.type === 'dark') {
+                    return props.theme.backgroundColorPrimary;
+                }
+                return props.theme.backgroundColorTertiary;
+            }}
+        );
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    #viewer {
+        height: 100%;
+        overflow: auto;
     }
 `;
 
@@ -135,6 +163,17 @@ export {
     PluridHeading,
 
     PluridSpinner,
+
+
+    PluridFormitem,
+    PluridFormline,
+
+    PluridTextline,
+
+    PluridHR,
+
+    PluridCopyableLine,
+
 
     StyledH2Heading,
     StyledH3Heading,
