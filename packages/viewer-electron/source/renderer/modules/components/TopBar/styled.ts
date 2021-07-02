@@ -54,26 +54,6 @@ export const StyledTopBar = styled.div<IStyledTopBar>`
 `;
 
 
-export const StyledWindowButtons = styled.div`
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-gap: 0.1rem;
-    justify-items: center;
-    align-items: center;
-    margin: 0 10px;
-    -webkit-app-region: no-drag;
-`;
-
-
-export const StyledWindowButton = styled.div`
-    display: grid;
-    place-content: center;
-    width: 15px;
-    height: 15px;
-    cursor: pointer;
-`;
-
-
 export interface IStyledSpaces {
     show: boolean;
 }
@@ -82,6 +62,7 @@ export const StyledSpaces = styled.div<IStyledSpaces>`
     display: flex;
     align-items: center;
     height: 100%;
+    margin-left: 85px;
 
     opacity: ${
         (properties: IStyledSpaces) => {
@@ -90,39 +71,6 @@ export const StyledSpaces = styled.div<IStyledSpaces>`
             }
 
             return '0.3';
-        }
-    };
-`;
-
-
-export const StyledSpace = styled.div`
-    font-size: 0.9rem;
-    max-width: 200px;
-    height: 100%;
-    /* cursor: pointer; */
-    -webkit-app-region: no-drag;
-`;
-
-
-export interface IStyledSpaceName {
-    active: boolean;
-}
-
-export const StyledSpaceName = styled.div<IStyledSpaceName>`
-    max-width: 200px;
-    padding: 0.4rem;
-    height: 100%;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-
-    border-bottom: 1px solid ${
-        (properties: IStyledSpaceName) => {
-            if (properties.active) {
-                return 'white';
-            }
-
-            return 'transparent';
         }
     };
 `;

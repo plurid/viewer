@@ -11,10 +11,6 @@
     import { ThunkDispatch } from 'redux-thunk';
 
     import {
-        remote,
-    } from 'electron';
-
-    import {
         Theme,
     } from '@plurid/plurid-themes';
 
@@ -39,14 +35,12 @@
     // #region internal
     import {
         StyledTopBar,
-        StyledWindowButtons,
-        StyledWindowButton,
         StyledSpaces,
-        StyledSpace,
-        StyledSpaceName,
         StyledAddButton,
         StyledDragZone,
     } from './styled';
+
+    import SpaceButton from './components/SpaceButton';
     // #endregion internal
 // #endregion imports
 
@@ -205,46 +199,6 @@ const TopBar: React.FC<TopBarProperties> = (
             show={show}
             isDraggable={draggable}
         >
-            <StyledWindowButtons>
-                {show && (
-                    <>
-                        <StyledWindowButton
-                            onClick={() => {
-                                remote.BrowserWindow.getFocusedWindow()?.close();
-                            }}
-                        >
-                            &times;
-                        </StyledWindowButton>
-
-                        <StyledWindowButton
-                            onClick={() => {
-                                remote.BrowserWindow.getFocusedWindow()?.minimize();
-                            }}
-                        >
-                            &#95;
-                        </StyledWindowButton>
-
-                        <StyledWindowButton
-                            onClick={() => {
-                                const window = remote.BrowserWindow.getFocusedWindow();
-
-                                if (!window) {
-                                    return;
-                                }
-
-                                if (window.isMaximized()) {
-                                    window.unmaximize();
-                                } else {
-                                    window.maximize();
-                                }
-                            }}
-                        >
-                            +
-                        </StyledWindowButton>
-                    </>
-                )}
-            </StyledWindowButtons>
-
             <StyledSpaces
                 show={show}
             >
@@ -252,45 +206,13 @@ const TopBar: React.FC<TopBarProperties> = (
                 && stateSpaces.map(space => {
                     const {
                         id,
-                        name,
                     } = space;
 
                     return (
-                        <StyledSpace
+                        <SpaceButton
                             key={id}
-                        >
-                            <StyledSpaceName
-                                active={stateActiveSpace === id}
-                            >
-                                <div
-                                    onClick={() => {
-                                        if (stateActiveSpace !== id) {
-                                            dispatchProductSetField({
-                                                field: 'activeSpace',
-                                                data: id,
-                                            });
-                                        }
-                                    }}
-                                    style={{
-                                        marginBottom: '-0.9rem',
-                                        paddingBottom: '0.9rem',
-                                    }}
-                                >
-                                    {name}
-                                </div>
-
-                                <div
-                                    onClick={() => {
-                                        dispatchProductRemoveSpace(id);
-                                    }}
-                                    style={{
-                                        marginLeft: '5px',
-                                    }}
-                                >
-                                    &times;
-                                </div>
-                            </StyledSpaceName>
-                        </StyledSpace>
+                            data={space}
+                        />
                     );
                 })}
 
