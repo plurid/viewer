@@ -173,7 +173,15 @@ const setMenu = (
             role: 'help',
             submenu: [
                 {
-                    label: 'Learn More',
+                    label: 'Report an Issue',
+                    click: async () => {
+                        const { shell } = require('electron');
+
+                        await shell.openExternal('https://support.plurid.com/viewer');
+                    },
+                },
+                {
+                    label: 'Plurid Viewer',
                     click: async () => {
                         const { shell } = require('electron');
 
