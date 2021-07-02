@@ -95,34 +95,40 @@ const setMenu = (
                     label: 'Open...',
                     accelerator: 'CmdOrCtrl+O',
                     click: async () => {
-                        if (!window) {
-                            createWindow();
+                        try {
+                            if (!window) {
+                                createWindow();
+                            }
+
+                            const filesData = await dialog.showOpenDialog({
+                                defaultPath: lastOpenPath,
+                                properties: [
+                                    'openFile',
+                                    'multiSelections',
+                                ],
+                            });
+
+                            const {
+                                canceled,
+                                filePaths,
+                            } = filesData;
+
+                            if (canceled) {
+                                return;
+                            }
+
+                            if (!window) {
+                                return;
+                            }
+
+                            lastOpenPath = path.dirname(filePaths[0]);
+
+                            setTimeout(() => {
+                                window.webContents.send('FILES_OPEN', filePaths);
+                            }, 500);
+                        } catch (error) {
+                            console.log(error);
                         }
-
-                        const filesData = await dialog.showOpenDialog({
-                            defaultPath: lastOpenPath,
-                            properties: [
-                                'openFile',
-                                'multiSelections',
-                            ],
-                        });
-
-                        const {
-                            canceled,
-                            filePaths,
-                        } = filesData;
-
-                        if (canceled) {
-                            return;
-                        }
-
-                        if (!window) {
-                            return;
-                        }
-
-                        lastOpenPath = path.dirname(filePaths[0]);
-
-                        window.webContents.send('FILES_OPEN', filePaths);
                     }
                 },
                 { type: 'separator' },

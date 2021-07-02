@@ -133,6 +133,11 @@ const createWindow = () => {
         'will-navigate',
         handleURLNavigation,
     );
+
+    setMenu(
+        window,
+        createWindow,
+    );
 }
 
 
