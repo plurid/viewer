@@ -17,7 +17,6 @@ export interface IStyledHistory {
 
 export const StyledHistory = styled.div<IStyledHistory>`
     display: flex;
-    grid-gap: 1rem;
     align-items: center;
 `;
 // #region module

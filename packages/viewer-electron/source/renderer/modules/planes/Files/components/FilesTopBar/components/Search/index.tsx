@@ -29,19 +29,13 @@ export interface SearchProperties {
     // #region required
         // #region values
         theme: Theme;
+        searchString: string;
+        setSearchString: React.Dispatch<React.SetStateAction<string>>;
         // #endregion values
 
         // #region methods
         // #endregion methods
     // #endregion required
-
-    // #region optional
-        // #region values
-        // #endregion values
-
-        // #region methods
-        // #endregion methods
-    // #endregion optional
 }
 
 const Search: React.FC<SearchProperties> = (
@@ -52,19 +46,13 @@ const Search: React.FC<SearchProperties> = (
         // #region required
             // #region values
             theme,
+            searchString,
+            setSearchString,
             // #endregion values
 
             // #region methods
             // #endregion methods
         // #endregion required
-
-        // #region optional
-            // #region values
-            // #endregion values
-
-            // #region methods
-            // #endregion methods
-        // #endregion optional
     } = properties;
     // #endregion properties
 
@@ -75,11 +63,12 @@ const Search: React.FC<SearchProperties> = (
             theme={theme}
         >
             <PluridTextline
-                text={''}
+                text={searchString}
                 atChange={(event) => {
+                    setSearchString(event.target.value);
                 }}
-                level={2}
                 placeholder="search"
+                level={2}
             />
         </StyledSearch>
     );

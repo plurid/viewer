@@ -41,11 +41,24 @@
 // #region module
 export interface FilesTopBarOwnProperties {
     viewDirectory: string;
+
+    viewShowFavorites: boolean;
+    setViewShowFavorites: React.Dispatch<React.SetStateAction<boolean>>;
+
     setViewDirectory: React.Dispatch<React.SetStateAction<string>>;
     viewShowAs: string;
     setViewShowAs: React.Dispatch<React.SetStateAction<string>>;
     pluridLinkNavigation: boolean;
     setPluridLinkNavigation: React.Dispatch<React.SetStateAction<boolean>>;
+
+    searchString: string;
+    setSearchString: React.Dispatch<React.SetStateAction<string>>;
+
+    hasPreviousHistory: boolean;
+    hasNextHistory: boolean;
+
+    historyStepPrevious: () => void;
+    historyStepNext: () => void;
 }
 
 export interface FilesTopBarStateProperties {
@@ -69,11 +82,24 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
     const {
         // #region own
         viewDirectory,
+
+        viewShowFavorites,
+        setViewShowFavorites,
+
         setViewDirectory,
         viewShowAs,
         setViewShowAs,
         pluridLinkNavigation,
         setPluridLinkNavigation,
+
+        searchString,
+        setSearchString,
+
+        hasPreviousHistory,
+        hasNextHistory,
+
+        historyStepPrevious,
+        historyStepNext,
         // #endregion own
 
         // #region state
@@ -91,11 +117,19 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
         >
             <Favorites
                 theme={stateGeneralTheme}
+                viewShowFavorites={viewShowFavorites}
+                setViewShowFavorites={setViewShowFavorites}
             />
 
             <StyledFilesTopBarCenter>
                 <History
                     theme={stateGeneralTheme}
+
+                    hasPreviousHistory={hasPreviousHistory}
+                    hasNextHistory={hasNextHistory}
+
+                    historyStepPrevious={historyStepPrevious}
+                    historyStepNext={historyStepNext}
                 />
 
                 <DirectoryPath
@@ -121,6 +155,8 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
 
             <Search
                 theme={stateGeneralTheme}
+                searchString={searchString}
+                setSearchString={setSearchString}
             />
         </StyledFilesTopBar>
     );

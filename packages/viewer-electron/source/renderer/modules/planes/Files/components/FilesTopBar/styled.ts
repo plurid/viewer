@@ -32,4 +32,56 @@ export const StyledFilesTopBarCenter = styled.div`
     grid-gap: 1rem;
     align-items: center;
 `;
+
+
+export interface IStyledTopBarButton {
+    theme: Theme;
+    active?: boolean;
+    disabled?: boolean;
+}
+
+export const StyledTopBarButton = styled.div<IStyledTopBarButton>`
+    height: 36px;
+    width: 36px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background-color: ${
+        ({
+            theme,
+            active,
+        }: IStyledTopBarButton) => {
+            if (active) {
+                return theme.backgroundColorSecondary;
+            }
+
+            return 'initial';
+        }
+    };
+
+    pointer-events: ${
+        ({
+            disabled,
+        }: IStyledTopBarButton) => {
+            if (disabled) {
+                return 'none';
+            }
+
+            return 'initial';
+        }
+    };
+    opacity: ${
+        ({
+            disabled,
+        }: IStyledTopBarButton) => {
+            if (disabled) {
+                return '0.3';
+            }
+
+            return '1';
+        }
+    };
+`;
 // #region module

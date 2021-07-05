@@ -13,6 +13,9 @@
 
 
     // #region external
+    import {
+        StyledTopBarButton,
+    } from '~renderer-planes/Files/components/FilesTopBar/styled';
     // #endregion external
 
 
@@ -30,19 +33,13 @@ export interface FavoritesProperties {
     // #region required
         // #region values
         theme: Theme;
+        viewShowFavorites: boolean;
+        setViewShowFavorites: React.Dispatch<React.SetStateAction<boolean>>;
         // #endregion values
 
         // #region methods
         // #endregion methods
     // #endregion required
-
-    // #region optional
-        // #region values
-        // #endregion values
-
-        // #region methods
-        // #endregion methods
-    // #endregion optional
 }
 
 const Favorites: React.FC<FavoritesProperties> = (
@@ -53,19 +50,13 @@ const Favorites: React.FC<FavoritesProperties> = (
         // #region required
             // #region values
             theme,
+            viewShowFavorites,
+            setViewShowFavorites,
             // #endregion values
 
             // #region methods
             // #endregion methods
         // #endregion required
-
-        // #region optional
-            // #region values
-            // #endregion values
-
-            // #region methods
-            // #endregion methods
-        // #endregion optional
     } = properties;
     // #endregion properties
 
@@ -75,10 +66,16 @@ const Favorites: React.FC<FavoritesProperties> = (
         <StyledFavorites
             theme={theme}
         >
-            <PluridIconSpace
+            <StyledTopBarButton
                 theme={theme}
-                title="Favorites"
-            />
+                active={viewShowFavorites}
+            >
+                <PluridIconSpace
+                    theme={theme}
+                    title="Favorites"
+                    atClick={() => setViewShowFavorites(active => !active)}
+                />
+            </StyledTopBarButton>
         </StyledFavorites>
     );
     // #endregion render

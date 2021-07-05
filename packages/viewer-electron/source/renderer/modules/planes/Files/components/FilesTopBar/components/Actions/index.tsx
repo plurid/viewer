@@ -1,6 +1,8 @@
 // #region imports
     // #region libraries
-    import React from 'react';
+    import React, {
+        useState,
+    } from 'react';
 
     import {
         Theme,
@@ -13,6 +15,9 @@
 
 
     // #region external
+    import {
+        StyledTopBarButton,
+    } from '~renderer-planes/Files/components/FilesTopBar/styled';
     // #endregion external
 
 
@@ -35,14 +40,6 @@ export interface ActionsProperties {
         // #region methods
         // #endregion methods
     // #endregion required
-
-    // #region optional
-        // #region values
-        // #endregion values
-
-        // #region methods
-        // #endregion methods
-    // #endregion optional
 }
 
 const Actions: React.FC<ActionsProperties> = (
@@ -58,16 +55,16 @@ const Actions: React.FC<ActionsProperties> = (
             // #region methods
             // #endregion methods
         // #endregion required
-
-        // #region optional
-            // #region values
-            // #endregion values
-
-            // #region methods
-            // #endregion methods
-        // #endregion optional
     } = properties;
     // #endregion properties
+
+
+    // #region state
+    const [
+        showActions,
+        setShowActions,
+    ] = useState(false);
+    // #endregion state
 
 
     // #region render
@@ -75,10 +72,22 @@ const Actions: React.FC<ActionsProperties> = (
         <StyledActions
             theme={theme}
         >
-            <PluridIconMore
+            <StyledTopBarButton
                 theme={theme}
-                title="Actions"
-            />
+                active={showActions}
+            >
+                <PluridIconMore
+                    theme={theme}
+                    title="Actions"
+                    atClick={() => setShowActions(active => !active)}
+                />
+            </StyledTopBarButton>
+
+            {showActions && (
+                <div>
+                    actions
+                </div>
+            )}
         </StyledActions>
     );
     // #endregion render

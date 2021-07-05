@@ -48,8 +48,10 @@
     // #region internal
     import {
         StyledFiles,
+        StyledFilesView,
         StyledFilesNotFound,
         StyledFilesList,
+        StyledFilesFavorites,
     } from './styled';
 
     import FilesTopBar from './components/FilesTopBar';
@@ -142,6 +144,12 @@ const Files: React.FC<FilesProperties> = (
         setViewError,
     ] = useState('');
 
+
+    const [
+        viewShowFavorites,
+        setViewShowFavorites,
+    ] = useState(true);
+
     const [
         viewShowAs,
         setViewShowAs,
@@ -151,7 +159,30 @@ const Files: React.FC<FilesProperties> = (
         pluridLinkNavigation,
         setPluridLinkNavigation,
     ] = useState(true);
+
+    const [
+        searchString,
+        setSearchString,
+    ] = useState('');
+
+
+    const [
+        hasPreviousHistory,
+        setHasPreviousHistory,
+    ] = useState(false);
+
+    const [
+        hasNextHistory,
+        setHasNextHistory,
+    ] = useState(false);
     // #endregion state
+
+
+    // #region handlers
+    const historyStepPrevious = () => {}
+
+    const historyStepNext = () => {}
+    // #endregion handlers
 
 
     // #region effects
@@ -192,33 +223,60 @@ const Files: React.FC<FilesProperties> = (
         >
             <FilesTopBar
                 viewDirectory={viewDirectory}
+
+                viewShowFavorites={viewShowFavorites}
+                setViewShowFavorites={setViewShowFavorites}
+
                 setViewDirectory={setViewDirectory}
                 viewShowAs={viewShowAs}
                 setViewShowAs={setViewShowAs}
                 pluridLinkNavigation={pluridLinkNavigation}
                 setPluridLinkNavigation={setPluridLinkNavigation}
+
+                searchString={searchString}
+                setSearchString={setSearchString}
+
+                hasPreviousHistory={hasPreviousHistory}
+                hasNextHistory={hasNextHistory}
+
+                historyStepPrevious={historyStepPrevious}
+                historyStepNext={historyStepNext}
             />
 
-            {viewError === 'NOT_FOUND' && (
-                <StyledFilesNotFound>
-                    path not found
-                </StyledFilesNotFound>
-            )}
+            <StyledFilesView
+                splitView={viewShowFavorites}
+            >
+                {viewShowFavorites && (
+                    <StyledFilesFavorites>
+                        <StyledFilesNotFound>
+                            no favorites
+                        </StyledFilesNotFound>
+                    </StyledFilesFavorites>
+                )}
 
-            {files.length > 0 && (
-                <StyledFilesList>
-                    {files.map(file => {
-                        return (
-                            <FileItem
-                                key={Math.random() + ''}
-                                path={viewDirectory}
-                                file={file}
-                                theme={stateGeneralTheme}
-                            />
-                        );
-                    })}
-                </StyledFilesList>
-            )}
+                {viewError === 'NOT_FOUND' && (
+                    <StyledFilesNotFound>
+                        path not found
+                    </StyledFilesNotFound>
+                )}
+
+                {files.length > 0 && (
+                    <StyledFilesList
+                        theme={stateGeneralTheme}
+                    >
+                        {files.map(file => {
+                            return (
+                                <FileItem
+                                    key={Math.random() + ''}
+                                    path={viewDirectory}
+                                    file={file}
+                                    theme={stateGeneralTheme}
+                                />
+                            );
+                        })}
+                    </StyledFilesList>
+                )}
+            </StyledFilesView>
         </StyledFiles>
     );
     // #endregion render

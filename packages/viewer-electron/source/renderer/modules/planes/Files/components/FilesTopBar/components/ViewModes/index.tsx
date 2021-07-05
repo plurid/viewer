@@ -13,13 +13,15 @@
 
 
     // #region external
+    import {
+        StyledTopBarButton,
+    } from '~renderer-planes/Files/components/FilesTopBar/styled';
     // #endregion external
 
 
     // #region internal
     import {
         StyledViewModes,
-        StyledViewMode,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -68,7 +70,7 @@ const ViewModes: React.FC<ViewModesProperties> = (
         <StyledViewModes
             theme={theme}
         >
-            <StyledViewMode
+            <StyledTopBarButton
                 theme={theme}
                 active={viewShowAs === 'ICONS'}
             >
@@ -77,9 +79,9 @@ const ViewModes: React.FC<ViewModesProperties> = (
                     title="Show as Icons"
                     atClick={() => setViewShowAs('ICONS')}
                 />
-            </StyledViewMode>
+            </StyledTopBarButton>
 
-            <StyledViewMode
+            <StyledTopBarButton
                 theme={theme}
                 active={viewShowAs === 'LIST'}
             >
@@ -88,9 +90,9 @@ const ViewModes: React.FC<ViewModesProperties> = (
                     title="Show as List"
                     atClick={() => setViewShowAs('LIST')}
                 />
-            </StyledViewMode>
+            </StyledTopBarButton>
 
-            <StyledViewMode
+            <StyledTopBarButton
                 theme={theme}
                 active={viewShowAs === 'COLUMNS'}
             >
@@ -99,9 +101,9 @@ const ViewModes: React.FC<ViewModesProperties> = (
                     title="Show as Columns"
                     atClick={() => setViewShowAs('COLUMNS')}
                 />
-            </StyledViewMode>
+            </StyledTopBarButton>
 
-            <StyledViewMode
+            <StyledTopBarButton
                 theme={theme}
                 active={viewShowAs === 'GALLERY'}
             >
@@ -110,10 +112,10 @@ const ViewModes: React.FC<ViewModesProperties> = (
                     title="Show as Gallery"
                     atClick={() => setViewShowAs('GALLERY')}
                 />
-            </StyledViewMode>
+            </StyledTopBarButton>
 
 
-            <StyledViewMode
+            <StyledTopBarButton
                 theme={theme}
                 active={pluridLinkNavigation}
                 style={{
@@ -125,7 +127,7 @@ const ViewModes: React.FC<ViewModesProperties> = (
                     title="Plurid Link Navigation"
                     atClick={() => setPluridLinkNavigation(active => !active)}
                 />
-            </StyledViewMode>
+            </StyledTopBarButton>
         </StyledViewModes>
     );
     // #endregion render
