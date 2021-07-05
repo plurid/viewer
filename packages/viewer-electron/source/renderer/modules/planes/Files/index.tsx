@@ -4,8 +4,6 @@
         Dirent,
     } from 'fs';
 
-    import path from 'path';
-
     import React, {
         useRef,
         useState,
@@ -53,12 +51,11 @@
         StyledFilesView,
         StyledFilesNotFound,
         StyledFilesList,
-        StyledFilesFavorites,
-        StyledFavoritesList,
     } from './styled';
 
     import FilesTopBar from './components/FilesTopBar';
     import FileItem from './components/FileItem';
+    import Favorites from './components/Favorites';
     // #endregion internal
 // #endregion imports
 
@@ -258,29 +255,10 @@ const Files: React.FC<FilesProperties> = (
                 splitView={viewShowFavorites}
             >
                 {viewShowFavorites && (
-                    <StyledFilesFavorites>
-                        {favorites.length === 0 && (
-                            <StyledFilesNotFound>
-                                no favorites
-                            </StyledFilesNotFound>
-                        )}
-
-                        {favorites.length > 0 && (
-                            <StyledFavoritesList>
-                                {favorites.map(favorite => {
-                                    const favoriteName = path.basename(favorite);
-
-                                    return (
-                                        <div
-                                            key={favorite}
-                                        >
-                                            {favoriteName}
-                                        </div>
-                                    );
-                                })}
-                            </StyledFavoritesList>
-                        )}
-                    </StyledFilesFavorites>
+                    <Favorites
+                        theme={stateGeneralTheme}
+                        favorites={favorites}
+                    />
                 )}
 
                 {viewError === 'NOT_FOUND' && (
