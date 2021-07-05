@@ -42,6 +42,10 @@
 export interface FilesTopBarOwnProperties {
     viewDirectory: string;
     setViewDirectory: React.Dispatch<React.SetStateAction<string>>;
+    viewShowAs: string;
+    setViewShowAs: React.Dispatch<React.SetStateAction<string>>;
+    pluridLinkNavigation: boolean;
+    setPluridLinkNavigation: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export interface FilesTopBarStateProperties {
@@ -66,6 +70,10 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
         // #region own
         viewDirectory,
         setViewDirectory,
+        viewShowAs,
+        setViewShowAs,
+        pluridLinkNavigation,
+        setPluridLinkNavigation,
         // #endregion own
 
         // #region state
@@ -100,6 +108,10 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
 
                 <ViewModes
                     theme={stateGeneralTheme}
+                    viewShowAs={viewShowAs}
+                    setViewShowAs={setViewShowAs}
+                    pluridLinkNavigation={pluridLinkNavigation}
+                    setPluridLinkNavigation={setPluridLinkNavigation}
                 />
 
                 <Actions

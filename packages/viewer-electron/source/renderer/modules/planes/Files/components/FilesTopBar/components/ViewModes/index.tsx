@@ -19,6 +19,7 @@
     // #region internal
     import {
         StyledViewModes,
+        StyledViewMode,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -30,19 +31,15 @@ export interface ViewModesProperties {
     // #region required
         // #region values
         theme: Theme;
+        viewShowAs: string;
+        setViewShowAs: React.Dispatch<React.SetStateAction<string>>;
+        pluridLinkNavigation: boolean;
+        setPluridLinkNavigation: React.Dispatch<React.SetStateAction<boolean>>;
         // #endregion values
 
         // #region methods
         // #endregion methods
     // #endregion required
-
-    // #region optional
-        // #region values
-        // #endregion values
-
-        // #region methods
-        // #endregion methods
-    // #endregion optional
 }
 
 const ViewModes: React.FC<ViewModesProperties> = (
@@ -53,19 +50,15 @@ const ViewModes: React.FC<ViewModesProperties> = (
         // #region required
             // #region values
             theme,
+            viewShowAs,
+            setViewShowAs,
+            pluridLinkNavigation,
+            setPluridLinkNavigation,
             // #endregion values
 
             // #region methods
             // #endregion methods
         // #endregion required
-
-        // #region optional
-            // #region values
-            // #endregion values
-
-            // #region methods
-            // #endregion methods
-        // #endregion optional
     } = properties;
     // #endregion properties
 
@@ -75,30 +68,64 @@ const ViewModes: React.FC<ViewModesProperties> = (
         <StyledViewModes
             theme={theme}
         >
-            <PluridIconSpace
+            <StyledViewMode
                 theme={theme}
-                title="Show as Icons"
-            />
+                active={viewShowAs === 'ICONS'}
+            >
+                <PluridIconSpace
+                    theme={theme}
+                    title="Show as Icons"
+                    atClick={() => setViewShowAs('ICONS')}
+                />
+            </StyledViewMode>
 
-            <PluridIconSpace
+            <StyledViewMode
                 theme={theme}
-                title="Show as List"
-            />
+                active={viewShowAs === 'LIST'}
+            >
+                <PluridIconSpace
+                    theme={theme}
+                    title="Show as List"
+                    atClick={() => setViewShowAs('LIST')}
+                />
+            </StyledViewMode>
 
-            <PluridIconSpace
+            <StyledViewMode
                 theme={theme}
-                title="Show as Columns"
-            />
+                active={viewShowAs === 'COLUMNS'}
+            >
+                <PluridIconSpace
+                    theme={theme}
+                    title="Show as Columns"
+                    atClick={() => setViewShowAs('COLUMNS')}
+                />
+            </StyledViewMode>
 
-            <PluridIconSpace
+            <StyledViewMode
                 theme={theme}
-                title="Show as Gallery"
-            />
+                active={viewShowAs === 'GALLERY'}
+            >
+                <PluridIconSpace
+                    theme={theme}
+                    title="Show as Gallery"
+                    atClick={() => setViewShowAs('GALLERY')}
+                />
+            </StyledViewMode>
 
-            <PluridIconSpace
+
+            <StyledViewMode
                 theme={theme}
-                title="Plurid Link Navigation"
-            />
+                active={pluridLinkNavigation}
+                style={{
+                    marginLeft: '1rem',
+                }}
+            >
+                <PluridIconSpace
+                    theme={theme}
+                    title="Plurid Link Navigation"
+                    atClick={() => setPluridLinkNavigation(active => !active)}
+                />
+            </StyledViewMode>
         </StyledViewModes>
     );
     // #endregion render

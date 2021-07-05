@@ -141,6 +141,16 @@ const Files: React.FC<FilesProperties> = (
         viewError,
         setViewError,
     ] = useState('');
+
+    const [
+        viewShowAs,
+        setViewShowAs,
+    ] = useState('LIST');
+
+    const [
+        pluridLinkNavigation,
+        setPluridLinkNavigation,
+    ] = useState(true);
     // #endregion state
 
 
@@ -183,6 +193,10 @@ const Files: React.FC<FilesProperties> = (
             <FilesTopBar
                 viewDirectory={viewDirectory}
                 setViewDirectory={setViewDirectory}
+                viewShowAs={viewShowAs}
+                setViewShowAs={setViewShowAs}
+                pluridLinkNavigation={pluridLinkNavigation}
+                setPluridLinkNavigation={setPluridLinkNavigation}
             />
 
             {viewError === 'NOT_FOUND' && (
