@@ -1,5 +1,7 @@
 // #region imports
     // #region libraries
+    import path from 'path';
+
     import React, {
         useRef,
         useState,
@@ -12,6 +14,7 @@
 
     import {
         ipcRenderer,
+        remote,
     } from 'electron';
 
     import {
@@ -194,6 +197,8 @@ const Space: React.FC<SpaceProperties> = (
     const currentYAngle = useRef(0);
     const currentXCoord = useRef(0);
     const currentYCoord = useRef(0);
+
+    const lastOpenPath = useRef('');
     // #endregion references
 
 
@@ -205,6 +210,61 @@ const Space: React.FC<SpaceProperties> = (
         pluridData.view,
     );
     // #endregion state
+
+
+    // #region handlers
+    const addFiles = async (
+        files: string[],
+    ) => {
+        for (const file of files) {
+            const {
+                kind,
+                extension,
+            } = getFileType(file);
+
+            const strategy = new FileStrategy(
+                kind,
+                extension,
+                file,
+            );
+            const {
+                plane,
+                notification,
+            } = await strategy.apply();
+
+            dispatchProductAddPlane({
+                spaceID: activeSpaceID,
+                data: plane as any,
+            });
+            dispatchAddNotification(
+                notification,
+            );
+        }
+    }
+
+    const openFile = async () => {
+        const filesData = await remote.dialog.showOpenDialog({
+            defaultPath: lastOpenPath.current,
+            properties: [
+                'openFile',
+                'multiSelections',
+            ],
+        });
+
+        const {
+            canceled,
+            filePaths,
+        } = filesData;
+
+        if (canceled) {
+            return;
+        }
+
+        lastOpenPath.current = path.dirname(filePaths[0]);
+
+        addFiles(filePaths);
+    }
+    // #endregion handlers
 
 
     // #region effects
@@ -231,30 +291,7 @@ const Space: React.FC<SpaceProperties> = (
                 return;
             }
 
-            for (const file of files) {
-                const {
-                    kind,
-                    extension,
-                } = getFileType(file);
-
-                const strategy = new FileStrategy(
-                    kind,
-                    extension,
-                    file,
-                );
-                const {
-                    plane,
-                    notification,
-                } = await strategy.apply();
-
-                dispatchProductAddPlane({
-                    spaceID: activeSpaceID,
-                    data: plane as any,
-                });
-                dispatchAddNotification(
-                    notification,
-                );
-            }
+            addFiles(files);
         }
 
         ipcRenderer.on('FILES_OPEN', addPlane);
@@ -408,7 +445,7 @@ const Space: React.FC<SpaceProperties> = (
                         or&nbsp;
                         <PluridLinkButton
                             text="open"
-                            atClick={() => {}}
+                            atClick={() => openFile()}
                             theme={stateGeneralTheme}
                             inline={true}
                         />
