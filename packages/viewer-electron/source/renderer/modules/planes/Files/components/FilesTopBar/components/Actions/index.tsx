@@ -1,6 +1,7 @@
 // #region imports
     // #region libraries
     import React, {
+        useRef,
         useState,
     } from 'react';
 
@@ -60,6 +61,11 @@ const Actions: React.FC<ActionsProperties> = (
     // #endregion properties
 
 
+    // #region references
+    const node = useRef<HTMLDivElement | null>(null);
+    // #endregion references
+
+
     // #region state
     const [
         showActions,
@@ -72,6 +78,7 @@ const Actions: React.FC<ActionsProperties> = (
     return (
         <StyledActions
             theme={theme}
+            ref={node}
         >
             <StyledTopBarButton
                 theme={theme}
@@ -88,7 +95,7 @@ const Actions: React.FC<ActionsProperties> = (
                 <StyledActionsMenu
                     theme={theme}
                     style={{
-                        left: '700px',
+                        left: node.current ? node.current.offsetLeft + 'px' : '0px',
                     }}
                 >
                     <div>
