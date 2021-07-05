@@ -134,6 +134,11 @@ const Files: React.FC<FilesProperties> = (
         viewDirectory,
         setViewDirectory,
     ] = useState(directory);
+
+    const [
+        viewError,
+        setViewError,
+    ] = useState('');
     // #endregion state
 
 
@@ -149,9 +154,11 @@ const Files: React.FC<FilesProperties> = (
                     return;
                 }
 
+                setViewError('');
                 setFiles(ignoreHiddenFiles(files));
             } catch (error) {
-                return;
+                setFiles([]);
+                setViewError('NOT_FOUND');
             }
         }
 
@@ -178,6 +185,12 @@ const Files: React.FC<FilesProperties> = (
                     setViewDirectory(directory);
                 }}
             />
+
+            {viewError === 'NOT_FOUND' && (
+                <div>
+                    path not found
+                </div>
+            )}
 
             {files.map(file => {
                 return (

@@ -82,6 +82,7 @@ const DirectoryPath: React.FC<DirectoryPathProperties> = (
                         update(localDirectory);
                     }
                 }}
+                level={2}
             />
         </StyledDirectoryPath>
     );
