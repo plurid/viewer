@@ -471,6 +471,15 @@ const Space: React.FC<SpaceProperties> = (
                     planes={pluridPlanes}
                     view={pluridView}
                     pubsub={pluridPubSub}
+                    configuration={{
+                        elements: {
+                            plane: {
+                                controls: {
+                                    show: false,
+                                },
+                            },
+                        },
+                    }}
                 />
             )}
 
