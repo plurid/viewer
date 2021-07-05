@@ -11,15 +11,10 @@
 
 
 // #region module
-export interface IStyledDirectoryPath {
+export interface IStyledActions {
     theme: Theme;
 }
 
-export const StyledDirectoryPath = styled.div<IStyledDirectoryPath>`
-    width: 500px;
-
-    @media (max-width: 900px) {
-        width: 100%;
-    }
+export const StyledActions = styled.div<IStyledActions>`
 `;
 // #region module

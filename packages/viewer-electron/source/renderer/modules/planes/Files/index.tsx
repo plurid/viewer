@@ -52,7 +52,7 @@
         StyledFilesList,
     } from './styled';
 
-    import DirectoryPath from './components/DirectoryPath';
+    import FilesTopBar from './components/FilesTopBar';
     import FileItem from './components/FileItem';
     // #endregion internal
 // #endregion imports
@@ -180,12 +180,9 @@ const Files: React.FC<FilesProperties> = (
         <StyledFiles
             theme={stateGeneralTheme}
         >
-            <DirectoryPath
-                theme={stateGeneralTheme}
-                directory={viewDirectory}
-                update={(directory) => {
-                    setViewDirectory(directory);
-                }}
+            <FilesTopBar
+                viewDirectory={viewDirectory}
+                setViewDirectory={setViewDirectory}
             />
 
             {viewError === 'NOT_FOUND' && (
