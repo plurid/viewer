@@ -28,4 +28,11 @@ export const StyledFiles = styled.div<IStyledFiles>`
         margin: 0;
     }
 `;
+
+
+export const StyledFilesNotFound = styled.div`
+    height: 500px;
+    display: grid;
+    place-content: center;
+`;
 // #region module

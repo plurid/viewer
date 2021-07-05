@@ -16,8 +16,12 @@ export interface IStyledDirectoryPath {
 }
 
 export const StyledDirectoryPath = styled.div<IStyledDirectoryPath>`
-    width: 500px;
+    width: 800px;
     margin: 0 auto;
     padding: 2rem;
+
+    @media (max-width: 900px) {
+        width: 100%;
+    }
 `;
 // #region module

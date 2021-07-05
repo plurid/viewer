@@ -48,6 +48,7 @@
     // #region internal
     import {
         StyledFiles,
+        StyledFilesNotFound,
     } from './styled';
 
     import DirectoryPath from './components/DirectoryPath';
@@ -187,9 +188,9 @@ const Files: React.FC<FilesProperties> = (
             />
 
             {viewError === 'NOT_FOUND' && (
-                <div>
+                <StyledFilesNotFound>
                     path not found
-                </div>
+                </StyledFilesNotFound>
             )}
 
             {files.map(file => {
