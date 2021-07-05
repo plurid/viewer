@@ -16,5 +16,16 @@ export interface IStyledSpace {
 }
 
 export const StyledSpace = styled.div<IStyledSpace>`
+    height: 100%;
+`;
+
+
+export const StyledSpaceEmpty = styled.div`
+    height: 100%;
+    display: grid;
+    place-content: center;
+    line-height: 2;
+    text-align: center;
+    user-select: none;
 `;
 // #region module

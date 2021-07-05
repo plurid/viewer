@@ -32,12 +32,18 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import ToolbarUtility from '~renderer-components/Toolbar/Utility';
+
     import ImagePlane from '~renderer-planes/Image';
     import VideoPlane from '~renderer-planes/Video';
     import SoundPlane from '~renderer-planes/Sound';
     import TextPlane from '~renderer-planes/Text';
     import FilesPlane from '~renderer-planes/Files';
     import FileSystemPlane from '~renderer-planes/FileSystem';
+
+    import {
+        PluridLinkButton,
+    } from '~renderer-services/styled';
 
     import {
         getFileType,
@@ -55,6 +61,7 @@
     // #region internal
     import {
         StyledSpace,
+        StyledSpaceEmpty,
     } from './styled';
     // #endregion internal
 // #endregion imports
@@ -148,7 +155,8 @@ export interface SpaceDispatchProperties {
     dispatchAddNotification: typeof actions.notifications.addNotification;
 }
 
-export type SpaceProperties = SpaceOwnProperties
+export type SpaceProperties =
+    & SpaceOwnProperties
     & SpaceStateProperties
     & SpaceDispatchProperties;
 
@@ -159,7 +167,7 @@ const Space: React.FC<SpaceProperties> = (
     // #region properties
     const {
         // #region state
-        // stateGeneralTheme,
+        stateGeneralTheme,
         // stateInteractionTheme,
         stateSpaces,
         activeSpaceID,
@@ -386,7 +394,30 @@ const Space: React.FC<SpaceProperties> = (
     // #region render
     return (
         <StyledSpace>
-            {activeSpace && (
+            {pluridView.length === 0 && (
+                <StyledSpaceEmpty>
+                    <p>
+                        <PluridLinkButton
+                            text="add"
+                            atClick={() => {}}
+                            theme={stateGeneralTheme}
+                            inline={true}
+                        />&nbsp;
+                        a plane
+                        <br />
+                        or&nbsp;
+                        <PluridLinkButton
+                            text="open"
+                            atClick={() => {}}
+                            theme={stateGeneralTheme}
+                            inline={true}
+                        />
+                        &nbsp;a file
+                    </p>
+                </StyledSpaceEmpty>
+            )}
+
+            {activeSpace && pluridView.length > 0 && (
                 <PluridApplication
                     key={activeSpaceID}
                     planes={pluridPlanes}
@@ -394,6 +425,8 @@ const Space: React.FC<SpaceProperties> = (
                     pubsub={pluridPubSub}
                 />
             )}
+
+            <ToolbarUtility />
         </StyledSpace>
     );
     // #endregion render
