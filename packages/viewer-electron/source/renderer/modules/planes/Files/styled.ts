@@ -57,21 +57,4 @@ export const StyledFilesNotFound = styled.div`
     display: grid;
     place-content: center;
 `;
-
-
-export interface IStyledFilesList {
-    theme: Theme;
-}
-
-export const StyledFilesList = styled.div<IStyledFilesList>`
-    height: 500px;
-    overflow: scroll;
-    padding: 1rem;
-
-    background-color: ${
-        ({
-            theme,
-        }: IStyledFilesList) => theme.backgroundColorSecondary
-    };
-`;
 // #region module

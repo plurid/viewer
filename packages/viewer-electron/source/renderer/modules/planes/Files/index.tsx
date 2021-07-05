@@ -50,12 +50,11 @@
         StyledFiles,
         StyledFilesView,
         StyledFilesNotFound,
-        StyledFilesList,
     } from './styled';
 
     import FilesTopBar from './components/FilesTopBar';
-    import FileItem from './components/FileItem';
     import Favorites from './components/Favorites';
+    import FilesView from './components/FilesView';
     // #endregion internal
 // #endregion imports
 
@@ -268,20 +267,11 @@ const Files: React.FC<FilesProperties> = (
                 )}
 
                 {files.length > 0 && (
-                    <StyledFilesList
+                    <FilesView
                         theme={stateGeneralTheme}
-                    >
-                        {files.map(file => {
-                            return (
-                                <FileItem
-                                    key={Math.random() + ''}
-                                    path={viewDirectory}
-                                    file={file}
-                                    theme={stateGeneralTheme}
-                                />
-                            );
-                        })}
-                    </StyledFilesList>
+                        files={files}
+                        viewDirectory={viewDirectory}
+                    />
                 )}
             </StyledFilesView>
         </StyledFiles>
