@@ -15,9 +15,9 @@
     import reduxStore from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
 
-    import {
-        getProduct,
-    } from '~renderer-services/logic/data';
+    // import {
+    //     getProduct,
+    // } from '~renderer-services/logic/data';
 
     import View from './View';
     // #endregion external
@@ -45,7 +45,7 @@ const Application: React.FC<any> = () => {
     // #region effects
     useEffect(() => {
         const loadData = async () => {
-            const product = await getProduct();
+            // const product = await getProduct();
 
             const emptyStore = reduxStore({});
             const emptyState = emptyStore.getState();
