@@ -42,11 +42,14 @@
     import SoundPlane from '~renderer-planes/Sound';
     import TextPlane from '~renderer-planes/Text';
     import FilesPlane from '~renderer-planes/Files';
-    import FileSystemPlane from '~renderer-planes/FileSystem';
 
     import {
         PluridLinkButton,
     } from '~renderer-services/styled';
+
+    import {
+        addPlane,
+    } from '~renderer-services/logic/dispatches';
 
     import {
         getFileType,
@@ -92,10 +95,6 @@ const pluridPlanes: PluridReactPlane[] = [
     {
         route: '/files/:id',
         component: FilesPlane,
-    },
-    {
-        route: '/file-system/:id',
-        component: FileSystemPlane,
     },
 ];
 
@@ -146,6 +145,7 @@ export interface SpaceOwnProperties {
 }
 
 export interface SpaceStateProperties {
+    state: AppState;
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
     stateSpaces: Space[];
@@ -154,6 +154,7 @@ export interface SpaceStateProperties {
 }
 
 export interface SpaceDispatchProperties {
+    dispatch: ThunkDispatch<{}, {}, AnyAction>;
     dispatchProductAddPlane: typeof actions.product.addPlane;
     dispatchAddNotification: typeof actions.notifications.addNotification;
 }
@@ -170,6 +171,7 @@ const Space: React.FC<SpaceProperties> = (
     // #region properties
     const {
         // #region state
+        state,
         stateGeneralTheme,
         // stateInteractionTheme,
         stateSpaces,
@@ -178,6 +180,7 @@ const Space: React.FC<SpaceProperties> = (
         // #endregion state
 
         // #region dispatch
+        dispatch,
         dispatchProductAddPlane,
         dispatchAddNotification,
         // #endregion dispatch
@@ -436,7 +439,10 @@ const Space: React.FC<SpaceProperties> = (
                     <p>
                         <PluridLinkButton
                             text="add"
-                            atClick={() => {}}
+                            atClick={() => addPlane(
+                                state,
+                                dispatch,
+                            )}
                             theme={stateGeneralTheme}
                             inline={true}
                         />&nbsp;
@@ -473,6 +479,7 @@ const Space: React.FC<SpaceProperties> = (
 const mapStateToProperties = (
     state: AppState,
 ): SpaceStateProperties => ({
+    state,
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
     stateSpaces: selectors.product.getSpaces(state),
@@ -484,6 +491,7 @@ const mapStateToProperties = (
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
 ): SpaceDispatchProperties => ({
+    dispatch,
     dispatchProductAddPlane: (
         payload,
     ) => dispatch(

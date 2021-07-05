@@ -1,6 +1,15 @@
 // #region imports
     // #region libraries
-    import React from 'react';
+    import os from 'os';
+
+    import {
+        promises as fs,
+    } from 'fs';
+
+    import React, {
+        useState,
+        useEffect,
+    } from 'react';
 
     import { AnyAction } from 'redux';
     import { connect } from 'react-redux';
@@ -9,6 +18,10 @@
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        PluridPlaneComponentProperty,
+    } from '@plurid/plurid-react';
     // #endregion libraries
 
 
@@ -31,6 +44,7 @@
 
 // #region module
 export interface FilesOwnProperties {
+    plurid: PluridPlaneComponentProperty;
 }
 
 export interface FilesStateProperties {
@@ -41,27 +55,67 @@ export interface FilesStateProperties {
 export interface FilesDispatchProperties {
 }
 
-export type FilesProperties = FilesOwnProperties
+export type FilesProperties =
+    & FilesOwnProperties
     & FilesStateProperties
     & FilesDispatchProperties;
+
 
 const Files: React.FC<FilesProperties> = (
     properties,
 ) => {
     // #region properties
-    // const {
-        // // #region state
-        // stateGeneralTheme,
-        // stateInteractionTheme,
-        // // #endregion state
-    // } = properties;
+    const {
+        // #region own
+        plurid,
+        // #endregion own
+
+        // #region state
+        stateGeneralTheme,
+        stateInteractionTheme,
+        // #endregion state
+    } = properties;
+
+    const id = plurid.plane.parameters.id;
     // #endregion properties
+
+
+    // #region state
+    const [
+        files,
+        setFiles,
+    ] = useState<string[]>([]);
+    // #endregion state
+
+
+    // #region effects
+    useEffect(() => {
+        const readFiles = async () => {
+            try {
+                const files = await fs.readdir(os.homedir());
+                setFiles(files);
+            } catch (error) {
+                return;
+            }
+        }
+
+        readFiles()
+    }, []);
+    // #endregion effects
 
 
     // #region render
     return (
         <StyledFiles>
-            Files
+            {files.map(file => {
+                return (
+                    <div
+                        key={Math.random() + ''}
+                    >
+                        {file}
+                    </div>
+                );
+            })}
         </StyledFiles>
     );
     // #endregion render

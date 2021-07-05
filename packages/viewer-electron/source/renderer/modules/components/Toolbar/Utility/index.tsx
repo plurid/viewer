@@ -13,6 +13,10 @@
 
 
     // #region external
+    import {
+        addPlane,
+    } from '~renderer-services/logic/dispatches';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -39,6 +43,7 @@ export interface UtilityOwnProperties {
 }
 
 export interface UtilityStateProperties {
+    state: AppState;
     stateSpaces: any;
     stateActiveSpaceID: string;
 }
@@ -59,27 +64,17 @@ const Utility: React.FC<UtilityProperties> = (
     // #region properties
     const {
         // #region state
-        stateSpaces,
-        stateActiveSpaceID,
+        state,
         // #endregion state
 
         // #region dispatch
         dispatch,
         // #endregion dispatch
     } = properties;
-
-    const activeSpace = stateSpaces[stateActiveSpaceID];
     // #endregion properties
 
 
     // #region handlers
-    const addPlane = () => {
-        if (!activeSpace) {
-            return;
-        }
-
-    }
-
     const togglePlaneList = () => {
 
     }
@@ -89,7 +84,10 @@ const Utility: React.FC<UtilityProperties> = (
     ) => {
         switch (type) {
             case 'ADD_PLANE':
-                addPlane();
+                addPlane(
+                    state,
+                    dispatch,
+                );
                 break;
             case 'PLANE_LIST':
                 togglePlaneList();
@@ -115,6 +113,7 @@ const Utility: React.FC<UtilityProperties> = (
 const mapStateToProperties = (
     state: AppState,
 ): UtilityStateProperties => ({
+    state,
     stateSpaces: selectors.product.getSpaces(state),
     stateActiveSpaceID: selectors.product.getActiveSpace(state),
 });
