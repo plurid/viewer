@@ -1,7 +1,5 @@
 // #region imports
     // #region libraries
-    import os from 'os';
-
     import {
         Dirent,
     } from 'fs';
@@ -52,6 +50,7 @@
         StyledFiles,
     } from './styled';
 
+    import DirectoryPath from './components/DirectoryPath';
     import FileItem from './components/FileItem';
     // #endregion internal
 // #endregion imports
@@ -113,6 +112,10 @@ const Files: React.FC<FilesProperties> = (
     if (!planeData) {
         return (<></>);
     }
+
+    const {
+        directory,
+    } = planeData.data;
     // #endregion properties
 
 
@@ -126,6 +129,11 @@ const Files: React.FC<FilesProperties> = (
         files,
         setFiles,
     ] = useState<Dirent[]>([]);
+
+    const [
+        viewDirectory,
+        setViewDirectory,
+    ] = useState(directory);
     // #endregion state
 
 
@@ -135,7 +143,7 @@ const Files: React.FC<FilesProperties> = (
 
         const readFiles = async () => {
             try {
-                const files = await getDirectoryFiles(planeData.data.directory);
+                const files = await getDirectoryFiles(viewDirectory);
 
                 if (!isMounted.current) {
                     return;
@@ -152,7 +160,9 @@ const Files: React.FC<FilesProperties> = (
         return () => {
             isMounted.current = false;
         }
-    }, []);
+    }, [
+        viewDirectory,
+    ]);
     // #endregion effects
 
 
@@ -161,11 +171,19 @@ const Files: React.FC<FilesProperties> = (
         <StyledFiles
             theme={stateGeneralTheme}
         >
+            <DirectoryPath
+                theme={stateGeneralTheme}
+                directory={viewDirectory}
+                update={(directory) => {
+                    setViewDirectory(directory);
+                }}
+            />
+
             {files.map(file => {
                 return (
                     <FileItem
                         key={Math.random() + ''}
-                        path={os.homedir()}
+                        path={viewDirectory}
                         file={file}
                         theme={stateGeneralTheme}
                     />
