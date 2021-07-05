@@ -24,7 +24,7 @@ export const StyledFileItem = styled.div<IStyledFileItem>`
         background: ${
             ({
                 theme,
-            }: IStyledFileItem) => theme.backgroundColorSecondary
+            }: IStyledFileItem) => theme.backgroundColorPrimary
         };
     }
 `;
