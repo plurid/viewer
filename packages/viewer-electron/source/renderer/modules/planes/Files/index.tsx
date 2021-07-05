@@ -49,6 +49,7 @@
     import {
         StyledFiles,
         StyledFilesNotFound,
+        StyledFilesList,
     } from './styled';
 
     import DirectoryPath from './components/DirectoryPath';
@@ -193,16 +194,20 @@ const Files: React.FC<FilesProperties> = (
                 </StyledFilesNotFound>
             )}
 
-            {files.map(file => {
-                return (
-                    <FileItem
-                        key={Math.random() + ''}
-                        path={viewDirectory}
-                        file={file}
-                        theme={stateGeneralTheme}
-                    />
-                );
-            })}
+            {files.length > 0 && (
+                <StyledFilesList>
+                    {files.map(file => {
+                        return (
+                            <FileItem
+                                key={Math.random() + ''}
+                                path={viewDirectory}
+                                file={file}
+                                theme={stateGeneralTheme}
+                            />
+                        );
+                    })}
+                </StyledFilesList>
+            )}
         </StyledFiles>
     );
     // #endregion render

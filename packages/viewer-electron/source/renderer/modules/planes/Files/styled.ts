@@ -16,6 +16,8 @@ export interface IStyledFiles {
 }
 
 export const StyledFiles = styled.div<IStyledFiles>`
+    min-height: 600px;
+
     font-family: ${
         ({
             theme,
@@ -34,5 +36,11 @@ export const StyledFilesNotFound = styled.div`
     height: 500px;
     display: grid;
     place-content: center;
+`;
+
+
+export const StyledFilesList = styled.div`
+    height: 500px;
+    overflow: scroll;
 `;
 // #region module
