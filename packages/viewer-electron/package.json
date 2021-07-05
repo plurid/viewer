@@ -172,13 +172,12 @@
         "test": "jest",
         "develop": "yarn clean && webpack --config ./scripts/webpack.config.js",
         "build": "yarn clean && webpack --config ./scripts/webpack.config.js --env prod --progress",
-        "build.production": "NODE_ENV=production yarn build",
         "build.clean": "rm -rf `find ./build/ -type d -name __tests__` && rm -rf `find ./build/ -type d -name .DS_STORE`",
-        "builder": "electron-builder build --publish never",
-        "electron": "electron ./build/",
-        "electron.run": "yarn develop && yarn electron",
-        "package": "yarn build && yarn builder",
-        "package.clean": "yarn build && yarn build.clean && yarn builder"
+        "build.production": "NODE_ENV=production yarn build && yarn build.clean",
+        "electron.run": "electron ./build/",
+        "electron.develop": "yarn develop && yarn electron",
+        "electron.builder": "electron-builder build --publish never",
+        "package": "yarn build.production && yarn electron.builder"
     },
     "dependencies": {
         "@apollo/client": "^3.3.20",
