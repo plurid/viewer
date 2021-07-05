@@ -54,6 +54,7 @@
         StyledFilesNotFound,
         StyledFilesList,
         StyledFilesFavorites,
+        StyledFavoritesList,
     } from './styled';
 
     import FilesTopBar from './components/FilesTopBar';
@@ -265,7 +266,7 @@ const Files: React.FC<FilesProperties> = (
                         )}
 
                         {favorites.length > 0 && (
-                            <div>
+                            <StyledFavoritesList>
                                 {favorites.map(favorite => {
                                     const favoriteName = path.basename(favorite);
 
@@ -277,7 +278,7 @@ const Files: React.FC<FilesProperties> = (
                                         </div>
                                     );
                                 })}
-                            </div>
+                            </StyledFavoritesList>
                         )}
                     </StyledFilesFavorites>
                 )}

@@ -63,6 +63,15 @@ export const StyledFilesFavorites = styled.div`
 `;
 
 
+export const StyledFavoritesList = styled.div`
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-gap: 1rem;
+    padding: 1rem;
+    font-size: 0.9rem;
+`;
+
+
 export interface IStyledFilesList {
     theme: Theme;
 }

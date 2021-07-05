@@ -32,6 +32,7 @@ export const StyledActionsMenu = styled.div<IStyledActionsMenu>`
     grid-gap: 1rem;
     padding: 1rem;
     border-radius: 15px;
+    font-size: 0.9rem;
 
     background-color: ${
         ({
