@@ -37,6 +37,7 @@
     import SoundPlane from '~renderer-planes/Sound';
     import TextPlane from '~renderer-planes/Text';
     import FilesPlane from '~renderer-planes/Files';
+    import FileSystemPlane from '~renderer-planes/FileSystem';
 
     import {
         getFileType,
@@ -81,6 +82,10 @@ const pluridPlanes: PluridReactPlane[] = [
     {
         route: '/files/:id',
         component: FilesPlane,
+    },
+    {
+        route: '/file-system/:id',
+        component: FileSystemPlane,
     },
 ];
 
