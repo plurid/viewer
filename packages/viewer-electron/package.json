@@ -172,6 +172,7 @@
         "test": "jest",
         "develop": "yarn clean && webpack --config ./scripts/webpack.config.js",
         "build": "yarn clean && webpack --config ./scripts/webpack.config.js --env prod --progress",
+        "build.production": "NODE_ENV=production yarn build",
         "build.clean": "rm -rf `find ./build/ -type d -name __tests__` && rm -rf `find ./build/ -type d -name .DS_STORE`",
         "builder": "electron-builder build --publish never",
         "electron": "electron ./build/",
