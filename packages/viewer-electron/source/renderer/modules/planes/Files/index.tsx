@@ -4,6 +4,8 @@
         Dirent,
     } from 'fs';
 
+    import path from 'path';
+
     import React, {
         useRef,
         useState,
@@ -151,6 +153,14 @@ const Files: React.FC<FilesProperties> = (
     ] = useState(true);
 
     const [
+        favorites,
+        setFavorites,
+    ] = useState([
+        '/Applications',
+    ]);
+
+
+    const [
         viewShowAs,
         setViewShowAs,
     ] = useState('LIST');
@@ -248,9 +258,27 @@ const Files: React.FC<FilesProperties> = (
             >
                 {viewShowFavorites && (
                     <StyledFilesFavorites>
-                        <StyledFilesNotFound>
-                            no favorites
-                        </StyledFilesNotFound>
+                        {favorites.length === 0 && (
+                            <StyledFilesNotFound>
+                                no favorites
+                            </StyledFilesNotFound>
+                        )}
+
+                        {favorites.length > 0 && (
+                            <div>
+                                {favorites.map(favorite => {
+                                    const favoriteName = path.basename(favorite);
+
+                                    return (
+                                        <div
+                                            key={favorite}
+                                        >
+                                            {favoriteName}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </StyledFilesFavorites>
                 )}
 
