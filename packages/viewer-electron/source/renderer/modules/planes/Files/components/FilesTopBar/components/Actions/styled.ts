@@ -17,4 +17,31 @@ export interface IStyledActions {
 
 export const StyledActions = styled.div<IStyledActions>`
 `;
+
+
+export interface IStyledActionsMenu {
+    theme: Theme;
+}
+
+export const StyledActionsMenu = styled.div<IStyledActionsMenu>`
+    position: absolute;
+    top: 70px;
+    width: 300px;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-gap: 1rem;
+    padding: 1rem;
+    border-radius: 15px;
+
+    background-color: ${
+        ({
+            theme,
+        }: IStyledActionsMenu) => theme.backgroundColorTertiary
+    };
+    box-shadow: ${
+        ({
+            theme,
+        }: IStyledActionsMenu) => theme.boxShadowUmbra
+    };
+`;
 // #region module

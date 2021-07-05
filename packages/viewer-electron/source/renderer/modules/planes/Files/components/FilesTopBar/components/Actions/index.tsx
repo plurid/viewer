@@ -24,6 +24,7 @@
     // #region internal
     import {
         StyledActions,
+        StyledActionsMenu,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -84,9 +85,24 @@ const Actions: React.FC<ActionsProperties> = (
             </StyledTopBarButton>
 
             {showActions && (
-                <div>
-                    actions
-                </div>
+                <StyledActionsMenu
+                    theme={theme}
+                    style={{
+                        left: '700px',
+                    }}
+                >
+                    <div>
+                        New Folder
+                    </div>
+
+                    <div>
+                        Open in New Plane
+                    </div>
+
+                    <div>
+                        Group By
+                    </div>
+                </StyledActionsMenu>
             )}
         </StyledActions>
     );
