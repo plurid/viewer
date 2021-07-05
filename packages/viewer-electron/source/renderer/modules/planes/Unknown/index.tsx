@@ -34,7 +34,7 @@
 
     // #region internal
     import {
-        StyledSound,
+        StyledUnknown,
     } from './styled';
     // #endregion internal
 // #endregion imports
@@ -42,38 +42,43 @@
 
 
 // #region module
-export interface SoundOwnProperties {
+export interface UnknownOwnProperties {
     plurid: PluridPlaneComponentProperty;
 }
 
-export interface SoundStateProperties {
+export interface UnknownStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
     stateSpaces: Space[];
     stateActiveSpaceID: string;
 }
 
-export interface SoundDispatchProperties {
+export interface UnknownDispatchProperties {
 }
 
-export type SoundProperties =
-    & SoundOwnProperties
-    & SoundStateProperties
-    & SoundDispatchProperties;
+export type UnknownProperties =
+    & UnknownOwnProperties
+    & UnknownStateProperties
+    & UnknownDispatchProperties;
 
 
-const Sound: React.FC<SoundProperties> = (
+const Unknown: React.FC<UnknownProperties> = (
     properties,
 ) => {
     // #region properties
     const {
-        // #region own
-        plurid,
-        // #endregion own
+        // #region required
+            // #region values
+            plurid,
+            // #endregion values
+
+            // #region methods
+            // #endregion methods
+        // #endregion required
 
         // #region state
         stateGeneralTheme,
-        stateInteractionTheme,
+        // stateInteractionTheme,
         stateSpaces,
         stateActiveSpaceID,
         // #endregion state
@@ -90,7 +95,7 @@ const Sound: React.FC<SoundProperties> = (
         return (<></>);
     }
 
-    const planeData = activePlane.kind === 'sound'
+    const planeData = activePlane.kind === 'unknown'
         ? activePlane
         : undefined;
     if (!planeData) {
@@ -101,9 +106,9 @@ const Sound: React.FC<SoundProperties> = (
 
     // #region render
     return (
-        <StyledSound>
+        <StyledUnknown>
 
-        </StyledSound>
+        </StyledUnknown>
     );
     // #endregion render
 }
@@ -111,7 +116,7 @@ const Sound: React.FC<SoundProperties> = (
 
 const mapStateToProperties = (
     state: AppState,
-): SoundStateProperties => ({
+): UnknownStateProperties => ({
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
     stateSpaces: selectors.product.getSpaces(state),
@@ -121,22 +126,22 @@ const mapStateToProperties = (
 
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
-): SoundDispatchProperties => ({
+): UnknownDispatchProperties => ({
 });
 
 
-const ConnectedSound = connect(
+const ConnectedUnknown = connect(
     mapStateToProperties,
     mapDispatchToProperties,
     null,
     {
         context: StateContext,
     },
-)(Sound);
+)(Unknown);
 // #endregion module
 
 
 
 // #region exports
-export default ConnectedSound;
+export default ConnectedUnknown;
 // #endregion exports

@@ -27,7 +27,9 @@ export const ignoreHiddenFiles = (
     files: Dirent[],
 ) => {
     return files.filter(
-        file => !(/(^|\/)\.[^\/\.]/g).test(file.name),
+        file => {
+            return !(/(^|\/)\.[^\/\.]/g).test(file.name);
+        },
     );
 }
 // #endregion module

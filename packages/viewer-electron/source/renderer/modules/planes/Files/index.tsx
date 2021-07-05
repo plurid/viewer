@@ -4,7 +4,6 @@
 
     import {
         Dirent,
-        promises as fs,
     } from 'fs';
 
     import React, {
@@ -28,6 +27,14 @@
 
 
     // #region external
+    import {
+        Space,
+    } from '~renderer-data/interfaces';
+
+    import {
+        getPlaneByID,
+    } from '~renderer-services/logic/data';
+
     import {
         getDirectoryFiles,
         ignoreHiddenFiles,
@@ -59,6 +66,8 @@ export interface FilesOwnProperties {
 export interface FilesStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
+    stateSpaces: Space[];
+    stateActiveSpaceID: string;
 }
 
 export interface FilesDispatchProperties {
@@ -82,10 +91,28 @@ const Files: React.FC<FilesProperties> = (
         // #region state
         stateGeneralTheme,
         // stateInteractionTheme,
+        stateSpaces,
+        stateActiveSpaceID,
         // #endregion state
     } = properties;
 
-    const id = plurid.plane.parameters.id;
+    const planeID = plurid.plane.parameters.id;
+
+    const activePlane = getPlaneByID(
+        stateSpaces,
+        stateActiveSpaceID,
+        planeID,
+    );
+    if (!activePlane) {
+        return (<></>);
+    }
+
+    const planeData = activePlane.kind === 'files'
+        ? activePlane
+        : undefined;
+    if (!planeData) {
+        return (<></>);
+    }
     // #endregion properties
 
 
@@ -108,7 +135,7 @@ const Files: React.FC<FilesProperties> = (
 
         const readFiles = async () => {
             try {
-                const files = await getDirectoryFiles(os.homedir());
+                const files = await getDirectoryFiles(planeData.data.directory);
 
                 if (!isMounted.current) {
                     return;
@@ -155,6 +182,8 @@ const mapStateToProperties = (
 ): FilesStateProperties => ({
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
+    stateSpaces: selectors.product.getSpaces(state),
+    stateActiveSpaceID: selectors.product.getActiveSpace(state),
 });
 
 

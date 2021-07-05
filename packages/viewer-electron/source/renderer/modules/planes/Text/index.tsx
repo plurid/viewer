@@ -25,6 +25,10 @@
     import Epub from '~renderer-components/Texts/Epub';
     import PDF from '~renderer-components/Texts/PDF';
 
+    import {
+        getPlaneByID,
+    } from '~renderer-services/logic/data';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -50,14 +54,17 @@ export interface TextStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
     stateSpaces: Space[];
+    stateActiveSpaceID: string;
 }
 
 export interface TextDispatchProperties {
 }
 
-export type TextProperties = TextOwnProperties
+export type TextProperties =
+    & TextOwnProperties
     & TextStateProperties
     & TextDispatchProperties;
+
 
 const Text: React.FC<TextProperties> = (
     properties,
@@ -77,26 +84,30 @@ const Text: React.FC<TextProperties> = (
         stateGeneralTheme,
         // stateInteractionTheme,
         stateSpaces,
+        stateActiveSpaceID,
         // #endregion state
     } = properties;
 
-    const id = plurid.plane.parameters.id;
+    const planeID = plurid.plane.parameters.id;
 
-    const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
-    const activePlane = activeSpace
-        ? activeSpace.planes.find(plane => plane.id === id)
-        : undefined;
-
-    const resolvedPlane = activePlane && activePlane.kind === 'text'
-        ? activePlane
-        : undefined;
-
-    if (!resolvedPlane) {
+    const activePlane = getPlaneByID(
+        stateSpaces,
+        stateActiveSpaceID,
+        planeID,
+    );
+    if (!activePlane) {
         return (<></>);
     }
 
-    const file = resolvedPlane.data.source;
-    const type = resolvedPlane.data.type;
+    const planeData = activePlane.kind === 'text'
+        ? activePlane
+        : undefined;
+    if (!planeData) {
+        return (<></>);
+    }
+
+    const file = planeData.data.source;
+    const type = planeData.data.type;
     // #endregion properties
 
 
@@ -142,6 +153,7 @@ const mapStateToProperties = (
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
     stateSpaces: selectors.product.getSpaces(state),
+    stateActiveSpaceID: selectors.product.getActiveSpace(state),
 });
 
 

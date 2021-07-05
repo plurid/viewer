@@ -41,6 +41,7 @@
     import VideoPlane from '~renderer-planes/Video';
     import SoundPlane from '~renderer-planes/Sound';
     import TextPlane from '~renderer-planes/Text';
+    import UnknownPlane from '~renderer-planes/Unknown';
     import FilesPlane from '~renderer-planes/Files';
 
     import {
@@ -91,6 +92,10 @@ const pluridPlanes: PluridReactPlane[] = [
     {
         route: '/texts/:id',
         component: TextPlane,
+    },
+    {
+        route: '/unknown/:id',
+        component: UnknownPlane,
     },
     {
         route: '/files/:id',

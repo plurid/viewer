@@ -23,6 +23,10 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import {
+        getPlaneByID,
+    } from '~renderer-services/logic/data';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -73,32 +77,20 @@ const Image: React.FC<ImageProperties> = (
         // #endregion required
 
         // #region state
-        // stateGeneralTheme,
+        stateGeneralTheme,
         // stateInteractionTheme,
         stateSpaces,
         stateActiveSpaceID,
         // #endregion state
     } = properties;
 
-    const id = plurid.plane.parameters.id;
+    const planeID = plurid.plane.parameters.id;
 
-    const getActiveSpace = (
-        spaces: any[],
-    ) => {
-        if (spaces.length === 0) {
-            return;
-        }
-
-        const activeSpace = stateSpaces.find(space => space.id === stateActiveSpaceID);
-        return activeSpace;
-    }
-
-    const activeSpace = getActiveSpace(stateSpaces);
-    if (!activeSpace) {
-        return (<></>);
-    }
-
-    const activePlane = activeSpace.planes.find(plane => plane.id === id);
+    const activePlane = getPlaneByID(
+        stateSpaces,
+        stateActiveSpaceID,
+        planeID,
+    );
     if (!activePlane) {
         return (<></>);
     }
@@ -118,15 +110,14 @@ const Image: React.FC<ImageProperties> = (
     return (
         <StyledImage>
             <div
-                style={
-                    {
-                        width: 900,
-                        margin: '150px auto',
-                    }
-                }
+                style={{
+                    width: 900,
+                    margin: '150px auto',
+                }}
             >
                 <EnhancedImage
                     src={src}
+                    theme={stateGeneralTheme.name as any}
                 />
             </div>
         </StyledImage>

@@ -23,6 +23,10 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import {
+        getPlaneByID,
+    } from '~renderer-services/logic/data';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -48,14 +52,17 @@ export interface VideoStateProperties {
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
     stateSpaces: Space[];
+    stateActiveSpaceID: string;
 }
 
 export interface VideoDispatchProperties {
 }
 
-export type VideoProperties = VideoOwnProperties
+export type VideoProperties =
+    & VideoOwnProperties
     & VideoStateProperties
     & VideoDispatchProperties;
+
 
 const Video: React.FC<VideoProperties> = (
     properties,
@@ -72,36 +79,47 @@ const Video: React.FC<VideoProperties> = (
         // #endregion required
 
         // #region state
-        // stateGeneralTheme,
+        stateGeneralTheme,
         // stateInteractionTheme,
         stateSpaces,
+        stateActiveSpaceID,
         // #endregion state
     } = properties;
 
-    const id = plurid.plane.parameters.id;
+    const planeID = plurid.plane.parameters.id;
 
-    const activeSpace = stateSpaces.length > 0 ? stateSpaces[0] : undefined;
-    const activePlane = activeSpace
-        ? activeSpace.planes.find(plane => plane.id === id)
-        : undefined;
+    const activePlane = getPlaneByID(
+        stateSpaces,
+        stateActiveSpaceID,
+        planeID,
+    );
+    if (!activePlane) {
+        return (<></>);
+    }
 
-    const planeData = activePlane && activePlane.kind === 'video'
+    const planeData = activePlane.kind === 'video'
         ? activePlane
         : undefined;
+    if (!planeData) {
+        return (<></>);
+    }
 
     const type = 'video/mp4';
-    const src = planeData?.data.source || '';
+    const src = planeData.data.source;
     // #endregion properties
 
 
     // #region render
     return (
-        <StyledVideo>
+        <StyledVideo
+            theme={stateGeneralTheme}
+        >
             <EnhancedVideo
                 type={type}
                 src={src}
                 controls={true}
                 mask="legacy"
+                theme={stateGeneralTheme.name as any}
             />
         </StyledVideo>
     );
@@ -115,6 +133,7 @@ const mapStateToProperties = (
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
     stateSpaces: selectors.product.getSpaces(state),
+    stateActiveSpaceID: selectors.product.getActiveSpace(state),
 });
 
 
