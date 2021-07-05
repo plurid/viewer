@@ -16,5 +16,16 @@ export interface IStyledFiles {
 }
 
 export const StyledFiles = styled.div<IStyledFiles>`
+    font-family: ${
+        ({
+            theme,
+        }: IStyledFiles) => theme.fontFamilySansSerif
+    };
+
+    ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
 `;
 // #region module

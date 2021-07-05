@@ -3,10 +3,12 @@
     import os from 'os';
 
     import {
+        Dirent,
         promises as fs,
     } from 'fs';
 
     import React, {
+        useRef,
         useState,
         useEffect,
     } from 'react';
@@ -26,6 +28,11 @@
 
 
     // #region external
+    import {
+        getDirectoryFiles,
+        ignoreHiddenFiles,
+    } from '~renderer-services/logic/files';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -37,6 +44,8 @@
     import {
         StyledFiles,
     } from './styled';
+
+    import FileItem from './components/FileItem';
     // #endregion internal
 // #endregion imports
 
@@ -72,7 +81,7 @@ const Files: React.FC<FilesProperties> = (
 
         // #region state
         stateGeneralTheme,
-        stateInteractionTheme,
+        // stateInteractionTheme,
         // #endregion state
     } = properties;
 
@@ -80,40 +89,59 @@ const Files: React.FC<FilesProperties> = (
     // #endregion properties
 
 
+    // #region references
+    const isMounted = useRef(false);
+    // #endregion references
+
+
     // #region state
     const [
         files,
         setFiles,
-    ] = useState<string[]>([]);
+    ] = useState<Dirent[]>([]);
     // #endregion state
 
 
     // #region effects
     useEffect(() => {
+        isMounted.current = true;
+
         const readFiles = async () => {
             try {
-                const files = await fs.readdir(os.homedir());
-                setFiles(files);
+                const files = await getDirectoryFiles(os.homedir());
+
+                if (!isMounted.current) {
+                    return;
+                }
+
+                setFiles(ignoreHiddenFiles(files));
             } catch (error) {
                 return;
             }
         }
 
-        readFiles()
+        readFiles();
+
+        return () => {
+            isMounted.current = false;
+        }
     }, []);
     // #endregion effects
 
 
     // #region render
     return (
-        <StyledFiles>
+        <StyledFiles
+            theme={stateGeneralTheme}
+        >
             {files.map(file => {
                 return (
-                    <div
+                    <FileItem
                         key={Math.random() + ''}
-                    >
-                        {file}
-                    </div>
+                        path={os.homedir()}
+                        file={file}
+                        theme={stateGeneralTheme}
+                    />
                 );
             })}
         </StyledFiles>
