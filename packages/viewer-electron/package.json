@@ -175,7 +175,7 @@
         "build.clean": "rm -rf `find ./build/ -type d -name __tests__` && rm -rf `find ./build/ -type d -name .DS_STORE`",
         "build.production": "NODE_ENV=production yarn build && yarn build.clean",
         "electron.run": "electron ./build/",
-        "electron.develop": "yarn develop && yarn electron",
+        "electron.develop": "yarn develop && yarn electron.run",
         "electron.builder": "electron-builder build --publish never",
         "package": "yarn build.production && yarn electron.builder"
     },
