@@ -145,8 +145,19 @@ const FilesView: React.FC<FilesViewProperties> = (
             !event.shiftKey
             && !(event.metaKey || event.ctrlKey)
         ) {
-            if (selectionIndexes.includes(index)) {
+            if (
+                selectionIndexes.includes(index)
+                && selectionIndexes.length === 1
+            ) {
                 setSelectionIndexes([]);
+                return;
+            }
+
+            if (
+                selectionIndexes.includes(index)
+                && selectionIndexes.length > 1
+            ) {
+                setSelectionIndexes([index]);
                 return;
             }
 
@@ -196,6 +207,17 @@ const FilesView: React.FC<FilesViewProperties> = (
             }
 
             if (highestIndex < index) {
+                const values = range(lowestIndex, index);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return;
+            }
+
+            if (
+                lowestIndex <= index
+                && index <= highestIndex
+            ) {
                 const values = range(lowestIndex, index);
                 setSelectionIndexes([
                     ...values,
