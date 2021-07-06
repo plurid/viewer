@@ -184,10 +184,17 @@ const FilesView: React.FC<FilesViewProperties> = (
     const handleKeyDown = (
         event: React.KeyboardEvent,
     ) => {
+        const stopEvent = () => {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+
         if (
             event.key === 'ArrowDown'
             && (event.metaKey || event.ctrlKey)
         ) {
+            stopEvent();
             actionCurrent(selectionIndexes);
             return;
         }
@@ -196,6 +203,7 @@ const FilesView: React.FC<FilesViewProperties> = (
             event.key === 'ArrowUp'
             && (event.metaKey || event.ctrlKey)
         ) {
+            stopEvent();
             upLevel();
             return;
         }
@@ -203,6 +211,7 @@ const FilesView: React.FC<FilesViewProperties> = (
         if (
             event.key === 'Enter'
         ) {
+            stopEvent();
             // rename file
             return;
         }
@@ -212,8 +221,7 @@ const FilesView: React.FC<FilesViewProperties> = (
         const highestIndex = Math.max(...selectionIndexes);
 
         if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            event.stopPropagation();
+            stopEvent();
 
             const previousItem = lowestIndex - 1 >= 0
                 ? lowestIndex - 1
@@ -234,8 +242,7 @@ const FilesView: React.FC<FilesViewProperties> = (
         }
 
         if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            event.stopPropagation();
+            stopEvent();
 
             const nextItem = highestIndex + 1 < files.length
                 ? highestIndex + 1
