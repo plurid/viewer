@@ -7,6 +7,7 @@
     import React, {
         useRef,
         useState,
+        useEffect,
     } from 'react';
 
     import {
@@ -87,6 +88,11 @@ const FilesView: React.FC<FilesViewProperties> = (
         selectionIndexes,
         setSelectionIndexes,
     ] = useState<number[]>([]);
+
+    const [
+        selectionDirection,
+        setSelectionDirection,
+    ] = useState('');
     // #endregion state
 
 
@@ -181,8 +187,97 @@ const FilesView: React.FC<FilesViewProperties> = (
         }
     }
 
+    const handleNavigation = (
+        event: KeyboardEvent,
+        stopEvent: () => void,
+    ) => {
+        const lowestIndex = Math.min(...selectionIndexes);
+        const highestIndex = Math.max(...selectionIndexes);
+
+        const previousItem = lowestIndex - 1 >= 0
+            ? lowestIndex - 1
+            : lowestIndex;
+
+        const nextItem = highestIndex + 1 < files.length
+            ? highestIndex + 1
+            : highestIndex;
+
+        if (event.key === 'ArrowUp') {
+            stopEvent();
+
+            if (
+                event.shiftKey
+                && event.altKey
+            ) {
+                const values = range(previousItem, highestIndex);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return true;
+            }
+
+            if (
+                event.shiftKey
+            ) {
+                if (
+                    selectionIndexes.length === 1
+                    || selectionDirection === 'UP'
+                ) {
+                    setSelectionDirection('UP');
+                    const values = range(previousItem, highestIndex);
+                    setSelectionIndexes([
+                        ...values,
+                    ]);
+                    return true;
+                }
+
+                const values = range(lowestIndex, highestIndex - 1);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return true;
+            }
+
+            setSelectionIndexes([
+                previousItem,
+            ]);
+            return true;
+        }
+
+        if (event.key === 'ArrowDown') {
+            stopEvent();
+
+            if (event.shiftKey) {
+                if (
+                    selectionIndexes.length === 1
+                    || selectionDirection === 'DOWN'
+                ) {
+                    setSelectionDirection('DOWN');
+                    const values = range(lowestIndex, nextItem);
+                    setSelectionIndexes([
+                        ...values,
+                    ]);
+                    return true;
+                }
+
+                const values = range(lowestIndex + 1, highestIndex);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return true;
+            }
+
+            setSelectionIndexes([
+                nextItem,
+            ]);
+            return true;
+        }
+
+        return false;
+    }
+
     const handleKeyDown = (
-        event: React.KeyboardEvent,
+        event: KeyboardEvent,
     ) => {
         const stopEvent = () => {
             event.preventDefault();
@@ -208,6 +303,7 @@ const FilesView: React.FC<FilesViewProperties> = (
             return;
         }
 
+
         if (
             event.key === 'Enter'
         ) {
@@ -217,52 +313,33 @@ const FilesView: React.FC<FilesViewProperties> = (
         }
 
 
-        const lowestIndex = Math.min(...selectionIndexes);
-        const highestIndex = Math.max(...selectionIndexes);
-
-        if (event.key === 'ArrowUp') {
-            stopEvent();
-
-            const previousItem = lowestIndex - 1 >= 0
-                ? lowestIndex - 1
-                : lowestIndex;
-
-            if (event.shiftKey) {
-                const values = range(previousItem, highestIndex);
-                setSelectionIndexes([
-                    ...values,
-                ]);
-                return;
-            }
-
-            setSelectionIndexes([
-                previousItem,
-            ]);
-            return;
-        }
-
-        if (event.key === 'ArrowDown') {
-            stopEvent();
-
-            const nextItem = highestIndex + 1 < files.length
-                ? highestIndex + 1
-                : highestIndex;
-
-            if (event.shiftKey) {
-                const values = range(lowestIndex, nextItem);
-                setSelectionIndexes([
-                    ...values,
-                ]);
-                return;
-            }
-
-            setSelectionIndexes([
-                nextItem,
-            ]);
+        const handledByNavigation = handleNavigation(event, stopEvent);
+        if (handledByNavigation) {
             return;
         }
     }
     // #endregion handlers
+
+
+    // #region effects
+    useEffect(() => {
+        if (!node.current) {
+            return;
+        }
+
+        node.current.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            if (!node.current) {
+                return;
+            }
+
+            node.current.removeEventListener('keydown', handleKeyDown);
+        }
+    }, [
+        selectionIndexes,
+    ]);
+    // #endregion effects
 
 
     // #region render
@@ -278,7 +355,7 @@ const FilesView: React.FC<FilesViewProperties> = (
                         setSelectionIndexes([]);
                     }
                 }}
-                onKeyDown={(event) => handleKeyDown(event)}
+                // onKeyDown={(event) => handleKeyDown(event)}
                 tabIndex={1}
                 style={{
                     outline: 'none',
