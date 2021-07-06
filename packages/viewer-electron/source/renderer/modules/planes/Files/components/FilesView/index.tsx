@@ -122,6 +122,10 @@ const FilesView: React.FC<FilesViewProperties> = (
 
 
     // #region handlers
+    const renameFile = () => {
+
+    }
+
     const selectionClick = (
         event: React.MouseEvent,
         index: number,
@@ -333,7 +337,7 @@ const FilesView: React.FC<FilesViewProperties> = (
             event.key === 'Enter'
         ) {
             stopEvent();
-            // rename file
+            renameFile();
             return;
         }
 
