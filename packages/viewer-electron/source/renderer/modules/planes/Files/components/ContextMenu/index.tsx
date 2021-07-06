@@ -1,6 +1,6 @@
 // #region imports
     // #region libraries
-    import {
+    import fsSync, {
         Dirent,
         promises as fs,
     } from 'fs';
@@ -70,14 +70,58 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
 
 
     // #region handlers
-    const newFolder = () => {
-        const newFolderPath = path.join(
-            viewDirectory,
-            'New Folder',
-        );
-        fs.mkdir(newFolderPath);
+    const resolveNewFolderPath = (
+        newFolderPath: string,
+    ) => {
+        let index = 0;
+        let searching = true;
 
-        closeMenu();
+        do {
+            try {
+                if (index === 0) {
+                    const exists = fsSync.existsSync(newFolderPath);
+                    if (!exists) {
+                        searching = false;
+                        break;
+                    }
+
+                    index += 1;
+                    continue;
+                }
+
+                const exists = fsSync.existsSync(newFolderPath + ` ${index}`);
+                if (!exists) {
+                    searching = false;
+                    break;
+                }
+
+                index += 1;
+            } catch (error) {
+                continue;
+            }
+        } while (searching);
+
+        if (index === 0) {
+            return newFolderPath;
+        }
+
+        return newFolderPath + ` ${index}`;
+    }
+
+    const newFolder = () => {
+        try {
+            const newFolderPath = path.join(
+                viewDirectory,
+                'New Folder',
+            );
+
+            const validPath = resolveNewFolderPath(newFolderPath);
+            fs.mkdir(validPath);
+
+            closeMenu();
+        } catch (error) {
+            return;
+        }
     }
     // #endregion handlers
 
