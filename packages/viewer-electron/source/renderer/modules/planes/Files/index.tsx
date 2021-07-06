@@ -335,6 +335,12 @@ const Files: React.FC<FilesProperties> = (
                     </StyledFilesNotFound>
                 )}
 
+                {files.length === 0 && viewError === '' &&  (
+                    <StyledFilesNotFound>
+                        no files
+                    </StyledFilesNotFound>
+                )}
+
                 {files.length > 0 && (
                     <FilesView
                         theme={stateGeneralTheme}
