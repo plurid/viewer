@@ -90,6 +90,11 @@ const FilesView: React.FC<FilesViewProperties> = (
 
     // #region state
     const [
+        cursorOverIndex,
+        setCursorOverIndex,
+    ] = useState<number>(-1);
+
+    const [
         selectionIndexes,
         setSelectionIndexes,
     ] = useState<number[]>([]);
@@ -409,6 +414,10 @@ const FilesView: React.FC<FilesViewProperties> = (
 
                         setContextMenuLeft(left);
                         setContextMenuTop(top);
+
+                        if (!selectionIndexes.includes(cursorOverIndex)) {
+                            setSelectionIndexes([cursorOverIndex]);
+                        }
                     }}
                     tabIndex={1}
                     style={{
@@ -427,6 +436,7 @@ const FilesView: React.FC<FilesViewProperties> = (
 
                                 selectionClick={selectionClick}
                                 actionClick={actionClick}
+                                setCursorOverIndex={setCursorOverIndex}
                             />
                         );
                     })}

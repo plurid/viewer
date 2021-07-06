@@ -52,6 +52,7 @@ export interface FileItemOwnProperties {
     actionClick: (
         file: Dirent,
     ) => void;
+    setCursorOverIndex: React.Dispatch<React.SetStateAction<number>>;
 }
 
 
@@ -68,6 +69,7 @@ const FileItem: React.FC<FileItemOwnProperties> = (
 
         selectionClick,
         actionClick,
+        setCursorOverIndex,
     } = properties;
 
     const isFile = file.isFile();
@@ -95,6 +97,9 @@ const FileItem: React.FC<FileItemOwnProperties> = (
                         actionClick(file);
                         break;
                 }
+            }}
+            onMouseEnter={() => {
+                setCursorOverIndex(index);
             }}
         >
             <StyledFileItemIcon>
