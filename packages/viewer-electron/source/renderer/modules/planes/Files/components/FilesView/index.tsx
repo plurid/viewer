@@ -29,6 +29,7 @@
     import {
         StyledFilesView,
         StyledFilesList,
+        StyledContextMenu,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -93,6 +94,21 @@ const FilesView: React.FC<FilesViewProperties> = (
         selectionDirection,
         setSelectionDirection,
     ] = useState('');
+
+    const [
+        showContextMenu,
+        setShowContextMenu,
+    ] = useState(false);
+
+    const [
+        contextMenuLeft,
+        setContextMenuLeft,
+    ] = useState(0);
+
+    const [
+        contextMenuTop,
+        setContextMenuTop,
+    ] = useState(0);
     // #endregion state
 
 
@@ -347,15 +363,48 @@ const FilesView: React.FC<FilesViewProperties> = (
         <StyledFilesView
             theme={theme}
         >
+            {showContextMenu && (
+                <StyledContextMenu
+                    theme={theme}
+                    style={{
+                        left: contextMenuLeft + 'px',
+                        top: contextMenuTop + 'px',
+                    }}
+                >
+                    <div>
+                        New Folder
+                    </div>
+
+                    <div>
+                        Open in New Plane
+                    </div>
+                </StyledContextMenu>
+            )}
+
             <StyledFilesList
                 ref={node}
                 theme={theme}
                 onClick={(event) => {
+                    setShowContextMenu(false);
+
                     if (event.target === node.current) {
                         setSelectionIndexes([]);
                     }
                 }}
-                // onKeyDown={(event) => handleKeyDown(event)}
+                onContextMenu={(event) => {
+                    if (!node.current) {
+                        return;
+                    }
+
+                    setShowContextMenu(true);
+
+                    const rect = node.current.getBoundingClientRect();
+                    const left = event.clientX - rect.left;
+                    const top = event.clientY - rect.top;
+
+                    setContextMenuLeft(left);
+                    setContextMenuTop(top);
+                }}
                 tabIndex={1}
                 style={{
                     outline: 'none',
