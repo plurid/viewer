@@ -4,6 +4,8 @@
         Dirent,
     } from 'fs';
 
+    import path from 'path';
+
     import React, {
         useRef,
         useState,
@@ -189,6 +191,18 @@ const Files: React.FC<FilesProperties> = (
     const historyStepPrevious = () => {}
 
     const historyStepNext = () => {}
+
+    const actionClick = (
+        file: Dirent,
+    ) => {
+        if (file.isDirectory()) {
+            const newViewDirectory = path.join(
+                viewDirectory,
+                file.name,
+            );
+            setViewDirectory(newViewDirectory);
+        }
+    }
     // #endregion handlers
 
 
@@ -271,6 +285,8 @@ const Files: React.FC<FilesProperties> = (
                         theme={stateGeneralTheme}
                         files={files}
                         viewDirectory={viewDirectory}
+
+                        actionClick={actionClick}
                     />
                 )}
             </StyledFilesView>

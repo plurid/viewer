@@ -44,6 +44,9 @@ export interface FilesViewProperties {
         // #endregion values
 
         // #region methods
+        actionClick: (
+            file: Dirent,
+        ) => void;
         // #endregion methods
     // #endregion required
 }
@@ -61,6 +64,7 @@ const FilesView: React.FC<FilesViewProperties> = (
             // #endregion values
 
             // #region methods
+            actionClick,
             // #endregion methods
         // #endregion required
     } = properties;
@@ -252,7 +256,9 @@ const FilesView: React.FC<FilesViewProperties> = (
                             theme={theme}
                             index={index}
                             selected={selectionIndexes.includes(index)}
+
                             selectionClick={selectionClick}
+                            actionClick={actionClick}
                         />
                     );
                 })}

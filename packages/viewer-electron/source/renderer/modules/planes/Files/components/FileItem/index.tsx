@@ -49,6 +49,9 @@ export interface FileItemOwnProperties {
         event: React.MouseEvent,
         index: number,
     ) => void;
+    actionClick: (
+        file: Dirent,
+    ) => void;
 }
 
 
@@ -64,6 +67,7 @@ const FileItem: React.FC<FileItemOwnProperties> = (
         selected,
 
         selectionClick,
+        actionClick,
     } = properties;
 
     const isFile = file.isFile();
@@ -82,7 +86,16 @@ const FileItem: React.FC<FileItemOwnProperties> = (
         <StyledFileItem
             theme={theme}
             selected={selected}
-            onClick={(event) => selectionClick(event, index)}
+            onClick={(event) => {
+                switch (event.detail) {
+                    case 1:
+                        selectionClick(event, index);
+                        break;
+                    case 2:
+                        actionClick(file);
+                        break;
+                }
+            }}
         >
             <StyledFileItemIcon>
                 {isDirectory

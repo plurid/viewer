@@ -2,6 +2,7 @@
     // #region libraries
     import React, {
         useState,
+        useEffect,
     } from 'react';
 
     import {
@@ -65,6 +66,15 @@ const DirectoryPath: React.FC<DirectoryPathProperties> = (
         setLocalDirectory,
     ] = useState(directory);
     // #endregion state
+
+
+    // #region effects
+    useEffect(() => {
+        setLocalDirectory(directory);
+    }, [
+        directory,
+    ]);
+    // #endregion effects
 
 
     // #region render
