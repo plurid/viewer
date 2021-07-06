@@ -17,13 +17,16 @@
 
     // #region external
     import FileItem from '../FileItem';
+
+    import {
+        range,
+    } from '~renderer-services/utilities/general';
     // #endregion external
 
 
     // #region internal
     import {
         StyledFilesView,
-        StyledFilesSelection,
         StyledFilesList,
     } from './styled';
     // #endregion internal
@@ -32,19 +35,6 @@
 
 
 // #region module
-const range = (
-    start: number,
-    end: number,
-) => {
-    return Array.from(
-        {
-            length: end - start + 1,
-        },
-        (_, k) => k + start,
-    );
-}
-
-
 export interface FilesViewProperties {
     // #region required
         // #region values
@@ -189,10 +179,11 @@ const FilesView: React.FC<FilesViewProperties> = (
 
         if (event.code === 'ArrowUp') {
             event.preventDefault();
+            event.stopPropagation();
 
             const previousItem = lowestIndex - 1 >= 0
-                ? highestIndex - 1
-                : highestIndex;
+                ? lowestIndex - 1
+                : lowestIndex;
 
             if (event.shiftKey) {
                 const values = range(previousItem, highestIndex);
@@ -210,6 +201,7 @@ const FilesView: React.FC<FilesViewProperties> = (
 
         if (event.code === 'ArrowDown') {
             event.preventDefault();
+            event.stopPropagation();
 
             const nextItem = highestIndex + 1 < files.length
                 ? highestIndex + 1

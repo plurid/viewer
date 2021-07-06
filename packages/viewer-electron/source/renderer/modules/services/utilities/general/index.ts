@@ -24,6 +24,19 @@ const secondsToMMSS = (
 
     return timeString;
 }
+
+
+const range = (
+    start: number,
+    end: number,
+) => {
+    return Array.from(
+        {
+            length: end - start + 1,
+        },
+        (_, k) => k + start,
+    );
+}
 // #endregion module
 
 
@@ -32,5 +45,6 @@ const secondsToMMSS = (
 export {
     getNumber,
     secondsToMMSS,
+    range,
 };
 // #endregion exports

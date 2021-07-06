@@ -20,27 +20,6 @@ export const StyledFilesView = styled.div<IStyledFilesView>`
 `;
 
 
-export interface IStyledFilesSelection {
-    theme: Theme;
-}
-
-export const StyledFilesSelection = styled.div<IStyledFilesSelection>`
-    position: absolute;
-    z-index: 999;
-    pointer-events: none;
-    background-color: ${
-        ({
-            theme,
-        }: IStyledFilesSelection) => theme.backgroundColorTertiaryAlpha
-    };
-    border: 2px solid ${
-        ({
-            theme,
-        }: IStyledFilesSelection) => theme.backgroundColorQuaternaryAlpha
-    };
-`;
-
-
 export interface IStyledFilesList {
     theme: Theme;
 }
