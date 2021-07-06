@@ -13,6 +13,7 @@
 // #region module
 export interface IStyledFileItem {
     theme: Theme;
+    selected: boolean;
 }
 
 export const StyledFileItem = styled.div<IStyledFileItem>`
@@ -20,13 +21,26 @@ export const StyledFileItem = styled.div<IStyledFileItem>`
     align-items: center;
     padding: 0.3rem 0.7rem;
 
-    :hover {
-        background: ${
+    background-color: ${
+        ({
+            theme,
+            selected,
+        }: IStyledFileItem) => {
+            if (selected) {
+                return theme.backgroundColorTertiaryAlpha;
+            }
+
+            return 'initial';
+        }
+    };
+
+    /* :hover {
+        background-color: ${
             ({
                 theme,
             }: IStyledFileItem) => theme.backgroundColorPrimary
         };
-    }
+    } */
 `;
 
 

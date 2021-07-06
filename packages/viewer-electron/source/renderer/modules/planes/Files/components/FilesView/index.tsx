@@ -32,6 +32,19 @@
 
 
 // #region module
+const range = (
+    start: number,
+    end: number,
+) => {
+    return Array.from(
+        {
+            length: end - start + 1,
+        },
+        (_, k) => k + start,
+    );
+}
+
+
 export interface FilesViewProperties {
     // #region required
         // #region values
@@ -76,47 +89,120 @@ const FilesView: React.FC<FilesViewProperties> = (
     ] = useState(false);
 
     const [
-        selectionTop,
-        setSelectionTop,
-    ] = useState(0);
-    const [
-        selectionLeft,
-        setSelectionLeft,
-    ] = useState(0);
-    const [
-        selectionWidth,
-        setSelectionWidth,
-    ] = useState(0);
-    const [
-        selectionHeight,
-        setSelectionHeight,
-    ] = useState(0);
+        selectionIndexes,
+        setSelectionIndexes,
+    ] = useState<number[]>([]);
+
+    // const [
+    //     selectionTop,
+    //     setSelectionTop,
+    // ] = useState(0);
+    // const [
+    //     selectionLeft,
+    //     setSelectionLeft,
+    // ] = useState(0);
+    // const [
+    //     selectionWidth,
+    //     setSelectionWidth,
+    // ] = useState(0);
+    // const [
+    //     selectionHeight,
+    //     setSelectionHeight,
+    // ] = useState(0);
     // #endregion state
 
 
     // #region handlers
-    const handleSelection = (
-        event: React.MouseEvent<HTMLDivElement>,
+    // const handleSelection = (
+    //     event: React.MouseEvent<HTMLDivElement>,
+    // ) => {
+    //     if (!selecting) {
+    //         return;
+    //     }
+
+    //     if (!node.current) {
+    //         return;
+    //     }
+
+    //     const rect = node.current.getBoundingClientRect();
+    //     const x = event.clientX - rect.left;
+    //     const y = event.clientY - rect.top;
+    //     // console.log('x y', x, y);
+
+    //     const width = selectionLeft + x;
+    //     const height = selectionTop + y;
+    //     // console.log('width height', width, height);
+
+    //     setSelectionWidth(width);
+    //     setSelectionHeight(height);
+    // }
+
+    const selectionClick = (
+        event: React.MouseEvent,
+        index: number,
     ) => {
-        if (!selecting) {
+        if (
+            !event.shiftKey
+            && !(event.metaKey || event.ctrlKey)
+        ) {
+            if (selectionIndexes.includes(index)) {
+                setSelectionIndexes([]);
+                return;
+            }
+
+            setSelectionIndexes([
+                index,
+            ]);
             return;
         }
 
-        if (!node.current) {
+        if (
+            event.metaKey
+            || event.ctrlKey
+        ) {
+            if (selectionIndexes.includes(index)) {
+                const newSelectionIndexes = selectionIndexes.filter(idx => idx !== index);
+                setSelectionIndexes(newSelectionIndexes);
+                return;
+            }
+
+            setSelectionIndexes([
+                ...selectionIndexes,
+                index,
+            ]);
             return;
         }
 
-        const rect = node.current.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        // console.log('x y', x, y);
+        if (
+            event.shiftKey
+        ) {
+            if (selectionIndexes.length === 0) {
+                const values = range(0, index);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return;
+            }
 
-        const width = selectionLeft + x;
-        const height = selectionTop + y;
-        // console.log('width height', width, height);
+            const lowestIndex = Math.min(...selectionIndexes);
+            const highestIndex = Math.max(...selectionIndexes);
 
-        setSelectionWidth(width);
-        setSelectionHeight(height);
+            if (index < lowestIndex) {
+                const values = range(index, highestIndex);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return;
+            }
+
+            if (highestIndex < index) {
+                const values = range(lowestIndex, index);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return;
+            }
+        }
     }
     // #endregion handlers
 
@@ -125,28 +211,27 @@ const FilesView: React.FC<FilesViewProperties> = (
     return (
         <StyledFilesView
             theme={theme}
-            ref={node}
-            onMouseDown={(event) => {
-                if (!node.current) {
-                    return;
-                }
+            // onMouseDown={(event) => {
+            //     if (!node.current) {
+            //         return;
+            //     }
 
-                setSelecting(true);
+            //     setSelecting(true);
 
-                const rect = node.current.getBoundingClientRect();
-                const top = event.clientY - rect.top;
-                const left = event.clientX - rect.left;
-                // console.log('top left', top, left);
+            //     const rect = node.current.getBoundingClientRect();
+            //     const top = event.clientY - rect.top;
+            //     const left = event.clientX - rect.left;
+            //     // console.log('top left', top, left);
 
-                setSelectionTop(top);
-                setSelectionLeft(left);
-            }}
-            onMouseUp={() => {
-                setSelecting(false);
-            }}
-            onMouseMove={(event) => handleSelection(event)}
+            //     setSelectionTop(top);
+            //     setSelectionLeft(left);
+            // }}
+            // onMouseUp={() => {
+            //     setSelecting(false);
+            // }}
+            // onMouseMove={(event) => handleSelection(event)}
         >
-            {selecting && (
+            {/* {selecting && (
                 <StyledFilesSelection
                     theme={theme}
                     style={{
@@ -156,21 +241,32 @@ const FilesView: React.FC<FilesViewProperties> = (
                         height: selectionHeight + 'px',
                     }}
                 />
-            )}
+            )} */}
 
             <StyledFilesList
+                ref={node}
                 theme={theme}
+                onClick={(event) => {
+                    console.log('event.target', event.target);
+                    console.log('node.current', node.current);
+                    if (event.target === node.current) {
+                        setSelectionIndexes([]);
+                    }
+                }}
                 style={{
                     pointerEvents: selecting ? 'none' : 'initial',
                 }}
             >
-                {files.map(file => {
+                {files.map((file, index) => {
                     return (
                         <FileItem
                             key={Math.random() + ''}
                             path={viewDirectory}
                             file={file}
                             theme={theme}
+                            index={index}
+                            selected={selectionIndexes.includes(index)}
+                            selectionClick={selectionClick}
                         />
                     );
                 })}

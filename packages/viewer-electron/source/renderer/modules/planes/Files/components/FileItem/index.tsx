@@ -42,6 +42,13 @@ export interface FileItemOwnProperties {
     theme: Theme;
     path: string;
     file: Dirent;
+    index: number;
+    selected: boolean;
+
+    selectionClick: (
+        event: React.MouseEvent,
+        index: number,
+    ) => void;
 }
 
 
@@ -53,6 +60,10 @@ const FileItem: React.FC<FileItemOwnProperties> = (
         theme,
         path: filepath,
         file,
+        index,
+        selected,
+
+        selectionClick,
     } = properties;
 
     const isFile = file.isFile();
@@ -68,39 +79,41 @@ const FileItem: React.FC<FileItemOwnProperties> = (
 
     // #region render
     return (
-        <PluridLink
-            route={'/' + page.slice(1,).replace(/\//g, '-')}
-            devisible={true}
-            style={{
-                display: 'block',
-                width: '100%',
-            }}
+        <StyledFileItem
+            theme={theme}
+            selected={selected}
+            onClick={(event) => selectionClick(event, index)}
         >
-            <StyledFileItem
-                theme={theme}
-            >
-                <StyledFileItemIcon>
-                    {isDirectory
+            <StyledFileItemIcon>
+                {isDirectory
+                    ? (
+                        <DirectoryIcon
+                            theme={theme}
+                        />
+                    ) : isFile
                         ? (
-                            <DirectoryIcon
+                            <FileIcon
                                 theme={theme}
+                                extension={extension}
                             />
-                        ) : isFile
-                            ? (
-                                <FileIcon
-                                    theme={theme}
-                                    extension={extension}
-                                />
-                            )
-                            : ''
-                    }
-                </StyledFileItemIcon>
+                        )
+                        : ''
+                }
+            </StyledFileItemIcon>
 
+            <PluridLink
+                route={'/' + page.slice(1,).replace(/\//g, '-')}
+                devisible={true}
+                // style={{
+                //     display: 'block',
+                //     width: '100%',
+                // }}
+            >
                 <StyledFileItemName>
                     {file.name}
                 </StyledFileItemName>
-            </StyledFileItem>
-        </PluridLink>
+            </PluridLink>
+        </StyledFileItem>
     );
     // #endregion render
 }
