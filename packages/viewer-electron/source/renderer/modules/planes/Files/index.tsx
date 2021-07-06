@@ -36,14 +36,20 @@
     } from '~renderer-services/logic/data';
 
     import {
+        getFileType,
+    } from '~renderer-services/logic/general';
+
+    import {
         getDirectoryFiles,
         ignoreHiddenFiles,
     } from '~renderer-services/logic/files';
 
+    import FileStrategy from '~renderer-services/logic/objects/FileStrategy';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
-    // import actions from '~renderer-services/state/actions';
+    import actions from '~renderer-services/state/actions';
     // #endregion external
 
 
@@ -75,6 +81,7 @@ export interface FilesStateProperties {
 }
 
 export interface FilesDispatchProperties {
+    dispatchProductAddPlane: typeof actions.product.addPlane;
 }
 
 export type FilesProperties =
@@ -98,6 +105,10 @@ const Files: React.FC<FilesProperties> = (
         stateSpaces,
         stateActiveSpaceID,
         // #endregion state
+
+        // #region dispatch
+        dispatchProductAddPlane,
+        // #endregion dispatch
     } = properties;
 
     const planeID = plurid.plane.parameters.id;
@@ -218,7 +229,7 @@ const Files: React.FC<FilesProperties> = (
         }
     }
 
-    const actionClick = (
+    const actionClick = async (
         file: Dirent,
     ) => {
         if (file.isDirectory()) {
@@ -230,6 +241,32 @@ const Files: React.FC<FilesProperties> = (
             setPlaceInHistory(history.length);
             return;
         }
+
+        if (file.isFile()) {
+            const filename = path.join(
+                viewDirectory,
+                file.name,
+            );
+
+            const {
+                kind,
+                extension,
+            } = getFileType(filename);
+
+            const strategy = new FileStrategy(
+                kind,
+                extension,
+                filename,
+            );
+            const {
+                plane,
+            } = await strategy.apply();
+
+            dispatchProductAddPlane({
+                spaceID: stateActiveSpaceID,
+                data: plane as any,
+            });
+        }
     }
 
     const actionCurrent = (
@@ -238,6 +275,13 @@ const Files: React.FC<FilesProperties> = (
         if (selection.length === 0) {
             return;
         }
+
+        if (selection.length === 1) {
+            const file = files[selection[0]];
+            actionClick(file);
+            return;
+        }
+
 
         const firstDirectoryIndex = selection.find(selectionIndex => {
             const file = files[selectionIndex];
@@ -403,6 +447,11 @@ const mapStateToProperties = (
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
 ): FilesDispatchProperties => ({
+    dispatchProductAddPlane: (
+        payload,
+    ) => dispatch(
+        actions.product.addPlane(payload),
+    ),
 });
 
 
