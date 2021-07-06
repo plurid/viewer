@@ -33,6 +33,7 @@ export const StyledActionsMenu = styled.div<IStyledActionsMenu>`
     padding: 1rem;
     border-radius: 15px;
     font-size: 0.9rem;
+    z-index: 9999;
 
     background-color: ${
         ({
