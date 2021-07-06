@@ -47,6 +47,9 @@ export interface FilesViewProperties {
         actionClick: (
             file: Dirent,
         ) => void;
+        actionCurrent: (
+            selection: number[],
+        ) => void;
         // #endregion methods
     // #endregion required
 }
@@ -65,6 +68,7 @@ const FilesView: React.FC<FilesViewProperties> = (
 
             // #region methods
             actionClick,
+            actionCurrent,
             // #endregion methods
         // #endregion required
     } = properties;
@@ -178,10 +182,27 @@ const FilesView: React.FC<FilesViewProperties> = (
     const handleKeyDown = (
         event: React.KeyboardEvent,
     ) => {
+        if (
+            event.key === 'Enter'
+            && (event.metaKey || event.ctrlKey)
+        ) {
+            actionCurrent(selectionIndexes);
+            return;
+        }
+
+        if (
+            event.key === 'Enter'
+            && !(event.metaKey || event.ctrlKey)
+        ) {
+            // rename file
+            return;
+        }
+
+
         const lowestIndex = Math.min(...selectionIndexes);
         const highestIndex = Math.max(...selectionIndexes);
 
-        if (event.code === 'ArrowUp') {
+        if (event.key === 'ArrowUp') {
             event.preventDefault();
             event.stopPropagation();
 
@@ -203,7 +224,7 @@ const FilesView: React.FC<FilesViewProperties> = (
             return;
         }
 
-        if (event.code === 'ArrowDown') {
+        if (event.key === 'ArrowDown') {
             event.preventDefault();
             event.stopPropagation();
 

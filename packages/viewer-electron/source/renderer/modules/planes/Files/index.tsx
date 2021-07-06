@@ -228,6 +228,30 @@ const Files: React.FC<FilesProperties> = (
             );
             setViewDirectory(newViewDirectory);
             setPlaceInHistory(history.length);
+            return;
+        }
+    }
+
+    const actionCurrent = (
+        selection: number[],
+    ) => {
+        if (selection.length === 0) {
+            return;
+        }
+
+        const firstDirectoryIndex = selection.find(selectionIndex => {
+            const file = files[selectionIndex];
+            if (file.isDirectory()) {
+                return true;
+            }
+
+            return false;
+        });
+
+        if (firstDirectoryIndex) {
+            const firstDirectory = files[firstDirectoryIndex];
+            actionClick(firstDirectory);
+            return;
         }
     }
     // #endregion handlers
@@ -348,6 +372,7 @@ const Files: React.FC<FilesProperties> = (
                         viewDirectory={viewDirectory}
 
                         actionClick={actionClick}
+                        actionCurrent={actionCurrent}
                     />
                 )}
             </StyledFilesView>
