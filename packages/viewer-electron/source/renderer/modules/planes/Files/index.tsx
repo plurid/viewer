@@ -254,6 +254,11 @@ const Files: React.FC<FilesProperties> = (
             return;
         }
     }
+
+    const upLevel = () => {
+        const newViewDirectory = path.dirname(viewDirectory);
+        setViewDirectory(newViewDirectory);
+    }
     // #endregion handlers
 
 
@@ -373,6 +378,7 @@ const Files: React.FC<FilesProperties> = (
 
                         actionClick={actionClick}
                         actionCurrent={actionCurrent}
+                        upLevel={upLevel}
                     />
                 )}
             </StyledFilesView>

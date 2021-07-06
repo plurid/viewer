@@ -50,6 +50,7 @@ export interface FilesViewProperties {
         actionCurrent: (
             selection: number[],
         ) => void;
+        upLevel: () => void;
         // #endregion methods
     // #endregion required
 }
@@ -69,6 +70,7 @@ const FilesView: React.FC<FilesViewProperties> = (
             // #region methods
             actionClick,
             actionCurrent,
+            upLevel,
             // #endregion methods
         // #endregion required
     } = properties;
@@ -183,7 +185,7 @@ const FilesView: React.FC<FilesViewProperties> = (
         event: React.KeyboardEvent,
     ) => {
         if (
-            event.key === 'Enter'
+            event.key === 'ArrowDown'
             && (event.metaKey || event.ctrlKey)
         ) {
             actionCurrent(selectionIndexes);
@@ -191,8 +193,15 @@ const FilesView: React.FC<FilesViewProperties> = (
         }
 
         if (
+            event.key === 'ArrowUp'
+            && (event.metaKey || event.ctrlKey)
+        ) {
+            upLevel();
+            return;
+        }
+
+        if (
             event.key === 'Enter'
-            && !(event.metaKey || event.ctrlKey)
         ) {
             // rename file
             return;
