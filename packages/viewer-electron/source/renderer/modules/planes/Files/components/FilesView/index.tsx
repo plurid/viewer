@@ -84,59 +84,13 @@ const FilesView: React.FC<FilesViewProperties> = (
 
     // #region state
     const [
-        selecting,
-        setSelecting,
-    ] = useState(false);
-
-    const [
         selectionIndexes,
         setSelectionIndexes,
     ] = useState<number[]>([]);
-
-    // const [
-    //     selectionTop,
-    //     setSelectionTop,
-    // ] = useState(0);
-    // const [
-    //     selectionLeft,
-    //     setSelectionLeft,
-    // ] = useState(0);
-    // const [
-    //     selectionWidth,
-    //     setSelectionWidth,
-    // ] = useState(0);
-    // const [
-    //     selectionHeight,
-    //     setSelectionHeight,
-    // ] = useState(0);
     // #endregion state
 
 
     // #region handlers
-    // const handleSelection = (
-    //     event: React.MouseEvent<HTMLDivElement>,
-    // ) => {
-    //     if (!selecting) {
-    //         return;
-    //     }
-
-    //     if (!node.current) {
-    //         return;
-    //     }
-
-    //     const rect = node.current.getBoundingClientRect();
-    //     const x = event.clientX - rect.left;
-    //     const y = event.clientY - rect.top;
-    //     // console.log('x y', x, y);
-
-    //     const width = selectionLeft + x;
-    //     const height = selectionTop + y;
-    //     // console.log('width height', width, height);
-
-    //     setSelectionWidth(width);
-    //     setSelectionHeight(height);
-    // }
-
     const selectionClick = (
         event: React.MouseEvent,
         index: number,
@@ -226,6 +180,55 @@ const FilesView: React.FC<FilesViewProperties> = (
             }
         }
     }
+
+    const handleKeyDown = (
+        event: React.KeyboardEvent,
+    ) => {
+        const lowestIndex = Math.min(...selectionIndexes);
+        const highestIndex = Math.max(...selectionIndexes);
+
+        if (event.code === 'ArrowUp') {
+            event.preventDefault();
+
+            const previousItem = lowestIndex - 1 >= 0
+                ? highestIndex - 1
+                : highestIndex;
+
+            if (event.shiftKey) {
+                const values = range(previousItem, highestIndex);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return;
+            }
+
+            setSelectionIndexes([
+                previousItem,
+            ]);
+            return;
+        }
+
+        if (event.code === 'ArrowDown') {
+            event.preventDefault();
+
+            const nextItem = highestIndex + 1 < files.length
+                ? highestIndex + 1
+                : highestIndex;
+
+            if (event.shiftKey) {
+                const values = range(lowestIndex, nextItem);
+                setSelectionIndexes([
+                    ...values,
+                ]);
+                return;
+            }
+
+            setSelectionIndexes([
+                nextItem,
+            ]);
+            return;
+        }
+    }
     // #endregion handlers
 
 
@@ -233,50 +236,19 @@ const FilesView: React.FC<FilesViewProperties> = (
     return (
         <StyledFilesView
             theme={theme}
-            // onMouseDown={(event) => {
-            //     if (!node.current) {
-            //         return;
-            //     }
-
-            //     setSelecting(true);
-
-            //     const rect = node.current.getBoundingClientRect();
-            //     const top = event.clientY - rect.top;
-            //     const left = event.clientX - rect.left;
-            //     // console.log('top left', top, left);
-
-            //     setSelectionTop(top);
-            //     setSelectionLeft(left);
-            // }}
-            // onMouseUp={() => {
-            //     setSelecting(false);
-            // }}
-            // onMouseMove={(event) => handleSelection(event)}
         >
-            {/* {selecting && (
-                <StyledFilesSelection
-                    theme={theme}
-                    style={{
-                        top: selectionTop + 'px',
-                        left: selectionLeft + 'px',
-                        width: selectionWidth + 'px',
-                        height: selectionHeight + 'px',
-                    }}
-                />
-            )} */}
-
             <StyledFilesList
                 ref={node}
                 theme={theme}
                 onClick={(event) => {
-                    console.log('event.target', event.target);
-                    console.log('node.current', node.current);
                     if (event.target === node.current) {
                         setSelectionIndexes([]);
                     }
                 }}
+                onKeyDown={(event) => handleKeyDown(event)}
+                tabIndex={1}
                 style={{
-                    pointerEvents: selecting ? 'none' : 'initial',
+                    outline: 'none',
                 }}
             >
                 {files.map((file, index) => {
