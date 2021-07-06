@@ -375,6 +375,8 @@ const Files: React.FC<FilesProperties> = (
                         theme={stateGeneralTheme}
                         files={files}
                         viewDirectory={viewDirectory}
+                        viewShowAs={viewShowAs}
+                        pluridLinkNavigation={pluridLinkNavigation}
 
                         actionClick={actionClick}
                         actionCurrent={actionCurrent}

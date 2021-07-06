@@ -18,6 +18,7 @@
 
     // #region external
     import FileItem from '../FileItem';
+    import ContextMenu from '../ContextMenu';
 
     import {
         range,
@@ -29,7 +30,6 @@
     import {
         StyledFilesView,
         StyledFilesList,
-        StyledContextMenu,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -43,6 +43,8 @@ export interface FilesViewProperties {
         theme: Theme;
         files: Dirent[];
         viewDirectory: string;
+        viewShowAs: string;
+        pluridLinkNavigation: boolean;
         // #endregion values
 
         // #region methods
@@ -67,6 +69,8 @@ const FilesView: React.FC<FilesViewProperties> = (
             theme,
             files,
             viewDirectory,
+            viewShowAs,
+            pluridLinkNavigation,
             // #endregion values
 
             // #region methods
@@ -364,68 +368,78 @@ const FilesView: React.FC<FilesViewProperties> = (
             theme={theme}
         >
             {showContextMenu && (
-                <StyledContextMenu
+                <ContextMenu
                     theme={theme}
-                    style={{
-                        left: contextMenuLeft + 'px',
-                        top: contextMenuTop + 'px',
-                    }}
-                >
-                    <div>
-                        New Folder
-                    </div>
+                    left={contextMenuLeft}
+                    top={contextMenuTop}
+                    viewDirectory={viewDirectory}
+                    selectionIndexes={selectionIndexes}
+                    files={files}
 
-                    <div>
-                        Open in New Plane
-                    </div>
-                </StyledContextMenu>
+                    closeMenu={() => setShowContextMenu(false)}
+                />
             )}
 
-            <StyledFilesList
-                ref={node}
-                theme={theme}
-                onClick={(event) => {
-                    setShowContextMenu(false);
 
-                    if (event.target === node.current) {
-                        setSelectionIndexes([]);
-                    }
-                }}
-                onContextMenu={(event) => {
-                    if (!node.current) {
-                        return;
-                    }
+            {viewShowAs === 'ICONS' && (
+                <div></div>
+            )}
 
-                    setShowContextMenu(true);
+            {viewShowAs === 'LIST' && (
+                <StyledFilesList
+                    ref={node}
+                    theme={theme}
+                    onClick={(event) => {
+                        setShowContextMenu(false);
 
-                    const rect = node.current.getBoundingClientRect();
-                    const left = event.clientX - rect.left;
-                    const top = event.clientY - rect.top;
+                        if (event.target === node.current) {
+                            setSelectionIndexes([]);
+                        }
+                    }}
+                    onContextMenu={(event) => {
+                        if (!node.current) {
+                            return;
+                        }
 
-                    setContextMenuLeft(left);
-                    setContextMenuTop(top);
-                }}
-                tabIndex={1}
-                style={{
-                    outline: 'none',
-                }}
-            >
-                {files.map((file, index) => {
-                    return (
-                        <FileItem
-                            key={Math.random() + ''}
-                            path={viewDirectory}
-                            file={file}
-                            theme={theme}
-                            index={index}
-                            selected={selectionIndexes.includes(index)}
+                        setShowContextMenu(true);
 
-                            selectionClick={selectionClick}
-                            actionClick={actionClick}
-                        />
-                    );
-                })}
-            </StyledFilesList>
+                        const rect = node.current.getBoundingClientRect();
+                        const left = event.clientX - rect.left;
+                        const top = event.clientY - rect.top;
+
+                        setContextMenuLeft(left);
+                        setContextMenuTop(top);
+                    }}
+                    tabIndex={1}
+                    style={{
+                        outline: 'none',
+                    }}
+                >
+                    {files.map((file, index) => {
+                        return (
+                            <FileItem
+                                key={Math.random() + ''}
+                                path={viewDirectory}
+                                file={file}
+                                theme={theme}
+                                index={index}
+                                selected={selectionIndexes.includes(index)}
+
+                                selectionClick={selectionClick}
+                                actionClick={actionClick}
+                            />
+                        );
+                    })}
+                </StyledFilesList>
+            )}
+
+            {viewShowAs === 'COLUMNS' && (
+                <div></div>
+            )}
+
+            {viewShowAs === 'GALLERY' && (
+                <div></div>
+            )}
         </StyledFilesView>
     );
     // #endregion render
