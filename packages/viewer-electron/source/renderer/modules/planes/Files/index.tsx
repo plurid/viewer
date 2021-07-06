@@ -176,6 +176,18 @@ const Files: React.FC<FilesProperties> = (
 
 
     const [
+        history,
+        setHistory,
+    ] = useState<string[]>([
+        directory,
+    ]);
+
+    const [
+        placeInHistory,
+        setPlaceInHistory,
+    ] = useState(0);
+
+    const [
         hasPreviousHistory,
         setHasPreviousHistory,
     ] = useState(false);
@@ -188,9 +200,23 @@ const Files: React.FC<FilesProperties> = (
 
 
     // #region handlers
-    const historyStepPrevious = () => {}
+    const historyStepPrevious = () => {
+        const previousIndex = placeInHistory - 1;
+        const previousHistory = history[previousIndex];
+        if (previousHistory) {
+            setViewDirectory(previousHistory);
+            setPlaceInHistory(previousIndex);
+        }
+    }
 
-    const historyStepNext = () => {}
+    const historyStepNext = () => {
+        const nextIndex = placeInHistory + 1;
+        const nextHistory = history[nextIndex];
+        if (nextHistory) {
+            setViewDirectory(nextHistory);
+            setPlaceInHistory(nextIndex);
+        }
+    }
 
     const actionClick = (
         file: Dirent,
@@ -201,6 +227,7 @@ const Files: React.FC<FilesProperties> = (
                 file.name,
             );
             setViewDirectory(newViewDirectory);
+            setPlaceInHistory(history.length);
         }
     }
     // #endregion handlers
@@ -230,6 +257,34 @@ const Files: React.FC<FilesProperties> = (
 
         return () => {
             isMounted.current = false;
+        }
+    }, [
+        viewDirectory,
+    ]);
+
+    useEffect(() => {
+        if (placeInHistory > 0) {
+            setHasPreviousHistory(true);
+        } else {
+            setHasPreviousHistory(false);
+        }
+
+        if (placeInHistory < history.length - 1) {
+            setHasNextHistory(true);
+        } else {
+            setHasNextHistory(false);
+        }
+    }, [
+        placeInHistory,
+        history.length,
+    ]);
+
+    useEffect(() => {
+        if (history[history.length - 1] !== viewDirectory) {
+            setHistory([
+                ...history,
+                viewDirectory,
+            ]);
         }
     }, [
         viewDirectory,
