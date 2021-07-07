@@ -30,6 +30,9 @@ const initialState: Types.State = {
         },
     ],
     activeSpace: 'initial',
+    filesFavorites: [],
+    filesRecents: [],
+    filesShowDirectAccess: true,
 };
 // #endregion module
 

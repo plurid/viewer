@@ -88,6 +88,9 @@ export interface State {
     language: string;
     spaces: Space[];
     activeSpace: string;
+    filesFavorites: string[];
+    filesRecents: string[];
+    filesShowDirectAccess: boolean;
 }
 
 
