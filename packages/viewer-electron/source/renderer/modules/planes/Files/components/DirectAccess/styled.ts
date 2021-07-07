@@ -11,22 +11,22 @@
 
 
 // #region module
-export interface IStyledFavorites {
+export interface IStyledDirectAccess {
     theme: Theme;
 }
 
-export const StyledFavorites = styled.div<IStyledFavorites>`
+export const StyledDirectAccess = styled.div<IStyledDirectAccess>`
 `;
 
 
-export const StyledFavoritesNotFound = styled.div`
+export const StyledDirectAccessNotFound = styled.div`
     display: grid;
     place-content: center;
     height: 100%;
 `;
 
 
-export const StyledFavoritesList = styled.div`
+export const StyledDirectAccessList = styled.div`
     display: grid;
     grid-template-columns: 1fr;
     grid-gap: 1rem;

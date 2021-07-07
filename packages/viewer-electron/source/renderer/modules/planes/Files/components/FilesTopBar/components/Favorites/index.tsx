@@ -7,7 +7,7 @@
     } from '@plurid/plurid-themes';
 
     import {
-        PluridIconSpace,
+        PluridIconContents,
     } from '@plurid/plurid-icons-react';
     // #endregion libraries
 
@@ -33,8 +33,8 @@ export interface FavoritesProperties {
     // #region required
         // #region values
         theme: Theme;
-        viewShowFavorites: boolean;
-        setViewShowFavorites: React.Dispatch<React.SetStateAction<boolean>>;
+        viewShowDirectAccess: boolean;
+        setViewShowDirectAccess: React.Dispatch<React.SetStateAction<boolean>>;
         // #endregion values
 
         // #region methods
@@ -50,8 +50,8 @@ const Favorites: React.FC<FavoritesProperties> = (
         // #region required
             // #region values
             theme,
-            viewShowFavorites,
-            setViewShowFavorites,
+            viewShowDirectAccess,
+            setViewShowDirectAccess,
             // #endregion values
 
             // #region methods
@@ -68,12 +68,12 @@ const Favorites: React.FC<FavoritesProperties> = (
         >
             <StyledTopBarButton
                 theme={theme}
-                active={viewShowFavorites}
+                active={viewShowDirectAccess}
             >
-                <PluridIconSpace
+                <PluridIconContents
                     theme={theme}
-                    title="Favorites"
-                    atClick={() => setViewShowFavorites(active => !active)}
+                    title="Direct Access"
+                    atClick={() => setViewShowDirectAccess(active => !active)}
                 />
             </StyledTopBarButton>
         </StyledFavorites>

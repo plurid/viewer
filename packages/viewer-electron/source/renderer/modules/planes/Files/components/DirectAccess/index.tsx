@@ -16,9 +16,9 @@
 
     // #region internal
     import {
-        StyledFavorites,
-        StyledFavoritesNotFound,
-        StyledFavoritesList,
+        StyledDirectAccess,
+        StyledDirectAccessNotFound,
+        StyledDirectAccessList,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -26,7 +26,7 @@
 
 
 // #region module
-export interface FavoritesProperties {
+export interface DirectAccessProperties {
     // #region required
         // #region values
         theme: Theme;
@@ -38,7 +38,7 @@ export interface FavoritesProperties {
     // #endregion required
 }
 
-const Favorites: React.FC<FavoritesProperties> = (
+const DirectAccess: React.FC<DirectAccessProperties> = (
     properties,
 ) => {
     // #region properties
@@ -58,17 +58,17 @@ const Favorites: React.FC<FavoritesProperties> = (
 
     // #region render
     return (
-        <StyledFavorites
+        <StyledDirectAccess
             theme={theme}
         >
             {favorites.length === 0 && (
-                <StyledFavoritesNotFound>
+                <StyledDirectAccessNotFound>
                     no favorites
-                </StyledFavoritesNotFound>
+                </StyledDirectAccessNotFound>
             )}
 
             {favorites.length > 0 && (
-                <StyledFavoritesList>
+                <StyledDirectAccessList>
                     {favorites.map(favorite => {
                         const favoriteName = path.basename(favorite);
 
@@ -80,9 +80,9 @@ const Favorites: React.FC<FavoritesProperties> = (
                             </div>
                         );
                     })}
-                </StyledFavoritesList>
+                </StyledDirectAccessList>
             )}
-        </StyledFavorites>
+        </StyledDirectAccess>
     );
     // #endregion render
 }
@@ -91,5 +91,5 @@ const Favorites: React.FC<FavoritesProperties> = (
 
 
 // #region exports
-export default Favorites;
+export default DirectAccess;
 // #endregion exports

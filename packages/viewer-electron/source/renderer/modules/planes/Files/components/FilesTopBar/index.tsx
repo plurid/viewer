@@ -42,8 +42,8 @@
 export interface FilesTopBarOwnProperties {
     viewDirectory: string;
 
-    viewShowFavorites: boolean;
-    setViewShowFavorites: React.Dispatch<React.SetStateAction<boolean>>;
+    viewShowDirectAccess: boolean;
+    setViewShowDirectAccess: React.Dispatch<React.SetStateAction<boolean>>;
 
     setViewDirectory: React.Dispatch<React.SetStateAction<string>>;
     viewShowAs: string;
@@ -83,8 +83,8 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
         // #region own
         viewDirectory,
 
-        viewShowFavorites,
-        setViewShowFavorites,
+        viewShowDirectAccess,
+        setViewShowDirectAccess,
 
         setViewDirectory,
         viewShowAs,
@@ -117,8 +117,8 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
         >
             <Favorites
                 theme={stateGeneralTheme}
-                viewShowFavorites={viewShowFavorites}
-                setViewShowFavorites={setViewShowFavorites}
+                viewShowDirectAccess={viewShowDirectAccess}
+                setViewShowDirectAccess={setViewShowDirectAccess}
             />
 
             <StyledFilesTopBarCenter>

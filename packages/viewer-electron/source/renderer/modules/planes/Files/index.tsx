@@ -61,7 +61,7 @@
     } from './styled';
 
     import FilesTopBar from './components/FilesTopBar';
-    import Favorites from './components/Favorites';
+    import DirectAccess from './components/DirectAccess';
     import FilesView from './components/FilesView';
     // #endregion internal
 // #endregion imports
@@ -158,8 +158,8 @@ const Files: React.FC<FilesProperties> = (
 
 
     const [
-        viewShowFavorites,
-        setViewShowFavorites,
+        viewShowDirectAccess,
+        setViewShowDirectAccess,
     ] = useState(true);
 
     const [
@@ -373,8 +373,8 @@ const Files: React.FC<FilesProperties> = (
             <FilesTopBar
                 viewDirectory={viewDirectory}
 
-                viewShowFavorites={viewShowFavorites}
-                setViewShowFavorites={setViewShowFavorites}
+                viewShowDirectAccess={viewShowDirectAccess}
+                setViewShowDirectAccess={setViewShowDirectAccess}
 
                 setViewDirectory={setViewDirectory}
                 viewShowAs={viewShowAs}
@@ -393,10 +393,10 @@ const Files: React.FC<FilesProperties> = (
             />
 
             <StyledFilesView
-                splitView={viewShowFavorites}
+                splitView={viewShowDirectAccess}
             >
-                {viewShowFavorites && (
-                    <Favorites
+                {viewShowDirectAccess && (
+                    <DirectAccess
                         theme={stateGeneralTheme}
                         favorites={favorites}
                     />
