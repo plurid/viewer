@@ -77,6 +77,8 @@ export interface FilesStateProperties {
     stateInteractionTheme: Theme;
     stateSpaces: Space[];
     stateActiveSpaceID: string;
+    stateFilesFavorites: string[];
+    stateFilesRecents: string[];
 }
 
 export interface FilesDispatchProperties {
@@ -103,6 +105,8 @@ const Files: React.FC<FilesProperties> = (
         // stateInteractionTheme,
         stateSpaces,
         stateActiveSpaceID,
+        stateFilesFavorites,
+        stateFilesRecents,
         // #endregion state
 
         // #region dispatch
@@ -165,13 +169,6 @@ const Files: React.FC<FilesProperties> = (
         viewShowDirectAccess,
         setViewShowDirectAccess,
     ] = useState(true);
-
-    const [
-        favorites,
-        setFavorites,
-    ] = useState([
-        '/Applications',
-    ]);
 
 
     const [
@@ -402,7 +399,8 @@ const Files: React.FC<FilesProperties> = (
                 {viewShowDirectAccess && (
                     <DirectAccess
                         theme={stateGeneralTheme}
-                        favorites={favorites}
+                        favorites={stateFilesFavorites}
+                        recents={stateFilesRecents}
                     />
                 )}
 
@@ -432,6 +430,8 @@ const mapStateToProperties = (
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
     stateSpaces: selectors.product.getSpaces(state),
     stateActiveSpaceID: selectors.product.getActiveSpace(state),
+    stateFilesFavorites: selectors.product.getFilesFavorites(state),
+    stateFilesRecents: selectors.product.getFilesRecents(state),
 });
 
 

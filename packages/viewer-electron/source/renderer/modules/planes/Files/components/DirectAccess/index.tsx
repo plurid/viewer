@@ -31,6 +31,7 @@ export interface DirectAccessProperties {
         // #region values
         theme: Theme;
         favorites: string[];
+        recents: string[];
         // #endregion values
 
         // #region methods
@@ -47,6 +48,7 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
             // #region values
             theme,
             favorites,
+            recents,
             // #endregion values
 
             // #region methods
@@ -61,27 +63,39 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
         <StyledDirectAccess
             theme={theme}
         >
-            {favorites.length === 0 && (
-                <StyledDirectAccessNotFound>
-                    no favorites
-                </StyledDirectAccessNotFound>
-            )}
+            <div>
+                <div>
+                    Favorites
+                </div>
 
-            {favorites.length > 0 && (
-                <StyledDirectAccessList>
-                    {favorites.map(favorite => {
-                        const favoriteName = path.basename(favorite);
+                {favorites.length === 0 && (
+                    <StyledDirectAccessNotFound>
+                        no favorites
+                    </StyledDirectAccessNotFound>
+                )}
 
-                        return (
-                            <div
-                                key={favorite}
-                            >
-                                {favoriteName}
-                            </div>
-                        );
-                    })}
-                </StyledDirectAccessList>
-            )}
+                {favorites.length > 0 && (
+                    <StyledDirectAccessList>
+                        {favorites.map(favorite => {
+                            const favoriteName = path.basename(favorite);
+
+                            return (
+                                <div
+                                    key={favorite}
+                                >
+                                    {favoriteName}
+                                </div>
+                            );
+                        })}
+                    </StyledDirectAccessList>
+                )}
+            </div>
+
+            <div>
+                <div>
+                    Recent
+                </div>
+            </div>
         </StyledDirectAccess>
     );
     // #endregion render
