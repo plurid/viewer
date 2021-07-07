@@ -73,6 +73,7 @@ export interface PlaneFiles extends PlaneBase {
         searchValue: string;
         history: string[];
         placeInHistory: number;
+        showDirectAccess: boolean;
     };
 }
 

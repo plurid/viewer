@@ -38,9 +38,9 @@ export interface ViewModesProperties {
         // #region values
         theme: Theme;
         viewShowAs: string;
-        setViewShowAs: React.Dispatch<React.SetStateAction<string>>;
+        setViewShowAs: (showAs: string) => void;
         pluridLinkNavigation: boolean;
-        setPluridLinkNavigation: React.Dispatch<React.SetStateAction<boolean>>;
+        setPluridLinkNavigation: (pluridLinkNavigation: boolean) => void;
         // #endregion values
 
         // #region methods
@@ -129,7 +129,7 @@ const ViewModes: React.FC<ViewModesProperties> = (
                 <PluridIconPlurid
                     theme={theme}
                     title="Plurid Link Navigation"
-                    atClick={() => setPluridLinkNavigation(active => !active)}
+                    atClick={() => setPluridLinkNavigation(!pluridLinkNavigation)}
                 />
             </StyledTopBarButton>
         </StyledViewModes>

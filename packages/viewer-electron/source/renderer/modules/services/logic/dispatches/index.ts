@@ -48,6 +48,7 @@ export const addPlane = (
                     planeDirectory,
                 ],
                 placeInHistory: 0,
+                showDirectAccess: state.product.filesShowDirectAccess,
             },
         },
     });

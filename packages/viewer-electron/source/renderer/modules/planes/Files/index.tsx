@@ -138,9 +138,10 @@ const Files: React.FC<FilesProperties> = (
         directory: viewDirectory,
         history,
         placeInHistory,
-        // pluridLinkNavigation,
-        // searchValue,
-        // showAs,
+        pluridLinkNavigation,
+        searchValue,
+        showAs: viewShowAs,
+        showDirectAccess,
     } = planeData.data;
     // #endregion properties
 
@@ -159,28 +160,6 @@ const Files: React.FC<FilesProperties> = (
     const [
         viewError,
         setViewError,
-    ] = useState('');
-
-
-    const [
-        viewShowDirectAccess,
-        setViewShowDirectAccess,
-    ] = useState(true);
-
-
-    const [
-        viewShowAs,
-        setViewShowAs,
-    ] = useState('LIST');
-
-    const [
-        pluridLinkNavigation,
-        setPluridLinkNavigation,
-    ] = useState(true);
-
-    const [
-        searchString,
-        setSearchString,
     ] = useState('');
 
 
@@ -228,6 +207,38 @@ const Files: React.FC<FilesProperties> = (
     ) => {
         dispatchUpdate({
             placeInHistory,
+        });
+    }
+
+    const setViewShowAs = (
+        showAs: string,
+    ) => {
+        dispatchUpdate({
+            showAs,
+        });
+    }
+
+    const setSearchValue = (
+        searchValue: string,
+    ) => {
+        dispatchUpdate({
+            searchValue,
+        });
+    }
+
+    const setShowDirectAccess = (
+        showDirectAccess: boolean,
+    ) => {
+        dispatchUpdate({
+            showDirectAccess,
+        });
+    }
+
+    const setPluridLinkNavigation = (
+        pluridLinkNavigation: boolean,
+    ) => {
+        dispatchUpdate({
+            pluridLinkNavigation,
         });
     }
 
@@ -394,8 +405,8 @@ const Files: React.FC<FilesProperties> = (
             <FilesTopBar
                 viewDirectory={viewDirectory}
 
-                viewShowDirectAccess={viewShowDirectAccess}
-                setViewShowDirectAccess={setViewShowDirectAccess}
+                viewShowDirectAccess={showDirectAccess}
+                setViewShowDirectAccess={setShowDirectAccess}
 
                 setViewDirectory={setViewDirectory}
                 viewShowAs={viewShowAs}
@@ -403,8 +414,8 @@ const Files: React.FC<FilesProperties> = (
                 pluridLinkNavigation={pluridLinkNavigation}
                 setPluridLinkNavigation={setPluridLinkNavigation}
 
-                searchString={searchString}
-                setSearchString={setSearchString}
+                searchValue={searchValue}
+                setSearchValue={setSearchValue}
 
                 hasPreviousHistory={hasPreviousHistory}
                 hasNextHistory={hasNextHistory}
@@ -414,9 +425,9 @@ const Files: React.FC<FilesProperties> = (
             />
 
             <StyledFilesView
-                splitView={viewShowDirectAccess}
+                splitView={showDirectAccess}
             >
-                {viewShowDirectAccess && (
+                {showDirectAccess && (
                     <DirectAccess
                         theme={stateGeneralTheme}
                         favorites={stateFilesFavorites}

@@ -29,8 +29,8 @@ export interface SearchProperties {
     // #region required
         // #region values
         theme: Theme;
-        searchString: string;
-        setSearchString: React.Dispatch<React.SetStateAction<string>>;
+        searchValue: string;
+        setSearchValue: (searchValue: string) => void;
         // #endregion values
 
         // #region methods
@@ -46,8 +46,8 @@ const Search: React.FC<SearchProperties> = (
         // #region required
             // #region values
             theme,
-            searchString,
-            setSearchString,
+            searchValue,
+            setSearchValue,
             // #endregion values
 
             // #region methods
@@ -63,9 +63,9 @@ const Search: React.FC<SearchProperties> = (
             theme={theme}
         >
             <PluridTextline
-                text={searchString}
+                text={searchValue}
                 atChange={(event) => {
-                    setSearchString(event.target.value);
+                    setSearchValue(event.target.value);
                 }}
                 placeholder="search"
                 level={2}

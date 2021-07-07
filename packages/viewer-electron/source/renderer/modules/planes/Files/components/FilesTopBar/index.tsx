@@ -43,16 +43,16 @@ export interface FilesTopBarOwnProperties {
     viewDirectory: string;
 
     viewShowDirectAccess: boolean;
-    setViewShowDirectAccess: React.Dispatch<React.SetStateAction<boolean>>;
+    setViewShowDirectAccess: (showDirectAccess: boolean) => void;
 
-    setViewDirectory: (diretory: string) => void;
+    setViewDirectory: (directory: string) => void;
     viewShowAs: string;
-    setViewShowAs: React.Dispatch<React.SetStateAction<string>>;
+    setViewShowAs: (showAs: string) => void;
     pluridLinkNavigation: boolean;
-    setPluridLinkNavigation: React.Dispatch<React.SetStateAction<boolean>>;
+    setPluridLinkNavigation: (pluridLinkNavigation: boolean) => void;
 
-    searchString: string;
-    setSearchString: React.Dispatch<React.SetStateAction<string>>;
+    searchValue: string;
+    setSearchValue: (searchValue: string) => void;
 
     hasPreviousHistory: boolean;
     hasNextHistory: boolean;
@@ -92,8 +92,8 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
         pluridLinkNavigation,
         setPluridLinkNavigation,
 
-        searchString,
-        setSearchString,
+        searchValue,
+        setSearchValue,
 
         hasPreviousHistory,
         hasNextHistory,
@@ -155,8 +155,8 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
 
             <Search
                 theme={stateGeneralTheme}
-                searchString={searchString}
-                setSearchString={setSearchString}
+                searchValue={searchValue}
+                setSearchValue={setSearchValue}
             />
         </StyledFilesTopBar>
     );

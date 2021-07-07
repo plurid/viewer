@@ -34,7 +34,7 @@ export interface FavoritesProperties {
         // #region values
         theme: Theme;
         viewShowDirectAccess: boolean;
-        setViewShowDirectAccess: React.Dispatch<React.SetStateAction<boolean>>;
+        setViewShowDirectAccess: (showDirectAccess: boolean) => void;
         // #endregion values
 
         // #region methods
@@ -73,7 +73,7 @@ const Favorites: React.FC<FavoritesProperties> = (
                 <PluridIconContents
                     theme={theme}
                     title="Direct Access"
-                    atClick={() => setViewShowDirectAccess(active => !active)}
+                    atClick={() => setViewShowDirectAccess(!viewShowDirectAccess)}
                 />
             </StyledTopBarButton>
         </StyledFavorites>
