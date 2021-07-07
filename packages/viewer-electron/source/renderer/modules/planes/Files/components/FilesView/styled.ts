@@ -24,4 +24,11 @@ export const StyledFilesView = styled.div<IStyledFilesView>`
         }: IStyledFilesView) => theme.backgroundColorSecondary
     };
 `;
+
+
+export const StyledFilesNotFound = styled.div`
+    height: 500px;
+    display: grid;
+    place-content: center;
+`;
 // #region module

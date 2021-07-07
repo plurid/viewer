@@ -50,11 +50,4 @@ export const StyledFilesView = styled.div<IStyledFilesView>`
         }
     };
 `;
-
-
-export const StyledFilesNotFound = styled.div`
-    height: 500px;
-    display: grid;
-    place-content: center;
-`;
 // #region module

@@ -57,7 +57,6 @@
     import {
         StyledFiles,
         StyledFilesView,
-        StyledFilesNotFound,
     } from './styled';
 
     import FilesTopBar from './components/FilesTopBar';
@@ -402,31 +401,18 @@ const Files: React.FC<FilesProperties> = (
                     />
                 )}
 
-                {viewError === 'NOT_FOUND' && (
-                    <StyledFilesNotFound>
-                        path not found
-                    </StyledFilesNotFound>
-                )}
+                <FilesView
+                    theme={stateGeneralTheme}
+                    files={files}
+                    viewDirectory={viewDirectory}
+                    viewShowAs={viewShowAs}
+                    viewError={viewError}
+                    pluridLinkNavigation={pluridLinkNavigation}
 
-                {files.length === 0 && viewError === '' &&  (
-                    <StyledFilesNotFound>
-                        no files
-                    </StyledFilesNotFound>
-                )}
-
-                {files.length > 0 && (
-                    <FilesView
-                        theme={stateGeneralTheme}
-                        files={files}
-                        viewDirectory={viewDirectory}
-                        viewShowAs={viewShowAs}
-                        pluridLinkNavigation={pluridLinkNavigation}
-
-                        actionClick={actionClick}
-                        actionCurrent={actionCurrent}
-                        upLevel={upLevel}
-                    />
-                )}
+                    actionClick={actionClick}
+                    actionCurrent={actionCurrent}
+                    upLevel={upLevel}
+                />
             </StyledFilesView>
         </StyledFiles>
     );

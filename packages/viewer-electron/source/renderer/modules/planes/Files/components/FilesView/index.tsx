@@ -33,6 +33,7 @@
     // #region internal
     import {
         StyledFilesView,
+        StyledFilesNotFound,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -47,6 +48,7 @@ export interface FilesViewProperties {
         files: Dirent[];
         viewDirectory: string;
         viewShowAs: string;
+        viewError: string;
         pluridLinkNavigation: boolean;
         // #endregion values
 
@@ -73,6 +75,7 @@ const FilesView: React.FC<FilesViewProperties> = (
             files,
             viewDirectory,
             viewShowAs,
+            viewError,
             pluridLinkNavigation,
             // #endregion values
 
@@ -379,56 +382,76 @@ const FilesView: React.FC<FilesViewProperties> = (
         <StyledFilesView
             theme={theme}
         >
-            {showContextMenu && (
-                <ContextMenu
-                    theme={theme}
-                    left={contextMenuLeft}
-                    top={contextMenuTop}
-                    viewDirectory={viewDirectory}
-                    selectionIndexes={selectionIndexes}
-                    files={files}
-
-                    closeMenu={() => setShowContextMenu(false)}
-                />
+            {viewError === 'NOT_FOUND'
+            && (
+                <StyledFilesNotFound>
+                    path not found
+                </StyledFilesNotFound>
             )}
 
-
-            {viewShowAs === 'BLOCKS' && (
-                <FilesBlocks
-                    theme={theme}
-                />
+            {files.length === 0
+            && viewError === ''
+            && (
+                <StyledFilesNotFound>
+                    no files
+                </StyledFilesNotFound>
             )}
 
-            {viewShowAs === 'LIST' && (
-                <FilesList
-                    ref={node}
+            {files.length > 0
+            && (
+                <>
+                    {showContextMenu && (
+                        <ContextMenu
+                            theme={theme}
+                            left={contextMenuLeft}
+                            top={contextMenuTop}
+                            viewDirectory={viewDirectory}
+                            selectionIndexes={selectionIndexes}
+                            files={files}
 
-                    theme={theme}
-                    files={files}
-                    viewDirectory={viewDirectory}
-                    selectionIndexes={selectionIndexes}
-                    cursorOverIndex={cursorOverIndex}
+                            closeMenu={() => setShowContextMenu(false)}
+                        />
+                    )}
 
-                    selectionClick={selectionClick}
-                    actionClick={actionClick}
-                    setSelectionIndexes={setSelectionIndexes}
-                    setCursorOverIndex={setCursorOverIndex}
-                    setShowContextMenu={setShowContextMenu}
-                    setContextMenuLeft={setContextMenuLeft}
-                    setContextMenuTop={setContextMenuTop}
-                />
-            )}
 
-            {viewShowAs === 'COLUMNS' && (
-                <FilesColumns
-                    theme={theme}
-                />
-            )}
+                    {viewShowAs === 'BLOCKS' && (
+                        <FilesBlocks
+                            theme={theme}
+                        />
+                    )}
 
-            {viewShowAs === 'GALLERY' && (
-                <FilesGallery
-                    theme={theme}
-                />
+                    {viewShowAs === 'LIST' && (
+                        <FilesList
+                            ref={node}
+
+                            theme={theme}
+                            files={files}
+                            viewDirectory={viewDirectory}
+                            selectionIndexes={selectionIndexes}
+                            cursorOverIndex={cursorOverIndex}
+
+                            selectionClick={selectionClick}
+                            actionClick={actionClick}
+                            setSelectionIndexes={setSelectionIndexes}
+                            setCursorOverIndex={setCursorOverIndex}
+                            setShowContextMenu={setShowContextMenu}
+                            setContextMenuLeft={setContextMenuLeft}
+                            setContextMenuTop={setContextMenuTop}
+                        />
+                    )}
+
+                    {viewShowAs === 'COLUMNS' && (
+                        <FilesColumns
+                            theme={theme}
+                        />
+                    )}
+
+                    {viewShowAs === 'GALLERY' && (
+                        <FilesGallery
+                            theme={theme}
+                        />
+                    )}
+                </>
             )}
         </StyledFilesView>
     );
