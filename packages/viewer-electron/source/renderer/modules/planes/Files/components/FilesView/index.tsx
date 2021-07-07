@@ -17,8 +17,12 @@
 
 
     // #region external
-    import FileItem from '../FileItem';
     import ContextMenu from '../ContextMenu';
+
+    import FilesBlocks from '../FilesBlocks';
+    import FilesList from '../FilesList';
+    import FilesColumns from '../FilesColumns';
+    import FilesGallery from '../FilesGallery';
 
     import {
         range,
@@ -29,7 +33,6 @@
     // #region internal
     import {
         StyledFilesView,
-        StyledFilesList,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -390,71 +393,42 @@ const FilesView: React.FC<FilesViewProperties> = (
             )}
 
 
-            {viewShowAs === 'ICONS' && (
-                <div></div>
+            {viewShowAs === 'BLOCKS' && (
+                <FilesBlocks
+                    theme={theme}
+                />
             )}
 
             {viewShowAs === 'LIST' && (
-                <StyledFilesList
+                <FilesList
                     ref={node}
+
                     theme={theme}
-                    onClick={(event) => {
-                        setShowContextMenu(false);
+                    files={files}
+                    viewDirectory={viewDirectory}
+                    selectionIndexes={selectionIndexes}
+                    cursorOverIndex={cursorOverIndex}
 
-                        if (event.target === node.current) {
-                            setSelectionIndexes([]);
-                        }
-                    }}
-                    onContextMenu={(event) => {
-                        if (!node.current) {
-                            return;
-                        }
-
-                        event.preventDefault();
-
-                        setShowContextMenu(true);
-
-                        const rect = node.current.getBoundingClientRect();
-                        const left = event.clientX - rect.left;
-                        const top = event.clientY - rect.top;
-
-                        setContextMenuLeft(left);
-                        setContextMenuTop(top);
-
-                        if (!selectionIndexes.includes(cursorOverIndex)) {
-                            setSelectionIndexes([cursorOverIndex]);
-                        }
-                    }}
-                    tabIndex={1}
-                    style={{
-                        outline: 'none',
-                    }}
-                >
-                    {files.map((file, index) => {
-                        return (
-                            <FileItem
-                                key={Math.random() + ''}
-                                path={viewDirectory}
-                                file={file}
-                                theme={theme}
-                                index={index}
-                                selected={selectionIndexes.includes(index)}
-
-                                selectionClick={selectionClick}
-                                actionClick={actionClick}
-                                setCursorOverIndex={setCursorOverIndex}
-                            />
-                        );
-                    })}
-                </StyledFilesList>
+                    selectionClick={selectionClick}
+                    actionClick={actionClick}
+                    setSelectionIndexes={setSelectionIndexes}
+                    setCursorOverIndex={setCursorOverIndex}
+                    setShowContextMenu={setShowContextMenu}
+                    setContextMenuLeft={setContextMenuLeft}
+                    setContextMenuTop={setContextMenuTop}
+                />
             )}
 
             {viewShowAs === 'COLUMNS' && (
-                <div></div>
+                <FilesColumns
+                    theme={theme}
+                />
             )}
 
             {viewShowAs === 'GALLERY' && (
-                <div></div>
+                <FilesGallery
+                    theme={theme}
+                />
             )}
         </StyledFilesView>
     );

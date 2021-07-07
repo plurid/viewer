@@ -11,17 +11,10 @@
 
 
 // #region module
-export interface IStyledFilesView {
+export interface IStyledFilesGallery {
     theme: Theme;
 }
 
-export const StyledFilesView = styled.div<IStyledFilesView>`
-    position: relative;
-
-    background-color: ${
-        ({
-            theme,
-        }: IStyledFilesView) => theme.backgroundColorSecondary
-    };
+export const StyledFilesGallery = styled.div<IStyledFilesGallery>`
 `;
 // #region module
