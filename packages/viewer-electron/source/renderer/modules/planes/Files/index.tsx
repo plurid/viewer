@@ -83,6 +83,7 @@ export interface FilesStateProperties {
 
 export interface FilesDispatchProperties {
     dispatchProductAddPlane: typeof actions.product.addPlane;
+    dispatchProductUpdatePlane: typeof actions.product.updatePlane;
 }
 
 export type FilesProperties =
@@ -111,6 +112,7 @@ const Files: React.FC<FilesProperties> = (
 
         // #region dispatch
         dispatchProductAddPlane,
+        dispatchProductUpdatePlane,
         // #endregion dispatch
     } = properties;
 
@@ -133,9 +135,9 @@ const Files: React.FC<FilesProperties> = (
     }
 
     const {
-        directory,
-        // history,
-        // placeInHistory,
+        directory: viewDirectory,
+        history,
+        placeInHistory,
         // pluridLinkNavigation,
         // searchValue,
         // showAs,
@@ -153,11 +155,6 @@ const Files: React.FC<FilesProperties> = (
         files,
         setFiles,
     ] = useState<Dirent[]>([]);
-
-    const [
-        viewDirectory,
-        setViewDirectory,
-    ] = useState(directory);
 
     const [
         viewError,
@@ -188,18 +185,6 @@ const Files: React.FC<FilesProperties> = (
 
 
     const [
-        history,
-        setHistory,
-    ] = useState<string[]>([
-        directory,
-    ]);
-
-    const [
-        placeInHistory,
-        setPlaceInHistory,
-    ] = useState(0);
-
-    const [
         hasPreviousHistory,
         setHasPreviousHistory,
     ] = useState(false);
@@ -212,6 +197,41 @@ const Files: React.FC<FilesProperties> = (
 
 
     // #region handlers
+    const dispatchUpdate = (
+        data: any
+    ) => {
+        dispatchProductUpdatePlane({
+            spaceID: stateActiveSpaceID,
+            planeID,
+            data,
+        });
+    }
+
+    const setViewDirectory = (
+        directory: string,
+    ) => {
+        dispatchUpdate({
+            directory,
+        });
+    }
+
+    const setHistory = (
+        history: string[],
+    ) => {
+        dispatchUpdate({
+            history,
+        });
+    }
+
+    const setPlaceInHistory = (
+        placeInHistory: number,
+    ) => {
+        dispatchUpdate({
+            placeInHistory,
+        });
+    }
+
+
     const historyStepPrevious = () => {
         const previousIndex = placeInHistory - 1;
         const previousHistory = history[previousIndex];
@@ -442,6 +462,11 @@ const mapDispatchToProperties = (
         payload,
     ) => dispatch(
         actions.product.addPlane(payload),
+    ),
+    dispatchProductUpdatePlane: (
+        payload,
+    ) => dispatch(
+        actions.product.updatePlane(payload),
     ),
 });
 

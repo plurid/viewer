@@ -45,7 +45,7 @@ export interface FilesTopBarOwnProperties {
     viewShowDirectAccess: boolean;
     setViewShowDirectAccess: React.Dispatch<React.SetStateAction<boolean>>;
 
-    setViewDirectory: React.Dispatch<React.SetStateAction<string>>;
+    setViewDirectory: (diretory: string) => void;
     viewShowAs: string;
     setViewShowAs: React.Dispatch<React.SetStateAction<string>>;
     pluridLinkNavigation: boolean;
