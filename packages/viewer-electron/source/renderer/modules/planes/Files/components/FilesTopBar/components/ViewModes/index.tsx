@@ -7,7 +7,11 @@
     } from '@plurid/plurid-themes';
 
     import {
-        PluridIconSpace,
+        PluridIconBlocks,
+        PluridIconList,
+        PluridIconColumns,
+        PluridIconGallery,
+        PluridIconPlurid,
     } from '@plurid/plurid-icons-react';
     // #endregion libraries
 
@@ -72,12 +76,12 @@ const ViewModes: React.FC<ViewModesProperties> = (
         >
             <StyledTopBarButton
                 theme={theme}
-                active={viewShowAs === 'ICONS'}
+                active={viewShowAs === 'BLOCKS'}
             >
-                <PluridIconSpace
+                <PluridIconBlocks
                     theme={theme}
-                    title="Show as Icons"
-                    atClick={() => setViewShowAs('ICONS')}
+                    title="Show as Blocks"
+                    atClick={() => setViewShowAs('BLOCKS')}
                 />
             </StyledTopBarButton>
 
@@ -85,7 +89,7 @@ const ViewModes: React.FC<ViewModesProperties> = (
                 theme={theme}
                 active={viewShowAs === 'LIST'}
             >
-                <PluridIconSpace
+                <PluridIconList
                     theme={theme}
                     title="Show as List"
                     atClick={() => setViewShowAs('LIST')}
@@ -96,7 +100,7 @@ const ViewModes: React.FC<ViewModesProperties> = (
                 theme={theme}
                 active={viewShowAs === 'COLUMNS'}
             >
-                <PluridIconSpace
+                <PluridIconColumns
                     theme={theme}
                     title="Show as Columns"
                     atClick={() => setViewShowAs('COLUMNS')}
@@ -107,7 +111,7 @@ const ViewModes: React.FC<ViewModesProperties> = (
                 theme={theme}
                 active={viewShowAs === 'GALLERY'}
             >
-                <PluridIconSpace
+                <PluridIconGallery
                     theme={theme}
                     title="Show as Gallery"
                     atClick={() => setViewShowAs('GALLERY')}
@@ -122,7 +126,7 @@ const ViewModes: React.FC<ViewModesProperties> = (
                     marginLeft: '1rem',
                 }}
             >
-                <PluridIconSpace
+                <PluridIconPlurid
                     theme={theme}
                     title="Plurid Link Navigation"
                     atClick={() => setPluridLinkNavigation(active => !active)}
