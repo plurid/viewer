@@ -26,6 +26,8 @@ export const reducer = (
             return resolvers.setField(state, action);
         case Types.ADD_PLANE:
             return resolvers.addPlane(state, action);
+        case Types.UPDATE_PLANE:
+            return resolvers.updatePlane(state, action);
         case Types.REMOVE_PLANE:
             return resolvers.removePlane(state, action);
         case Types.ADD_SPACE:

@@ -54,6 +54,16 @@ export const addPlane = (
 }
 
 
+export const updatePlane = (
+    payload: Types.UpdatePlanePayload,
+): Types.UpdatePlaneAction => {
+    return {
+        type: Types.UPDATE_PLANE,
+        payload,
+    };
+}
+
+
 export const removePlane = (
     payload: Types.RemovePlanePayload,
 ): Types.RemovePlaneAction => {
@@ -88,6 +98,7 @@ export const actions = {
     setLanguage,
     setField,
     addPlane,
+    updatePlane,
     removePlane,
     addSpace,
     removeSpace,

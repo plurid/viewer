@@ -104,6 +104,61 @@ export const addPlane = (
 }
 
 
+export const updatePlane = (
+    state: Types.State,
+    action: Types.UpdatePlaneAction,
+): Types.State => {
+    const newState = {
+        ...state,
+    };
+
+    const {
+        spaceID,
+        planeID,
+        data,
+    } = action.payload;
+
+    const space = state.spaces.find(space => space.id === spaceID);
+    if (!space) {
+        return newState;
+    }
+
+    const plane = space.planes.find(plane => plane.id === planeID);
+    if (!plane) {
+        return newState;
+    }
+
+    for (const [key, value] of Object.entries(data)) {
+        plane.data[key] = value;
+    }
+
+    const planes = space.planes.map(spacePlane => {
+        if (spacePlane.id === planeID) {
+            return plane;
+        }
+
+        return spacePlane;
+    });
+
+    space.planes = [
+        ...planes,
+    ];
+
+    const spaces = state.spaces.map(stateSpace => {
+        if (stateSpace.id === spaceID) {
+            return space;
+        }
+
+        return stateSpace;
+    });
+
+    return {
+        ...newState,
+        spaces,
+    };
+}
+
+
 export const removePlane = (
     state: Types.State,
     action: Types.RemovePlaneAction,
@@ -193,6 +248,7 @@ const resolvers = {
     setLanguage,
     setField,
     addPlane,
+    updatePlane,
     removePlane,
     addSpace,
     removeSpace,

@@ -52,6 +52,18 @@ export interface AddPlaneAction {
 }
 
 
+export const UPDATE_PLANE = 'UPDATE_PLANE';
+export interface UpdatePlanePayload {
+    spaceID: string;
+    planeID: string;
+    data: Partial<any>;
+}
+export interface UpdatePlaneAction {
+    type: typeof UPDATE_PLANE;
+    payload: UpdatePlanePayload;
+}
+
+
 export const REMOVE_PLANE = 'REMOVE_PLANE';
 export interface RemovePlanePayload {
     spaceID: string;
@@ -103,6 +115,7 @@ export type Actions =
     | SetLanguageAction
     | SetFieldAction
     | AddPlaneAction
+    | UpdatePlaneAction
     | RemovePlaneAction
     | AddSpaceAction
     | RemoveSpaceAction;
