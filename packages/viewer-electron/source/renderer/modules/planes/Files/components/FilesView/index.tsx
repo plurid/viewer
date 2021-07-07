@@ -410,6 +410,8 @@ const FilesView: React.FC<FilesViewProperties> = (
                             return;
                         }
 
+                        event.preventDefault();
+
                         setShowContextMenu(true);
 
                         const rect = node.current.getBoundingClientRect();
