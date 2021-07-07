@@ -68,6 +68,11 @@ export interface PlaneFiles extends PlaneBase {
     kind: 'files';
     data: {
         directory: string;
+        showAs: string;
+        pluridLinkNavigation: boolean;
+        searchValue: string;
+        history: string[];
+        placeInHistory: number;
     };
 }
 

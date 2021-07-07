@@ -31,6 +31,8 @@ export const addPlane = (
     );
 
     const defaultFileSystemPath = os.homedir();
+    const planeDirectory = state.product.filesDefaultOpenDirectory || defaultFileSystemPath;
+
 
     dispatchProductAddPlane({
         spaceID: state.product.activeSpace,
@@ -38,7 +40,14 @@ export const addPlane = (
             id: uuid.generate(),
             kind: 'files',
             data: {
-                directory: defaultFileSystemPath,
+                directory: planeDirectory,
+                showAs: state.product.filesDefaultShowAs,
+                pluridLinkNavigation: state.product.filesDefaultPluridLinkNavigation,
+                searchValue: '',
+                history: [
+                    planeDirectory,
+                ],
+                placeInHistory: 0,
             },
         },
     });

@@ -130,6 +130,11 @@ const Files: React.FC<FilesProperties> = (
 
     const {
         directory,
+        // history,
+        // placeInHistory,
+        // pluridLinkNavigation,
+        // searchValue,
+        // showAs,
     } = planeData.data;
     // #endregion properties
 

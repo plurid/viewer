@@ -33,6 +33,9 @@ const initialState: Types.State = {
     filesFavorites: [],
     filesRecents: [],
     filesShowDirectAccess: true,
+    filesDefaultOpenDirectory: '',
+    filesDefaultShowAs: 'LIST',
+    filesDefaultPluridLinkNavigation: true,
 };
 // #endregion module
 
