@@ -118,6 +118,20 @@ const Video: React.FC<VideoProperties> = (
         >
             <FileTopBar
                 filepath={src}
+                settingsRender={(
+                    <div>
+                        <div>
+                            Convert to evid
+                        </div>
+                    </div>
+                )}
+                infoRender={(
+                    <div>
+                        <div>
+                            size
+                        </div>
+                    </div>
+                )}
             />
 
             <EnhancedVideo

@@ -146,6 +146,20 @@ const Text: React.FC<TextProperties> = (
         <StyledText>
             <FileTopBar
                 filepath={file}
+                settingsRender={(
+                    <div>
+                        <div>
+                            Convert to pluridoc
+                        </div>
+                    </div>
+                )}
+                infoRender={(
+                    <div>
+                        <div>
+                            size
+                        </div>
+                    </div>
+                )}
             />
 
             {textRender}

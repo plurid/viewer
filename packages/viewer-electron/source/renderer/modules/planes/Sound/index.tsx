@@ -108,6 +108,20 @@ const Sound: React.FC<SoundProperties> = (
         <StyledSound>
             <FileTopBar
                 filepath={src}
+                settingsRender={(
+                    <div>
+                        <div>
+                            Convert to eaud
+                        </div>
+                    </div>
+                )}
+                infoRender={(
+                    <div>
+                        <div>
+                            size
+                        </div>
+                    </div>
+                )}
             />
         </StyledSound>
     );

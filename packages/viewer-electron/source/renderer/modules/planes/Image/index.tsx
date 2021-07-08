@@ -115,6 +115,20 @@ const Image: React.FC<ImageProperties> = (
         >
             <FileTopBar
                 filepath={src}
+                settingsRender={(
+                    <div>
+                        <div>
+                            Convert to eimg
+                        </div>
+                    </div>
+                )}
+                infoRender={(
+                    <div>
+                        <div>
+                            size
+                        </div>
+                    </div>
+                )}
             />
 
             <EnhancedImage
