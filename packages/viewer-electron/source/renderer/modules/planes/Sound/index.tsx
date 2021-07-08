@@ -21,6 +21,8 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import FileTopBar from '~renderer-components/FileTopBar';
+
     import {
         getPlaneByID,
     } from '~renderer-services/logic/data';
@@ -96,13 +98,17 @@ const Sound: React.FC<SoundProperties> = (
     if (!planeData) {
         return (<></>);
     }
+
+    const src = planeData.data.source;
     // #endregion properties
 
 
     // #region render
     return (
         <StyledSound>
-
+            <FileTopBar
+                filepath={src}
+            />
         </StyledSound>
     );
     // #endregion render

@@ -23,6 +23,8 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import FileTopBar from '~renderer-components/FileTopBar';
+
     import {
         getPlaneByID,
     } from '~renderer-services/logic/data';
@@ -108,18 +110,17 @@ const Image: React.FC<ImageProperties> = (
 
     // #region render
     return (
-        <StyledImage>
-            <div
-                style={{
-                    width: 900,
-                    margin: '150px auto',
-                }}
-            >
-                <EnhancedImage
-                    src={src}
-                    theme={stateGeneralTheme.name as any}
-                />
-            </div>
+        <StyledImage
+            theme={stateGeneralTheme}
+        >
+            <FileTopBar
+                filepath={src}
+            />
+
+            <EnhancedImage
+                src={src}
+                theme={stateGeneralTheme.name as any}
+            />
         </StyledImage>
     );
     // #endregion render

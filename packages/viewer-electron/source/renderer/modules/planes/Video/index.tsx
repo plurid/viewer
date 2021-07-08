@@ -23,6 +23,8 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import FileTopBar from '~renderer-components/FileTopBar';
+
     import {
         getPlaneByID,
     } from '~renderer-services/logic/data';
@@ -114,6 +116,10 @@ const Video: React.FC<VideoProperties> = (
         <StyledVideo
             theme={stateGeneralTheme}
         >
+            <FileTopBar
+                filepath={src}
+            />
+
             <EnhancedVideo
                 type={type}
                 src={src}

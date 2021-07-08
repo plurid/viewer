@@ -16,5 +16,10 @@ export interface IStyledVideo {
 }
 
 export const StyledVideo = styled.div<IStyledVideo>`
+    font-family: ${
+        ({
+            theme,
+        }: IStyledVideo) => theme.fontFamilySansSerif
+    };
 `;
 // #region module

@@ -21,6 +21,8 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import FileTopBar from '~renderer-components/FileTopBar';
+
     import {
         getPlaneByID,
     } from '~renderer-services/logic/data';
@@ -101,13 +103,17 @@ const Unknown: React.FC<UnknownProperties> = (
     if (!planeData) {
         return (<></>);
     }
+
+    const src = planeData.data.source;
     // #endregion properties
 
 
     // #region render
     return (
         <StyledUnknown>
-
+            <FileTopBar
+                filepath={src}
+            />
         </StyledUnknown>
     );
     // #endregion render

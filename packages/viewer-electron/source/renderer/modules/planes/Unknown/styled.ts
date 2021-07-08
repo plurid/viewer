@@ -16,5 +16,10 @@ export interface IStyledUnknown {
 }
 
 export const StyledUnknown = styled.div<IStyledUnknown>`
+    font-family: ${
+        ({
+            theme,
+        }: IStyledUnknown) => theme.fontFamilySansSerif
+    };
 `;
 // #region module

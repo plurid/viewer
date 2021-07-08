@@ -21,6 +21,8 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import FileTopBar from '~renderer-components/FileTopBar';
+
     import Djvu from '~renderer-components/Texts/Djvu';
     import Epub from '~renderer-components/Texts/Epub';
     import PDF from '~renderer-components/Texts/PDF';
@@ -112,37 +114,43 @@ const Text: React.FC<TextProperties> = (
 
 
     // #region render
+    let textRender = (<></>);
     switch (type) {
         case '.djvu':
-            return (
-                <StyledText>
-                    <Djvu
-                        file={file}
-                        theme={stateGeneralTheme}
-                    />
-                </StyledText>
+            textRender = (
+                <Djvu
+                    file={file}
+                    theme={stateGeneralTheme}
+                />
             );
+            break;
         case '.epub':
-            return (
-                <StyledText>
-                    <Epub
-                        file={file}
-                        theme={stateGeneralTheme}
-                    />
-                </StyledText>
+            textRender = (
+                <Epub
+                    file={file}
+                    theme={stateGeneralTheme}
+                />
             );
+            break;
         case '.pdf':
-            return (
-                <StyledText>
-                    <PDF
-                        file={file}
-                        theme={stateGeneralTheme}
-                    />
-                </StyledText>
+            textRender = (
+                <PDF
+                    file={file}
+                    theme={stateGeneralTheme}
+                />
             );
-        default:
-            return (<></>);
+            break;
     }
+
+    return (
+        <StyledText>
+            <FileTopBar
+                filepath={file}
+            />
+
+            {textRender}
+        </StyledText>
+    );
     // #endregion render
 }
 

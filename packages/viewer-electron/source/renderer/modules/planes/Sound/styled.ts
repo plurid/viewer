@@ -16,5 +16,10 @@ export interface IStyledSound {
 }
 
 export const StyledSound = styled.div<IStyledSound>`
+    font-family: ${
+        ({
+            theme,
+        }: IStyledSound) => theme.fontFamilySansSerif
+    };
 `;
 // #region module

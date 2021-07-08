@@ -16,5 +16,10 @@ export interface IStyledImage {
 }
 
 export const StyledImage = styled.div<IStyledImage>`
+    font-family: ${
+        ({
+            theme,
+        }: IStyledImage) => theme.fontFamilySansSerif
+    };
 `;
 // #region module
