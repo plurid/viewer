@@ -23,6 +23,7 @@
 export const addPlane = (
     state: AppState,
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
+    directory?: string,
 ) => {
     const dispatchProductAddPlane: typeof actions.product.addPlane = (
         payload,
@@ -31,7 +32,9 @@ export const addPlane = (
     );
 
     const defaultFileSystemPath = os.homedir();
-    const planeDirectory = state.product.filesDefaultOpenDirectory || defaultFileSystemPath;
+    const planeDirectory = directory
+        || state.product.filesDefaultOpenDirectory
+        || defaultFileSystemPath;
 
 
     dispatchProductAddPlane({

@@ -138,6 +138,72 @@ const StyledPluridFormbutton = styled(PluridFormbutton)`
     padding: 0;
     margin-bottom: 1.5rem;
 `;
+
+
+
+
+export interface IStyledRoundButton {
+    theme: Theme;
+    active?: boolean;
+    disabled?: boolean;
+}
+
+export const StyledRoundButton = styled.div<IStyledRoundButton>`
+    height: 36px;
+    width: 36px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+
+    background-color: ${
+        ({
+            theme,
+            active,
+        }: IStyledRoundButton) => {
+            if (active) {
+                return theme.backgroundColorSecondary;
+            }
+
+            return 'initial';
+        }
+    };
+
+    cursor: ${
+        ({
+            disabled,
+        }: IStyledRoundButton) => {
+            if (disabled) {
+                return 'default';
+            }
+
+            return 'pointer';
+        }
+    };
+    pointer-events: ${
+        ({
+            disabled,
+        }: IStyledRoundButton) => {
+            if (disabled) {
+                return 'none';
+            }
+
+            return 'initial';
+        }
+    };
+    opacity: ${
+        ({
+            disabled,
+        }: IStyledRoundButton) => {
+            if (disabled) {
+                return '0.3';
+            }
+
+            return '1';
+        }
+    };
+`;
 // #endregion module
 
 

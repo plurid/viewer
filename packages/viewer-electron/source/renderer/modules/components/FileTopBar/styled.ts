@@ -40,7 +40,8 @@ export interface IStyledDetail {
 
 export const StyledDetail = styled.div<IStyledDetail>`
     position: absolute;
-    top: 70px;
+    top: 60px;
+    right: 20px;
     width: 300px;
     display: grid;
     grid-template-columns: 1fr;

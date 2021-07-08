@@ -28,6 +28,14 @@
 
 
     // #region external
+    import {
+        StyledRoundButton,
+    } from '~renderer-services/styled';
+
+    import {
+        addPlane,
+    } from '~renderer-services/logic/dispatches';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -54,11 +62,13 @@ export interface FileTopBarOwnProperties {
 }
 
 export interface FileTopBarStateProperties {
+    state: AppState;
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
 }
 
 export interface FileTopBarDispatchProperties {
+    dispatch: ThunkDispatch<{}, {}, AnyAction>;
 }
 
 export type FileTopBarProperties =
@@ -79,12 +89,18 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
         // #endregion own
 
         // #region state
+        state,
         stateGeneralTheme,
         // stateInteractionTheme,
         // #endregion state
+
+        // #region dispatch
+        dispatch,
+        // #endregion dispatch
     } = properties;
 
     const filename = path.basename(filepath);
+    const directory = path.dirname(filepath);
 
     const buttonCount = 1 + (settingsRender ? 1 : 0) + (infoRender ? 1 : 0);
     // #endregion properties
@@ -130,24 +146,41 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
             </StyledFilename>
 
             {settingsRender && (
-                <PluridIconSettings
+                <StyledRoundButton
                     theme={stateGeneralTheme}
-                    title="Settings"
-                    atClick={() => toggleDetail('SETTINGS')}
-                />
+                    active={showDetail === 'SETTINGS'}
+                    onClick={() => toggleDetail('SETTINGS')}
+                >
+                    <PluridIconSettings
+                        theme={stateGeneralTheme}
+                        title="Settings"
+                    />
+                </StyledRoundButton>
             )}
 
             {infoRender && (
-                <PluridIconInfo
+                <StyledRoundButton
                     theme={stateGeneralTheme}
-                    title="Info"
-                    atClick={() => toggleDetail('INFO')}
-                />
+                    active={showDetail === 'INFO'}
+                    onClick={() => toggleDetail('INFO')}
+                >
+                    <PluridIconInfo
+                        theme={stateGeneralTheme}
+                        title="Info"
+                    />
+                </StyledRoundButton>
             )}
 
             <PluridIconArrowRight
                 theme={stateGeneralTheme}
                 title="File Location"
+                atClick={() => {
+                    addPlane(
+                        state,
+                        dispatch,
+                        directory,
+                    );
+                }}
             />
 
             {showDetail && (
@@ -176,6 +209,7 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
 const mapStateToProperties = (
     state: AppState,
 ): FileTopBarStateProperties => ({
+    state,
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
 });
@@ -184,6 +218,7 @@ const mapStateToProperties = (
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
 ): FileTopBarDispatchProperties => ({
+    dispatch,
 });
 
 
