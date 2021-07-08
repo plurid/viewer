@@ -197,6 +197,7 @@
         "@plurid/plurid-themes": "^0.0.0-0",
         "@plurid/plurid-ui-components-react": "^0.0.0-2",
         "@plurid/plurid-ui-state-react": "^0.0.0-0",
+        "chokidar": "^3.5.2",
         "cross-fetch": "^3.1.4",
         "draft-js": "^0.11.7",
         "electron-context-menu": "^3.1.1",
