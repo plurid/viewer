@@ -24,13 +24,4 @@ export const StyledDirectAccessNotFound = styled.div`
     place-content: center;
     height: 100%;
 `;
-
-
-export const StyledDirectAccessList = styled.div`
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-gap: 1rem;
-    padding: 1rem;
-    font-size: 0.9rem;
-`;
 // #region module

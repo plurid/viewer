@@ -17,9 +17,9 @@
     // #region internal
     import {
         StyledDirectAccess,
-        StyledDirectAccessNotFound,
-        StyledDirectAccessList,
     } from './styled';
+
+    import AccessList from './components/AccessList';
     // #endregion internal
 // #region imports
 
@@ -32,9 +32,11 @@ export interface DirectAccessProperties {
         theme: Theme;
         favorites: string[];
         recents: string[];
+        viewDirectory: string;
         // #endregion values
 
         // #region methods
+        setViewDirectory: (directory: string) => void;
         // #endregion methods
     // #endregion required
 }
@@ -49,9 +51,11 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
             theme,
             favorites,
             recents,
+            viewDirectory,
             // #endregion values
 
             // #region methods
+            setViewDirectory,
             // #endregion methods
         // #endregion required
     } = properties;
@@ -63,39 +67,37 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
         <StyledDirectAccess
             theme={theme}
         >
-            <div>
-                <div>
-                    Favorites
-                </div>
+            <AccessList
+                theme={theme}
+                title="Favorites"
+                items={favorites.map(directory => {
+                    const name = path.basename(directory);
 
-                {favorites.length === 0 && (
-                    <StyledDirectAccessNotFound>
-                        no favorites
-                    </StyledDirectAccessNotFound>
-                )}
+                    return {
+                        name,
+                        directory,
+                    };
+                })}
+                viewDirectory={viewDirectory}
 
-                {favorites.length > 0 && (
-                    <StyledDirectAccessList>
-                        {favorites.map(favorite => {
-                            const favoriteName = path.basename(favorite);
+                setViewDirectory={setViewDirectory}
+            />
 
-                            return (
-                                <div
-                                    key={favorite}
-                                >
-                                    {favoriteName}
-                                </div>
-                            );
-                        })}
-                    </StyledDirectAccessList>
-                )}
-            </div>
+            <AccessList
+                theme={theme}
+                title="Recent"
+                items={recents.map(directory => {
+                    const name = path.basename(directory);
 
-            <div>
-                <div>
-                    Recent
-                </div>
-            </div>
+                    return {
+                        name,
+                        directory,
+                    };
+                })}
+                viewDirectory={viewDirectory}
+
+                setViewDirectory={setViewDirectory}
+            />
         </StyledDirectAccess>
     );
     // #endregion render

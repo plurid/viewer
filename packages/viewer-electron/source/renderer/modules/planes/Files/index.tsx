@@ -432,6 +432,9 @@ const Files: React.FC<FilesProperties> = (
                         theme={stateGeneralTheme}
                         favorites={stateFilesFavorites}
                         recents={stateFilesRecents}
+                        viewDirectory={viewDirectory}
+
+                        setViewDirectory={setViewDirectory}
                     />
                 )}
 
