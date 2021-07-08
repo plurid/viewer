@@ -52,6 +52,7 @@ const initialState: Types.State = {
         ? defaultMacOSFavorites
         : [],
     filesRecents: [],
+    filesRecentsLength: 20,
     filesShowDirectAccess: true,
     filesShowDirectAccessFavorites: true,
     filesShowDirectAccessRecent: true,

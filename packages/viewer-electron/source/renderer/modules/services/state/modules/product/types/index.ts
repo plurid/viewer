@@ -102,6 +102,7 @@ export interface State {
     activeSpace: string;
     filesFavorites: string[];
     filesRecents: string[];
+    filesRecentsLength: number;
     filesShowDirectAccess: boolean;
     filesShowDirectAccessFavorites: boolean;
     filesShowDirectAccessRecent: boolean;
