@@ -957,6 +957,11 @@
   resolved "https://npm.plurid.cloud/@types%2fnode/-/node-14.17.4.tgz#218712242446fc868d0e007af29a4408c7765bc0"
   integrity sha512-8kQ3+wKGRNN0ghtEn7EGps/B8CzuBz1nXZEIGGLP2GnwbqYn4dbTs7k+VKLTq1HvZLRCIDtN3Snx1Ege8B7L5A==
 
+"@types/node@^16.0.1":
+  version "16.0.1"
+  resolved "https://npm.plurid.cloud/@types%2fnode/-/node-16.0.1.tgz#70cedfda26af7a2ca073fdcc9beb2fff4aa693f8"
+  integrity sha512-hBOx4SUlEPKwRi6PrXuTGw1z6lz0fjsibcWCM378YxsSu/6+C30L6CR49zIBKHiwNWCYIcOLjg4OHKZaFeLAug==
+
 "@types/pdfjs-dist@*", "@types/pdfjs-dist@^2.7.3":
   version "2.7.3"
   resolved "https://npm.plurid.cloud/@types%2fpdfjs-dist/-/pdfjs-dist-2.7.3.tgz#37a2bb1e5046bb423f78df131e8e1ae18372de8e"
