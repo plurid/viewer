@@ -17,6 +17,8 @@ const getActiveSpace = (state: AppState) => state.product.activeSpace;
 const getFilesFavorites = (state: AppState) => state.product.filesFavorites;
 const getFilesRecents = (state: AppState) => state.product.filesRecents;
 const getFilesShowDirectAccess = (state: AppState) => state.product.filesShowDirectAccess;
+const getFilesShowDirectAccessFavorites = (state: AppState) => state.product.filesShowDirectAccessFavorites;
+const getFilesShowDirectAccessRecent = (state: AppState) => state.product.filesShowDirectAccessRecent;
 const getFilesDefaultOpenDirectory = (state: AppState) => state.product.filesDefaultOpenDirectory;
 const getFilesDefaultShowAs = (state: AppState) => state.product.filesDefaultShowAs;
 const getFilesDefaultPluridLinkNavigation = (state: AppState) => state.product.filesDefaultPluridLinkNavigation;
@@ -32,6 +34,8 @@ const selectors = {
     getFilesFavorites,
     getFilesRecents,
     getFilesShowDirectAccess,
+    getFilesShowDirectAccessFavorites,
+    getFilesShowDirectAccessRecent,
     getFilesDefaultOpenDirectory,
     getFilesDefaultShowAs,
     getFilesDefaultPluridLinkNavigation,

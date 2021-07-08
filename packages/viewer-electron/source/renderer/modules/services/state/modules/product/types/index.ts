@@ -103,6 +103,8 @@ export interface State {
     filesFavorites: string[];
     filesRecents: string[];
     filesShowDirectAccess: boolean;
+    filesShowDirectAccessFavorites: boolean;
+    filesShowDirectAccessRecent: boolean;
     filesDefaultOpenDirectory: string;
     filesDefaultShowAs: string;
     filesDefaultPluridLinkNavigation: boolean;

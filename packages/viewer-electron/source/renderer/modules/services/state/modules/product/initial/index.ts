@@ -53,6 +53,8 @@ const initialState: Types.State = {
         : [],
     filesRecents: [],
     filesShowDirectAccess: true,
+    filesShowDirectAccessFavorites: true,
+    filesShowDirectAccessRecent: true,
     filesDefaultOpenDirectory: isMac
         ? os.homedir() + '/Downloads'
         : '',
