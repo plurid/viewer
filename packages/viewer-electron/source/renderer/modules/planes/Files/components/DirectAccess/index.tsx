@@ -70,6 +70,24 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
     // #endregion properties
 
 
+    // #region handlers
+    const generateAccessListItems = (
+        list: string[],
+    ) => {
+        const accessList = list.map(directory => {
+            const name = path.basename(directory);
+
+            return {
+                name,
+                directory,
+            };
+        });
+
+        return accessList;
+    }
+    // #endregion handlers
+
+
     // #region render
     return (
         <StyledDirectAccess
@@ -78,14 +96,7 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
             <AccessList
                 theme={theme}
                 title="Favorites"
-                items={favorites.map(directory => {
-                    const name = path.basename(directory);
-
-                    return {
-                        name,
-                        directory,
-                    };
-                })}
+                items={generateAccessListItems(favorites)}
                 viewDirectory={viewDirectory}
                 show={showFavorites}
 
@@ -93,18 +104,10 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
                 toggleShow={() => toggleFavorites()}
             />
 
-
             <AccessList
                 theme={theme}
                 title="Recent"
-                items={recents.map(directory => {
-                    const name = path.basename(directory);
-
-                    return {
-                        name,
-                        directory,
-                    };
-                })}
+                items={generateAccessListItems(recents)}
                 viewDirectory={viewDirectory}
                 show={showRecent}
 
