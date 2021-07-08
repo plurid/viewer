@@ -19,7 +19,7 @@ export const StyledFileTopBar = styled.div<IStyledFileTopBar>`
     height: 50px;
     display: grid;
     align-items: center;
-    grid-template-columns: 1fr 16px 16px;
+    grid-template-columns: 1fr 16px 16px 16px;
     grid-gap: 1rem;
     padding: 0 1rem;
 `;

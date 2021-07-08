@@ -18,6 +18,7 @@
 
     import {
         PluridIconCopy,
+        PluridIconSettings,
         PluridIconInfo,
         PluridIconArrowRight,
     } from '@plurid/plurid-icons-react';
@@ -96,6 +97,11 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
                     {filename}
                 </div>
             </StyledFilename>
+
+            <PluridIconSettings
+                theme={stateGeneralTheme}
+                title="Actions"
+            />
 
             <PluridIconInfo
                 theme={stateGeneralTheme}
