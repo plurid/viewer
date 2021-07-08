@@ -17,12 +17,6 @@ export interface IStyledFilesView {
 
 export const StyledFilesView = styled.div<IStyledFilesView>`
     position: relative;
-
-    background-color: ${
-        ({
-            theme,
-        }: IStyledFilesView) => theme.backgroundColorSecondary
-    };
 `;
 
 

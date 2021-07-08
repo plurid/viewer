@@ -32,22 +32,36 @@ export const StyledFiles = styled.div<IStyledFiles>`
 `;
 
 
-export interface IStyledFilesView {
+export interface IStyledFilesZone {
     splitView: boolean;
 }
 
-export const StyledFilesView = styled.div<IStyledFilesView>`
+export const StyledFilesZone = styled.div<IStyledFilesZone>`
     display: grid;
     grid-template-columns: ${
         ({
             splitView,
-        }: IStyledFilesView) => {
+        }: IStyledFilesZone) => {
             if (splitView) {
                 return '1fr 5fr';
             }
 
             return '1fr';
         }
+    };
+`;
+
+
+export interface IStyledFilesContainer {
+    theme: Theme;
+}
+
+export const StyledFilesContainer = styled.div<IStyledFilesContainer>`
+    height: 500px;
+    background-color: ${
+        ({
+            theme,
+        }: IStyledFilesContainer) => theme.backgroundColorSecondary
     };
 `;
 // #region module

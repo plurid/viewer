@@ -56,7 +56,8 @@
     // #region internal
     import {
         StyledFiles,
-        StyledFilesView,
+        StyledFilesZone,
+        StyledFilesContainer,
     } from './styled';
 
     import FilesTopBar from './components/FilesTopBar';
@@ -158,6 +159,11 @@ const Files: React.FC<FilesProperties> = (
 
 
     // #region state
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
+
     const [
         files,
         setFiles,
@@ -373,9 +379,11 @@ const Files: React.FC<FilesProperties> = (
 
                 setViewError('');
                 setFiles(ignoreHiddenFiles(files));
+                setLoading(false);
             } catch (error) {
                 setFiles([]);
                 setViewError('NOT_FOUND');
+                setLoading(false);
             }
         }
 
@@ -445,7 +453,7 @@ const Files: React.FC<FilesProperties> = (
                 historyStepNext={historyStepNext}
             />
 
-            <StyledFilesView
+            <StyledFilesZone
                 splitView={showDirectAccess}
             >
                 {showDirectAccess && (
@@ -463,19 +471,25 @@ const Files: React.FC<FilesProperties> = (
                     />
                 )}
 
-                <FilesView
+                <StyledFilesContainer
                     theme={stateGeneralTheme}
-                    files={files}
-                    viewDirectory={viewDirectory}
-                    viewShowAs={viewShowAs}
-                    viewError={viewError}
-                    pluridLinkNavigation={pluridLinkNavigation}
+                >
+                    {!loading && (
+                        <FilesView
+                            theme={stateGeneralTheme}
+                            files={files}
+                            viewDirectory={viewDirectory}
+                            viewShowAs={viewShowAs}
+                            viewError={viewError}
+                            pluridLinkNavigation={pluridLinkNavigation}
 
-                    actionClick={actionClick}
-                    actionCurrent={actionCurrent}
-                    upLevel={upLevel}
-                />
-            </StyledFilesView>
+                            actionClick={actionClick}
+                            actionCurrent={actionCurrent}
+                            upLevel={upLevel}
+                        />
+                    )}
+                </StyledFilesContainer>
+            </StyledFilesZone>
         </StyledFiles>
     );
     // #endregion render
