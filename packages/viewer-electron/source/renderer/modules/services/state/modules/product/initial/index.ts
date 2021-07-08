@@ -1,4 +1,8 @@
 // #region imports
+    // #region imports
+    import os from 'os';
+    // #endregion imports
+
     // #region external
     import * as Types from '../types';
     // #endregion external
@@ -7,6 +11,18 @@
 
 
 // #region module
+const isMac = process.platform === 'darwin';
+
+const defaultMacOSFavorites = [
+    os.homedir() + '/Downloads',
+    os.homedir() + '/Documents',
+    os.homedir() + '/Movies',
+    os.homedir() + '/Pictures',
+    os.homedir() + '/Applications',
+    os.homedir(),
+];
+
+
 const initialState: Types.State = {
     ui: {
         toolbars: {
@@ -30,10 +46,14 @@ const initialState: Types.State = {
         },
     ],
     activeSpace: 'initial',
-    filesFavorites: [],
+    filesFavorites: isMac
+        ? defaultMacOSFavorites
+        : [],
     filesRecents: [],
     filesShowDirectAccess: true,
-    filesDefaultOpenDirectory: '',
+    filesDefaultOpenDirectory: isMac
+        ? os.homedir() + '/Downloads'
+        : '',
     filesDefaultShowAs: 'LIST',
     filesDefaultPluridLinkNavigation: true,
 };
