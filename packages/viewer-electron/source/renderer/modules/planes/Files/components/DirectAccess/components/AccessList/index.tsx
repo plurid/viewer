@@ -16,6 +16,7 @@
 
 
     // #region external
+    import DirectoryIcon from '../../../DirectoryIcon';
     // #endregion external
 
 
@@ -25,6 +26,7 @@
         StyledAccessListHead,
         StyledAccessListBody,
         StyledAccessListItem,
+        StyledAccessListIcon,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -127,7 +129,15 @@ const AccessList: React.FC<AccessListProperties> = (
                                 active={viewDirectory === directory}
                                 onClick={() => setViewDirectory(directory)}
                             >
-                                {name}
+                                <StyledAccessListIcon>
+                                    <DirectoryIcon
+                                        theme={theme}
+                                    />
+                                </StyledAccessListIcon>
+
+                                <div>
+                                    {name}
+                                </div>
                             </StyledAccessListItem>
                         );
                     })}

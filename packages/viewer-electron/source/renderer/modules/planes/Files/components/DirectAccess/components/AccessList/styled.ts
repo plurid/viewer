@@ -24,7 +24,7 @@ export const StyledAccessListHead = styled.div`
     align-items: center;
     justify-content: space-between;
     font-size: 0.8rem;
-    padding: 0.7rem;
+    padding: 0.4rem 1.1rem;
     user-select: none;
     cursor: pointer;
 `;
@@ -43,11 +43,14 @@ export interface IStyledAccessListItem {
 }
 
 export const StyledAccessListItem = styled.div<IStyledAccessListItem>`
+    display: flex;
+    align-items: center;
     cursor: pointer;
     user-select: none;
     border-radius: 15px;
-    padding: 0.3rem 0.8rem;
-    margin: 0.3rem;
+    padding: 0.4rem 0.8rem;
+    margin: 0.3rem 1.1rem;
+    margin-top: 0;
 
     background-color: ${
         ({
@@ -61,5 +64,15 @@ export const StyledAccessListItem = styled.div<IStyledAccessListItem>`
             return 'initial';
         }
     };
+`;
+
+
+export const StyledAccessListIcon = styled.div`
+    margin-right: 0.5rem;
+
+    svg {
+        height: 20px;
+        width: 20px;
+    }
 `;
 // #region module
