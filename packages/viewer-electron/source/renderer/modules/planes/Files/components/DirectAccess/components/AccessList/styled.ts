@@ -33,8 +33,6 @@ export const StyledAccessListHead = styled.div`
 export const StyledAccessListBody = styled.div`
     display: grid;
     grid-template-columns: 1fr;
-    grid-gap: 1rem;
-    padding: 1rem;
     font-size: 0.9rem;
 `;
 
@@ -47,5 +45,21 @@ export interface IStyledAccessListItem {
 export const StyledAccessListItem = styled.div<IStyledAccessListItem>`
     cursor: pointer;
     user-select: none;
+    border-radius: 15px;
+    padding: 0.3rem 0.8rem;
+    margin: 0.3rem;
+
+    background-color: ${
+        ({
+            theme,
+            active,
+        }: IStyledAccessListItem) => {
+            if (active) {
+                return theme.backgroundColorSecondary;
+            }
+
+            return 'initial';
+        }
+    };
 `;
 // #region module

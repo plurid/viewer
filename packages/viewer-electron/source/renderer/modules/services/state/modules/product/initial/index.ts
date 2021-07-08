@@ -14,11 +14,13 @@
 const isMac = process.platform === 'darwin';
 
 const defaultMacOSFavorites = [
+    os.homedir() + '/Desktop',
     os.homedir() + '/Downloads',
     os.homedir() + '/Documents',
     os.homedir() + '/Movies',
+    os.homedir() + '/Music',
     os.homedir() + '/Pictures',
-    os.homedir() + '/Applications',
+    '/Applications',
     os.homedir(),
 ];
 

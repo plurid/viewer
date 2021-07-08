@@ -10,6 +10,7 @@
 
     import {
         PluridIconArrowDown,
+        PluridIconArrowRight,
     } from '@plurid/plurid-icons-react';
     // #endregion libraries
 
@@ -63,6 +64,7 @@ const AccessList: React.FC<AccessListProperties> = (
             // #endregion values
 
             // #region methods
+            setViewDirectory,
             // #endregion methods
         // #endregion required
     } = properties;
@@ -74,6 +76,11 @@ const AccessList: React.FC<AccessListProperties> = (
         show,
         setShow,
     ] = useState(false);
+
+    const [
+        showArrow,
+        setShowArrow,
+    ] = useState(false);
     // #endregion state
 
 
@@ -84,14 +91,26 @@ const AccessList: React.FC<AccessListProperties> = (
         >
             <StyledAccessListHead
                 onClick={() => setShow(!show)}
+                onMouseEnter={() => setShowArrow(true)}
+                onMouseLeave={() => setShowArrow(false)}
             >
                 <div>
                     {title}
                 </div>
 
-                <PluridIconArrowDown
-                    size="small"
-                />
+                {showArrow && (
+                    <>
+                        {show ? (
+                            <PluridIconArrowDown
+                                size="small"
+                            />
+                        ) : (
+                            <PluridIconArrowRight
+                                size="small"
+                            />
+                        )}
+                    </>
+                )}
             </StyledAccessListHead>
 
             {show && (
@@ -105,7 +124,9 @@ const AccessList: React.FC<AccessListProperties> = (
                         return (
                             <StyledAccessListItem
                                 key={title + directory}
-                                active={viewDirectory.startsWith(directory)}
+                                theme={theme}
+                                active={viewDirectory === directory}
+                                onClick={() => setViewDirectory(directory)}
                             >
                                 {name}
                             </StyledAccessListItem>
