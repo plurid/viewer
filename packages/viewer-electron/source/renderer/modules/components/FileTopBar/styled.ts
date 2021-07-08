@@ -19,8 +19,10 @@ export interface IStyledFileTopBar {
 export const StyledFileTopBar = styled.div<IStyledFileTopBar>`
     height: 50px;
     display: grid;
+    grid-template-columns: 1fr repeat(${({buttonCount}: IStyledFileTopBar) => buttonCount}, 32px);
     align-items: center;
-    grid-template-columns: 1fr repeat(${({buttonCount}: IStyledFileTopBar) => buttonCount}, 16px);
+    justify-items: center;
+    font-size: 0.8rem;
     grid-gap: 1rem;
     padding: 0 1rem;
 `;
