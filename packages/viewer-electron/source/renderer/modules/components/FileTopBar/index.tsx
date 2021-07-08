@@ -2,7 +2,9 @@
     // #region libraries
     import path from 'path';
 
-    import React from 'react';
+    import React, {
+        useState,
+    } from 'react';
 
     import { AnyAction } from 'redux';
     import { connect } from 'react-redux';
@@ -37,6 +39,7 @@
     import {
         StyledFileTopBar,
         StyledFilename,
+        StyledDetail,
     } from './styled';
     // #endregion internal
 // #endregion imports
@@ -46,6 +49,8 @@
 // #region module
 export interface FileTopBarOwnProperties {
     filepath: string;
+    settingsRender?: JSX.Element;
+    infoRender?: JSX.Element;
 }
 
 export interface FileTopBarStateProperties {
@@ -69,6 +74,8 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
     const {
         // #region own
         filepath,
+        settingsRender,
+        infoRender,
         // #endregion own
 
         // #region state
@@ -78,13 +85,37 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
     } = properties;
 
     const filename = path.basename(filepath);
+
+    const buttonCount = 1 + (settingsRender ? 1 : 0) + (infoRender ? 1 : 0);
     // #endregion properties
+
+
+    // #region state
+    const [
+        showDetail,
+        setShowDetail,
+    ] = useState('');
+    // #endregion state
+
+
+    // #region handlers
+    const toggleDetail = (
+        name: string,
+    ) => {
+        if (name !== showDetail) {
+            setShowDetail(name);
+        } else {
+            setShowDetail('');
+        }
+    }
+    // #endregion handlers
 
 
     // #region render
     return (
         <StyledFileTopBar
             theme={stateGeneralTheme}
+            buttonCount={buttonCount}
         >
             <StyledFilename>
                 <PluridIconCopy
@@ -98,20 +129,44 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
                 </div>
             </StyledFilename>
 
-            <PluridIconSettings
-                theme={stateGeneralTheme}
-                title="Actions"
-            />
+            {settingsRender && (
+                <PluridIconSettings
+                    theme={stateGeneralTheme}
+                    title="Settings"
+                    atClick={() => toggleDetail('SETTINGS')}
+                />
+            )}
 
-            <PluridIconInfo
-                theme={stateGeneralTheme}
-                title="Info"
-            />
+            {infoRender && (
+                <PluridIconInfo
+                    theme={stateGeneralTheme}
+                    title="Info"
+                    atClick={() => toggleDetail('INFO')}
+                />
+            )}
 
             <PluridIconArrowRight
                 theme={stateGeneralTheme}
                 title="File Location"
             />
+
+            {showDetail && (
+                <StyledDetail
+                    theme={stateGeneralTheme}
+                >
+                    {showDetail === 'SETTINGS' && (
+                        <>
+                            {settingsRender}
+                        </>
+                    )}
+
+                    {showDetail === 'INFO' && (
+                        <>
+                            {infoRender}
+                        </>
+                    )}
+                </StyledDetail>
+            )}
         </StyledFileTopBar>
     );
     // #endregion render
