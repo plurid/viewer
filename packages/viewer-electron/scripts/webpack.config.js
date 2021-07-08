@@ -53,6 +53,10 @@ module.exports = [
         module: {
             rules: [
                 {
+                    test: /\.node$/,
+                    loader: 'node-loader',
+                },
+                {
                     test: /\.(png|jpe?g|gif|mov|pdf)$/i,
                     use: [
                         {
