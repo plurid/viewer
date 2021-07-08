@@ -83,11 +83,11 @@ const Actions: React.FC<ActionsProperties> = (
             <StyledTopBarButton
                 theme={theme}
                 active={showActions}
+                onClick={() => setShowActions(active => !active)}
             >
                 <PluridIconMore
                     theme={theme}
                     title="Actions"
-                    atClick={() => setShowActions(active => !active)}
                 />
             </StyledTopBarButton>
 

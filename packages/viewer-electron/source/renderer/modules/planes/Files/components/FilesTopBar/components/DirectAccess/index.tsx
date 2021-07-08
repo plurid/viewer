@@ -21,7 +21,7 @@
 
     // #region internal
     import {
-        StyledFavorites,
+        StyledDirectAccess,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -29,7 +29,7 @@
 
 
 // #region module
-export interface FavoritesProperties {
+export interface DirectAccessProperties {
     // #region required
         // #region values
         theme: Theme;
@@ -42,7 +42,7 @@ export interface FavoritesProperties {
     // #endregion required
 }
 
-const Favorites: React.FC<FavoritesProperties> = (
+const DirectAccess: React.FC<DirectAccessProperties> = (
     properties,
 ) => {
     // #region properties
@@ -63,20 +63,20 @@ const Favorites: React.FC<FavoritesProperties> = (
 
     // #region render
     return (
-        <StyledFavorites
+        <StyledDirectAccess
             theme={theme}
         >
             <StyledTopBarButton
                 theme={theme}
                 active={viewShowDirectAccess}
+                onClick={() => setViewShowDirectAccess(!viewShowDirectAccess)}
             >
                 <PluridIconContents
                     theme={theme}
                     title="Direct Access"
-                    atClick={() => setViewShowDirectAccess(!viewShowDirectAccess)}
                 />
             </StyledTopBarButton>
-        </StyledFavorites>
+        </StyledDirectAccess>
     );
     // #endregion render
 }
@@ -85,5 +85,5 @@ const Favorites: React.FC<FavoritesProperties> = (
 
 
 // #region exports
-export default Favorites;
+export default DirectAccess;
 // #endregion exports

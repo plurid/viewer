@@ -11,10 +11,10 @@
 
 
 // #region module
-export interface IStyledFavorites {
+export interface IStyledDirectAccess {
     theme: Theme;
 }
 
-export const StyledFavorites = styled.div<IStyledFavorites>`
+export const StyledDirectAccess = styled.div<IStyledDirectAccess>`
 `;
 // #region module

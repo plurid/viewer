@@ -28,7 +28,7 @@
 
     import DirectoryPath from '../DirectoryPath';
 
-    import Favorites from './components/Favorites';
+    import DirectAccess from './components/DirectAccess';
     import History from './components/History';
     import ViewModes from './components/ViewModes';
     import Actions from './components/Actions';
@@ -115,7 +115,7 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
         <StyledFilesTopBar
             theme={stateGeneralTheme}
         >
-            <Favorites
+            <DirectAccess
                 theme={stateGeneralTheme}
                 viewShowDirectAccess={viewShowDirectAccess}
                 setViewShowDirectAccess={setViewShowDirectAccess}

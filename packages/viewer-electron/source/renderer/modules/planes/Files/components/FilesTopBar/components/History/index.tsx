@@ -78,26 +78,26 @@ const History: React.FC<HistoryProperties> = (
             <StyledTopBarButton
                 theme={theme}
                 disabled={!hasPreviousHistory}
+                onClick={() => {
+                    historyStepPrevious();
+                }}
             >
                 <PluridIconArrowLeft
                     theme={theme}
                     title="Previous"
-                    atClick={() => {
-                        historyStepPrevious();
-                    }}
                 />
             </StyledTopBarButton>
 
             <StyledTopBarButton
                 theme={theme}
                 disabled={!hasNextHistory}
+                onClick={() => {
+                    historyStepNext();
+                }}
             >
                 <PluridIconArrowRight
                     theme={theme}
                     title="Next"
-                    atClick={() => {
-                        historyStepNext();
-                    }}
                 />
             </StyledTopBarButton>
         </StyledHistory>

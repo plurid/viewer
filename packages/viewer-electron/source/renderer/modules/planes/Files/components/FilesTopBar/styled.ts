@@ -47,6 +47,7 @@ export const StyledTopBarButton = styled.div<IStyledTopBarButton>`
     display: flex;
     align-items: center;
     justify-content: center;
+    user-select: none;
 
     background-color: ${
         ({
@@ -61,6 +62,17 @@ export const StyledTopBarButton = styled.div<IStyledTopBarButton>`
         }
     };
 
+    cursor: ${
+        ({
+            disabled,
+        }: IStyledTopBarButton) => {
+            if (disabled) {
+                return 'default';
+            }
+
+            return 'pointer';
+        }
+    };
     pointer-events: ${
         ({
             disabled,

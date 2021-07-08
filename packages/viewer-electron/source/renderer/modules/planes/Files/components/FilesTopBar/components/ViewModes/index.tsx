@@ -77,44 +77,44 @@ const ViewModes: React.FC<ViewModesProperties> = (
             <StyledTopBarButton
                 theme={theme}
                 active={viewShowAs === 'BLOCKS'}
+                onClick={() => setViewShowAs('BLOCKS')}
             >
                 <PluridIconBlocks
                     theme={theme}
                     title="Show as Blocks"
-                    atClick={() => setViewShowAs('BLOCKS')}
                 />
             </StyledTopBarButton>
 
             <StyledTopBarButton
                 theme={theme}
                 active={viewShowAs === 'LIST'}
+                onClick={() => setViewShowAs('LIST')}
             >
                 <PluridIconList
                     theme={theme}
                     title="Show as List"
-                    atClick={() => setViewShowAs('LIST')}
                 />
             </StyledTopBarButton>
 
             <StyledTopBarButton
                 theme={theme}
                 active={viewShowAs === 'COLUMNS'}
+                onClick={() => setViewShowAs('COLUMNS')}
             >
                 <PluridIconColumns
                     theme={theme}
                     title="Show as Columns"
-                    atClick={() => setViewShowAs('COLUMNS')}
                 />
             </StyledTopBarButton>
 
             <StyledTopBarButton
                 theme={theme}
                 active={viewShowAs === 'GALLERY'}
+                onClick={() => setViewShowAs('GALLERY')}
             >
                 <PluridIconGallery
                     theme={theme}
                     title="Show as Gallery"
-                    atClick={() => setViewShowAs('GALLERY')}
                 />
             </StyledTopBarButton>
 
@@ -125,11 +125,11 @@ const ViewModes: React.FC<ViewModesProperties> = (
                 style={{
                     marginLeft: '1rem',
                 }}
+                onClick={() => setPluridLinkNavigation(!pluridLinkNavigation)}
             >
                 <PluridIconPlurid
                     theme={theme}
                     title="Plurid Link Navigation"
-                    atClick={() => setPluridLinkNavigation(!pluridLinkNavigation)}
                 />
             </StyledTopBarButton>
         </StyledViewModes>
