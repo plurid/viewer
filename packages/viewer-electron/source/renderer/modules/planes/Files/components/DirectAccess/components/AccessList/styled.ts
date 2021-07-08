@@ -49,7 +49,7 @@ export const StyledAccessListItem = styled.div<IStyledAccessListItem>`
     align-items: center;
     cursor: pointer;
     user-select: none;
-    border-radius: 15px;
+    border-radius: 25px;
     padding: 0.4rem 0.8rem;
     margin: 0.3rem 1.1rem;
     margin-top: 0;
