@@ -6,6 +6,8 @@
 
     import path from 'path';
 
+    import chokidar from 'chokidar';
+
     import React, {
         useRef,
         useState,
@@ -423,6 +425,18 @@ const Files: React.FC<FilesProperties> = (
     }, [
         viewDirectory,
     ]);
+
+    useEffect(() => {
+        const watcher = chokidar.watch(viewDirectory);
+
+        watcher.on('all', (event, path, details) => {
+            console.log(event, path, details);
+        });
+
+        return () => {
+            watcher.unwatch(viewDirectory);
+        }
+    }, []);
     // #endregion effects
 
 
