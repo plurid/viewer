@@ -32,7 +32,7 @@ export interface SetLanguageAction {
 
 export const SET_FIELD = 'SET_FIELD';
 export interface SetFieldPayload {
-    field: string;
+    field: keyof State;
     data: any;
 }
 export interface SetFieldAction {

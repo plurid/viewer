@@ -86,6 +86,7 @@ export interface FilesStateProperties {
 export interface FilesDispatchProperties {
     dispatchProductAddPlane: typeof actions.product.addPlane;
     dispatchProductUpdatePlane: typeof actions.product.updatePlane;
+    dispatchProductSetField: typeof actions.product.setField;
 }
 
 export type FilesProperties =
@@ -117,6 +118,7 @@ const Files: React.FC<FilesProperties> = (
         // #region dispatch
         dispatchProductAddPlane,
         dispatchProductUpdatePlane,
+        dispatchProductSetField,
         // #endregion dispatch
     } = properties;
 
@@ -247,14 +249,16 @@ const Files: React.FC<FilesProperties> = (
     }
 
     const toggleDirectAccessFavorites = () => {
-        dispatchUpdate({
-            filesShowDirectAccessFavorites: !stateFilesShowDirectAccessFavorites,
+        dispatchProductSetField({
+            field: 'filesShowDirectAccessFavorites',
+            data: !stateFilesShowDirectAccessFavorites,
         });
     }
 
     const toggleDirectAccessRecent = () => {
-        dispatchUpdate({
-            filesShowDirectAccessRecent: !stateFilesShowDirectAccessRecent,
+        dispatchProductSetField({
+            field: 'filesShowDirectAccessRecent',
+            data: !stateFilesShowDirectAccessRecent,
         });
     }
 
@@ -504,6 +508,11 @@ const mapDispatchToProperties = (
         payload,
     ) => dispatch(
         actions.product.updatePlane(payload),
+    ),
+    dispatchProductSetField: (
+        payload,
+    ) => dispatch(
+        actions.product.setField(payload),
     ),
 });
 

@@ -62,7 +62,7 @@ export const setField = (
         ...state,
     };
 
-    newState[field] = data;
+    (newState as any)[field] = data;
 
     return newState;
 }
