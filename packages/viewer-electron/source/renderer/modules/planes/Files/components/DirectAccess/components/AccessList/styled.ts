@@ -16,6 +16,7 @@ export interface IStyledAccessList {
 }
 
 export const StyledAccessList = styled.div<IStyledAccessList>`
+    margin-bottom: 1rem;
 `;
 
 
@@ -25,6 +26,7 @@ export const StyledAccessListHead = styled.div`
     justify-content: space-between;
     font-size: 0.8rem;
     padding: 0.4rem 1.1rem;
+    margin-bottom: 0.3rem;
     user-select: none;
     cursor: pointer;
 `;
