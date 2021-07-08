@@ -427,14 +427,19 @@ const Files: React.FC<FilesProperties> = (
     ]);
 
     useEffect(() => {
-        const watcher = chokidar.watch(viewDirectory);
+        const watcher = chokidar.watch(
+            viewDirectory,
+            {
+                depth: 0,
+            },
+        );
 
         watcher.on('all', (event, path, details) => {
-            console.log(event, path, details);
+            // console.log(event, path, details);
         });
 
         return () => {
-            watcher.unwatch(viewDirectory);
+            watcher.close();
         }
     }, []);
     // #endregion effects
