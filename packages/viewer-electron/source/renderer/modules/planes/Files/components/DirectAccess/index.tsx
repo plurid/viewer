@@ -33,10 +33,14 @@ export interface DirectAccessProperties {
         favorites: string[];
         recents: string[];
         viewDirectory: string;
+        showFavorites: boolean;
+        showRecent: boolean;
         // #endregion values
 
         // #region methods
         setViewDirectory: (directory: string) => void;
+        toggleFavorites: () => void;
+        toggleRecent: () => void;
         // #endregion methods
     // #endregion required
 }
@@ -52,10 +56,14 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
             favorites,
             recents,
             viewDirectory,
+            showFavorites,
+            showRecent,
             // #endregion values
 
             // #region methods
             setViewDirectory,
+            toggleFavorites,
+            toggleRecent
             // #endregion methods
         // #endregion required
     } = properties;
@@ -79,9 +87,12 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
                     };
                 })}
                 viewDirectory={viewDirectory}
+                show={showFavorites}
 
                 setViewDirectory={setViewDirectory}
+                toggleShow={() => toggleFavorites()}
             />
+
 
             <AccessList
                 theme={theme}
@@ -95,8 +106,10 @@ const DirectAccess: React.FC<DirectAccessProperties> = (
                     };
                 })}
                 viewDirectory={viewDirectory}
+                show={showRecent}
 
                 setViewDirectory={setViewDirectory}
+                toggleShow={() => toggleRecent()}
             />
         </StyledDirectAccess>
     );

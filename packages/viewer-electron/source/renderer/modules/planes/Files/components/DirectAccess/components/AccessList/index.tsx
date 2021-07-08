@@ -42,10 +42,12 @@ export interface AccessListProperties {
             directory: string;
         }[];
         viewDirectory: string;
+        show: boolean;
         // #endregion values
 
         // #region methods
         setViewDirectory: (directory: string) => void;
+        toggleShow: () => void;
         // #endregion methods
     // #endregion required
 }
@@ -61,10 +63,12 @@ const AccessList: React.FC<AccessListProperties> = (
             title,
             items,
             viewDirectory,
+            show,
             // #endregion values
 
             // #region methods
             setViewDirectory,
+            toggleShow,
             // #endregion methods
         // #endregion required
     } = properties;
@@ -72,11 +76,6 @@ const AccessList: React.FC<AccessListProperties> = (
 
 
     // #region state
-    const [
-        show,
-        setShow,
-    ] = useState(false);
-
     const [
         showArrow,
         setShowArrow,
@@ -90,7 +89,7 @@ const AccessList: React.FC<AccessListProperties> = (
             theme={theme}
         >
             <StyledAccessListHead
-                onClick={() => setShow(!show)}
+                onClick={() => toggleShow()}
                 onMouseEnter={() => setShowArrow(true)}
                 onMouseLeave={() => setShowArrow(false)}
             >

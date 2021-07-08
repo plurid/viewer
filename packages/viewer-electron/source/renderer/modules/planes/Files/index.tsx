@@ -79,6 +79,8 @@ export interface FilesStateProperties {
     stateActiveSpaceID: string;
     stateFilesFavorites: string[];
     stateFilesRecents: string[];
+    stateFilesShowDirectAccessFavorites: boolean;
+    stateFilesShowDirectAccessRecent: boolean;
 }
 
 export interface FilesDispatchProperties {
@@ -108,6 +110,8 @@ const Files: React.FC<FilesProperties> = (
         stateActiveSpaceID,
         stateFilesFavorites,
         stateFilesRecents,
+        stateFilesShowDirectAccessFavorites,
+        stateFilesShowDirectAccessRecent,
         // #endregion state
 
         // #region dispatch
@@ -241,6 +245,19 @@ const Files: React.FC<FilesProperties> = (
             pluridLinkNavigation,
         });
     }
+
+    const toggleDirectAccessFavorites = () => {
+        dispatchUpdate({
+            filesShowDirectAccessFavorites: !stateFilesShowDirectAccessFavorites,
+        });
+    }
+
+    const toggleDirectAccessRecent = () => {
+        dispatchUpdate({
+            filesShowDirectAccessRecent: !stateFilesShowDirectAccessRecent,
+        });
+    }
+
 
 
     const historyStepPrevious = () => {
@@ -433,8 +450,12 @@ const Files: React.FC<FilesProperties> = (
                         favorites={stateFilesFavorites}
                         recents={stateFilesRecents}
                         viewDirectory={viewDirectory}
+                        showFavorites={stateFilesShowDirectAccessFavorites}
+                        showRecent={stateFilesShowDirectAccessRecent}
 
                         setViewDirectory={setViewDirectory}
+                        toggleFavorites={toggleDirectAccessFavorites}
+                        toggleRecent={toggleDirectAccessRecent}
                     />
                 )}
 
@@ -466,6 +487,8 @@ const mapStateToProperties = (
     stateActiveSpaceID: selectors.product.getActiveSpace(state),
     stateFilesFavorites: selectors.product.getFilesFavorites(state),
     stateFilesRecents: selectors.product.getFilesRecents(state),
+    stateFilesShowDirectAccessFavorites: selectors.product.getFilesShowDirectAccessFavorites(state),
+    stateFilesShowDirectAccessRecent: selectors.product.getFilesShowDirectAccessRecent(state),
 });
 
 
