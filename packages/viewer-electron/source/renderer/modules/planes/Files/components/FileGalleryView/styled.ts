@@ -11,13 +11,10 @@
 
 
 // #region module
-export interface IStyledFilesGallery {
+export interface IStyledFileGalleryView {
     theme: Theme;
 }
 
-export const StyledFilesGallery = styled.div<IStyledFilesGallery>`
-    height: 500px;
-    width: 700px;
-    overflow-x: scroll;
+export const StyledFileGalleryView = styled.div<IStyledFileGalleryView>`
 `;
 // #region module

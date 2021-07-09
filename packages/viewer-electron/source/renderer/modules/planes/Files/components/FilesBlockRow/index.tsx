@@ -71,6 +71,7 @@ const FilesBlockRow: React.FC<FilesBlockRowProperties> = (
     return (
         <StyledFilesBlockRow
             theme={theme}
+            rowLength={files.length}
         >
             {files.map((file, index) => {
                 return (

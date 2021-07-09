@@ -13,11 +13,12 @@
 // #region module
 export interface IStyledFilesBlockRow {
     theme: Theme;
+    rowLength: number;
 }
 
 export const StyledFilesBlockRow = styled.div<IStyledFilesBlockRow>`
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    grid-template-columns: repeat(${({ rowLength }: IStyledFilesBlockRow) => rowLength}, 1fr);
     height: 120px;
 `;
 // #region module

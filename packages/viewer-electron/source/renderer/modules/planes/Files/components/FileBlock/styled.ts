@@ -22,6 +22,7 @@ export const StyledFileBlock = styled.div<IStyledFileBlock>`
     align-items: center;
     padding: 0.3rem 0.7rem;
     max-width: 150px;
+    min-width: 120px;
     margin: 0 auto;
     word-break: break-all;
     text-align: center;

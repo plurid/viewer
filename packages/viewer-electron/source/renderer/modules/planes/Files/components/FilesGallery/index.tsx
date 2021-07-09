@@ -8,6 +8,9 @@
     import {
         FilesViewContainerProperties,
     } from '../../data';
+
+    import FileGalleryView from '../FileGalleryView';
+    import FilesBlockRow from '../FilesBlockRow';
     // #endregion external
 
 
@@ -58,7 +61,20 @@ const FilesGallery = React.forwardRef<
         <StyledFilesGallery
             theme={theme}
         >
-            FilesGallery
+            <FileGalleryView
+                theme={theme}
+            />
+
+            <FilesBlockRow
+                theme={theme}
+                files={files}
+                viewDirectory={viewDirectory}
+                selectionIndexes={selectionIndexes}
+
+                selectionClick={selectionClick}
+                actionClick={actionClick}
+                setCursorOverIndex={setCursorOverIndex}
+            />
         </StyledFilesGallery>
     );
     // #endregion render
