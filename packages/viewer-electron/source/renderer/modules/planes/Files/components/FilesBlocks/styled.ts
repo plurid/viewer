@@ -16,8 +16,11 @@ export interface IStyledFilesBlocks {
 }
 
 export const StyledFilesBlocks = styled.div<IStyledFilesBlocks>`
-    padding: 1rem;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    height: 500px;
+    overflow: scroll;
+    padding: 1rem;
+    user-select: none;
 `;
 // #region module
