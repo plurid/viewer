@@ -9,7 +9,7 @@
         FilesViewContainerProperties,
     } from '../../data';
 
-    import FileBlock from '../FileBlock';
+    import FileBlockRow from '../FileBlockRow';
     // #endregion external
 
 
@@ -52,6 +52,10 @@ const FilesBlocks = React.forwardRef<
             // #endregion methods
         // #endregion required
     } = properties;
+
+    const rowLength = 5;
+    const rowsCount = Math.ceil(files.length / rowLength);
+    const rows = Array.from({length: rowsCount}, (_, i) => i);
     // #endregion properties
 
 
@@ -60,15 +64,22 @@ const FilesBlocks = React.forwardRef<
         <StyledFilesBlocks
             theme={theme}
         >
-            {files.map((file, index) => {
+            {rows.map(row => {
+                const emptyArray = Array.from({length: rowLength}, (_, i) => i);
+                const rowsFiles = emptyArray
+                    .map(index => {
+                        const fileIndex = index + row * rowLength;
+                        return files[fileIndex];
+                    })
+                    .filter(file => !!file);
+
                 return (
-                    <FileBlock
-                        key={Math.random() + ''}
-                        path={viewDirectory}
-                        file={file}
+                    <FileBlockRow
+                        key={viewDirectory + 'row' + row + Math.random()}
                         theme={theme}
-                        index={index}
-                        selected={selectionIndexes.includes(index)}
+                        files={rowsFiles}
+                        viewDirectory={viewDirectory}
+                        selectionIndexes={selectionIndexes}
 
                         selectionClick={selectionClick}
                         actionClick={actionClick}
