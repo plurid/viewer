@@ -8,6 +8,8 @@
     import {
         FilesViewContainerProperties,
     } from '../../data';
+
+    import FileBlock from '../FileBlock';
     // #endregion external
 
 
@@ -58,7 +60,22 @@ const FilesBlocks = React.forwardRef<
         <StyledFilesBlocks
             theme={theme}
         >
-            FilesBlocks
+            {files.map((file, index) => {
+                return (
+                    <FileBlock
+                        key={Math.random() + ''}
+                        path={viewDirectory}
+                        file={file}
+                        theme={theme}
+                        index={index}
+                        selected={selectionIndexes.includes(index)}
+
+                        selectionClick={selectionClick}
+                        actionClick={actionClick}
+                        setCursorOverIndex={setCursorOverIndex}
+                    />
+                );
+            })}
         </StyledFilesBlocks>
     );
     // #endregion render
