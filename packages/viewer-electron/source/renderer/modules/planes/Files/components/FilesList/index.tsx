@@ -1,18 +1,14 @@
 // #region imports
     // #region libraries
-    import {
-        Dirent,
-    } from 'fs';
-
     import React from 'react';
-
-    import {
-        Theme,
-    } from '@plurid/plurid-themes';
     // #endregion libraries
 
 
     // #region external
+    import {
+        FilesViewContainerProperties,
+    } from '../../data';
+
     import FileItem from '../FileItem';
     // #endregion external
 
@@ -27,31 +23,9 @@
 
 
 // #region module
-export interface FilesListProperties {
-    // #region required
-        // #region values
-        theme: Theme;
-        files: Dirent[];
-        viewDirectory: string;
-        selectionIndexes: number[];
-        cursorOverIndex: number;
-        // #endregion values
-
-        // #region methods
-        selectionClick: (event: React.MouseEvent, index: number) => void;
-        actionClick: (file: Dirent) => void;
-        setSelectionIndexes: React.Dispatch<React.SetStateAction<number[]>>;
-        setCursorOverIndex: React.Dispatch<React.SetStateAction<number>>;
-        setShowContextMenu: React.Dispatch<React.SetStateAction<boolean>>;
-        setContextMenuLeft: React.Dispatch<React.SetStateAction<number>>;
-        setContextMenuTop: React.Dispatch<React.SetStateAction<number>>;
-        // #endregion methods
-    // #endregion required
-}
-
 const FilesList = React.forwardRef<
     any,
-    FilesListProperties
+    FilesViewContainerProperties
 >((
     properties,
     node,

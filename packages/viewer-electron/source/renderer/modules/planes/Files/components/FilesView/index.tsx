@@ -17,6 +17,10 @@
 
 
     // #region external
+    import {
+        FilesViewContainerProperties,
+    } from '../../data';
+
     import ContextMenu from '../ContextMenu';
 
     import FilesBlocks from '../FilesBlocks';
@@ -378,6 +382,27 @@ const FilesView: React.FC<FilesViewProperties> = (
 
 
     // #region render
+    let FilesViewContainer = React.forwardRef<
+        any,
+        FilesViewContainerProperties
+    >(
+        () => (<></>),
+    );
+    switch (viewShowAs) {
+        case 'BLOCKS':
+            FilesViewContainer = FilesBlocks;
+            break;
+        case 'LIST':
+            FilesViewContainer = FilesList;
+            break;
+        case 'COLUMNS':
+            FilesViewContainer = FilesColumns;
+            break;
+        case 'GALLERY':
+            FilesViewContainer = FilesGallery;
+            break;
+    }
+
     return (
         <StyledFilesView
             theme={theme}
@@ -413,44 +438,23 @@ const FilesView: React.FC<FilesViewProperties> = (
                         />
                     )}
 
+                    <FilesViewContainer
+                        ref={node}
 
-                    {viewShowAs === 'BLOCKS' && (
-                        <FilesBlocks
-                            theme={theme}
-                        />
-                    )}
+                        theme={theme}
+                        files={files}
+                        viewDirectory={viewDirectory}
+                        selectionIndexes={selectionIndexes}
+                        cursorOverIndex={cursorOverIndex}
 
-                    {viewShowAs === 'LIST' && (
-                        <FilesList
-                            ref={node}
-
-                            theme={theme}
-                            files={files}
-                            viewDirectory={viewDirectory}
-                            selectionIndexes={selectionIndexes}
-                            cursorOverIndex={cursorOverIndex}
-
-                            selectionClick={selectionClick}
-                            actionClick={actionClick}
-                            setSelectionIndexes={setSelectionIndexes}
-                            setCursorOverIndex={setCursorOverIndex}
-                            setShowContextMenu={setShowContextMenu}
-                            setContextMenuLeft={setContextMenuLeft}
-                            setContextMenuTop={setContextMenuTop}
-                        />
-                    )}
-
-                    {viewShowAs === 'COLUMNS' && (
-                        <FilesColumns
-                            theme={theme}
-                        />
-                    )}
-
-                    {viewShowAs === 'GALLERY' && (
-                        <FilesGallery
-                            theme={theme}
-                        />
-                    )}
+                        selectionClick={selectionClick}
+                        actionClick={actionClick}
+                        setSelectionIndexes={setSelectionIndexes}
+                        setCursorOverIndex={setCursorOverIndex}
+                        setShowContextMenu={setShowContextMenu}
+                        setContextMenuLeft={setContextMenuLeft}
+                        setContextMenuTop={setContextMenuTop}
+                    />
                 </>
             )}
         </StyledFilesView>

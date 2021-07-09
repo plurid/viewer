@@ -1,14 +1,13 @@
 // #region imports
     // #region libraries
     import React from 'react';
-
-    import {
-        Theme,
-    } from '@plurid/plurid-themes';
     // #endregion libraries
 
 
     // #region external
+    import {
+        FilesViewContainerProperties,
+    } from '../../data';
     // #endregion external
 
 
@@ -22,46 +21,34 @@
 
 
 // #region module
-export interface FilesGalleryProperties {
-    // #region required
-        // #region values
-        theme: Theme;
-        // #endregion values
-
-        // #region methods
-        // #endregion methods
-    // #endregion required
-
-    // #region optional
-        // #region values
-        // #endregion values
-
-        // #region methods
-        // #endregion methods
-    // #endregion optional
-}
-
-const FilesGallery: React.FC<FilesGalleryProperties> = (
+const FilesGallery = React.forwardRef<
+    any,
+    FilesViewContainerProperties
+>((
     properties,
+    node,
 ) => {
     // #region properties
     const {
         // #region required
             // #region values
             theme,
+            files,
+            viewDirectory,
+            selectionIndexes,
+            cursorOverIndex,
             // #endregion values
 
             // #region methods
+            selectionClick,
+            actionClick,
+            setSelectionIndexes,
+            setCursorOverIndex,
+            setShowContextMenu,
+            setContextMenuLeft,
+            setContextMenuTop,
             // #endregion methods
         // #endregion required
-
-        // #region optional
-            // #region values
-            // #endregion values
-
-            // #region methods
-            // #endregion methods
-        // #endregion optional
     } = properties;
     // #endregion properties
 
@@ -75,7 +62,7 @@ const FilesGallery: React.FC<FilesGalleryProperties> = (
         </StyledFilesGallery>
     );
     // #endregion render
-}
+});
 // #endregion module
 
 
