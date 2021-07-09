@@ -8,6 +8,8 @@
     import {
         FilesViewContainerProperties,
     } from '../../data';
+
+    import FilesColumn from '../FilesColumn';
     // #endregion external
 
 
@@ -50,6 +52,8 @@ const FilesColumns = React.forwardRef<
             // #endregion methods
         // #endregion required
     } = properties;
+
+    const columns: string[] = [];
     // #endregion properties
 
 
@@ -58,7 +62,14 @@ const FilesColumns = React.forwardRef<
         <StyledFilesColumns
             theme={theme}
         >
-            FilesColumns
+            {columns.map(column => {
+                return (
+                    <FilesColumn
+                        key={column + Math.random()}
+                        theme={theme}
+                    />
+                );
+            })}
         </StyledFilesColumns>
     );
     // #endregion render

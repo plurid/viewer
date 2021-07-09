@@ -19,7 +19,7 @@
 
     // #region internal
     import {
-        StyledFileBlockRow,
+        StyledFilesBlockRow,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -27,7 +27,7 @@
 
 
 // #region module
-export interface FileBlockRowProperties {
+export interface FilesBlockRowProperties {
     // #region required
         // #region values
         theme: Theme;
@@ -44,7 +44,7 @@ export interface FileBlockRowProperties {
     // #endregion required
 }
 
-const FileBlockRow: React.FC<FileBlockRowProperties> = (
+const FilesBlockRow: React.FC<FilesBlockRowProperties> = (
     properties,
 ) => {
     // #region properties
@@ -69,7 +69,7 @@ const FileBlockRow: React.FC<FileBlockRowProperties> = (
 
     // #region render
     return (
-        <StyledFileBlockRow
+        <StyledFilesBlockRow
             theme={theme}
         >
             {files.map((file, index) => {
@@ -88,7 +88,7 @@ const FileBlockRow: React.FC<FileBlockRowProperties> = (
                     />
                 );
             })}
-        </StyledFileBlockRow>
+        </StyledFilesBlockRow>
     );
     // #endregion render
 }
@@ -97,5 +97,5 @@ const FileBlockRow: React.FC<FileBlockRowProperties> = (
 
 
 // #region exports
-export default FileBlockRow;
+export default FilesBlockRow;
 // #endregion exports

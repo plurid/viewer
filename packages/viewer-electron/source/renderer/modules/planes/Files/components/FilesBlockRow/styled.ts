@@ -11,11 +11,11 @@
 
 
 // #region module
-export interface IStyledFileBlockRow {
+export interface IStyledFilesBlockRow {
     theme: Theme;
 }
 
-export const StyledFileBlockRow = styled.div<IStyledFileBlockRow>`
+export const StyledFilesBlockRow = styled.div<IStyledFilesBlockRow>`
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
     height: 120px;

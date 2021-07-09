@@ -9,7 +9,7 @@
         FilesViewContainerProperties,
     } from '../../data';
 
-    import FileBlockRow from '../FileBlockRow';
+    import FilesBlockRow from '../FilesBlockRow';
     // #endregion external
 
 
@@ -74,7 +74,7 @@ const FilesBlocks = React.forwardRef<
                     .filter(file => !!file);
 
                 return (
-                    <FileBlockRow
+                    <FilesBlockRow
                         key={viewDirectory + 'row' + row + Math.random()}
                         theme={theme}
                         files={rowsFiles}
