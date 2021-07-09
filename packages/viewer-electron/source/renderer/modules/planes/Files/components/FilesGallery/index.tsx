@@ -53,6 +53,8 @@ const FilesGallery = React.forwardRef<
             // #endregion methods
         // #endregion required
     } = properties;
+
+    const selected = files[0];
     // #endregion properties
 
 
@@ -63,6 +65,7 @@ const FilesGallery = React.forwardRef<
         >
             <FileGalleryView
                 theme={theme}
+                selected={selected}
             />
 
             <FilesBlockRow

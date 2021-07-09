@@ -1,5 +1,9 @@
 // #region imports
     // #region libraries
+    import {
+        Dirent,
+    } from 'fs';
+
     import React from 'react';
 
     import {
@@ -26,19 +30,12 @@ export interface FileGalleryViewProperties {
     // #region required
         // #region values
         theme: Theme;
+        selected: Dirent | undefined;
         // #endregion values
 
         // #region methods
         // #endregion methods
     // #endregion required
-
-    // #region optional
-        // #region values
-        // #endregion values
-
-        // #region methods
-        // #endregion methods
-    // #endregion optional
 }
 
 const FileGalleryView: React.FC<FileGalleryViewProperties> = (
@@ -49,19 +46,12 @@ const FileGalleryView: React.FC<FileGalleryViewProperties> = (
         // #region required
             // #region values
             theme,
+            selected,
             // #endregion values
 
             // #region methods
             // #endregion methods
         // #endregion required
-
-        // #region optional
-            // #region values
-            // #endregion values
-
-            // #region methods
-            // #endregion methods
-        // #endregion optional
     } = properties;
     // #endregion properties
 
@@ -71,7 +61,17 @@ const FileGalleryView: React.FC<FileGalleryViewProperties> = (
         <StyledFileGalleryView
             theme={theme}
         >
-            FileGalleryView
+            {!selected && (
+                <div>
+                    select a file
+                </div>
+            )}
+
+            {selected && (
+                <div>
+                    file
+                </div>
+            )}
         </StyledFileGalleryView>
     );
     // #endregion render
