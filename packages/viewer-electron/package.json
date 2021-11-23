@@ -181,6 +181,7 @@
     },
     "dependencies": {
         "@apollo/client": "^3.5.4",
+        "@electron/remote": "^2.0.1",
         "@plurid/detoolbar-react": "^0.0.0-0",
         "@plurid/elementql": "^0.0.0-1",
         "@plurid/elementql-client-react": "^0.0.0-1",
