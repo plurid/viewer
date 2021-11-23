@@ -1,6 +1,6 @@
 // #region imports
     // #region libraries
-    import remote from '@electron/remote';
+    import * as remote from '@electron/remote';
 
     import Datastore from 'nedb';
     // #endregion libraries

@@ -16,7 +16,7 @@
         ipcRenderer,
     } from 'electron';
 
-    import remote from '@electron/remote';
+    import * as remote from '@electron/remote';
 
 
     import {

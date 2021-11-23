@@ -2,7 +2,7 @@
     // #region libraries
     import React from 'react';
 
-    import remote from '@electron/remote';
+    import * as remote from '@electron/remote';
 
 
     import {
