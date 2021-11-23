@@ -18,7 +18,7 @@ export interface IStyledFilesBlockRow {
 
 export const StyledFilesBlockRow = styled.div<IStyledFilesBlockRow>`
     display: grid;
-    grid-template-columns: repeat(${({ rowLength }: IStyledFilesBlockRow) => rowLength}, 1fr);
+    grid-template-columns: repeat(${({ rowLength }: IStyledFilesBlockRow) => rowLength}, 150px);
     height: 120px;
 `;
 // #region module
