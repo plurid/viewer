@@ -8,7 +8,7 @@
         globalShortcut,
     } from 'electron';
 
-    import remoteMain from '@electron/remote/main';
+    import * as remoteMain from '@electron/remote/main';
 
     import contextMenu from 'electron-context-menu';
     // #endregion libraries
@@ -94,7 +94,6 @@ const createWindow = () => {
         titleBarStyle: 'hiddenInset',
         // frame: false,
         webPreferences: {
-            // enableRemoteModule: true,
             nodeIntegration: true,
             contextIsolation: false,
             webSecurity: true,
