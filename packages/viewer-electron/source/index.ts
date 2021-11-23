@@ -8,6 +8,8 @@
         globalShortcut,
     } from 'electron';
 
+    import remoteMain from '@electron/remote/main';
+
     import contextMenu from 'electron-context-menu';
     // #endregion libraries
 
@@ -34,6 +36,9 @@
 
 // #region module
 require('v8-compile-cache');
+
+remoteMain.initialize();
+
 
 
 const setShortcuts = () => {
@@ -89,13 +94,15 @@ const createWindow = () => {
         titleBarStyle: 'hiddenInset',
         // frame: false,
         webPreferences: {
-            enableRemoteModule: true,
+            // enableRemoteModule: true,
             nodeIntegration: true,
             contextIsolation: false,
             webSecurity: true,
         },
         show: false,
     });
+
+    remoteMain.enable(window.webContents);
 
 
     // and load the index.html of the app.
@@ -204,9 +211,6 @@ application.on('activate', () => {
         createWindow();
     }
 });
-
-
-application.allowRendererProcessReuse = true;
 
 
 

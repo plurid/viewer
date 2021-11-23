@@ -14,8 +14,10 @@
 
     import {
         ipcRenderer,
-        remote,
     } from 'electron';
+
+    import remote from '@electron/remote';
+
 
     import {
         Theme,
