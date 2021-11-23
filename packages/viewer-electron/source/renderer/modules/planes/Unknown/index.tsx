@@ -110,7 +110,9 @@ const Unknown: React.FC<UnknownProperties> = (
 
     // #region render
     return (
-        <StyledUnknown>
+        <StyledUnknown
+            theme={stateGeneralTheme}
+        >
             <FileTopBar
                 filepath={src}
             />

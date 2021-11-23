@@ -143,7 +143,9 @@ const Text: React.FC<TextProperties> = (
     }
 
     return (
-        <StyledText>
+        <StyledText
+            theme={stateGeneralTheme}
+        >
             <FileTopBar
                 filepath={file}
                 settingsRender={(

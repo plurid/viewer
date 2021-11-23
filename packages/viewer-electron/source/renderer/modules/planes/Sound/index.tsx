@@ -105,7 +105,9 @@ const Sound: React.FC<SoundProperties> = (
 
     // #region render
     return (
-        <StyledSound>
+        <StyledSound
+            theme={stateGeneralTheme}
+        >
             <FileTopBar
                 filepath={src}
                 settingsRender={(
