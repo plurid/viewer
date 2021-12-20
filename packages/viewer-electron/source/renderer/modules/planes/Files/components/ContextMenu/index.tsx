@@ -16,6 +16,13 @@
 
 
     // #region external
+    import {
+        PluridFormitem,
+    } from '~renderer-services/styled';
+
+    import {
+        newFolder,
+    } from '~renderer-services/logic/files';
     // #endregion external
 
 
@@ -69,61 +76,61 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
     // #endregion properties
 
 
-    // #region handlers
-    const resolveNewFolderPath = (
-        newFolderPath: string,
-    ) => {
-        let index = 0;
-        let searching = true;
+    // // #region handlers
+    // const resolveNewFolderPath = (
+    //     newFolderPath: string,
+    // ) => {
+    //     let index = 0;
+    //     let searching = true;
 
-        do {
-            try {
-                if (index === 0) {
-                    const exists = fsSync.existsSync(newFolderPath);
-                    if (!exists) {
-                        searching = false;
-                        break;
-                    }
+    //     do {
+    //         try {
+    //             if (index === 0) {
+    //                 const exists = fsSync.existsSync(newFolderPath);
+    //                 if (!exists) {
+    //                     searching = false;
+    //                     break;
+    //                 }
 
-                    index += 1;
-                    continue;
-                }
+    //                 index += 1;
+    //                 continue;
+    //             }
 
-                const exists = fsSync.existsSync(newFolderPath + ` ${index}`);
-                if (!exists) {
-                    searching = false;
-                    break;
-                }
+    //             const exists = fsSync.existsSync(newFolderPath + ` ${index}`);
+    //             if (!exists) {
+    //                 searching = false;
+    //                 break;
+    //             }
 
-                index += 1;
-            } catch (error) {
-                continue;
-            }
-        } while (searching);
+    //             index += 1;
+    //         } catch (error) {
+    //             continue;
+    //         }
+    //     } while (searching);
 
-        if (index === 0) {
-            return newFolderPath;
-        }
+    //     if (index === 0) {
+    //         return newFolderPath;
+    //     }
 
-        return newFolderPath + ` ${index}`;
-    }
+    //     return newFolderPath + ` ${index}`;
+    // }
 
-    const newFolder = () => {
-        try {
-            const newFolderPath = path.join(
-                viewDirectory,
-                'New Folder',
-            );
+    // const newFolder = () => {
+    //     try {
+    //         const newFolderPath = path.join(
+    //             viewDirectory,
+    //             'New Folder',
+    //         );
 
-            const validPath = resolveNewFolderPath(newFolderPath);
-            fs.mkdir(validPath);
+    //         const validPath = resolveNewFolderPath(newFolderPath);
+    //         fs.mkdir(validPath);
 
-            closeMenu();
-        } catch (error) {
-            return;
-        }
-    }
-    // #endregion handlers
+    //         closeMenu();
+    //     } catch (error) {
+    //         return;
+    //     }
+    // }
+    // // #endregion handlers
 
 
     // #region render
@@ -135,15 +142,30 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
                 top: top + 'px',
             }}
         >
-            <div
-                onClick={() => newFolder()}
-            >
-                New Folder
-            </div>
+            <PluridFormitem>
+                <div
+                    onClick={() => {
+                        newFolder(viewDirectory);
+                        closeMenu();
+                    }}
+                >
+                    New Folder
+                </div>
+            </PluridFormitem>
 
-            <div>
-                Open in New Plane
-            </div>
+            {selectionIndexes.length > 0 && (
+                <PluridFormitem>
+                    <div>
+                        Delete Selected
+                    </div>
+                </PluridFormitem>
+            )}
+
+            <PluridFormitem>
+                <div>
+                    Open in New Plane
+                </div>
+            </PluridFormitem>
         </StyledContextMenu>
     );
     // #endregion render

@@ -407,6 +407,19 @@ const FilesView: React.FC<FilesViewProperties> = (
         <StyledFilesView
             theme={theme}
         >
+            {showContextMenu && (
+                <ContextMenu
+                    theme={theme}
+                    left={contextMenuLeft}
+                    top={contextMenuTop}
+                    viewDirectory={viewDirectory}
+                    selectionIndexes={selectionIndexes}
+                    files={files}
+
+                    closeMenu={() => setShowContextMenu(false)}
+                />
+            )}
+
             {viewError === 'NOT_FOUND'
             && (
                 <StyledFilesNotFound>
@@ -425,19 +438,6 @@ const FilesView: React.FC<FilesViewProperties> = (
             {files.length > 0
             && (
                 <>
-                    {showContextMenu && (
-                        <ContextMenu
-                            theme={theme}
-                            left={contextMenuLeft}
-                            top={contextMenuTop}
-                            viewDirectory={viewDirectory}
-                            selectionIndexes={selectionIndexes}
-                            files={files}
-
-                            closeMenu={() => setShowContextMenu(false)}
-                        />
-                    )}
-
                     <FilesViewContainer
                         ref={node}
 
