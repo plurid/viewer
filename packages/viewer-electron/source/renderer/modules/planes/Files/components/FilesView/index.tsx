@@ -467,6 +467,7 @@ const FilesView: React.FC<FilesViewProperties> = (
                     files={files}
 
                     closeMenu={() => setShowContextMenu(false)}
+                    deleteSelectedFiles={deleteSelectedFiles}
                 />
             )}
 

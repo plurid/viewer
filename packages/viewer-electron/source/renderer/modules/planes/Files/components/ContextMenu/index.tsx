@@ -6,9 +6,14 @@
 
     import React from 'react';
 
+
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        strings,
+    } from '@plurid/plurid-functions';
     // #endregion libraries
 
 
@@ -46,6 +51,7 @@ export interface ContextMenuProperties {
 
         // #region methods
         closeMenu: () => void;
+        deleteSelectedFiles: () => void;
         // #endregion methods
     // #endregion required
 }
@@ -67,9 +73,16 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
 
             // #region methods
             closeMenu,
+            deleteSelectedFiles,
             // #endregion methods
         // #endregion required
     } = properties;
+
+    const selectedFilesText = selectionIndexes.length === 0
+        ? ''
+        : selectionIndexes.length === 1
+            ? `'${strings.truncate(files[selectionIndexes[0]].name, 30)}'`
+            : `Selected (${selectionIndexes.length})`;
     // #endregion properties
 
 
@@ -95,8 +108,13 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
 
             {selectionIndexes.length > 0 && (
                 <PluridFormitem>
-                    <div>
-                        Delete Selected
+                    <div
+                        onClick={() => {
+                            deleteSelectedFiles();
+                            closeMenu();
+                        }}
+                    >
+                        Delete {selectedFilesText}
                     </div>
                 </PluridFormitem>
             )}
