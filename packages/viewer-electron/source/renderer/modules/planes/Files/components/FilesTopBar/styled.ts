@@ -27,10 +27,17 @@ export const StyledFilesTopBar = styled.div<IStyledFilesTopBar>`
 
 export const StyledFilesTopBarCenter = styled.div`
     height: 50px;
-    margin: 1rem;
     display: flex;
-    grid-gap: 1rem;
     align-items: center;
+    grid-gap: 1rem;
+`;
+
+
+export const StyledFilesTopBarRight = styled.div`
+    height: 50px;
+    display: flex;
+    align-items: center;
+    grid-gap: 1rem;
 `;
 
 

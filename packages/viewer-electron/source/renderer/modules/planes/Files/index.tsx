@@ -451,6 +451,8 @@ const Files: React.FC<FilesProperties> = (
             theme={stateGeneralTheme}
         >
             <FilesTopBar
+                planeID={planeID}
+
                 viewDirectory={viewDirectory}
 
                 viewShowDirectAccess={showDirectAccess}

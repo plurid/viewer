@@ -6,13 +6,22 @@
     import { connect } from 'react-redux';
     import { ThunkDispatch } from 'redux-thunk';
 
+
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        PluridIconDelete,
+    } from '@plurid/plurid-icons-react';
     // #endregion libraries
 
 
     // #region external
+    import {
+        removePlane,
+    } from '~renderer-services/logic/dispatches';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -24,6 +33,7 @@
     import {
         StyledFilesTopBar,
         StyledFilesTopBarCenter,
+        StyledFilesTopBarRight,
     } from './styled';
 
     import DirectoryPath from '../DirectoryPath';
@@ -40,6 +50,8 @@
 
 // #region module
 export interface FilesTopBarOwnProperties {
+    planeID: string;
+
     viewDirectory: string;
 
     viewShowDirectAccess: boolean;
@@ -62,11 +74,13 @@ export interface FilesTopBarOwnProperties {
 }
 
 export interface FilesTopBarStateProperties {
+    state: AppState;
     stateGeneralTheme: Theme;
     stateInteractionTheme: Theme;
 }
 
 export interface FilesTopBarDispatchProperties {
+    dispatch: ThunkDispatch<{}, {}, AnyAction>;
 }
 
 export type FilesTopBarProperties =
@@ -81,6 +95,8 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
     // #region properties
     const {
         // #region own
+        planeID,
+
         viewDirectory,
 
         viewShowDirectAccess,
@@ -103,9 +119,14 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
         // #endregion own
 
         // #region state
+        state,
         stateGeneralTheme,
         // stateInteractionTheme,
         // #endregion state
+
+        // #region dispatch
+        dispatch,
+        // #endregion dispatch
     } = properties;
     // #endregion properties
 
@@ -120,6 +141,7 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
                 viewShowDirectAccess={viewShowDirectAccess}
                 setViewShowDirectAccess={setViewShowDirectAccess}
             />
+
 
             <StyledFilesTopBarCenter>
                 <History
@@ -153,11 +175,27 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
                 />
             </StyledFilesTopBarCenter>
 
-            <Search
-                theme={stateGeneralTheme}
-                searchValue={searchValue}
-                setSearchValue={setSearchValue}
-            />
+
+            <StyledFilesTopBarRight>
+                <Search
+                    theme={stateGeneralTheme}
+                    searchValue={searchValue}
+                    setSearchValue={setSearchValue}
+                />
+
+                <PluridIconDelete
+                    theme={stateGeneralTheme}
+                    atClick={() => {
+                        removePlane(
+                            state,
+                            dispatch,
+                            planeID,
+                        );
+                    }}
+                    title="Remove Plane"
+                    titleAppearTime={2_500}
+                />
+            </StyledFilesTopBarRight>
         </StyledFilesTopBar>
     );
     // #endregion render
@@ -167,6 +205,7 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
 const mapStateToProperties = (
     state: AppState,
 ): FilesTopBarStateProperties => ({
+    state,
     stateGeneralTheme: selectors.themes.getGeneralTheme(state),
     stateInteractionTheme: selectors.themes.getInteractionTheme(state),
 });
@@ -175,6 +214,7 @@ const mapStateToProperties = (
 const mapDispatchToProperties = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
 ): FilesTopBarDispatchProperties => ({
+    dispatch,
 });
 
 
