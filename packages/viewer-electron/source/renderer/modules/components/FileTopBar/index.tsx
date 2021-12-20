@@ -103,6 +103,8 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
     const directory = path.dirname(filepath);
 
     const buttonCount = 1 + (settingsRender ? 1 : 0) + (infoRender ? 1 : 0);
+
+    const titleAppearTime = 2_500;
     // #endregion properties
 
 
@@ -138,6 +140,7 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
                     theme={stateGeneralTheme}
                     title="Copy Filepath"
                     atClick={() => clipboard.copy(filepath)}
+                    titleAppearTime={titleAppearTime}
                 />
 
                 <div>
@@ -154,6 +157,7 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
                     <PluridIconSettings
                         theme={stateGeneralTheme}
                         title="Settings"
+                        titleAppearTime={titleAppearTime}
                     />
                 </StyledRoundButton>
             )}
@@ -167,13 +171,14 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
                     <PluridIconInfo
                         theme={stateGeneralTheme}
                         title="Info"
+                        titleAppearTime={titleAppearTime}
                     />
                 </StyledRoundButton>
             )}
 
             <PluridIconArrowRight
                 theme={stateGeneralTheme}
-                title="File Location"
+                title="View Location"
                 atClick={() => {
                     addPlane(
                         state,
@@ -181,6 +186,7 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
                         directory,
                     );
                 }}
+                titleAppearTime={titleAppearTime}
             />
 
             {showDetail && (

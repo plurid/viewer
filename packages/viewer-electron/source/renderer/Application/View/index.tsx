@@ -155,7 +155,7 @@ const View: React.FC<ViewProperties> = (
     return (
         <>
             <PluridGlobalStyles
-                    theme={stateGeneralTheme}
+                theme={stateGeneralTheme}
             />
 
             <GlobalStyles

@@ -33,6 +33,8 @@ export const StyledFilename = styled.div`
     align-items: center;
     grid-template-columns: 16px 1fr;
     grid-gap: 0.5rem;
+    justify-self: left;
+    padding: 0 0.7rem;
 `;
 
 

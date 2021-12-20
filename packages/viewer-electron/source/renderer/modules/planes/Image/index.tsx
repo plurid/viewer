@@ -29,6 +29,10 @@
         getPlaneByID,
     } from '~renderer-services/logic/data';
 
+    import {
+        useSize,
+    } from '~renderer-services/hooks/file';
+
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
     import selectors from '~renderer-services/state/selectors';
@@ -108,27 +112,41 @@ const Image: React.FC<ImageProperties> = (
     // #endregion properties
 
 
+    // #region effects
+    const {
+        loadedFileSize,
+        fileSizeReadable,
+    } = useSize(src);
+    // #endregion effects
+
+
     // #region render
+    const FileSettings = (
+        <div>
+            <div>
+                Convert to eimg
+            </div>
+        </div>
+    );
+
+    const FileInfo = (
+        <div>
+            {loadedFileSize && (
+                <div>
+                    Size {fileSizeReadable}
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <StyledImage
             theme={stateGeneralTheme}
         >
             <FileTopBar
                 filepath={src}
-                settingsRender={(
-                    <div>
-                        <div>
-                            Convert to eimg
-                        </div>
-                    </div>
-                )}
-                infoRender={(
-                    <div>
-                        <div>
-                            size
-                        </div>
-                    </div>
-                )}
+                settingsRender={FileSettings}
+                infoRender={FileInfo}
             />
 
             <EnhancedImage
