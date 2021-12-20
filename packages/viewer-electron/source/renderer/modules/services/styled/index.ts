@@ -47,6 +47,7 @@ const {
     },
     varia: {
         CopyableLine: PluridCopyableLine,
+        ScrollableLine: PluridScrollableLine,
     },
 } = universal;
 
@@ -239,6 +240,7 @@ export {
     PluridHR,
 
     PluridCopyableLine,
+    PluridScrollableLine,
 
 
     StyledH2Heading,

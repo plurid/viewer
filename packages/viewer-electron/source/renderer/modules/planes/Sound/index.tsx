@@ -22,6 +22,8 @@
     } from '~renderer-data/interfaces';
 
     import FileTopBar from '~renderer-components/FileTopBar';
+    import FilePath from '~renderer-components/FileInformation/FilePath';
+    import FileSize from '~renderer-components/FileInformation/FileSize';
 
     import {
         getPlaneByID,
@@ -104,26 +106,35 @@ const Sound: React.FC<SoundProperties> = (
 
 
     // #region render
+    const FileSettings = (
+        <div>
+            <div>
+                Convert to eaud
+            </div>
+        </div>
+    );
+
+    const FileInfo = (
+        <div>
+            <FilePath
+                filepath={src}
+            />
+
+            <FileSize
+                filepath={src}
+            />
+        </div>
+    );
+
     return (
         <StyledSound
             theme={stateGeneralTheme}
         >
             <FileTopBar
+                planeID={planeID}
                 filepath={src}
-                settingsRender={(
-                    <div>
-                        <div>
-                            Convert to eaud
-                        </div>
-                    </div>
-                )}
-                infoRender={(
-                    <div>
-                        <div>
-                            size
-                        </div>
-                    </div>
-                )}
+                settingsRender={FileSettings}
+                infoRender={FileInfo}
             />
         </StyledSound>
     );

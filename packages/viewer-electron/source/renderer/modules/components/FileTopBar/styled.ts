@@ -53,7 +53,7 @@ export const StyledDetail = styled.div<IStyledDetail>`
     padding: 1rem;
     border-radius: 15px;
     font-size: 0.9rem;
-    z-index: 9999;
+    z-index: 99999;
 
     background-color: ${
         ({

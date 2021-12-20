@@ -22,6 +22,8 @@
     } from '~renderer-data/interfaces';
 
     import FileTopBar from '~renderer-components/FileTopBar';
+    import FilePath from '~renderer-components/FileInformation/FilePath';
+    import FileSize from '~renderer-components/FileInformation/FileSize';
 
     import Djvu from '~renderer-components/Texts/Djvu';
     import Epub from '~renderer-components/Texts/Epub';
@@ -142,26 +144,36 @@ const Text: React.FC<TextProperties> = (
             break;
     }
 
+    const FileSettings = (
+        <div>
+            <div>
+                Convert to pluridoc
+            </div>
+        </div>
+    );
+
+    const FileInfo = (
+        <div>
+            <FilePath
+                filepath={file}
+            />
+
+            <FileSize
+                filepath={file}
+            />
+        </div>
+    );
+
+
     return (
         <StyledText
             theme={stateGeneralTheme}
         >
             <FileTopBar
+                planeID={planeID}
                 filepath={file}
-                settingsRender={(
-                    <div>
-                        <div>
-                            Convert to pluridoc
-                        </div>
-                    </div>
-                )}
-                infoRender={(
-                    <div>
-                        <div>
-                            size
-                        </div>
-                    </div>
-                )}
+                settingsRender={FileSettings}
+                infoRender={FileInfo}
             />
 
             {textRender}

@@ -20,6 +20,7 @@
 
     import {
         PluridIconCopy,
+        PluridIconDelete,
         PluridIconSettings,
         PluridIconInfo,
         PluridIconArrowRight,
@@ -34,6 +35,7 @@
 
     import {
         addPlane,
+        removePlane,
     } from '~renderer-services/logic/dispatches';
 
     import { AppState } from '~renderer-services/state/store';
@@ -56,6 +58,7 @@
 
 // #region module
 export interface FileTopBarOwnProperties {
+    planeID: string;
     filepath: string;
     settingsRender?: JSX.Element;
     infoRender?: JSX.Element;
@@ -83,6 +86,7 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
     // #region properties
     const {
         // #region own
+        planeID,
         filepath,
         settingsRender,
         infoRender,
@@ -102,7 +106,7 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
     const filename = path.basename(filepath);
     const directory = path.dirname(filepath);
 
-    const buttonCount = 1 + (settingsRender ? 1 : 0) + (infoRender ? 1 : 0);
+    const buttonCount = 2 + (settingsRender ? 1 : 0) + (infoRender ? 1 : 0);
 
     const titleAppearTime = 2_500;
     // #endregion properties
@@ -147,6 +151,19 @@ const FileTopBar: React.FC<FileTopBarProperties> = (
                     {filename}
                 </div>
             </StyledFilename>
+
+            <PluridIconDelete
+                theme={stateGeneralTheme}
+                atClick={() => {
+                    removePlane(
+                        state,
+                        dispatch,
+                        planeID,
+                    );
+                }}
+                title="Remove Plane"
+                titleAppearTime={titleAppearTime}
+            />
 
             {settingsRender && (
                 <StyledRoundButton

@@ -22,6 +22,8 @@
     } from '~renderer-data/interfaces';
 
     import FileTopBar from '~renderer-components/FileTopBar';
+    import FilePath from '~renderer-components/FileInformation/FilePath';
+    import FileSize from '~renderer-components/FileInformation/FileSize';
 
     import {
         getPlaneByID,
@@ -109,12 +111,31 @@ const Unknown: React.FC<UnknownProperties> = (
 
 
     // #region render
+    const FileSettings = (
+        <div>
+        </div>
+    );
+
+    const FileInfo = (
+        <div>
+            <FilePath
+                filepath={src}
+            />
+
+            <FileSize
+                filepath={src}
+            />
+        </div>
+    );
+
     return (
         <StyledUnknown
             theme={stateGeneralTheme}
         >
             <FileTopBar
+                planeID={planeID}
                 filepath={src}
+                infoRender={FileInfo}
             />
         </StyledUnknown>
     );

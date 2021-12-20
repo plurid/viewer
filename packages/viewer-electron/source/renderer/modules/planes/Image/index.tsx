@@ -24,14 +24,16 @@
     } from '~renderer-data/interfaces';
 
     import FileTopBar from '~renderer-components/FileTopBar';
+    import FilePath from '~renderer-components/FileInformation/FilePath';
+    import FileSize from '~renderer-components/FileInformation/FileSize';
+
+    // import {
+    //     PluridFormline,
+    // } from '~renderer-services/styled';
 
     import {
         getPlaneByID,
     } from '~renderer-services/logic/data';
-
-    import {
-        useSize,
-    } from '~renderer-services/hooks/file';
 
     import { AppState } from '~renderer-services/state/store';
     import StateContext from '~renderer-services/state/context';
@@ -112,14 +114,6 @@ const Image: React.FC<ImageProperties> = (
     // #endregion properties
 
 
-    // #region effects
-    const {
-        loadedFileSize,
-        fileSizeReadable,
-    } = useSize(src);
-    // #endregion effects
-
-
     // #region render
     const FileSettings = (
         <div>
@@ -131,11 +125,13 @@ const Image: React.FC<ImageProperties> = (
 
     const FileInfo = (
         <div>
-            {loadedFileSize && (
-                <div>
-                    Size {fileSizeReadable}
-                </div>
-            )}
+            <FilePath
+                filepath={src}
+            />
+
+            <FileSize
+                filepath={src}
+            />
         </div>
     );
 
@@ -144,6 +140,7 @@ const Image: React.FC<ImageProperties> = (
             theme={stateGeneralTheme}
         >
             <FileTopBar
+                planeID={planeID}
                 filepath={src}
                 settingsRender={FileSettings}
                 infoRender={FileInfo}

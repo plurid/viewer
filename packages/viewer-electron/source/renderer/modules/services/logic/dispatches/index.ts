@@ -56,4 +56,23 @@ export const addPlane = (
         },
     });
 }
+
+
+export const removePlane = (
+    state: AppState,
+    dispatch: ThunkDispatch<{}, {}, AnyAction>,
+    planeID: string,
+    spaceID?: string,
+) => {
+    const dispatchProductRemovePlane: typeof actions.product.removePlane = (
+        payload,
+    ) => dispatch(
+        actions.product.removePlane(payload),
+    );
+
+    dispatchProductRemovePlane({
+        planeID,
+        spaceID: spaceID || state.product.activeSpace,
+    });
+}
 // #endregion module
