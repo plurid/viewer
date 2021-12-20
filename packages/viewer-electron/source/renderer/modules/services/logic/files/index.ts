@@ -1,6 +1,8 @@
 // #region imports
     // #region libraries
-    import {
+    import path from 'path';
+
+    import fsSync, {
         Dirent,
         promises as fs,
     } from 'fs';
@@ -31,5 +33,53 @@ export const ignoreHiddenFiles = (
             return !(/(^|\/)\.[^\/\.]/g).test(file.name);
         },
     );
+}
+
+
+export const newFolder = async (
+    directory: string,
+) => {
+    const baseNewDirectory = path.join(
+        directory,
+        'New Folder',
+    );
+
+    let newDirectory = baseNewDirectory;
+    let index = 1;
+    let created = false;
+
+    while(!created) {
+        if (!fsSync.existsSync(newDirectory)) {
+            await fs.mkdir(newDirectory);
+            created = true;
+        } else {
+            newDirectory = baseNewDirectory + ` (${index})`;
+            index += 1;
+        }
+    }
+}
+
+
+export const newFile = async (
+    directory: string,
+) => {
+    const baseNewFilepath = path.join(
+        directory,
+        'New File',
+    );
+
+    let newFilepath = baseNewFilepath;
+    let index = 1;
+    let created = false;
+
+    while(!created) {
+        if (!fsSync.existsSync(newFilepath)) {
+            await fs.writeFile(newFilepath, '');
+            created = true;
+        } else {
+            newFilepath = baseNewFilepath + ` (${index})`;
+            index += 1;
+        }
+    }
 }
 // #endregion module

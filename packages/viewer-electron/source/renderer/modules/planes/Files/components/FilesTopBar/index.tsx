@@ -171,6 +171,7 @@ const FilesTopBar: React.FC<FilesTopBarProperties> = (
                 />
 
                 <Actions
+                    viewDirectory={viewDirectory}
                     theme={stateGeneralTheme}
                 />
             </StyledFilesTopBarCenter>

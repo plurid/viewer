@@ -16,6 +16,10 @@ export interface IStyledActions {
 }
 
 export const StyledActions = styled.div<IStyledActions>`
+    svg {
+        height: 20px;
+        width: 20px;
+    }
 `;
 
 

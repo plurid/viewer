@@ -19,6 +19,19 @@
     import {
         StyledTopBarButton,
     } from '~renderer-planes/Files/components/FilesTopBar/styled';
+
+    import {
+        PluridFormbutton,
+        PluridFormitem,
+    } from '~renderer-services/styled';
+
+    import {
+        newFolder,
+        newFile,
+    } from '~renderer-services/logic/files';
+
+    import DirectoryIcon from '../../../DirectoryIcon';
+    import FileIcon from '../../../FileIcon';
     // #endregion external
 
 
@@ -36,6 +49,7 @@
 export interface ActionsProperties {
     // #region required
         // #region values
+        viewDirectory: string;
         theme: Theme;
         // #endregion values
 
@@ -51,6 +65,7 @@ const Actions: React.FC<ActionsProperties> = (
     const {
         // #region required
             // #region values
+            viewDirectory,
             theme,
             // #endregion values
 
@@ -98,17 +113,54 @@ const Actions: React.FC<ActionsProperties> = (
                         left: node.current ? node.current.offsetLeft + 'px' : '0px',
                     }}
                 >
-                    <div>
-                        New Folder
-                    </div>
+                    <PluridFormbutton
+                        text="New Folder"
+                        Icon={() => (
+                            <DirectoryIcon
+                                theme={theme}
+                                color={theme.colorPrimary}
+                            />
+                        )}
+                        atClick={() => {
+                            newFolder(viewDirectory);
+                            setShowActions(false);
+                        }}
+                        theme={theme}
+                        hoverEffect={false}
+                    />
 
-                    <div>
-                        Open in New Plane
-                    </div>
+                    <PluridFormbutton
+                        text="New File"
+                        Icon={() => (
+                            <FileIcon
+                                theme={theme}
+                                extension=""
+                                color={theme.colorPrimary}
+                            />
+                        )}
+                        atClick={() => {
+                            newFile(viewDirectory);
+                            setShowActions(false);
+                        }}
+                        theme={theme}
+                        hoverEffect={false}
+                    />
 
-                    <div>
-                        Group By
-                    </div>
+                    <PluridFormitem
+                        theme={theme}
+                    >
+                        <div>
+                            Open in New Plane
+                        </div>
+                    </PluridFormitem>
+
+                    <PluridFormitem
+                        theme={theme}
+                    >
+                        <div>
+                            Group By
+                        </div>
+                    </PluridFormitem>
                 </StyledActionsMenu>
             )}
         </StyledActions>
