@@ -1,5 +1,7 @@
 // #region imports
     // #region libraries
+    import path from 'path';
+
     import {
         Dirent,
     } from 'fs';
@@ -31,6 +33,11 @@
     import {
         range,
     } from '~renderer-services/utilities/general';
+
+    import {
+        deleteFile,
+        deleteFolder,
+    } from '~renderer-services/logic/files';
     // #endregion external
 
 
@@ -132,8 +139,41 @@ const FilesView: React.FC<FilesViewProperties> = (
 
 
     // #region handlers
-    const renameFile = () => {
+    const getSelectedFiles = () => {
+        const selectedFiles: Dirent[] = [];
 
+        for (const selectionIndex of selectionIndexes) {
+            const file = files[selectionIndex];
+            selectedFiles.push(file);
+        }
+
+        return selectedFiles;
+    }
+
+    const renameFile = () => {
+        if (selectionIndexes.length > 1) {
+            return;
+        }
+    }
+
+    const deleteSelectedFiles = () => {
+        const selectedFiles = getSelectedFiles();
+
+        for (const selectedFile of selectedFiles) {
+            const filepath = path.join(
+                viewDirectory,
+                selectedFile.name,
+            );
+
+            if (selectedFile.isFile()) {
+                deleteFile(filepath);
+                return;
+            }
+
+            deleteFolder(filepath);
+        }
+
+        setSelectionIndexes([]);
     }
 
     const selectionClick = (
@@ -348,6 +388,16 @@ const FilesView: React.FC<FilesViewProperties> = (
         ) {
             stopEvent();
             renameFile();
+            return;
+        }
+
+
+        if (
+            event.key === 'Backspace'
+            && (event.metaKey || event.ctrlKey)
+        ) {
+            stopEvent();
+            deleteSelectedFiles();
             return;
         }
 

@@ -82,4 +82,18 @@ export const newFile = async (
         }
     }
 }
+
+
+export const deleteFile = async (
+    filepath: string,
+) => {
+    await fs.unlink(filepath);
+}
+
+
+export const deleteFolder = async (
+    filepath: string,
+) => {
+    fsSync.rmdirSync(filepath, { recursive: true });
+}
 // #endregion module
