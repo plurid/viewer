@@ -364,30 +364,31 @@ const Files: React.FC<FilesProperties> = (
         const newViewDirectory = path.dirname(viewDirectory);
         setViewDirectory(newViewDirectory);
     }
+
+
+    const readFiles = async () => {
+        try {
+            const files = await getDirectoryFiles(viewDirectory);
+
+            if (!isMounted.current) {
+                return;
+            }
+
+            setViewError('');
+            setFiles(ignoreHiddenFiles(files));
+            setLoading(false);
+        } catch (error) {
+            setFiles([]);
+            setViewError('NOT_FOUND');
+            setLoading(false);
+        }
+    }
     // #endregion handlers
 
 
     // #region effects
     useEffect(() => {
         isMounted.current = true;
-
-        const readFiles = async () => {
-            try {
-                const files = await getDirectoryFiles(viewDirectory);
-
-                if (!isMounted.current) {
-                    return;
-                }
-
-                setViewError('');
-                setFiles(ignoreHiddenFiles(files));
-                setLoading(false);
-            } catch (error) {
-                setFiles([]);
-                setViewError('NOT_FOUND');
-                setLoading(false);
-            }
-        }
 
         readFiles();
 
@@ -434,8 +435,8 @@ const Files: React.FC<FilesProperties> = (
             },
         );
 
-        watcher.on('all', (event, path, details) => {
-            // console.log(event, path, details);
+        watcher.on('all', (_event, _path, _details) => {
+            readFiles();
         });
 
         return () => {
