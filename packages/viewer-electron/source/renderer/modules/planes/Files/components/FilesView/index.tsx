@@ -6,11 +6,14 @@
         Dirent,
     } from 'fs';
 
+    import * as remote from '@electron/remote';
+
     import React, {
         useRef,
         useState,
         useEffect,
     } from 'react';
+
 
     import {
         Theme,
@@ -278,6 +281,13 @@ const FilesView: React.FC<FilesViewProperties> = (
             file.name,
         );
 
+        const url = file.name;
+
+        const streamer = remote.getGlobal('streamer');
+        streamer.add(
+            url,
+            filepath,
+        );
     }
 
     const handleNavigation = (

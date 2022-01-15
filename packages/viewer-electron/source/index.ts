@@ -22,6 +22,7 @@
     } from './database';
 
     import generateTouchBar from './extras/touchbar';
+    import streamer from './extras/streamer';
 
     import {
         handleURLNavigation,
@@ -65,6 +66,21 @@ let window: BrowserWindow | null;
 
 (global as any).loadDatabase = loadDatabase;
 
+(global as any).streamer = {
+    add: (
+        url: string,
+        file: string,
+    ) => {
+        streamer.add(url, file);
+    },
+    remove: (
+        url: string,
+    ) => {
+        streamer.remove(url);
+    },
+};
+
+streamer.start();
 
 
 contextMenu({
