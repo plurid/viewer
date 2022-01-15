@@ -7,12 +7,14 @@
     import express, {
         Application,
     } from 'express';
+
+    import mime from 'mime-types';
     // #endregion libraries
 
 
     // #region internal
     import {
-        streamVideo,
+        sendFile,
     } from './logic';
     // #endregion internal
 // #endregion imports
@@ -43,13 +45,20 @@ class Streamer {
                 return;
             }
 
-            console.log(`streaming file ${fileURL} from ${filepath}`);
+            const mimetype = mime.lookup(filepath);
+            if (!mimetype) {
+                response.status(500).end();
+                return;
+            }
 
-            streamVideo(
+            // const streamAs = 'video/mp4';
+            // console.log(`streaming file ${fileURL} from ${filepath} with mime ${mimetype}`);
+
+            sendFile(
                 request,
                 response,
                 filepath,
-                'video/mp4',
+                mimetype,
             );
         });
 
