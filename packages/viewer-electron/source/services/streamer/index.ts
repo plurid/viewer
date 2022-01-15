@@ -16,6 +16,12 @@
     import {
         sendFile,
     } from './logic';
+
+    import {
+        indexPage,
+        notAvailablePage,
+        errorPage,
+    } from './templates';
     // #endregion internal
 // #endregion imports
 
@@ -34,6 +40,7 @@ class Streamer {
     ) {
         this.application = express();
 
+
         this.application.get('/:fileURL', (
             request,
             response,
@@ -41,13 +48,13 @@ class Streamer {
             const fileURL = request.params.fileURL;
             const filepath = this.filesURLs[fileURL];
             if (!filepath) {
-                response.status(404).end();
+                response.status(404).send(notAvailablePage);
                 return;
             }
 
             const mimetype = mime.lookup(filepath);
             if (!mimetype) {
-                response.status(500).end();
+                response.status(500).send(errorPage);
                 return;
             }
 
@@ -61,6 +68,11 @@ class Streamer {
                 mimetype,
             );
         });
+
+        this.application.get('/', (_request, response) => {
+            response.send(indexPage);
+        });
+
 
         this.server = this.application.listen(port, '0.0.0.0', () => {
             // console.log('streamer started');
