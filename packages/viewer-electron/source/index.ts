@@ -15,14 +15,12 @@
 
 
     // #region internal
-    import setMenu from './menu';
-
+    import setMenu from './services/menu';
     import {
         loadDatabase,
-    } from './database';
-
-    import generateTouchBar from './extras/touchbar';
-    import streamer from './extras/streamer';
+    } from './services/database';
+    import generateTouchBar from './services/touchbar';
+    import streamer from './services/streamer';
 
     import {
         handleURLNavigation,
