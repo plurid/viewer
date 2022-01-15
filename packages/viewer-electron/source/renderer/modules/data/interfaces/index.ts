@@ -103,4 +103,7 @@ export interface FileStream {
     local: boolean;
     global: boolean;
 }
+
+
+export type RecordFilesStreams = Record<string, FileStream | undefined>;
 // #endregion module

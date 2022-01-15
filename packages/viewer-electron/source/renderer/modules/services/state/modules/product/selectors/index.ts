@@ -22,6 +22,7 @@ const getFilesShowDirectAccessRecent = (state: AppState) => state.product.filesS
 const getFilesDefaultOpenDirectory = (state: AppState) => state.product.filesDefaultOpenDirectory;
 const getFilesDefaultShowAs = (state: AppState) => state.product.filesDefaultShowAs;
 const getFilesDefaultPluridLinkNavigation = (state: AppState) => state.product.filesDefaultPluridLinkNavigation;
+const getFilesStreams = (state: AppState) => state.product.filesStreams;
 
 
 
@@ -39,6 +40,7 @@ const selectors = {
     getFilesDefaultOpenDirectory,
     getFilesDefaultShowAs,
     getFilesDefaultPluridLinkNavigation,
+    getFilesStreams,
 };
 // #endregion module
 

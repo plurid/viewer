@@ -16,5 +16,10 @@ export interface IStyledStream {
 }
 
 export const StyledStream = styled.div<IStyledStream>`
+    font-family: ${
+        ({
+            theme,
+        }: IStyledStream) => theme.fontFamilySansSerif
+    };
 `;
 // #region module

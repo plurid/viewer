@@ -3,7 +3,7 @@
     import {
         Space,
         Plane,
-        FileStream,
+        RecordFilesStreams,
     } from '~renderer-data/interfaces';
     // #endregion external
 // #endregion imports
@@ -120,7 +120,7 @@ export interface State {
     filesDefaultOpenDirectory: string;
     filesDefaultShowAs: string;
     filesDefaultPluridLinkNavigation: boolean;
-    filesStreams: Record<string, FileStream>;
+    filesStreams: RecordFilesStreams;
 }
 
 
