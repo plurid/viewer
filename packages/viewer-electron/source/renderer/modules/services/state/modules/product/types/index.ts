@@ -3,6 +3,7 @@
     import {
         Space,
         Plane,
+        FileStream,
     } from '~renderer-data/interfaces';
     // #endregion external
 // #endregion imports
@@ -88,6 +89,16 @@ export interface RemoveSpaceAction {
 }
 
 
+export const ADD_STREAM = 'ADD_STREAM';
+export interface AddStreamPayload {
+    filepath: string;
+}
+export interface AddStreamAction {
+    type: typeof ADD_STREAM;
+    payload: AddStreamPayload;
+}
+
+
 
 export interface State {
     ui: {
@@ -109,6 +120,7 @@ export interface State {
     filesDefaultOpenDirectory: string;
     filesDefaultShowAs: string;
     filesDefaultPluridLinkNavigation: boolean;
+    filesStreams: Record<string, FileStream>;
 }
 
 
@@ -121,5 +133,6 @@ export type Actions =
     | UpdatePlaneAction
     | RemovePlaneAction
     | AddSpaceAction
-    | RemoveSpaceAction;
+    | RemoveSpaceAction
+    | AddStreamAction;
 // #endregion module

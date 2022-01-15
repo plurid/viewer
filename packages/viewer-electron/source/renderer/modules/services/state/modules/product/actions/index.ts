@@ -7,7 +7,7 @@
 
 
 // #region module
-export const setProduct = (
+const setProduct = (
     product: any,
 ): Types.SetProductAction => {
     return {
@@ -17,14 +17,14 @@ export const setProduct = (
 }
 
 
-export const unsetProduct = (): Types.UnsetProductAction => {
+const unsetProduct = (): Types.UnsetProductAction => {
     return {
         type: Types.UNSET_PRODUCT,
     };
 }
 
 
-export const setLanguage = (
+const setLanguage = (
     payload: string,
 ): Types.SetLanguageAction => {
     return {
@@ -34,7 +34,7 @@ export const setLanguage = (
 }
 
 
-export const setField = (
+const setField = (
     payload: Types.SetFieldPayload,
 ): Types.SetFieldAction => {
     return {
@@ -44,7 +44,7 @@ export const setField = (
 }
 
 
-export const addPlane = (
+const addPlane = (
     payload: Types.AddPlanePayload,
 ): Types.AddPlaneAction => {
     return {
@@ -54,7 +54,7 @@ export const addPlane = (
 }
 
 
-export const updatePlane = (
+const updatePlane = (
     payload: Types.UpdatePlanePayload,
 ): Types.UpdatePlaneAction => {
     return {
@@ -64,7 +64,7 @@ export const updatePlane = (
 }
 
 
-export const removePlane = (
+const removePlane = (
     payload: Types.RemovePlanePayload,
 ): Types.RemovePlaneAction => {
     return {
@@ -74,14 +74,14 @@ export const removePlane = (
 }
 
 
-export const addSpace = (): Types.AddSpaceAction => {
+const addSpace = (): Types.AddSpaceAction => {
     return {
         type: Types.ADD_SPACE,
     };
 }
 
 
-export const removeSpace = (
+const removeSpace = (
     payload: string,
 ): Types.RemoveSpaceAction => {
     return {
@@ -91,8 +91,18 @@ export const removeSpace = (
 }
 
 
+const addStream = (
+    payload: Types.AddStreamPayload,
+): Types.AddStreamAction => {
+    return {
+        type: Types.ADD_STREAM,
+        payload,
+    };
+}
 
-export const actions = {
+
+
+const actions = {
     setProduct,
     unsetProduct,
     setLanguage,
@@ -102,6 +112,7 @@ export const actions = {
     removePlane,
     addSpace,
     removeSpace,
+    addStream,
 };
 // #endregion module
 

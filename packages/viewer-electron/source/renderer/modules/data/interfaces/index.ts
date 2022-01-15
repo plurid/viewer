@@ -92,4 +92,15 @@ export type Plane =
 export interface Strategy {
     compute(): Promise<Plane | undefined>;
 }
+
+
+
+export interface FileStream {
+    id: string;
+    filepath: string;
+    url: string;
+    localport: number;
+    local: boolean;
+    global: boolean;
+}
 // #endregion module

@@ -6,21 +6,24 @@
     // #endregion libraries
 
 
-    // #region internal
-    import initialState from '../initial';
-
-    import * as Types from '../types';
-
+    // #region external
     import {
         loadDatabase,
     } from '~renderer-services/database';
-    // #endregion internal
+
+    import {
+        FileStream,
+    } from '~renderer-data/interfaces';
+
+    import initialState from '../initial';
+    import * as Types from '../types';
+    // #endregion external
 // #endregion imports
 
 
 
 // #region module
-export const setProduct = (
+const setProduct = (
     state: Types.State,
     action: Types.SetProductAction,
 ): Types.State => {
@@ -31,14 +34,14 @@ export const setProduct = (
 }
 
 
-export const unsetProduct = (): Types.State => {
+const unsetProduct = (): Types.State => {
     return {
         ...initialState,
     };
 }
 
 
-export const setLanguage = (
+const setLanguage = (
     state: Types.State,
     action: Types.SetLanguageAction,
 ): Types.State => {
@@ -49,7 +52,7 @@ export const setLanguage = (
 }
 
 
-export const setField = (
+const setField = (
     state: Types.State,
     action: Types.SetFieldAction,
 ): Types.State => {
@@ -68,7 +71,7 @@ export const setField = (
 }
 
 
-export const addPlane = (
+const addPlane = (
     state: Types.State,
     action: Types.AddPlaneAction,
 ): Types.State => {
@@ -104,7 +107,7 @@ export const addPlane = (
 }
 
 
-export const updatePlane = (
+const updatePlane = (
     state: Types.State,
     action: Types.UpdatePlaneAction,
 ): Types.State => {
@@ -159,7 +162,7 @@ export const updatePlane = (
 }
 
 
-export const removePlane = (
+const removePlane = (
     state: Types.State,
     action: Types.RemovePlaneAction,
 ): Types.State => {
@@ -192,7 +195,7 @@ export const removePlane = (
 }
 
 
-export const addSpace = (
+const addSpace = (
     state: Types.State,
     action: Types.AddSpaceAction,
 ): Types.State => {
@@ -215,7 +218,7 @@ export const addSpace = (
 }
 
 
-export const removeSpace = (
+const removeSpace = (
     state: Types.State,
     action: Types.RemoveSpaceAction,
 ): Types.State => {
@@ -241,6 +244,47 @@ export const removeSpace = (
 }
 
 
+const addStream = (
+    state: Types.State,
+    action: Types.AddStreamAction,
+): Types.State => {
+    const {
+        payload,
+    } = action;
+
+    const {
+        filepath,
+    } = payload;
+
+
+    const id = uuid.multiple();
+
+    const fileStream: FileStream = {
+        id,
+        filepath,
+        url: filepath,
+        localport: 9090,
+        local: true,
+        global: false,
+    };
+
+
+    const newState = {
+        ...state,
+    };
+
+    const newFilesStreams = {
+        ...newState.filesStreams,
+    };
+    newFilesStreams[id] = {
+        ...fileStream,
+    };
+    newState.filesStreams = newFilesStreams;
+
+    return newState;
+}
+
+
 
 const resolvers = {
     setProduct,
@@ -252,6 +296,7 @@ const resolvers = {
     removePlane,
     addSpace,
     removeSpace,
+    addStream,
 };
 // #endregion module
 

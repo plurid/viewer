@@ -61,6 +61,7 @@ const initialState: Types.State = {
         : '',
     filesDefaultShowAs: 'LIST',
     filesDefaultPluridLinkNavigation: true,
+    filesStreams: {},
 };
 // #endregion module
 
