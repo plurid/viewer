@@ -45,6 +45,7 @@
     import TextPlane from '~renderer-planes/Text';
     import UnknownPlane from '~renderer-planes/Unknown';
     import FilesPlane from '~renderer-planes/Files';
+    import StreamPlane from '~renderer-planes/Stream';
 
     import {
         PluridLinkButton,
@@ -102,6 +103,10 @@ const pluridPlanes: PluridReactPlane[] = [
     {
         route: '/files/:id',
         component: FilesPlane,
+    },
+    {
+        route: '/stream/:id',
+        component: StreamPlane,
     },
 ];
 
