@@ -81,7 +81,7 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
     const selectedFilesText = selectionIndexes.length === 0
         ? ''
         : selectionIndexes.length === 1
-            ? `'${strings.truncate(files[selectionIndexes[0]].name, 30)}'`
+            ? `'${strings.truncate(files[selectionIndexes[0]].name, 25)}'`
             : `Selected (${selectionIndexes.length})`;
     // #endregion properties
 
@@ -122,6 +122,12 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
             <PluridFormitem>
                 <div>
                     Open in New Plane
+                </div>
+            </PluridFormitem>
+
+            <PluridFormitem>
+                <div>
+                    Stream File
                 </div>
             </PluridFormitem>
         </StyledContextMenu>
