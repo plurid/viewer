@@ -1,6 +1,5 @@
 // #region imports
     // #region libraries
-    import path from 'path';
     import fs from 'fs';
     // #endregion libraries
 // #endregion imports
@@ -45,20 +44,5 @@ export const sendFile = (
         response.writeHead(200, head);
         fs.createReadStream(filePath).pipe(response);
     }
-}
-
-
-export const streamVideo = (
-    request: any,
-    response: any,
-    file: string,
-    contentType: string = 'video/mp4',
-) => {
-    sendFile(
-        request,
-        response,
-        file,
-        contentType,
-    );
 }
 // #endregion module
