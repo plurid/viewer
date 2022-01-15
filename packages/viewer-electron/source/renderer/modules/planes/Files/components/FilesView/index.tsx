@@ -266,6 +266,20 @@ const FilesView: React.FC<FilesViewProperties> = (
         }
     }
 
+    const streamFile = () => {
+        const selected = getSelectedFiles();
+        const file = selected[0];
+        if (!file) {
+            return;
+        }
+
+        const filepath = path.join(
+            viewDirectory,
+            file.name,
+        );
+
+    }
+
     const handleNavigation = (
         event: KeyboardEvent,
         stopEvent: () => void,
@@ -468,6 +482,7 @@ const FilesView: React.FC<FilesViewProperties> = (
 
                     closeMenu={() => setShowContextMenu(false)}
                     deleteSelectedFiles={deleteSelectedFiles}
+                    streamFile={streamFile}
                 />
             )}
 

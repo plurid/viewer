@@ -52,6 +52,7 @@ export interface ContextMenuProperties {
         // #region methods
         closeMenu: () => void;
         deleteSelectedFiles: () => void;
+        streamFile: () => void;
         // #endregion methods
     // #endregion required
 }
@@ -74,6 +75,7 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
             // #region methods
             closeMenu,
             deleteSelectedFiles,
+            streamFile,
             // #endregion methods
         // #endregion required
     } = properties;
@@ -126,7 +128,11 @@ const ContextMenu: React.FC<ContextMenuProperties> = (
             </PluridFormitem>
 
             <PluridFormitem>
-                <div>
+                <div
+                    onClick={() => {
+                        streamFile();
+                    }}
+                >
                     Stream File
                 </div>
             </PluridFormitem>
