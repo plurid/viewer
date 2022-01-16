@@ -1,5 +1,5 @@
 // #region module
-const imageExtensions = [
+export const imageExtensions = [
     '.ai',
     '.bmp',
     '.gif',
@@ -16,7 +16,7 @@ const imageExtensions = [
     '.eimg',
 ];
 
-const videoExtensions = [
+export const videoExtensions = [
     '.3g2',
     '.3gp',
     '.avi',
@@ -35,7 +35,7 @@ const videoExtensions = [
     '.evid',
 ];
 
-const soundExtensions = [
+export const soundExtensions = [
     '.aif',
     '.cda',
     '.mid',
@@ -49,7 +49,7 @@ const soundExtensions = [
     '.eaud',
 ];
 
-const textExtensions = [
+export const textExtensions = [
     // markup files
     '.md',
     '.pluridoc',
@@ -83,15 +83,15 @@ const textExtensions = [
     '.plurid',
     '.pluridoc',
 ];
-// #endregion module
 
 
 
-// #region exports
-export {
-    imageExtensions,
-    videoExtensions,
-    soundExtensions,
-    textExtensions,
+export const pluridPlaneKinds = {
+    image: 'images',
+    video: 'videos',
+    sound: 'sounds',
+    text: 'texts',
+    files: 'files',
+    stream: 'stream',
 };
-// #endregion exports
+// #endregion module

@@ -91,6 +91,7 @@ export interface RemoveSpaceAction {
 
 export const ADD_STREAM = 'ADD_STREAM';
 export interface AddStreamPayload {
+    id: string;
     filepath: string;
 }
 export interface AddStreamAction {

@@ -74,6 +74,9 @@ export interface FilesViewProperties {
             selection: number[],
         ) => void;
         upLevel: () => void;
+        addStream: (
+            filepath: string,
+        ) => void;
         // #endregion methods
     // #endregion required
 }
@@ -97,6 +100,7 @@ const FilesView: React.FC<FilesViewProperties> = (
             actionClick,
             actionCurrent,
             upLevel,
+            addStream,
             // #endregion methods
         // #endregion required
     } = properties;
@@ -288,6 +292,12 @@ const FilesView: React.FC<FilesViewProperties> = (
             url,
             filepath,
         );
+
+        addStream(
+            filepath,
+        );
+
+        setShowContextMenu(false);
     }
 
     const handleNavigation = (

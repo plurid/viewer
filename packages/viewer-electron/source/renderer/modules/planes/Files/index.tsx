@@ -18,9 +18,14 @@
     import { connect } from 'react-redux';
     import { ThunkDispatch } from 'redux-thunk';
 
+
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        uuid,
+    } from '@plurid/plurid-functions';
 
     import {
         PluridPlaneComponentProperty,
@@ -90,6 +95,7 @@ export interface FilesDispatchProperties {
     dispatchProductAddPlane: typeof actions.product.addPlane;
     dispatchProductUpdatePlane: typeof actions.product.updatePlane;
     dispatchProductSetField: typeof actions.product.setField;
+    dispatchProductAddStream: typeof actions.product.addStream;
 }
 
 export type FilesProperties =
@@ -122,6 +128,7 @@ const Files: React.FC<FilesProperties> = (
         dispatchProductAddPlane,
         dispatchProductUpdatePlane,
         dispatchProductSetField,
+        dispatchProductAddStream,
         // #endregion dispatch
     } = properties;
 
@@ -383,6 +390,29 @@ const Files: React.FC<FilesProperties> = (
             setLoading(false);
         }
     }
+
+
+    const addStream = (
+        filepath: string,
+    ) => {
+        const id = uuid.multiple();
+
+        dispatchProductAddStream({
+            id,
+            filepath,
+        });
+
+        dispatchProductAddPlane({
+            spaceID: stateActiveSpaceID,
+            data: {
+                id,
+                kind: 'stream',
+                data: {
+                    id,
+                },
+            },
+        });
+    }
     // #endregion handlers
 
 
@@ -508,6 +538,7 @@ const Files: React.FC<FilesProperties> = (
                             actionClick={actionClick}
                             actionCurrent={actionCurrent}
                             upLevel={upLevel}
+                            addStream={addStream}
                         />
                     )}
                 </StyledFilesContainer>
@@ -549,6 +580,11 @@ const mapDispatchToProperties = (
         payload,
     ) => dispatch(
         actions.product.setField(payload),
+    ),
+    dispatchProductAddStream: (
+        payload,
+    ) => dispatch(
+        actions.product.addStream(payload),
     ),
 });
 

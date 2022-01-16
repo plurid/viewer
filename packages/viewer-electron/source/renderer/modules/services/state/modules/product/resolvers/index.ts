@@ -253,11 +253,10 @@ const addStream = (
     } = action;
 
     const {
+        id,
         filepath,
     } = payload;
 
-
-    const id = uuid.multiple();
 
     const fileStream: FileStream = {
         id,

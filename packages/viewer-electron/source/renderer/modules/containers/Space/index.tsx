@@ -37,6 +37,10 @@
         Space,
     } from '~renderer-data/interfaces';
 
+    import {
+        pluridPlaneKinds,
+    } from '~renderer-data/constants/defaults';
+
     import ToolbarUtility from '~renderer-components/Toolbar/Utility';
 
     import ImagePlane from '~renderer-planes/Image';
@@ -128,14 +132,7 @@ const computePluridData = (
             kind,
         } = plane;
 
-        const types = {
-            image: 'images',
-            video: 'videos',
-            sound: 'sounds',
-            text: 'texts',
-            files: 'files',
-        };
-        const routeType = types[kind];
+        const routeType = pluridPlaneKinds[kind];
         if (!routeType) {
             return;
         }

@@ -13,7 +13,8 @@ export type PlaneKind =
     | 'sound'
     | 'text'
     | 'unknown'
-    | 'files';
+    | 'files'
+    | 'stream';
 
 
 export interface PlaneBase {
@@ -64,6 +65,7 @@ export interface PlaneUnknown extends PlaneBase {
 }
 
 
+
 export interface PlaneFiles extends PlaneBase {
     kind: 'files';
     data: {
@@ -78,6 +80,13 @@ export interface PlaneFiles extends PlaneBase {
 }
 
 
+export interface PlaneStream extends PlaneBase {
+    kind: 'stream';
+    data: {
+        id: string;
+    };
+}
+
 
 export type Plane =
     | PlaneImage
@@ -85,7 +94,8 @@ export type Plane =
     | PlaneSound
     | PlaneText
     | PlaneUnknown
-    | PlaneFiles;
+    | PlaneFiles
+    | PlaneStream;
 
 
 
