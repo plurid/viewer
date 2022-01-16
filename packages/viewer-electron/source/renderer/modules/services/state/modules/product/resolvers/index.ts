@@ -2,6 +2,7 @@
     // #region libraries
     import {
         uuid,
+        objects,
     } from '@plurid/plurid-functions';
     // #endregion libraries
 
@@ -23,6 +24,12 @@
 
 
 // #region module
+const getNewState = (
+    state: Types.State,
+) => objects.clone(state, 'any');
+
+
+
 const setProduct = (
     state: Types.State,
     action: Types.SetProductAction,
@@ -255,22 +262,21 @@ const addStream = (
     const {
         id,
         filepath,
+        url,
     } = payload;
 
 
     const fileStream: FileStream = {
         id,
         filepath,
-        url: filepath,
+        url,
         localport: 9090,
         local: true,
         global: false,
     };
 
 
-    const newState = {
-        ...state,
-    };
+    const newState = getNewState(state);
 
     const newFilesStreams = {
         ...newState.filesStreams,

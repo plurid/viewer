@@ -34,6 +34,8 @@ export const reducer = (
             return resolvers.addSpace(state, action);
         case Types.REMOVE_SPACE:
             return resolvers.removeSpace(state, action);
+        case Types.ADD_STREAM:
+            return resolvers.addStream(state, action);
         default:
             return {
                 ...state,

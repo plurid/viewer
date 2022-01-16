@@ -21,5 +21,6 @@ export const StyledStream = styled.div<IStyledStream>`
             theme,
         }: IStyledStream) => theme.fontFamilySansSerif
     };
+    padding: 4rem;
 `;
 // #region module

@@ -76,6 +76,7 @@ export interface FilesViewProperties {
         upLevel: () => void;
         addStream: (
             filepath: string,
+            url: string,
         ) => void;
         // #endregion methods
     // #endregion required
@@ -295,6 +296,7 @@ const FilesView: React.FC<FilesViewProperties> = (
 
         addStream(
             filepath,
+            url,
         );
 
         setShowContextMenu(false);

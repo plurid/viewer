@@ -394,12 +394,14 @@ const Files: React.FC<FilesProperties> = (
 
     const addStream = (
         filepath: string,
+        url: string,
     ) => {
         const id = uuid.multiple();
 
         dispatchProductAddStream({
             id,
             filepath,
+            url,
         });
 
         dispatchProductAddPlane({

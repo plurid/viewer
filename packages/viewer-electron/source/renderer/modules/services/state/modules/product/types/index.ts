@@ -93,6 +93,7 @@ export const ADD_STREAM = 'ADD_STREAM';
 export interface AddStreamPayload {
     id: string;
     filepath: string;
+    url: string;
 }
 export interface AddStreamAction {
     type: typeof ADD_STREAM;
