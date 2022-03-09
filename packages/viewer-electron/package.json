@@ -180,14 +180,14 @@
     "scripts": {
         "clean": "rm -rf ./build && rm -rf ./release",
         "test": "jest",
-        "develop": "yarn clean && webpack --config ./scripts/webpack.config.js",
-        "build": "yarn clean && webpack --config ./scripts/webpack.config.js --env prod --progress",
+        "develop": "pnpm clean && webpack --config ./scripts/webpack.config.js",
+        "build": "pnpm clean && webpack --config ./scripts/webpack.config.js --env prod --progress",
         "build.clean": "rm -rf `find ./build/ -type d -name __tests__` && rm -rf `find ./build/ -type d -name .DS_STORE`",
-        "build.production": "NODE_ENV=production yarn build && yarn build.clean",
+        "build.production": "NODE_ENV=production pnpm build && pnpm build.clean",
         "electron.run": "electron ./build/",
-        "electron.develop": "yarn develop && yarn electron.run",
+        "electron.develop": "pnpm develop && pnpm electron.run",
         "electron.builder": "electron-builder build --publish never",
-        "package": "yarn build.production && yarn electron.builder"
+        "package": "pnpm build.production && pnpm electron.builder"
     },
     "dependencies": {
         "@apollo/client": "^3.5.10",
