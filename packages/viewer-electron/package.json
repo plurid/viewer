@@ -215,7 +215,6 @@
         "react-pdf": "^5.7.1",
         "react-redux": "^7.2.6",
         "redux": "^4.1.2",
-        "redux-devtools-extension": "^2.13.9",
         "redux-thunk": "^2.4.1",
         "styled-components": "^5.3.3",
         "utif": "^3.1.0",
@@ -223,6 +222,7 @@
         "worker-loader": "^3.0.8"
     },
     "devDependencies": {
+        "@redux-devtools/extension": "^3.2.2",
         "@types/express": "^4.17.13",
         "@types/jest": "^27.4.1",
         "@types/mime-types": "^2.1.1",
@@ -235,8 +235,8 @@
         "@types/styled-components": "^5.1.24",
         "@types/utif": "^3.0.1",
         "copy-webpack-plugin": "^10.2.4",
-        "css-loader": "^6.7.0",
-        "electron": "^17.1.0",
+        "css-loader": "^6.7.1",
+        "electron": "^17.1.1",
         "electron-builder": "^22.14.13",
         "file-loader": "^6.2.0",
         "html-webpack-plugin": "^5.5.0",
