@@ -96,6 +96,16 @@
         },
         "fileAssociations": [
             {
+                "ext": "pdf",
+                "name": "PDF File",
+                "role": "Editor"
+            },
+            {
+                "ext": "pluridoc",
+                "name": "Pluridoc File",
+                "role": "Editor"
+            },
+            {
                 "ext": "bmp",
                 "name": "Bmp File",
                 "role": "Editor"
