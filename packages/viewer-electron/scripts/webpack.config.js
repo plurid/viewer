@@ -94,7 +94,7 @@ module.exports = [
                 patterns: [
                     { from: './source/window/package.json', to: './package.json' },
                     { from: './source/assets/', to: './assets/' },
-                    { from: './yarn.lock', to: './' },
+                    { from: './pnpm-lock.yaml', to: './' },
                     { from: './libraries/', to: './libraries/' },
                 ],
             }),
