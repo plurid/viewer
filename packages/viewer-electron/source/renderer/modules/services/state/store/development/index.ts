@@ -7,10 +7,6 @@
 
     import thunk from 'redux-thunk';
 
-    import {
-        composeWithDevTools,
-    } from 'redux-devtools-extension';
-
     // import {
     //     localStorage,
     // } from '@plurid/apps.libraries.logic.utilities';
@@ -18,6 +14,8 @@
 
 
     // #region external
+    import environment from '~renderer-services/utilities/environment';
+
     import rootReducer from '../reducers';
     // #endregion external
 // #endregion imports
@@ -25,6 +23,17 @@
 
 
 // #region module
+let composeWithDevTools: any;
+if (!environment.production) {
+    try {
+        const reduxDevTools = require('@redux-devtools/extension');
+        composeWithDevTools = reduxDevTools.composeWithDevTools;
+    } catch (error) {
+        composeWithDevTools = undefined;
+    }
+}
+
+
 export type AppState = ReturnType<typeof rootReducer>;
 
 const store = (preloadedState: any) => {
@@ -43,14 +52,14 @@ const store = (preloadedState: any) => {
         rootReducer,
         preloadedState,
         // persistedState || preloadedState,
-        composeWithDevTools(
-            applyMiddleware(...middleware),
-        ),
+        composeWithDevTools
+            ? composeWithDevTools(applyMiddleware(...middleware))
+            : applyMiddleware(...middleware),
     );
 
     _store.subscribe(
         () => {
-            console.log('REDUX STATE', _store.getState());
+            // console.log('REDUX STATE', _store.getState());
             // const localState = localStorage.loadState();
             // localStorage.saveState({
             //     ...localState,
