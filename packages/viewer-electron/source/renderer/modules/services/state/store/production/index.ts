@@ -1,62 +1,34 @@
 // #region imports
     // #region libraries
     import {
-        createStore,
-        applyMiddleware,
-    } from 'redux';
-
-    import thunk from 'redux-thunk';
-
-    // import {
-    //     localStorage,
-    // } from '@plurid/apps.libraries.logic.utilities';
+        configureStore,
+        Store,
+    } from '@reduxjs/toolkit';
     // #endregion libraries
 
 
     // #region external
-    import rootReducer from '../reducers';
+    import reducer, {
+        AppState,
+    } from '../reducer';
     // #endregion external
 // #endregion imports
 
 
 
 // #region module
-export type AppState = ReturnType<typeof rootReducer>;
+const store: (
+    preloadedState: AppState | {},
+) => Store<AppState> = (
+    preloadedState: AppState | {},
+) => configureStore({
+    preloadedState,
+    reducer,
+    devTools: false,
+});
 
-const store = (preloadedState: any) => {
-    // const localState = localStorage.loadState();
 
-    // const persistedState = {
-    //     product: localState?.product,
-    //     themes: localState?.themes,
-    //     // user: localState?.user,
-    //     views: localState?.views,
-    // };
-
-    const _store = createStore(
-        rootReducer,
-        preloadedState,
-        // persistedState || preloadedState,
-        applyMiddleware(
-            thunk,
-        ),
-    );
-
-    // _store.subscribe(
-    //     () => {
-    //         const localState = localStorage.loadState();
-    //         localStorage.saveState({
-    //             ...localState,
-    //             product: _store.getState().product,
-    //             // themes: _store.getState().themes,
-    //             // user: _store.getState().user,
-    //             views: _store.getState().views,
-    //         });
-    //     },
-    // );
-
-    return _store;
-}
+export type AppDispatch = ReturnType<typeof store>['dispatch'];
 // #endregion module
 
 

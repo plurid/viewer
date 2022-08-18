@@ -2,8 +2,10 @@
     // #region libraries
     import os from 'os';
 
-    import { AnyAction } from 'redux';
-    import { ThunkDispatch } from 'redux-thunk';
+    import {
+        AnyAction,
+        ThunkDispatch,
+    } from '@reduxjs/toolkit';
 
     import {
         uuid,

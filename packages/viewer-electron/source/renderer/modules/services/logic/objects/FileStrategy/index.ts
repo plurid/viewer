@@ -5,7 +5,7 @@
     } from '@plurid/plurid-functions';
 
     import {
-        notifications,
+        AddNotificationPayload,
     } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 
@@ -90,7 +90,7 @@ class FileStrategy {
             text = `Opened ${this.kind}: '${this.file}'`;
         }
 
-        const notification: notifications.Types.Notification = {
+        const notification: AddNotificationPayload = {
             id,
             text,
             timeout,

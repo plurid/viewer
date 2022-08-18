@@ -2,7 +2,7 @@
     // #region libraries
     import {
         combineReducers,
-    } from 'redux';
+    } from '@reduxjs/toolkit';
 
     import {
         notifications,
@@ -20,7 +20,7 @@
 
 
 // #region module
-const rootReducer = combineReducers({
+const reducer = combineReducers({
     notifications: notifications.reducer,
     owner: modules.owner.reducer,
     product: modules.product.reducer,
@@ -34,5 +34,8 @@ const rootReducer = combineReducers({
 
 
 // #region exports
-export default rootReducer;
+export type AppState = ReturnType<typeof reducer>;
+
+
+export default reducer;
 // #endregion exports

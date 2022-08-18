@@ -1,7 +1,9 @@
 // #region imports
     // #region libraries
     import React from 'react';
-    import ReactDOM from 'react-dom';
+    import {
+        createRoot,
+    } from 'react-dom/client';
     // #endregion libraries
 
 
@@ -13,8 +15,10 @@
 
 
 // #region module
-ReactDOM.render(
+const APPLICATION_ID = 'viewer';
+const mount = document.getElementById(APPLICATION_ID)!
+const root = createRoot(mount);
+root.render(
     <Application />,
-    document.getElementById('viewer'),
 );
 // #endregion module

@@ -8,9 +8,11 @@
         useEffect,
     } from 'react';
 
-    import { AnyAction } from 'redux';
+    import {
+        AnyAction,
+        ThunkDispatch,
+    } from '@reduxjs/toolkit';
     import { connect } from 'react-redux';
-    import { ThunkDispatch } from 'redux-thunk';
 
     import {
         ipcRenderer,
@@ -29,6 +31,10 @@
         PluridPubSub,
         PLURID_PUBSUB_TOPIC,
     } from '@plurid/plurid-react';
+
+    import {
+        DispatchAction,
+    } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 
 
@@ -165,7 +171,7 @@ export interface SpaceStateProperties {
 export interface SpaceDispatchProperties {
     dispatch: ThunkDispatch<{}, {}, AnyAction>;
     dispatchProductAddPlane: typeof actions.product.addPlane;
-    dispatchAddNotification: typeof actions.notifications.addNotification;
+    dispatchAddNotification: DispatchAction<typeof actions.notifications.add>;
 }
 
 export type SpaceProperties =
@@ -518,7 +524,7 @@ const mapDispatchToProperties = (
     dispatchAddNotification: (
         payload,
     ) => dispatch(
-        actions.notifications.addNotification(payload),
+        actions.notifications.add(payload),
     ),
 });
 
