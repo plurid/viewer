@@ -19,6 +19,10 @@
     import {
         PluridIconAdd,
     } from '@plurid/plurid-icons-react';
+
+    import {
+        DispatchAction,
+    } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 
 
@@ -61,7 +65,7 @@ export interface TopBarStateProperties {
 }
 
 export interface TopBarDispatchProperties {
-    dispatchProductAddSpace: typeof actions.product.addSpace;
+    dispatchProductAddSpace: DispatchAction<typeof actions.product.addSpace>;
 }
 
 export type TopBarProperties =

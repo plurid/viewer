@@ -21,6 +21,10 @@
     import {
         pluridal,
     } from '@plurid/plurid-ui-components-react';
+
+    import {
+        DispatchAction,
+    } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 
 
@@ -63,7 +67,7 @@ export interface ViewStateProperties {
 }
 
 export interface ViewDispatchProperties {
-    dispatchProductSetField: typeof actions.product.setField;
+    dispatchProductSetField: DispatchAction<typeof actions.product.setField>;
 }
 
 export type ViewProperties = ViewOwnProperties

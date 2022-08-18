@@ -32,6 +32,10 @@
     import {
         PluridPlaneComponentProperty,
     } from '@plurid/plurid-react';
+
+    import {
+        DispatchAction,
+    } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 
 
@@ -94,10 +98,10 @@ export interface FilesStateProperties {
 }
 
 export interface FilesDispatchProperties {
-    dispatchProductAddPlane: typeof actions.product.addPlane;
-    dispatchProductUpdatePlane: typeof actions.product.updatePlane;
-    dispatchProductSetField: typeof actions.product.setField;
-    dispatchProductAddStream: typeof actions.product.addStream;
+    dispatchProductAddPlane: DispatchAction<typeof actions.product.addPlane>;
+    dispatchProductUpdatePlane: DispatchAction<typeof actions.product.updatePlane>;
+    dispatchProductSetField: DispatchAction<typeof actions.product.setField>;
+    dispatchProductAddStream: DispatchAction<typeof actions.product.addStream>;
 }
 
 export type FilesProperties =

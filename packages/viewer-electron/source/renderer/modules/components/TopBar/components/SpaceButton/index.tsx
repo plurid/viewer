@@ -14,6 +14,10 @@
     import {
         Theme,
     } from '@plurid/plurid-themes';
+
+    import {
+        DispatchAction,
+    } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 
 
@@ -47,8 +51,8 @@ export interface SpaceButtonStateProperties {
 }
 
 export interface SpaceButtonDispatchProperties {
-    dispatchProductSetField: typeof actions.product.setField;
-    dispatchProductRemoveSpace: typeof actions.product.removeSpace;
+    dispatchProductSetField: DispatchAction<typeof actions.product.setField>;
+    dispatchProductRemoveSpace: DispatchAction<typeof actions.product.removeSpace>;
 }
 
 export type SpaceButtonProperties =

@@ -10,6 +10,10 @@
     import {
         uuid,
     } from '@plurid/plurid-functions';
+
+    import {
+        DispatchAction,
+    } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 
 
@@ -27,7 +31,7 @@ export const addPlane = (
     dispatch: ThunkDispatch<{}, {}, AnyAction>,
     directory?: string,
 ) => {
-    const dispatchProductAddPlane: typeof actions.product.addPlane = (
+    const dispatchProductAddPlane: DispatchAction<typeof actions.product.addPlane> = (
         payload,
     ) => dispatch(
         actions.product.addPlane(payload),
@@ -66,7 +70,7 @@ export const removePlane = (
     planeID: string,
     spaceID?: string,
 ) => {
-    const dispatchProductRemovePlane: typeof actions.product.removePlane = (
+    const dispatchProductRemovePlane: DispatchAction<typeof actions.product.removePlane> = (
         payload,
     ) => dispatch(
         actions.product.removePlane(payload),

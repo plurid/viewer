@@ -95,7 +95,7 @@ export interface SpaceStateProperties {
 
 export interface SpaceDispatchProperties {
     dispatch: ThunkDispatch<{}, {}, AnyAction>;
-    dispatchProductAddPlane: typeof actions.product.addPlane;
+    dispatchProductAddPlane: DispatchAction<typeof actions.product.addPlane>;
     dispatchAddNotification: DispatchAction<typeof actions.notifications.add>;
 }
 
