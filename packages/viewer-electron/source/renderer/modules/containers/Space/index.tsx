@@ -27,8 +27,6 @@
 
     import {
         PluridApplication,
-        PluridReactPlane,
-        PluridPubSub,
         PLURID_PUBSUB_TOPIC,
     } from '@plurid/plurid-react';
 
@@ -43,19 +41,7 @@
         Space,
     } from '~renderer-data/interfaces';
 
-    import {
-        pluridPlaneKinds,
-    } from '~renderer-data/constants/defaults';
-
     import ToolbarUtility from '~renderer-components/Toolbar/Utility';
-
-    import ImagePlane from '~renderer-planes/Image';
-    import VideoPlane from '~renderer-planes/Video';
-    import SoundPlane from '~renderer-planes/Sound';
-    import TextPlane from '~renderer-planes/Text';
-    import UnknownPlane from '~renderer-planes/Unknown';
-    import FilesPlane from '~renderer-planes/Files';
-    import StreamPlane from '~renderer-planes/Stream';
 
     import {
         PluridLinkButton,
@@ -83,79 +69,18 @@
         StyledSpace,
         StyledSpaceEmpty,
     } from './styled';
+
+    import {
+        computePluridData,
+        pluridPlanes,
+        pluridPubSub,
+    } from './data';
     // #endregion internal
 // #endregion imports
 
 
 
 // #region module
-const pluridPlanes: PluridReactPlane[] = [
-    {
-        route: '/images/:id',
-        component: ImagePlane,
-    },
-    {
-        route: '/videos/:id',
-        component: VideoPlane,
-    },
-    {
-        route: '/sounds/:id',
-        component: SoundPlane,
-    },
-    {
-        route: '/texts/:id',
-        component: TextPlane,
-    },
-    {
-        route: '/unknown/:id',
-        component: UnknownPlane,
-    },
-    {
-        route: '/files/:id',
-        component: FilesPlane,
-    },
-    {
-        route: '/stream/:id',
-        component: StreamPlane,
-    },
-];
-
-
-const computePluridData = (
-    space: Space | undefined,
-) => {
-    const view: string[] = [];
-
-    if (!space) {
-        return {
-            view,
-        };
-    }
-
-    space.planes.forEach(plane => {
-        const {
-            id,
-            kind,
-        } = plane;
-
-        const routeType = pluridPlaneKinds[kind];
-        if (!routeType) {
-            return;
-        }
-
-        const planeID = `/${routeType}/` + id;
-
-        view.push(planeID);
-    });
-
-    return {
-        view,
-    };
-}
-
-const pluridPubSub = new PluridPubSub();
-
-
 export interface SpaceOwnProperties {
 }
 
@@ -252,7 +177,9 @@ const Space: React.FC<SpaceProperties> = (
 
             dispatchProductAddPlane({
                 spaceID: activeSpaceID,
-                data: plane as any,
+                data: {
+                    ...plane as any,
+                },
             });
             dispatchAddNotification(
                 notification,
@@ -293,7 +220,7 @@ const Space: React.FC<SpaceProperties> = (
 
         setPluridView(view);
     }, [
-        activeSpace?.planes,
+        JSON.stringify(activeSpace?.planes),
     ]);
 
     /**
