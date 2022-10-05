@@ -190,7 +190,7 @@
         "package": "pnpm build.production && pnpm electron.builder"
     },
     "dependencies": {
-        "@apollo/client": "^3.6.9",
+        "@apollo/client": "^3.7.0",
         "@electron/remote": "^2.0.8",
         "@plurid/detoolbar-react": "^0.0.0-1",
         "@plurid/elementql": "^0.0.0-1",
@@ -233,10 +233,10 @@
     "devDependencies": {
         "@redux-devtools/extension": "^3.2.3",
         "@types/express": "^4.17.14",
-        "@types/jest": "^29.1.0",
+        "@types/jest": "^29.1.1",
         "@types/mime-types": "^2.1.1",
         "@types/nedb": "^1.8.12",
-        "@types/node": "^18.7.23",
+        "@types/node": "^18.8.2",
         "@types/react": "^18.0.21",
         "@types/react-dom": "^18.0.6",
         "@types/react-pdf": "^5.7.2",
@@ -249,7 +249,7 @@
         "electron-builder": "^23.3.3",
         "file-loader": "^6.2.0",
         "html-webpack-plugin": "^5.5.0",
-        "jest": "^29.1.1",
+        "jest": "^29.1.2",
         "node-loader": "^2.0.0",
         "style-loader": "^3.3.1",
         "ts-jest": "^29.0.3",
