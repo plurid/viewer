@@ -3,12 +3,6 @@
     import {
         combineReducers,
     } from '@reduxjs/toolkit';
-
-    import {
-        notifications,
-        sitting,
-        themes,
-    } from '@plurid/plurid-ui-state-react';
     // #endregion libraries
 
 
@@ -21,12 +15,12 @@
 
 // #region module
 const reducer = combineReducers({
-    notifications: notifications.reducer,
+    notifications: modules.notifications.reducer,
     owner: modules.owner.reducer,
     product: modules.product.reducer,
     // shortcuts: modules.shortcuts.reducer,
-    sitting: sitting.reducer,
-    themes: themes.reducer,
+    sitting: modules.sitting.reducer,
+    themes: modules.themes.reducer,
     views: modules.views.reducer,
 });
 // #endregion module
