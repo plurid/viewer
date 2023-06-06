@@ -26,7 +26,7 @@
     } from '@plurid/plurid-themes';
 
     import {
-        PluridApplication,
+        PluridApplication as xPluridApplication,
         PLURID_PUBSUB_TOPIC,
     } from '@plurid/plurid-react';
 
@@ -81,6 +81,10 @@
 
 
 // #region module
+// TOFIX context bug
+const PluridApplication: any = xPluridApplication;
+
+
 export interface SpaceOwnProperties {
 }
 

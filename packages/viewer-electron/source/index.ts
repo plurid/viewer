@@ -19,7 +19,7 @@
     import {
         loadDatabase,
     } from './services/database';
-    import generateTouchBar from './services/touchbar';
+    // import generateTouchBar from './services/touchbar';
     import streamer from './services/streamer';
 
     import {
@@ -151,25 +151,26 @@ const createWindow = () => {
         window = null;
     });
 
-    const regenerate = () => {
-        if (!window) {
-            return;
-        }
+    // TOFIX
+    // const regenerate = () => {
+    //     if (!window) {
+    //         return;
+    //     }
 
-        window.setTouchBar(
-            generateTouchBar(
-                window,
-                regenerate,
-            )
-        );
-    }
+    //     window.setTouchBar(
+    //         generateTouchBar(
+    //             window,
+    //             regenerate,
+    //         ),
+    //     );
+    // }
 
-    window.setTouchBar(
-        generateTouchBar(
-            window,
-            regenerate,
-        ),
-    );
+    // window.setTouchBar(
+    //     generateTouchBar(
+    //         window,
+    //         regenerate,
+    //     ),
+    // );
 
     window.webContents.on(
         'will-navigate',
@@ -254,12 +255,12 @@ application.on(
                 });
             });
         }
-    }
+    },
 );
 
 
 
 application.on('will-quit', () => {
     globalShortcut.unregisterAll();
-})
+});
 // #endregion module
