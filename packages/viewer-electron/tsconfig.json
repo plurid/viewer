@@ -41,7 +41,6 @@
         "downlevelIteration": true,
         "allowSyntheticDefaultImports": true,
         "forceConsistentCasingInFileNames": true,
-        "suppressImplicitAnyIndexErrors": true,
         "resolveJsonModule": true,
         "skipLibCheck": true,
         "isolatedModules": true,
