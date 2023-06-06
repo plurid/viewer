@@ -83,7 +83,7 @@ class ImageStrategy implements Strategy {
             '.webp': WebpImageStrategy,
             '.eimg': EimgImageStrategy,
         };
-        const Strategy = strategies[this.extension];
+        const Strategy = (strategies as any)[this.extension];
 
         if (!Strategy) {
             return;

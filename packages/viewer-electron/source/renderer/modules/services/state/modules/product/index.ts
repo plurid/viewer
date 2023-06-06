@@ -157,7 +157,7 @@ export const product = createSlice({
             }
 
             for (const [key, value] of Object.entries(data)) {
-                plane.data[key] = value;
+                (plane.data as any)[key] = value;
             }
 
             const planes = space.planes.map(spacePlane => {

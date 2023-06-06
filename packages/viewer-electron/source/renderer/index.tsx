@@ -16,7 +16,7 @@
 
 // #region module
 const APPLICATION_ID = 'viewer';
-const mount = document.getElementById(APPLICATION_ID)!
+const mount = document.getElementById(APPLICATION_ID)!;
 const root = createRoot(mount);
 root.render(
     <Application />,

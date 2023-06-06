@@ -78,7 +78,7 @@ export const computePluridData = (
             kind,
         } = plane;
 
-        const routeType = pluridPlaneKinds[kind];
+        const routeType = (pluridPlaneKinds as any)[kind];
         if (!routeType) {
             return;
         }

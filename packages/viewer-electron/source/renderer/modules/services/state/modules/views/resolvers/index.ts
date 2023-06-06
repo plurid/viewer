@@ -24,7 +24,7 @@ export const setView = (
         data,
     } = payload;
 
-    newState[type] = data;
+    (newState as any)[type] = data;
 
     return {
         ...newState,

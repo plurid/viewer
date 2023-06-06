@@ -116,7 +116,7 @@ class TextStrategy implements Strategy {
             '.djvu': DjvuTextStrategy,
             '.pdf': PdfTextStrategy,
         };
-        const Strategy = strategies[this.extension];
+        const Strategy = (strategies as any)[this.extension];
 
         if (!Strategy) {
             return;

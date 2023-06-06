@@ -62,7 +62,7 @@ class FileStrategy {
             text: TextStrategy,
             unknown: UnknownStrategy,
         };
-        const Strategy = strategies[this.kind];
+        const Strategy = (strategies as any)[this.kind];
 
         if (!Strategy) {
             return;
