@@ -26,7 +26,11 @@ const createWindow = () => {
         // titleBarStyle: 'hiddenInset',
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: true,
+            contextIsolation: false,
+            webSecurity: true,
         },
+        show: false,
     });
 
     // and load the index.html of the app.
@@ -36,8 +40,16 @@ const createWindow = () => {
         mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
     }
 
+    mainWindow.webContents.on('did-finish-load', () => {
+        if (!mainWindow) {
+            return;
+        }
+
+        mainWindow.show();
+    });
+
     // Open the DevTools.
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
 };
 
 // This method will be called when Electron has finished
