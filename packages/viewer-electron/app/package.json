@@ -1,8 +1,29 @@
 {
     "name": "viewer-electron",
-    "productName": "viewer-electron",
-    "version": "1.0.0",
-    "description": "My Electron application description",
+    "productName": "viewer",
+    "version": "0.0.0-0",
+    "description": "Enhanced Image, Video, Sound, and Text Viewer Application",
+    "keywords": [
+        "viewer",
+        "enhanced image",
+        "enhanced video",
+        "enhanced sound",
+        "enhanced text"
+    ],
+    "author": "ly3xqhl8g9 <ly3xqhl8g9@plurid.com> (https://plurid.com)",
+    "license": "SEE LICENSE IN LICENSE",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/plurid/viewer"
+    },
+    "bugs": {
+        "email": "source@plurid.com",
+        "url": "https://github.com/plurid/viewer/issues"
+    },
+    "homepage": "https://plurid.com/viewer",
+    "publishConfig": {
+        "access": "restricted"
+    },
     "main": ".vite/build/main.js",
     "scripts": {
         "start": "electron-forge start",
@@ -34,12 +55,6 @@
         "typescript": "~4.5.4",
         "vite": "^5.0.12"
     },
-    "keywords": [],
-    "author": {
-        "name": "ly3xqhl8g9",
-        "email": "ly3xqhl8g9@plurid.com"
-    },
-    "license": "SEE LICENSE IN LICENSE",
     "dependencies": {
         "electron-squirrel-startup": "^1.0.1",
         "react": "^19.0.0",
