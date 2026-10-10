@@ -11,6 +11,27 @@
         "outDir": "dist",
         "moduleResolution": "node",
         "resolveJsonModule": true,
-        "jsx": "react-jsx"
+        "jsx": "react-jsx",
+
+        "paths": {
+            "~source/*": [
+                "./src/*"
+            ],
+            "~renderer-data/*": [
+                "./src/app/modules/data/*"
+            ],
+            "~renderer-components/*": [
+                "./src/app/modules/components/*"
+            ],
+            "~renderer-containers/*": [
+                "./src/app/modules/containers/*"
+            ],
+            "~renderer-planes/*": [
+                "./src/app/modules/planes/*"
+            ],
+            "~renderer-services/*": [
+                "./src/app/modules/services/*"
+            ],
+        },
     }
 }
