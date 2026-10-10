@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node", "vitest/globals", "vite/client"],
+    "jsx": "react-jsx"
+  },
+  "include": ["*.ts", "tests/**/*.ts", "tools/**/*.ts", "src/domain/**/*.ts", "src/desktop/**/*.ts"]
+}

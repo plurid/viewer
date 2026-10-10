@@ -1,0 +1,718 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-10T21:38:14Z",
+  "title": "Design System: Viewer",
+  "extensions": {
+    "colorMeta": {
+      "space": {
+        "role": "neutral",
+        "displayName": "Workspace graphite",
+        "description": "The space behind content planes. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.01181 264.37)",
+          "oklch(26% 0.01181 264.37)",
+          "oklch(37% 0.01181 264.37)",
+          "oklch(48% 0.01181 264.37)",
+          "oklch(59% 0.01181 264.37)",
+          "oklch(70% 0.01181 264.37)",
+          "oklch(82% 0.01181 264.37)",
+          "oklch(95% 0.01181 264.37)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Content graphite",
+        "description": "Folder, preview, menu, dialog, and operations surfaces. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.01520 264.34)",
+          "oklch(26% 0.01520 264.34)",
+          "oklch(37% 0.01520 264.34)",
+          "oklch(48% 0.01520 264.34)",
+          "oklch(59% 0.01520 264.34)",
+          "oklch(70% 0.01520 264.34)",
+          "oklch(82% 0.01520 264.34)",
+          "oklch(95% 0.01520 264.34)"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Raised graphite",
+        "description": "Plane chrome and hover surfaces. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.01695 262.28)",
+          "oklch(26% 0.01695 262.28)",
+          "oklch(37% 0.01695 262.28)",
+          "oklch(48% 0.01695 262.28)",
+          "oklch(59% 0.01695 262.28)",
+          "oklch(70% 0.01695 262.28)",
+          "oklch(82% 0.01695 262.28)",
+          "oklch(95% 0.01695 262.28)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Primary ink",
+        "description": "Primary interface and file text. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.00343 247.86)",
+          "oklch(26% 0.00343 247.86)",
+          "oklch(37% 0.00343 247.86)",
+          "oklch(48% 0.00343 247.86)",
+          "oklch(59% 0.00343 247.86)",
+          "oklch(70% 0.00343 247.86)",
+          "oklch(82% 0.00343 247.86)",
+          "oklch(95% 0.00343 247.86)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Supporting ink",
+        "description": "Metadata and supporting labels. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.01977 255.55)",
+          "oklch(26% 0.01977 255.55)",
+          "oklch(37% 0.01977 255.55)",
+          "oklch(48% 0.01977 255.55)",
+          "oklch(59% 0.01977 255.55)",
+          "oklch(70% 0.01977 255.55)",
+          "oklch(82% 0.01977 255.55)",
+          "oklch(95% 0.01977 255.55)"
+        ]
+      },
+      "subtle": {
+        "role": "neutral",
+        "displayName": "Quiet ink",
+        "description": "Placeholder and secondary status text. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.02436 252.23)",
+          "oklch(26% 0.02436 252.23)",
+          "oklch(37% 0.02436 252.23)",
+          "oklch(48% 0.02436 252.23)",
+          "oklch(59% 0.02436 252.23)",
+          "oklch(70% 0.02436 252.23)",
+          "oklch(82% 0.02436 252.23)",
+          "oklch(95% 0.02436 252.23)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Muted blue accent",
+        "description": "Active icons, actions, focus, links, and progress. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.06582 233.88)",
+          "oklch(26% 0.06582 233.88)",
+          "oklch(37% 0.06582 233.88)",
+          "oklch(48% 0.06582 233.88)",
+          "oklch(59% 0.06582 233.88)",
+          "oklch(70% 0.06582 233.88)",
+          "oklch(82% 0.06582 233.88)",
+          "oklch(95% 0.06582 233.88)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Graphite divider",
+        "description": "Control borders and structural dividers. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.01849 260.69)",
+          "oklch(26% 0.01849 260.69)",
+          "oklch(37% 0.01849 260.69)",
+          "oklch(48% 0.01849 260.69)",
+          "oklch(59% 0.01849 260.69)",
+          "oklch(70% 0.01849 260.69)",
+          "oklch(82% 0.01849 260.69)",
+          "oklch(95% 0.01849 260.69)"
+        ]
+      },
+      "selection": {
+        "role": "primary",
+        "displayName": "Blue selection",
+        "description": "Selected files and pressed or selected controls. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.04634 244.51)",
+          "oklch(26% 0.04634 244.51)",
+          "oklch(37% 0.04634 244.51)",
+          "oklch(48% 0.04634 244.51)",
+          "oklch(59% 0.04634 244.51)",
+          "oklch(70% 0.04634 244.51)",
+          "oklch(82% 0.04634 244.51)",
+          "oklch(95% 0.04634 244.51)"
+        ]
+      },
+      "selection-muted": {
+        "role": "neutral",
+        "displayName": "Selected supporting ink",
+        "description": "Readable metadata inside selected file items. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.02639 235.40)",
+          "oklch(26% 0.02639 235.40)",
+          "oklch(37% 0.02639 235.40)",
+          "oklch(48% 0.02639 235.40)",
+          "oklch(59% 0.02639 235.40)",
+          "oklch(70% 0.02639 235.40)",
+          "oklch(82% 0.02639 235.40)",
+          "oklch(95% 0.02639 235.40)"
+        ]
+      },
+      "danger": {
+        "role": "state",
+        "displayName": "Error rose",
+        "description": "Errors and destructive action labels. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.11723 18.05)",
+          "oklch(26% 0.11723 18.05)",
+          "oklch(37% 0.11723 18.05)",
+          "oklch(48% 0.11723 18.05)",
+          "oklch(59% 0.11723 18.05)",
+          "oklch(70% 0.11723 18.05)",
+          "oklch(82% 0.11723 18.05)",
+          "oklch(95% 0.11723 18.05)"
+        ]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Field graphite",
+        "description": "Inputs, file headers, and content stages. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.01393 261.70)",
+          "oklch(26% 0.01393 261.70)",
+          "oklch(37% 0.01393 261.70)",
+          "oklch(48% 0.01393 261.70)",
+          "oklch(59% 0.01393 261.70)",
+          "oklch(70% 0.01393 261.70)",
+          "oklch(82% 0.01393 261.70)",
+          "oklch(95% 0.01393 261.70)"
+        ]
+      },
+      "light-space": {
+        "role": "neutral",
+        "displayName": "Light workspace",
+        "description": "The space behind content planes. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.00577 264.53)",
+          "oklch(26% 0.00577 264.53)",
+          "oklch(37% 0.00577 264.53)",
+          "oklch(48% 0.00577 264.53)",
+          "oklch(59% 0.00577 264.53)",
+          "oklch(70% 0.00577 264.53)",
+          "oklch(82% 0.00577 264.53)",
+          "oklch(95% 0.00577 264.53)"
+        ]
+      },
+      "light-surface": {
+        "role": "neutral",
+        "displayName": "White content surface",
+        "description": "Folder, preview, menu, dialog, and operations surfaces. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.00000 0.00)",
+          "oklch(26% 0.00000 0.00)",
+          "oklch(37% 0.00000 0.00)",
+          "oklch(48% 0.00000 0.00)",
+          "oklch(59% 0.00000 0.00)",
+          "oklch(70% 0.00000 0.00)",
+          "oklch(82% 0.00000 0.00)",
+          "oklch(95% 0.00000 0.00)"
+        ]
+      },
+      "light-raised": {
+        "role": "neutral",
+        "displayName": "Light raised surface",
+        "description": "Plane chrome and hover surfaces. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.00342 247.86)",
+          "oklch(26% 0.00342 247.86)",
+          "oklch(37% 0.00342 247.86)",
+          "oklch(48% 0.00342 247.86)",
+          "oklch(59% 0.00342 247.86)",
+          "oklch(70% 0.00342 247.86)",
+          "oklch(82% 0.00342 247.86)",
+          "oklch(95% 0.00342 247.86)"
+        ]
+      },
+      "light-ink": {
+        "role": "neutral",
+        "displayName": "Light primary ink",
+        "description": "Primary interface and file text. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.02457 261.11)",
+          "oklch(26% 0.02457 261.11)",
+          "oklch(37% 0.02457 261.11)",
+          "oklch(48% 0.02457 261.11)",
+          "oklch(59% 0.02457 261.11)",
+          "oklch(70% 0.02457 261.11)",
+          "oklch(82% 0.02457 261.11)",
+          "oklch(95% 0.02457 261.11)"
+        ]
+      },
+      "light-muted": {
+        "role": "neutral",
+        "displayName": "Light supporting ink",
+        "description": "Metadata and supporting labels. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.03121 257.08)",
+          "oklch(26% 0.03121 257.08)",
+          "oklch(37% 0.03121 257.08)",
+          "oklch(48% 0.03121 257.08)",
+          "oklch(59% 0.03121 257.08)",
+          "oklch(70% 0.03121 257.08)",
+          "oklch(82% 0.03121 257.08)",
+          "oklch(95% 0.03121 257.08)"
+        ]
+      },
+      "light-subtle": {
+        "role": "neutral",
+        "displayName": "Light quiet ink",
+        "description": "Placeholder and secondary status text. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.03510 258.93)",
+          "oklch(26% 0.03510 258.93)",
+          "oklch(37% 0.03510 258.93)",
+          "oklch(48% 0.03510 258.93)",
+          "oklch(59% 0.03510 258.93)",
+          "oklch(70% 0.03510 258.93)",
+          "oklch(82% 0.03510 258.93)",
+          "oklch(95% 0.03510 258.93)"
+        ]
+      },
+      "light-accent": {
+        "role": "primary",
+        "displayName": "Light blue accent",
+        "description": "Active icons, actions, focus, links, and progress. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.08523 235.52)",
+          "oklch(26% 0.08523 235.52)",
+          "oklch(37% 0.08523 235.52)",
+          "oklch(48% 0.08523 235.52)",
+          "oklch(59% 0.08523 235.52)",
+          "oklch(70% 0.08523 235.52)",
+          "oklch(82% 0.08523 235.52)",
+          "oklch(95% 0.08523 235.52)"
+        ]
+      },
+      "light-line": {
+        "role": "neutral",
+        "displayName": "Light divider",
+        "description": "Control borders and structural dividers. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.01161 252.10)",
+          "oklch(26% 0.01161 252.10)",
+          "oklch(37% 0.01161 252.10)",
+          "oklch(48% 0.01161 252.10)",
+          "oklch(59% 0.01161 252.10)",
+          "oklch(70% 0.01161 252.10)",
+          "oklch(82% 0.01161 252.10)",
+          "oklch(95% 0.01161 252.10)"
+        ]
+      },
+      "light-selection": {
+        "role": "primary",
+        "displayName": "Light blue selection",
+        "description": "Selected files and pressed or selected controls. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.02014 233.86)",
+          "oklch(26% 0.02014 233.86)",
+          "oklch(37% 0.02014 233.86)",
+          "oklch(48% 0.02014 233.86)",
+          "oklch(59% 0.02014 233.86)",
+          "oklch(70% 0.02014 233.86)",
+          "oklch(82% 0.02014 233.86)",
+          "oklch(95% 0.02014 233.86)"
+        ]
+      },
+      "light-selection-muted": {
+        "role": "neutral",
+        "displayName": "Light selected supporting ink",
+        "description": "Readable metadata inside selected file items. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.03121 257.08)",
+          "oklch(26% 0.03121 257.08)",
+          "oklch(37% 0.03121 257.08)",
+          "oklch(48% 0.03121 257.08)",
+          "oklch(59% 0.03121 257.08)",
+          "oklch(70% 0.03121 257.08)",
+          "oklch(82% 0.03121 257.08)",
+          "oklch(95% 0.03121 257.08)"
+        ]
+      },
+      "light-danger": {
+        "role": "state",
+        "displayName": "Light error rose",
+        "description": "Errors and destructive action labels. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.15431 18.00)",
+          "oklch(26% 0.15431 18.00)",
+          "oklch(37% 0.15431 18.00)",
+          "oklch(48% 0.15431 18.00)",
+          "oklch(59% 0.15431 18.00)",
+          "oklch(70% 0.15431 18.00)",
+          "oklch(82% 0.15431 18.00)",
+          "oklch(95% 0.15431 18.00)"
+        ]
+      },
+      "light-field": {
+        "role": "neutral",
+        "displayName": "Light field surface",
+        "description": "Inputs, file headers, and content stages. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.00342 247.86)",
+          "oklch(26% 0.00342 247.86)",
+          "oklch(37% 0.00342 247.86)",
+          "oklch(48% 0.00342 247.86)",
+          "oklch(59% 0.00342 247.86)",
+          "oklch(70% 0.00342 247.86)",
+          "oklch(82% 0.00342 247.86)",
+          "oklch(95% 0.00342 247.86)"
+        ]
+      },
+      "file-image": {
+        "role": "file-family",
+        "displayName": "Image olive",
+        "description": "Image-family file icons. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.05326 111.21)",
+          "oklch(26% 0.05326 111.21)",
+          "oklch(37% 0.05326 111.21)",
+          "oklch(48% 0.05326 111.21)",
+          "oklch(59% 0.05326 111.21)",
+          "oklch(70% 0.05326 111.21)",
+          "oklch(82% 0.05326 111.21)",
+          "oklch(95% 0.05326 111.21)"
+        ]
+      },
+      "file-code": {
+        "role": "file-family",
+        "displayName": "Code lavender",
+        "description": "Code and data file-family icons. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.04708 293.60)",
+          "oklch(26% 0.04708 293.60)",
+          "oklch(37% 0.04708 293.60)",
+          "oklch(48% 0.04708 293.60)",
+          "oklch(59% 0.04708 293.60)",
+          "oklch(70% 0.04708 293.60)",
+          "oklch(82% 0.04708 293.60)",
+          "oklch(95% 0.04708 293.60)"
+        ]
+      },
+      "light-file-image": {
+        "role": "file-family",
+        "displayName": "Light image olive",
+        "description": "Image-family file icons. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.08188 113.26)",
+          "oklch(26% 0.08188 113.26)",
+          "oklch(37% 0.08188 113.26)",
+          "oklch(48% 0.08188 113.26)",
+          "oklch(59% 0.08188 113.26)",
+          "oklch(70% 0.08188 113.26)",
+          "oklch(82% 0.08188 113.26)",
+          "oklch(95% 0.08188 113.26)"
+        ]
+      },
+      "light-file-code": {
+        "role": "file-family",
+        "displayName": "Light code violet",
+        "description": "Code and data file-family icons. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.09832 293.64)",
+          "oklch(26% 0.09832 293.64)",
+          "oklch(37% 0.09832 293.64)",
+          "oklch(48% 0.09832 293.64)",
+          "oklch(59% 0.09832 293.64)",
+          "oklch(70% 0.09832 293.64)",
+          "oklch(82% 0.09832 293.64)",
+          "oklch(95% 0.09832 293.64)"
+        ]
+      },
+      "syntax-string": {
+        "role": "syntax",
+        "displayName": "String green",
+        "description": "String and attribute-value syntax in code and JSON. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.05853 125.03)",
+          "oklch(26% 0.05853 125.03)",
+          "oklch(37% 0.05853 125.03)",
+          "oklch(48% 0.05853 125.03)",
+          "oklch(59% 0.05853 125.03)",
+          "oklch(70% 0.05853 125.03)",
+          "oklch(82% 0.05853 125.03)",
+          "oklch(95% 0.05853 125.03)"
+        ]
+      },
+      "syntax-keyword": {
+        "role": "syntax",
+        "displayName": "Keyword lavender",
+        "description": "Keyword and boolean syntax in code. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.05246 312.58)",
+          "oklch(26% 0.05246 312.58)",
+          "oklch(37% 0.05246 312.58)",
+          "oklch(48% 0.05246 312.58)",
+          "oklch(59% 0.05246 312.58)",
+          "oklch(70% 0.05246 312.58)",
+          "oklch(82% 0.05246 312.58)",
+          "oklch(95% 0.05246 312.58)"
+        ]
+      },
+      "syntax-number": {
+        "role": "syntax",
+        "displayName": "Number bronze",
+        "description": "Numeric and constant code syntax; JSON numbers and booleans. Default dark look. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.06886 66.59)",
+          "oklch(26% 0.06886 66.59)",
+          "oklch(37% 0.06886 66.59)",
+          "oklch(48% 0.06886 66.59)",
+          "oklch(59% 0.06886 66.59)",
+          "oklch(70% 0.06886 66.59)",
+          "oklch(82% 0.06886 66.59)",
+          "oklch(95% 0.06886 66.59)"
+        ]
+      },
+      "light-syntax-string": {
+        "role": "syntax",
+        "displayName": "Light string green",
+        "description": "String and attribute-value syntax in code and JSON. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.09782 141.17)",
+          "oklch(26% 0.09782 141.17)",
+          "oklch(37% 0.09782 141.17)",
+          "oklch(48% 0.09782 141.17)",
+          "oklch(59% 0.09782 141.17)",
+          "oklch(70% 0.09782 141.17)",
+          "oklch(82% 0.09782 141.17)",
+          "oklch(95% 0.09782 141.17)"
+        ]
+      },
+      "light-syntax-keyword": {
+        "role": "syntax",
+        "displayName": "Light keyword violet",
+        "description": "Keyword and boolean syntax in code. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.08818 316.18)",
+          "oklch(26% 0.08818 316.18)",
+          "oklch(37% 0.08818 316.18)",
+          "oklch(48% 0.08818 316.18)",
+          "oklch(59% 0.08818 316.18)",
+          "oklch(70% 0.08818 316.18)",
+          "oklch(82% 0.08818 316.18)",
+          "oklch(95% 0.08818 316.18)"
+        ]
+      },
+      "light-syntax-number": {
+        "role": "syntax",
+        "displayName": "Light number bronze",
+        "description": "Numeric and constant code syntax; JSON numbers and booleans. Light-look counterpart. The tonal ramp is a synthesized swatch aid; the frontmatter value is normative.",
+        "tonalRamp": [
+          "oklch(15% 0.07481 70.40)",
+          "oklch(26% 0.07481 70.40)",
+          "oklch(37% 0.07481 70.40)",
+          "oklch(48% 0.07481 70.40)",
+          "oklch(59% 0.07481 70.40)",
+          "oklch(70% 0.07481 70.40)",
+          "oklch(82% 0.07481 70.40)",
+          "oklch(95% 0.07481 70.40)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "Interface body",
+        "purpose": "Controls and application text."
+      },
+      "body-compact": {
+        "displayName": "Compact body",
+        "purpose": "File names and supporting preview text."
+      },
+      "title": {
+        "displayName": "Plane title",
+        "purpose": "Compact semibold plane names."
+      },
+      "label": {
+        "displayName": "Metadata label",
+        "purpose": "File metadata, headers, status, and preview information."
+      },
+      "section-label": {
+        "displayName": "Sidebar section label",
+        "purpose": "Semibold location-rail group names."
+      },
+      "code": {
+        "displayName": "Code content",
+        "purpose": "Monospace source listings inside previews."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay-dark",
+        "value": "0 18px 56px #0005",
+        "purpose": "Dark menus, dialogs, notices, and compact operations overlay."
+      },
+      {
+        "name": "overlay-light",
+        "value": "0 18px 56px #20304025",
+        "purpose": "The corresponding light-look transient surfaces."
+      },
+      {
+        "name": "pdf-sheet",
+        "value": "0 2px 12px #0003",
+        "purpose": "The rendered white PDF page on its content stage."
+      }
+    ],
+    "motion": [
+      {
+        "name": "spinner-duration",
+        "value": "0.7s",
+        "purpose": "One rotation of the loading indicator."
+      },
+      {
+        "name": "spinner-easing",
+        "value": "linear",
+        "purpose": "Even loading-indicator rotation."
+      },
+      {
+        "name": "reduced-motion-duration",
+        "value": "0.01ms",
+        "purpose": "CSS animation and transition duration when reduced motion is requested."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "1050px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The accent action used in name and confirmation dialogs.",
+      "html": "<button class=\"ds-primary\" type=\"button\">Create folder</button>",
+      "css": ".ds-primary { font: 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); cursor: pointer; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 6px 10px; } .ds-primary:hover { background: var(--raised, #393e47); } .ds-primary:active { background: var(--selection, #3a5368); } .ds-primary:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-primary:disabled { cursor: default; opacity: 0.45; } .ds-primary:disabled:hover { background: transparent; } .ds-primary { background: var(--accent, #82b3cf); color: var(--space, #272a30); font-weight: 600; } .ds-primary:hover { filter: brightness(1.1); background: var(--accent, #82b3cf); }"
+    },
+    {
+      "name": "Ghost button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The shared compact text control with hover, press, focus, and disabled states.",
+      "html": "<button class=\"ds-ghost\" type=\"button\">Cancel</button>",
+      "css": ".ds-ghost { font: 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); cursor: pointer; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 6px 10px; } .ds-ghost:hover { background: var(--raised, #393e47); } .ds-ghost:active { background: var(--selection, #3a5368); } .ds-ghost:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-ghost:disabled { cursor: default; opacity: 0.45; } .ds-ghost:disabled:hover { background: transparent; } "
+    },
+    {
+      "name": "Icon button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "A labeled square action using the authored SVG icon system.",
+      "html": "<button class=\"ds-icon-button\" type=\"button\" title=\"Frame plane\" aria-label=\"Frame plane\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 9V3h6m6 0h6v6m0 6v6h-6m-6 0H3v-6\"></path></svg></button>",
+      "css": ".ds-icon-button { font: 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); cursor: pointer; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 6px 10px; } .ds-icon-button:hover { background: var(--raised, #393e47); } .ds-icon-button:active { background: var(--selection, #3a5368); } .ds-icon-button:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-icon-button:disabled { cursor: default; opacity: 0.45; } .ds-icon-button:disabled:hover { background: transparent; } .ds-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 5px; flex-shrink: 0; } .ds-icon-button svg { flex-shrink: 0; }"
+    },
+    {
+      "name": "Name field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "The bordered field and supporting label used for folder, file, and workspace names.",
+      "html": "<label class=\"ds-field-label\">Name<input class=\"ds-name-field\" placeholder=\"Folder name\"></label>",
+      "css": ".ds-field-label { display: flex; flex-direction: column; gap: 8px; font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--muted, #b1bac6); } .ds-name-field { font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); border: 1px solid var(--line, #454b55); border-radius: 5px; background: var(--field, #292d34); padding: 7px 9px; min-width: 0; caret-color: var(--accent, #82b3cf); } .ds-name-field::placeholder { color: var(--subtle, #9fabb9); } .ds-name-field:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } "
+    },
+    {
+      "name": "Location navigation",
+      "kind": "nav",
+      "refersTo": "location",
+      "description": "Location rows show file navigation and the current selection within the rail.",
+      "html": "<nav class=\"ds-locations\" aria-label=\"Locations\"><button class=\"ds-location\" type=\"button\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8\"></path></svg><span>Home</span></button><button class=\"ds-location ds-location-selected\" type=\"button\" aria-pressed=\"true\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 7V5a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z\"></path></svg><span>Downloads</span></button></nav>",
+      "css": ".ds-location { font: 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); cursor: pointer; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 6px 10px; } .ds-location:hover { background: var(--raised, #393e47); } .ds-location:active { background: var(--selection, #3a5368); } .ds-location:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-location:disabled { cursor: default; opacity: 0.45; } .ds-location:disabled:hover { background: transparent; } .ds-location { display: flex; width: 100%; text-align: left; gap: 10px; align-items: center; min-height: 34px; padding: 7px 9px; } .ds-location svg { color: var(--muted, #b1bac6); flex-shrink: 0; } .ds-location span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-location-selected, .ds-location-selected:hover { background: var(--selection, #3a5368); color: var(--ink, #f2f4f6); } .ds-location-selected svg { color: var(--accent, #82b3cf); }"
+    },
+    {
+      "name": "Operation count badge",
+      "kind": "chip",
+      "refersTo": "count-badge",
+      "description": "An informational count inside the Operations control.",
+      "html": "<div class=\"ds-count-line\"><span>Operations</span><span class=\"ds-count-badge\">2</span></div>",
+      "css": ".ds-count-line { display: flex; align-items: center; gap: 10px; font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); } .ds-count-badge { background: var(--accent, #82b3cf); color: var(--space, #272a30); border-radius: 4px; min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; margin-left: auto; }"
+    },
+    {
+      "name": "Name dialog",
+      "kind": "card",
+      "refersTo": "dialog",
+      "description": "The shared modal appearance; the application supplies native modal focus and placement.",
+      "html": "<section class=\"ds-dialog\" role=\"dialog\" aria-label=\"New folder\"><header><strong>New folder</strong><button class=\"ds-dialog-close\" type=\"button\" title=\"Close\" aria-label=\"Close\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m6 6 12 12M6 18 18 6\"></path></svg></button></header><form><label class=\"ds-dialog-label\">Name<input class=\"ds-dialog-input\" value=\"Untitled folder\"></label><footer><button class=\"ds-dialog-button\" type=\"button\">Cancel</button><button class=\"ds-dialog-button ds-dialog-primary\" type=\"button\">Create</button></footer></form></section>",
+      "css": ".ds-dialog { font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 0; width: 440px; max-width: 100%; background: var(--surface, #31353d); color: var(--ink, #f2f4f6); border: 1px solid var(--line, #454b55); border-radius: 10px; box-shadow: var(--shadow, 0 18px 56px #0005); overflow: hidden; } .ds-dialog header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line, #454b55); } .ds-dialog form { padding: 18px; } .ds-dialog-label { display: flex; flex-direction: column; gap: 8px; color: var(--muted, #b1bac6); } .ds-dialog footer { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 18px 0 0; } .ds-dialog-input { font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); border: 1px solid var(--line, #454b55); border-radius: 5px; background: var(--field, #292d34); padding: 7px 9px; min-width: 0; caret-color: var(--accent, #82b3cf); } .ds-dialog-input::placeholder { color: var(--subtle, #9fabb9); } .ds-dialog-input:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-dialog-button { font: 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); cursor: pointer; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 6px 10px; } .ds-dialog-button:hover { background: var(--raised, #393e47); } .ds-dialog-button:active { background: var(--selection, #3a5368); } .ds-dialog-button:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-dialog-button:disabled { cursor: default; opacity: 0.45; } .ds-dialog-button:disabled:hover { background: transparent; } .ds-dialog-close { font: 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); cursor: pointer; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 6px 10px; } .ds-dialog-close:hover { background: var(--raised, #393e47); } .ds-dialog-close:active { background: var(--selection, #3a5368); } .ds-dialog-close:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-dialog-close:disabled { cursor: default; opacity: 0.45; } .ds-dialog-close:disabled:hover { background: transparent; } .ds-dialog-button { border-color: var(--line, #454b55); } .ds-dialog-close { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 5px; } .ds-dialog-primary { background: var(--accent, #82b3cf); color: var(--space, #272a30); font-weight: 600; } .ds-dialog-primary:hover { background: var(--accent, #82b3cf); filter: brightness(1.1); }"
+    },
+    {
+      "name": "Context menu",
+      "kind": "nav",
+      "refersTo": "context-menu",
+      "description": "Compact file-command rows; the application portal supplies viewport placement.",
+      "html": "<div class=\"ds-menu\" role=\"menu\"><button class=\"ds-menu-action\" type=\"button\" role=\"menuitem\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M16 3h6m-3 0v18m-3 0h6M3 7h11v10H3V7Z\"></path></svg><span>Rename</span></button><button class=\"ds-menu-action\" type=\"button\" role=\"menuitem\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 9h12v12H9V9ZM5 15H3V3h12v2\"></path></svg><span>Copy</span></button><button class=\"ds-menu-action ds-menu-danger\" type=\"button\" role=\"menuitem\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7\"></path></svg><span>Move to Trash</span></button></div>",
+      "css": ".ds-menu { max-height: calc(100vh - 16px); overflow-y: auto; width: 228px; padding: 5px; background: var(--surface, #31353d); border: 1px solid var(--line, #454b55); border-radius: 8px; box-shadow: var(--shadow, 0 18px 56px #0005); } .ds-menu-action { font: 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); cursor: pointer; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 6px 10px; } .ds-menu-action:hover { background: var(--raised, #393e47); } .ds-menu-action:active { background: var(--selection, #3a5368); } .ds-menu-action:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-menu-action:disabled { cursor: default; opacity: 0.45; } .ds-menu-action:disabled:hover { background: transparent; } .ds-menu-action { width: 100%; text-align: left; display: flex; align-items: center; gap: 9px; padding: 7px 9px; } .ds-menu-action svg { color: var(--muted, #b1bac6); } .ds-menu-danger { color: var(--danger, #ff9da0); border-color: var(--line, #454b55); }"
+    },
+    {
+      "name": "Selected file row with alias",
+      "kind": "custom",
+      "refersTo": "file-row",
+      "description": "The native-density metadata grid, selected metadata role, file-family icon, and SVG alias overlay.",
+      "html": "<div class=\"ds-file-list\" role=\"listbox\" aria-label=\"Files\"><div class=\"ds-file-row\" role=\"option\" aria-selected=\"false\"><span class=\"ds-file-name\"><span class=\"ds-file-icon\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 7V5a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z\"></path></svg></span><span>Models</span></span><span class=\"ds-file-metadata\">Oct 11, 2026</span><span class=\"ds-file-metadata\">Folder</span><span class=\"ds-file-metadata ds-file-size\">—</span></div><div class=\"ds-file-row ds-file-selected\" role=\"option\" aria-selected=\"true\"><span class=\"ds-file-name\"><span class=\"ds-file-icon\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m12 3 9 5v8l-9 5-9-5V8l9-5Zm0 9 9-4M12 12 3 8m9 4v9\"></path></svg><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"ds-alias-mark\"><path d=\"M4 20v-4a5 5 0 0 1 5-5h11m-5-5 5 5-5 5\"></path></svg></span><span>Scene.glb</span></span><span class=\"ds-file-metadata\">Oct 11, 2026</span><span class=\"ds-file-metadata\">Alias</span><span class=\"ds-file-metadata ds-file-size\">824 KB</span></div></div>",
+      "css": ".ds-file-list { overflow: auto; background: var(--surface, #31353d); } .ds-file-row { font: 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); display: grid; grid-template-columns: minmax(200px, 1fr) 160px 96px 95px; align-items: center; height: 36px; min-width: 587px; padding: 0 18px; user-select: none; cursor: default; border-bottom: 1px solid color-mix(in srgb, var(--line, #454b55) 25%, transparent); } .ds-file-row:hover { background: var(--raised, #393e47); } .ds-file-selected, .ds-file-selected:hover { background: var(--selection, #3a5368); --muted: var(--selection-muted, #c4d7e3); } .ds-file-name { display: flex; align-items: center; min-width: 0; gap: 9px; } .ds-file-name > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-file-icon { display: inline-flex; position: relative; flex-shrink: 0; color: var(--accent, #82b3cf); } .ds-alias-mark { position: absolute; right: -4px; bottom: -5px; color: var(--ink, #f2f4f6); } .ds-file-metadata { color: var(--muted, #b1bac6); font-size: 11px; } .ds-file-size { text-align: right; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Plane titlebar",
+      "kind": "custom",
+      "refersTo": "plane-titlebar",
+      "description": "Shared explorer/preview chrome with a title drag handle and separate frame, dock, and close actions.",
+      "html": "<div class=\"ds-plane-controls\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 7V5a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z\"></path></svg><span class=\"ds-plane-title\">Models</span><span class=\"ds-plane-type\">Explorer</span><button class=\"ds-plane-action\" type=\"button\" title=\"Frame plane\" aria-label=\"Frame plane\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 9V3h6m6 0h6v6m0 6v6h-6m-6 0H3v-6\"></path></svg></button><button class=\"ds-plane-action\" type=\"button\" title=\"Dock plane\" aria-label=\"Dock plane\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 4h18v16H3V4Zm0 4h18\"></path></svg></button><button class=\"ds-plane-action\" type=\"button\" title=\"Close plane\" aria-label=\"Close plane\"><svg aria-hidden=\"true\" pointer-events=\"none\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m6 6 12 12M6 18 18 6\"></path></svg></button></div>",
+      "css": ".ds-plane-controls { font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 9px 0 14px; color: var(--ink, #f2f4f6); background: var(--raised, #393e47); border-bottom: 1px solid var(--line, #454b55); user-select: none; cursor: grab; } .ds-plane-controls > svg { color: var(--accent, #82b3cf); } .ds-plane-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-plane-type { font-size: 11px; color: var(--muted, #b1bac6); margin-right: 10px; } .ds-plane-action { font: 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--ink, #f2f4f6); cursor: pointer; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 6px 10px; } .ds-plane-action:hover { background: var(--raised, #393e47); } .ds-plane-action:active { background: var(--selection, #3a5368); } .ds-plane-action:focus-visible { outline: 2px solid var(--accent, #82b3cf); outline-offset: -2px; } .ds-plane-action:disabled { cursor: default; opacity: 0.45; } .ds-plane-action:disabled:hover { background: transparent; } .ds-plane-action { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 5px; flex-shrink: 0; } .ds-plane-action svg { flex-shrink: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Current Plurid application family",
+    "overview": "Viewer inherits the user-confirmed Plurid world: graphite surfaces, system typography, dense native file rows, and one coordinated look for the application shell and spatial engine. Familiar desktop controls remain legible while the workspace shows folders and their linked previews together.\n\nThe defining visual behavior is a titled file plane beside its folder, with a visible relationship and a focused docked view available from the same chrome. File contents supply the imagery and dimensional detail; the interface uses restrained surfaces and authored SVG icons.",
+    "keyCharacteristics": [
+      "Coordinated dark and light shell and engine looks.",
+      "Dense rows, quiet metadata, and explicit selection and keyboard focus.",
+      "Linked spatial planes with familiar titlebar controls and focused docking.",
+      "File-content previews within the same visual system."
+    ],
+    "rules": [
+      {
+        "name": "The Shared Look Rule",
+        "body": "Apply the selected look to both the shell and the spatial engine; extend previews with the same surface and text roles.",
+        "section": "colors"
+      },
+      {
+        "name": "The Selected Metadata Rule",
+        "body": "Use the selected metadata role on selected rows, tiles, and gallery items so secondary information stays readable against selection.",
+        "section": "colors"
+      },
+      {
+        "name": "The Content Hierarchy Rule",
+        "body": "Keep document headings and syntax styling inside previews; extend application chrome with its compact title, body, and label roles.",
+        "section": "typography"
+      },
+      {
+        "name": "The Reachable Chrome Rule",
+        "body": "Keep plane titlebars and relationships within the framed viewport, and keep frame/dock commands in the workspace header where they stay clear of preview actions.",
+        "section": "layout"
+      },
+      {
+        "name": "The Task Depth Rule",
+        "body": "Use elevation for spatial relationships and transient controls; preserve flat file rows for scanning.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do coordinate the shell, engine, and preview look through the shared surface and text roles.",
+      "Do preserve dense file rows and readable selected metadata across list, grid, and gallery.",
+      "Do use authored SVG icons, accessible action labels, and visible keyboard focus.",
+      "Do keep frame/dock controls reachable and plane dragging on the title.",
+      "Do retain file-content conventions such as syntax coloring, contained imagery, and the Markdown quotation border."
+    ],
+    "donts": [
+      "Don't introduce a separate decorative identity or display-font tier into this confirmed application family.",
+      "Don't place duplicate floating engine controls over preview actions.",
+      "Don't make file content or model gestures drag the plane instead of performing their own task.",
+      "Don't reuse dark syntax colors unchanged in light previews or use ordinary muted text on dark selected files.",
+      "Don't turn synthetic verification fixtures into shipping product imagery."
+    ]
+  }
+}

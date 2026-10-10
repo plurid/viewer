@@ -1,0 +1,647 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import type { FileEntry, FolderPane, ViewMode } from '../../domain/contracts';
+import { formatBytes, selectedRange, sortEntries } from '../../domain/files';
+import {
+  activeWorkspace,
+  favorite,
+  getState,
+  historyNavigate,
+  navigate,
+  quickPreview,
+  report,
+  setActivePane,
+  updatePane,
+  useViewer,
+} from '../state/store';
+import { useWorkspace } from '../workspace/context';
+import { IconButton, Empty, Loading, NameDialog, Dialog } from '../ui/primitives';
+import { Icon } from '../ui/Icon';
+import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
+import { useFolder } from './useFolder';
+import { useSearch } from './useSearch';
+import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
+import { FileInformation } from './FileInformation';
+
+const modes: ViewMode[] = ['list', 'grid', 'columns', 'gallery'];
+function editable(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    !!target.closest('input, textarea, select, [contenteditable="true"]')
+  );
+}
+function parentPath(path: string): string {
+  const normalized = path.replace(/[\\/]$/, '');
+  const separator = path.includes('\\') ? '\\' : '/';
+  const end = normalized.lastIndexOf(separator);
+  return end <= 0 ? separator : normalized.slice(0, end);
+}
+export function FolderExplorer({ id, engineID }: { id: string; engineID?: string }) {
+  const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id)) as
+    FolderPane | undefined;
+  const workspace = useWorkspace();
+  const listing = useFolder(pane?.path || getState().bootstrap.home);
+  const [selection, setSelection] = useState<string[]>([]);
+  const anchor = useRef('');
+  const [query, setQuery] = useState('');
+  const [subtree, setSubtree] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const surface = useRef<HTMLDivElement>(null);
+  const selectionCache = useRef(new Map<string, FileEntry>());
+  const columnScope = useRef<FileEntry[] | null>(null);
+  const [dialog, setDialog] = useState<'rename' | 'mkdir' | 'go-to' | null>(null);
+  const [trash, setTrash] = useState(false);
+  const [info, setInfo] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [dropping, setDropping] = useState(false);
+  const path = pane?.path || '';
+  const search = useSearch(path, query, subtree, pane?.showHidden || false);
+  const sources = subtree && query.trim() ? search.entries : listing.entries;
+  const entries = useMemo(
+    () =>
+      pane
+        ? sortEntries(
+            sources.filter(
+              (entry) =>
+                (pane.showHidden || !entry.hidden) &&
+                (subtree ||
+                  !query ||
+                  entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())),
+            ),
+            pane.sort,
+            pane.descending,
+          )
+        : [],
+    [sources, pane, subtree, query],
+  );
+  const selected = useMemo(
+    () =>
+      selection
+        .map(
+          (path) =>
+            sources.find((entry) => entry.path === path) || selectionCache.current.get(path),
+        )
+        .filter((entry): entry is FileEntry => !!entry),
+    [sources, selection],
+  );
+  const isFavorite = useViewer((state) => state.saved.favorites.some((item) => item.path === path));
+  useEffect(() => {
+    setSelection([]);
+    anchor.current = '';
+    setQuery('');
+    setMenu(null);
+    selectionCache.current.clear();
+    columnScope.current = null;
+  }, [path]);
+  useEffect(() => {
+    if (listing.loading || listing.error) return;
+    setSelection((value) => {
+      const next = value.flatMap((file) => {
+        const cached = selectionCache.current.get(file);
+        if (!cached || cached.parent !== path) return [file];
+        const entry = listing.entries.find((item) => item.identity === cached.identity);
+        if (!entry) return [];
+        selectionCache.current.set(entry.path, entry);
+        return [entry.path];
+      });
+      return next.length === value.length && next.every((file, index) => file === value[index])
+        ? value
+        : next;
+    });
+  }, [listing.entries, listing.loading, listing.error, path]);
+  const operate = useCallback(
+    async (
+      kind: 'copy' | 'move' | 'duplicate' | 'rename' | 'mkdir' | 'trash',
+      options: { name?: string; destination?: string; sources?: string[] } = {},
+    ) => {
+      await window.viewer.operate({
+        kind,
+        sources: options.sources ?? selection,
+        destination: options.destination,
+        name: options.name,
+      });
+    },
+    [selection],
+  );
+  const open = useCallback(
+    (entry: FileEntry, linked = false) => {
+      if (entry.directory && !linked) navigate(id, entry.path);
+      else workspace.open(entry, engineID);
+    },
+    [workspace, engineID, id],
+  );
+  const select = useCallback(
+    (entry: FileEntry, event: MouseEvent, scope = entries) => {
+      columnScope.current = scope;
+      for (const item of scope) selectionCache.current.set(item.path, item);
+      selectionCache.current.set(entry.path, entry);
+      setActivePane(id);
+      surface.current?.focus({ preventScroll: true });
+      if (event.shiftKey)
+        setSelection((value) => [
+          ...new Set([
+            ...(event.metaKey || event.ctrlKey ? value : []),
+            ...selectedRange(scope, anchor.current, entry.path),
+          ]),
+        ]);
+      else if (event.metaKey || event.ctrlKey) {
+        anchor.current = entry.path;
+        setSelection((value) =>
+          value.includes(entry.path)
+            ? value.filter((path) => path !== entry.path)
+            : [...value, entry.path],
+        );
+      } else {
+        anchor.current = entry.path;
+        setSelection([entry.path]);
+      }
+    },
+    [entries, id],
+  );
+  const paste = useCallback(async () => {
+    const clipboard = await window.viewer.clipboardRead();
+    if (clipboard)
+      await operate(clipboard.cut ? 'move' : 'copy', {
+        sources: clipboard.paths,
+        destination: path,
+      });
+  }, [operate, path]);
+  const command = useCallback(
+    (name: string) => {
+      switch (name) {
+        case 'new-folder':
+          setDialog('mkdir');
+          break;
+        case 'rename':
+          if (selection.length === 1) setDialog('rename');
+          break;
+        case 'trash':
+          if (selection.length) setTrash(true);
+          break;
+        case 'duplicate':
+          if (selection.length) void operate('duplicate').catch(report);
+          break;
+        case 'copy':
+          if (selection.length) void window.viewer.clipboardWrite(selection, false).catch(report);
+          break;
+        case 'cut':
+          if (selection.length) void window.viewer.clipboardWrite(selection, true).catch(report);
+          break;
+        case 'paste':
+          void paste().catch(report);
+          break;
+        case 'hidden':
+          if (pane) updatePane(id, { showHidden: !pane.showHidden });
+          break;
+        case 'search':
+          input.current?.focus();
+          break;
+        case 'go-to':
+          setDialog('go-to');
+          break;
+        case 'open-selection':
+          for (const entry of selected) open(entry);
+          break;
+        case 'linked':
+          for (const entry of selected) open(entry, true);
+          break;
+        case 'quick-preview':
+          if (selected[0] && !selected[0].directory) quickPreview(selected[0].path);
+          break;
+        case 'refresh':
+          listing.refresh();
+          break;
+        case 'info':
+          if (selected.length) setInfo(true);
+          break;
+      }
+      setMenu(null);
+    },
+    [pane, id, selection, selected, operate, paste, open, listing.refresh],
+  );
+  useEffect(() => {
+    const native = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string; command: string }>).detail;
+      if (detail.id === id && !editable(document.activeElement)) command(detail.command);
+      else if (detail.id === id && ['search', 'go-to'].includes(detail.command))
+        command(detail.command);
+    };
+    window.addEventListener('viewer:folder-command', native);
+    return () => window.removeEventListener('viewer:folder-command', native);
+  }, [command, id]);
+  if (!pane || pane.type !== 'folder') return <Empty title="Folder plane is unavailable" />;
+  const viewProps: FileViewProps = {
+    entries,
+    selection,
+    select,
+    open,
+    showHidden: pane.showHidden,
+    context: (entry, event) => {
+      event.preventDefault();
+      selectionCache.current.set(entry.path, entry);
+      if (!selection.includes(entry.path)) {
+        setSelection([entry.path]);
+        anchor.current = entry.path;
+      }
+      setActivePane(id);
+      setMenu({
+        x: Math.max(8, Math.min(event.clientX, window.innerWidth - 240)),
+        y: Math.max(8, Math.min(event.clientY, window.innerHeight - 510)),
+      });
+    },
+    drag: (entry, event) => {
+      const files = selection.includes(entry.path) ? selection : [entry.path];
+      event.dataTransfer.setData('application/x-viewer-files', JSON.stringify(files));
+      event.dataTransfer.setData('text/plain', files.join('\n'));
+      event.dataTransfer.effectAllowed = 'copyMove';
+    },
+  };
+  const crumbs = path.split(/[\\/]/).filter(Boolean);
+  const separator = path.includes('\\') ? '\\' : '/';
+  return (
+    <div
+      className={`folder-explorer ${dropping ? 'drop-target' : ''}`}
+      ref={surface}
+      tabIndex={0}
+      aria-label={`Folder ${path}`}
+      onFocus={() => setActivePane(id)}
+      onPointerDown={() => setActivePane(id)}
+      onKeyDown={(event) => {
+        if (editable(event.target)) return;
+        const mod = event.metaKey || event.ctrlKey;
+        const scope = pane.mode === 'columns' ? columnScope.current || entries : entries;
+        if (event.altKey && event.key === 'ArrowLeft') {
+          event.preventDefault();
+          event.stopPropagation();
+          historyNavigate(id, -1);
+        } else if (event.altKey && event.key === 'ArrowRight') {
+          event.preventDefault();
+          event.stopPropagation();
+          historyNavigate(id, 1);
+        } else if (mod && event.key === 'ArrowUp') {
+          event.preventDefault();
+          event.stopPropagation();
+          navigate(id, parentPath(path));
+        } else if (
+          event.key === 'ArrowDown' ||
+          event.key === 'ArrowUp' ||
+          (pane.mode !== 'list' && ['ArrowLeft', 'ArrowRight'].includes(event.key))
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          const index = scope.findIndex((entry) => entry.path === selection.at(-1));
+          const stride =
+            pane.mode === 'grid' && ['ArrowDown', 'ArrowUp'].includes(event.key)
+              ? surface.current?.querySelector('.grid-row')?.childElementCount || 1
+              : 1;
+          const delta = ['ArrowDown', 'ArrowRight'].includes(event.key) ? stride : -stride;
+          const entry = scope[Math.max(0, Math.min(scope.length - 1, index + delta))];
+          if (entry) {
+            selectionCache.current.set(entry.path, entry);
+            if (event.shiftKey) {
+              if (!anchor.current) anchor.current = entry.path;
+              setSelection(selectedRange(scope, anchor.current, entry.path));
+            } else {
+              anchor.current = entry.path;
+              setSelection([entry.path]);
+            }
+          }
+        } else if (mod && event.key.toLowerCase() === 'a') {
+          event.preventDefault();
+          for (const entry of scope) selectionCache.current.set(entry.path, entry);
+          setSelection(scope.map((entry) => entry.path));
+        } else if (mod && ['c', 'x', 'v'].includes(event.key.toLowerCase())) {
+          event.preventDefault();
+          command(
+            ({ c: 'copy', x: 'cut', v: 'paste' } as Record<string, string>)[
+              event.key.toLowerCase()
+            ],
+          );
+        } else if (event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          command('quick-preview');
+        } else if (event.key === 'Enter' && !mod) {
+          event.preventDefault();
+          event.stopPropagation();
+          command('rename');
+        } else if (mod && event.key.toLowerCase() === 'o') {
+          event.preventDefault();
+          command('open-selection');
+        } else if (mod && event.key.toLowerCase() === 'i') {
+          event.preventDefault();
+          command('info');
+        } else if (event.key === 'Escape') {
+          setSelection([]);
+          setMenu(null);
+        } else if (mod && event.key === 'Backspace') {
+          event.preventDefault();
+          command('trash');
+        }
+      }}
+      onCopy={(event) => {
+        if (!editable(event.target) && selection.length) {
+          event.preventDefault();
+          command('copy');
+        }
+      }}
+      onCut={(event) => {
+        if (!editable(event.target) && selection.length) {
+          event.preventDefault();
+          command('cut');
+        }
+      }}
+      onPaste={(event) => {
+        if (!editable(event.target)) {
+          event.preventDefault();
+          command('paste');
+        }
+      }}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes('application/x-viewer-files')) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move';
+          setDropping(true);
+        }
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropping(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDropping(false);
+        const data = event.dataTransfer.getData('application/x-viewer-files');
+        if (!data) return;
+        try {
+          const files: unknown = JSON.parse(data);
+          if (!Array.isArray(files) || files.some((file) => typeof file !== 'string')) return;
+          void operate(event.altKey ? 'copy' : 'move', { sources: files, destination: path }).catch(
+            report,
+          );
+        } catch {
+          report('The dragged file selection could not be read.');
+        }
+      }}
+    >
+      <div className="folder-toolbar">
+        <IconButton
+          icon="left"
+          label="Back"
+          disabled={pane.historyIndex === 0}
+          onClick={() => historyNavigate(id, -1)}
+        />
+        <IconButton
+          icon="right"
+          label="Forward"
+          disabled={pane.historyIndex >= pane.history.length - 1}
+          onClick={() => historyNavigate(id, 1)}
+        />
+        <IconButton
+          icon="up"
+          label="Parent folder"
+          disabled={path === parentPath(path)}
+          onClick={() => navigate(id, parentPath(path))}
+        />
+        <span className="toolbar-divider" />
+        <div className="view-switch" aria-label="View mode">
+          {modes.map((mode) => (
+            <IconButton
+              key={mode}
+              icon={mode}
+              label={`${mode[0].toUpperCase()}${mode.slice(1)} view`}
+              aria-pressed={pane.mode === mode}
+              onClick={() => updatePane(id, { mode })}
+            />
+          ))}
+        </div>
+        <span className="toolbar-spacer" />
+        <IconButton icon="plus" label="New folder" onClick={() => command('new-folder')} />
+        <IconButton
+          icon="star"
+          label={isFavorite ? 'Remove favorite' : 'Add favorite'}
+          aria-pressed={isFavorite}
+          onClick={() => favorite(path, crumbs.at(-1) || path)}
+        />
+        <IconButton
+          icon="more"
+          label="Folder actions"
+          onClick={(event) =>
+            setMenu({ x: Math.min(event.clientX, window.innerWidth - 240), y: event.clientY + 20 })
+          }
+        />
+      </div>
+      <div className="breadcrumb-row">
+        <nav className="breadcrumbs" aria-label="Folder path">
+          <button title="Go to root" onClick={() => navigate(id, separator)}>
+            {separator}
+          </button>
+          {crumbs.map((crumb, index) => (
+            <span key={index}>
+              <Icon name="right" size={12} />
+              <button
+                title={separator + crumbs.slice(0, index + 1).join(separator)}
+                onClick={() => navigate(id, separator + crumbs.slice(0, index + 1).join(separator))}
+              >
+                {crumb}
+              </button>
+            </span>
+          ))}
+        </nav>
+      </div>
+      <div className="search-row">
+        <Icon name="search" size={16} />
+        <input
+          ref={input}
+          aria-label="Find files"
+          placeholder={subtree ? 'Search this folder and subfolders' : 'Filter this folder'}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <button
+          className={subtree ? 'selected' : ''}
+          aria-pressed={subtree}
+          onClick={() => setSubtree(!subtree)}
+          title="Include subfolders"
+        >
+          Subfolders
+        </button>
+        {query && <IconButton icon="close" label="Clear search" onClick={() => setQuery('')} />}
+        {search.running && (
+          <IconButton icon="pause" label="Cancel search" onClick={search.cancel} />
+        )}
+      </div>
+      {listing.error && (
+        <div className="folder-error" role="alert">
+          <Icon name="warning" />
+          <span>{listing.error}</span>
+          <button onClick={listing.refresh}>Retry</button>
+        </div>
+      )}
+      {pane.mode === 'list' && (
+        <div className="file-head">
+          <button
+            onClick={() =>
+              updatePane(id, { sort: 'name', descending: pane.sort === 'name' && !pane.descending })
+            }
+          >
+            Name {pane.sort === 'name' && (pane.descending ? '↓' : '↑')}
+          </button>
+          <button
+            onClick={() =>
+              updatePane(id, {
+                sort: 'modified',
+                descending: pane.sort === 'modified' && !pane.descending,
+              })
+            }
+          >
+            Date modified
+          </button>
+          <button
+            onClick={() =>
+              updatePane(id, { sort: 'kind', descending: pane.sort === 'kind' && !pane.descending })
+            }
+          >
+            Kind
+          </button>
+          <button
+            onClick={() =>
+              updatePane(id, { sort: 'size', descending: pane.sort === 'size' && !pane.descending })
+            }
+          >
+            Size
+          </button>
+        </div>
+      )}
+      <div className="folder-content">
+        {listing.loading && !subtree ? (
+          <Loading label="Reading folder…" />
+        ) : !entries.length ? (
+          <Empty
+            icon={query ? 'search' : 'folder'}
+            title={
+              query ? (search.running ? 'Searching…' : 'No matching files') : 'This folder is empty'
+            }
+            detail={
+              query
+                ? 'Try a different name or include subfolders.'
+                : 'Create a folder or drop files here.'
+            }
+          />
+        ) : pane.mode === 'grid' ? (
+          <GridView {...viewProps} />
+        ) : pane.mode === 'columns' ? (
+          <ColumnsView path={path} {...viewProps} />
+        ) : pane.mode === 'gallery' ? (
+          <GalleryView {...viewProps} />
+        ) : (
+          <ListView {...viewProps} />
+        )}
+      </div>
+      <footer className="folder-status">
+        <span>
+          {entries.length.toLocaleString()} items
+          {selection.length ? ` · ${selection.length} selected` : ''}
+        </span>
+        <span>
+          {search.summary ||
+            (selected.length
+              ? formatBytes(
+                  selected.reduce((size, entry) => size + (entry.directory ? 0 : entry.size), 0),
+                )
+              : pane.showHidden
+                ? 'Hidden files shown'
+                : '')}
+        </span>
+      </footer>
+      {menu && (
+        <ContextMenu
+          position={menu}
+          items={[
+            { id: 'open-selection', label: 'Open', icon: 'folder', disabled: !selection.length },
+            { id: 'linked', label: 'Open linked plane', icon: 'link', disabled: !selection.length },
+            {
+              id: 'quick-preview',
+              label: 'Quick preview',
+              icon: 'eye',
+              disabled: !selected[0] || selected[0].directory,
+            },
+            { id: 'info', label: 'Get info…', icon: 'file', disabled: !selection.length },
+            { id: 'rename', label: 'Rename…', icon: 'rename', disabled: selection.length !== 1 },
+            { id: 'copy', label: 'Copy', icon: 'copy', disabled: !selection.length },
+            { id: 'cut', label: 'Cut', icon: 'move', disabled: !selection.length },
+            { id: 'paste', label: 'Paste here', icon: 'copy' },
+            { id: 'duplicate', label: 'Duplicate', icon: 'copy', disabled: !selection.length },
+            { id: 'new-folder', label: 'New folder…', icon: 'plus' },
+            {
+              id: 'hidden',
+              label: pane.showHidden ? 'Hide hidden files' : 'Show hidden files',
+              icon: 'eye',
+            },
+            { id: 'refresh', label: 'Refresh', icon: 'refresh' },
+            { id: 'trash', label: 'Move to Trash…', icon: 'trash', disabled: !selection.length },
+            ...(selected[0]
+              ? [{ id: 'reveal', label: 'Reveal in Finder', icon: 'external' } satisfies MenuItem]
+              : []),
+          ]}
+          onClose={() => setMenu(null)}
+          onSelect={(name) => {
+            if (name === 'reveal' && selected[0]) {
+              void window.viewer.reveal(selected[0].path).catch(report);
+              setMenu(null);
+            } else command(name);
+          }}
+        />
+      )}
+      {dialog && (
+        <NameDialog
+          title={
+            dialog === 'rename' ? 'Rename file' : dialog === 'mkdir' ? 'New folder' : 'Go to folder'
+          }
+          label={dialog === 'go-to' ? 'Folder path' : 'Name'}
+          maxLength={dialog === 'go-to' ? 32768 : 255}
+          initial={dialog === 'rename' ? selected[0]?.name : dialog === 'go-to' ? path : ''}
+          action={dialog === 'rename' ? 'Rename' : dialog === 'mkdir' ? 'Create' : 'Go'}
+          onClose={() => setDialog(null)}
+          onSubmit={async (name) => {
+            if (dialog === 'go-to') {
+              const resolved =
+                name === '~' || name.startsWith('~/')
+                  ? getState().bootstrap.home + name.slice(1)
+                  : name;
+              const entry = await window.viewer.stat(resolved);
+              if (!entry.directory) throw new Error('Choose a folder path.');
+              navigate(id, entry.path);
+            } else
+              await operate(dialog === 'rename' ? 'rename' : 'mkdir', {
+                name,
+                destination: dialog === 'mkdir' ? path : undefined,
+              });
+          }}
+        />
+      )}
+      {info && <FileInformation entries={selected} onClose={() => setInfo(false)} />}
+      {trash && (
+        <Dialog title="Move to Trash?" onClose={() => setTrash(false)}>
+          <p className="dialog-copy">
+            Move{' '}
+            {selection.length === 1
+              ? `“${selected[0]?.name || selection[0]}”`
+              : `${selection.length} items`}{' '}
+            to the macOS Trash?
+          </p>
+          <footer>
+            <button onClick={() => setTrash(false)}>Cancel</button>
+            <button
+              className="danger"
+              onClick={() => {
+                void operate('trash').catch(report);
+                setTrash(false);
+              }}
+            >
+              Move to Trash
+            </button>
+          </footer>
+        </Dialog>
+      )}
+    </div>
+  );
+}

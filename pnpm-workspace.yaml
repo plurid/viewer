@@ -1,0 +1,6 @@
+packages:
+  - packages/viewer-electron/app
+nodeLinker: hoisted
+allowBuilds:
+  electron: true
+  esbuild: true

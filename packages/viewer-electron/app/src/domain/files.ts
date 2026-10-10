@@ -1,0 +1,44 @@
+import type { FileEntry, SortKey } from './contracts';
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+export function sortEntries(entries: FileEntry[], key: SortKey, descending: boolean): FileEntry[] {
+  return [...entries].sort((a, b) => {
+    if (a.directory !== b.directory) return a.directory ? -1 : 1;
+    const value =
+      key === 'name'
+        ? collator.compare(a.name, b.name)
+        : key === 'kind'
+          ? collator.compare(a.extension, b.extension)
+          : a[key] - b[key];
+    return (value || collator.compare(a.name, b.name)) * (descending ? -1 : 1);
+  });
+}
+export function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), 4);
+  return `${(value / 1024 ** index).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${['B', 'KB', 'MB', 'GB', 'TB'][index]}`;
+}
+export function fileFamily(entry: Pick<FileEntry, 'extension' | 'directory' | 'mime'>): string {
+  if (entry.directory) return 'folder';
+  if (['glb', 'gltf', 'obj', 'stl', 'fbx'].includes(entry.extension)) return 'model';
+  if (['zip', 'tar', 'gz', 'tgz'].includes(entry.extension)) return 'archive';
+  if (entry.extension === 'pdf') return 'pdf';
+  if (['csv', 'tsv', 'json', 'jsonl'].includes(entry.extension)) return 'data';
+  if (
+    ['ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'go', 'sh', 'html', 'css', 'cpp', 'c', 'java'].includes(
+      entry.extension,
+    )
+  )
+    return 'code';
+  if (entry.mime.startsWith('image/')) return 'image';
+  if (entry.mime.startsWith('audio/')) return 'audio';
+  if (entry.mime.startsWith('video/')) return 'video';
+  return 'file';
+}
+export function selectedRange(entries: FileEntry[], anchor: string, target: string): string[] {
+  const a = entries.findIndex((entry) => entry.path === anchor);
+  const b = entries.findIndex((entry) => entry.path === target);
+  return a < 0 || b < 0
+    ? [target]
+    : entries.slice(Math.min(a, b), Math.max(a, b) + 1).map((entry) => entry.path);
+}

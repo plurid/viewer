@@ -1,0 +1,19 @@
+{
+  "name": "viewer-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.3.0",
+  "engines": { "node": ">=22.13.0", "pnpm": ">=11" },
+  "scripts": {
+    "start": "pnpm --filter viewer-electron start",
+    "check": "pnpm --filter viewer-electron check",
+    "lint": "pnpm --filter viewer-electron lint",
+    "format": "pnpm --filter viewer-electron format",
+    "format:check": "pnpm --filter viewer-electron format:check",
+    "test": "pnpm --filter viewer-electron test",
+    "test:browser": "pnpm --filter viewer-electron test:browser",
+    "test:desktop": "pnpm --filter viewer-electron test:desktop",
+    "verify": "pnpm check && pnpm lint && pnpm test && pnpm package",
+    "package": "pnpm --filter viewer-electron package",
+    "make": "pnpm --filter viewer-electron make"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+.vite/
+out/
+coverage/
+*.tsbuildinfo
+.impeccable/review/
+.impeccable/config.local.json
+.DS_Store
