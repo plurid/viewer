@@ -59,6 +59,8 @@ import { editable, textEditFor } from './commands/editing';
 import { Sidebar } from './ui/Sidebar';
 
 import { ContextMenu } from './ui/ContextMenu';
+import { OpenWithDialog } from './ui/OpenWithDialog';
+import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 
 const basename = (path: string) => path.split(/[\\/]/).pop() || path;
 export function App() {
@@ -74,6 +76,7 @@ export function App() {
 }
 function AppWindow() {
   const registry = useCommands();
+  const [openWithPaths, setOpenWithPaths] = useState<string[]>();
   const engine = useRef<PluridApplicationHandle>(null);
   const surface = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
@@ -165,7 +168,11 @@ function AppWindow() {
             dock: getState().saved.ui.space.opening === 'dock',
           });
       },
-      open(entry: FileEntry, parentEngineID?: string, options?: { another?: boolean }) {
+      open(
+        entry: FileEntry,
+        parentEngineID?: string,
+        options?: { another?: boolean; link?: string },
+      ) {
         const api = engine.current;
         if (!api || !readyRef.current) return;
         const space = activeWorkspace();
@@ -205,6 +212,7 @@ function AppWindow() {
             data: {
               route: `/${entry.directory ? 'folders' : 'previews'}/${pane.id}`,
               parentPlaneID: parentEngineID!,
+              link: options?.link,
               framing: 'none',
             },
           });
@@ -237,7 +245,7 @@ function AppWindow() {
           const node =
             engine.current &&
             flattenTree(engine.current.tree.get()).find((node) => hostID(node) === current?.id);
-          controller.open(entry, node?.planeID, { another: target?.another });
+          controller.open(entry, node?.planeID, { another: target?.another, link: target?.link });
         }
       },
       focusPane(id) {
@@ -366,6 +374,7 @@ function AppWindow() {
           restoreWorkspace: () => transitionWorkspace(restoreWorkspace),
           spatialTool,
           goTo: () => setGoTo(true),
+          openWith: setOpenWithPaths,
         }),
       valid: (invocation) => invocation.workspaceID === getState().saved.activeWorkspace,
     },
@@ -426,9 +435,16 @@ function AppWindow() {
         });
     };
     const remove = window.viewer.onEvent((event) => {
-      if (event.type === 'settings') receiveSettings(event.snapshot);
-      else if (event.type === 'file-changes') receiveFileChanges(event.changes);
-      else if (event.type === 'job') receiveJob(event.job);
+      if (event.type === 'folder-size') receiveFolderSize(event.task);
+      else if (event.type === 'folder-changed') invalidateFolderSizes(event.path);
+      else if (event.type === 'settings') receiveSettings(event.snapshot);
+      else if (event.type === 'file-changes') {
+        receiveFileChanges(event.changes);
+        for (const change of event.changes) {
+          invalidateFolderSizes(change.source);
+          invalidateFolderSizes(change.destination);
+        }
+      } else if (event.type === 'job') receiveJob(event.job);
       else if (event.type === 'job-progress' && !receiveProgress(event.progress)) resync();
       else if (event.type === 'open')
         for (const path of event.paths) void controller.openPath(path).catch(report);
@@ -483,7 +499,9 @@ function AppWindow() {
         !event.ctrlKey &&
         !event.altKey &&
         !editable(event.target) &&
-        !(event.target as Element).closest('button, [role="button"], select, video, audio') &&
+        !(event.target as Element).closest(
+          'button, [role="button"], select, video, audio, .preview-host',
+        ) &&
         !document.querySelector('dialog[open], .context-menu')
       ) {
         const context = registry.context(getState().activePane) || windowContext();
@@ -599,6 +617,9 @@ function AppWindow() {
           </main>
         </div>
         <OperationsPanel />
+        {openWithPaths && (
+          <OpenWithDialog paths={openWithPaths} onClose={() => setOpenWithPaths(undefined)} />
+        )}
         {workspaceMenu && (
           <ContextMenu
             position={workspaceMenu}

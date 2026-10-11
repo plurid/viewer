@@ -10,10 +10,20 @@ export interface WorkspaceController {
     content?: boolean,
   ): void;
   newRootFolder(target?: NewRootFolderTarget): void;
-  open(entry: FileEntry, parentEngineID?: string, options?: { another?: boolean }): void;
+  open(
+    entry: FileEntry,
+    parentEngineID?: string,
+    options?: { another?: boolean; link?: string },
+  ): void;
   openPath(
     path: string,
-    target?: { paneID?: string; workspaceID?: string; linked?: boolean; another?: boolean },
+    target?: {
+      paneID?: string;
+      workspaceID?: string;
+      linked?: boolean;
+      another?: boolean;
+      link?: string;
+    },
   ): Promise<void>;
   focusPane(hostID: string): void;
   frameAll(): void;

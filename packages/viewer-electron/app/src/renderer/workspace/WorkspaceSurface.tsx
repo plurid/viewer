@@ -24,6 +24,7 @@ export { frameWorkspace } from './framing';
 import { focusFiles } from './sessions';
 import { useWorkspace } from './context';
 import { looks } from './look';
+import { routeFileKeyboard } from '../explorer/selection';
 
 export function flattenTree(tree: TreePlane[]): TreePlane[] {
   return tree.flatMap((node) => [node, ...flattenTree(node.children ?? [])]);
@@ -126,6 +127,7 @@ export function WorkspaceSurface({
         docking: { url: false },
         clipboard: false,
         gestures: { wheel: 'plane', dragHandle: 'chrome' },
+        bridge: { planeAngle: 0 },
         shortcuts: {
           disabled: ['palette', 'copy', 'cut', 'paste', 'undo', 'redo', 'duplicateSelection'],
         },
@@ -162,6 +164,8 @@ export function WorkspaceSurface({
   useEffect(() => {
     if (!api) return;
     let publishing = false;
+    let disposed = false;
+    let scheduled = false;
     const synchronize = () => {
       if (publishing || api.store !== engine.current?.store) return;
       const { elements, space } = api.getSnapshot().configuration;
@@ -173,6 +177,7 @@ export function WorkspaceSurface({
         elements.plane.resizable === preferences.resizing &&
         elements.plane.backface === 'visible' &&
         space.navigation?.childFraming === 'plane' &&
+        space.bridge?.planeAngle === 0 &&
         space.transformOrigin.show === preferences.origin
       )
         return;
@@ -183,13 +188,32 @@ export function WorkspaceSurface({
       publishing = false;
     };
     synchronize();
-    return api.store.subscribe(synchronize);
+    // A configuration publish dispatches several engine actions. Reapplying
+    // preferences between those actions can restore the previous transform
+    // mode through the engine's live configuration bridge.
+    const unsubscribe = api.store.subscribe(() => {
+      if (publishing || disposed || scheduled) return;
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        if (!disposed) synchronize();
+      });
+    });
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
   }, [api, configuration, preferences, engine]);
   return (
     <div
       className="workspace-surface"
       ref={surface}
       onKeyDownCapture={(event) => {
+        if (event.shiftKey && event.key.startsWith('Arrow')) {
+          const header = (event.target as Element).closest<HTMLElement>('[data-viewer-plane]');
+          if (header) routeFileKeyboard(header.dataset.viewerPlane!, event);
+          if (event.isPropagationStopped()) return;
+        }
         if (event.key !== 'Enter' && event.key !== ' ') return;
         const hit = (event.target as Element).closest<HTMLButtonElement>(
           'button[data-plurid-minimap-plane]',

@@ -172,6 +172,7 @@ export async function createFixtures(): Promise<{
   await writeFile(path.join(files, 'Images', 'Color.png'), imageFixture);
   await writeFile(path.join(files, 'Media', 'Tone.wav'), audioFixture());
   await writeFile(path.join(files, 'Media', 'Color.webm'), videoFixture);
+  await writeFile(path.join(files, 'Media', 'Malformed.mkv'), 'not a playable video');
   await writeFile(
     path.join(files, 'Reference files.zip'),
     zipSync({

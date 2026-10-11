@@ -20,7 +20,7 @@ Duration figures below are CPU work over controlled observation windows, not end
 | Prune 10,000 independent operation sources, Node     | 1,304.55ms                                                                                    | 3.84–3.92ms                                                        | Ancestor Set membership replaces all-pairs prefix comparison.                               |
 | Resolve a 10,000-item selection, Node                | 175.13ms for repeated `find`                                                                  | 1.54–1.90ms including construction of both indexes and path lookup | The hot lookup scales with listing plus selection size.                                     |
 | Idle 10,000-file folder, 3 seconds                   | 0.18ms task work                                                                              | 0.37ms task work, 0ms script work                                  | Both samples are effectively idle; there is no evidence of a continuous renderer loop here. |
-| Settings tab dimensions, preceding pass             | Heights varied: 180.9 / 586.2 / 332.3px                                                       | Fixed dialog in that pass; now a separate 900×640 native window    | Categories scroll inside a stable window and preserve its size.                              |
+| Settings tab dimensions, preceding pass              | Heights varied: 180.9 / 586.2 / 332.3px                                                       | Fixed dialog in that pass; now a separate 900×640 native window    | Categories scroll inside a stable window and preserve its size.                             |
 
 ### Menu scrolling
 
@@ -96,15 +96,15 @@ These are on-disk JavaScript sizes, not measured cold-start times. Gzip sizes ar
 
 Fresh packaged-native probes used isolated profiles, 120Hz frame observations, generated files and a React DevTools commit hook. They checked source hashes afterward and recorded no renderer exceptions or observer long tasks. These include asynchronous waits and instrumentation; elapsed duration is the observation window, not click latency.
 
-| Workload | React commits / engine emissions | Frame p95 | Largest frame interval |
-| --- | --- | --- | --- |
-| Two roots: open/scroll contextual actions, 24 wheel steps with pointer jitter | 51 / 7 in 1.65s | 9.1ms | 175ms |
-| Two roots: repeated hover on one command row | 8 / 1 in 1.41s | 9.1ms | 9.4ms |
-| Two roots: camera wheel rotation | 607 / 202 in 2.01s | 8.5ms | 9.3ms |
-| Twelve roots / 1,000 generated files: contextual menu scrolling | 30 / 1 in 1.44s | 8.9ms | 15.8ms |
-| Same layout plus four 4,096×4,096 image roots: contextual menu scrolling | 27 / 0 in 1.43s | 9.5ms | 12.8ms |
-| Image-root layout: camera wheel rotation | 751 / 251 in 2.40s | 8.9ms | 9.3ms |
-| Image-root layout: plane title drag | 125 / 46 in 1.41s | 9.3ms | 10.3ms |
+| Workload                                                                      | React commits / engine emissions | Frame p95 | Largest frame interval |
+| ----------------------------------------------------------------------------- | -------------------------------- | --------- | ---------------------- |
+| Two roots: open/scroll contextual actions, 24 wheel steps with pointer jitter | 51 / 7 in 1.65s                  | 9.1ms     | 175ms                  |
+| Two roots: repeated hover on one command row                                  | 8 / 1 in 1.41s                   | 9.1ms     | 9.4ms                  |
+| Two roots: camera wheel rotation                                              | 607 / 202 in 2.01s               | 8.5ms     | 9.3ms                  |
+| Twelve roots / 1,000 generated files: contextual menu scrolling               | 30 / 1 in 1.44s                  | 8.9ms     | 15.8ms                 |
+| Same layout plus four 4,096×4,096 image roots: contextual menu scrolling      | 27 / 0 in 1.43s                  | 9.5ms     | 12.8ms                 |
+| Image-root layout: camera wheel rotation                                      | 751 / 251 in 2.40s               | 8.9ms     | 9.3ms                  |
+| Image-root layout: plane title drag                                           | 125 / 46 in 1.41s                | 9.3ms     | 10.3ms                 |
 
 The small-menu sample contains one 175ms frame gap despite no JavaScript long task. This must not be hidden by percentile reporting or interpreted as a solved compositor stall. The larger menu samples did not reproduce that gap. The image-root camera trace recorded 194.4ms of FunctionCall work (largest 2.8ms), 15.9ms of style updates, 34.3ms layout, 8.8ms event dispatch and 33.0ms paint across its observation window. This is renderer trace data, not a GPU-memory or platform-compositor measurement.
 
@@ -112,14 +112,31 @@ Camera gestures still cause about three React root commits per engine emission. 
 
 The probes also verified independent same-image children in two roots, same-root reuse, Space after row/search/frame controls and selection surviving culling. They are generated diagnostic workloads, not representative real book libraries or network mounts.
 
+### Reliability-pass foreground observations
+
+Before switching routine QA to background rendering, the packaged harness recorded three warm, one-root menu samples with 24 alternating ±60px wheel events and 1px pointer jitter. The fixture contained 11 entries. A test-only React commit hook, engine subscription, RAF probe and long-task observer ran in the actual foreground app.
+
+| Workload              | Observation window | React commits / engine emissions | Frame p95 | Largest frame interval | JS long tasks |
+| --------------------- | ------------------ | -------------------------------- | --------- | ---------------------- | ------------- |
+| Menu wheel, sample 1  | 1.006s             | 26 / 0                           | 8.4ms     | 9.2ms                  | 0             |
+| Menu wheel, sample 2  | 1.006s             | 27 / 0                           | 8.7ms     | 9.3ms                  | 0             |
+| Menu wheel, sample 3  | 1.006s             | 25 / 0                           | 8.6ms     | 9.1ms                  | 0             |
+| Camera wheel rotation | 1.218s             | 301 / 100                        | 8.4ms     | 9.3ms                  | 0             |
+
+Menu scrolling left the camera unchanged; the camera sample asserted that rotation actually changed. These short warm samples did not reproduce the historical 175ms gap. They do not invalidate that earlier two-root observation or establish smoothness on cold, remote or larger workloads. Camera commit volume remains about three per emission. The spatial preference reentrancy fix was subsequently verified functionally; these figures are not a new physical benchmark of that change.
+
+Folder-size work now runs explicitly in the utility process with two active scans and bounded metadata batches. A separate renderer store limits progress rerenders to subscribers for that selection. No folder traversal runs merely because a folder was selected. Native application discovery runs in a bounded helper process, and media waits expose loading/recovery instead of an indefinite blank stage. Filesystem-call latency, decoded video/GPU costs and large directory scans still require representative traces.
+
+Routine `pnpm test:desktop` now renders hidden offscreen windows, keeps the QA process out of the Dock and checks that it never becomes active. This preserves functional renderer, WebGL, IPC and recovery checks without stealing user focus. Physical frame profiling requires explicit `VIEWER_TEST_FOREGROUND=1` and activates the owned test app. Offscreen frame observations are excluded from foreground performance evidence and do not overwrite its artifact. See [Electron's offscreen rendering behavior](https://www.electronjs.org/docs/latest/tutorial/offscreen-rendering).
+
 ### SQLite filename/metadata index
 
 The checked-in `tools/index-benchmark.ts` ingests synthetic records into a temporary disk SQLite/WAL database, then alternates publication-extension queries and frequent filename/size queries over 30 samples. It does not crawl a user's filesystem.
 
-| Records | Ingestion | Query p50 | Query p95 |
-| --- | --- | --- | --- |
-| 100,000 | 980ms | 21.46ms | 22.50ms |
-| 1,000,000 | 10,878ms | 18.69ms | 19.61ms |
+| Records   | Ingestion | Query p50 | Query p95 |
+| --------- | --------- | --------- | --------- |
+| 100,000   | 980ms     | 21.46ms   | 22.50ms   |
+| 1,000,000 | 10,878ms  | 18.69ms   | 19.61ms   |
 
 Before the frequent-term query-plan correction, the million-record fixture took 285.81ms p50 / 296.2ms p95. The current plan uses a bounded count probe and scans matching names in stable order when a term is frequent, avoiding a large intermediate FTS sort. A regression checks disjoint pages through this branch. These figures measure indexed warm queries over synthetic filenames/metadata; extraction, first crawl, real document search and mount latency have separate costs.
 
@@ -129,6 +146,6 @@ Reproduce from the app package with `node --import tsx tools/index-benchmark.ts 
 
 The unit suite covers identity reconciliation, normalized pane reuse, bounded finder ranking, preference migration, optional sidebar persistence, progress gaps/stale snapshots, whole-job throttling and filesystem safety. The packaged-app suite covers search toggle/focus restoration, ring suppression, fixed Settings dimensions, controls persistence/toggles, title dragging, independent plane navigation, face-on opening, duplicate prevention, explicit second views, previews, transfers, undo and workspace restoration. See [verification.md](verification.md).
 
-To reproduce functional checks, run `pnpm check`, `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm make`, then `pnpm test:desktop`. The native harness uses generated fixtures and an isolated profile. For performance comparison, use the same binary/profile setup, enable CDP Performance/Profiler and a long-task observer, and measure: 14 alternating ±60px menu wheel events with 1px pointer jitter; three seconds of idle in a generated 10,000-file folder; command opening and select-all over one-second windows. Keep window visibility and fixture size identical and distinguish full observations from parser-only Node probes.
+To reproduce functional checks, run `pnpm check`, `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm package`, then `pnpm test:desktop`. The native harness uses generated fixtures and an isolated profile. A requested foreground profiling run uses `VIEWER_TEST_FOREGROUND=1 pnpm test:desktop` for the reliability-pass menu/camera observations. For other comparisons, use the same binary/profile setup, enable CDP Performance/Profiler and a long-task observer, and measure: 14 alternating ±60px menu wheel events with 1px pointer jitter; three seconds of idle in a generated 10,000-file folder; command opening and select-all over one-second windows. Keep window visibility and fixture size identical and distinguish full observations from parser-only Node probes.
 
 The next evidence-driven priorities are camera subscriber/commit work, large CSV/model parsing, multi-preview GPU usage, cold/mounted-folder metadata and large workspace saves. Ordinary menu scrolling and large-folder selection no longer show the previously measured stalls.

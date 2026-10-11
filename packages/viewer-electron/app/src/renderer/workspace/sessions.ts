@@ -11,6 +11,7 @@ export interface BrowseSession {
   searchOpen: boolean;
   pathOpen: boolean;
   anchor: string;
+  cursor: string;
   scroll: number;
   cache: Map<string, FileEntry>;
 }
@@ -27,6 +28,7 @@ export function browseSession(id: string, path: string): BrowseSession {
       searchOpen: false,
       pathOpen: false,
       anchor: '',
+      cursor: '',
       scroll: 0,
       cache: new Map(),
     };
@@ -123,6 +125,7 @@ export function remapSessions(changes: readonly FileChange[]): void {
     state.path = map(state.path);
     state.selection = state.selection.map((path) => map(path));
     state.anchor = map(state.anchor);
+    state.cursor = map(state.cursor);
     const cache = new Map<string, FileEntry>();
     for (const entry of state.cache.values()) {
       const path = map(entry.path);

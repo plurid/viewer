@@ -1,12 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
-import {
-  formatBytes,
-  indexEntries,
-  reconcileSelection,
-  selectedRange,
-  sortEntries,
-} from '../../domain/files';
+import { indexEntries, reconcileSelection, sortEntries } from '../../domain/files';
 import {
   activeWorkspace,
   getState,
@@ -29,7 +23,10 @@ import { useCommands, useCommandSource } from '../commands/context';
 import { folderCommands } from '../commands/folder';
 import { editable } from '../commands/editing';
 import type { CommandRequest } from '../commands/registry';
+import { revealFile } from './anchors';
+import { SelectionSize } from './sizes';
 import { useFileDialogs } from './FileDialogs';
+import { blankFileSpace, fileControlOwnsKey, useFileKeyboard, useFileSelection } from './selection';
 
 export const FolderExplorer = memo(function FolderExplorer({
   id,
@@ -49,14 +46,7 @@ export const FolderExplorer = memo(function FolderExplorer({
   const path = pane?.path || '';
   const session = browseSession(id, path);
   const [selection, setSelection] = useBrowseField(id, path, 'selection');
-  const anchor = {
-    get current() {
-      return session.anchor;
-    },
-    set current(value: string) {
-      session.anchor = value;
-    },
-  };
+  const selecting = useFileSelection(session, setSelection);
   const [query, setQuery] = useBrowseField(id, path, 'query');
   const [subtree, setSubtree] = useBrowseField(id, path, 'subtree');
   const input = useRef<HTMLInputElement>(null);
@@ -128,37 +118,29 @@ export const FolderExplorer = memo(function FolderExplorer({
   const open = useCallback(
     (entry: FileEntry, linked = false, another = false) => {
       if (entry.directory && !linked) navigate(id, entry.path);
-      else workspace.open(entry, engineID, { another });
+      else {
+        const origin = activeWorkspace().id;
+        void revealFile(id, entry.path)
+          .then((link) => {
+            if (
+              activeWorkspace().id === origin &&
+              activeWorkspace().panes.some((pane) => pane.id === id && pane.path === path)
+            )
+              workspace.open(entry, engineID, { another, link });
+          })
+          .catch(report);
+      }
     },
-    [workspace, engineID, id],
+    [workspace, engineID, id, path],
   );
   const select = useCallback(
     (entry: FileEntry, event: MouseEvent, scope = entries) => {
       columnScope.current = scope;
-      for (const item of scope) selectionCache.current.set(item.path, item);
-      selectionCache.current.set(entry.path, entry);
       setActivePane(id);
       surface.current?.focus({ preventScroll: true });
-      if (event.shiftKey)
-        setSelection((value) => [
-          ...new Set([
-            ...(event.metaKey || event.ctrlKey ? value : []),
-            ...selectedRange(scope, anchor.current, entry.path),
-          ]),
-        ]);
-      else if (event.metaKey || event.ctrlKey) {
-        anchor.current = entry.path;
-        setSelection((value) =>
-          value.includes(entry.path)
-            ? value.filter((path) => path !== entry.path)
-            : [...value, entry.path],
-        );
-      } else {
-        anchor.current = entry.path;
-        setSelection([entry.path]);
-      }
+      selecting.click(entry, event, scope);
     },
-    [entries, id, path, setSelection],
+    [entries, id, selecting],
   );
   useEffect(() => {
     if (searchOpen) input.current?.focus();
@@ -198,8 +180,7 @@ export const FolderExplorer = memo(function FolderExplorer({
           refresh: listing.refresh,
           selectAll: () => {
             const scope = pane?.mode === 'columns' ? columnScope.current || entries : entries;
-            for (const entry of scope) selectionCache.current.set(entry.path, entry);
-            setSelection(scope.map((entry) => entry.path));
+            selecting.all(scope);
           },
         }),
       valid: (invocation, live) =>
@@ -227,21 +208,96 @@ export const FolderExplorer = memo(function FolderExplorer({
     void registry.invoke(name, { paneID: id }).catch(report);
     setMenu(null);
   };
+  const handleKey = useFileKeyboard(id, (event) => {
+    if (
+      !pane ||
+      editable(event.target) ||
+      fileControlOwnsKey(event) ||
+      document.querySelector('dialog[open], .context-menu')
+    )
+      return;
+    const mod = event.metaKey || event.ctrlKey;
+    const scope = pane.mode === 'columns' ? columnScope.current || entries : entries;
+    if (event.altKey && event.key === 'ArrowLeft') {
+      event.preventDefault();
+      event.stopPropagation();
+      command('back');
+    } else if (event.altKey && event.key === 'ArrowRight') {
+      event.preventDefault();
+      event.stopPropagation();
+      command('forward');
+    } else if (mod && event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      command('parent');
+    } else if (
+      [
+        'ArrowDown',
+        'ArrowUp',
+        'ArrowLeft',
+        'ArrowRight',
+        'Home',
+        'End',
+        'PageUp',
+        'PageDown',
+      ].includes(event.key)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      const stride =
+        pane.mode === 'grid' && ['ArrowDown', 'ArrowUp'].includes(event.key)
+          ? surface.current?.querySelector('.grid-row')?.childElementCount || 1
+          : 1;
+      selecting.move(scope, event.key, event.shiftKey, stride);
+    } else if (mod && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      event.stopPropagation();
+      selecting.all(scope);
+    } else if (mod && ['c', 'x', 'v'].includes(event.key.toLowerCase())) {
+      event.preventDefault();
+      event.stopPropagation();
+      command(
+        ({ c: 'copy', x: 'cut', v: 'paste' } as Record<string, string>)[event.key.toLowerCase()],
+      );
+    } else if (event.key === ' ') {
+      event.preventDefault();
+      event.stopPropagation();
+      command('quick-preview');
+    } else if (event.key === 'Enter' && !mod) {
+      event.preventDefault();
+      event.stopPropagation();
+      command('rename');
+    } else if (mod && event.key.toLowerCase() === 'o') {
+      event.preventDefault();
+      event.stopPropagation();
+      command('open-selection');
+    } else if (mod && event.key.toLowerCase() === 'i') {
+      event.preventDefault();
+      event.stopPropagation();
+      command('info');
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      selecting.clear();
+      setMenu(null);
+    } else if (mod && event.key === 'Backspace') {
+      event.preventDefault();
+      event.stopPropagation();
+      command('trash');
+    }
+  });
   if (!pane || pane.type !== 'folder') return <Empty title="Folder plane is unavailable" />;
   const viewProps: FileViewProps = {
     entries,
     selection,
+    cursor: session.cursor,
     selectionSet,
     select,
     open,
     showHidden: pane.showHidden,
     context: (entry, event) => {
       event.preventDefault();
-      selectionCache.current.set(entry.path, entry);
-      if (!selectionSet.has(entry.path)) {
-        setSelection([entry.path]);
-        anchor.current = entry.path;
-      }
+      selecting.target(entry);
       setActivePane(id);
       void refreshClipboard().catch(report);
       setMenu({
@@ -285,78 +341,30 @@ export const FolderExplorer = memo(function FolderExplorer({
       aria-label={`Folder ${path}`}
       onFocus={() => setActivePane(id)}
       onPointerDown={() => setActivePane(id)}
-      onKeyDown={(event) => {
-        if (editable(event.target) || document.querySelector('dialog[open], .context-menu')) return;
-        const mod = event.metaKey || event.ctrlKey;
-        const scope = pane.mode === 'columns' ? columnScope.current || entries : entries;
-        if (event.altKey && event.key === 'ArrowLeft') {
-          event.preventDefault();
-          event.stopPropagation();
-          command('back');
-        } else if (event.altKey && event.key === 'ArrowRight') {
-          event.preventDefault();
-          event.stopPropagation();
-          command('forward');
-        } else if (mod && event.key === 'ArrowUp') {
-          event.preventDefault();
-          event.stopPropagation();
-          command('parent');
-        } else if (
-          event.key === 'ArrowDown' ||
-          event.key === 'ArrowUp' ||
-          (pane.mode !== 'list' && ['ArrowLeft', 'ArrowRight'].includes(event.key))
+      onKeyDownCapture={handleKey}
+      onClick={(event) => {
+        if (
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          blankFileSpace(event.target)
         ) {
-          event.preventDefault();
-          event.stopPropagation();
-          const index = scope.findIndex((entry) => entry.path === selection.at(-1));
-          const stride =
-            pane.mode === 'grid' && ['ArrowDown', 'ArrowUp'].includes(event.key)
-              ? surface.current?.querySelector('.grid-row')?.childElementCount || 1
-              : 1;
-          const delta = ['ArrowDown', 'ArrowRight'].includes(event.key) ? stride : -stride;
-          const entry = scope[Math.max(0, Math.min(scope.length - 1, index + delta))];
-          if (entry) {
-            selectionCache.current.set(entry.path, entry);
-            if (event.shiftKey) {
-              if (!anchor.current) anchor.current = entry.path;
-              setSelection(selectedRange(scope, anchor.current, entry.path));
-            } else {
-              anchor.current = entry.path;
-              setSelection([entry.path]);
-            }
-          }
-        } else if (mod && event.key.toLowerCase() === 'a') {
-          event.preventDefault();
-          for (const entry of scope) selectionCache.current.set(entry.path, entry);
-          setSelection(scope.map((entry) => entry.path));
-        } else if (mod && ['c', 'x', 'v'].includes(event.key.toLowerCase())) {
-          event.preventDefault();
-          command(
-            ({ c: 'copy', x: 'cut', v: 'paste' } as Record<string, string>)[
-              event.key.toLowerCase()
-            ],
-          );
-        } else if (event.key === ' ') {
-          event.preventDefault();
-          event.stopPropagation();
-          command('quick-preview');
-        } else if (event.key === 'Enter' && !mod) {
-          event.preventDefault();
-          event.stopPropagation();
-          command('rename');
-        } else if (mod && event.key.toLowerCase() === 'o') {
-          event.preventDefault();
-          command('open-selection');
-        } else if (mod && event.key.toLowerCase() === 'i') {
-          event.preventDefault();
-          command('info');
-        } else if (event.key === 'Escape') {
-          setSelection([]);
-          setMenu(null);
-        } else if (mod && event.key === 'Backspace') {
-          event.preventDefault();
-          command('trash');
+          selecting.clear();
+          columnScope.current = null;
+          surface.current?.focus({ preventScroll: true });
         }
+      }}
+      onContextMenu={(event) => {
+        if (!blankFileSpace(event.target)) return;
+        event.preventDefault();
+        setActivePane(id);
+        void refreshClipboard().catch(report);
+        setMenu({
+          x: event.clientX,
+          y: event.clientY,
+          request: { paneID: id, scope: 'folder', context: { selection: [], directory: path } },
+        });
       }}
       onCopy={(event) => {
         if (!editable(event.target) && selection.length) {
@@ -490,21 +498,7 @@ export const FolderExplorer = memo(function FolderExplorer({
           </button>
         </div>
       )}
-      <div
-        className="folder-content"
-        onContextMenu={(event) => {
-          if (event.defaultPrevented || (event.target as HTMLElement).closest('[data-file-path]'))
-            return;
-          event.preventDefault();
-          setActivePane(id);
-          void refreshClipboard().catch(report);
-          setMenu({
-            x: event.clientX,
-            y: event.clientY,
-            request: { paneID: id, scope: 'folder', context: { selection: [], directory: path } },
-          });
-        }}
-      >
+      <div className="folder-content">
         {listing.loading && !subtree ? (
           <Loading label="Reading folder…" />
         ) : !entries.length ? (
@@ -534,16 +528,10 @@ export const FolderExplorer = memo(function FolderExplorer({
           {entries.length.toLocaleString()} items
           {selection.length ? ` · ${selection.length} selected` : ''}
         </span>
-        <span>
-          {search.summary ||
-            (selected.length
-              ? formatBytes(
-                  selected.reduce((size, entry) => size + (entry.directory ? 0 : entry.size), 0),
-                )
-              : pane.showHidden
-                ? 'Hidden files shown'
-                : '')}
-        </span>
+        <SelectionSize
+          entries={selected}
+          fallback={search.summary || (pane.showHidden ? 'Hidden files shown' : '')}
+        />
       </footer>
       {menu && (
         <ContextMenu

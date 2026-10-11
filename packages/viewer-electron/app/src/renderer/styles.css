@@ -2064,3 +2064,90 @@ select {
 .search-content-option input {
   width: auto;
 }
+
+.selection-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.selection-size .icon-button {
+  width: 22px;
+  height: 22px;
+}
+.open-with-dialog .application-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 12px;
+}
+.application-search input {
+  flex: 1;
+  min-width: 0;
+  background: var(--field);
+  border: 1px solid var(--line);
+  padding: 7px 9px;
+}
+.application-options {
+  height: 260px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.application-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  text-align: left;
+}
+.application-option[aria-selected='true'] {
+  background: var(--selection);
+  --muted: var(--selection-muted);
+}
+.application-option span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.application-option small,
+.application-empty {
+  color: var(--muted);
+}
+.application-empty {
+  margin: 12px 0;
+}
+.native-open-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.native-open-actions button {
+  border-color: var(--line);
+}
+.media-preview {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.media-preview > .video-viewer,
+.media-preview > .audio-viewer {
+  flex: 1;
+  min-height: 0;
+}
+.media-loading {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}

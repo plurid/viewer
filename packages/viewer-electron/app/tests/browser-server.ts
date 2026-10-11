@@ -8,6 +8,7 @@ import { createFixtures } from './fixtures';
 import { Resources } from '../src/desktop/resources';
 import { Operations } from '../src/desktop/operations';
 import { Watchers } from '../src/desktop/watchers';
+import { FolderSizes } from '../src/desktop/folder-sizes';
 import { Search } from '../src/desktop/search';
 import { Storage } from '../src/desktop/storage';
 import { entry, list } from '../src/desktop/filesystem';
@@ -36,6 +37,7 @@ const emit = (event: DesktopEvent) => {
   for (const client of clients) client.write(`data: ${JSON.stringify(event)}\n\n`);
 };
 const resources = new Resources();
+const sizes = new FolderSizes((task) => emit({ type: 'folder-size', task }));
 const watchers = new Watchers(emit);
 const search = new Search((batch) => emit({ type: 'search', batch }));
 const trash = path.join(fixture.root, 'trash');
@@ -176,6 +178,18 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'providerCredential':
     case 'agentToken':
       throw new Error('Credentials and agents are only available in the native app.');
+    case 'applications':
+      return { applications: [], supported: false };
+    case 'chooseApplication':
+      return null;
+    case 'openWith':
+      return;
+    case 'folderSizeStart':
+      return sizes.start((args[0] as string[]).map(scoped));
+    case 'folderSizeGet':
+      return sizes.get(args[0] as string);
+    case 'folderSizeCancel':
+      return sizes.cancel(args[0] as string);
     case 'chooseFolder':
       return fixture.files;
     case 'list':
@@ -297,6 +311,7 @@ console.log(
   `Viewer synthetic workspace: http://127.0.0.1:4173/tests/browser.html\nFixtures: ${fixture.files}`,
 );
 async function close() {
+  sizes.close();
   resources.clear();
   search.close();
   await actions.close();

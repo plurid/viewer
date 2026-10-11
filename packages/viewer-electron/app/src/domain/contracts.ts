@@ -192,6 +192,7 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'folder-size'; task: import('./metadata').FolderSizeTask }
   | { type: 'settings'; snapshot: import('./services').SettingsSnapshot }
   | { type: 'index'; status: import('./services').IndexStatus }
   | { type: 'action'; plan: import('./services').ActionPlan }
@@ -237,6 +238,12 @@ export interface ViewerAPI {
   chooseFolder(): Promise<string | null>;
   reveal(path: string): Promise<void>;
   openExternal(path: string): Promise<void>;
+  applications(paths: string[]): Promise<import('./metadata').ApplicationChoices>;
+  chooseApplication(): Promise<import('./metadata').NativeApplication | null>;
+  openWith(paths: string[], applicationID: string): Promise<void>;
+  folderSizeStart(paths: string[]): Promise<import('./metadata').FolderSizeTask>;
+  folderSizeGet(id: string): Promise<import('./metadata').FolderSizeTask>;
+  folderSizeCancel(id: string): Promise<void>;
   watch(path: string, subscriber: string): Promise<void>;
   unwatch(subscriber: string): Promise<void>;
   search(request: SearchRequest): Promise<void>;

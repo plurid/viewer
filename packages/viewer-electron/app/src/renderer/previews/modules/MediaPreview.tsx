@@ -3,6 +3,7 @@ import { usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
+import { NativeOpenActions } from '../../ui/NativeOpenActions';
 
 export default function MediaPreview(context: PreviewContext) {
   const { resource, active } = context;
@@ -10,7 +11,14 @@ export default function MediaPreview(context: PreviewContext) {
   const [error, setError] = useState('');
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const audio = resource.entry.mime.startsWith('audio/');
+  useEffect(() => {
+    if (ready || error || !active) return;
+    const timer = setTimeout(() => setSlow(true), 8000);
+    return () => clearTimeout(timer);
+  }, [ready, error, active, attempt]);
   useEffect(() => {
     if (!active) ref.current?.pause();
   }, [active]);
@@ -23,7 +31,7 @@ export default function MediaPreview(context: PreviewContext) {
         media.load();
       }
     };
-  }, []);
+  }, [error, attempt, resource.id]);
   usePreviewCommands(
     context,
     useMemo(
@@ -56,21 +64,37 @@ export default function MediaPreview(context: PreviewContext) {
   );
   if (error)
     return (
-      <Empty icon={audio ? 'audio' : 'video'} title="Media could not be played" detail={error} />
+      <Empty icon={audio ? 'audio' : 'video'} title="Media could not be played" detail={error}>
+        <NativeOpenActions path={resource.entry.path} />
+        <button
+          onClick={() => {
+            setError('');
+            setReady(false);
+            setSlow(false);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          Retry
+        </button>
+      </Empty>
     );
   const props = {
     src: resource.url,
     controls: true,
     onPlay: () => setPlaying(true),
     onPause: () => setPlaying(false),
-    onLoadedMetadata: () => setReady(true),
+    onLoadedData: () => {
+      setReady(true);
+      setSlow(false);
+    },
+    onCanPlay: () => {
+      setReady(true);
+      setSlow(false);
+    },
     preload: 'metadata' as const,
-    onError: () =>
-      setError(
-        'This codec or container is not supported by the desktop media engine, or the file is damaged.',
-      ),
+    onError: () => setError('Open this file in its default app or choose another player.'),
   };
-  return audio ? (
+  const media = audio ? (
     <div className="audio-viewer">
       <Icon name="audio" size={64} />
       <h2>{resource.entry.name}</h2>
@@ -79,6 +103,17 @@ export default function MediaPreview(context: PreviewContext) {
   ) : (
     <div className="video-viewer">
       <video ref={ref as React.RefObject<HTMLVideoElement>} {...props} />
+    </div>
+  );
+  return (
+    <div className="media-preview">
+      {media}
+      {!ready && (
+        <div className="media-loading" role="status">
+          <span>{slow ? 'Media is taking longer to load.' : 'Loading media…'}</span>
+          <NativeOpenActions path={resource.entry.path} />
+        </div>
+      )}
     </div>
   );
 }

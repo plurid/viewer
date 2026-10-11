@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { FileEntry, SearchPane } from '../../domain/contracts';
 import {
   activeWorkspace,
@@ -17,6 +17,11 @@ import { Empty, Loading } from '../ui/primitives';
 import { useCommandSource } from '../commands/context';
 import { folderCommands } from '../commands/folder';
 import { useFileDialogs } from './FileDialogs';
+import { revealFile } from './anchors';
+import { SelectionSize } from './sizes';
+import { blankFileSpace, fileControlOwnsKey, useFileKeyboard, useFileSelection } from './selection';
+import { editable } from '../commands/editing';
+import { useCommands } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
 const emptyEntries: FileEntry[] = [];
 export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string }) {
@@ -29,6 +34,9 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
   const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest }>();
   const [selection, select] = useBrowseField(id, pane?.path || '', 'selection');
   const session = browseSession(id, pane?.path || '');
+  const selecting = useFileSelection(session, select);
+  const registry = useCommands();
+  const surface = useRef<HTMLDivElement>(null);
   const search = useIndexedSearch(
     pane?.query || '',
     pane?.allLocations ? undefined : pane?.path,
@@ -62,22 +70,25 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         folderCommands({
           ...fileDialogs.actions,
           open: (entries, _linked, another) => {
+            const origin = activeWorkspace().id;
             for (const entry of entries)
-              void workspace
-                .openPath(entry.path, {
-                  workspaceID: activeWorkspace().id,
-                  paneID: id,
-                  linked: true,
-                  another,
-                })
+              void revealFile(id, entry.path)
+                .then((link) =>
+                  workspace.openPath(entry.path, {
+                    workspaceID: origin,
+                    paneID: id,
+                    linked: true,
+                    another,
+                    link,
+                  }),
+                )
                 .catch(report);
           },
           path: () => {},
           search: () => {},
           refresh: () => window.dispatchEvent(new Event('viewer:refresh')),
           selectAll: () => {
-            for (const entry of entries) session.cache.set(entry.path, entry);
-            select(entries.map((file) => file.path));
+            selecting.all(entries);
           },
         }),
       valid: (context) => context.workspaceID === activeWorkspace().id,
@@ -98,41 +109,90 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         })
         .catch(report);
   }, [active, id, selected, workspace]);
+  const handleKey = useFileKeyboard(id, (event) => {
+    if (
+      editable(event.target) ||
+      fileControlOwnsKey(event) ||
+      document.querySelector('dialog[open], .context-menu')
+    )
+      return;
+    const mod = event.metaKey || event.ctrlKey;
+    const invoke = (name: string) => {
+      void registry.invoke(name, { paneID: id }).catch(report);
+    };
+    if (
+      [
+        'ArrowDown',
+        'ArrowUp',
+        'ArrowLeft',
+        'ArrowRight',
+        'Home',
+        'End',
+        'PageUp',
+        'PageDown',
+      ].includes(event.key)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      selecting.move(entries, event.key, event.shiftKey);
+    } else if (mod && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      event.stopPropagation();
+      selecting.all(entries);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      selecting.clear();
+    } else {
+      const command =
+        event.key === ' '
+          ? 'quick-preview'
+          : event.key === 'Enter' && !mod
+            ? 'rename'
+            : mod
+              ? (
+                  { c: 'copy', x: 'cut', v: 'paste', o: 'open-selection', i: 'info' } as Record<
+                    string,
+                    string
+                  >
+                )[event.key.toLowerCase()]
+              : undefined;
+      if (command) {
+        event.preventDefault();
+        event.stopPropagation();
+        invoke(command);
+      }
+    }
+  });
   if (!pane) return <Empty title="Search is unavailable" />;
   const props: FileViewProps = {
     entries,
     selection,
+    cursor: session.cursor,
     selectionSet: set,
     showHidden: true,
     select: (entry, event) => {
-      session.cache.set(entry.path, entry);
       setActivePane(id);
-      event.currentTarget.closest<HTMLElement>('.search-explorer')?.focus({ preventScroll: true });
-      const anchor = entries.findIndex((file) => file.path === session.anchor);
-      const index = entries.findIndex((file) => file.path === entry.path);
-      select(
-        event.shiftKey && anchor >= 0
-          ? entries
-              .slice(Math.min(anchor, index), Math.max(anchor, index) + 1)
-              .map((file) => file.path)
-          : event.metaKey || event.ctrlKey
-            ? selection.includes(entry.path)
-              ? selection.filter((path) => path !== entry.path)
-              : [...selection, entry.path]
-            : [entry.path],
-      );
-      if (!event.shiftKey) session.anchor = entry.path;
+      surface.current?.focus({ preventScroll: true });
+      selecting.click(entry, event, entries);
     },
     open: (entry) => {
-      void workspace
-        .openPath(entry.path, { workspaceID: activeWorkspace().id, paneID: id, linked: true })
+      const origin = activeWorkspace().id;
+      void revealFile(id, entry.path)
+        .then((link) =>
+          workspace.openPath(entry.path, {
+            workspaceID: origin,
+            paneID: id,
+            linked: true,
+            link,
+          }),
+        )
         .catch(report);
     },
     context: (entry, event) => {
       event.preventDefault();
       void refreshClipboard().catch(report);
-      session.cache.set(entry.path, entry);
-      if (!set.has(entry.path)) select([entry.path]);
+      selecting.target(entry);
       setActivePane(id);
       setMenu({
         x: event.clientX,
@@ -157,49 +217,32 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       tabIndex={0}
       aria-label={pane.name}
       onFocus={() => setActivePane(id)}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) && entries.length) {
-          event.preventDefault();
-          const current = entries.findIndex((file) => file.path === selection.at(-1));
-          const index =
-            event.key === 'Home'
-              ? 0
-              : event.key === 'End'
-                ? entries.length - 1
-                : Math.min(
-                    entries.length - 1,
-                    Math.max(0, current + (event.key === 'ArrowDown' ? 1 : -1)),
-                  );
-          const file = entries[index];
-          const anchor = entries.findIndex((file) => file.path === session.anchor);
-          const targets =
-            event.shiftKey && anchor >= 0
-              ? entries.slice(Math.min(anchor, index), Math.max(anchor, index) + 1)
-              : [file];
-          for (const file of targets) session.cache.set(file.path, file);
-          select(targets.map((file) => file.path));
-          if (!event.shiftKey) session.anchor = file.path;
-          event.currentTarget
-            .querySelector<HTMLElement>(`[data-file-path="${CSS.escape(file.path)}"]`)
-            ?.scrollIntoView({ block: 'nearest' });
+      ref={surface}
+      data-file-owner={id}
+      onPointerDown={() => setActivePane(id)}
+      onKeyDownCapture={handleKey}
+      onClick={(event) => {
+        if (
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          blankFileSpace(event.target)
+        ) {
+          selecting.clear();
+          surface.current?.focus({ preventScroll: true });
         }
-        if (event.key === 'Enter' && selected.length === 1) {
-          event.preventDefault();
-          fileDialogs.actions.dialog('rename', {
-            scope: 'files',
-            workspaceID: activeWorkspace().id,
-            paneID: id,
-            selection: selected,
-            clipboard: getState().clipboard,
-            jobs: getState().jobs,
-          });
-        }
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
-          event.preventDefault();
-          for (const entry of entries) session.cache.set(entry.path, entry);
-          select(entries.map((file) => file.path));
-        }
+      }}
+      onContextMenu={(event) => {
+        if (!blankFileSpace(event.target)) return;
+        event.preventDefault();
+        setActivePane(id);
+        void refreshClipboard().catch(report);
+        setMenu({
+          x: event.clientX,
+          y: event.clientY,
+          request: { paneID: id, scope: 'folder', context: { selection: [] } },
+        });
       }}
     >
       <div className="search-row">
@@ -232,7 +275,9 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
           {search.result?.status.running
             ? 'Indexing in progress'
             : entries.length + ' results on this page'}
+          {selection.length ? ` · ${selection.length} selected` : ''}
         </span>
+        <SelectionSize entries={selected} />
         <div>
           <button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 150))}>
             Previous

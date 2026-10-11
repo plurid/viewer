@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { CommandContext } from '../commands/registry';
 import type { FolderActions } from '../commands/folder';
 import { DestinationDialog } from '../commands/DestinationDialog';
@@ -6,9 +6,10 @@ import { FileInformation } from './FileInformation';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { getState, report } from '../state/store';
 import { useWorkspace } from '../workspace/context';
+import { OpenWithDialog } from '../ui/OpenWithDialog';
 /** Physical folders and virtual results share the same file-operation dialogs. */
 export function useFileDialogs(): {
-  actions: Pick<FolderActions, 'dialog' | 'destination' | 'info' | 'trash'>;
+  actions: Pick<FolderActions, 'dialog' | 'destination' | 'info' | 'trash' | 'openWith'>;
   content: React.ReactNode;
 } {
   const workspace = useWorkspace();
@@ -21,16 +22,25 @@ export function useFileDialogs(): {
     context: CommandContext;
   }>();
   const [info, setInfo] = useState<CommandContext>();
+  const [applications, setApplications] = useState<CommandContext>();
+  const applicationPaths = useMemo(
+    () => applications?.selection.map((file) => file.path) || [],
+    [applications],
+  );
   const [trash, setTrash] = useState<CommandContext>();
   return {
     actions: {
       dialog: (kind, context) => setName({ kind, context }),
       destination: (kind, context) => setDestination({ kind, context }),
       info: setInfo,
+      openWith: setApplications,
       trash: setTrash,
     },
     content: (
       <>
+        {applications && (
+          <OpenWithDialog paths={applicationPaths} onClose={() => setApplications(undefined)} />
+        )}
         {name && (
           <NameDialog
             title={

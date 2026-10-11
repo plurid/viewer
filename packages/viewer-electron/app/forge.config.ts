@@ -6,7 +6,8 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    extraResource: process.platform === 'darwin' ? ['assets/viewer-ocr'] : [],
+    extraResource:
+      process.platform === 'darwin' ? ['assets/viewer-ocr', 'assets/viewer-applications'] : [],
     appBundleId: 'com.plurid.viewer',
     appCategoryType: 'public.app-category.utilities',
     name: 'Viewer',

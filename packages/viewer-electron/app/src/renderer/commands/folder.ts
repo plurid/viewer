@@ -1,4 +1,5 @@
 import { actionCommands } from '../actions/commands';
+import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath } from '../../domain/planes';
 export { parentPath } from '../../domain/planes';
@@ -19,6 +20,7 @@ export interface FolderActions {
   dialog(kind: 'rename' | 'mkdir' | 'go-to', context: CommandContext): void;
   trash(context: CommandContext): void;
   info(context: CommandContext): void;
+  openWith(context: CommandContext): void;
   destination(kind: 'copy' | 'move', context: CommandContext): void;
   search(): void;
   path(): void;
@@ -32,6 +34,35 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     ['window', 'files', 'folder'].includes(context.scope) && context.selection.length > 0;
   const paths = (context: CommandContext) => context.selection.map((entry) => entry.path);
   const commands: CommandDefinition[] = [
+    {
+      id: 'open-default',
+      label: 'Open in Default App',
+      group: 'Files',
+      icon: 'external',
+      aliases: ['default', 'external', 'od'],
+      when: selected,
+      run: async (context) => {
+        for (const path of paths(context)) await window.viewer.openExternal(path);
+      },
+    },
+    {
+      id: 'open-with',
+      label: 'Open With…',
+      group: 'Files',
+      icon: 'external',
+      aliases: ['ow', 'application'],
+      when: selected,
+      run: actions.openWith,
+    },
+    {
+      id: 'calculate-size',
+      label: 'Calculate Size',
+      group: 'Files',
+      icon: 'info',
+      aliases: ['size', 'cs', 'folder size'],
+      when: (context) => selected(context) && context.selection.some((file) => file.directory),
+      run: (context) => calculateSize(context.selection),
+    },
     {
       id: 'open-selection',
       label: 'Open',

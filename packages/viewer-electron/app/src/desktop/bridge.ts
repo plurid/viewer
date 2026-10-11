@@ -8,6 +8,7 @@ import {
   type BrowserWindow,
 } from 'electron';
 import { FileServices } from './file-services';
+import { Applications } from './applications';
 import { SettingsService } from './settings';
 import { Credentials, Providers } from './providers';
 import { Thumbnails } from './thumbnails';
@@ -108,6 +109,12 @@ const schemas = {
   chooseFolder: z.tuple([]),
   reveal: z.tuple([localPath]),
   openExternal: z.tuple([localPath]),
+  applications: z.tuple([z.array(localPath).min(1).max(2000)]),
+  chooseApplication: z.tuple([]),
+  openWith: z.tuple([z.array(localPath).min(1).max(2000), id]),
+  folderSizeStart: z.tuple([z.array(localPath).min(1).max(10000)]),
+  folderSizeGet: z.tuple([id]),
+  folderSizeCancel: z.tuple([id]),
   watch: z.tuple([localPath, id]),
   unwatch: z.tuple([id]),
   search: z.tuple([
@@ -149,6 +156,7 @@ export class Desktop {
   private bootstrapped = false;
   readonly settings: SettingsService;
   readonly files: FileServices;
+  readonly applications: Applications;
   readonly credentials: Credentials;
   readonly providers: Providers;
   readonly actions: ActionPlanner;
@@ -166,10 +174,12 @@ export class Desktop {
       openSettings(): Promise<void>;
       worker: string;
       ocr: string;
+      applications: string;
       settingsChanged?(): void;
     },
   ) {
     const emit = (event: DesktopEvent) => this.emit(event);
+    this.applications = new Applications(options.applications);
     this.settings = new SettingsService(
       dataPath,
       os.homedir(),
@@ -200,8 +210,12 @@ export class Desktop {
       async (value) => (await safeStorage.decryptStringAsync(value)).result,
     );
     this.providers = new Providers(this.credentials);
-    this.files = new FileServices(dataPath, options.worker, options.ocr, (status) =>
-      emit({ type: 'index', status }),
+    this.files = new FileServices(
+      dataPath,
+      options.worker,
+      options.ocr,
+      (status) => emit({ type: 'index', status }),
+      (task) => emit({ type: 'folder-size', task }),
     );
     const changed = (changes: import('../domain/changes').FileChange[]) => {
       emit({ type: 'file-changes', changes });
@@ -508,6 +522,27 @@ export class Desktop {
         const error = await shell.openPath(args[0] as string);
         if (error) throw new Error(error);
         return;
+      }
+      case 'folderSizeStart':
+        return this.files.sizeStart(args[0] as string[]);
+      case 'folderSizeGet':
+        return this.files.sizeGet(args[0] as string);
+      case 'folderSizeCancel':
+        return this.files.sizeCancel(args[0] as string);
+      case 'applications':
+        return this.applications.list(args[0] as string[]);
+      case 'openWith':
+        return this.applications.open(args[0] as string[], args[1] as string);
+      case 'chooseApplication': {
+        if (process.platform !== 'darwin')
+          throw new Error('Application selection is not available on this platform yet.');
+        const result = await dialog.showOpenDialog(this.window!, {
+          title: 'Choose Application',
+          defaultPath: '/Applications',
+          properties: ['openFile'],
+          filters: [{ name: 'Applications', extensions: ['app'] }],
+        });
+        return result.canceled ? null : this.applications.register(result.filePaths[0]);
       }
       case 'watch':
         return this.watchers.add(args[0] as string, args[1] as string);

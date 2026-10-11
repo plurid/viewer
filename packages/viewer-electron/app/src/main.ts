@@ -23,6 +23,11 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 app.setName('Viewer');
+// Hidden rendering is restricted to QA with an explicitly isolated profile.
+const renderTest = process.env.VIEWER_RENDER_TEST === '1';
+const backgroundTest =
+  renderTest && process.env.VIEWER_BACKGROUND_TEST === '1' && !!process.env.VIEWER_DATA_DIRECTORY;
+if (backgroundTest && process.platform === 'darwin') app.setActivationPolicy('accessory');
 // An optional, main-process-only profile supports portable installations and isolated QA.
 if (process.env.VIEWER_DATA_DIRECTORY) {
   if (!path.isAbsolute(process.env.VIEWER_DATA_DIRECTORY))
@@ -133,8 +138,11 @@ function menu(): void {
           },
           { label: 'New Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: command('new-folder') },
           { label: 'Open Selection', accelerator: 'CmdOrCtrl+O', click: command('open-selection') },
+          { label: 'Open in Default App', click: command('open-default') },
+          { label: 'Open With…', click: command('open-with') },
           { label: 'Quick Preview', click: command('quick-preview') },
           { label: 'Get Info…', accelerator: 'CmdOrCtrl+I', click: command('info') },
+          { label: 'Calculate Size', click: command('calculate-size') },
           { type: 'separator' },
           { label: 'Duplicate', accelerator: 'CmdOrCtrl+D', click: command('duplicate') },
           { label: 'Copy To…', click: command('copy-to') },
@@ -261,9 +269,10 @@ async function createWindow(): Promise<void> {
       webSecurity: true,
       webviewTag: false,
       spellcheck: false,
-      // Owned packaged-app verification keeps RAF alive while macOS occludes
-      // its test window. Normal launches retain background throttling.
-      backgroundThrottling: process.env.VIEWER_RENDER_TEST !== '1',
+      // Functional QA renders without showing windows or taking native focus.
+      // Normal launches retain background throttling and visible windows.
+      offscreen: backgroundTest,
+      backgroundThrottling: !renderTest,
     },
   });
   const createdWindow = window;
@@ -293,14 +302,16 @@ async function createWindow(): Promise<void> {
   });
   menu();
   await window.loadURL(devURL || 'viewer-app://app/index.html');
-  window.show();
+  if (!backgroundTest) window.show();
 }
 async function openSettingsWindow(): Promise<void> {
   await settingsClosing;
   if (!desktop) return;
   if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.show();
-    settingsWindow.focus();
+    if (!backgroundTest) {
+      settingsWindow.show();
+      settingsWindow.focus();
+    }
     return;
   }
   await desktop.settings.load();
@@ -321,6 +332,8 @@ async function openSettingsWindow(): Promise<void> {
       webSecurity: true,
       webviewTag: false,
       spellcheck: false,
+      offscreen: backgroundTest,
+      backgroundThrottling: !renderTest,
     },
   });
   settingsWindow = created;
@@ -370,12 +383,14 @@ async function openSettingsWindow(): Promise<void> {
   const url = new URL(devURL || 'viewer-app://app/index.html');
   url.searchParams.set('window', 'settings');
   await created.loadURL(url.toString());
-  created.show();
+  if (!backgroundTest) created.show();
 }
 app.on('second-instance', () => {
   if (window) {
-    window.show();
-    window.focus();
+    if (!backgroundTest) {
+      window.show();
+      window.focus();
+    }
   } else void createWindow();
 });
 app.on('open-file', (event, file) => {
@@ -404,6 +419,9 @@ app.whenReady().then(async () => {
     ocr: app.isPackaged
       ? path.join(process.resourcesPath, 'viewer-ocr')
       : path.resolve('assets/viewer-ocr'),
+    applications: app.isPackaged
+      ? path.join(process.resourcesPath, 'viewer-applications')
+      : path.resolve('assets/viewer-applications'),
   });
   protocol.handle('viewer-resource', (request) => desktop!.resources.response(request));
   nativeTheme.on('updated', () => desktop?.settings.announce());

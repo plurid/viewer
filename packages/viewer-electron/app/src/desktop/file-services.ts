@@ -1,6 +1,7 @@
 import { utilityProcess, type UtilityProcess } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import type { FolderSizeTask } from '../domain/metadata';
 import type {
   ApplicationSettings,
   DocumentData,
@@ -12,6 +13,7 @@ export class FileServices {
   private child?: UtilityProcess;
   private ready?: Promise<unknown>;
   private configuration?: ApplicationSettings['search'];
+  private sizes = new Map<string, FolderSizeTask>();
   private pending = new Map<
     string,
     {
@@ -26,6 +28,7 @@ export class FileServices {
     private worker: string,
     private ocr: string,
     private emit: (status: IndexStatus) => void,
+    private sizeChanged: (task: FolderSizeTask) => void = () => {},
   ) {}
   private start(): Promise<unknown> {
     if (this.ready) return this.ready;
@@ -38,6 +41,13 @@ export class FileServices {
       (reply: { id?: string; value?: unknown; error?: string; event?: string }) => {
         if (reply.event === 'index') {
           this.emit(reply.value as IndexStatus);
+          return;
+        }
+        if (reply.event === 'folder-size') {
+          const task = reply.value as FolderSizeTask;
+          if (task.status === 'running') this.sizes.set(task.id, task);
+          else this.sizes.delete(task.id);
+          this.sizeChanged(task);
           return;
         }
         const pending = reply.id && this.pending.get(reply.id);
@@ -56,6 +66,13 @@ export class FileServices {
         pending.reject(new Error('Background file services stopped. Retry the operation.'));
       }
       this.pending.clear();
+      for (const task of this.sizes.values())
+        this.sizeChanged({
+          ...task,
+          status: 'failed',
+          error: 'Background file services stopped. Calculate Size to retry.',
+        });
+      this.sizes.clear();
       this.child = undefined;
       this.ready = undefined;
     });
@@ -107,6 +124,15 @@ export class FileServices {
   }
   query(value: IndexedQuery) {
     return this.call<IndexedResult>('query', value);
+  }
+  sizeStart(paths: string[]) {
+    return this.call<FolderSizeTask>('size-start', paths);
+  }
+  sizeGet(id: string) {
+    return this.call<FolderSizeTask>('size-get', id);
+  }
+  sizeCancel(id: string) {
+    return this.call<void>('size-cancel', id);
   }
   status() {
     return this.call<IndexStatus>('status');

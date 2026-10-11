@@ -1,19 +1,25 @@
 /** Runs the actual packaged macOS application against disposable synthetic files. */
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { promisify } from 'node:util';
 import { createFixtures } from './fixtures';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import { repeatedPreviewFixture } from './workspace-fixtures';
+import { formatBytes } from '../src/domain/files';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Routine functional checks never show or activate the test app. Physical
+// compositor profiling requires a separately requested foreground run.
+const foreground = process.env.VIEWER_TEST_FOREGROUND === '1';
+const execNative = promisify(execFile);
 const binary = path.join(
   appRoot,
   `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`,
@@ -48,7 +54,12 @@ const child = spawn(
     '--disable-background-timer-throttling',
   ],
   {
-    env: { ...process.env, VIEWER_DATA_DIRECTORY: profile, VIEWER_RENDER_TEST: '1' },
+    env: {
+      ...process.env,
+      VIEWER_DATA_DIRECTORY: profile,
+      VIEWER_RENDER_TEST: '1',
+      VIEWER_BACKGROUND_TEST: foreground ? '0' : '1',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   },
 );
@@ -197,6 +208,7 @@ const text = () =>
     : evaluate<string>('document.body.innerText');
 const fileSelector = (file: string) => `[data-file-path=${JSON.stringify(file)}]`;
 async function activateTestWindow(): Promise<void> {
+  if (!foreground) return;
   // Activate our PID: Launch Services can select a user's already-running Viewer
   // instead, leaving this disposable instance's native paint loop suspended.
   await command('Page.bringToFront');
@@ -216,6 +228,20 @@ async function activateTestWindow(): Promise<void> {
     'native test window registration and activation',
     5000,
   );
+}
+async function verifyBackgroundApp(): Promise<void> {
+  if (foreground || process.platform !== 'darwin') return;
+  const { stdout } = await execNative(
+    'osascript',
+    [
+      '-l',
+      'JavaScript',
+      '-e',
+      `ObjC.import('AppKit');const instance=$.NSRunningApplication.runningApplicationWithProcessIdentifier(${child.pid});JSON.stringify({active:Boolean(instance.active),policy:Number(instance.activationPolicy)});`,
+    ],
+    { timeout: 5000 },
+  );
+  assert.deepEqual(JSON.parse(stdout.trim()), { active: false, policy: 1 });
 }
 async function reloadPage(): Promise<void> {
   await evaluate('window.__qaReloadPending = true');
@@ -245,6 +271,7 @@ async function click(selector: string, count = 1): Promise<void> {
     settingsSocket = undefined;
     settingsMode = false;
     await activateTestWindow();
+    await verifyBackgroundApp();
     return;
   }
   const point = await evaluate<{ x: number; y: number; hit: boolean }>(
@@ -280,14 +307,22 @@ async function key(
   modifiers = 0,
   commands: string[] = [],
 ): Promise<void> {
+  const keyCodes: Record<string, number> = {
+    Enter: 13,
+    Escape: 27,
+    Backspace: 8,
+    Delete: 46,
+    Home: 36,
+    End: 35,
+    PageUp: 33,
+    PageDown: 34,
+    ArrowLeft: 37,
+    ArrowUp: 38,
+    ArrowRight: 39,
+    ArrowDown: 40,
+  };
   const windowsVirtualKeyCode =
-    key === 'Enter'
-      ? 13
-      : key === 'Escape'
-        ? 27
-        : key.length === 1
-          ? key.toUpperCase().charCodeAt(0)
-          : undefined;
+    keyCodes[key] ?? (key.length === 1 ? key.toUpperCase().charCodeAt(0) : undefined);
   await command('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key,
@@ -341,6 +376,355 @@ async function captureEngine(): Promise<void> {
     return false;
   })()`),
     true,
+  );
+}
+async function verifySelectionReliability(): Promise<void> {
+  const rows = await evaluate<string[]>(
+    'Array.from(document.querySelectorAll(".folder-explorer [data-file-path]")).map(row=>row.dataset.filePath)',
+  );
+  assert.ok(rows.length > 4);
+  await click(fileSelector(rows[3]));
+  await settleCamera();
+  const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  await key('ArrowUp', 'ArrowUp', 8);
+  await key('ArrowUp', 'ArrowUp', 8);
+  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  assert.deepEqual(
+    await evaluate(
+      'Array.from(document.querySelectorAll(".folder-explorer [data-file-path][aria-selected=true]")).map(row=>row.dataset.filePath)',
+    ),
+    rows.slice(1, 4),
+    'Repeated Shift+Up must extend from the moving cursor, not the end of the selected range',
+  );
+  assert.equal(
+    await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+    camera,
+    'File selection must not rotate the spatial camera',
+  );
+  await key('ArrowDown', 'ArrowDown', 8);
+  assert.equal(
+    await evaluate('document.querySelectorAll(".folder-explorer [aria-selected=true]").length'),
+    2,
+    'Reversing direction shrinks the range',
+  );
+  const blank = await evaluate<{ x: number; y: number }>(
+    `(() => { const r=document.querySelector('.folder-explorer .file-scroll').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.bottom-12}; })()`,
+  );
+  await command('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+    ...blank,
+  });
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+    ...blank,
+  });
+  assert.equal(
+    await evaluate('document.querySelectorAll(".folder-explorer [aria-selected=true]").length'),
+    0,
+    'Clicking empty file space clears the selection',
+  );
+  await click(fileSelector(path.join(fixture.files, 'Models')));
+  assert.equal(
+    await evaluate('document.querySelector(".folder-status").textContent.includes("0 B")'),
+    false,
+    'Unmeasured folders must never be reported as zero bytes',
+  );
+  await evaluate(
+    `window.__qaSizes = []; window.__qaSizeOff = window.viewer.onEvent(event => { if(event.type === 'folder-size') window.__qaSizes.push(event.task); });`,
+  );
+  await paletteCommand('Calculate Size');
+  const measured = await until(
+    () => evaluate<import('../src/domain/metadata').FolderSizeTask[]>('window.__qaSizes'),
+    (tasks) => tasks.some((task) => task.status === 'completed'),
+    'background folder measurement',
+  ).then((tasks) => tasks.find((task) => task.status === 'completed')!);
+  assert.ok(measured.bytes > 0 && measured.files > 0 && measured.folders === 1);
+  await until(
+    () => evaluate<string>('document.querySelector(".selection-size").textContent'),
+    (value) => value.includes(formatBytes(measured.bytes)),
+    'measured folder footer',
+  );
+  await paletteCommand('Get info…');
+  assert.ok(
+    (await text()).includes(formatBytes(measured.bytes)),
+    'File information reuses the measured folder total',
+  );
+  await snapshot('desktop-native-folder-size.png');
+  await click('dialog [aria-label="Close"]');
+  await evaluate('window.__qaSizeOff(); delete window.__qaSizeOff; delete window.__qaSizes;');
+  await contextMenu(fileSelector(path.join(fixture.files, 'README.md')));
+  await command('Input.insertText', { text: 'ow' });
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".open-with-dialog")'),
+    Boolean,
+    'contextual Open With',
+  );
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".application-option").length'),
+    (value) => value > 0,
+    'native compatible applications',
+  );
+  assert.equal(
+    await evaluate('document.activeElement.getAttribute("aria-label")'),
+    'Search applications',
+  );
+  assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none');
+  await command('Input.insertText', { text: 'no such application xyz' });
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".application-option").length'),
+    (value) => value === 0,
+    'filtered application list',
+  );
+  assert.equal(
+    await evaluate('document.querySelector(".open-with-dialog [type=submit]").disabled'),
+    true,
+  );
+  await snapshot('desktop-native-open-with-empty.png');
+  await key('a', 'KeyA', 4, ['selectAll']);
+  await key('Backspace', 'Backspace');
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".application-option").length'),
+    (value) => value > 0,
+    'restored compatible applications',
+  );
+  await snapshot('desktop-native-open-with.png');
+  await key('Escape', 'Escape');
+  await click(fileSelector(path.join(fixture.files, 'Models')));
+  // A blank-space menu owns no files, even while a file remains highlighted.
+  await command('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    button: 'right',
+    buttons: 2,
+    clickCount: 1,
+    ...blank,
+  });
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    button: 'right',
+    buttons: 0,
+    clickCount: 1,
+    ...blank,
+  });
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".context-menu")'),
+    Boolean,
+    'background contextual actions',
+  );
+  assert.equal(
+    await evaluate(
+      'Array.from(document.querySelectorAll(".context-menu .command-result")).some(row => row.textContent.includes("Rename"))',
+    ),
+    false,
+  );
+  await key('Escape', 'Escape');
+  await key('Escape', 'Escape');
+  console.log(
+    'Reliability: range reversal, camera ownership, deselection, target-free background menus, measured folder sizes and native compatible-app search.',
+  );
+}
+
+async function verifyAnchoredPreviews(): Promise<void> {
+  await delay(800);
+  const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
+  const folder = path.join(fixture.root, 'Anchor tests');
+  await mkdir(folder);
+  await Promise.all(
+    Array.from({ length: 320 }, (_, i) =>
+      writeFile(path.join(folder, `${String(i).padStart(3, '0')}.txt`), 'preview fixture'),
+    ),
+  );
+  const seeded = structuredClone(original);
+  const base = seeded.workspaces[0].panes.find((pane) => pane.type === 'folder')!;
+  seeded.workspaces[0] = {
+    ...seeded.workspaces[0],
+    roots: ['qa-anchor-root'],
+    activePane: 'qa-anchor-root',
+    arrangement: {},
+    panes: [{ ...base, id: 'qa-anchor-root', path: folder, history: [folder], historyIndex: 0 }],
+  };
+  await evaluate(`window.viewer.save(${JSON.stringify(seeded)})`);
+  await reloadPage();
+  await restoredEngine(1);
+  await settleCamera();
+  await evaluate('document.querySelector(".folder-explorer").focus()');
+  await key('End', 'End');
+  const source = path.join(folder, '319.txt');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(source))})`),
+    Boolean,
+    'virtualized last file',
+  );
+  await evaluate('document.querySelector(".file-scroll").scrollTop=0');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(source))})`),
+    (value) => !value,
+    'unmounted selected source row',
+  );
+  await paletteCommand('Open linked plane');
+  await until(
+    () => evaluate<number>('window.__qaEngine.tree.get()[0].children.length'),
+    (value) => value === 1,
+    'preview beside a revealed virtual source',
+  );
+  await settleCamera();
+  const nodes = await evaluate<{
+    parent: { rotateX: number; rotateY: number; translateY: number };
+    child: { rotateX: number; rotateY: number; translateY: number };
+    link: { x: number; y: number };
+    offset: number;
+    angle: number;
+  }>(
+    `(() => { const root=window.__qaEngine.tree.get()[0],child=root.children[0]; return {parent:root.location,child:child.location,link:child.linkCoordinates,offset:child.bridgeOffset,angle:child.planeAngle}; })()`,
+  );
+  assert.equal(nodes.angle, 0);
+  assert.equal(nodes.parent.rotateY, nodes.child.rotateY);
+  assert.equal(nodes.parent.rotateX, nodes.child.rotateX);
+  assert.ok(
+    Math.abs(nodes.child.translateY - nodes.parent.translateY - nodes.link.y - nodes.offset) < 1,
+  );
+  await evaluate(
+    'window.__qaEngine.camera.frame({planeID:window.__qaEngine.tree.get()[0].planeID},{animate:false})',
+  );
+  await settleCamera();
+  const expected = await evaluate<number>(
+    `(() => { const row=document.querySelector(${JSON.stringify(fileSelector(source))}); const plane=row.closest('[data-plurid-plane]'); const r=row.getBoundingClientRect(),p=plane.getBoundingClientRect(); return (r.y+r.height/2-p.y)*plane.offsetHeight/p.height; })()`,
+  );
+  assert.ok(
+    Math.abs(nodes.link.y - expected) < 3,
+    `Preview must use the visible source row: ${JSON.stringify({ actual: nodes.link.y, expected })}`,
+  );
+  await snapshot('desktop-native-file-anchored-preview.png');
+  for (const mode of ['Grid', 'Columns', 'Gallery', 'List']) {
+    await evaluate('document.querySelector(".folder-explorer").focus()');
+    await paletteCommand(`${mode} view`);
+    await evaluate('document.querySelector(".folder-explorer").focus()');
+    const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+    await key('End', 'End');
+    await key('ArrowUp', 'ArrowUp', 8);
+    await key('ArrowUp', 'ArrowUp', 8);
+    await evaluate(
+      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
+    );
+    assert.ok(
+      (await evaluate<number>(
+        'document.querySelectorAll(".folder-explorer [data-file-path][aria-selected=true]").length',
+      )) > 1,
+      `${mode} range selection`,
+    );
+    assert.equal(
+      await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+      camera,
+      `${mode} keys must not rotate the camera`,
+    );
+    await key('Escape', 'Escape');
+  }
+  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await reloadPage();
+  await restoredEngine(1);
+  await settleCamera();
+  console.log(
+    'Anchoring: a scrolled-out virtual source is revealed before spawning a parallel preview at its row; all four views own range keys.',
+  );
+}
+
+/** Observations, not timing assertions: compositor stalls can occur without a JS long task. */
+async function profileNativeInteractions(): Promise<void> {
+  const samples: Record<string, unknown>[] = [];
+  const begin = () =>
+    evaluate(`(() => {
+    const probe = window.__qaPerf = {frames:[],tasks:[],commits:window.__qaCommits,emissions:0,started:performance.now(),stopped:false};
+    let last=performance.now();
+    const frame=time=>{if(probe.stopped)return;probe.frames.push(time-last);last=time;probe.raf=requestAnimationFrame(frame);};
+    probe.raf=requestAnimationFrame(frame);
+    probe.off=window.__qaEngine.store.subscribe(()=>probe.emissions++);
+    probe.observer=new PerformanceObserver(list=>probe.tasks.push(...list.getEntries().map(entry=>entry.duration)));
+    probe.observer.observe({entryTypes:['longtask']});
+  })()`);
+  const finish = async (workload: string) => {
+    const result = await evaluate<Record<string, unknown>>(`(() => {
+      const probe=window.__qaPerf;probe.stopped=true;cancelAnimationFrame(probe.raf);probe.off();
+      probe.tasks.push(...probe.observer.takeRecords().map(entry=>entry.duration));probe.observer.disconnect();
+      const frames=probe.frames.slice(1).sort((a,b)=>a-b);
+      const result={milliseconds:performance.now()-probe.started,commits:window.__qaCommits-probe.commits,emissions:probe.emissions,frames:frames.length,p95:frames[Math.floor((frames.length-1)*.95)]||0,worst:frames.at(-1)||0,longTasks:probe.tasks.length,longestTask:Math.max(0,...probe.tasks)};
+      delete window.__qaPerf;return result;
+    })()`);
+    samples.push({ workload, ...result });
+    console.log('Native performance:', JSON.stringify({ workload, ...result }));
+  };
+  for (let sample = 1; sample <= 3; sample++) {
+    const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+    await begin();
+    await contextMenu(fileSelector(path.join(fixture.files, 'README.md')));
+    const point = await evaluate<{ x: number; y: number }>(
+      `(() => { const r=document.querySelector('.context-menu .command-results').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`,
+    );
+    for (let i = 0; i < 24; i++) {
+      await command('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        buttons: 0,
+        x: point.x + (i % 2),
+        y: point.y,
+      });
+      await command('Input.dispatchMouseEvent', {
+        type: 'mouseWheel',
+        deltaX: 0,
+        deltaY: i % 12 < 6 ? 60 : -60,
+        ...point,
+      });
+      await delay(20);
+    }
+    await finish(`menu-wheel-${sample}`);
+    assert.equal(
+      await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+      camera,
+      'Contextual wheel scrolling cannot move the spatial camera',
+    );
+    await key('Escape', 'Escape');
+  }
+  const before = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  const point = await evaluate<{ x: number; y: number }>(
+    `(() => { const r=document.querySelector('.workspace-surface').getBoundingClientRect();return {x:r.x+14,y:r.y+r.height/2}; })()`,
+  );
+  await begin();
+  for (let i = 0; i < 24; i++) {
+    await command('Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      modifiers: 8,
+      deltaX: 4,
+      deltaY: 8,
+      ...point,
+    });
+    await delay(20);
+  }
+  await settleCamera();
+  await finish('camera-wheel');
+  assert.notEqual(
+    await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+    before,
+    'Camera profile must exercise actual rotation',
+  );
+  await paletteCommand('Frame plane');
+  await settleCamera();
+  await key('Escape', 'Escape');
+  await writeFile(
+    path.join(captureRoot, 'native-reliability-performance.json'),
+    JSON.stringify(
+      {
+        capturedAt: new Date().toISOString(),
+        platform: process.platform,
+        architecture: process.arch,
+        samples,
+      },
+      null,
+      2,
+    ),
   );
 }
 async function restoredEngine(count: number): Promise<void> {
@@ -458,6 +842,28 @@ async function paletteCommand(label: string): Promise<void> {
   // for two paints observes that action even when a native frame takes >60ms.
   await evaluate(
     'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+  );
+}
+async function verifySpatialTools(): Promise<void> {
+  await click('[aria-label="Rotate mode"]');
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
+    'ROTATION',
+  );
+  await paletteCommand('Finish spatial tool');
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
+    'ALL',
+  );
+  await paletteCommand('Translate space');
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
+    'TRANSLATION',
+  );
+  await key('Escape', 'Escape');
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
+    'ALL',
   );
 }
 async function appearance(look: 'dark' | 'light'): Promise<void> {
@@ -1358,7 +1764,7 @@ async function job(request: Record<string, unknown>): Promise<OperationJob> {
     'file operation',
   ).then((jobs) => jobs.find((job) => job.id === id)!);
 }
-try {
+async function verify(): Promise<void> {
   const target = await until(
     async () => {
       const response = await fetch(`http://127.0.0.1:${port}/json/list`);
@@ -1416,14 +1822,34 @@ try {
   });
   await command('Runtime.enable');
   await command('Page.enable');
+  await until(
+    () =>
+      evaluate<boolean>(
+        'document.readyState === "complete" && !!document.querySelector(".folder-explorer")',
+      ),
+    Boolean,
+    'initial renderer before diagnostic reload',
+  );
+  // Count production React commits only in this disposable diagnostic renderer.
+  await command('Page.addScriptToEvaluateOnNewDocument', {
+    source: `window.__qaCommits=0;window.__REACT_DEVTOOLS_GLOBAL_HOOK__={supportsFiber:true,renderers:new Map(),inject(renderer){const id=this.renderers.size+1;this.renderers.set(id,renderer);return id;},onCommitFiberRoot(){window.__qaCommits++;},onCommitFiberUnmount(){},checkDCE(){}};`,
+  });
+  await reloadPage();
   // The user's other windows can legitimately take native focus during this
   // isolated run. Keep browser focus deterministic without activating their app.
   await command('Emulation.setFocusEmulationEnabled', { enabled: true });
   await activateTestWindow();
-  await until(
-    () => evaluate<string>('document.visibilityState'),
-    (value) => value === 'visible',
-    'visible native window',
+  if (foreground)
+    await until(
+      () => evaluate<string>('document.visibilityState'),
+      (value) => value === 'visible',
+      'visible native window',
+    );
+  await verifyBackgroundApp();
+  console.log(
+    foreground
+      ? 'Native QA: foreground profiling.'
+      : 'Native QA: hidden background windows; native focus unchanged.',
   );
   await until(text, (value) => value.includes('Reference files.zip'), 'initial fixture folder');
   await settleCamera();
@@ -1448,6 +1874,17 @@ try {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'spatial') {
+    await verifySpatialTools();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    console.log('Packaged spatial tools verified in isolation.');
+    return;
+  }
+  await verifySelectionReliability();
+  if (foreground) await profileNativeInteractions();
+  await verifyAnchoredPreviews();
   await verifyServiceWorkflows();
   await verifyPreviewOwnership();
   await verifyRestoredPreviews();
@@ -1479,26 +1916,7 @@ try {
   assert.equal(await evaluate(`!!document.querySelector('[aria-label^="resize plane"]')`), true);
   await paletteCommand('Frame plane');
   await settleCamera();
-  await click('[aria-label="Rotate mode"]');
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
-    'ROTATION',
-  );
-  await paletteCommand('Finish spatial tool');
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
-    'ALL',
-  );
-  await paletteCommand('Translate space');
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
-    'TRANSLATION',
-  );
-  await key('Escape', 'Escape');
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
-    'ALL',
-  );
+  await verifySpatialTools();
 
   await click('.plane-controls [aria-label="Search this folder"]');
   assert.equal(await evaluate('document.activeElement.getAttribute("aria-label")'), 'Find files');
@@ -1937,6 +2355,17 @@ try {
     );
     await evaluate('window.__qaMedia=null');
   }
+  await preview(path.join(fixture.files, 'Media', 'Malformed.mkv'), 'Media could not be played');
+  assert.equal(
+    await evaluate('!!document.querySelector(".quick-preview .native-open-actions")'),
+    true,
+  );
+  await snapshot('desktop-native-media-error.png');
+  await evaluate(
+    `Array.from(document.querySelectorAll('.quick-preview button')).find(button=>button.textContent.trim()==='Retry').click()`,
+  );
+  await until(text, (value) => value.includes('Media could not be played'), 'media retry recovery');
+  await closePreview();
   await paletteCommand('Parent folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'return after media');
 
@@ -2286,6 +2715,7 @@ try {
   // when the 400ms persistence debounce has not fired.
   await appearance('light');
   assert.equal(await evaluate('document.documentElement.dataset.look'), 'light');
+  await verifyBackgroundApp();
   // Electron's renderer window.close() bypasses BrowserWindow's native close
   // event. Browser.close drives app.quit(), including before-quit and close.
   void command('Browser.close').catch(() => undefined);
@@ -2302,6 +2732,9 @@ try {
   console.log(
     'Packaged Electron verification passed: previews, file jobs and undo, four explorer views, model gesture isolation, IPC/resource boundaries, and workspace restoration.',
   );
+}
+try {
+  await verify();
 } catch (error) {
   console.error(error);
   console.error('Renderer diagnostics:', rendererLog.slice(-10), exceptions);

@@ -36,6 +36,7 @@ const actions: FolderActions = {
   dialog: vi.fn(),
   trash: vi.fn(),
   info: vi.fn(),
+  openWith: vi.fn(),
   destination: vi.fn(),
   search: vi.fn(),
   path: vi.fn(),

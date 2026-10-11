@@ -1,6 +1,8 @@
 import type { FileEntry } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { Dialog } from '../ui/primitives';
+import { SelectionSize, calculateSize } from './sizes';
+import { report } from '../state/store';
 
 export function FileInformation({ entries, onClose }: { entries: FileEntry[]; onClose(): void }) {
   return (
@@ -16,9 +18,11 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
             </dd>
             <dt>Size</dt>
             <dd>
-              {entry.directory
-                ? '—'
-                : `${formatBytes(entry.size)} (${entry.size.toLocaleString()} bytes)`}
+              {entry.directory ? (
+                <SelectionSize entries={[entry]} />
+              ) : (
+                `${formatBytes(entry.size)} (${entry.size.toLocaleString()} bytes)`
+              )}
             </dd>
             <dt>Modified</dt>
             <dd>{entry.modified ? new Date(entry.modified).toLocaleString() : 'Unavailable'}</dd>
@@ -35,6 +39,16 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
         ))}
       </dl>
       <footer>
+        {entries.some((entry) => entry.directory) && (
+          <button
+            onClick={() => {
+              void calculateSize(entries).catch(report);
+            }}
+          >
+            Calculate Size
+          </button>
+        )}
+        {entries.length > 1 && <SelectionSize entries={entries} />}
         <button onClick={onClose}>Done</button>
       </footer>
     </Dialog>

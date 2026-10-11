@@ -7,10 +7,12 @@ import { Icon, type IconName } from '../ui/Icon';
 import { PreviewHost } from '../previews/PreviewHost';
 import { useFolder } from './useFolder';
 import { Empty, Loading } from '../ui/primitives';
+import { useFileReveal } from './anchors';
 
 export interface FileViewProps {
   entries: FileEntry[];
   selection: string[];
+  cursor?: string;
   selectionSet: ReadonlySet<string>;
   select(entry: FileEntry, event: MouseEvent, scope?: FileEntry[]): void;
   showHidden: boolean;
@@ -103,10 +105,11 @@ export function ListView(props: FileViewProps) {
     estimateSize: () => (compact ? 30 : 36),
     overscan: 12,
   });
+  useFileReveal(scroll, props.entries, (index) => virtual.scrollToIndex(index, { align: 'auto' }));
   useEffect(() => {
-    const index = props.entries.findIndex((entry) => entry.path === props.selection.at(-1));
+    const index = props.entries.findIndex((entry) => entry.path === props.cursor);
     if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });
-  }, [props.selection, props.entries, virtual]);
+  }, [props.cursor, props.entries, virtual]);
   return (
     <div
       ref={scroll}
@@ -179,10 +182,13 @@ export function GridView(props: FileViewProps) {
     estimateSize: () => 140,
     overscan: 3,
   });
+  useFileReveal(scroll, props.entries, (index) =>
+    virtual.scrollToIndex(Math.floor(index / columns), { align: 'auto' }),
+  );
   useEffect(() => {
-    const index = props.entries.findIndex((entry) => entry.path === props.selection.at(-1));
+    const index = props.entries.findIndex((entry) => entry.path === props.cursor);
     if (index >= 0) virtual.scrollToIndex(Math.floor(index / columns), { align: 'auto' });
-  }, [props.selection, props.entries, columns, virtual]);
+  }, [props.cursor, props.entries, columns, virtual]);
   return (
     <div
       ref={scroll}
@@ -286,10 +292,11 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
     estimateSize: () => (compact ? 30 : 36),
     overscan: 8,
   });
+  useFileReveal(scroll, props.entries, (index) => virtual.scrollToIndex(index, { align: 'auto' }));
   useEffect(() => {
-    const index = props.entries.findIndex((entry) => entry.path === props.selection.at(-1));
+    const index = props.entries.findIndex((entry) => entry.path === props.cursor);
     if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });
-  }, [props.selection, props.entries, virtual]);
+  }, [props.cursor, props.entries, virtual]);
   return (
     <div ref={scroll} className="file-scroll" role="listbox" aria-label="Column files">
       <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
@@ -332,7 +339,7 @@ export function ColumnsView({ path, ...props }: FileViewProps & { path: string }
   );
 }
 export function GalleryView(props: FileViewProps) {
-  const selected = props.entries.find((entry) => entry.path === props.selection.at(-1));
+  const selected = props.entries.find((entry) => entry.path === props.cursor);
   const scroll = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     horizontal: true,
@@ -341,6 +348,7 @@ export function GalleryView(props: FileViewProps) {
     estimateSize: () => 106,
     overscan: 4,
   });
+  useFileReveal(scroll, props.entries, (index) => virtual.scrollToIndex(index, { align: 'auto' }));
   useEffect(() => {
     const index = props.entries.indexOf(selected!);
     if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });

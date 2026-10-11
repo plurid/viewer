@@ -3,15 +3,28 @@ import chokidar, { type FSWatcher } from 'chokidar';
 import type { ApplicationSettings, IndexedQuery } from '../domain/services';
 import { FileIndex } from './index-core';
 import { extractDocument } from './formats';
+import { FolderSizes } from './folder-sizes';
 interface Request {
   id: string;
-  method: 'init' | 'configure' | 'query' | 'status' | 'update' | 'extract' | 'cancel' | 'close';
+  method:
+    | 'init'
+    | 'configure'
+    | 'query'
+    | 'status'
+    | 'update'
+    | 'extract'
+    | 'cancel'
+    | 'close'
+    | 'size-start'
+    | 'size-get'
+    | 'size-cancel';
   args: unknown[];
 }
 let index: FileIndex | undefined;
 let watcher: FSWatcher | undefined;
 let ocr: string | undefined;
 const port = process.parentPort;
+const sizes = new FolderSizes((value) => port.postMessage({ event: 'folder-size', value }));
 const extracted = new Map<string, Awaited<ReturnType<typeof extractDocument>>>();
 const controllers = new Map<string, AbortController>();
 let config: ApplicationSettings['search'];
@@ -98,10 +111,14 @@ port.on('message', async (event) => {
       } finally {
         controllers.delete(request.id);
       }
-    } else if (request.method === 'cancel') {
+    } else if (request.method === 'size-start') value = sizes.start(request.args[0] as string[]);
+    else if (request.method === 'size-get') value = sizes.get(request.args[0] as string);
+    else if (request.method === 'size-cancel') sizes.cancel(request.args[0] as string);
+    else if (request.method === 'cancel') {
       controllers.get(request.args[0] as string)?.abort();
       value = true;
     } else if (request.method === 'close') {
+      sizes.close();
       for (const abort of controllers.values()) abort.abort();
       await configurationQueue;
       await watcher?.close();
