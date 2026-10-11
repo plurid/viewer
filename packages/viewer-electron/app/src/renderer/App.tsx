@@ -50,7 +50,7 @@ import { Icon } from './ui/Icon';
 import { Dialog, ErrorBoundary, IconButton, NameDialog } from './ui/primitives';
 import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
-import { PreviewHost } from './previews/PreviewHost';
+import { QuickPreview } from './previews/QuickPreview';
 import { CommandsContext, useCommands, useCommandSource } from './commands/context';
 import { CommandRegistry, type CommandContext } from './commands/registry';
 import { windowCommands } from './commands/window';
@@ -62,7 +62,6 @@ import { ContextMenu } from './ui/ContextMenu';
 import { OpenWithDialog } from './ui/OpenWithDialog';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 
-const basename = (path: string) => path.split(/[\\/]/).pop() || path;
 export function App() {
   const registry = useMemo(
     () => new CommandRegistry(rememberCommand, (id) => getState().settings.settings.shortcuts[id]),
@@ -650,54 +649,7 @@ function AppWindow() {
             </button>
           </div>
         )}
-        {quick && (
-          <Dialog
-            title={basename(quick.paths[quick.index])}
-            wide
-            onClose={() => quickPreview(null)}
-          >
-            <div className="quick-preview">
-              <PreviewHost path={quick.paths[quick.index]} />
-            </div>
-            <footer>
-              {quick.paths.length > 1 && (
-                <>
-                  <IconButton
-                    icon="left"
-                    label="Previous file"
-                    onClick={() => stepQuickPreview(-1)}
-                  />
-                  <span>
-                    {quick.index + 1} / {quick.paths.length}
-                  </span>
-                  <IconButton icon="right" label="Next file" onClick={() => stepQuickPreview(1)} />
-                </>
-              )}
-              <button
-                onClick={() => {
-                  void window.viewer.openExternal(quick.paths[quick.index]).catch(report);
-                }}
-              >
-                Open in default app
-              </button>
-              <button
-                className="primary"
-                onClick={() => {
-                  void controller
-                    .openPath(quick.paths[quick.index], {
-                      workspaceID: quick.workspaceID,
-                      paneID: quick.paneID,
-                      linked: true,
-                    })
-                    .then(() => quickPreview(null))
-                    .catch(report);
-                }}
-              >
-                Open linked plane
-              </button>
-            </footer>
-          </Dialog>
-        )}
+        {quick && <QuickPreview session={quick} />}
         {workspaceDialog && workspaceDialog.kind !== 'delete' && (
           <NameDialog
             title={workspaceDialog.kind === 'new' ? 'New workspace' : 'Rename workspace'}

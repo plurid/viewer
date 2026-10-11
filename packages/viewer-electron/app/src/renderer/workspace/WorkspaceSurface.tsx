@@ -18,6 +18,7 @@ import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
 import { Empty } from '../ui/primitives';
 import { Sidebar } from '../ui/Sidebar';
+import { NewPlaneLocation } from '../ui/NewPlaneLocation';
 import { PlaneHeader } from './PlaneHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
 export { frameWorkspace } from './framing';
@@ -282,6 +283,7 @@ export function WorkspaceSurface({
                 Open folder…
               </button>
             </div>
+            <NewPlaneLocation />
           </Empty>
         )}
       />

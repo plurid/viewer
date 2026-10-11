@@ -28,6 +28,11 @@ const config: ForgeConfig = {
       build: [
         { entry: 'src/main.ts', config: 'vite.main.config.ts', target: 'main' },
         { entry: 'src/desktop/worker.ts', config: 'vite.services.config.ts', target: 'main' },
+        {
+          entry: 'src/desktop/folder-size-worker.ts',
+          config: 'vite.services.config.ts',
+          target: 'main',
+        },
         { entry: 'src/preload.ts', config: 'vite.preload.config.ts', target: 'preload' },
       ],
       renderer: [{ name: 'main_window', config: 'vite.renderer.config.ts' }],

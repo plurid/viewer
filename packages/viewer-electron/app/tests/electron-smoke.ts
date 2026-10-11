@@ -531,6 +531,160 @@ async function verifySelectionReliability(): Promise<void> {
   );
 }
 
+async function verifyListAlignment(): Promise<void> {
+  const measure = () =>
+    evaluate<{ name: string; delta: number }[]>(
+      `(() => {
+      const head=document.querySelector('.file-head'),row=document.querySelector('.file-row');
+      const targets=['.file-name > span:last-child','.file-date','.file-kind','.file-size'];
+      const textRect=element=>{const range=document.createRange();range.selectNodeContents(element);return range.getBoundingClientRect();};
+      return Array.from(head.children).flatMap((cell,i)=>{
+        if(getComputedStyle(cell).display==='none') return [];
+        const heading=textRect(cell),value=textRect(row.querySelector(targets[i]));
+        return {name:cell.textContent.trim(),delta:i===3?heading.right-value.right:heading.left-value.left};
+      });
+    })()`,
+    );
+  for (const width of [960, 640, 420]) {
+    await evaluate(
+      `document.querySelector('.folder-explorer').style.width='${width}px';document.querySelector('.folder-explorer').style.flex='none'`,
+    );
+    for (const overflow of [false, true]) {
+      await evaluate(
+        `(() => { const list=document.querySelector('.file-scroll'); list.style.flex='none';list.style.height='${overflow ? 72 : 460}px';list.scrollTop=0; })()`,
+      );
+      await delay(100);
+      const columns = await measure();
+      for (const column of columns)
+        assert.ok(
+          Math.abs(column.delta) < 1,
+          `${width}px, overflow ${overflow}, ${column.name}: offset ${column.delta}px`,
+        );
+      assert.equal(
+        await evaluate(
+          'document.querySelector(".file-scroll").scrollWidth > document.querySelector(".file-scroll").clientWidth',
+        ),
+        false,
+      );
+      assert.equal(
+        await evaluate(
+          'document.querySelector(".file-scroll").scrollHeight > document.querySelector(".file-scroll").clientHeight',
+        ),
+        overflow,
+      );
+      console.log('List alignment:', { width, overflow, columns });
+    }
+  }
+  await evaluate(
+    `document.querySelector('.folder-explorer').style.removeProperty('width');document.querySelector('.folder-explorer').style.removeProperty('flex');document.querySelector('.file-scroll').style.removeProperty('height');document.querySelector('.file-scroll').style.removeProperty('flex');`,
+  );
+  await snapshot('desktop-native-list-alignment.png');
+}
+
+async function verifyPreviewFooter(): Promise<void> {
+  const file = path.join(fixture.files, 'README.md');
+  const choices = await evaluate<import('../src/domain/metadata').ApplicationChoices>(
+    `window.viewer.applications([${JSON.stringify(file)}])`,
+  );
+  await preview(file, 'Synthetic files for local Viewer verification.');
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".quick-preview .open-default-button")?.textContent || ""',
+      ),
+    (label) => label === (choices.defaultName ? `Open in ${choices.defaultName}` : 'Open'),
+    'the Quick Preview open control names the actual default application',
+  );
+  assert.equal(await evaluate('document.querySelectorAll(".wide-dialog footer").length'), 1);
+  assert.equal(
+    await evaluate('document.querySelectorAll(".quick-preview .preview-info").length'),
+    0,
+  );
+  assert.equal(
+    await evaluate(
+      `document.querySelectorAll('.wide-dialog [aria-label="Open file in default app"]').length`,
+    ),
+    0,
+  );
+  await snapshot('desktop-native-quick-preview-footer.png');
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 780,
+    height: 560,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  const bounds = await evaluate<{ overflow: boolean; bottom: number; height: number }>(
+    `(() => { const footer=document.querySelector('.quick-preview-footer');return {overflow:footer.scrollWidth>footer.clientWidth,bottom:footer.getBoundingClientRect().bottom,height:innerHeight}; })()`,
+  );
+  assert.equal(bounds.overflow, false);
+  assert.ok(bounds.bottom <= bounds.height);
+  await snapshot('desktop-native-quick-preview-footer-minimum.png');
+  await command('Emulation.clearDeviceMetricsOverride');
+  await closePreview();
+}
+
+async function verifySettingsScroll(): Promise<void> {
+  await evaluate('window.viewer.openSettings()');
+  await openSettingsProbe();
+  await tab('Actions');
+  const rectangles = () =>
+    settingsEvaluate<number[]>(
+      `Array.from(document.querySelectorAll('.settings-recipe summary')).flatMap(element=>{const r=element.getBoundingClientRect();return [r.x,r.width];})`,
+    );
+  const collapsed = await rectangles();
+  await settingsEvaluate('document.querySelector(".settings-recipe summary").click()');
+  await until(
+    () =>
+      settingsEvaluate(
+        'document.querySelector(".settings-page").scrollHeight > document.querySelector(".settings-page").clientHeight',
+      ),
+    Boolean,
+    'expanded Actions require scrolling',
+  );
+  assert.deepEqual(
+    await rectangles(),
+    collapsed,
+    'A scrollbar must not move Settings fields sideways',
+  );
+  await snapshot('desktop-native-settings-actions-expanded.png');
+  await settingsEvaluate('document.querySelector(".settings-recipe summary").click()');
+  assert.deepEqual(await rectangles(), collapsed);
+  await snapshot('desktop-native-settings-actions-collapsed.png');
+  await click('dialog [aria-label="Close"]');
+}
+
+async function verifyIndependentSizeCalculation(): Promise<void> {
+  const { stdout } = await execNative('/bin/ps', ['-axo', 'pid=,ppid=,command=']);
+  const worker = stdout
+    .split('\n')
+    .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/))
+    .find(
+      (match) =>
+        match &&
+        Number(match[2]) === child.pid &&
+        match[3].includes('--utility-sub-type=node.mojom.NodeService'),
+    );
+  assert.ok(worker, 'The isolated index worker is running');
+  pausedWorker = Number(worker[1]);
+  process.kill(pausedWorker, 'SIGSTOP');
+  try {
+    await click(fileSelector(path.join(fixture.files, 'Models')));
+    await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
+    await command('Input.insertText', { text: 'cs' });
+    await key('Enter', 'Enter');
+    await until(
+      () => evaluate<string>('document.querySelector(".selection-size").textContent'),
+      (label) => /KB|MB|GB/.test(label),
+      'Calculate Size completes while the index worker is stalled',
+      8000,
+    );
+    await snapshot('desktop-native-independent-folder-size.png');
+  } finally {
+    process.kill(pausedWorker, 'SIGCONT');
+    pausedWorker = undefined;
+  }
+}
+
 async function verifyAnchoredPreviews(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
@@ -1831,6 +1985,26 @@ async function verifyEntryAndPalette(): Promise<void> {
     'empty workspace can create a root directly',
   );
   await snapshot('desktop-native-empty-workspace.png');
+  await evaluate(
+    `(() => { const select=document.querySelector('.empty-plane-location select');select.value='desktop';select.dispatchEvent(new Event('change',{bubbles:true})); })()`,
+  );
+  await until(
+    () =>
+      evaluate<{ settings: { browsing: { newPlaneLocation: string } } }>(
+        'window.viewer.settingsGet()',
+      ),
+    (snapshot) => snapshot.settings.browsing.newPlaneLocation === 'desktop',
+    'empty workspace changes the shared starting-folder preference',
+  );
+  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
+    {path:'settings.browsing.newPlaneLocation',value:'custom'},
+    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(fixture.files)}}
+  ],snapshot.revision))`);
+  await until(
+    () => evaluate<string>('document.querySelector(".empty-plane-location select").value'),
+    (value) => value === 'custom',
+    'Settings updates the empty workspace preference',
+  );
   await click('.empty-actions .primary');
   await restoredEngine(1);
   await settleCamera();
@@ -2087,6 +2261,19 @@ async function verify(): Promise<void> {
     await verifyShutdown();
     return;
   }
+  if (process.env.VIEWER_TEST_SCENARIO === 'alignment') {
+    await verifyListAlignment();
+    await verifyPreviewFooter();
+    await verifySettingsScroll();
+    await verifyBackgroundApp();
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'size') {
+    await verifyIndependentSizeCalculation();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'entry') {
     await verifyEntryAndPalette();
     await verifyAnchoredPreviews();
@@ -2102,6 +2289,10 @@ async function verify(): Promise<void> {
     console.log('Packaged spatial tools verified in isolation.');
     return;
   }
+  await verifyListAlignment();
+  await verifyPreviewFooter();
+  await verifySettingsScroll();
+  await verifyIndependentSizeCalculation();
   await verifyEntryAndPalette();
   await verifySelectionReliability();
   if (foreground) await profileNativeInteractions();

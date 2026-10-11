@@ -1,4 +1,4 @@
-import { memo, lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { memo, lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
@@ -32,12 +32,14 @@ export const PreviewHost = memo(function PreviewHost({
   interactive = true,
   resource: supplied,
   paneID,
+  renderFooter,
 }: {
   path?: string;
   active?: boolean;
   interactive?: boolean;
   resource?: Resource;
   paneID?: string;
+  renderFooter?(resource: Resource, module: PreviewModule): ReactNode;
 }) {
   const [resource, setResource] = useState<Resource | null>(supplied ?? null);
   const [error, setError] = useState('');
@@ -153,21 +155,25 @@ export const PreviewHost = memo(function PreviewHost({
           </Suspense>
         </ErrorBoundary>
       </div>
-      <footer className="preview-info">
-        <span title={resource.entry.path}>{resource.entry.name}</span>
-        <span>
-          {module.label} <span className="separator">·</span> {formatBytes(resource.entry.size)}
-        </span>
-        {!supplied && (
-          <IconButton
-            icon="external"
-            label="Open file in default app"
-            onClick={() => {
-              void window.viewer.openExternal(resource.entry.path).catch(report);
-            }}
-          />
-        )}
-      </footer>
+      {renderFooter ? (
+        renderFooter(resource, module)
+      ) : (
+        <footer className="preview-info">
+          <span title={resource.entry.path}>{resource.entry.name}</span>
+          <span>
+            {module.label} <span className="separator">·</span> {formatBytes(resource.entry.size)}
+          </span>
+          {!supplied && (
+            <IconButton
+              icon="external"
+              label="Open file in default app"
+              onClick={() => {
+                void window.viewer.openExternal(resource.entry.path).catch(report);
+              }}
+            />
+          )}
+        </footer>
+      )}
     </div>
   );
 });

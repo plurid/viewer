@@ -508,11 +508,13 @@ select {
   display: grid;
   grid-template-columns: minmax(200px, 1fr) 160px 96px 95px;
   align-items: center;
+  padding: 0 18px;
 }
 .file-head {
   height: 30px;
   color: var(--muted);
-  padding: 0 13px;
+  overflow: hidden;
+  scrollbar-gutter: stable;
   font-size: 11px;
   background: var(--field);
   border-bottom: 1px solid var(--line);
@@ -520,10 +522,14 @@ select {
 }
 .file-head button {
   text-align: left;
-  padding: 3px 5px;
+  padding: 3px 0;
+  border: 0;
   font-size: 11px;
 }
-.file-head button:last-child {
+.file-head > :first-child {
+  padding-left: 27px;
+}
+.file-head > :last-child {
   text-align: right;
 }
 .folder-content {
@@ -534,13 +540,13 @@ select {
 }
 .file-scroll {
   overflow: auto;
+  scrollbar-gutter: stable;
   flex: 1;
   min-height: 0;
   height: 100%;
 }
 .file-row {
   height: 36px;
-  padding: 0 18px;
   user-select: none;
   cursor: default;
   font-size: 12px;
@@ -789,6 +795,21 @@ select {
   gap: 8px;
   margin-top: 6px;
 }
+.empty-plane-location,
+.empty-plane-location label {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.empty-plane-location select {
+  max-width: 220px;
+  color: var(--ink);
+}
 .loading {
   height: 100%;
   min-height: 50px;
@@ -896,6 +917,43 @@ select {
 }
 .quick-preview {
   height: min(650px, calc(100vh - 200px));
+}
+.dialog .quick-preview-footer {
+  flex: 0 0 auto;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+}
+.quick-preview-metadata {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-preview-actions,
+.quick-preview-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.quick-preview-navigation {
+  gap: 2px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.open-default-button {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-preview-actions > .primary {
+  flex-shrink: 0;
 }
 .notice {
   position: fixed;
@@ -1416,7 +1474,7 @@ select {
   .file-row:not(.compact-row) {
     grid-template-columns: minmax(150px, 1fr) 130px 76px;
   }
-  .file-head button:nth-child(3),
+  .file-head > :nth-child(3),
   .file-row:not(.compact-row) .file-kind {
     display: none;
   }
@@ -1426,7 +1484,7 @@ select {
   .file-row:not(.compact-row) {
     grid-template-columns: minmax(0, 1fr) 70px;
   }
-  .file-head button:nth-child(2),
+  .file-head > :nth-child(2),
   .file-row:not(.compact-row) .file-date {
     display: none;
   }
@@ -1733,6 +1791,7 @@ select {
 .settings-page {
   padding: 28px 32px 40px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-width: 0;
 }
 .settings-page header {

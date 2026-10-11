@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { OpenWithDialog } from './OpenWithDialog';
+import { OpenDefaultButton } from './OpenDefaultButton';
 
 export function NativeOpenActions({ path }: { path: string }) {
   const paths = useMemo(() => [path], [path]);
@@ -8,16 +9,11 @@ export function NativeOpenActions({ path }: { path: string }) {
   return (
     <>
       <div className="native-open-actions">
-        <button
-          onClick={() => {
-            setError('');
-            void window.viewer
-              .openExternal(path)
-              .catch((error) => setError(error instanceof Error ? error.message : String(error)));
-          }}
-        >
-          Open in Default App
-        </button>
+        <OpenDefaultButton
+          path={path}
+          onOpen={() => setError('')}
+          onError={(error) => setError(error instanceof Error ? error.message : String(error))}
+        />
         <button onClick={() => setChooser(true)}>Open With…</button>
       </div>
       {error && (
