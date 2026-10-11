@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -147,6 +147,86 @@ async function key(key: string, code: string, modifiers = 0): Promise<void> {
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers });
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers });
 }
+async function contextMenu(selector: string): Promise<void> {
+  const point = await evaluate<{ x: number; y: number }>(
+    `(() => { const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`,
+  );
+  await command('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    button: 'right',
+    buttons: 2,
+    clickCount: 1,
+    ...point,
+  });
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    button: 'right',
+    buttons: 0,
+    clickCount: 1,
+    ...point,
+  });
+  await until(
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search actions"'),
+    (value) => value,
+    'autofocused contextual search',
+  );
+}
+async function inventory(): Promise<string[]> {
+  const entries = await readdir(fixture.files, { recursive: true, withFileTypes: true });
+  return Promise.all(
+    entries.map(async (entry) => {
+      const file = path.join(entry.parentPath, entry.name);
+      const relative = path.relative(fixture.files, file);
+      if (entry.isDirectory()) return `${relative}/`;
+      if (entry.isSymbolicLink()) return `${relative} -> ${await readlink(file)}`;
+      return `${relative}: ${createHash('sha256')
+        .update(await readFile(file))
+        .digest('hex')}`;
+    }),
+  ).then((entries) => entries.sort());
+}
+async function paletteCommand(label: string): Promise<void> {
+  await click('[aria-label="Commands (⌘K)"]');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Search commands"]')`),
+    (present) => present,
+    'focused command palette',
+  );
+  await command('Input.insertText', { text: label });
+  await until(
+    () =>
+      evaluate<string>(
+        `document.querySelector('.command-result[aria-selected="true"]')?.textContent || ""`,
+      ),
+    (text) => text.includes(label),
+    `command ${label}`,
+  );
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Search commands"]')`),
+    (present) => !present,
+    'closed command palette',
+  );
+  await delay(60);
+}
+async function appearance(look: 'dark' | 'light'): Promise<void> {
+  await paletteCommand('Settings');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Appearance"]')`),
+    (present) => present,
+    'appearance setting',
+  );
+  await evaluate(
+    `(() => { const field = document.querySelector('[aria-label="Appearance"]'); field.value=${JSON.stringify(look)}; field.dispatchEvent(new Event('change', { bubbles:true })); })()`,
+  );
+  await until(
+    () => evaluate<string>('document.documentElement.dataset.look'),
+    (value) => value === look,
+    'changed appearance',
+  );
+  await click('dialog [aria-label="Close"]');
+}
 async function preview(file: string, expected: string): Promise<void> {
   await click(fileSelector(file));
   await key(' ', 'Space');
@@ -269,6 +349,207 @@ try {
   );
   await snapshot('desktop-native-initial.png');
 
+  assert.equal(
+    await evaluate(
+      'getComputedStyle(document.querySelector("[data-plurid-plane]")).backfaceVisibility',
+    ),
+    'visible',
+  );
+  assert.equal(
+    await evaluate(
+      '!!document.querySelector(".wordmark, .workspace-tabs, .workspace-footer, .folder-toolbar, .search-row, .breadcrumb-row, .operations-panel, .operations-button")',
+    ),
+    false,
+    'Initial shell has no branding, redundant toolbars, permanent operations or search rows',
+  );
+  await key('k', 'KeyK', 4);
+  await until(
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    (value) => value,
+    'keyboard command palette',
+  );
+  await command('Input.insertText', { text: 'Settings' });
+  await snapshot('palette-native.png');
+  await key('Enter', 'Enter');
+  await until(
+    text,
+    (value) => value.includes('Settings') && value.includes('Appearance'),
+    'Settings from keyboard',
+  );
+  await evaluate(
+    'Array.from(document.querySelectorAll(".settings-tabs button")).find(button=>button.textContent === "Space").click()',
+  );
+  await snapshot('settings-native.png');
+  await click('.settings-content input');
+  await until(
+    () =>
+      evaluate<string>(
+        'getComputedStyle(document.querySelector("[data-plurid-plane]")).backfaceVisibility',
+      ),
+    (value) => value === 'hidden',
+    'plane backs setting',
+  );
+  await click('.settings-content input');
+  await until(
+    () =>
+      evaluate<string>(
+        'getComputedStyle(document.querySelector("[data-plurid-plane]")).backfaceVisibility',
+      ),
+    (value) => value === 'visible',
+    'visible plane backs restored',
+  );
+  await click('dialog [aria-label="Close"]');
+
+  const readme = path.join(fixture.files, 'README.md');
+  await contextMenu(fileSelector(readme));
+  await command('Input.insertText', { text: 'rn' });
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".command-result[aria-selected=true]")?.textContent || ""',
+      ),
+    (value) => value.startsWith('Rename'),
+    'two-letter Rename alias',
+  );
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    (value) => value === 'README.md',
+    'clicked target captured for rename',
+  );
+  await click('dialog [aria-label="Close"]');
+  await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
+  assert.match(
+    await evaluate<string>(
+      'document.querySelector(".context-menu .command-result")?.textContent || ""',
+    ),
+    /^Rename/,
+  );
+  assert.equal(
+    await evaluate(
+      'Array.from(document.querySelectorAll(".context-menu .command-result-text > span")).filter(item => item.textContent === "Rename…").length',
+    ),
+    1,
+  );
+  await snapshot('context-native.png');
+  await key('Escape', 'Escape');
+  // The header actions resolve the current selection through the same registry.
+  await click('[aria-label="Folder actions"]');
+  await command('Input.insertText', { text: 'rn' });
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    (value) => value === 'Models',
+    'header menu uses selected folder',
+  );
+  await click('dialog [aria-label="Close"]');
+
+  const sidebarJobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  const favorites =
+    '.sidebar-group:has(.location[title=' +
+    JSON.stringify(path.join(fixture.files, 'Models')) +
+    '])';
+  await click(`${favorites} .sidebar-section-title`);
+  assert.equal(
+    await evaluate(`!!document.querySelector(${JSON.stringify(favorites + ' .location')})`),
+    false,
+  );
+  // Find the now-collapsed section by its title rather than its hidden contents.
+  await evaluate(
+    'Array.from(document.querySelectorAll(".sidebar-section-title")).find(button=>button.textContent.includes("Favorites")).click()',
+  );
+  await evaluate(
+    '(() => { const transfer=new DataTransfer(); const titles=Array.from(document.querySelectorAll(".sidebar-section-title")); const source=titles.find(button=>button.textContent.includes("Favorites")); const target=titles.find(button=>button.textContent.includes("Locations")); source.dispatchEvent(new DragEvent("dragstart",{bubbles:true,dataTransfer:transfer})); target.closest("section").dispatchEvent(new DragEvent("drop",{bubbles:true,dataTransfer:transfer})); })()',
+  );
+  assert.deepEqual(
+    await evaluate(
+      'Array.from(document.querySelectorAll(".sidebar-section-title")).map(button=>button.textContent.trim())',
+    ),
+    ['Favorites', 'Locations', 'Recent'],
+  );
+  await evaluate(
+    `(() => { const transfer=new DataTransfer(); const source=document.querySelector('.location[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]'); const target=document.querySelector('.location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]'); source.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:transfer})); target.dispatchEvent(new DragEvent('drop',{bubbles:true,dataTransfer:transfer})); })()`,
+  );
+  assert.deepEqual(
+    await evaluate(
+      `Array.from(document.querySelectorAll(${JSON.stringify(favorites + ' .location')})).map(button => button.textContent.trim())`,
+    ),
+    ['Documents', 'Models'],
+  );
+  // A folder row offers a separate shortcut payload, so Favorites never moves a file.
+  await evaluate(
+    `(() => { const transfer=new DataTransfer(); document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Images')))}).dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:transfer})); document.querySelector(${JSON.stringify(favorites)}).dispatchEvent(new DragEvent('drop',{bubbles:true,dataTransfer:transfer})); })()`,
+  );
+  await until(
+    () =>
+      evaluate<boolean>(
+        `!!document.querySelector('.location[title=${JSON.stringify(path.join(fixture.files, 'Images'))}]')`,
+      ),
+    (value) => value,
+    'folder shortcut drop',
+  );
+  await contextMenu(
+    '.location[title=' + JSON.stringify(path.join(fixture.files, 'Documents')) + ']',
+  );
+  await command('Input.insertText', { text: 'Rename shortcut' });
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    (value) => value === 'Documents',
+    'shortcut alias dialog',
+  );
+  await command('Input.insertText', { text: 'Project documents' });
+  await click('dialog .primary');
+  await until(text, (value) => value.includes('Project documents'), 'shortcut alias');
+  assert.deepEqual(
+    await evaluate('window.viewer.jobs()'),
+    sidebarJobs,
+    'Sidebar changes must not start filesystem operations',
+  );
+  await click('[aria-label="Sidebar width"]');
+  await key('ArrowRight', 'ArrowRight');
+  assert.equal(
+    await evaluate('document.querySelector(".sidebar-resizer").getAttribute("aria-valuenow")'),
+    '220',
+  );
+  await click('[aria-label="Hide sidebar"]');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".location-sidebar")'),
+    (value) => !value,
+    'hidden sidebar',
+  );
+  await click('[aria-label="Show sidebar"]');
+  await paletteCommand('Frame all planes');
+  await settleCamera();
+  await snapshot('sidebar-native.png');
+  await key('f', 'KeyF', 4);
+  await until(
+    () =>
+      evaluate<boolean>(
+        'document.activeElement?.getAttribute("aria-label") === "Find file by name"',
+      ),
+    (value) => value,
+    'contextual file finder',
+  );
+  await command('Input.insertText', { text: 'Project brief.pdf' });
+  await evaluate(
+    'Array.from(document.querySelectorAll("dialog button")).find(button=>button.textContent === "Include subfolders").click()',
+  );
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".command-result[aria-selected=true]")?.textContent || ""',
+      ),
+    (value) => value.includes('Project brief.pdf'),
+    'subtree file search in palette',
+  );
+  await snapshot('file-finder-native.png');
+  await key('Escape', 'Escape');
+  console.log(
+    'Interface: contextual search and recency, Cmd+K, Settings, sidebar collapse/reorder/shortcut aliases/hide/resize.',
+  );
+
   await click(fileSelector(path.join(fixture.files, 'Models')), 2);
   await until(text, (value) => value.includes('Triangle.glb'), 'model folder');
   await click(fileSelector(path.join(fixture.files, 'Models', 'Triangle alias.glb')));
@@ -288,18 +569,19 @@ try {
     'Model could not be loaded',
   );
   await closePreview();
-  await click('[aria-label="Parent folder"]');
+  await paletteCommand('Parent folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'return to Studio');
   await click(fileSelector(path.join(fixture.files, 'Documents')), 2);
   await until(text, (value) => value.includes('Project brief.pdf'), 'documents');
   await preview(path.join(fixture.files, 'Documents', 'Project notes.md'), 'A wider view');
   await closePreview();
   await preview(path.join(fixture.files, 'Documents', 'Project brief.pdf'), 'Searchable PDF text');
+  await click('[aria-label="Search PDF"]');
   await click('[aria-label="Search PDF text"]');
   await command('Input.insertText', { text: 'Searchable' });
   await until(text, (value) => value.includes('1 matching pages'), 'PDF text search');
   await closePreview();
-  await click('[aria-label="Parent folder"]');
+  await paletteCommand('Parent folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'Studio archive files');
   for (const extension of ['zip', 'tar', 'tar.gz']) {
     await preview(path.join(fixture.files, `Reference files.${extension}`), 'notes.md');
@@ -322,14 +604,14 @@ try {
   await click('[aria-label="Expand 0"]');
   await until(text, (value) => value.includes('Brushed aluminum'), 'expanded JSON tree');
   await closePreview();
-  await click('[aria-label="Switch to light look"]');
+  await appearance('light');
   await preview(path.join(fixture.files, 'Data', 'Materials.json'), 'materials');
   await click('[aria-label="Expand materials"]');
   await click('[aria-label="Expand 0"]');
   await until(text, (value) => value.includes('Brushed aluminum'), 'light JSON tree');
   await snapshot('json-light.png');
   await closePreview();
-  await click('[aria-label="Parent folder"]');
+  await paletteCommand('Parent folder');
   await until(
     () =>
       evaluate<boolean>(
@@ -343,7 +625,7 @@ try {
   await preview(path.join(fixture.files, 'Source', 'workspace.ts'), 'export interface Workspace');
   await snapshot('code-light.png');
   await closePreview();
-  await click('[aria-label="Parent folder"]');
+  await paletteCommand('Parent folder');
   await until(
     () =>
       evaluate<boolean>(
@@ -354,12 +636,12 @@ try {
   );
   await click(fileSelector(path.join(fixture.files, 'Data')), 2);
   await until(text, (value) => value.includes('Inventory.csv'), 'return to data folder');
-  await click('[aria-label="Switch to dark look"]');
+  await appearance('dark');
   await preview(path.join(fixture.files, 'Data', 'Inventory.csv'), 'Small, medium');
   await closePreview();
   await preview(path.join(fixture.files, 'Data', 'Malformed.json'), 'Invalid JSON');
   await closePreview();
-  await click('[aria-label="Parent folder"]');
+  await paletteCommand('Parent folder');
   await until(
     text,
     (value) => value.includes('Reference files.zip'),
@@ -373,7 +655,7 @@ try {
   await closePreview();
   await preview(path.join(fixture.files, 'Images', 'Reference.svg'), '800 × 600');
   await closePreview();
-  await click('[aria-label="Parent folder"]');
+  await paletteCommand('Parent folder');
   await until(
     text,
     (value) => value.includes('Reference files.zip'),
@@ -398,12 +680,52 @@ try {
     );
     await evaluate('window.__qaMedia=null');
   }
-  await click('[aria-label="Parent folder"]');
+  await paletteCommand('Parent folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'return after media');
 
   const source = path.join(fixture.files, 'README.md'),
     destination = path.join(fixture.files, 'Transfers');
   assert.equal((await job({ kind: 'copy', sources: [source], destination })).status, 'completed');
+  const workspaceWidth = await evaluate<number>(
+    'document.querySelector(".workspace-surface").clientWidth',
+  );
+  const collisionID = await evaluate<string>(
+    `window.viewer.operate(${JSON.stringify({ kind: 'copy', sources: [source], destination })})`,
+  );
+  await until(
+    () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+    (jobs) => jobs.some((job) => job.id === collisionID && job.status === 'collision'),
+    'pending collision',
+  );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".operations-button")'),
+    (value) => value,
+    'conditional operations control',
+  );
+  await click('.operations-button');
+  await until(text, (value) => value.includes('already exists.'), 'collision popover');
+  assert.equal(
+    await evaluate('document.querySelector(".workspace-surface").clientWidth'),
+    workspaceWidth,
+    'Operations must not reduce workspace width',
+  );
+  await snapshot('operations-native.png');
+  await evaluate(
+    'Array.from(document.querySelectorAll(".collision-actions button")).find(button=>button.textContent === "Replace").click()',
+  );
+  await until(text, (value) => value.includes('Replace existing item?'), 'protected replacement');
+  await click('dialog [aria-label="Close"]');
+  await evaluate(
+    'Array.from(document.querySelectorAll(".collision-actions button")).find(button=>button.textContent === "Skip").click()',
+  );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".operations-button, .operations-panel")'),
+    (value) => !value,
+    'operations control removed after completion',
+  );
+  await paletteCommand('Recent file operations');
+  await until(text, (value) => value.includes('completed'), 'explicit operation history');
+  await click('[aria-label="Close operations"]');
   const renamed = await job({
     kind: 'rename',
     sources: [path.join(destination, 'README.md')],
@@ -436,21 +758,21 @@ try {
   );
   assert.equal(validation, true);
 
-  await click('[aria-label="Grid view"]');
+  await paletteCommand('Grid view');
   assert.equal(await evaluate('document.querySelectorAll(".file-tile").length > 0'), true);
-  await click('[aria-label="Columns view"]');
+  await paletteCommand('Columns view');
   await click(fileSelector(path.join(fixture.files, 'Documents')));
   await until(text, (value) => value.includes('Project brief.pdf'), 'column child folder');
   await preview(path.join(fixture.files, 'Documents', 'Project notes.md'), 'A wider view');
   await closePreview();
-  await click('[aria-label="Gallery view"]');
+  await paletteCommand('Gallery view');
   await click(fileSelector(source));
   await until(
     text,
     (value) => value.includes('Synthetic files for local Viewer verification.'),
     'gallery preview',
   );
-  await click('[aria-label="List view"]');
+  await paletteCommand('List view');
   await click(fileSelector(path.join(fixture.files, 'Models')), 2);
   await until(text, (value) => value.includes('Triangle.glb'), 'linked preview folder');
   await preview(
@@ -467,9 +789,16 @@ try {
   );
   await settleCamera();
   assert.equal(await evaluate('document.querySelector(".model-stage canvas") !== null'), true);
+  assert.equal(
+    await evaluate('!!document.querySelector(".plane-module-controls .preview-toolbar")'),
+    true,
+    'Preview controls belong in the plane header',
+  );
+  await paletteCommand('Show wireframe');
+  await paletteCommand('Hide wireframe');
   const transforms = () =>
     evaluate<string>(
-      'JSON.stringify(Array.from(document.querySelectorAll(".workspace-surface [style*=transform]")).map(element=>element.getAttribute("style")))',
+      'JSON.stringify(Array.from(document.querySelectorAll(".workspace-surface [style*=transform]")).map(element=>getComputedStyle(element).transform))',
     );
   const beforeTransform = await transforms();
   const bounds = await evaluate<{
@@ -521,7 +850,7 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await click('[aria-label="Frame all planes"]');
+    await paletteCommand('Frame all planes');
     await settleCamera();
     await snapshot(`user-1456x${height}.png`);
   }
@@ -531,7 +860,7 @@ try {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await click('[aria-label="Frame all planes"]');
+  await paletteCommand('Frame all planes');
   await settleCamera();
   const framed = await evaluate<{ view: number[]; planes: number[][] }>(
     '(()=>{const bounds=element=>{const r=element.getBoundingClientRect();return[r.left,r.top,r.right,r.bottom]};return{view:bounds(document.querySelector(".workspace-surface")),planes:Array.from(document.querySelectorAll("[data-plurid-plane], .plane-controls")).map(bounds)}})()',
@@ -546,9 +875,9 @@ try {
     );
   }
   await snapshot('compact-native-initial.png');
-  await click('[aria-label="Dock or reveal active plane"]');
+  await paletteCommand('Dock plane');
   await settleCamera();
-  await click('.model-viewer [aria-label="Frame model"]');
+  await click('.plane-module-controls [aria-label="Frame model"]');
   await delay(200);
   assert.equal(
     await evaluate(
@@ -559,55 +888,87 @@ try {
   );
   await snapshot('compact-native-docked.png');
   await command('Emulation.clearDeviceMetricsOverride');
-  await click('[aria-label="Switch to light look"]');
+  await appearance('light');
   await until(text, (value) => value.includes('1 meshes'), 'model after look change');
   await settleCamera();
   await delay(300);
   await snapshot('desktop-light.png');
-  await click('[aria-label="Switch to dark look"]');
+  await appearance('dark');
   // Closing an explorer also closes its linked preview. History restores both
   // their engine nodes and host records, including redo, without orphan tabs.
-  await click('[aria-label="Dock or reveal active plane"]');
-  await click('.plane-tabs button:first-child');
+  await paletteCommand('Reveal space');
+  await paletteCommand('Models');
   await settleCamera();
-  await click('[data-plurid-plane] [aria-label="Close plane"]');
+  await click('[data-plurid-plane]:has(.folder-explorer) [aria-label="Close plane"]');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".plane-tabs button").length'),
+    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
     (count) => count === 0,
     'closed linked branch',
   );
-  await click('[aria-label="Undo arrangement"]');
+  await paletteCommand('Undo arrangement');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".plane-tabs button").length'),
+    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
     (count) => count === 2,
     'undo closed branch',
   );
-  await click('[aria-label="Redo arrangement"]');
+  await paletteCommand('Redo arrangement');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".plane-tabs button").length'),
+    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
     (count) => count === 0,
     'redo closed branch',
   );
-  await click('[aria-label="Undo arrangement"]');
+  await paletteCommand('Undo arrangement');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".plane-tabs button").length'),
+    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
     (count) => count === 2,
     'restore closed branch again',
   );
   // Verify real workspace switching without sharing an engine adapter.
-  await click('[aria-label="New workspace"]');
+  await paletteCommand('New workspace');
   await command('Input.insertText', { text: 'Second workspace' });
   await click('dialog .primary');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".plane-tabs button").length'),
+    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
     (count) => count === 1,
     'new workspace',
   );
-  await evaluate(
-    `(()=>{const select=document.querySelector('[aria-label="Workspace"]');select.value=${JSON.stringify(fixture.state.activeWorkspace)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`,
-  );
+  const filesBeforeDelete = await inventory();
+  const jobsBeforeDelete = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  await paletteCommand('Delete workspace');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".plane-tabs button").length'),
+    text,
+    (value) => value.includes('Second workspace') && value.includes('1 open plane'),
+    'workspace deletion confirmation',
+  );
+  await snapshot('workspace-delete-native.png');
+  await click('dialog [aria-label="Close"]');
+  await paletteCommand('Delete workspace');
+  await click('dialog .danger');
+  await until(
+    () => evaluate<string>('document.querySelector(".workspace-switcher")?.textContent || ""'),
+    (value) => value.trim() === fixture.state.workspaces[0].name,
+    'layout-only deletion switches workspace',
+  );
+  assert.deepEqual(
+    await inventory(),
+    filesBeforeDelete,
+    'Workspace deletion must preserve every fixture file, folder and symlink',
+  );
+  assert.deepEqual(
+    await evaluate('window.viewer.jobs()'),
+    jobsBeforeDelete,
+    'Workspace deletion must preserve file jobs',
+  );
+  await paletteCommand('Undo workspace deletion');
+  await until(
+    () => evaluate<string>('document.querySelector(".workspace-switcher")?.textContent || ""'),
+    (value) => value.trim() === 'Second workspace',
+    'workspace recovery',
+  );
+  assert.deepEqual(await inventory(), filesBeforeDelete, 'Recovery must preserve fixture contents');
+  await paletteCommand(fixture.state.workspaces[0].name);
+  await until(
+    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
     (count) => count === 2,
     'switched workspace restored',
   );
@@ -631,7 +992,7 @@ try {
   assert.deepEqual(exceptions, []);
   // A native application quit exercises the renderer/main flush handshake, even
   // when the 400ms persistence debounce has not fired.
-  await click('[aria-label="Switch to light look"]');
+  await appearance('light');
   assert.equal(await evaluate('document.documentElement.dataset.look'), 'light');
   // Electron's renderer window.close() bypasses BrowserWindow's native close
   // event. Browser.close drives app.quit(), including before-quit and close.

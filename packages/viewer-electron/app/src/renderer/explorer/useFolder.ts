@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 
+const emptyEntries: FileEntry[] = [];
+
 export function useFolder(path: string) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loadedPath, setLoadedPath] = useState('');
@@ -54,7 +56,7 @@ export function useFolder(path: string) {
     };
   }, [path, refresh]);
   return {
-    entries: loadedPath === path ? entries : [],
+    entries: loadedPath === path ? entries : emptyEntries,
     loading: loadedPath !== path,
     error,
     refresh,

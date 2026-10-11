@@ -1,16 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 
 GlobalWorkerOptions.workerSrc = workerURL;
-export default function PDFPreview({ resource, signal, active }: PreviewContext) {
+export default function PDFPreview(context: PreviewContext) {
+  const { resource, signal, active } = context;
   const [pdf, setPDF] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (searchOpen) searchInput.current?.focus();
+  }, [searchOpen]);
   const [matches, setMatches] = useState<number[]>([]);
   const [searching, setSearching] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -133,11 +140,53 @@ export default function PDFPreview({ resource, signal, active }: PreviewContext)
       setSearching(false);
     };
   }, [pdf, query, signal]);
+  usePreviewCommands(
+    context,
+    useMemo(
+      () => [
+        {
+          id: 'pdf-next',
+          label: 'Next PDF page',
+          aliases: ['np'],
+          available: !!pdf && page < pdf.numPages,
+          run: () => setPage((value) => value + 1),
+        },
+        {
+          id: 'pdf-previous',
+          label: 'Previous PDF page',
+          aliases: ['pp'],
+          available: !!pdf && page > 1,
+          run: () => setPage((value) => value - 1),
+        },
+        {
+          id: 'pdf-search',
+          label: 'Search PDF text…',
+          aliases: ['sp'],
+          primary: true,
+          available: !!pdf,
+          run: () => setSearchOpen(true),
+        },
+        {
+          id: 'zoom-in',
+          label: 'Zoom in',
+          available: !!pdf && zoom < 2,
+          run: () => setZoom((value) => Math.min(2, value + 0.25)),
+        },
+        {
+          id: 'zoom-out',
+          label: 'Zoom out',
+          available: !!pdf && zoom > 0.5,
+          run: () => setZoom((value) => Math.max(0.5, value - 0.25)),
+        },
+      ],
+      [pdf, page, zoom],
+    ),
+  );
   if (error) return <Empty icon="pdf" title="PDF could not be displayed" detail={error} />;
   if (!pdf) return <Loading label="Opening PDF…" />;
   return (
     <div className="pdf-viewer">
-      <div className="preview-toolbar">
+      <PreviewToolbar context={context}>
         <IconButton
           icon="left"
           label="Previous page"
@@ -174,14 +223,27 @@ export default function PDFPreview({ resource, signal, active }: PreviewContext)
             </option>
           ))}
         </select>
-        <span className="toolbar-spacer" />
-        <input
-          aria-label="Search PDF text"
-          placeholder="Find in PDF"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
+        <IconButton icon="search" label="Search PDF" onClick={() => setSearchOpen(true)} />
+      </PreviewToolbar>
+      {searchOpen && (
+        <div className="search-row">
+          <input
+            ref={searchInput}
+            aria-label="Search PDF text"
+            placeholder="Find in PDF"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <IconButton
+            icon="close"
+            label="Close PDF search"
+            onClick={() => {
+              setSearchOpen(false);
+              setQuery('');
+            }}
+          />
+        </div>
+      )}
       {query && (
         <div className="pdf-search-results">
           {searching

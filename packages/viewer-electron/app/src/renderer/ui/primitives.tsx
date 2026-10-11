@@ -52,22 +52,25 @@ export function Dialog({
   children,
   onClose,
   wide = false,
+  className = '',
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
+    dialog?.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
     return () => dialog?.close();
   }, []);
   return (
     <dialog
       ref={ref}
-      className={wide ? 'dialog wide-dialog' : 'dialog'}
+      className={`dialog ${wide ? 'wide-dialog' : ''} ${className}`}
       onCancel={(event) => {
         event.preventDefault();
         onClose();

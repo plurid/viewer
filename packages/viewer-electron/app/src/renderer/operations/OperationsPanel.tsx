@@ -1,16 +1,56 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { CollisionDecision } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { report, setOperationsOpen, useViewer } from '../state/store';
-import { IconButton } from '../ui/primitives';
+import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 
 export function OperationsPanel() {
   const jobs = useViewer((state) => state.jobs);
   const open = useViewer((state) => state.operationsOpen);
+  const history = useViewer((state) => state.operationsHistory);
+  const visibleJobs = history
+    ? jobs
+    : jobs.filter((job) => ['queued', 'running', 'collision', 'failed'].includes(job.status));
   const [all, setAll] = useState<Record<string, boolean>>({});
+  const [replace, setReplace] = useState<{ id: string; path: string; applyAll: boolean } | null>(
+    null,
+  );
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    panel.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const close = (event: PointerEvent) => {
+      if (
+        !panel.current?.contains(event.target as Node) &&
+        !document.querySelector('dialog[open]') &&
+        !(event.target as HTMLElement).closest('.operations-button')
+      )
+        setOperationsOpen(false);
+    };
+    window.addEventListener('pointerdown', close);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      if (!document.querySelector('dialog[open]') && previous?.isConnected)
+        previous.focus({ preventScroll: true });
+    };
+  }, [open]);
   if (!open) return null;
   return (
-    <aside className="operations-panel" aria-label="File operations">
+    <aside
+      className="operations-panel"
+      aria-label="File operations"
+      role="dialog"
+      ref={panel}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && !replace) {
+          event.preventDefault();
+          event.stopPropagation();
+          setOperationsOpen(false);
+        }
+      }}
+    >
       <header>
         <strong>File operations</strong>
         <IconButton
@@ -19,10 +59,8 @@ export function OperationsPanel() {
           onClick={() => setOperationsOpen(false)}
         />
       </header>
-      {!jobs.length && (
-        <p className="muted panel-empty">Copy, move, rename, and Trash progress appears here.</p>
-      )}
-      {jobs.map((job) => (
+      {!visibleJobs.length && <p className="muted panel-empty">No recent file operations.</p>}
+      {visibleJobs.map((job) => (
         <section className={`operation operation-${job.status}`} key={job.id}>
           <div className="operation-title">
             <Icon
@@ -79,8 +117,16 @@ export function OperationsPanel() {
                   <button
                     key={decision}
                     onClick={() => {
+                      if (decision === 'replace') {
+                        setReplace({
+                          id: job.id,
+                          path: job.collision!.destination,
+                          applyAll: !!all[job.id],
+                        });
+                        return;
+                      }
                       void window.viewer
-                        .resolveCollision(job.id, decision as 'skip', !!all[job.id])
+                        .resolveCollision(job.id, decision as CollisionDecision, !!all[job.id])
                         .catch(report);
                     }}
                   >
@@ -106,6 +152,34 @@ export function OperationsPanel() {
           )}
         </section>
       ))}
+      {replace && (
+        <Dialog title="Replace existing item?" onClose={() => setReplace(null)}>
+          <div className="dialog-copy">
+            <p>
+              “{replace.path.split(/[\\/]/).pop()}” will be sent to Trash before the replacement is
+              copied.
+            </p>
+            {replace.applyAll && <p>This applies to the remaining conflicts in this operation.</p>}
+          </div>
+          <footer>
+            <button onClick={() => setReplace(null)}>Cancel</button>
+            <button
+              className="danger"
+              onClick={() => {
+                if (
+                  jobs.find((job) => job.id === replace.id)?.collision?.destination === replace.path
+                )
+                  void window.viewer
+                    .resolveCollision(replace.id, 'replace', replace.applyAll)
+                    .catch(report);
+                setReplace(null);
+              }}
+            >
+              Replace
+            </button>
+          </footer>
+        </Dialog>
+      )}
     </aside>
   );
 }

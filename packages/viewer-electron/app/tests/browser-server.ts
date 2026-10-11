@@ -106,6 +106,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'save':
       return storage.save(args[0] as SavedState);
     case 'flushed':
+    case 'textEdit':
       return;
     case 'clipboardWrite':
       clipboard = { paths: args[0] as string[], cut: args[1] as boolean };

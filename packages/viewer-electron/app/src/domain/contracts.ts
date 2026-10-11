@@ -55,7 +55,23 @@ export interface SavedState {
   favorites: { name: string; path: string }[];
   recents: string[];
   look: 'dark' | 'light';
+  ui?: UIPreferences;
 }
+export type SidebarSection = 'locations' | 'favorites' | 'recents';
+export interface UIPreferences {
+  sidebar: {
+    visible: boolean;
+    width: number;
+    order: SidebarSection[];
+    collapsed: SidebarSection[];
+    locations: string[];
+    hidden: string[];
+    labels: Record<string, string>;
+  };
+  space: { backs: boolean; minimap: boolean; viewcube: boolean; origin: boolean };
+  recentCommands: string[];
+}
+export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
   home: string;
   platform: 'darwin' | 'win32' | 'linux';
@@ -159,6 +175,7 @@ export interface ViewerAPI {
   flushed(token: string): Promise<void>;
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
   clipboardRead(): Promise<{ paths: string[]; cut: boolean } | null>;
+  textEdit(command: TextEditCommand): Promise<void>;
   onEvent(listener: (event: DesktopEvent) => void): () => void;
 }
 export type ApiMethod = Exclude<keyof ViewerAPI, 'onEvent'>;

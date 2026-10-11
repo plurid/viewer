@@ -1,37 +1,32 @@
-/**
- * THESIS: Folders and previews form one working space, with focused file tasks a dock away.
- * OWN-WORLD: Current Plurid graphite surfaces, system typography, dense native file rows.
- * STORY: Browse local files, open linked previews, organize safely, restore the workspace.
- * FIRST VIEWPORT: 210px location rail, 56px native titlebar, a 960px explorer plane in space;
- * the Open Folder action and linked preview command remain within reach.
- * FORM: User-approved Plurid application family; the implementation plan fixes the structure.
- * SIGNATURE: Open a file beside its folder, orbit a model independently, dock either plane.
- * MOTION: Engine camera transitions; bounded media/model activity; reduced-motion support.
- * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review,
- * the verdict, DESIGN.md, and every shipping raster carrying its provenance.
- */
+/** Native window chrome stays quiet; commands follow the active file, folder or preview. */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
-import type { FileEntry } from '../domain/contracts';
+import type { FileEntry, FolderPane } from '../domain/contracts';
 import {
   activeWorkspace,
   addPane,
+  deleteWorkspace,
   dismissNotice,
   flushState,
   getState,
   navigate,
+  needsOperations,
   newWorkspace,
   quickPreview,
   receiveJob,
   reconcilePanes,
+  rememberCommand,
+  removePanes,
+  renameShortcut,
   renameWorkspace,
   report,
+  restoreWorkspace,
   setActivePane,
   setJobs,
   setOperationsOpen,
   switchWorkspace,
-  toggleLook,
+  refreshClipboard,
   useViewer,
 } from './state/store';
 import { WorkspaceContext, type WorkspaceController } from './workspace/context';
@@ -45,24 +40,57 @@ import { Icon } from './ui/Icon';
 import { Dialog, ErrorBoundary, IconButton, NameDialog } from './ui/primitives';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { PreviewHost } from './previews/PreviewHost';
+import { CommandsContext, useCommands, useCommandSource } from './commands/context';
+import { CommandRegistry, type CommandContext } from './commands/registry';
+import { windowCommands } from './commands/window';
+import { CommandPalette } from './commands/CommandPalette';
+import { editable, textEditFor } from './commands/editing';
+import { Sidebar } from './ui/Sidebar';
+import { Settings } from './ui/Settings';
+import { ContextMenu } from './ui/ContextMenu';
 
-function basename(path: string): string {
-  return path.split(/[\\/]/).pop() || path;
-}
+const basename = (path: string) => path.split(/[\\/]/).pop() || path;
 export function App() {
+  const registry = useMemo(() => new CommandRegistry(rememberCommand), []);
+  return (
+    <CommandsContext.Provider value={registry}>
+      <AppWindow />
+    </CommandsContext.Provider>
+  );
+}
+function AppWindow() {
+  const registry = useCommands();
   const engine = useRef<PluridApplicationHandle>(null);
   const surface = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
-  const [workspaceDialog, setWorkspaceDialog] = useState<'new' | 'rename' | null>(null);
+  const [workspaceDialog, setWorkspaceDialog] = useState<{
+    kind: 'new' | 'rename' | 'delete';
+    id: string;
+  } | null>(null);
+  const [shortcutDialog, setShortcutDialog] = useState<{ path: string; name: string } | null>(null);
+  const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
+  const [settings, setSettings] = useState(false);
+  const [palette, setPalette] = useState<'commands' | 'files' | null>(null);
+  const [goTo, setGoTo] = useState(false);
+  const [tool, setTool] = useState<'rotate' | 'scale' | 'translate' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [showWorkspaceUndo, setShowWorkspaceUndo] = useState(false);
   const initialOpenHandled = useRef(false);
   const saved = useViewer((state) => state.saved);
   const space = useViewer(activeWorkspace);
-  const active = useViewer((state) => state.activePane);
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
   const quick = useViewer((state) => state.quickPreview);
   const jobs = useViewer((state) => state.jobs);
   const operationsOpen = useViewer((state) => state.operationsOpen);
+  const showOperations = useViewer(needsOperations);
+  const deleted = useViewer((state) => state.deletedWorkspace);
+  useEffect(() => {
+    setShowWorkspaceUndo(!!deleted);
+    if (!deleted) return;
+    const timer = setTimeout(() => setShowWorkspaceUndo(false), 8000);
+    return () => clearTimeout(timer);
+  }, [deleted]);
   const controller = useMemo<WorkspaceController>(
     () => ({
       open(entry: FileEntry, parentEngineID?: string) {
@@ -73,43 +101,61 @@ export function App() {
           flattenTree(api.tree.get()).some((node) => node.planeID === parentEngineID);
         const pane = addPane(entry.path, entry.directory ? 'folder' : 'preview', !linked);
         setActivePane(pane.id);
-        if (api && linked)
+        if (api && linked) {
           api.pubsub.publish({
             topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
             data: {
               route: `/${entry.directory ? 'folders' : 'previews'}/${pane.id}`,
               parentPlaneID: parentEngineID!,
-              framing: 'pair',
+              framing: 'none',
             },
           });
+          const parent = flattenTree(api.tree.get()).find(
+            (node) => node.planeID === parentEngineID,
+          );
+          frameWorkspace(engine, surface, parent ? [hostID(parent), pane.id] : [pane.id]);
+        } else frameWorkspace(engine, surface);
       },
-      async openPath(path: string) {
+      async openPath(path) {
         const entry = await window.viewer.stat(path);
         const current = activeWorkspace().panes.find((pane) => pane.id === getState().activePane);
         if (entry.directory && current?.type === 'folder') {
           navigate(current.id, entry.path);
           controller.focusPane(current.id);
-        } else controller.open(entry);
+        } else {
+          const node =
+            engine.current &&
+            flattenTree(engine.current.tree.get()).find((node) => hostID(node) === current?.id);
+          controller.open(entry, node?.planeID);
+        }
       },
-      focusPane(id: string) {
+      focusPane(id) {
         const node =
           engine.current &&
           flattenTree(engine.current.tree.get()).find((node) => hostID(node) === id);
         if (node) {
           engine.current?.tree.open(node.planeID);
-          engine.current?.camera.frame({ planeID: node.planeID }, { animate: true });
+          frameWorkspace(engine, surface, [id]);
         }
         setActivePane(id);
       },
       frameAll: () => frameWorkspace(engine, surface),
-      dock: () => {
+      dock: (id) => {
         const api = engine.current;
         if (!api) return;
         const node = flattenTree(api.tree.get()).find(
-          (node) => hostID(node) === getState().activePane,
+          (node) => hostID(node) === (id || getState().activePane),
         );
+        if (node) setActivePane(hostID(node));
         if (api.camera.docked()) api.camera.reveal({ animate: true });
         else api.camera.dock(node?.planeID, { animate: true });
+      },
+      closePane: (id) => {
+        const api = engine.current;
+        const node = api && flattenTree(api.tree.get()).find((node) => hostID(node) === id);
+        if (!node) return;
+        api!.tree.remove(node.planeID);
+        removePanes(flattenTree([node]).map(hostID));
       },
       arrange: (axis) => {
         const api = engine.current;
@@ -135,6 +181,94 @@ export function App() {
     }),
     [],
   );
+  async function transitionWorkspace(change: () => Promise<void>) {
+    setReady(false);
+    setTool(null);
+    try {
+      await change();
+    } catch (error) {
+      setReady(!!engine.current);
+      throw error;
+    }
+  }
+  async function switchTo(id: string) {
+    if (id === getState().saved.activeWorkspace) return;
+    await transitionWorkspace(() => switchWorkspace(id));
+  }
+  const windowContext = (): CommandContext => {
+    const state = getState();
+    const pane = activeWorkspace().panes.find((pane) => pane.id === state.activePane);
+    return {
+      scope: 'window',
+      workspaceID: state.saved.activeWorkspace,
+      paneID: state.activePane || undefined,
+      path: pane?.path,
+      directory: pane?.type === 'folder' ? pane.path : undefined,
+      folder: pane?.type === 'folder' ? (pane as FolderPane) : undefined,
+      selection: [],
+      jobs: state.jobs,
+      clipboard: state.clipboard,
+    };
+  };
+  useCommandSource(
+    'window',
+    {
+      context: windowContext,
+      definitions: () =>
+        windowCommands({
+          workspace: controller,
+          engine,
+          ready,
+          tool,
+          palette: setPalette,
+          settings: () => setSettings(true),
+          workspaceDialog: (kind) => setWorkspaceDialog({ kind, id: activeWorkspace().id }),
+          renameShortcut: (path, name) => setShortcutDialog({ path, name }),
+          switchWorkspace: switchTo,
+          restoreWorkspace: () => transitionWorkspace(restoreWorkspace),
+          spatialTool: setTool,
+          goTo: () => setGoTo(true),
+        }),
+      valid: (invocation) =>
+        invocation.scope === 'sidebar' ||
+        invocation.workspaceID === getState().saved.activeWorkspace,
+    },
+    [saved, ready, tool, jobs],
+  );
+  useEffect(() => {
+    const api = engine.current;
+    if (!ready || !api) return;
+    let previous = '';
+    return api.store.subscribe(() => {
+      const history = api.history.get();
+      const value = `${history.undoDepth}/${history.redoDepth}/${api.camera.docked()}`;
+      if (value !== previous) {
+        previous = value;
+        registry.touch();
+      }
+    });
+  }, [ready, registry]);
+  const invoke = async (id: string) => {
+    const edit = textEditFor(id, editable(document.activeElement));
+    if (edit) {
+      await window.viewer.textEdit(edit);
+      return;
+    }
+    if (
+      document.querySelector('dialog[open], .context-menu') &&
+      !['palette', 'settings'].includes(id)
+    )
+      return;
+    const context = registry.context(getState().activePane) || windowContext();
+    await refreshClipboard();
+    await registry.invoke(id, {
+      paneID: context.paneID,
+      scope: 'window',
+      context,
+    });
+  };
+  const invokeRef = useRef(invoke);
+  invokeRef.current = invoke;
   useEffect(() => {
     const remove = window.viewer.onEvent((event) => {
       if (event.type === 'job') receiveJob(event.job);
@@ -144,31 +278,18 @@ export function App() {
         void flushState()
           .then(() => window.viewer.flushed(event.token))
           .catch(report);
-      else if (event.type === 'command') {
-        if (event.command === 'choose-folder')
-          void window.viewer
-            .chooseFolder()
-            .then((path) => {
-              if (path) return controller.openPath(path);
-            })
-            .catch(report);
-        else if (event.command === 'frame-all') controller.frameAll();
-        else if (event.command === 'dock') controller.dock();
-        else if (event.command === 'undo-arrangement') controller.undo();
-        else if (event.command === 'redo-arrangement') controller.redo();
-        else if (event.command === 'undo-file') {
-          const job = getState().jobs.find((job) => job.undoable);
-          if (job) void window.viewer.undo(job.id).catch(report);
-        } else
-          window.dispatchEvent(
-            new CustomEvent('viewer:folder-command', {
-              detail: { id: getState().activePane, command: event.command },
-            }),
-          );
-      }
+      else if (event.type === 'command') void invokeRef.current(event.command).catch(report);
     });
     void window.viewer.jobs().then(setJobs).catch(report);
-    return remove;
+    const focus = () => {
+      void refreshClipboard().catch(report);
+    };
+    window.addEventListener('focus', focus);
+    focus();
+    return () => {
+      remove();
+      window.removeEventListener('focus', focus);
+    };
   }, [controller]);
   useEffect(() => {
     if (ready && !initialOpenHandled.current) {
@@ -183,18 +304,36 @@ export function App() {
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && getState().quickPreview) quickPreview(null);
-      if ((event.metaKey || event.ctrlKey) && event.key === '0') {
+      if (
+        event.key === 'Escape' &&
+        tool &&
+        !document.querySelector('dialog[open], .context-menu')
+      ) {
+        setTool(null);
         event.preventDefault();
-        controller.frameAll();
       }
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      if (!(event.metaKey || event.ctrlKey) || event.isComposing) return;
+      const key = event.key.toLowerCase();
+      let id: string | undefined;
+      if (key === 'k') id = 'palette';
+      else if (key === ',') id = 'settings';
+      else if (key === '0') id = 'frame-all';
+      else if (key === 'enter') id = 'dock';
+      else if (event.altKey && key === 's') id = 'toggle-sidebar';
+      else if (!editable(event.target) && key === 'f') id = 'find-file';
+      else if (!editable(event.target) && key === 'l') id = 'go-to';
+      if (id) {
         event.preventDefault();
-        controller.dock();
+        event.stopPropagation();
+        void invokeRef.current(id).catch(report);
       }
     };
-    window.addEventListener('keydown', keydown);
-    return () => window.removeEventListener('keydown', keydown);
-  }, [controller]);
+    window.addEventListener('keydown', keydown, true);
+    return () => window.removeEventListener('keydown', keydown, true);
+  }, [tool]);
+  const targetWorkspace = saved.workspaces.find(
+    (workspace) => workspace.id === workspaceDialog?.id,
+  );
   const inProgress = jobs.filter((job) =>
     ['queued', 'running', 'collision'].includes(job.status),
   ).length;
@@ -203,186 +342,91 @@ export function App() {
       <div className="app-shell" data-look={saved.look}>
         <header className="app-titlebar">
           <div className="traffic-space" />
-          <span className="app-wordmark">
-            viewer
-            <span className="wordmark-dot" />
-          </span>
-          <span className="titlebar-divider" />
-          <select
-            aria-label="Workspace"
-            value={space.id}
-            onChange={(event) => {
-              setReady(false);
-              void switchWorkspace(event.target.value).catch(report);
-            }}
-          >
-            {saved.workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </option>
-            ))}
-          </select>
-          <IconButton icon="plus" label="New workspace" onClick={() => setWorkspaceDialog('new')} />
           <IconButton
-            icon="rename"
-            label="Rename workspace"
-            onClick={() => setWorkspaceDialog('rename')}
-          />
-          <span className="toolbar-spacer" />
-          <button
-            className="open-folder-button"
+            icon="sidebar"
+            label={saved.ui.sidebar.visible ? 'Hide sidebar' : 'Show sidebar'}
+            aria-pressed={saved.ui.sidebar.visible}
             onClick={() => {
-              void window.viewer
-                .chooseFolder()
-                .then((path) => {
-                  if (path) return controller.openPath(path);
-                })
-                .catch(report);
+              void registry.invoke('toggle-sidebar', { sources: ['window'] }).catch(report);
+            }}
+          />
+          <button
+            className="workspace-switcher"
+            aria-label="Workspace"
+            aria-haspopup="dialog"
+            aria-expanded={!!workspaceMenu}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setWorkspaceMenu({ x: rect.left, y: rect.bottom + 6 });
             }}
           >
-            <Icon name="folder" size={16} />
-            Open folder
+            <span>{space.name}</span>
+            <Icon name="down" size={13} />
           </button>
+          <span className="toolbar-spacer" />
+          {showOperations && (
+            <button
+              className="operations-button"
+              aria-label="File operations"
+              aria-expanded={operationsOpen}
+              onClick={() => setOperationsOpen(!operationsOpen)}
+            >
+              <Icon name="copy" size={17} />
+              {inProgress > 0 && <span className="count-badge">{inProgress}</span>}
+            </button>
+          )}
           <IconButton
-            icon={saved.look === 'dark' ? 'sun' : 'moon'}
-            label={`Switch to ${saved.look === 'dark' ? 'light' : 'dark'} look`}
-            onClick={toggleLook}
+            icon="command"
+            label="Commands (⌘K)"
+            onClick={() => {
+              void invoke('palette').catch(report);
+            }}
           />
         </header>
         <div className="app-main">
-          <aside className="location-sidebar" aria-label="Locations">
-            <div className="sidebar-group">
-              <h2>Locations</h2>
-              {bootstrap.locations.map((location) => {
-                const current = space.panes.find((pane) => pane.id === active);
-                return (
-                  <button
-                    className={`location ${current?.path === location.path ? 'selected' : ''}`}
-                    key={location.path}
-                    title={location.path}
-                    onClick={(event) => {
-                      if (event.altKey)
-                        void window.viewer
-                          .stat(location.path)
-                          .then((entry) => controller.open(entry))
-                          .catch(report);
-                      else void controller.openPath(location.path).catch(report);
-                    }}
-                  >
-                    <Icon
-                      name={
-                        location.name === 'Home'
-                          ? 'home'
-                          : location.name === 'Volumes' || location.name === 'Computer'
-                            ? 'disk'
-                            : 'folder'
-                      }
-                      size={17}
-                    />
-                    <span>{location.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="sidebar-group">
-              <h2>Favorites</h2>
-              {!saved.favorites.length && (
-                <p className="sidebar-hint">Star a folder to keep it here.</p>
-              )}
-              {saved.favorites.map((location) => (
-                <button
-                  className="location"
-                  key={location.path}
-                  title={location.path}
-                  onClick={() => {
-                    void controller.openPath(location.path).catch(report);
-                  }}
-                >
-                  <Icon name="star" size={17} />
-                  <span>{location.name}</span>
-                </button>
-              ))}
-            </div>
-            <div className="sidebar-group">
-              <h2>Recent</h2>
-              {saved.recents.slice(0, 5).map((path) => (
-                <button
-                  className="location"
-                  key={path}
-                  title={path}
-                  onClick={() => {
-                    void controller.openPath(path).catch(report);
-                  }}
-                >
-                  <Icon name="clock" size={16} />
-                  <span>{basename(path)}</span>
-                </button>
-              ))}
-            </div>
-            <div className="sidebar-bottom">
-              <button
-                className={operationsOpen ? 'selected' : ''}
-                onClick={() => setOperationsOpen(!operationsOpen)}
-              >
-                <Icon name="copy" size={17} />
-                <span>File operations</span>
-                {inProgress > 0 && <span className="count-badge">{inProgress}</span>}
-              </button>
-              <div className="sidebar-caption">Local files. A wider view.</div>
-            </div>
-          </aside>
+          <Sidebar />
           <main className="workspace-main">
-            <div className="workspace-header">
-              <div className="plane-tabs" aria-label="Open planes">
-                {space.panes.map((pane) => (
-                  <button
-                    className={pane.id === active ? 'active' : ''}
-                    key={pane.id}
-                    title={pane.path}
-                    onClick={() => controller.focusPane(pane.id)}
-                  >
-                    <Icon name={pane.type === 'folder' ? 'folder' : 'file'} size={15} />
-                    <span>{basename(pane.path)}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="workspace-tools">
-                <IconButton icon="left" label="Undo arrangement" onClick={controller.undo} />
-                <IconButton icon="right" label="Redo arrangement" onClick={controller.redo} />
-                <IconButton
-                  icon="columns"
-                  label="Arrange planes horizontally"
-                  onClick={() => controller.arrange('x')}
-                />
-                <IconButton icon="frame" label="Frame all planes" onClick={controller.frameAll} />
-                <IconButton
-                  icon="dock"
-                  label="Dock or reveal active plane"
-                  onClick={controller.dock}
-                />
-              </div>
-            </div>
             <ErrorBoundary>
-              <WorkspaceSurface engine={engine} surface={surface} onReady={() => setReady(true)} />
+              <WorkspaceSurface
+                engine={engine}
+                surface={surface}
+                onReady={() => setReady(true)}
+                tool={tool}
+                onToolDone={() => setTool(null)}
+              />
             </ErrorBoundary>
-            <footer className="workspace-footer">
-              <span>
-                <span className="status-dot" />
-                {space.panes.length} {space.panes.length === 1 ? 'plane' : 'planes'}
-              </span>
-              <span>
-                ⌥ open linked plane <span className="separator">·</span> Space quick preview{' '}
-                <span className="separator">·</span> ⌘↵ dock
-              </span>
-            </footer>
           </main>
-          <OperationsPanel />
         </div>
+        <OperationsPanel />
+        {workspaceMenu && (
+          <ContextMenu
+            position={workspaceMenu}
+            request={{ sources: ['window'], scope: 'workspace' }}
+            label="Workspaces"
+            onClose={() => setWorkspaceMenu(null)}
+          />
+        )}
+        {palette && (
+          <CommandPalette mode={palette} onMode={setPalette} onClose={() => setPalette(null)} />
+        )}
+        {settings && <Settings onClose={() => setSettings(false)} />}
         {notice && (
           <div className="notice" role="alert">
             <Icon name="warning" />
             <span>{notice}</span>
             <IconButton icon="close" label="Dismiss message" onClick={dismissNotice} />
+          </div>
+        )}
+        {deleted && showWorkspaceUndo && (
+          <div className="workspace-recovery" role="status">
+            <span>Deleted “{deleted.workspace.name}” workspace</span>
+            <button
+              onClick={() => {
+                void transitionWorkspace(restoreWorkspace).catch(report);
+              }}
+            >
+              Undo
+            </button>
           </div>
         )}
         {quick && (
@@ -420,20 +464,83 @@ export function App() {
             </footer>
           </Dialog>
         )}
-        {workspaceDialog && (
+        {workspaceDialog && workspaceDialog.kind !== 'delete' && (
           <NameDialog
-            title={workspaceDialog === 'new' ? 'New workspace' : 'Rename workspace'}
+            title={workspaceDialog.kind === 'new' ? 'New workspace' : 'Rename workspace'}
             maxLength={100}
-            initial={workspaceDialog === 'rename' ? space.name : ''}
-            action={workspaceDialog === 'new' ? 'Create' : 'Rename'}
+            initial={workspaceDialog.kind === 'rename' ? targetWorkspace?.name : ''}
+            action={workspaceDialog.kind === 'new' ? 'Create' : 'Rename'}
             onClose={() => setWorkspaceDialog(null)}
             onSubmit={async (name) => {
               name = name.trim();
               if (!name) throw new Error('Enter a workspace name.');
-              if (workspaceDialog === 'new') {
-                setReady(false);
-                await newWorkspace(name);
-              } else renameWorkspace(name);
+              if (workspaceDialog.kind === 'new') {
+                await transitionWorkspace(() => newWorkspace(name));
+              } else if (targetWorkspace?.id === activeWorkspace().id) renameWorkspace(name);
+            }}
+          />
+        )}
+        {workspaceDialog?.kind === 'delete' && targetWorkspace && (
+          <Dialog
+            title="Delete workspace?"
+            onClose={() => {
+              if (!busy) setWorkspaceDialog(null);
+            }}
+          >
+            <div className="dialog-copy">
+              <p>
+                Delete “{targetWorkspace.name}” and its {targetWorkspace.panes.length} open{' '}
+                {targetWorkspace.panes.length === 1 ? 'plane' : 'planes'}?
+              </p>
+              <p>
+                Your files and folders stay where they are. File operations continue. You can undo
+                this deletion during this session.
+              </p>
+            </div>
+            <footer>
+              <button disabled={busy} onClick={() => setWorkspaceDialog(null)}>
+                Cancel
+              </button>
+              <button
+                className="danger"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  void transitionWorkspace(() => deleteWorkspace(targetWorkspace.id))
+                    .then(() => setWorkspaceDialog(null))
+                    .catch(report)
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Delete workspace
+              </button>
+            </footer>
+          </Dialog>
+        )}
+        {shortcutDialog && (
+          <NameDialog
+            title="Rename shortcut"
+            initial={shortcutDialog.name}
+            maxLength={200}
+            action="Rename"
+            onClose={() => setShortcutDialog(null)}
+            onSubmit={(name) => renameShortcut(shortcutDialog.path, name)}
+          />
+        )}
+        {goTo && (
+          <NameDialog
+            title="Go to folder"
+            label="Folder path"
+            maxLength={32768}
+            initial={bootstrap.home}
+            action="Go"
+            onClose={() => setGoTo(false)}
+            onSubmit={async (path) => {
+              const resolved =
+                path === '~' || path.startsWith('~/') ? bootstrap.home + path.slice(1) : path;
+              const entry = await window.viewer.stat(resolved);
+              if (!entry.directory) throw new Error('Choose a folder.');
+              await controller.openPath(entry.path);
             }}
           />
         )}

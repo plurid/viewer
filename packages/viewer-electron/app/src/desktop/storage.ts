@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SavedState } from '../domain/contracts';
+import { normalizePreferences } from '../domain/preferences';
 
 const localPath = z
   .string()
@@ -44,6 +45,7 @@ export const stateSchema = z
     favorites: z.array(z.object({ name: z.string().max(200), path: localPath })).max(200),
     recents: z.array(localPath).max(50),
     look: z.enum(['dark', 'light']),
+    ui: z.unknown().optional().transform(normalizePreferences),
   })
   .refine(
     (state) => state.workspaces.some((workspace) => workspace.id === state.activeWorkspace),

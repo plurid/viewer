@@ -39,7 +39,48 @@ export default function ExamplePreview({ resource, services, signal }: PreviewCo
 }
 ```
 
-`PreviewContext` contains file metadata and a resource URL, an abort signal, active/interactive flags, the current look, and a fixed read/archive interface. Optional `metadata()` and `thumbnail()` hooks share that contract. Explorer, filesystem and Plurid state stay outside a preview module.
+`PreviewContext` contains file metadata and a resource URL, an abort signal, active/interactive flags, the current look, a fixed read/archive interface, and an optional renderer command capability. Optional `metadata()` and `thumbnail()` hooks share that contract. Explorer, filesystem and Plurid state stay outside a preview module.
+
+## Contextual controls and commands
+
+Use `PreviewToolbar` for primary controls. It places them in the plane's header when the host supplies a slot, or inline for a quick preview or gallery. Keep document-specific controls such as a timeline or data filter in the content. Register secondary or searchable actions with `usePreviewCommands`:
+
+```tsx
+import { useMemo, useState } from 'react';
+import { PreviewToolbar, usePreviewCommands } from '../controls';
+
+// Inside the module component, with its PreviewContext named context:
+const [wrap, setWrap] = useState(false);
+usePreviewCommands(
+  context,
+  useMemo(
+    () => [
+      {
+        id: 'example-wrap',
+        label: wrap ? 'Disable line wrap' : 'Enable line wrap',
+        aliases: ['wrap', 'lw'],
+        primary: true,
+        available: true,
+        run: () => setWrap((value) => !value),
+      },
+    ],
+    [wrap],
+  ),
+);
+
+return (
+  <>
+    <PreviewToolbar context={context}>
+      <button aria-pressed={wrap} onClick={() => setWrap((value) => !value)}>
+        Wrap lines
+      </button>
+    </PreviewToolbar>
+    <pre style={{ whiteSpace: wrap ? 'pre-wrap' : 'pre' }}>{text}</pre>
+  </>
+);
+```
+
+Use stable module-local IDs and memoize definitions on the state their labels, availability and handlers depend on. The host supplies preview scope, resource/pane lifetime checks, ID namespacing and registry cleanup. `register()` returns a disposer; the hook releases commands on replacement or unmount. Set `available: false` while an action cannot run. Commands appear only for the active preview; recent IDs cannot carry a previous resource target. The optional capability keeps modules usable outside a spatial plane without engine or explorer imports.
 
 Use `services.read()` for bounded UTF-8 data. Use `fetch(resource.url, { signal })` or the resource URL directly for binary files, PDF or media. Range requests support seeking. Model companions resolve relative to the resource URL inside its granted local directory. Archive entries receive child grants and use the same registry.
 

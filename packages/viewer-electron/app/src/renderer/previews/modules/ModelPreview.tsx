@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -6,6 +6,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 
@@ -36,13 +37,8 @@ function disposeObject(object: THREE.Object3D): void {
     texture.dispose();
   }
 }
-export default function ModelPreview({
-  resource,
-  signal,
-  active,
-  interactive,
-  look,
-}: PreviewContext) {
+export default function ModelPreview(context: PreviewContext) {
+  const { resource, signal, active, interactive, look } = context;
   const stage = useRef<HTMLDivElement>(null);
   const session = useRef<ModelSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,7 +111,8 @@ export default function ModelPreview({
       dirty = true;
       schedule();
     });
-    // Native canvas listeners stop the event before Plurid's ancestor listeners see it.
+    // Stop gesture initiation at the canvas. OrbitControls receives subsequent
+    // pointer moves/up on ownerDocument, so those events must keep bubbling.
     const isolate = (event: Event) => {
       if (controls.enabled) event.stopPropagation();
     };
@@ -125,7 +122,7 @@ export default function ModelPreview({
         event.stopPropagation();
       }
     };
-    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'contextmenu', 'dblclick'])
+    for (const type of ['pointerdown', 'contextmenu', 'dblclick'])
       renderer.domElement.addEventListener(type, isolate);
     renderer.domElement.addEventListener('wheel', wheel, { passive: false });
     scene.add(new THREE.HemisphereLight(0xffffff, 0x58616b, 2));
@@ -331,7 +328,7 @@ export default function ModelPreview({
         mixer?.uncacheRoot(object);
         disposeObject(object);
       }
-      for (const type of ['pointerdown', 'pointermove', 'pointerup', 'contextmenu', 'dblclick'])
+      for (const type of ['pointerdown', 'contextmenu', 'dblclick'])
         renderer.domElement.removeEventListener(type, isolate);
       renderer.domElement.removeEventListener('wheel', wheel);
       renderer.dispose();
@@ -339,9 +336,47 @@ export default function ModelPreview({
       renderer.domElement.remove();
     };
   }, [resource.id, resource.url, resource.entry.extension, resource.entry.size, look, signal]);
+  usePreviewCommands(
+    context,
+    useMemo(
+      () => [
+        {
+          id: 'model-frame',
+          label: 'Frame model',
+          aliases: ['fm'],
+          primary: true,
+          available: !loading && !error,
+          run: () => session.current?.frame(),
+        },
+        {
+          id: 'model-wireframe',
+          label: wire ? 'Hide wireframe' : 'Show wireframe',
+          aliases: ['wf'],
+          available: !loading && !error,
+          run: () => setWire((value) => !value),
+        },
+        {
+          id: 'model-playback',
+          label: playing ? 'Pause animation' : 'Play animation',
+          available: animations.length > 0 && !error,
+          run: () => setPlaying((value) => !value),
+        },
+        ...animations.map((name, index) => ({
+          id: `model-animation-${index}`,
+          label: `Play ${name}`,
+          available: !error,
+          run: () => {
+            setAnimation(index);
+            setPlaying(true);
+          },
+        })),
+      ],
+      [loading, error, wire, playing, animations],
+    ),
+  );
   return (
     <div className="model-viewer">
-      <div className="preview-toolbar">
+      <PreviewToolbar context={context}>
         <IconButton icon="frame" label="Frame model" onClick={() => session.current?.frame()} />
         <button
           className={wire ? 'selected' : ''}
@@ -372,7 +407,7 @@ export default function ModelPreview({
         )}
         <span className="toolbar-spacer" />
         <span className="muted">{resource.entry.extension.toUpperCase()}</span>
-      </div>
+      </PreviewToolbar>
       <div className="model-stage" ref={stage}>
         {loading && (
           <div className="preview-overlay">

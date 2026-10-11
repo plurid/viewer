@@ -5,7 +5,8 @@ export interface WorkspaceController {
   openPath(path: string): Promise<void>;
   focusPane(hostID: string): void;
   frameAll(): void;
-  dock(): void;
+  dock(hostID?: string): void;
+  closePane(hostID: string): void;
   arrange(axis: 'x' | 'y'): void;
   undo(): void;
   redo(): void;

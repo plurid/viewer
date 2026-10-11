@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewContext } from '../contracts';
+import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { Empty, IconButton } from '../../ui/primitives';
 
-export default function ImagePreview({ resource, active, interactive }: PreviewContext) {
+export default function ImagePreview(context: PreviewContext) {
+  const { resource, active, interactive } = context;
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState('');
@@ -30,6 +32,37 @@ export default function ImagePreview({ resource, active, interactive }: PreviewC
       element.removeEventListener('contextmenu', stop);
     };
   }, [active, interactive]);
+  usePreviewCommands(
+    context,
+    useMemo(
+      () => [
+        {
+          id: 'image-fit',
+          label: 'Fit image',
+          aliases: ['fi'],
+          primary: true,
+          available: !error,
+          run: () => {
+            setZoom(1);
+            setPan({ x: 0, y: 0 });
+          },
+        },
+        {
+          id: 'zoom-in',
+          label: 'Zoom in',
+          available: !error && zoom < 20,
+          run: () => setZoom((value) => Math.min(20, value * 1.25)),
+        },
+        {
+          id: 'zoom-out',
+          label: 'Zoom out',
+          available: !error && zoom > 0.1,
+          run: () => setZoom((value) => Math.max(0.1, value / 1.25)),
+        },
+      ],
+      [error, zoom],
+    ),
+  );
   if (error)
     return (
       <Empty
@@ -40,7 +73,7 @@ export default function ImagePreview({ resource, active, interactive }: PreviewC
     );
   return (
     <div className="image-viewer">
-      <div className="preview-toolbar">
+      <PreviewToolbar context={context}>
         <IconButton
           icon="frame"
           label="Fit image"
@@ -61,7 +94,7 @@ export default function ImagePreview({ resource, active, interactive }: PreviewC
         </button>
         <span className="toolbar-spacer" />
         <span className="muted">{dimensions}</span>
-      </div>
+      </PreviewToolbar>
       <div
         className="image-stage"
         ref={stage}

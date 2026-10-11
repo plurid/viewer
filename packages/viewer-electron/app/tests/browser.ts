@@ -43,6 +43,10 @@ const api: ViewerAPI = {
   flushed: (token) => invoke('flushed', token),
   clipboardWrite: (paths, cut) => invoke('clipboardWrite', paths, cut),
   clipboardRead: () => invoke('clipboardRead'),
+  textEdit: (command) => {
+    document.execCommand(command);
+    return Promise.resolve();
+  },
   onEvent: (listener) => {
     listeners.add(listener);
     return () => {

@@ -2,7 +2,9 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
-import { report, useViewer } from '../state/store';
+import { activeWorkspace, getState, report, useViewer } from '../state/store';
+import { useCommands } from '../commands/context';
+import { usePreviewControlsSlot } from './controls';
 import type { PreviewContext, PreviewModule } from './contracts';
 import { choosePreview } from './registry';
 
@@ -26,20 +28,63 @@ export function PreviewHost({
   active = true,
   interactive = true,
   resource: supplied,
+  paneID,
 }: {
   path?: string;
   active?: boolean;
   interactive?: boolean;
   resource?: Resource;
+  paneID?: string;
 }) {
   const [resource, setResource] = useState<Resource | null>(supplied ?? null);
   const [error, setError] = useState('');
   const [activated, setActivated] = useState(active);
+  const registry = useCommands();
+  const header = usePreviewControlsSlot(paneID);
   useEffect(() => {
     if (active) setActivated(true);
   }, [active]);
   const look = useViewer((state) => state.saved.look);
   const abort = useMemo(() => new AbortController(), [path, supplied?.id]);
+  const commands = useMemo<PreviewContext['commands']>(
+    () =>
+      !paneID || !resource
+        ? undefined
+        : {
+            header,
+            register: (definitions) =>
+              registry.register(`preview:${paneID}`, {
+                context: () => ({
+                  scope: 'preview',
+                  workspaceID: activeWorkspace().id,
+                  paneID,
+                  path: resource.entry.path,
+                  resourceID: resource.id,
+                  selection: [],
+                  jobs: getState().jobs,
+                  clipboard: getState().clipboard,
+                }),
+                definitions: () =>
+                  definitions.map((command) => ({
+                    ...command,
+                    id: `preview.${command.id}`,
+                    group: 'Preview',
+                    icon: 'eye' as const,
+                    when: (context) =>
+                      ['window', 'preview'].includes(context.scope) &&
+                      command.available !== false &&
+                      active,
+                  })),
+                valid: (invocation) =>
+                  !abort.signal.aborted &&
+                  invocation.resourceID === resource.id &&
+                  activeWorkspace().panes.some(
+                    (pane) => pane.id === paneID && pane.path === resource.entry.path,
+                  ),
+              }),
+          },
+    [paneID, resource, header, registry, abort, active],
+  );
   useEffect(() => {
     let owned: Resource | undefined;
     if (supplied) {
@@ -93,6 +138,7 @@ export function PreviewHost({
               signal={abort.signal}
               services={services}
               look={look}
+              commands={commands}
             />
           </Suspense>
         </ErrorBoundary>

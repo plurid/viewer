@@ -15,7 +15,7 @@ pnpm start
 pnpm check         # strict types across main, preload, renderer, tests and tooling
 pnpm lint
 pnpm format:check
-pnpm test          # filesystem, transfers, resources, archives, search, workspaces
+pnpm test          # filesystem, transfers, resources, archives, commands, saved state
 pnpm make          # locally signed macOS .app and ZIP
 pnpm test:desktop  # exercises the actual packaged app with synthetic files
 ```
@@ -26,33 +26,41 @@ The app is built under `packages/viewer-electron/app/out/Viewer-darwin-<architec
 
 ## File work
 
-Browse local folders, external volumes and mounted network folders in virtualized list, grid, columns or gallery views. Folder double-click navigates within a plane. Option-double-click, **Open linked plane**, or a quick preview’s linked action opens a child plane. Space opens a quick preview. Plane tabs focus an existing plane; the dock button or Command-Return switches between focused and spatial views.
+Browse local folders, external volumes and mounted network folders in virtualized list, grid, columns or gallery views. Folder double-click navigates within a plane. Option-double-click, **Open linked plane**, or a quick preview’s linked action opens a child plane. Space opens a quick preview. Command-Return switches between focused and spatial views. Each plane has one compact header; its view menu and searchable actions replace the stacked toolbars.
 
-Breadcrumbs, history, hidden files, sorting, favorites, recents and file information accompany browsing. Filter the current folder or turn on **Subfolders** for cancellable streamed filename search. File actions include new folder, rename, duplicate, copy/paste, cut/paste, and dragging between planes (Option-drag copies). Clipboard transfers currently work between Viewer planes. Collision decisions include skip, keep both and replace; replacement sends the existing item to native Trash. The operations panel shows progress, cancellation and partial errors.
+Command-K searches commands, workspaces, open planes and places using the active folder, file selection or preview. Command-F finds filenames in that context, with optional subfolder search. Right-click opens an autofocus search with aliases such as `rn` (rename), `cp` (copy) and `nf` (new folder). The last two applicable actions appear first; history stores command IDs, never previous file targets. Breadcrumbs and folder filtering appear on demand.
 
-Command-Z undoes eligible rename/move jobs; identity and content checks protect changed destinations. Copies, duplicates, cross-volume moves and Trash have no application undo. Arrangement history is separate: use its toolbar arrows or Command-Option-Z / Command-Option-Shift-Z. Native Trash restoration remains available through Finder.
+The sidebar can be resized, hidden, and arranged by dragging sections or shortcuts. Sections fold; Recent stays chronological. Drag a folder into Favorites to add a shortcut. Rename shortcut and Hide location change only the sidebar. Equivalent movement commands are available in its searchable menus. Appearance and spatial aids live in Settings (Command-comma); plane backs are visible by default, while minimap and viewcube are opt-in.
 
-| Command | macOS shortcut |
-| --- | --- |
-| Open folder / new folder | ⌘⇧O / ⌘⇧N |
-| Open selection / rename | ⌘O / Return |
-| Copy / cut / paste / select all | ⌘C / ⌘X / ⌘V / ⌘A |
-| Quick preview / file information | Space / ⌘I |
-| Search / go to folder | ⌘F / ⌘L |
-| Parent / back / forward | ⌘↑ / ⌘← / ⌘→ |
-| Hidden files / duplicate / Trash | ⌘⇧. / ⌘D / ⌘⌫ |
-| Frame all / dock or reveal | ⌘0 / ⌘Return |
+The workspace switcher provides New, Rename and Delete. Deletion confirms the workspace name and plane count, removes only saved layout, and can be undone during the session. Deleting the final workspace leaves an empty replacement. Files, folders and running jobs are unaffected.
+
+File actions include new folder, rename, duplicate, copy/paste, cut/paste, Copy/Move to a chosen destination, and dragging between planes (Option-drag copies). Clipboard transfers currently work between Viewer planes. Collision decisions include skip, keep both and replace; replacement sends the existing item to native Trash after confirmation. A topbar operations control appears only for pending work, conflicts or unseen failures. Progress opens in a popover; **Recent file operations** remains available through Commands and the File menu.
+
+Command-Z undoes eligible rename/move jobs; identity and content checks protect changed destinations. Copies, duplicates, cross-volume moves and Trash have no application undo. Arrangement history is separate: use Commands or Command-Option-Z / Command-Option-Shift-Z. Native Trash restoration remains available through Finder. When editing a text field, standard Edit commands operate on its text.
+
+| Command                          | macOS shortcut    |
+| -------------------------------- | ----------------- |
+| Open folder / new folder         | ⌘⇧O / ⌘⇧N         |
+| Open selection / rename          | ⌘O / Return       |
+| Copy / cut / paste / select all  | ⌘C / ⌘X / ⌘V / ⌘A |
+| Quick preview / file information | Space / ⌘I        |
+| Commands / Settings              | ⌘K / ⌘,           |
+| Find file / go to folder         | ⌘F / ⌘L           |
+| Show or hide sidebar             | ⌥⌘S               |
+| Parent / back / forward          | ⌘↑ / ⌥← / ⌥→      |
+| Hidden files / duplicate / Trash | ⌘⇧. / ⌘D / ⌘⌫     |
+| Frame all / dock or reveal       | ⌘0 / ⌘Return      |
 
 ## Previews
 
-| Module | Initial support |
-| --- | --- |
-| 3D | GLB/glTF, OBJ with local MTL, STL, FBX; orbit, pan, zoom, framing, wireframe, animations, statistics |
-| Images | PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG; fit, zoom and pan |
-| Audio/video | Chromium-supported codecs with native seeking and playback |
-| PDF | Worker rendering, pages, zoom, selectable text and document search |
-| Text/data | Safe Markdown, code/text, expandable JSON and virtualized CSV/TSV tables |
-| Archives | ZIP, TAR, TAR.GZ/TGZ indexing and entry previews without extraction |
+| Module      | Initial support                                                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------- |
+| 3D          | GLB/glTF, OBJ with local MTL, STL, FBX; orbit, pan, zoom, framing, wireframe, animations, statistics |
+| Images      | PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG; fit, zoom and pan                                         |
+| Audio/video | Chromium-supported codecs with native seeking and playback                                           |
+| PDF         | Worker rendering, pages, zoom, selectable text and document search                                   |
+| Text/data   | Safe Markdown, code/text, expandable JSON and virtualized CSV/TSV tables                             |
+| Archives    | ZIP, TAR, TAR.GZ/TGZ indexing and entry previews without extraction                                  |
 
 Formats outside this set receive file information and an **Open in default app** action. Office, ebooks, CAD/USD, HEIC/TIFF and creative formats are the next extension path. A registered extension does not guarantee a file’s codec, compression or external asset requirements: failures stay visible and recoverable.
 

@@ -5,17 +5,23 @@ import type {
   OperationJob,
   Pane,
   SavedState,
+  UIPreferences,
   Workspace,
 } from '../../domain/contracts';
+import { normalizePreferences, reorder } from '../../domain/preferences';
 
 interface ViewerState {
-  saved: SavedState;
+  saved: SavedState & { ui: UIPreferences };
   bootstrap: Bootstrap;
   jobs: OperationJob[];
   activePane: string;
   quickPreview: string | null;
   notice: string | null;
   operationsOpen: boolean;
+  operationsHistory: boolean;
+  acknowledgedJobs: string[];
+  clipboard: { paths: string[]; cut: boolean } | null;
+  deletedWorkspace: { workspace: Workspace; index: number; replacement?: string } | null;
 }
 let current: ViewerState;
 const listeners = new Set<() => void>();
@@ -52,6 +58,9 @@ function update(next: ViewerState, persist = false): void {
   }
 }
 export function initialize(bootstrap: Bootstrap): void {
+  clearTimeout(persistTimer);
+  adapters.clear();
+  closedPanes.clear();
   const pane = folderPane(bootstrap.home);
   const workspace: Workspace = {
     id: uuid(),
@@ -60,14 +69,15 @@ export function initialize(bootstrap: Bootstrap): void {
     roots: [pane.id],
     arrangement: {},
   };
-  const saved = bootstrap.state ?? {
-    version: 1,
+  const original = bootstrap.state ?? {
+    version: 1 as const,
     workspaces: [workspace],
     activeWorkspace: workspace.id,
     favorites: [],
     recents: [],
-    look: 'dark',
+    look: 'dark' as const,
   };
+  const saved = { ...original, ui: normalizePreferences(original.ui) };
   const active = activeWorkspace({ saved } as ViewerState);
   current = {
     bootstrap,
@@ -77,6 +87,10 @@ export function initialize(bootstrap: Bootstrap): void {
     quickPreview: null,
     notice: bootstrap.recovery || null,
     operationsOpen: false,
+    operationsHistory: false,
+    acknowledgedJobs: [],
+    clipboard: null,
+    deletedWorkspace: null,
   };
   for (const space of saved.workspaces)
     adapters.set(space.id, new Map(Object.entries(space.arrangement)));
@@ -109,24 +123,99 @@ export function setActivePane(id: string): void {
 export function quickPreview(path: string | null): void {
   update({ ...current, quickPreview: path });
 }
-export function setOperationsOpen(open: boolean): void {
-  update({ ...current, operationsOpen: open });
+export function setOperationsOpen(open: boolean, history = false): void {
+  update({
+    ...current,
+    operationsOpen: open,
+    operationsHistory: history || current.jobs.some((job) => job.status === 'failed'),
+    acknowledgedJobs: open
+      ? [
+          ...new Set([
+            ...current.acknowledgedJobs,
+            ...current.jobs.filter((job) => job.status === 'failed').map((job) => job.id),
+          ]),
+        ]
+      : current.acknowledgedJobs,
+  });
+}
+export function needsOperations(state = current): boolean {
+  return state.jobs.some(
+    (job) =>
+      ['queued', 'running', 'collision'].includes(job.status) ||
+      (job.status === 'failed' && !state.acknowledgedJobs.includes(job.id)),
+  );
 }
 export function setJobs(jobs: OperationJob[]): void {
   update({ ...current, jobs });
 }
 export function receiveJob(job: OperationJob): void {
   const old = current.jobs.find((item) => item.id === job.id);
+  const jobs = [job, ...current.jobs.filter((item) => item.id !== job.id)].slice(0, 100);
   update({
     ...current,
-    jobs: [job, ...current.jobs.filter((item) => item.id !== job.id)].slice(0, 100),
-    operationsOpen: current.operationsOpen || job.status === 'collision',
+    jobs,
+    operationsOpen:
+      current.operationsOpen &&
+      (current.operationsHistory ||
+        jobs.some((job) => ['queued', 'running', 'collision', 'failed'].includes(job.status))),
+    acknowledgedJobs:
+      current.operationsOpen && job.status === 'failed'
+        ? [...new Set([...current.acknowledgedJobs, job.id])]
+        : current.acknowledgedJobs,
   });
   if (old && old.status !== job.status && ['completed', 'failed', 'cancelled'].includes(job.status))
     window.dispatchEvent(new CustomEvent('viewer:refresh'));
 }
 function savePatch(patch: Partial<SavedState>): void {
-  update({ ...current, saved: { ...current.saved, ...patch } }, true);
+  update(
+    { ...current, saved: { ...current.saved, ...patch, ui: patch.ui ?? current.saved.ui } },
+    true,
+  );
+}
+export function changePreferences(transform: (ui: UIPreferences) => UIPreferences): void {
+  savePatch({ ui: normalizePreferences(transform(current.saved.ui)) });
+}
+export function rememberCommand(id: string): void {
+  changePreferences((ui) => ({
+    ...ui,
+    recentCommands: [id, ...ui.recentCommands.filter((item) => item !== id)].slice(0, 20),
+  }));
+}
+export function setLook(look: 'dark' | 'light'): void {
+  savePatch({ look });
+}
+export async function refreshClipboard(): Promise<void> {
+  const clipboard = await window.viewer.clipboardRead();
+  update({ ...current, clipboard });
+}
+export async function writeFileClipboard(paths: string[], cut: boolean): Promise<void> {
+  await window.viewer.clipboardWrite(paths, cut);
+  update({ ...current, clipboard: { paths, cut } });
+}
+export function addFavorite(path: string, name: string, before?: string): void {
+  if (
+    current.saved.favorites.length >= 200 &&
+    !current.saved.favorites.some((item) => item.path === path)
+  )
+    throw new Error('The sidebar has 200 favorites. Remove a shortcut before adding another.');
+  const favorites = current.saved.favorites.some((item) => item.path === path)
+    ? current.saved.favorites
+    : [...current.saved.favorites, { path, name }];
+  const order = reorder(
+    favorites.map((item) => item.path),
+    path,
+    before,
+  );
+  savePatch({ favorites: order.map((path) => favorites.find((item) => item.path === path)!) });
+}
+export function removeFavorite(path: string): void {
+  savePatch({ favorites: current.saved.favorites.filter((item) => item.path !== path) });
+}
+export function renameShortcut(path: string, name: string): void {
+  changePreferences((ui) => ({
+    ...ui,
+    sidebar: { ...ui.sidebar, labels: { ...ui.sidebar.labels, [path]: name.trim() } },
+  }));
 }
 export function changeWorkspace(transform: (space: Workspace) => Workspace): void {
   savePatch({
@@ -215,17 +304,12 @@ export function reconcilePanes(ids: string[]): void {
     setActivePane(restored[0].pane.id);
 }
 export function favorite(path: string, name: string): void {
-  savePatch({
-    favorites: current.saved.favorites.some((item) => item.path === path)
-      ? current.saved.favorites.filter((item) => item.path !== path)
-      : [...current.saved.favorites, { path, name }],
-  });
-}
-export function toggleLook(): void {
-  savePatch({ look: current.saved.look === 'dark' ? 'light' : 'dark' });
+  if (current.saved.favorites.some((item) => item.path === path)) removeFavorite(path);
+  else addFavorite(path, name);
 }
 export async function switchWorkspace(id: string): Promise<void> {
   if (id === current.saved.activeWorkspace) return;
+  if (!current.saved.workspaces.some((space) => space.id === id)) return;
   await flushState();
   savePatch({ activeWorkspace: id });
   update({
@@ -258,6 +342,59 @@ export async function newWorkspace(name: string): Promise<void> {
 }
 export function renameWorkspace(name: string): void {
   changeWorkspace((space) => ({ ...space, name }));
+}
+/** Removes only saved Viewer layout. No filesystem service is involved. */
+export async function deleteWorkspace(id: string): Promise<void> {
+  const index = current.saved.workspaces.findIndex((space) => space.id === id);
+  if (index < 0) return;
+  await flushState();
+  const workspace = current.saved.workspaces.find((space) => space.id === id);
+  if (!workspace) return;
+  const workspaces = current.saved.workspaces.filter((space) => space.id !== id);
+  let replacement: string | undefined;
+  if (!workspaces.length) {
+    replacement = uuid();
+    workspaces.push({ id: replacement, name: 'Workspace', panes: [], roots: [], arrangement: {} });
+    adapters.set(replacement, new Map());
+  }
+  const active =
+    current.saved.activeWorkspace === id
+      ? workspaces[Math.min(index, workspaces.length - 1)]
+      : activeWorkspace();
+  update(
+    {
+      ...current,
+      saved: { ...current.saved, workspaces, activeWorkspace: active.id },
+      activePane: active.activePane || active.panes[0]?.id || '',
+      quickPreview: null,
+      deletedWorkspace: { workspace, index, replacement },
+    },
+    true,
+  );
+  adapters.delete(id);
+  closedPanes.delete(id);
+  await flushState(false);
+}
+export async function restoreWorkspace(): Promise<void> {
+  const deleted = current.deletedWorkspace;
+  if (!deleted) return;
+  await flushState();
+  const workspaces = current.saved.workspaces.filter(
+    (space) => !(space.id === deleted.replacement && !space.panes.length),
+  );
+  if (workspaces.length >= 30) throw new Error('Close a workspace before restoring this one.');
+  workspaces.splice(Math.min(deleted.index, workspaces.length), 0, deleted.workspace);
+  adapters.set(deleted.workspace.id, new Map(Object.entries(deleted.workspace.arrangement)));
+  update(
+    {
+      ...current,
+      saved: { ...current.saved, workspaces, activeWorkspace: deleted.workspace.id },
+      activePane: deleted.workspace.activePane || deleted.workspace.panes[0]?.id || '',
+      deletedWorkspace: null,
+    },
+    true,
+  );
+  await flushState(false);
 }
 export function storageAdapter(id: string) {
   const map = adapters.get(id) ?? new Map<string, string>();

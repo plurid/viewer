@@ -51,6 +51,7 @@ const schemas = {
   flushed: z.tuple([id]),
   clipboardWrite: z.tuple([z.array(localPath).max(10000), z.boolean()]),
   clipboardRead: z.tuple([]),
+  textEdit: z.tuple([z.enum(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])]),
 } satisfies Record<ApiMethod, z.ZodType>;
 export class Desktop {
   readonly resources = new Resources();
@@ -226,6 +227,11 @@ export class Desktop {
         return value && (await clipboard.readText()) === value.text
           ? { paths: value.paths, cut: value.cut }
           : null;
+      }
+      case 'textEdit': {
+        const command = args[0] as import('../domain/contracts').TextEditCommand;
+        this.window.webContents[command]();
+        return;
       }
     }
   }

@@ -52,7 +52,26 @@ function menu(): void {
   const command = (value: string) => () => desktop?.emit({ type: 'command', command: value });
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
-      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+      ...(process.platform === 'darwin'
+        ? [
+            {
+              role: 'appMenu' as const,
+              submenu: [
+                { role: 'about' as const },
+                { type: 'separator' as const },
+                { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: command('settings') },
+                { type: 'separator' as const },
+                { role: 'services' as const },
+                { type: 'separator' as const },
+                { role: 'hide' as const },
+                { role: 'hideOthers' as const },
+                { role: 'unhide' as const },
+                { type: 'separator' as const },
+                { role: 'quit' as const },
+              ],
+            },
+          ]
+        : []),
       {
         label: 'File',
         submenu: [
@@ -64,9 +83,14 @@ function menu(): void {
           { label: 'New Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: command('new-folder') },
           { label: 'Open Selection', accelerator: 'CmdOrCtrl+O', click: command('open-selection') },
           { label: 'Quick Preview', click: command('quick-preview') },
+          { label: 'Get Info…', accelerator: 'CmdOrCtrl+I', click: command('info') },
           { type: 'separator' },
           { label: 'Duplicate', accelerator: 'CmdOrCtrl+D', click: command('duplicate') },
-          { label: 'Move to Trash', accelerator: 'CmdOrCtrl+Backspace', click: command('trash') },
+          { label: 'Copy To…', click: command('copy-to') },
+          { label: 'Move To…', click: command('move-to') },
+          { label: 'Move to Trash…', accelerator: 'CmdOrCtrl+Backspace', click: command('trash') },
+          { type: 'separator' },
+          { label: 'Recent File Operations', click: command('recent-operations') },
           { type: 'separator' },
           { role: 'close' },
         ],
@@ -74,24 +98,31 @@ function menu(): void {
       {
         label: 'Edit',
         submenu: [
-          { label: 'Undo File Operation', accelerator: 'CmdOrCtrl+Z', click: command('undo-file') },
+          { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: command('undo-file') },
+          { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: command('redo-file') },
           { type: 'separator' },
-          { role: 'cut' },
-          { role: 'copy' },
-          { role: 'paste' },
-          { role: 'selectAll' },
+          { label: 'Cut', accelerator: 'CmdOrCtrl+X', click: command('cut') },
+          { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: command('copy') },
+          { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: command('paste') },
+          { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: command('select-all') },
         ],
       },
       {
         label: 'View',
         submenu: [
+          { label: 'Commands…', accelerator: 'CmdOrCtrl+K', click: command('palette') },
+          { label: 'Find File…', accelerator: 'CmdOrCtrl+F', click: command('find-file') },
+          { label: 'Go to Folder…', accelerator: 'CmdOrCtrl+L', click: command('go-to') },
           {
-            label: 'Show Hidden Files',
+            label: 'Show / Hide Sidebar',
+            accelerator: 'CmdOrCtrl+Alt+S',
+            click: command('toggle-sidebar'),
+          },
+          {
+            label: 'Show / Hide Hidden Files',
             accelerator: 'CmdOrCtrl+Shift+.',
             click: command('hidden'),
           },
-          { label: 'Find Files…', accelerator: 'CmdOrCtrl+F', click: command('search') },
-          { label: 'Go to Folder…', accelerator: 'CmdOrCtrl+L', click: command('go-to') },
           { type: 'separator' },
           { label: 'Frame All Planes', accelerator: 'CmdOrCtrl+0', click: command('frame-all') },
           { label: 'Dock / Reveal', accelerator: 'CmdOrCtrl+Return', click: command('dock') },
@@ -105,9 +136,20 @@ function menu(): void {
             accelerator: 'CmdOrCtrl+Alt+Shift+Z',
             click: command('redo-arrangement'),
           },
+          { label: 'Arrange Horizontally', click: command('arrange-horizontal') },
+          { label: 'Arrange Vertically', click: command('arrange-vertical') },
           { type: 'separator' },
           ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }]),
           { role: 'togglefullscreen' },
+        ],
+      },
+      {
+        label: 'Workspace',
+        submenu: [
+          { label: 'New Workspace…', click: command('new-workspace') },
+          { label: 'Rename Workspace…', click: command('rename-workspace') },
+          { label: 'Delete Workspace…', click: command('delete-workspace') },
+          { label: 'Undo Workspace Deletion', click: command('restore-workspace') },
         ],
       },
       { role: 'windowMenu' },

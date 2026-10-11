@@ -46,6 +46,11 @@ const paths = {
   pause: 'M6 4h4v16H6V4Zm8 0h4v16h-4V4Z',
   wireframe: 'M3 3h18v18H3V3Zm0 0 18 18M3 21 21 3M12 3v18M3 12h18',
   warning: 'm12 3 10 18H2L12 3Zm0 6v5m0 3h.01',
+  sidebar: 'M3 4h18v16H3V4Zm6 0v16M5 8h2m-2 4h2',
+  command:
+    'M8 8h8v8H8V8ZM8 8H5a2 2 0 1 1 2-2v2m9 0V5a2 2 0 1 1 2 2h-2m0 9h3a2 2 0 1 1-2 2v-2m-9 0v3a2 2 0 1 1-2-2h2',
+  settings:
+    'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1 1-3Z',
 };
 export type IconName = keyof typeof paths;
 export function Icon({

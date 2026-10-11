@@ -30,6 +30,7 @@ const api: ViewerAPI = {
   flushed: (token) => invoke('flushed', token),
   clipboardWrite: (files, cut) => invoke('clipboardWrite', files, cut),
   clipboardRead: () => invoke('clipboardRead'),
+  textEdit: (command) => invoke('textEdit', command),
   onEvent: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, event: DesktopEvent) => listener(event);
     ipcRenderer.on('viewer:event', handler);

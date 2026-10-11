@@ -10,6 +10,7 @@ import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-bash';
+import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty, Loading } from '../../ui/primitives';
 import { parseDelimited } from '../parse';
@@ -209,7 +210,8 @@ function Code({ text, extension }: { text: string; extension: string }) {
     </div>
   );
 }
-export default function TextPreview({ resource, signal, services }: PreviewContext) {
+export default function TextPreview(context: PreviewContext) {
+  const { resource, signal, services } = context;
   const [data, setData] = useState<{ text: string; truncated: boolean; binary: boolean } | null>(
     null,
   );
@@ -233,29 +235,43 @@ export default function TextPreview({ resource, signal, services }: PreviewConte
       return { error: (error as Error).message };
     }
   }, [data, resource.entry.extension]);
+  usePreviewCommands(
+    context,
+    useMemo(
+      () => [
+        {
+          id: 'view-source',
+          label: raw ? 'Show document' : 'Show source',
+          aliases: ['vs'],
+          available:
+            !!data &&
+            !data.binary &&
+            ['md', 'markdown', 'mdx', 'json'].includes(resource.entry.extension),
+          run: () => setRaw((value) => !value),
+        },
+      ],
+      [raw, data, resource.entry.extension],
+    ),
+  );
   if (error) return <Empty icon="warning" title="Text could not be read" detail={error} />;
   if (!data) return <Loading />;
   if (data.binary)
     return (
-      <Empty
-        icon="file"
-        title="No preview module for this format yet"
-        detail="File information is available below. Open it in its default app, or add a module to the preview registry."
-      />
+      <Empty icon="file" title="Preview unavailable" detail="Open this file in its default app." />
     );
   const ext = resource.entry.extension;
   const markdown = ['md', 'markdown', 'mdx'].includes(ext);
   return (
     <div className="text-viewer">
       {(markdown || ext === 'json') && (
-        <div className="preview-toolbar">
+        <PreviewToolbar context={context}>
           <button className={!raw ? 'selected' : ''} onClick={() => setRaw(false)}>
             {markdown ? 'Document' : 'Tree'}
           </button>
           <button className={raw ? 'selected' : ''} onClick={() => setRaw(true)}>
             Source
           </button>
-        </div>
+        </PreviewToolbar>
       )}
       {data.truncated && (
         <p className="inline-warning">
