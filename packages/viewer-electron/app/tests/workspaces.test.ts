@@ -4,15 +4,18 @@ import { stateSchema } from '../src/desktop/storage';
 import {
   activeWorkspace,
   addPane,
+  addRootFolder,
   flushState,
   getState,
   initialize,
   newWorkspace,
+  navigate,
   reconcilePanes,
   removePanes,
   setActivePane,
   storageAdapter,
   switchWorkspace,
+  updatePane,
 } from '../src/renderer/state/store';
 
 const save = vi.fn(async (state: SavedState) => {
@@ -31,6 +34,57 @@ afterEach(async () => {
 });
 
 describe('workspace host and engine lifecycle', () => {
+  it('adds fresh roots at a folder with copied view preferences and independent history', async () => {
+    const first = activeWorkspace().panes[0];
+    navigate(first.id, '/fixtures/project');
+    updatePane(first.id, { mode: 'gallery', sort: 'modified', descending: true, showHidden: true });
+    const owner = structuredClone(activeWorkspace().panes[0]);
+    const second = addRootFolder()!;
+    const third = addRootFolder()!;
+    expect(new Set(activeWorkspace().roots).size).toBe(3);
+    expect(activeWorkspace().panes[0]).toEqual(owner);
+    expect(second).toMatchObject({
+      path: '/fixtures/project',
+      mode: 'gallery',
+      sort: 'modified',
+      descending: true,
+      showHidden: true,
+      history: ['/fixtures/project'],
+      historyIndex: 0,
+      sidebar: { visible: true, width: 210 },
+    });
+    navigate(second.id, '/fixtures/elsewhere');
+    expect(activeWorkspace().panes.find((pane) => pane.id === third.id)?.path).toBe(
+      '/fixtures/project',
+    );
+    await flushState(false);
+    const saved = stateSchema.parse(getState().saved);
+    initialize({ ...getState().bootstrap, state: saved });
+    expect(activeWorkspace().roots).toEqual([first.id, second.id, third.id]);
+    expect(activeWorkspace().panes).toHaveLength(3);
+  });
+  it('starts at a preview parent or Home, and refuses stale workspace or plane ownership', async () => {
+    const preview = addPane('/fixtures/images/photo.png', 'preview', false);
+    setActivePane(preview.id);
+    expect(addRootFolder()?.path).toBe('/fixtures/images');
+    const count = activeWorkspace().panes.length;
+    expect(addRootFolder({ workspaceID: 'old', path: '/fixtures/other' })).toBeUndefined();
+    expect(addRootFolder({ paneID: 'closed', path: '/fixtures/other' })).toBeUndefined();
+    expect(activeWorkspace().panes).toHaveLength(count);
+    removePanes(activeWorkspace().panes.map((pane) => pane.id));
+    expect(addRootFolder()?.path).toBe('/fixtures');
+    const source = activeWorkspace().panes[0];
+    expect(addRootFolder({ paneID: source.id, path: '/fixtures/shortcut' })?.path).toBe(
+      '/fixtures/shortcut',
+    );
+  });
+  it('enforces the plane limit without creating an orphan root', () => {
+    for (let count = 1; count < 200; count++) addRootFolder();
+    const roots = [...activeWorkspace().roots];
+    expect(() => addRootFolder()).toThrow('200 planes');
+    expect(activeWorkspace().panes).toHaveLength(200);
+    expect(activeWorkspace().roots).toEqual(roots);
+  });
   it('removes closed branches and restores host records on arrangement undo and redo', () => {
     const root = activeWorkspace().panes[0];
     const child = addPane('/fixtures/model.glb', 'preview', false);

@@ -6,11 +6,13 @@ import type {
   OperationProgress,
   Pane,
   PaneSidebar,
+  NewRootFolderTarget,
   SavedState,
   UIPreferences,
   Workspace,
 } from '../../domain/contracts';
-import { normalizePreferences, reorder } from '../../domain/preferences';
+import { migratePlaneNavigation, normalizePreferences, reorder } from '../../domain/preferences';
+import { parentPath } from '../../domain/planes';
 
 interface ViewerState {
   saved: SavedState & { ui: UIPreferences };
@@ -64,7 +66,7 @@ export function initialize(bootstrap: Bootstrap): void {
   clearTimeout(persistTimer);
   adapters.clear();
   closedPanes.clear();
-  const pane = folderPane(bootstrap.home);
+  const pane = folderPane(bootstrap.home, { visible: true, width: 210 });
   const workspace: Workspace = {
     id: uuid(),
     name: 'Workspace',
@@ -72,7 +74,7 @@ export function initialize(bootstrap: Bootstrap): void {
     roots: [pane.id],
     arrangement: {},
   };
-  const original = bootstrap.state ?? {
+  const original = (migratePlaneNavigation(bootstrap.state) as SavedState | null) ?? {
     version: 1 as const,
     workspaces: [workspace],
     activeWorkspace: workspace.id,
@@ -275,13 +277,19 @@ export function addPane(
   path: string,
   type: 'folder' | 'preview',
   root: boolean,
-  options?: { keepSeparate?: boolean },
+  options?: {
+    keepSeparate?: boolean;
+    folderView?: Pick<FolderPane, 'mode' | 'sort' | 'descending' | 'showHidden'>;
+  },
 ): Pane {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('This workspace has 200 planes. Close a plane or create another workspace.');
   const pane: Pane =
     type === 'folder'
-      ? folderPane(path, { visible: current.saved.ui.sidebar.inNewPlanes, width: 210 })
+      ? {
+          ...folderPane(path, { visible: current.saved.ui.sidebar.inNewPlanes, width: 210 }),
+          ...options?.folderView,
+        }
       : { id: uuid(), type, path, keepSeparate: options?.keepSeparate || undefined };
   changeWorkspace((space) => ({
     ...space,
@@ -289,6 +297,33 @@ export function addPane(
     roots: root ? [...space.roots, pane.id] : space.roots,
   }));
   remember(path);
+  return pane;
+}
+/** An explicit new explorer is a fresh root, independent even when its path is already open. */
+export function addRootFolder(target: NewRootFolderTarget = {}): FolderPane | undefined {
+  const space = activeWorkspace();
+  if (target.workspaceID && target.workspaceID !== space.id) return;
+  const owner = space.panes.find((pane) => pane.id === (target.paneID ?? current.activePane));
+  if (target.paneID && !owner) return;
+  const path =
+    target.path ??
+    (owner?.type === 'folder'
+      ? owner.path
+      : owner
+        ? parentPath(owner.path)
+        : current.bootstrap.home);
+  const pane = addPane(path, 'folder', true, {
+    folderView:
+      owner?.type === 'folder'
+        ? {
+            mode: owner.mode,
+            sort: owner.sort,
+            descending: owner.descending,
+            showHidden: owner.showHidden,
+          }
+        : undefined,
+  }) as FolderPane;
+  setActivePane(pane.id);
   return pane;
 }
 export function removePanes(ids: string[]): void {

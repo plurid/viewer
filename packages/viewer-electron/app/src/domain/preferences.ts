@@ -29,10 +29,41 @@ const width = (value: unknown) =>
 const boolean = (value: unknown, fallback: boolean) =>
   typeof value === 'boolean' ? value : fallback;
 
+export function needsNavigationMigration(value: unknown): boolean {
+  return object(object(value).ui).version !== 3;
+}
+
+/** Run before UI normalization, so an old preference version cannot hide the migration. */
+export function migratePlaneNavigation(value: unknown): unknown {
+  const saved = object(value);
+  if (!Array.isArray(saved.workspaces) || !needsNavigationMigration(saved)) return value;
+  const ui = object(saved.ui);
+  return {
+    ...saved,
+    ui: {
+      ...ui,
+      sidebar: { ...object(ui.sidebar), visible: false, inNewPlanes: true },
+    },
+    workspaces: saved.workspaces.map((workspace) => {
+      const space = object(workspace);
+      if (!Array.isArray(space.panes)) return workspace;
+      return {
+        ...space,
+        panes: space.panes.map((pane) => {
+          const record = object(pane);
+          return record.type === 'folder'
+            ? { ...record, sidebar: { ...object(record.sidebar), visible: true } }
+            : pane;
+        }),
+      };
+    }),
+  };
+}
+
 export function normalizePaneSidebar(value: unknown): PaneSidebar | undefined {
   if (value === undefined) return undefined;
   const sidebar = object(value);
-  return { visible: boolean(sidebar.visible, false), width: width(sidebar.width) };
+  return { visible: boolean(sidebar.visible, true), width: width(sidebar.width) };
 }
 
 /** Invalid UI fields fall back independently; core workspace state never depends on them. */
@@ -55,10 +86,10 @@ export function normalizePreferences(value?: unknown): UIPreferences {
       .slice(0, 200),
   );
   return {
-    version: 2,
+    version: 3,
     sidebar: {
-      visible: boolean(sidebar.visible, true),
-      inNewPlanes: boolean(sidebar.inNewPlanes, false),
+      visible: boolean(sidebar.visible, false),
+      inNewPlanes: boolean(sidebar.inNewPlanes, true),
       width: width(sidebar.width),
       order: [...order, ...sidebarSections.filter((item) => !order.includes(item))],
       collapsed: strings(sidebar.collapsed, 3, 20).filter((item): item is SidebarSection =>
@@ -69,11 +100,10 @@ export function normalizePreferences(value?: unknown): UIPreferences {
       labels: labels as Record<string, string>,
     },
     space: {
-      backs: boolean(space.backs, true),
       // Restore the spatial aids once for profiles made before the controls were exposed.
-      toolbar: ui.version === 2 ? boolean(space.toolbar, true) : true,
-      minimap: ui.version === 2 ? boolean(space.minimap, true) : true,
-      viewcube: ui.version === 2 ? boolean(space.viewcube, true) : true,
+      toolbar: ui.version === 2 || ui.version === 3 ? boolean(space.toolbar, true) : true,
+      minimap: ui.version === 2 || ui.version === 3 ? boolean(space.minimap, true) : true,
+      viewcube: ui.version === 2 || ui.version === 3 ? boolean(space.viewcube, true) : true,
       origin: boolean(space.origin, false),
       planeHeaders: boolean(space.planeHeaders, true),
       dragging: boolean(space.dragging, true),

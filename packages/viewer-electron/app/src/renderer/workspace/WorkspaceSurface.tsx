@@ -125,7 +125,7 @@ export function WorkspaceSurface({
           freezeDistance: 3500,
           detach: { mode: 'unmount', delay: 1500, max: 40 },
         },
-        navigation: { onClose: 'parent', framing: { fill: 0.82 }, childFraming: 'pair' },
+        navigation: { onClose: 'parent', framing: { fill: 0.82 }, childFraming: 'plane' },
       },
       elements: {
         minimap: { show: preferences.minimap },
@@ -143,7 +143,7 @@ export function WorkspaceSurface({
           height: Math.max(300, Math.min(660, size.height - 72)),
           controls: { show: preferences.planeHeaders },
           resizable: preferences.resizing,
-          backface: preferences.backs ? 'visible' : 'hidden',
+          backface: 'visible',
         },
       },
     }),
@@ -161,7 +161,8 @@ export function WorkspaceSurface({
         elements.viewcube.show === preferences.viewcube &&
         elements.plane.controls.show === preferences.planeHeaders &&
         elements.plane.resizable === preferences.resizing &&
-        elements.plane.backface === (preferences.backs ? 'visible' : 'hidden') &&
+        elements.plane.backface === 'visible' &&
+        space.navigation?.childFraming === 'plane' &&
         space.transformOrigin.show === preferences.origin
       )
         return;
@@ -175,7 +176,33 @@ export function WorkspaceSurface({
     return api.store.subscribe(synchronize);
   }, [api, configuration, preferences, engine]);
   return (
-    <div className="workspace-surface" ref={surface}>
+    <div
+      className="workspace-surface"
+      ref={surface}
+      onKeyDownCapture={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const hit = (event.target as Element).closest<HTMLButtonElement>(
+          'button[data-plurid-minimap-plane]',
+        );
+        if (!hit) return;
+        // Keep the engine/window Enter and Space shortcuts from taking a native
+        // minimap button's activation. Its click owns one camera navigation.
+        event.preventDefault();
+        event.stopPropagation();
+        hit.click();
+      }}
+      onClickCapture={(event) => {
+        const hit = (event.target as Element).closest<HTMLElement>('[data-plurid-minimap-plane]');
+        if (!hit || !engine.current) return;
+        const node = flattenTree(engine.current.tree.get()).find(
+          (node) => node.planeID === hit.dataset.pluridMinimapPlane,
+        );
+        if (node && activeWorkspace().panes.some((pane) => pane.id === hostID(node)))
+          setActivePane(hostID(node));
+        // Native minimap navigation frames the plane. Only bind the host context here;
+        // issuing a second camera command would interrupt the engine's tween.
+      }}
+    >
       <PluridApplication
         key={space.id}
         ref={engine}

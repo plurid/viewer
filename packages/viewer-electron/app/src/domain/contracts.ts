@@ -39,6 +39,11 @@ export interface PaneSidebar {
   visible: boolean;
   width: number;
 }
+export interface NewRootFolderTarget {
+  path?: string;
+  paneID?: string;
+  workspaceID?: string;
+}
 export interface PreviewPane {
   id: string;
   type: 'preview';
@@ -66,7 +71,7 @@ export interface SavedState {
 }
 export type SidebarSection = 'locations' | 'favorites' | 'recents';
 export interface UIPreferences {
-  version: 2;
+  version: 3;
   sidebar: {
     visible: boolean;
     inNewPlanes: boolean;
@@ -78,7 +83,6 @@ export interface UIPreferences {
     labels: Record<string, string>;
   };
   space: {
-    backs: boolean;
     toolbar: boolean;
     minimap: boolean;
     viewcube: boolean;

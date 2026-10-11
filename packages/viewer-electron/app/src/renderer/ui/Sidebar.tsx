@@ -14,6 +14,7 @@ import { useWorkspace } from '../workspace/context';
 import { ContextMenu } from './ContextMenu';
 import { Icon } from './Icon';
 import type { CommandRequest } from '../commands/registry';
+import { measureLocalX, type Point } from './projectedResize';
 
 const titles = { locations: 'Locations', favorites: 'Favorites', recents: 'Recent' };
 export const SIDEBAR_DRAG = 'application/x-viewer-sidebar';
@@ -44,12 +45,17 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   const owner = space.panes.find((pane) => pane.id === (paneID || active));
   const layout = paneID
     ? owner?.type === 'folder'
-      ? (owner.sidebar ?? { visible: false, width: 210 })
+      ? (owner.sidebar ?? { visible: true, width: 210 })
       : { visible: false, width: 210 }
     : sidebar;
   const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest } | null>(null);
   const [drop, setDrop] = useState('');
-  const resizing = useRef<{ x: number; width: number } | null>(null);
+  const element = useRef<HTMLElement>(null);
+  const resizing = useRef<{
+    x: number;
+    width: number;
+    localX: (point: Point) => number | undefined;
+  } | null>(null);
   const current = owner?.path;
   const target = { paneID, workspaceID: space.id };
   function resize(width: number) {
@@ -138,8 +144,12 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   return (
     <aside
       className="location-sidebar"
+      ref={element}
       aria-label={paneID ? 'Plane navigation' : 'Locations'}
-      style={{ width: layout.width }}
+      style={{ width: paneID ? `min(${layout.width}px, 50%)` : layout.width }}
+      onFocus={() => {
+        if (paneID) setActivePane(paneID);
+      }}
       onPointerDown={() => {
         if (paneID) setActivePane(paneID);
       }}
@@ -263,6 +273,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
         onKeyDown={(event) => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
           event.preventDefault();
+          event.stopPropagation();
           const width =
             event.key === 'Home'
               ? 160
@@ -272,11 +283,23 @@ export function Sidebar({ paneID }: { paneID?: string }) {
           resize(width);
         }}
         onPointerDown={(event) => {
+          if (event.button !== 0 || !element.current) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (paneID) setActivePane(paneID);
+          event.currentTarget.focus({ preventScroll: true });
+          const localX = paneID ? measureLocalX(element.current) : (point: Point) => point.x;
+          const x = localX({ x: event.clientX, y: event.clientY });
+          if (x === undefined) return;
           event.currentTarget.setPointerCapture(event.pointerId);
-          resizing.current = { x: event.clientX, width: layout.width };
+          resizing.current = { x, width: element.current.offsetWidth, localX };
         }}
         onPointerMove={(event) => {
-          if (resizing.current) resize(resizing.current.width + event.clientX - resizing.current.x);
+          const drag = resizing.current;
+          if (!drag) return;
+          event.stopPropagation();
+          const x = drag.localX({ x: event.clientX, y: event.clientY });
+          if (x !== undefined) resize(drag.width + x - drag.x);
         }}
         onPointerUp={() => {
           resizing.current = null;

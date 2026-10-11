@@ -246,6 +246,7 @@ select {
   color: var(--accent);
 }
 .location span {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -417,7 +418,7 @@ select {
   .plane-spatial-controls {
     display: none;
   }
-  .plane-navigation .icon-button:nth-child(2) {
+  .plane-navigation .plane-forward {
     display: none;
   }
   .plane-module-controls {
@@ -430,6 +431,7 @@ select {
   }
 }
 .folder-plane {
+  position: relative;
   display: flex;
   height: 100%;
   min-height: 0;
@@ -1415,7 +1417,7 @@ select {
 @container (max-width: 470px) {
   .file-head,
   .file-row:not(.compact-row) {
-    grid-template-columns: minmax(120px, 1fr) 70px;
+    grid-template-columns: minmax(0, 1fr) 70px;
   }
   .file-head button:nth-child(2),
   .file-row:not(.compact-row) .file-date {

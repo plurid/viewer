@@ -1,5 +1,13 @@
 import type { Pane, Workspace } from './contracts';
 
+export function parentPath(path: string): string {
+  const separator = path.includes('\\') ? '\\' : '/';
+  const normalized = path.replace(/[\\/]$/, '');
+  const end = normalized.lastIndexOf(separator);
+  if (/^[A-Za-z]:[\\/]/.test(path) && end <= 2) return path.slice(0, 3);
+  return end <= 0 ? separator : normalized.slice(0, end);
+}
+
 /** Compare lexical paths, without resolving links or touching the filesystem. */
 export function normalizedPanePath(path: string, platform: string): string {
   const windows = platform === 'win32';

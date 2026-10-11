@@ -226,9 +226,9 @@ Use tabular numerals for file sizes and operation counts. File and plane names t
 
 ## Layout
 
-The shell fills the native window. The draggable titlebar (56px) reserves the left inset for macOS window controls (94px). It contains sidebar visibility, the searchable workspace selector, conditional operations, and Commands. The window has no in-window wordmark, tagline, plane tabs, global arrangement toolbar, or global shortcut/count footer. Buttons remain outside the native drag region.
+The shell fills the native window. The draggable titlebar (56px) reserves the left inset for macOS window controls (94px). It contains window navigation visibility, the searchable workspace selector, a compact plus for a new root folder plane, conditional operations, and Commands. The window has no in-window wordmark, tagline, plane tabs, global arrangement toolbar, or global shortcut/count footer. Buttons remain outside the native drag region.
 
-The visible sidebar starts at its saved/default width (210px), resizes within its bounds (160–360px), and can hide completely. A folder plane may show the same navigation component with independent width and visibility; its actions navigate that plane. Shortcut order, aliases, Favorites and section folding are shared. New plane navigation starts hidden, with a Settings default. Sidebars and plane bodies scroll independently of their chrome. The native window minimum is implemented (780×560). Adapt to available workspace and plane dimensions rather than switching to a phone navigation pattern.
+The visible sidebar starts at its saved/default width (210px), resizes within its bounds (160–360px), and can hide completely. Folder planes show the shared navigation component by default, with a direct header toggle and independent width/visibility; its actions navigate that plane. Shortcut order, aliases, Favorites and section folding are shared. Window navigation starts hidden and remains optional. Settings controls navigation in later new planes. The projected resizer handles spatial zoom and perspective, and caps rendered navigation at half a narrow plane’s content width. Sidebars and plane bodies scroll independently of their chrome. The native window minimum is implemented (780×560). Adapt to available workspace and plane dimensions rather than switching to a phone navigation pattern.
 
 Every plane has one contextual header (40px), with compact icon actions (28px). A plane-width container query (540px) hides forward navigation, frame/dock icons and secondary preview labels, and narrows the preview control slot from 64% to 50%; that slot can scroll horizontally. Titles retain ellipsis. Path entry, breadcrumbs/filtering, folder search, and secondary actions appear on demand. Search toggles from the header and clears/cancels its query on close. Scoped commands keep actions available when compact chrome hides them.
 
@@ -250,7 +250,7 @@ Depth comes from the spatial engine, layered neutral surfaces, dividers, and res
 - **Light overlay:** `box-shadow: 0 18px 56px #20304025` for the corresponding light surfaces.
 - **PDF sheet:** `box-shadow: 0 2px 12px #0003` for the rendered white page within its content stage.
 
-Engine camera transitions support framing and docking. Media and model activity is bounded by visibility; a model can orbit independently of its plane. Plane backs show mirrored content by default. Plurid's native bottom toolbar, minimap and viewcube are on by default and each has a Settings switch. Transform origin defaults off. Headers, title dragging and resize handles have independent Settings switches. The toolbar, scoped commands and Escape share the engine's transform mode. CSS honors reduced motion, including the loading indicator.
+Engine camera transitions support framing and docking. Media and model activity is bounded by visibility; a model can orbit independently of its plane. Plane backs always show mirrored content; there is no backs setting. Minimap activation faces the selected plane and selects its command context. Plurid's native bottom toolbar, minimap and viewcube are on by default and each has a Settings switch. Transform origin defaults off. Headers, title dragging and resize handles have independent Settings switches. The toolbar, scoped commands and Escape share the engine's transform mode. CSS honors reduced motion, including the loading indicator.
 
 **The Task Depth Rule.** Use elevation for spatial relationships and transient controls; preserve flat file rows for scanning.
 
@@ -290,7 +290,7 @@ The dense row separates file identity from muted date, kind, and size metadata; 
 
 ### Contextual Plane Header
 
-Folder headers combine back/forward navigation, a titled drag region, view menu, search, frame/dock, more actions, and close. Preview headers replace folder navigation/view/search with the module's primary controls in the same header. There is no second permanent preview toolbar in a linked plane. The first title press selects and moves the plane; pressing an already selected plane retains the current multiselection. File selection, text selection, media, image, and model gestures keep their own functions. Duplicate floating engine controls remain disabled.
+Folder headers combine a direct navigation toggle, back/forward navigation, a titled drag region, view menu, search, frame/dock, more actions, and close. Preview headers replace folder navigation/view/search with the module's primary controls in the same header. There is no second permanent preview toolbar in a linked plane. The first title press selects and moves the plane; pressing an already selected plane retains the current multiselection. File selection, text selection, media, image, and model gestures keep their own functions. Duplicate floating engine controls remain disabled.
 
 Images, models, PDF, text, and media contribute commands scoped to their preview. Keep zoom, fit, page, search, and playback actions with the preview they affect; unavailable actions do not appear as command results. Supplemental file information stays compact within the plane body.
 
@@ -302,7 +302,7 @@ Targets remain explicit: a context menu binds its clicked item or captured selec
 
 ### Settings and Operations
 
-Command-comma opens Settings. Its 500×540px dialog remains the same size across Appearance, Sidebar and Space, constrained by the viewport, with scrolling inside the content area. Ordinary labeled selects and checkboxes carry the choices. Appearance has Dark and Light. Space defaults to face-on opening, visible backs, headers, title dragging, resize handles and all three native spatial aids; transform origin remains off. Sidebar includes the navigation default for new planes. Settings keeps those preferences out of the routine browsing chrome.
+Command-comma opens Settings. Its 500×540px dialog remains the same size across Appearance, Sidebar and Space, constrained by the viewport, with scrolling inside the content area. Ordinary labeled selects and checkboxes carry the choices. Appearance has Dark and Light. Space defaults to face-on opening, headers, title dragging, resize handles and all three native spatial aids; transform origin remains off. Sidebar includes the navigation default for new planes. Settings keeps those preferences out of the routine browsing chrome.
 
 The operations control appears for pending work, conflicts, or unseen failures. Its anchored popover shows bounded progress, cancellation, paths, errors, and available undo; past jobs open through Commands or the native menu. Conflicts provide Skip, Keep both, and Replace, with an explicit remaining-conflicts checkbox. Replace explains that the existing item goes to Trash and requires its own confirmation. Idle browsing keeps the workspace open.
 

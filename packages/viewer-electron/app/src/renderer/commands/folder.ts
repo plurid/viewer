@@ -1,4 +1,6 @@
 import type { FileEntry, ViewMode } from '../../domain/contracts';
+import { parentPath } from '../../domain/planes';
+export { parentPath } from '../../domain/planes';
 import {
   favorite,
   getState,
@@ -11,12 +13,6 @@ import {
 } from '../state/store';
 import type { CommandContext, CommandDefinition } from './registry';
 
-export function parentPath(path: string): string {
-  const normalized = path.replace(/[\\/]$/, '');
-  const separator = path.includes('\\') ? '\\' : '/';
-  const end = normalized.lastIndexOf(separator);
-  return end <= 0 ? separator : normalized.slice(0, end);
-}
 export interface FolderActions {
   open(entries: readonly FileEntry[], linked: boolean, another?: boolean): void;
   dialog(kind: 'rename' | 'mkdir' | 'go-to', context: CommandContext): void;

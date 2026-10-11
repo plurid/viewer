@@ -76,6 +76,11 @@ function menu(): void {
         label: 'File',
         submenu: [
           {
+            label: 'New Folder Plane',
+            accelerator: 'CmdOrCtrl+N',
+            click: command('new-root-folder'),
+          },
+          {
             label: 'Open Folder…',
             accelerator: 'CmdOrCtrl+Shift+O',
             click: command('choose-folder'),
@@ -114,10 +119,11 @@ function menu(): void {
           { label: 'Find File…', accelerator: 'CmdOrCtrl+F', click: command('find-file') },
           { label: 'Go to Folder…', accelerator: 'CmdOrCtrl+L', click: command('go-to') },
           {
-            label: 'Show / Hide Sidebar',
+            label: 'Show / Hide Window Navigation',
             accelerator: 'CmdOrCtrl+Alt+S',
             click: command('toggle-sidebar'),
           },
+          { label: 'Show / Hide Plane Navigation', click: command('plane-sidebar') },
           {
             label: 'Show / Hide Hidden Files',
             accelerator: 'CmdOrCtrl+Shift+.',

@@ -8,6 +8,7 @@ import { repeatedPreviews } from './workspace/recovery';
 import {
   activeWorkspace,
   addPane,
+  addRootFolder,
   deleteWorkspace,
   dismissNotice,
   flushState,
@@ -66,6 +67,8 @@ function AppWindow() {
   const engine = useRef<PluridApplicationHandle>(null);
   const surface = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
+  const readyRef = useRef(false);
+  readyRef.current = ready;
   const [workspaceDialog, setWorkspaceDialog] = useState<{
     kind: 'new' | 'rename' | 'delete';
     id: string;
@@ -128,6 +131,14 @@ function AppWindow() {
   }, [deleted]);
   const controller = useMemo<WorkspaceController>(
     () => ({
+      newRootFolder(target) {
+        if (!engine.current || !readyRef.current) return;
+        const pane = addRootFolder(target);
+        if (pane)
+          frameWorkspace(engine, surface, [pane.id], {
+            dock: getState().saved.ui.space.opening === 'dock',
+          });
+      },
       open(entry: FileEntry, parentEngineID?: string, options?: { another?: boolean }) {
         const existing =
           !options?.another &&
@@ -422,6 +433,7 @@ function AppWindow() {
       const key = event.key.toLowerCase();
       let id: string | undefined;
       if (key === 'k') id = 'palette';
+      else if (key === 'n' && !event.shiftKey && !event.altKey) id = 'new-root-folder';
       else if (key === ',') id = 'settings';
       else if (key === '0') id = 'frame-all';
       else if (key === 'enter') id = 'dock';
@@ -450,7 +462,7 @@ function AppWindow() {
           <div className="traffic-space" />
           <IconButton
             icon="sidebar"
-            label={saved.ui.sidebar.visible ? 'Hide sidebar' : 'Show sidebar'}
+            label={saved.ui.sidebar.visible ? 'Hide window navigation' : 'Show window navigation'}
             aria-pressed={saved.ui.sidebar.visible}
             onClick={() => {
               void registry.invoke('toggle-sidebar', { sources: ['window'] }).catch(report);
@@ -469,6 +481,14 @@ function AppWindow() {
             <span>{space.name}</span>
             <Icon name="down" size={13} />
           </button>
+          <IconButton
+            icon="plus"
+            label="New folder plane (⌘N)"
+            disabled={!ready || space.panes.length >= 200}
+            onClick={() => {
+              void invoke('new-root-folder').catch(report);
+            }}
+          />
           <span className="toolbar-spacer" />
           {showOperations && (
             <button

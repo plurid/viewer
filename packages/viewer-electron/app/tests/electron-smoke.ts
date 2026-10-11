@@ -120,19 +120,23 @@ const fileSelector = (file: string) => `[data-file-path=${JSON.stringify(file)}]
 async function activateTestWindow(): Promise<void> {
   // Activate our PID: Launch Services can select a user's already-running Viewer
   // instead, leaving this disposable instance's native paint loop suspended.
-  await new Promise<void>((resolve, reject) => {
-    const activation = spawn('osascript', [
-      '-l',
-      'JavaScript',
-      '-e',
-      `ObjC.import('AppKit'); if (!$.NSRunningApplication.runningApplicationWithProcessIdentifier(${child.pid}).activateWithOptions(2)) throw new Error('Activation failed');`,
-    ]);
-    activation.once('error', reject);
-    activation.once('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error('Could not activate the Viewer test window')),
-    );
-  });
   await command('Page.bringToFront');
+  await until(
+    () =>
+      new Promise<boolean>((resolve, reject) => {
+        const activation = spawn('osascript', [
+          '-l',
+          'JavaScript',
+          '-e',
+          `ObjC.import('AppKit'); if (!$.NSRunningApplication.runningApplicationWithProcessIdentifier(${child.pid}).activateWithOptions(2)) throw new Error('Activation failed');`,
+        ]);
+        activation.once('error', reject);
+        activation.once('exit', (code) => resolve(code === 0));
+      }),
+    Boolean,
+    'native test window registration and activation',
+    5000,
+  );
 }
 async function reloadPage(): Promise<void> {
   await evaluate('window.__qaReloadPending = true');
@@ -416,10 +420,10 @@ async function verifyRestoredPreviews(): Promise<void> {
     await restoredEngine(count);
     await settleCamera();
   };
-  const containedActive = () =>
+  const containedActive = (id = 'legacy-preview-3') =>
     evaluate<boolean>(`(() => {
       const surface = document.querySelector('.workspace-surface').getBoundingClientRect();
-      const plane = document.querySelector('[data-plurid-plane]:has([data-viewer-plane="legacy-preview-3"])').getBoundingClientRect();
+      const plane = document.querySelector(${JSON.stringify(`[data-plurid-plane]:has([data-viewer-plane=${JSON.stringify(id)}])`)}).getBoundingClientRect();
       return plane.left >= surface.left && plane.top >= surface.top && plane.right <= surface.right && plane.bottom <= surface.bottom;
     })()`);
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -447,9 +451,15 @@ async function verifyRestoredPreviews(): Promise<void> {
     planeIDs,
     'Normal repeated activation of a restored image never adds another preview',
   );
-  assert.equal(await containedActive(), true);
+  const reopened = await until(
+    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
+    (state) => state.workspaces[0].activePane?.startsWith('legacy-preview-') === true,
+    'existing preview chosen for reopening',
+  );
+  const reopenedID = reopened.workspaces[0].activePane!;
+  assert.equal(await containedActive(reopenedID), true);
   const geometry = await evaluate<string>(
-    'JSON.stringify(window.__qaEngine.tree.get()[0].children[2].location)',
+    `JSON.stringify(window.__qaEngine.tree.get()[0].children.find(node => node.routeDivisions.plane.parameters.id === ${JSON.stringify(reopenedID)}).location)`,
   );
   const history = await evaluate<number>('window.__qaEngine.history.get().undoDepth');
   await paletteCommand('Consolidate repeated previews');
@@ -459,7 +469,7 @@ async function verifyRestoredPreviews(): Promise<void> {
     'consolidated repeated image previews',
   );
   await settleCamera();
-  assert.equal(await containedActive(), true);
+  assert.equal(await containedActive(reopenedID), true);
   assert.equal(
     await evaluate('JSON.stringify(window.__qaEngine.tree.get()[0].children[0].location)'),
     geometry,
@@ -484,7 +494,7 @@ async function verifyRestoredPreviews(): Promise<void> {
     'window.__qaEngine.camera.moveBy({absolute:{yaw:-74,pitch:8,scale:0.6}},{animate:false})',
   );
   await settleCamera();
-  assert.equal(await containedActive(), true);
+  assert.equal(await containedActive(reopenedID), true);
   const viewpoint = await evaluate<string>('window.__qaEngine.getViewpoint({version:2})');
   await until(
     async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
@@ -550,6 +560,311 @@ async function verifyRestoredPreviews(): Promise<void> {
   await snapshot('desktop-native-workspace-recovered.png');
   await restore(original, original.workspaces[0].panes.length);
 }
+async function verifyRootPlanes(): Promise<void> {
+  await delay(800);
+  const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
+  const untouched = await inventory();
+  const jobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
+  const roots = async (count: number) => {
+    await restoredEngine(count);
+    await settleCamera();
+    return until(
+      saved,
+      (state) => state.workspaces[0].roots.length === count,
+      `${count} saved roots`,
+    );
+  };
+  const controls = (id: string) => `[data-viewer-plane=${JSON.stringify(id)}]`;
+  const folder = (id: string) => `[data-plurid-plane]:has(${controls(id)}) .folder-plane`;
+  assert.equal(original.ui?.version, 3);
+  assert.equal(original.ui.sidebar.visible, false);
+  assert.equal(original.workspaces[0].panes[0].type, 'folder');
+  assert.equal(await evaluate('!!document.querySelector(".app-main > .location-sidebar")'), false);
+  assert.equal(await evaluate('!!document.querySelector(".folder-plane .location-sidebar")'), true);
+  const backups = (await readdir(profile)).filter((name) =>
+    name.includes('before-plane-navigation-v3'),
+  );
+  assert.ok(backups.length >= 1);
+  assert.equal(
+    await readFile(path.join(profile, backups[0]), 'utf8'),
+    JSON.stringify(fixture.state),
+  );
+  // Old engine snapshots may carry these choices independently of the host UI.
+  await evaluate(
+    `window.__qaEngine.pubsub.publish({topic:'configuration',data:{elements:{plane:{backface:'hidden'}},space:{navigation:{childFraming:'pair'}}}})`,
+  );
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.elements.plane.backface'),
+    'visible',
+  );
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.navigation.childFraming'),
+    'plane',
+  );
+
+  const first = original.workspaces[0].roots[0];
+  const firstEngineID = await enginePlaneIDs();
+  await click('[aria-label="New folder plane (⌘N)"]');
+  let state = await roots(2);
+  const second = state.workspaces[0].roots[1];
+  assert.equal(state.workspaces[0].panes.find((pane) => pane.id === second)?.path, fixture.files);
+  assert.ok(JSON.parse(await enginePlaneIDs()).includes(JSON.parse(firstEngineID)[0]));
+  await click(`${controls(second)} [aria-label="Hide plane navigation"]`);
+  assert.equal(
+    await evaluate(
+      `!!document.querySelector(${JSON.stringify(folder(second) + ' .location-sidebar')})`,
+    ),
+    false,
+  );
+  await click(`${controls(second)} [aria-label="Show plane navigation"]`);
+  await click(`${folder(second)} .sidebar-resizer`);
+  await key('ArrowRight', 'ArrowRight');
+  assert.equal(
+    await evaluate(
+      `document.querySelector(${JSON.stringify(folder(second) + ' .sidebar-resizer')}).getAttribute('aria-valuenow')`,
+    ),
+    '220',
+  );
+  await click(
+    `${folder(second)} .location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
+  );
+  state = await until(
+    saved,
+    (value) =>
+      value.workspaces[0].panes.find((pane) => pane.id === second)?.path.endsWith('/Models') ===
+      true,
+    'independent root navigation',
+  );
+  assert.equal(state.workspaces[0].panes.find((pane) => pane.id === first)?.path, fixture.files);
+  const documents = path.join(fixture.files, 'Documents');
+  await contextMenu(`${folder(second)} .location[title=${JSON.stringify(documents)}]`);
+  await command('Input.insertText', { text: 'Open in new root plane' });
+  await key('Enter', 'Enter');
+  state = await roots(3);
+  assert.equal(
+    state.workspaces[0].panes.find((pane) => pane.id === state.workspaces[0].roots[2])?.path,
+    documents,
+  );
+  await key('n', 'KeyN', 4);
+  await roots(4);
+  await paletteCommand('New folder plane');
+  state = await roots(5);
+  await click(`${controls(state.workspaces[0].roots[4])} [aria-label="Folder actions"]`);
+  await command('Input.insertText', { text: 'New folder plane' });
+  await key('Enter', 'Enter');
+  await roots(6);
+  // Two additions in one React batch must retain both roots and all earlier engine IDs.
+  await evaluate(
+    `(() => { const button = document.querySelector('[aria-label="New folder plane (⌘N)"]'); button.click(); button.click(); })()`,
+  );
+  state = await roots(8);
+  assert.equal(new Set(state.workspaces[0].roots).size, 8);
+  assert.equal(
+    await evaluate('window.__qaEngine.tree.get().every(plane => !plane.parentPlaneID)'),
+    true,
+  );
+  const allRootIDs = await enginePlaneIDs();
+  await reloadPage();
+  await restoredEngine(8);
+  await settleCamera();
+  assert.equal(await enginePlaneIDs(), allRootIDs);
+  state = await saved();
+  const resized = state.workspaces[0].panes.find((pane) => pane.id === second);
+  assert.equal(resized?.type === 'folder' && resized.sidebar?.width, 220);
+  assert.equal(resized?.type === 'folder' && resized.history.length, 2);
+  assert.equal(state.workspaces[0].panes.find((pane) => pane.id === first)?.path, fixture.files);
+
+  const last = state.workspaces[0].roots[7];
+  await contextMenu(
+    `${folder(last)} .location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
+  );
+  await command('Input.insertText', { text: 'Open in new root plane' });
+  await key('Enter', 'Enter');
+  state = await roots(9);
+  const previewOwner = state.workspaces[0].roots[8];
+  await paletteCommand('Parent folder');
+  await until(text, (value) => value.includes('Reference files.zip'), 'root parent folder');
+  await click(`${folder(previewOwner)} ${fileSelector(path.join(fixture.files, 'Images'))}`, 2);
+  await until(text, (value) => value.includes('Color.png'), 'root image directory');
+  await click(
+    `${folder(previewOwner)} ${fileSelector(path.join(fixture.files, 'Images', 'Color.png'))}`,
+    2,
+  );
+  await restoredEngine(10);
+  await settleCamera();
+  state = await until(
+    saved,
+    (value) => value.workspaces[0].panes.some((pane) => pane.type === 'preview'),
+    'linked image preview',
+  );
+  const previewID = state.workspaces[0].panes.find((pane) => pane.type === 'preview')!.id;
+  const face = async (hostID: string, keyboard = false) => {
+    const engineID = await evaluate<string>(
+      `window.__qaEngine.inspect().planes.find(plane => plane.route.endsWith('/' + ${JSON.stringify(hostID)})).planeID`,
+    );
+    const minimap = `[data-plurid-minimap-plane=${JSON.stringify(engineID)}]`;
+    if (keyboard) {
+      await evaluate(`document.querySelector(${JSON.stringify(minimap)}).focus()`);
+      await key('Enter', 'Enter');
+    } else {
+      // Dense maps have overlapping generous hit boxes. Find an exposed point
+      // belonging to this real native button, rather than clicking another plane.
+      const point = await evaluate<{ x: number; y: number } | null>(`(() => {
+        const button = document.querySelector(${JSON.stringify(minimap)});
+        const rect = button.getBoundingClientRect();
+        for (let y=rect.top+1; y<rect.bottom; y+=2) for (let x=rect.left+1; x<rect.right; x+=2)
+          if (button.contains(document.elementFromPoint(x,y))) return {x,y};
+        return null;
+      })()`);
+      assert.ok(point, 'Minimap plane has an exposed clickable target');
+      await command('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        button: 'left',
+        buttons: 1,
+        clickCount: 1,
+        ...point,
+      });
+      await command('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        button: 'left',
+        buttons: 0,
+        clickCount: 1,
+        ...point,
+      });
+    }
+    await settleCamera();
+    const facing = await evaluate<{ yaw: number; pitch: number; roll: number }>(`(() => {
+      const camera = window.__qaEngine.camera.get();
+      const node = window.__qaEngine.inspect().planes.find(plane => plane.planeID === ${JSON.stringify(engineID)});
+      return { yaw: camera.yaw + node.location.rotateY, pitch: camera.pitch + node.location.rotateX, roll: camera.roll };
+    })()`);
+    for (const value of Object.values(facing))
+      assert.ok(Math.abs(value) < 0.01, `Minimap must face ${hostID}: ${JSON.stringify(facing)}`);
+    await until(
+      saved,
+      (value) => value.workspaces[0].activePane === hostID,
+      'minimap command context',
+    );
+  };
+  await face(previewOwner);
+  await face(previewID);
+  await face(previewOwner, true);
+  const topology = await enginePlaneIDs();
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.navigation.childFraming'),
+    'plane',
+  );
+  await snapshot('desktop-native-root-navigation.png');
+
+  // The browser's projected positions are independent evidence of pointer movement
+  // in local plane units, including a tilted and zoomed camera.
+  await evaluate(
+    'window.__qaEngine.camera.moveBy({absolute:{yaw:12,pitch:6,roll:8,scale:0.65}},{animate:false})',
+  );
+  await settleCamera();
+  const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  const handle = folder(previewOwner) + ' .sidebar-resizer';
+  const points = await evaluate<{
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+    hit: boolean;
+  }>(`(() => {
+    const sidebar = document.querySelector(${JSON.stringify(folder(previewOwner) + ' .location-sidebar')});
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;pointer-events:none;width:0;height:0;top:50%';
+    sidebar.append(probe);
+    const position = (x) => { probe.style.left = x + 'px'; const r = probe.getBoundingClientRect(); return {x:r.x,y:r.y}; };
+    const start = position(sidebar.clientWidth);
+    const end = position(sidebar.clientWidth + 64);
+    probe.remove();
+    return { start, end, hit:document.querySelector(${JSON.stringify(handle)}).contains(document.elementFromPoint(start.x,start.y)) };
+  })()`);
+  assert.equal(points.hit, true, 'Projected sidebar handle must be usable');
+  await command('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+    ...points.start,
+  });
+  for (let step = 1; step <= 8; step++) {
+    await command('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      button: 'left',
+      buttons: 1,
+      x: points.start.x + ((points.end.x - points.start.x) * step) / 8,
+      y: points.start.y + ((points.end.y - points.start.y) * step) / 8,
+    });
+    await delay(20);
+  }
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+    ...points.end,
+  });
+  assert.ok(
+    Math.abs(
+      Number(
+        await evaluate(
+          `document.querySelector(${JSON.stringify(handle)}).getAttribute('aria-valuenow')`,
+        ),
+      ) - 274,
+    ) <= 2,
+  );
+  assert.equal(
+    await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+    camera,
+    'Sidebar resize must not move the camera',
+  );
+  await paletteCommand('Frame plane');
+  await settleCamera();
+  await paletteCommand('Dock plane');
+  await settleCamera();
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 420,
+    height: 720,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await settleCamera();
+  assert.equal(
+    await evaluate(
+      `!!document.querySelector(${JSON.stringify(folder(previewOwner) + ' .location-sidebar')})`,
+    ),
+    true,
+  );
+  const narrow = await evaluate<{ sidebar: number; plane: number; overflow: boolean }>(`(() => {
+    const plane = document.querySelector(${JSON.stringify(folder(previewOwner))});
+    const list = plane.querySelector('.file-scroll');
+    return { sidebar:plane.querySelector('.location-sidebar').offsetWidth,plane:plane.clientWidth,overflow:list.scrollWidth > list.clientWidth };
+  })()`);
+  assert.ok(narrow.sidebar <= narrow.plane / 2 + 1);
+  assert.equal(narrow.overflow, false);
+  await click(`${controls(previewOwner)} [aria-label="Hide plane navigation"]`);
+  await click(`${controls(previewOwner)} [aria-label="Show plane navigation"]`);
+  await snapshot('desktop-native-navigation-narrow-docked.png');
+  await command('Emulation.clearDeviceMetricsOverride');
+  await paletteCommand('Reveal space');
+  await settleCamera();
+  assert.equal(await enginePlaneIDs(), topology);
+  assert.deepEqual(await evaluate('window.viewer.jobs()'), jobs);
+  assert.deepEqual(
+    await inventory(),
+    untouched,
+    'Roots, navigation and minimap never change files',
+  );
+  await delay(800);
+  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await reloadPage();
+  await restoredEngine(1);
+  await settleCamera();
+  console.log(
+    'Root planes: +, Cmd+N, Commands, plane actions, shortcut roots, independent history, rapid additions, reload, minimap facing, projected resizing and narrow docked navigation.',
+  );
+}
 async function job(request: Record<string, unknown>): Promise<OperationJob> {
   const id = await evaluate<string>(`window.viewer.operate(${JSON.stringify(request)})`);
   return until(
@@ -599,8 +914,18 @@ try {
           message.params?.exceptionDetails?.text ||
           'Renderer exception',
       );
-    if (message.method === 'Runtime.consoleAPICalled')
-      rendererLog.push(JSON.stringify(message.params));
+    if (message.method === 'Runtime.consoleAPICalled') {
+      const entry = message.params as {
+        type?: string;
+        args?: { value?: unknown; description?: string }[];
+      };
+      rendererLog.push(
+        JSON.stringify({
+          type: entry.type,
+          args: entry.args?.map((arg) => arg.value ?? arg.description),
+        }),
+      );
+    }
   });
   socket.addEventListener('close', () => {
     for (const entry of pending.values())
@@ -609,6 +934,9 @@ try {
   });
   await command('Runtime.enable');
   await command('Page.enable');
+  // The user's other windows can legitimately take native focus during this
+  // isolated run. Keep browser focus deterministic without activating their app.
+  await command('Emulation.setFocusEmulationEnabled', { enabled: true });
   await activateTestWindow();
   await until(
     () => evaluate<string>('document.visibilityState'),
@@ -628,6 +956,10 @@ try {
   const untouched = await inventory();
   await captureEngine();
   await verifyRestoredPreviews();
+  await verifyRootPlanes();
+  await click('[aria-label="Show window navigation"]');
+  await paletteCommand('Frame plane');
+  await settleCamera();
   assert.deepEqual(
     await evaluate(`({
     toolbar: !!document.querySelector('[data-plurid-entity="PluridToolbar"]'),
@@ -746,7 +1078,7 @@ try {
   await until(
     async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
     (state) =>
-      state.ui?.version === 2 &&
+      state.ui?.version === 3 &&
       !state.ui.space.toolbar &&
       !state.ui.space.minimap &&
       !state.ui.space.viewcube,
@@ -789,25 +1121,13 @@ try {
   await setting('Show plane headers');
   assert.equal(await evaluate('!!document.querySelector(".plane-controls")'), false);
   await setting('Show plane headers');
-  await setting('Show plane backs');
-  await until(
-    () =>
-      evaluate<string>(
-        'getComputedStyle(document.querySelector("[data-plurid-plane]")).backfaceVisibility',
-      ),
-    (value) => value === 'hidden',
-    'plane backs setting',
-  );
-  await setting('Show plane backs');
-  await until(
-    () =>
-      evaluate<string>(
-        'getComputedStyle(document.querySelector("[data-plurid-plane]")).backfaceVisibility',
-      ),
-    (value) => value === 'visible',
-    'visible plane backs restored',
+  assert.equal((await text()).includes('Show plane backs'), false);
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.elements.plane.backface'),
+    'visible',
   );
   await click('dialog [aria-label="Close"]');
+  await click('.plane-controls [aria-label="Hide plane navigation"]');
   await paletteCommand('Show plane navigation');
   await until(
     () => evaluate<boolean>('!!document.querySelector(".folder-plane .location-sidebar")'),
@@ -957,13 +1277,13 @@ try {
     await evaluate('document.querySelector(".sidebar-resizer").getAttribute("aria-valuenow")'),
     '220',
   );
-  await click('[aria-label="Hide sidebar"]');
+  await click('[aria-label="Hide window navigation"]');
   await until(
     () => evaluate<boolean>('!!document.querySelector(".location-sidebar")'),
     (value) => !value,
     'hidden sidebar',
   );
-  await click('[aria-label="Show sidebar"]');
+  await click('[aria-label="Show window navigation"]');
   await paletteCommand('Frame all planes');
   await settleCamera();
   await snapshot('sidebar-native.png');

@@ -11,10 +11,17 @@ import { Icon, type IconName } from './Icon';
 export function IconButton({
   icon,
   label,
+  className = '',
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: IconName; label: string }) {
   return (
-    <button type="button" className="icon-button" title={label} aria-label={label} {...props}>
+    <button
+      type="button"
+      className={`icon-button ${className}`}
+      title={label}
+      aria-label={label}
+      {...props}
+    >
       <Icon name={icon} />
     </button>
   );

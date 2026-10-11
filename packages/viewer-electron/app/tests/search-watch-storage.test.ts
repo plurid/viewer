@@ -1,11 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import type { SearchBatch, SavedState, DesktopEvent } from '../src/domain/contracts';
 import { Search } from '../src/desktop/search';
 import { Watchers } from '../src/desktop/watchers';
 import { Storage } from '../src/desktop/storage';
+import { folderPane } from '../src/renderer/state/store';
 let root: string;
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'viewer-services-'));
@@ -14,6 +25,62 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 describe('search, subscriptions and persistence', () => {
+  const legacyState = (): SavedState => ({
+    version: 1,
+    activeWorkspace: 'work',
+    workspaces: [
+      {
+        id: 'work',
+        name: 'Work',
+        panes: [folderPane(root, { visible: false, width: 270 })],
+        roots: [],
+        arrangement: { engine: '{"tree":"preserve"}' },
+      },
+    ],
+    favorites: [{ name: 'Fixture', path: root }],
+    recents: [root],
+    look: 'dark',
+  });
+  it('backs up the exact pre-migration layout before saving, then preserves subsequent visibility', async () => {
+    const storage = new Storage(path.join(root, 'state.json'));
+    const original = legacyState();
+    original.workspaces[0].roots = [original.workspaces[0].panes[0].id];
+    const bytes = JSON.stringify(original, null, 2);
+    await writeFile(storage.file, bytes);
+    const loaded = (await storage.load()).state!;
+    expect(await readFile(storage.file, 'utf8')).toBe(bytes);
+    const backups = (await readdir(root)).filter((name) =>
+      name.includes('before-plane-navigation-v3'),
+    );
+    expect(backups).toHaveLength(1);
+    expect(await readFile(path.join(root, backups[0]), 'utf8')).toBe(bytes);
+    expect((await stat(path.join(root, backups[0]))).mode & 0o777).toBe(0o600);
+    expect(loaded.workspaces[0].panes[0]).toMatchObject({ sidebar: { visible: true, width: 270 } });
+    expect(loaded.workspaces[0].arrangement).toEqual(original.workspaces[0].arrangement);
+    const pane = loaded.workspaces[0].panes[0];
+    if (pane.type !== 'folder') throw new Error('Expected folder');
+    pane.sidebar!.visible = false;
+    await storage.save(loaded);
+    expect((await storage.load()).state!.workspaces[0].panes[0]).toMatchObject({
+      sidebar: { visible: false },
+    });
+    expect(
+      (await readdir(root)).filter((name) => name.includes('before-plane-navigation-v3')),
+    ).toEqual(backups);
+  });
+  it('never treats a valid layout as corrupt when the required migration backup cannot be written', async () => {
+    const storage = new Storage(path.join(root, 'state.json'));
+    const original = JSON.stringify(legacyState());
+    await writeFile(storage.file, original);
+    await chmod(root, 0o500);
+    try {
+      await expect(storage.load()).rejects.toMatchObject({ code: 'EACCES' });
+      expect(await readFile(storage.file, 'utf8')).toBe(original);
+      expect(await readdir(root)).toEqual(['state.json']);
+    } finally {
+      await chmod(root, 0o700);
+    }
+  });
   it('streams subtree names, skips hidden paths, and avoids symlink cycles', async () => {
     await mkdir(path.join(root, 'nested'));
     await mkdir(path.join(root, '.hidden'));

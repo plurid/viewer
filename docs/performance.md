@@ -42,7 +42,7 @@ Remaining renderer opportunities are broader command-registry invalidation and w
 
 Measured failures were host-integration issues: the first title drag started without an engine selection; new linked planes used pair framing, leaving the selected plane at an oblique angle; and reopening a file always created another host record. Native checks now verify selection on the same initial title press, unchanged camera during plane dragging, face-on opening, reuse under rapid repeated activation, and explicit second-view creation.
 
-Plane headers, dragging, resizing, backs, origin and the three spatial aids are configurable. The native toolbar and host commands share engine transform state. Versioned UI preferences remain authoritative when engine arrangement hydration restores configuration. The resize observer ignores equal dimensions, routes keep stable identities, and configuration changes do not reconstruct the engine store.
+Plane headers, dragging, resizing, origin and the three spatial aids are configurable. Plane backs are always visible. Native minimap activation faces one plane and synchronizes the host command context without a second camera request. The native toolbar and host commands share engine transform state. Versioned UI preferences remain authoritative when engine arrangement hydration restores configuration. The resize observer ignores equal dimensions, routes keep stable identities, and configuration changes do not reconstruct the engine store.
 
 The installed engine already culls distant content and can unmount it after a delay. Model previews render when dirty or animated and pause while inactive; media also pauses while inactive. The idle measurements do not justify a GPU or spatial-engine rewrite. A workspace with many textured models, high-resolution media and simultaneously visible planes still needs a GPU-memory and frame-timing trace. Such a trace was not performed here.
 
@@ -66,7 +66,7 @@ The change preserves serial ownership, exclusive publication, source revalidatio
 
 ### Persistence
 
-UI preferences use version 2 independently of core saved-state version 1. Unversioned profiles restore toolbar, minimap and viewcube once; versioned false choices survive reload. Optional malformed fields fall back individually. Folder-plane navigation stores only visibility and width; order, labels, Favorites and folding remain shared. Native tests check persistence and unchanged fixture inventories for UI-only actions.
+UI preferences use version 3 independently of core saved-state version 1. The version-3 whole-state migration enables existing plane navigation and hides window navigation once after an exclusive synced metadata backup; subsequent choices remain authoritative. Unversioned profiles restore toolbar, minimap and viewcube once; versioned false choices survive reload. Optional malformed fields fall back individually. Folder-plane navigation stores only visibility and width; order, labels, Favorites and folding remain shared. Native tests check persistence and unchanged fixture inventories for UI-only actions.
 
 Persistence debounces at 400ms, serializes all workspace arrangements and uses validated atomic writes. The preload boundary and storage service both validate the state. Large arrangements can therefore create a renderer serialization pause and main-process validation/serialization work. Incremental workspace persistence is a future profiling target; this pass does not change the durable format or remove validation to chase throughput.
 

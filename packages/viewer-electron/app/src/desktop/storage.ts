@@ -3,7 +3,12 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SavedState } from '../domain/contracts';
-import { normalizePaneSidebar, normalizePreferences } from '../domain/preferences';
+import {
+  migratePlaneNavigation,
+  needsNavigationMigration,
+  normalizePaneSidebar,
+  normalizePreferences,
+} from '../domain/preferences';
 
 const localPath = z
   .string()
@@ -34,7 +39,7 @@ const pane = z.discriminatedUnion('type', [
       .transform((value) => value === true || undefined),
   }),
 ]);
-export const stateSchema = z
+const savedStateSchema = z
   .object({
     version: z.literal(1),
     workspaces: z
@@ -89,15 +94,20 @@ export const stateSchema = z
       ),
     'Invalid folder navigation history.',
   );
+export const stateSchema = z.preprocess(migratePlaneNavigation, savedStateSchema);
 export class Storage {
   private writes: Promise<void> = Promise.resolve();
   constructor(readonly file: string) {}
   async load(): Promise<{ state: SavedState | null; recovery?: string }> {
     await this.writes.catch(() => undefined);
+    let text: string;
+    let original: unknown;
+    let state: SavedState;
     try {
-      const text = await readFile(this.file, 'utf8');
+      text = await readFile(this.file, 'utf8');
       if (text.length > 32 * 1024 * 1024) throw new Error('State exceeds the size limit.');
-      return { state: stateSchema.parse(JSON.parse(text)) };
+      original = JSON.parse(text);
+      state = stateSchema.parse(original);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: null };
       const backup = `${this.file}.unreadable-${Date.now()}`;
@@ -107,6 +117,18 @@ export class Storage {
         recovery: `Saved workspace could not be loaded. A backup was kept at ${backup}.`,
       };
     }
+    if (needsNavigationMigration(original)) {
+      // A failed backup must never enter corrupt-state recovery or replace a valid layout.
+      const backup = `${this.file}.before-plane-navigation-v3-${Date.now()}-${randomUUID()}.bak`;
+      const handle = await open(backup, 'wx', 0o600);
+      try {
+        await handle.writeFile(text);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+    }
+    return { state };
   }
   save(input: SavedState): Promise<void> {
     const state = stateSchema.parse(input);

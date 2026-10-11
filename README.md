@@ -26,15 +26,15 @@ The app is built under `packages/viewer-electron/app/out/Viewer-darwin-<architec
 
 ## File work
 
-Browse local folders, external volumes and mounted network folders in virtualized list, grid, columns or gallery views. Folder double-click navigates within a plane. Option-double-click, **Open linked plane**, or a quick preview’s linked action opens a child plane. Opening an already open path focuses its existing plane in the current workspace; **Open another plane** creates an intentional copy. New planes face the camera by default; Settings also offers linked-pair framing or immediate docking. Space opens a quick preview. Command-Return switches between focused and spatial views. Each plane has one compact header with frame/dock actions; narrower headers keep those actions in their searchable menu. The search button toggles its row and clears the query on close.
+Browse local folders, external volumes and mounted network folders in virtualized list, grid, columns or gallery views. Folder double-click navigates within a plane. Option-double-click, **Open linked plane**, or a quick preview’s linked action opens a child plane. Opening an already open path focuses its existing plane in the current workspace; **Open another plane** creates an intentional copy. The workspace **+**, Command-N, **New folder plane** in Commands, the native File menu and plane actions create an independent root explorer at the active folder or preview’s parent, with fresh navigation history and selection. A sidebar shortcut offers **Open in new root plane**. New planes face the camera by default; Settings also offers linked-pair framing or immediate docking. Space opens a quick preview. Command-Return switches between focused and spatial views. Each plane has one compact header with frame/dock actions; narrower headers keep those actions in their searchable menu. The search button toggles its row and clears the query on close.
 
 Reopening preserves a usable saved camera view and brings a clipped active plane back into view. **Consolidate repeated previews** in Commands closes redundant image or other preview views from older layouts, retaining the active view and its placement. It preserves explicit copies, manually positioned views and branches; one **Undo arrangement** restores the closed views. This changes workspace layout only.
 
 Command-K searches commands, workspaces, open planes and places using the active folder, file selection or preview. Command-F finds filenames in that context, with optional subfolder search. Right-click opens an autofocus search with aliases such as `rn` (rename), `cp` (copy) and `nf` (new folder). The last two applicable actions appear first; history stores command IDs, never previous file targets. Breadcrumbs and folder filtering appear on demand.
 
-The sidebar can be resized, hidden, and arranged by dragging sections or shortcuts. Sections fold; Recent stays chronological. Drag a folder into Favorites to add a shortcut. Rename shortcut and Hide location change only the sidebar. Equivalent movement commands are available in its searchable menus. **Show plane navigation** places the same sidebar inside a folder plane, with independent width/visibility and navigation scoped to that plane. New folder planes start with navigation hidden; Settings can change that default.
+The sidebar can be resized, hidden, and arranged by dragging sections or shortcuts. Sections fold; Recent stays chronological. Drag a folder into Favorites to add a shortcut. Rename shortcut and Hide location change only the sidebar. Equivalent movement commands are available in its searchable menus. Folder planes show this shared navigation by default; their header toggles it directly. Each has independent width/visibility and navigation scoped to that plane. Pointer resizing accounts for zoom and perspective, and narrow planes retain space for file content. Window navigation starts hidden and has its own topbar toggle. Settings can change the default for later new planes. Older layouts receive a metadata backup before navigation is enabled in existing folder planes once; subsequent choices persist.
 
-Appearance and spatial controls live in Settings (Command-comma), which keeps a fixed size across tabs. Plurid’s native bottom toolbar, minimap and viewcube are on by default and can each be hidden. Plane headers, title dragging, resize handles and visible backs are independently configurable; transform origin starts hidden. Existing unversioned preferences receive the restored spatial aids once, and subsequent choices persist. Toolbar actions, commands and Escape share the engine’s transform mode. Focus outlines and halos are suppressed throughout the interface; caret, active command and selection feedback remain visible.
+Appearance and spatial controls live in Settings (Command-comma), which keeps a fixed size across tabs. Plurid’s native bottom toolbar, minimap and viewcube are on by default and can each be hidden. Minimap activation faces the selected plane and makes it the active command context. Plane backs are always visible. Plane headers, title dragging and resize handles are independently configurable; transform origin starts hidden. Existing unversioned preferences receive the restored spatial aids once, and subsequent choices persist. Toolbar actions, commands and Escape share the engine’s transform mode. Focus outlines and halos are suppressed throughout the interface; caret, active command and selection feedback remain visible.
 
 The workspace switcher provides New, Rename and Delete. Deletion confirms the workspace name and plane count, removes only saved layout, and can be undone during the session. Deleting the final workspace leaves an empty replacement. Files, folders and running jobs are unaffected.
 
@@ -44,13 +44,14 @@ Command-Z undoes eligible rename/move jobs; identity and content checks protect 
 
 | Command                          | macOS shortcut    |
 | -------------------------------- | ----------------- |
+| New root folder plane            | ⌘N                |
 | Open folder / new folder         | ⌘⇧O / ⌘⇧N         |
 | Open selection / rename          | ⌘O / Return       |
 | Copy / cut / paste / select all  | ⌘C / ⌘X / ⌘V / ⌘A |
 | Quick preview / file information | Space / ⌘I        |
 | Commands / Settings              | ⌘K / ⌘,           |
 | Find file / go to folder         | ⌘F / ⌘L           |
-| Show or hide sidebar             | ⌥⌘S               |
+| Show or hide window navigation   | ⌥⌘S               |
 | Parent / back / forward          | ⌘↑ / ⌥← / ⌥→      |
 | Hidden files / duplicate / Trash | ⌘⇧. / ⌘D / ⌘⌫     |
 | Frame all / dock or reveal       | ⌘0 / ⌘Return      |

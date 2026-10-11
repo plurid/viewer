@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
-import type { FileEntry } from '../../domain/contracts';
+import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 export interface WorkspaceController {
+  newRootFolder(target?: NewRootFolderTarget): void;
   open(entry: FileEntry, parentEngineID?: string, options?: { another?: boolean }): void;
   openPath(
     path: string,

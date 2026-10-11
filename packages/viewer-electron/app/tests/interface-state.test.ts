@@ -6,6 +6,7 @@ import { CommandRegistry } from '../src/renderer/commands/registry';
 import { windowCommands, type WindowActions } from '../src/renderer/commands/window';
 import {
   activeWorkspace,
+  addRootFolder,
   addFavorite,
   addPane,
   changePreferences,
@@ -18,6 +19,7 @@ import {
   receiveJob,
   receiveProgress,
   setJobs,
+  setActivePane,
   updatePane,
   renameShortcut,
   restoreWorkspace,
@@ -56,6 +58,55 @@ afterEach(async () => {
 });
 
 describe('layout-only changes', () => {
+  it('creates a root from captured command ownership even if the active pane changes', async () => {
+    const owner = activeWorkspace().panes[0];
+    const workspaceID = activeWorkspace().id;
+    const other = addPane('/fixtures/other', 'folder', true);
+    const actions = {
+      engine: { current: null },
+      workspace: { newRootFolder: addRootFolder },
+      ready: true,
+      tool: null,
+    } as unknown as WindowActions;
+    const registry = new CommandRegistry();
+    registry.register('window', {
+      context: () => ({
+        scope: 'window',
+        workspaceID: activeWorkspace().id,
+        paneID: getState().activePane,
+        selection: [],
+        clipboard: null,
+        jobs: [],
+      }),
+      definitions: () => windowCommands(actions),
+      valid: (invocation) => invocation.workspaceID === activeWorkspace().id,
+    });
+    const request = {
+      paneID: owner.id,
+      scope: 'folder' as const,
+      context: { paneID: owner.id, workspaceID },
+    };
+    const command = registry.list(request).find((command) => command.id === 'new-root-folder')!;
+    setActivePane(other.id);
+    expect(await registry.run(command)).toBe(true);
+    expect(activeWorkspace().panes.at(-1)?.path).toBe(owner.path);
+    expect(activeWorkspace().roots).toHaveLength(3);
+    await registry.invoke('shortcut-new-root', {
+      scope: 'sidebar',
+      context: {
+        paneID: owner.id,
+        workspaceID,
+        sidebar: { section: 'favorites', path: '/fixtures/shortcut' },
+      },
+    });
+    expect(activeWorkspace().panes.at(-1)?.path).toBe('/fixtures/shortcut');
+    expect(activeWorkspace().roots).toHaveLength(4);
+    await newWorkspace('Elsewhere');
+    const elsewhere = activeWorkspace().panes;
+    expect(await registry.run(command)).toBe(false);
+    expect(activeWorkspace().panes).toEqual(elsewhere);
+    expect(operate).not.toHaveBeenCalled();
+  });
   it('deletes and restores a workspace with its arrangement, preserving jobs and paths', async () => {
     addPane('/fixtures/project.glb', 'preview', false);
     const id = activeWorkspace().id;
@@ -139,7 +190,7 @@ describe('layout-only changes', () => {
   it('loads legacy state and falls back independently for invalid new preferences', () => {
     const { ui: _ui, ...legacy } = getState().saved;
     const parsed = stateSchema.parse(legacy);
-    expect(parsed.ui.space.backs).toBe(true);
+    expect(parsed.ui.space).not.toHaveProperty('backs');
     const corrupt = stateSchema.parse({
       ...legacy,
       ui: {
@@ -152,10 +203,7 @@ describe('layout-only changes', () => {
     expect(corrupt.ui.sidebar.visible).toBe(false);
     expect(corrupt.ui.sidebar.width).toBe(210);
     expect(corrupt.ui.sidebar.order).toEqual(['recents', 'locations', 'favorites']);
-    expect(corrupt.ui.space).toEqual({
-      ...normalizePreferences().space,
-      backs: false,
-    });
+    expect(corrupt.ui.space).toEqual(normalizePreferences().space);
     expect(corrupt.ui.recentCommands).toEqual(['rename']);
     expect(normalizePreferences('broken')).toEqual(normalizePreferences());
   });
@@ -163,7 +211,7 @@ describe('layout-only changes', () => {
     const migrated = normalizePreferences({
       space: { toolbar: false, minimap: false, viewcube: false },
     });
-    expect(migrated.version).toBe(2);
+    expect(migrated.version).toBe(3);
     expect(migrated.space).toMatchObject({ toolbar: true, minimap: true, viewcube: true });
     changePreferences((ui) => ({
       ...ui,
@@ -188,7 +236,7 @@ describe('layout-only changes', () => {
     changePreferences((ui) => ({ ...ui, sidebar: { ...ui.sidebar, inNewPlanes: true } }));
     const second = addPane('/fixtures/second', 'folder', true);
     updatePane(second.id, { sidebar: { visible: true, width: 280 } });
-    expect(first.type === 'folder' && first.sidebar?.visible).toBeUndefined();
+    expect(first.type === 'folder' && first.sidebar?.visible).toBe(true);
     expect(getState().saved.ui.sidebar.width).toBe(210);
     await flushState(false);
     const parsed = stateSchema.parse(getState().saved);
@@ -197,6 +245,57 @@ describe('layout-only changes', () => {
     Object.assign(corrupt.workspaces[0].panes[1], { sidebar: { visible: true, width: 'wide' } });
     expect(stateSchema.parse(corrupt).workspaces[0].panes[1]).toMatchObject({
       sidebar: { visible: true, width: 210 },
+    });
+    expect(operate).not.toHaveBeenCalled();
+  });
+  it('migrates navigation once across all workspaces, retaining layout and spatial choices', async () => {
+    await newWorkspace('Second');
+    const original = structuredClone(getState().saved);
+    const legacy = {
+      ...original,
+      ui: {
+        ...original.ui,
+        version: 2,
+        sidebar: { ...original.ui.sidebar, visible: true, inNewPlanes: false, width: 280 },
+        space: {
+          ...original.ui.space,
+          backs: false,
+          toolbar: false,
+          minimap: false,
+          viewcube: false,
+        },
+      },
+      workspaces: original.workspaces.map((space) => ({
+        ...space,
+        panes: space.panes.map((pane) => ({ ...pane, sidebar: { visible: false, width: 300 } })),
+      })),
+    };
+    const unchanged = JSON.stringify(legacy);
+    const migrated = stateSchema.parse(legacy);
+    expect(JSON.stringify(legacy)).toBe(unchanged);
+    expect(migrated.ui).toMatchObject({
+      version: 3,
+      sidebar: { visible: false, inNewPlanes: true, width: 280 },
+      space: { toolbar: false, minimap: false, viewcube: false },
+    });
+    expect(migrated.ui.space).not.toHaveProperty('backs');
+    for (const [index, space] of migrated.workspaces.entries()) {
+      expect(space.roots).toEqual(original.workspaces[index].roots);
+      expect(space.arrangement).toEqual(original.workspaces[index].arrangement);
+      expect(space.panes[0]).toMatchObject({ sidebar: { visible: true, width: 300 } });
+    }
+    initialize({ ...getState().bootstrap, state: migrated });
+    const pane = activeWorkspace().panes[0];
+    updatePane(pane.id, { sidebar: { visible: false, width: 260 } });
+    changePreferences((ui) => ({
+      ...ui,
+      sidebar: { ...ui.sidebar, visible: true, inNewPlanes: false },
+    }));
+    await flushState(false);
+    const reloaded = stateSchema.parse(getState().saved);
+    expect(reloaded.ui.sidebar).toMatchObject({ visible: true, inNewPlanes: false });
+    expect(reloaded.workspaces[1].panes[0]).toMatchObject({
+      sidebar: { visible: false, width: 260 },
     });
     expect(operate).not.toHaveBeenCalled();
   });

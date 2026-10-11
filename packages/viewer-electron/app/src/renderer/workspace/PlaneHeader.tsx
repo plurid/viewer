@@ -64,6 +64,14 @@ export function PlaneHeader({
       {pane?.type === 'folder' && (
         <div className="plane-navigation">
           <IconButton
+            icon="sidebar"
+            label={
+              pane.sidebar?.visible !== false ? 'Hide plane navigation' : 'Show plane navigation'
+            }
+            aria-pressed={pane.sidebar?.visible !== false}
+            onClick={() => run('plane-sidebar')}
+          />
+          <IconButton
             icon="left"
             label="Back"
             disabled={!available.some((item) => item.id === 'back')}
@@ -71,6 +79,7 @@ export function PlaneHeader({
           />
           <IconButton
             icon="right"
+            className="plane-forward"
             label="Forward"
             disabled={!available.some((item) => item.id === 'forward')}
             onClick={() => run('forward')}

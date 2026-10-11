@@ -43,6 +43,24 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
   const shortcut = (context: CommandContext) => sidebar(context) && !!context.sidebar?.path;
   const commands: CommandDefinition[] = [
     {
+      id: 'new-root-folder',
+      label: 'New folder plane',
+      group: 'Plane',
+      icon: 'plus',
+      aliases: ['np', 'new plane', 'add plane', 'root'],
+      shortcut: '⌘N',
+      primary: true,
+      when: (context) =>
+        ['window', 'workspace', 'folder', 'files', 'preview'].includes(context.scope) &&
+        actions.ready &&
+        space.panes.length < 200,
+      run: (context) =>
+        actions.workspace.newRootFolder({
+          paneID: context.paneID,
+          workspaceID: context.workspaceID,
+        }),
+    },
+    {
       id: 'palette',
       label: 'Commands…',
       group: 'App',
@@ -81,17 +99,17 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       label: 'Settings…',
       group: 'App',
       icon: 'settings',
-      aliases: ['st', 'preferences', 'appearance', 'backface', 'backs', 'minimap', 'viewcube'],
+      aliases: ['st', 'preferences', 'appearance', 'minimap', 'viewcube'],
       shortcut: '⌘,',
       when: windowScope,
       run: actions.settings,
     },
     {
       id: 'toggle-sidebar',
-      label: state.saved.ui.sidebar.visible ? 'Hide sidebar' : 'Show sidebar',
+      label: state.saved.ui.sidebar.visible ? 'Hide window navigation' : 'Show window navigation',
       group: 'View',
       icon: 'sidebar',
-      aliases: ['sb'],
+      aliases: ['sb', 'window sidebar'],
       shortcut: '⌥⌘S',
       when: (context) => windowScope(context) || (sidebar(context) && !context.paneID),
       run: () =>
@@ -103,7 +121,9 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     {
       id: 'plane-sidebar',
       label: (context) =>
-        context.folder?.sidebar?.visible ? 'Hide plane navigation' : 'Show plane navigation',
+        context.folder?.sidebar?.visible !== false
+          ? 'Hide plane navigation'
+          : 'Show plane navigation',
       group: 'Plane',
       icon: 'sidebar',
       aliases: ['ps', 'sidebar', 'navigation'],
@@ -113,7 +133,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
         if (pane?.type === 'folder')
           updatePane(pane.id, {
             sidebar: {
-              visible: !pane.sidebar?.visible,
+              visible: pane.sidebar?.visible === false,
               width: pane.sidebar?.width ?? 210,
             },
           });
@@ -303,6 +323,20 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       when: shortcut,
       run: (context) =>
         actions.workspace.openPath(context.sidebar!.path!, {
+          paneID: context.paneID,
+          workspaceID: context.workspaceID,
+        }),
+    },
+    {
+      id: 'shortcut-new-root',
+      label: 'Open in new root plane',
+      group: 'Sidebar',
+      icon: 'plus',
+      aliases: ['np', 'root'],
+      when: (context) => shortcut(context) && actions.ready && space.panes.length < 200,
+      run: (context) =>
+        actions.workspace.newRootFolder({
+          path: context.sidebar!.path!,
           paneID: context.paneID,
           workspaceID: context.workspaceID,
         }),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FileEntry, Workspace } from '../src/domain/contracts';
 import { indexEntries, reconcileSelection } from '../src/domain/files';
-import { matchingPane, normalizedPanePath } from '../src/domain/planes';
+import { matchingPane, normalizedPanePath, parentPath } from '../src/domain/planes';
 import { rankFiles } from '../src/renderer/commands/registry';
 import { operationRoots } from '../src/desktop/operations';
 import { repeatedPreviews } from '../src/renderer/workspace/recovery';
@@ -60,6 +60,12 @@ describe('selection reconciliation', () => {
   });
 });
 describe('spatial plane reuse', () => {
+  it('finds a preview parent including drive-root files', () => {
+    expect(parentPath('/images/photo.png')).toBe('/images');
+    expect(parentPath('/photo.png')).toBe('/');
+    expect(parentPath('C:\\photo.png')).toBe('C:\\');
+    expect(parentPath('C:\\images\\photo.png')).toBe('C:\\images');
+  });
   it('reuses only matching type/path in this workspace, preferring the active existing duplicate', () => {
     const workspace: Workspace = {
       id: 'one',

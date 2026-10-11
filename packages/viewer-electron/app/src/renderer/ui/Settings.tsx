@@ -77,7 +77,6 @@ export function Settings({ onClose }: { onClose(): void }) {
                 ['planeHeaders', 'Show plane headers'],
                 ['dragging', 'Drag planes by their title'],
                 ['resizing', 'Show resize handles'],
-                ['backs', 'Show plane backs'],
                 ['origin', 'Show transform origin'],
               ] as const
             ).map(([key, label]) => (
@@ -95,15 +94,13 @@ export function Settings({ onClose }: { onClose(): void }) {
                 />
               </label>
             ))}
-            <p className="settings-note">
-              Plane backs show mirrored content. Plane actions remain available in Commands.
-            </p>
+            <p className="settings-note">Plane actions remain available in Commands.</p>
           </>
         )}
         {tab === 'sidebar' && (
           <>
             <label className="settings-row">
-              <span>Show sidebar</span>
+              <span>Show window navigation</span>
               <input
                 type="checkbox"
                 checked={saved.ui.sidebar.visible}
