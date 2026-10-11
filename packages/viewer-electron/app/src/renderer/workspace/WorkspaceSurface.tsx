@@ -12,7 +12,7 @@ import {
   type PluridPlane,
   type TreePlane,
 } from '@plurid/plurid-data';
-import { activeWorkspace, setActivePane, storageAdapter, useViewer } from '../state/store';
+import { activeWorkspace, report, setActivePane, storageAdapter, useViewer } from '../state/store';
 import { SearchExplorer } from '../explorer/SearchExplorer';
 import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
@@ -127,7 +127,7 @@ export function WorkspaceSurface({
         docking: { url: false },
         clipboard: false,
         gestures: { wheel: 'plane', dragHandle: 'chrome' },
-        bridge: { planeAngle: 0 },
+        bridge: { preset: 'reading', planeAngle: 90.1 },
         shortcuts: {
           disabled: ['palette', 'copy', 'cut', 'paste', 'undo', 'redo', 'duplicateSelection'],
         },
@@ -177,7 +177,7 @@ export function WorkspaceSurface({
         elements.plane.resizable === preferences.resizing &&
         elements.plane.backface === 'visible' &&
         space.navigation?.childFraming === 'plane' &&
-        space.bridge?.planeAngle === 0 &&
+        space.bridge?.planeAngle === 90.1 &&
         space.transformOrigin.show === preferences.origin
       )
         return;
@@ -263,20 +263,25 @@ export function WorkspaceSurface({
         }}
         renderPlaneControls={(context) => <PlaneHeader context={context} engine={engine} />}
         renderEmpty={() => (
-          <Empty
-            title="Open a folder"
-            detail="Choose a folder or select a location in the sidebar."
-          >
-            <button
-              className="primary"
-              onClick={() => {
-                void window.viewer.chooseFolder().then((path) => {
-                  if (path) return workspace.openPath(path);
-                });
-              }}
-            >
-              Open folder
-            </button>
+          <Empty title="No open planes" detail="Create a folder plane or choose a folder.">
+            <div className="empty-actions">
+              <button className="primary" disabled={!api} onClick={() => workspace.newRootFolder()}>
+                New folder plane
+              </button>
+              <button
+                disabled={!api}
+                onClick={() => {
+                  void window.viewer
+                    .chooseFolder()
+                    .then((path) => {
+                      if (path) return workspace.openPath(path);
+                    })
+                    .catch(report);
+                }}
+              >
+                Open folder…
+              </button>
+            </div>
           </Empty>
         )}
       />

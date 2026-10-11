@@ -45,6 +45,8 @@ if (!ownsInstance) app.quit();
 let closing = false;
 let quitting = false;
 let quitPending = false;
+let disposalPending = false;
+let disposed = false;
 const pendingPaths: string[] = [];
 const devURL = MAIN_WINDOW_VITE_DEV_SERVER_URL;
 const rendererRoot = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
@@ -249,7 +251,7 @@ function menu(): void {
   );
 }
 async function createWindow(): Promise<void> {
-  if (window) return;
+  if (window || quitPending || quitting) return;
   closing = false;
   window = new BrowserWindow({
     width: 1440,
@@ -306,7 +308,7 @@ async function createWindow(): Promise<void> {
 }
 async function openSettingsWindow(): Promise<void> {
   await settingsClosing;
-  if (!desktop) return;
+  if (!desktop || quitPending || quitting) return;
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     if (!backgroundTest) {
       settingsWindow.show();
@@ -386,6 +388,7 @@ async function openSettingsWindow(): Promise<void> {
   if (!backgroundTest) created.show();
 }
 app.on('second-instance', () => {
+  if (quitPending || quitting) return;
   if (window) {
     if (!backgroundTest) {
       window.show();
@@ -399,7 +402,7 @@ app.on('open-file', (event, file) => {
   else pendingPaths.push(file);
 });
 app.whenReady().then(async () => {
-  if (!ownsInstance) return;
+  if (!ownsInstance || quitPending || quitting) return;
   if (mcpMode) {
     app.dock?.hide();
     try {
@@ -463,21 +466,33 @@ app.whenReady().then(async () => {
   await createWindow();
 });
 app.on('activate', () => {
-  if (!mcpMode && desktop && !window) void createWindow();
+  if (!mcpMode && desktop && !window && !quitPending && !quitting) void createWindow();
 });
 app.on('before-quit', (event) => {
   if (quitting) return;
   event.preventDefault();
   if (quitPending) return;
   quitPending = true;
-  void (async () => {
-    await desktop?.flush();
-    await desktop?.dispose();
-  })()
+  // Keep the bridge and services alive until every renderer has saved and
+  // Electron has closed its windows. Cleanup belongs to will-quit.
+  void (desktop?.flush() ?? Promise.resolve())
     .catch((error) => console.error(error))
     .finally(() => {
       quitting = true;
       closing = true;
+      app.quit();
+    });
+});
+app.on('will-quit', (event) => {
+  if (disposed || !desktop) return;
+  event.preventDefault();
+  if (disposalPending) return;
+  disposalPending = true;
+  void desktop
+    .dispose()
+    .catch((error) => console.error('Desktop shutdown failed', error))
+    .finally(() => {
+      disposed = true;
       app.quit();
     });
 });

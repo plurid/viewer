@@ -10,6 +10,7 @@ import {
   initialize,
   newWorkspace,
   navigate,
+  receiveSettings,
   reconcilePanes,
   removePanes,
   setActivePane,
@@ -34,6 +35,29 @@ afterEach(async () => {
 });
 
 describe('workspace host and engine lifecycle', () => {
+  it('uses the configured starting folder for roots, including an empty workspace, and honors explicit location commands', () => {
+    const owner = activeWorkspace().panes[0];
+    navigate(owner.id, '/fixtures/project');
+    for (const location of ['home', 'desktop', 'downloads'] as const) {
+      const snapshot = structuredClone(getState().settings);
+      snapshot.revision++;
+      snapshot.settings.browsing.newPlaneLocation = location;
+      receiveSettings(snapshot);
+      const expected =
+        location === 'home'
+          ? '/fixtures'
+          : `/fixtures/${location[0].toUpperCase()}${location.slice(1)}`;
+      expect(addRootFolder()?.path).toBe(expected);
+    }
+    const snapshot = structuredClone(getState().settings);
+    snapshot.revision++;
+    snapshot.settings.browsing.newPlaneLocation = 'custom';
+    snapshot.settings.browsing.newPlanePath = '/fixtures/library';
+    receiveSettings(snapshot);
+    removePanes(activeWorkspace().panes.map((pane) => pane.id));
+    expect(addRootFolder()?.path).toBe('/fixtures/library');
+    expect(addRootFolder({ path: '/fixtures/explicit' })?.path).toBe('/fixtures/explicit');
+  });
   it('adds fresh roots at a folder with copied view preferences and independent history', async () => {
     const first = activeWorkspace().panes[0];
     navigate(first.id, '/fixtures/project');

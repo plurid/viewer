@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type {
   ActionRecipe,
   ModelProvider,
@@ -113,6 +113,18 @@ export function SettingsWindow() {
   };
   const patch = (path: string, value: unknown) => enqueue(() => [{ path, value }]);
   const patches = (values: SettingsPatch[]) => enqueue(() => values);
+  const chooseNewPlaneFolder = () => {
+    void window.viewer
+      .chooseFolder()
+      .then((path) => {
+        if (path)
+          patches([
+            { path: 'settings.browsing.newPlanePath', value: path },
+            { path: 'settings.browsing.newPlaneLocation', value: 'custom' },
+          ]);
+      })
+      .catch((error) => setError((error as Error).message));
+  };
   const selected = (value: string) => {
     setCategory(value);
     setQuery('');
@@ -223,48 +235,66 @@ export function SettingsWindow() {
           ))}
         <div className="settings-group">
           {definitions.map((definition) => (
-            <label className="settings-row" key={definition.path}>
-              <span>
-                {definition.label}
-                {definition.detail && <small>{definition.detail}</small>}
-                {query && <small>{definition.category}</small>}
-              </span>
-              {definition.kind === 'boolean' ? (
-                <input
-                  type="checkbox"
-                  checked={settingValue(snapshot, definition.path) === true}
-                  onChange={(event) => patch(definition.path, event.target.checked)}
-                />
-              ) : definition.kind === 'choice' ? (
-                <select
-                  aria-label={definition.label}
-                  value={String(settingValue(snapshot, definition.path))}
-                  onChange={(event) =>
-                    patch(
-                      definition.path,
-                      definition.path === 'settings.previews.thumbnailSize'
-                        ? Number(event.target.value)
-                        : event.target.value,
-                    )
-                  }
-                >
-                  {definition.choices?.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  aria-label={definition.label}
-                  type="number"
-                  min={definition.min}
-                  max={definition.max}
-                  defaultValue={Number(settingValue(snapshot, definition.path))}
-                  onBlur={(event) => patch(definition.path, Number(event.target.value))}
-                />
-              )}
-            </label>
+            <Fragment key={definition.path}>
+              <label className="settings-row">
+                <span>
+                  {definition.label}
+                  {definition.detail && <small>{definition.detail}</small>}
+                  {query && <small>{definition.category}</small>}
+                </span>
+                {definition.kind === 'boolean' ? (
+                  <input
+                    type="checkbox"
+                    checked={settingValue(snapshot, definition.path) === true}
+                    onChange={(event) => patch(definition.path, event.target.checked)}
+                  />
+                ) : definition.kind === 'choice' ? (
+                  <select
+                    aria-label={definition.label}
+                    value={String(settingValue(snapshot, definition.path))}
+                    onChange={(event) => {
+                      if (
+                        definition.path === 'settings.browsing.newPlaneLocation' &&
+                        event.target.value === 'custom'
+                      ) {
+                        chooseNewPlaneFolder();
+                        return;
+                      }
+                      patch(
+                        definition.path,
+                        definition.path === 'settings.previews.thumbnailSize'
+                          ? Number(event.target.value)
+                          : event.target.value,
+                      );
+                    }}
+                  >
+                    {definition.choices?.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    aria-label={definition.label}
+                    type="number"
+                    min={definition.min}
+                    max={definition.max}
+                    defaultValue={Number(settingValue(snapshot, definition.path))}
+                    onBlur={(event) => patch(definition.path, Number(event.target.value))}
+                  />
+                )}
+              </label>
+              {definition.path === 'settings.browsing.newPlaneLocation' &&
+                settings.browsing.newPlaneLocation === 'custom' && (
+                  <div className="settings-folder-choice">
+                    <span title={settings.browsing.newPlanePath}>
+                      {settings.browsing.newPlanePath}
+                    </span>
+                    <button onClick={chooseNewPlaneFolder}>Change folder…</button>
+                  </div>
+                )}
+            </Fragment>
           ))}
         </div>
         {!query && category === 'Navigation' && (

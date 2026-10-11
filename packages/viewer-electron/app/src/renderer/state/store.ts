@@ -15,7 +15,7 @@ import { migratePlaneNavigation, normalizePreferences, reorder } from '../../dom
 import { clearSessions, focusFiles, trimSessions, remapSessions } from '../workspace/sessions';
 import { pathMapper, type FileChange } from '../../domain/changes';
 import { parentPath } from '../../domain/planes';
-import { defaultSettings, type SettingsSnapshot } from '../../domain/services';
+import { defaultSettings, newPlaneFolder, type SettingsSnapshot } from '../../domain/services';
 
 interface ViewerState {
   settings: SettingsSnapshot;
@@ -413,11 +413,11 @@ export function addRootFolder(target: NewRootFolderTarget = {}): FolderPane | un
   if (target.paneID && !owner) return;
   const path =
     target.path ??
-    (owner?.type === 'folder'
-      ? owner.path
-      : owner
-        ? parentPath(owner.path)
-        : current.bootstrap.home);
+    newPlaneFolder(
+      current.settings.settings.browsing,
+      current.bootstrap.home,
+      owner?.type === 'folder' ? owner.path : owner ? parentPath(owner.path) : undefined,
+    );
   const pane = addPane(path, 'folder', true, {
     folderView:
       owner?.type === 'folder'

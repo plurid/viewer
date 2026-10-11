@@ -39,6 +39,55 @@ export function epubFixture() {
   );
 }
 describe('authoritative settings', () => {
+  it('preserves existing settings when adding the new-plane folder preference and validates custom folders', async () => {
+    const old = defaultSettings(root);
+    const { newPlaneLocation: _location, newPlanePath: _path, ...browsing } = old.browsing;
+    await writeFile(
+      path.join(root, 'settings-v1.json'),
+      JSON.stringify({
+        version: 1,
+        revision: 4,
+        settings: { ...old, browsing },
+        ui: normalizePreferences(),
+      }),
+    );
+    const settings = new SettingsService(
+      root,
+      root,
+      () => true,
+      () => {},
+    );
+    await settings.load();
+    expect(settings.snapshot().revision).toBe(4);
+    expect(settings.snapshot().settings.browsing).toMatchObject({
+      newPlaneLocation: 'current',
+      newPlanePath: '',
+    });
+    await expect(
+      settings.patch([{ path: 'settings.browsing.newPlaneLocation', value: 'custom' }], 4),
+    ).rejects.toThrow('Choose the folder');
+    await expect(
+      settings.patch([{ path: 'settings.browsing.newPlanePath', value: '../relative' }], 4),
+    ).rejects.toThrow();
+    await settings.patch(
+      [
+        { path: 'settings.browsing.newPlaneLocation', value: 'custom' },
+        { path: 'settings.browsing.newPlanePath', value: root },
+      ],
+      4,
+    );
+    const restored = new SettingsService(
+      root,
+      root,
+      () => true,
+      () => {},
+    );
+    await restored.load();
+    expect(restored.snapshot().settings.browsing).toMatchObject({
+      newPlaneLocation: 'custom',
+      newPlanePath: root,
+    });
+  });
   it('merges independent window edits and rejects stale overlapping edits', async () => {
     const settings = new SettingsService(
       root,

@@ -12,6 +12,8 @@ import type {
 export class FileServices {
   private child?: UtilityProcess;
   private ready?: Promise<unknown>;
+  private closed = false;
+  private closing?: Promise<void>;
   private configuration?: ApplicationSettings['search'];
   private sizes = new Map<string, FolderSizeTask>();
   private pending = new Map<
@@ -31,6 +33,8 @@ export class FileServices {
     private sizeChanged: (task: FolderSizeTask) => void = () => {},
   ) {}
   private start(): Promise<unknown> {
+    if (this.closed)
+      return Promise.reject(new Error('Background file services are shutting down.'));
     if (this.ready) return this.ready;
     this.child = utilityProcess.fork(this.worker, [], {
       serviceName: 'Viewer file services',
@@ -87,9 +91,18 @@ export class FileServices {
     );
     return this.ready;
   }
-  private send(method: string, args: unknown[], signal?: AbortSignal): Promise<unknown> {
+  private send(
+    method: string,
+    args: unknown[],
+    signal?: AbortSignal,
+    timeout = 120000,
+  ): Promise<unknown> {
     const id = randomUUID();
     return new Promise((resolve, reject) => {
+      if (this.closed && method !== 'close') {
+        reject(new Error('Background file services are shutting down.'));
+        return;
+      }
       if (signal?.aborted) {
         reject(new Error('Task cancelled.'));
         return;
@@ -99,7 +112,7 @@ export class FileServices {
         this.pending.delete(id);
         this.child?.postMessage({ id: randomUUID(), method: 'cancel', args: [id] });
         reject(new Error('Background operation timed out.'));
-      }, 120000);
+      }, timeout);
       const cancel = () => {
         clearTimeout(timer);
         cleanup();
@@ -144,9 +157,45 @@ export class FileServices {
     await this.start();
     return (await this.send('extract', [file, undefined, chapters], signal)) as DocumentData;
   }
-  async close(): Promise<void> {
-    if (!this.child) return;
-    await this.call('close').catch(() => {});
-    this.child?.kill();
+  close(): Promise<void> {
+    if (this.closing) return this.closing;
+    this.closed = true;
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.cleanup?.();
+      pending.reject(new Error('Background file services are shutting down.'));
+    }
+    this.pending.clear();
+    const child = this.child;
+    if (!child) return (this.closing = Promise.resolve());
+    this.closing = (async () => {
+      // The worker writes derived index/cache data, never source files. It gets
+      // a short grace period to checkpoint; blocked reads cannot hold Quit open.
+      await this.send('close', [], undefined, 2000).catch(() => {});
+      const pid = child.pid;
+      let exited = pid === undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const stopped = new Promise<void>((resolve) => {
+        child.once('exit', () => {
+          exited = true;
+          clearTimeout(timer);
+          resolve();
+        });
+        timer = setTimeout(resolve, 1000);
+      });
+      child.kill();
+      if (!exited) await stopped;
+      clearTimeout(timer);
+      // SIGTERM cannot stop a suspended or stuck child. This PID is captured
+      // from our own utility process, and only that read-only worker is forced.
+      if (!exited && pid !== undefined) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+        }
+      }
+    })();
+    return this.closing;
   }
 }

@@ -782,6 +782,13 @@ select {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
 .loading {
   height: 100%;
   min-height: 50px;
@@ -1538,8 +1545,16 @@ select {
   padding: 14px 9px;
 }
 .command-palette {
+  --palette-top: clamp(80px, 22vh, 240px);
+  position: fixed;
+  inset: var(--palette-top) 0 auto;
+  margin: 0 auto;
   width: 560px;
-  max-height: min(570px, calc(100vh - 70px));
+  max-height: min(570px, calc(100vh - var(--palette-top) - 20px));
+}
+.command-palette[open] {
+  display: flex;
+  flex-direction: column;
 }
 .command-palette > header {
   display: none;
@@ -1555,6 +1570,7 @@ select {
   align-items: center;
   gap: 8px;
   min-height: 38px;
+  flex-shrink: 0;
   flex-wrap: wrap;
   padding: 6px 14px;
   border-top: 1px solid var(--line);
@@ -1738,6 +1754,22 @@ select {
 }
 .settings-page .settings-row {
   gap: 24px;
+}
+.settings-folder-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  font-size: 12px;
+}
+.settings-folder-choice > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.settings-folder-choice > button {
+  flex-shrink: 0;
 }
 .settings-row small,
 .settings-location small {

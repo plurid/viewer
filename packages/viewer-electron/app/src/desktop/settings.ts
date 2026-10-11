@@ -32,6 +32,20 @@ export const settingsSchema = z
       foldersFirst: z.boolean(),
       showHidden: z.boolean(),
       restoreSession: z.boolean(),
+      newPlaneLocation: z
+        .enum([
+          'current',
+          'home',
+          'desktop',
+          'documents',
+          'downloads',
+          'pictures',
+          'movies',
+          'music',
+          'custom',
+        ])
+        .default('current'),
+      newPlanePath: z.union([z.literal(''), localPath]).default(''),
     }),
     previews: z.object({
       thumbnailSize: z.number().int().min(128).max(512),
@@ -95,6 +109,12 @@ export const settingsSchema = z
     }),
   })
   .superRefine((value, context) => {
+    if (value.browsing.newPlaneLocation === 'custom' && !value.browsing.newPlanePath)
+      context.addIssue({
+        code: 'custom',
+        path: ['browsing', 'newPlanePath'],
+        message: 'Choose the folder to open in new planes.',
+      });
     for (const [key, items] of [
       ['providers', value.providers],
       ['recipes', value.recipes],

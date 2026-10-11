@@ -29,6 +29,17 @@ export interface ApplicationSettings {
     foldersFirst: boolean;
     showHidden: boolean;
     restoreSession: boolean;
+    newPlaneLocation:
+      | 'current'
+      | 'home'
+      | 'desktop'
+      | 'documents'
+      | 'downloads'
+      | 'pictures'
+      | 'movies'
+      | 'music'
+      | 'custom';
+    newPlanePath: string;
   };
   previews: { thumbnailSize: number; maxImagePixels: number; maxModelMB: number };
   search: { roots: string[]; exclusions: string[]; contentRoots: string[]; paused: boolean };
@@ -219,6 +230,8 @@ export function defaultSettings(home: string): ApplicationSettings {
       foldersFirst: true,
       showHidden: false,
       restoreSession: true,
+      newPlaneLocation: 'current',
+      newPlanePath: '',
     },
     previews: { thumbnailSize: 256, maxImagePixels: 64000000, maxModelMB: 256 },
     search: {
@@ -234,4 +247,16 @@ export function defaultSettings(home: string): ApplicationSettings {
     savedSearches: [],
     settingsWindow: { width: 900, height: 640, category: 'browsing' },
   };
+}
+export function newPlaneFolder(
+  browsing: ApplicationSettings['browsing'],
+  home: string,
+  currentFolder?: string,
+): string {
+  if (browsing.newPlaneLocation === 'current') return currentFolder || home;
+  if (browsing.newPlaneLocation === 'home') return home;
+  if (browsing.newPlaneLocation === 'custom') return browsing.newPlanePath || home;
+  const name = browsing.newPlaneLocation;
+  const separator = home.includes('\\') ? '\\' : '/';
+  return home.replace(/[\\/]$/, '') + separator + name[0].toUpperCase() + name.slice(1);
 }

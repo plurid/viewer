@@ -138,6 +138,7 @@ async function evaluate<T>(expression: string): Promise<T> {
   return value.result.value;
 }
 let settingsMode = false;
+let pausedWorker: number | undefined;
 let settingsSocket: WebSocket | undefined;
 let settingsNext = 0;
 const settingsPending = new Map<
@@ -583,8 +584,8 @@ async function verifyAnchoredPreviews(): Promise<void> {
   }>(
     `(() => { const root=window.__qaEngine.tree.get()[0],child=root.children[0]; return {parent:root.location,child:child.location,link:child.linkCoordinates,offset:child.bridgeOffset,angle:child.planeAngle}; })()`,
   );
-  assert.equal(nodes.angle, 0);
-  assert.equal(nodes.parent.rotateY, nodes.child.rotateY);
+  assert.equal(nodes.angle, 90.1);
+  assert.ok(Math.abs(nodes.child.rotateY - nodes.parent.rotateY - 90.1) < 0.01);
   assert.equal(nodes.parent.rotateX, nodes.child.rotateX);
   assert.ok(
     Math.abs(nodes.child.translateY - nodes.parent.translateY - nodes.link.y - nodes.offset) < 1,
@@ -630,7 +631,7 @@ async function verifyAnchoredPreviews(): Promise<void> {
   await restoredEngine(1);
   await settleCamera();
   console.log(
-    'Anchoring: a scrolled-out virtual source is revealed before spawning a parallel preview at its row; all four views own range keys.',
+    'Anchoring: a scrolled-out virtual source is revealed before spawning a 90.1° parent-relative preview at its row; all four views own range keys.',
   );
 }
 
@@ -1764,6 +1765,212 @@ async function job(request: Record<string, unknown>): Promise<OperationJob> {
     'file operation',
   ).then((jobs) => jobs.find((job) => job.id === id)!);
 }
+async function verifyEntryAndPalette(): Promise<void> {
+  await delay(800);
+  const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
+  const settings = await evaluate<{
+    revision: number;
+    settings: { browsing: { newPlaneLocation: string; newPlanePath: string } };
+  }>('window.viewer.settingsGet()');
+  await evaluate('window.viewer.openSettings()');
+  await openSettingsProbe();
+  await until(
+    () =>
+      settingsEvaluate<boolean>(
+        `Array.from(document.querySelectorAll('.settings-navigation button')).some(button => button.textContent.trim() === 'Browsing')`,
+      ),
+    Boolean,
+    'Settings categories ready',
+  );
+  await settingsEvaluate(
+    `Array.from(document.querySelectorAll('.settings-navigation button')).find(button => button.textContent.trim() === 'Browsing').click()`,
+  );
+  await until(
+    () =>
+      settingsEvaluate<boolean>(
+        `!!document.querySelector('[aria-label="New folder planes start in"]')`,
+      ),
+    Boolean,
+    'new-plane folder preference',
+  );
+  await settingsEvaluate(
+    `(() => { const select=document.querySelector('[aria-label="New folder planes start in"]');select.value='downloads';select.dispatchEvent(new Event('change',{bubbles:true})); })()`,
+  );
+  await until(
+    () =>
+      evaluate<{ settings: { browsing: { newPlaneLocation: string } } }>(
+        'window.viewer.settingsGet()',
+      ),
+    (snapshot) => snapshot.settings.browsing.newPlaneLocation === 'downloads',
+    'folder preference propagated from Settings',
+  );
+  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
+    {path:'settings.browsing.newPlaneLocation',value:'custom'},
+    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(fixture.files)}}
+  ],snapshot.revision))`);
+  await until(
+    () => settingsEvaluate<string>('document.body.innerText'),
+    (body) => body.includes(fixture.files) && body.includes('Change folder…'),
+    'custom starting folder in Settings',
+  );
+  await snapshot('desktop-native-new-plane-settings.png');
+  await click('dialog [aria-label="Close"]');
+  const empty = structuredClone(original);
+  empty.workspaces[0].panes = [];
+  empty.workspaces[0].roots = [];
+  empty.workspaces[0].activePane = undefined;
+  empty.workspaces[0].arrangement = {};
+  await evaluate(`window.viewer.save(${JSON.stringify(empty)})`);
+  await command('Page.reload');
+  await until(
+    () =>
+      evaluate<boolean>(
+        'document.readyState === "complete" && !!document.querySelector(".empty-actions .primary:not(:disabled)")',
+      ),
+    Boolean,
+    'empty workspace can create a root directly',
+  );
+  await snapshot('desktop-native-empty-workspace.png');
+  await click('.empty-actions .primary');
+  await restoredEngine(1);
+  await settleCamera();
+  await until(
+    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
+    (value) =>
+      value.workspaces[0].panes.length === 1 && value.workspaces[0].panes[0].path === fixture.files,
+    'empty-state root uses the configured folder',
+  );
+  await click('[aria-label="New folder plane (⌘N)"]');
+  await restoredEngine(2);
+  await key('n', 'KeyN', 4);
+  await restoredEngine(3);
+  await until(
+    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
+    (value) =>
+      value.workspaces[0].panes.length === 3 &&
+      value.workspaces[0].panes.every((pane) => pane.path === fixture.files),
+    'plus and Command-N share the configured folder',
+  );
+  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
+    {path:'settings.browsing.newPlaneLocation',value:${JSON.stringify(settings.settings.browsing.newPlaneLocation)}},
+    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(settings.settings.browsing.newPlanePath)}}
+  ],snapshot.revision))`);
+  await delay(800);
+  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await reloadPage();
+  await restoredEngine(1);
+  await settleCamera();
+  await key('k', 'KeyK', 4);
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".command-palette[open]")'),
+    Boolean,
+    'anchored command palette',
+  );
+  const bounds = () =>
+    evaluate<{
+      top: number;
+      left: number;
+      width: number;
+      height: number;
+      bottom: number;
+      inputTop: number;
+      viewport: number;
+    }>(
+      `(() => { const dialog=document.querySelector('.command-palette');const r=dialog.getBoundingClientRect();return {top:r.top,left:r.left,width:r.width,height:r.height,bottom:r.bottom,inputTop:dialog.querySelector('input').getBoundingClientRect().top,viewport:innerHeight}; })()`,
+    );
+  const expanded = await bounds();
+  await snapshot('desktop-native-palette-expanded.png');
+  await command('Input.insertText', { text: 'no-such-command-qa' });
+  await until(
+    () => text(),
+    (body) => body.includes('No matching actions'),
+    'empty command search',
+  );
+  const compact = await bounds();
+  assert.ok(expanded.height > compact.height + 100);
+  assert.equal(compact.top, expanded.top);
+  assert.equal(compact.inputTop, expanded.inputTop);
+  assert.equal(compact.left, expanded.left);
+  assert.equal(compact.width, expanded.width);
+  assert.ok(compact.top < compact.viewport / 3);
+  await snapshot('desktop-native-palette-empty.png');
+  await key('a', 'KeyA', 4, ['selectAll']);
+  await key('Backspace', 'Backspace');
+  await until(
+    () => bounds(),
+    (value) => value.height > compact.height + 100,
+    'palette expands downward',
+  );
+  assert.equal((await bounds()).top, expanded.top);
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 780,
+    height: 560,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  const narrow = await bounds();
+  assert.ok(narrow.bottom <= narrow.viewport - 19, JSON.stringify(narrow));
+  await key('Escape', 'Escape');
+  await key('f', 'KeyF', 4);
+  await until(
+    () =>
+      evaluate<number>(
+        `document.querySelectorAll('.command-palette[open] .command-result').length`,
+      ),
+    (count) => count === 11,
+    'file palette has enough results to scroll',
+  );
+  const finder = await bounds();
+  assert.equal(finder.top, narrow.top);
+  assert.ok(finder.bottom <= finder.viewport - 19, JSON.stringify(finder));
+  assert.ok(
+    await evaluate<boolean>(
+      `(() => { const list=document.querySelector('.command-palette .command-results');return list.scrollHeight > list.clientHeight && getComputedStyle(list).overflowY === 'auto'; })()`,
+    ),
+  );
+  await snapshot('desktop-native-palette-small-window.png');
+  await command('Emulation.clearDeviceMetricsOverride');
+  await key('Escape', 'Escape');
+  console.log(
+    'Workspace entry: direct root creation, starting-folder Settings, and palettes with a fixed search position and bounded scrolling.',
+  );
+}
+async function verifyShutdown(): Promise<void> {
+  // Stall only this isolated QA instance's read-only worker. A slow filesystem
+  // or extraction must not leave an interactive window without its IPC bridge.
+  await evaluate('window.viewer.openSettings()');
+  await openSettingsProbe();
+  settingsMode = false;
+  const { stdout } = await execNative('/bin/ps', ['-axo', 'pid=,ppid=,command=']);
+  const worker = stdout
+    .split('\n')
+    .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/))
+    .find(
+      (match) =>
+        match &&
+        Number(match[2]) === child.pid &&
+        match[3].includes('--utility-sub-type=node.mojom.NodeService'),
+    );
+  assert.ok(worker, 'The owned file-services worker must be running');
+  pausedWorker = Number(worker[1]);
+  process.kill(pausedWorker, 'SIGSTOP');
+  void command('Browser.close').catch(() => undefined);
+  await delay(500);
+  if (child.exitCode === null && socket?.readyState === WebSocket.OPEN) {
+    const reply = await evaluate<string>(
+      `window.viewer.jobs().then(() => 'available', error => error.message)`,
+    ).catch(() => 'Window closed');
+    assert.ok(!reply.includes('No handler registered'), reply);
+  }
+  await until(
+    async () => child.exitCode,
+    (code) => code === 0,
+    'quit with an unresponsive file-services worker',
+    8000,
+  );
+  assert.deepEqual(exceptions, []);
+  console.log('Shutdown: the owned stalled worker cannot strand a window without its IPC bridge.');
+}
 async function verify(): Promise<void> {
   const target = await until(
     async () => {
@@ -1874,6 +2081,19 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'shutdown') {
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    await verifyShutdown();
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'entry') {
+    await verifyEntryAndPalette();
+    await verifyAnchoredPreviews();
+    await verifyBackgroundApp();
+    assert.deepEqual(exceptions, []);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'spatial') {
     await verifySpatialTools();
     await verifyBackgroundApp();
@@ -1882,6 +2102,7 @@ async function verify(): Promise<void> {
     console.log('Packaged spatial tools verified in isolation.');
     return;
   }
+  await verifyEntryAndPalette();
   await verifySelectionReliability();
   if (foreground) await profileNativeInteractions();
   await verifyAnchoredPreviews();
@@ -2751,6 +2972,14 @@ try {
     console.error(await text().catch(() => 'Renderer unavailable'));
   process.exitCode = 1;
 } finally {
+  if (pausedWorker) {
+    try {
+      process.kill(pausedWorker, 'SIGCONT');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+    }
+  }
+  settingsSocket?.close();
   socket?.close();
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGTERM');

@@ -1,0 +1,171 @@
+import { EventEmitter } from 'node:events';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defaultSettings } from '../src/domain/services';
+
+const native = vi.hoisted(() => ({
+  flush: vi.fn<() => Promise<void>>(),
+  dispose: vi.fn<() => Promise<void>>(),
+  flushSettings: vi.fn<() => Promise<void>>(),
+  bridge: true,
+  options: undefined as { openSettings(): Promise<void> } | undefined,
+}));
+class NativeEvent {
+  prevented = false;
+  preventDefault() {
+    this.prevented = true;
+  }
+}
+class TestWindow extends EventEmitter {
+  static windows: TestWindow[] = [];
+  destroyed = false;
+  webContents = Object.assign(new EventEmitter(), {
+    id: TestWindow.windows.length + 1,
+    setWindowOpenHandler: vi.fn(),
+  });
+  constructor() {
+    super();
+    TestWindow.windows.push(this);
+  }
+  static getFocusedWindow() {
+    return undefined;
+  }
+  async loadURL() {}
+  show() {}
+  focus() {}
+  getSize() {
+    return [900, 640];
+  }
+  isDestroyed() {
+    return this.destroyed;
+  }
+  close() {
+    if (this.destroyed) return;
+    const event = new NativeEvent();
+    this.emit('close', event);
+    if (event.prevented) return;
+    this.destroyed = true;
+    this.emit('closed');
+  }
+}
+const application = Object.assign(new EventEmitter(), {
+  setName: vi.fn(),
+  requestSingleInstanceLock: () => true,
+  getPath: () => '/isolated-test-profile',
+  whenReady: () => Promise.resolve(),
+  terminated: false,
+  quit(): void {
+    const before = new NativeEvent();
+    application.emit('before-quit', before);
+    if (before.prevented) return;
+    for (const window of TestWindow.windows) window.close();
+    if (TestWindow.windows.some((window) => !window.destroyed)) return;
+    const will = new NativeEvent();
+    application.emit('will-quit', will);
+    if (!will.prevented) this.terminated = true;
+  },
+});
+vi.mock('electron', () => ({
+  app: application,
+  BrowserWindow: TestWindow,
+  nativeTheme: new EventEmitter(),
+  Menu: { buildFromTemplate: (value: unknown) => value, setApplicationMenu: vi.fn() },
+  protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
+  session: {
+    defaultSession: {
+      setPermissionRequestHandler: vi.fn(),
+      setPermissionCheckHandler: vi.fn(),
+      webRequest: { onHeadersReceived: vi.fn(), onBeforeRequest: vi.fn() },
+    },
+  },
+}));
+vi.mock('../src/desktop/mcp-client', () => ({ runMCPClient: vi.fn() }));
+vi.mock('../src/desktop/bridge', () => ({
+  Desktop: class {
+    settings = {
+      snapshot: () => ({ settings: defaultSettings('/fixtures') }),
+      load: async () => {},
+    };
+    resources = { response: vi.fn() };
+    attach = vi.fn();
+    open = vi.fn();
+    emit = vi.fn();
+    flush = native.flush;
+    flushSettings = native.flushSettings;
+    constructor(_path: string, _trusted: unknown, options: typeof native.options) {
+      native.options = options;
+    }
+    async dispose() {
+      native.bridge = false;
+      await native.dispose();
+    }
+  },
+}));
+function gate() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+beforeEach(async () => {
+  vi.resetModules();
+  vi.stubGlobal('MAIN_WINDOW_VITE_DEV_SERVER_URL', undefined);
+  vi.stubGlobal('MAIN_WINDOW_VITE_NAME', 'main_window');
+  vi.stubEnv('VIEWER_RENDER_TEST', '0');
+  vi.stubEnv('VIEWER_DATA_DIRECTORY', '');
+  TestWindow.windows = [];
+  application.removeAllListeners();
+  application.terminated = false;
+  native.bridge = true;
+  native.flush.mockReset().mockResolvedValue();
+  native.dispose.mockReset().mockResolvedValue();
+  native.flushSettings.mockReset().mockResolvedValue();
+  await import('../src/main');
+  await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(1));
+});
+afterEach(() => {
+  application.removeAllListeners();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+describe('native window and application shutdown', () => {
+  it('closes every window before disposing IPC, saves once and refuses reopening during Quit', async () => {
+    await native.options!.openSettings();
+    const save = gate();
+    const disposal = gate();
+    native.flush.mockReturnValue(save.promise);
+    native.dispose.mockReturnValue(disposal.promise);
+    application.quit();
+    application.quit();
+    expect(native.flush).toHaveBeenCalledTimes(1);
+    expect(native.bridge).toBe(true);
+    expect(TestWindow.windows.every((window) => !window.destroyed)).toBe(true);
+    save.resolve();
+    await vi.waitFor(() => expect(native.dispose).toHaveBeenCalledTimes(1));
+    expect(TestWindow.windows.every((window) => window.destroyed)).toBe(true);
+    application.emit('activate');
+    application.emit('second-instance');
+    await native.options!.openSettings();
+    expect(TestWindow.windows).toHaveLength(2);
+    application.quit();
+    expect(native.dispose).toHaveBeenCalledTimes(1);
+    disposal.resolve();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+  });
+  it('a native window close saves once and preserves services for macOS reopening', async () => {
+    const save = gate();
+    native.flush.mockReturnValue(save.promise);
+    const window = TestWindow.windows[0];
+    window.close();
+    window.close();
+    expect(native.flush).toHaveBeenCalledTimes(1);
+    expect(window.destroyed).toBe(false);
+    save.resolve();
+    await vi.waitFor(() => expect(window.destroyed).toBe(true));
+    expect(native.dispose).not.toHaveBeenCalled();
+    expect(native.bridge).toBe(true);
+    application.emit('activate');
+    await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(2));
+    expect(TestWindow.windows[1].destroyed).toBe(false);
+  });
+});

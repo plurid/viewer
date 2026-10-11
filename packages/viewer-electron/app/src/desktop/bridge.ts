@@ -166,6 +166,8 @@ export class Desktop {
   private indexConfiguration = '';
   private openPaths: string[] = [];
   private flushes = new Map<string, () => void>();
+  private flushing?: Promise<void>;
+  private disposal?: Promise<void>;
   private fileClipboard: { paths: string[]; cut: boolean; text: string } | null = null;
   constructor(
     dataPath: string,
@@ -351,7 +353,14 @@ export class Desktop {
     });
     await this.settings.flush();
   }
-  async flush(): Promise<void> {
+  flush(): Promise<void> {
+    if (this.flushing) return this.flushing;
+    this.flushing = this.flushWindows().finally(() => {
+      this.flushing = undefined;
+    });
+    return this.flushing;
+  }
+  private async flushWindows(): Promise<void> {
     await Promise.all(
       [...this.windows.values()]
         .filter((item) => item.role === 'settings')
@@ -374,14 +383,27 @@ export class Desktop {
     }
     await Promise.all([this.storage.flush(), this.settings.flush()]);
   }
-  async dispose(): Promise<void> {
+  dispose(): Promise<void> {
+    return (this.disposal ??= this.disposeServices());
+  }
+  private async disposeServices(): Promise<void> {
     this.ready = false;
-    ipcMain.removeHandler('viewer:request');
     this.search.close();
     this.resources.clear();
-    await this.actions.close();
-    await this.agents.close();
-    await Promise.all([this.watchers.close(), this.operations.close(), this.files.close()]);
+    // Cancel the read-only worker before waiting for planners that may be
+    // awaiting extraction. File mutations still drain through their journal.
+    const results = await Promise.allSettled([
+      this.files.close(),
+      this.actions.close(),
+      this.agents.close(),
+      this.watchers.close(),
+      this.operations.close(),
+    ]);
+    ipcMain.removeHandler('viewer:request');
+    const errors = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (errors.length) throw new AggregateError(errors, 'Desktop services failed to stop.');
   }
   private async invoke(method: ApiMethod, args: unknown[], senderID?: number): Promise<unknown> {
     switch (method) {
