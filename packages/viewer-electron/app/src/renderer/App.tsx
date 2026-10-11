@@ -3,11 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
 import type { FileEntry, FolderPane } from '../domain/contracts';
+import { rootOwners, selectedFiles } from './workspace/sessions';
+import { defaultShortcuts, matchesShortcut } from '../domain/shortcuts';
 import { matchingPane } from '../domain/planes';
 import { repeatedPreviews } from './workspace/recovery';
 import {
   activeWorkspace,
   addPane,
+  addSearchPane,
   addRootFolder,
   deleteWorkspace,
   dismissNotice,
@@ -17,7 +20,10 @@ import {
   needsOperations,
   newWorkspace,
   quickPreview,
+  stepQuickPreview,
   receiveJob,
+  receiveSettings,
+  receiveFileChanges,
   receiveProgress,
   reconcilePanes,
   rememberCommand,
@@ -42,6 +48,7 @@ import {
 } from './workspace/WorkspaceSurface';
 import { Icon } from './ui/Icon';
 import { Dialog, ErrorBoundary, IconButton, NameDialog } from './ui/primitives';
+import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { PreviewHost } from './previews/PreviewHost';
 import { CommandsContext, useCommands, useCommandSource } from './commands/context';
@@ -50,12 +57,15 @@ import { windowCommands } from './commands/window';
 import { CommandPalette } from './commands/CommandPalette';
 import { editable, textEditFor } from './commands/editing';
 import { Sidebar } from './ui/Sidebar';
-import { Settings } from './ui/Settings';
+
 import { ContextMenu } from './ui/ContextMenu';
 
 const basename = (path: string) => path.split(/[\\/]/).pop() || path;
 export function App() {
-  const registry = useMemo(() => new CommandRegistry(rememberCommand), []);
+  const registry = useMemo(
+    () => new CommandRegistry(rememberCommand, (id) => getState().settings.settings.shortcuts[id]),
+    [],
+  );
   return (
     <CommandsContext.Provider value={registry}>
       <AppWindow />
@@ -75,12 +85,13 @@ function AppWindow() {
   } | null>(null);
   const [shortcutDialog, setShortcutDialog] = useState<{ path: string; name: string } | null>(null);
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
-  const [settings, setSettings] = useState(false);
+
   const [palette, setPalette] = useState<'commands' | 'files' | null>(null);
   const [goTo, setGoTo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showWorkspaceUndo, setShowWorkspaceUndo] = useState(false);
   const initialOpenHandled = useRef(false);
+  const pendingOwners = useRef(new Map<string, Map<string, string>>());
   const saved = useViewer((state) => state.saved);
   const space = useViewer(activeWorkspace);
   const subscribeEngine = useCallback(
@@ -119,6 +130,7 @@ function AppWindow() {
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
   const quick = useViewer((state) => state.quickPreview);
+  const density = useViewer((state) => state.settings.settings.browsing.density);
   const jobs = useViewer((state) => state.jobs);
   const operationsOpen = useViewer((state) => state.operationsOpen);
   const showOperations = useViewer(needsOperations);
@@ -131,6 +143,20 @@ function AppWindow() {
   }, [deleted]);
   const controller = useMemo<WorkspaceController>(
     () => ({
+      rootID(id) {
+        const space = activeWorkspace();
+        return rootOwners(
+          engine.current?.tree.get() || [],
+          hostID,
+          space.roots,
+          pendingOwners.current.get(space.id) || new Map(),
+        ).get(id);
+      },
+      newSearch(query, name, root, recursive, content) {
+        if (!engine.current || !readyRef.current) return;
+        const id = addSearchPane(query, name, root, recursive, content);
+        frameWorkspace(engine, surface, [id]);
+      },
       newRootFolder(target) {
         if (!engine.current || !readyRef.current) return;
         const pane = addRootFolder(target);
@@ -140,27 +166,38 @@ function AppWindow() {
           });
       },
       open(entry: FileEntry, parentEngineID?: string, options?: { another?: boolean }) {
+        const api = engine.current;
+        if (!api || !readyRef.current) return;
+        const space = activeWorkspace();
+        const tree = api.tree.get();
+        const parent =
+          parentEngineID && flattenTree(tree).find((node) => node.planeID === parentEngineID);
+        if (parentEngineID && !parent)
+          throw new Error('The originating plane is no longer available.');
+        const pending = pendingOwners.current.get(space.id) ?? new Map<string, string>();
+        pendingOwners.current.set(space.id, pending);
+        const owners = rootOwners(tree, hostID, space.roots, pending);
+        const rootID = parent ? owners.get(hostID(parent)) : undefined;
         const existing =
           !options?.another &&
+          rootID &&
           matchingPane(
-            activeWorkspace(),
+            space,
             entry.path,
             entry.directory ? 'folder' : 'preview',
             getState().activePane,
             getState().bootstrap.platform,
+            { rootID, owners },
           );
         if (existing) {
           controller.focusPane(existing.id);
           return;
         }
-        const api = engine.current;
-        const linked =
-          !!parentEngineID &&
-          !!api &&
-          flattenTree(api.tree.get()).some((node) => node.planeID === parentEngineID);
+        const linked = !!parent;
         const pane = addPane(entry.path, entry.directory ? 'folder' : 'preview', !linked, {
           keepSeparate: options?.another,
         });
+        pending.set(pane.id, rootID ?? pane.id);
         setActivePane(pane.id);
         if (api && linked) {
           api.pubsub.publish({
@@ -200,7 +237,7 @@ function AppWindow() {
           const node =
             engine.current &&
             flattenTree(engine.current.tree.get()).find((node) => hostID(node) === current?.id);
-          controller.open(entry, node?.planeID);
+          controller.open(entry, node?.planeID, { another: target?.another });
         }
       },
       focusPane(id) {
@@ -304,7 +341,7 @@ function AppWindow() {
       path: pane?.path,
       directory: pane?.type === 'folder' ? pane.path : undefined,
       folder: pane?.type === 'folder' ? (pane as FolderPane) : undefined,
-      selection: [],
+      selection: selectedFiles(state.activePane),
       jobs: state.jobs,
       clipboard: state.clipboard,
     };
@@ -320,7 +357,9 @@ function AppWindow() {
           ready,
           tool,
           palette: setPalette,
-          settings: () => setSettings(true),
+          settings: () => {
+            void window.viewer.openSettings().catch(report);
+          },
           workspaceDialog: (kind) => setWorkspaceDialog({ kind, id: activeWorkspace().id }),
           renameShortcut: (path, name) => setShortcutDialog({ path, name }),
           switchWorkspace: switchTo,
@@ -387,7 +426,9 @@ function AppWindow() {
         });
     };
     const remove = window.viewer.onEvent((event) => {
-      if (event.type === 'job') receiveJob(event.job);
+      if (event.type === 'settings') receiveSettings(event.snapshot);
+      else if (event.type === 'file-changes') receiveFileChanges(event.changes);
+      else if (event.type === 'job') receiveJob(event.job);
       else if (event.type === 'job-progress' && !receiveProgress(event.progress)) resync();
       else if (event.type === 'open')
         for (const path of event.paths) void controller.openPath(path).catch(report);
@@ -420,7 +461,42 @@ function AppWindow() {
   }, [saved.look]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && getState().quickPreview) quickPreview(null);
+      if (
+        getState().quickPreview &&
+        !editable(event.target) &&
+        !event.isComposing &&
+        !event.repeat &&
+        [' ', 'Escape', 'ArrowLeft', 'ArrowRight'].includes(event.key)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+          stepQuickPreview(event.key === 'ArrowLeft' ? -1 : 1);
+        else quickPreview(null);
+        return;
+      }
+      if (
+        event.key === ' ' &&
+        !event.repeat &&
+        !event.isComposing &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !editable(event.target) &&
+        !(event.target as Element).closest('button, [role="button"], select, video, audio') &&
+        !document.querySelector('dialog[open], .context-menu')
+      ) {
+        const context = registry.context(getState().activePane) || windowContext();
+        if (context.selection.some((file) => !file.directory)) {
+          event.preventDefault();
+          event.stopPropagation();
+          quickPreview(
+            context.selection.filter((file) => !file.directory).map((file) => file.path),
+            { paneID: context.paneID, workspaceID: context.workspaceID },
+          );
+          return;
+        }
+      }
       if (
         event.key === 'Escape' &&
         tool &&
@@ -429,17 +505,21 @@ function AppWindow() {
         spatialTool(null);
         event.preventDefault();
       }
-      if (!(event.metaKey || event.ctrlKey) || event.isComposing) return;
-      const key = event.key.toLowerCase();
-      let id: string | undefined;
-      if (key === 'k') id = 'palette';
-      else if (key === 'n' && !event.shiftKey && !event.altKey) id = 'new-root-folder';
-      else if (key === ',') id = 'settings';
-      else if (key === '0') id = 'frame-all';
-      else if (key === 'enter') id = 'dock';
-      else if (event.altKey && key === 's') id = 'toggle-sidebar';
-      else if (!editable(event.target) && key === 'f') id = 'find-file';
-      else if (!editable(event.target) && key === 'l') id = 'go-to';
+      if (!(event.metaKey || event.ctrlKey) || event.isComposing || event.repeat) return;
+      const settings = getState().settings.settings;
+      const bindings = {
+        ...defaultShortcuts,
+        ...settings.shortcuts,
+        ...Object.fromEntries(
+          settings.recipes
+            .filter((recipe) => recipe.shortcut)
+            .map((recipe) => ['recipe.' + recipe.id, recipe.shortcut!]),
+        ),
+      };
+      const id = Object.entries(bindings).find(([, shortcut]) =>
+        matchesShortcut(shortcut, event),
+      )?.[0];
+      if (editable(event.target) && !['palette', 'settings'].includes(id || '')) return;
       if (id) {
         event.preventDefault();
         event.stopPropagation();
@@ -457,7 +537,7 @@ function AppWindow() {
   ).length;
   return (
     <WorkspaceContext.Provider value={controller}>
-      <div className="app-shell" data-look={saved.look}>
+      <div className="app-shell" data-look={saved.look} data-density={density}>
         <header className="app-titlebar">
           <div className="traffic-space" />
           <IconButton
@@ -490,6 +570,7 @@ function AppWindow() {
             }}
           />
           <span className="toolbar-spacer" />
+          <ActionHub />
           {showOperations && (
             <button
               className="operations-button"
@@ -529,7 +610,6 @@ function AppWindow() {
         {palette && (
           <CommandPalette mode={palette} onMode={setPalette} onClose={() => setPalette(null)} />
         )}
-        {settings && <Settings onClose={() => setSettings(false)} />}
         {notice && (
           <div className="notice" role="alert">
             <Icon name="warning" />
@@ -550,14 +630,31 @@ function AppWindow() {
           </div>
         )}
         {quick && (
-          <Dialog title={basename(quick)} wide onClose={() => quickPreview(null)}>
+          <Dialog
+            title={basename(quick.paths[quick.index])}
+            wide
+            onClose={() => quickPreview(null)}
+          >
             <div className="quick-preview">
-              <PreviewHost path={quick} />
+              <PreviewHost path={quick.paths[quick.index]} />
             </div>
             <footer>
+              {quick.paths.length > 1 && (
+                <>
+                  <IconButton
+                    icon="left"
+                    label="Previous file"
+                    onClick={() => stepQuickPreview(-1)}
+                  />
+                  <span>
+                    {quick.index + 1} / {quick.paths.length}
+                  </span>
+                  <IconButton icon="right" label="Next file" onClick={() => stepQuickPreview(1)} />
+                </>
+              )}
               <button
                 onClick={() => {
-                  void window.viewer.openExternal(quick).catch(report);
+                  void window.viewer.openExternal(quick.paths[quick.index]).catch(report);
                 }}
               >
                 Open in default app
@@ -565,17 +662,13 @@ function AppWindow() {
               <button
                 className="primary"
                 onClick={() => {
-                  void window.viewer
-                    .stat(quick)
-                    .then((entry) => {
-                      const node =
-                        engine.current &&
-                        flattenTree(engine.current.tree.get()).find(
-                          (node) => hostID(node) === getState().activePane,
-                        );
-                      controller.open(entry, node?.planeID);
-                      quickPreview(null);
+                  void controller
+                    .openPath(quick.paths[quick.index], {
+                      workspaceID: quick.workspaceID,
+                      paneID: quick.paneID,
+                      linked: true,
                     })
+                    .then(() => quickPreview(null))
                     .catch(report);
                 }}
               >

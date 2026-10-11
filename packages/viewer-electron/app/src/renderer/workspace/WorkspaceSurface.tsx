@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore, type RefObject } from 'react';
+import { memo, useEffect, useMemo, useState, useSyncExternalStore, type RefObject } from 'react';
 import {
   PluridApplication,
   usePluridApi,
@@ -13,6 +13,7 @@ import {
   type TreePlane,
 } from '@plurid/plurid-data';
 import { activeWorkspace, setActivePane, storageAdapter, useViewer } from '../state/store';
+import { SearchExplorer } from '../explorer/SearchExplorer';
 import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
 import { Empty } from '../ui/primitives';
@@ -20,6 +21,7 @@ import { Sidebar } from '../ui/Sidebar';
 import { PlaneHeader } from './PlaneHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
 export { frameWorkspace } from './framing';
+import { focusFiles } from './sessions';
 import { useWorkspace } from './context';
 import { looks } from './look';
 
@@ -29,14 +31,17 @@ export function flattenTree(tree: TreePlane[]): TreePlane[] {
 export function hostID(node: TreePlane): string {
   return node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id || '';
 }
-function FolderContent() {
-  const plane = usePluridPlane();
+const FolderScene = memo(function FolderScene({ id, engineID }: { id: string; engineID?: string }) {
   return (
     <div className="folder-plane">
-      <Sidebar paneID={plane.parameters.id} />
-      <FolderExplorer id={plane.parameters.id} engineID={plane.planeID} />
+      <Sidebar paneID={id} />
+      <FolderExplorer id={id} engineID={engineID} />
     </div>
   );
+});
+function FolderContent() {
+  const plane = usePluridPlane();
+  return <FolderScene id={plane.parameters.id} engineID={plane.planeID} />;
 }
 function PreviewContent() {
   const plane = usePluridPlane();
@@ -62,8 +67,13 @@ function PreviewContent() {
     </div>
   );
 }
+function SearchContent() {
+  const plane = usePluridPlane();
+  return <SearchExplorer id={plane.parameters.id} />;
+}
 const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/folders/:id', component: FolderContent },
+  { route: '/searches/:id', component: SearchContent },
   { route: '/previews/:id', component: PreviewContent },
 ];
 export function WorkspaceSurface({
@@ -99,7 +109,7 @@ export function WorkspaceSurface({
     () =>
       space.roots.map((id) => {
         const pane = space.panes.find((item) => item.id === id);
-        return `/${pane?.type === 'folder' ? 'folders' : 'previews'}/${id}`;
+        return `/${pane?.type === 'folder' ? 'folders' : pane?.type === 'search' ? 'searches' : 'previews'}/${id}`;
       }),
     [space.roots],
   );
@@ -197,8 +207,10 @@ export function WorkspaceSurface({
         const node = flattenTree(engine.current.tree.get()).find(
           (node) => node.planeID === hit.dataset.pluridMinimapPlane,
         );
-        if (node && activeWorkspace().panes.some((pane) => pane.id === hostID(node)))
+        if (node && activeWorkspace().panes.some((pane) => pane.id === hostID(node))) {
           setActivePane(hostID(node));
+          if (event.detail) focusFiles(hostID(node));
+        }
         // Native minimap navigation frames the plane. Only bind the host context here;
         // issuing a second camera command would interrupt the engine's tween.
       }}

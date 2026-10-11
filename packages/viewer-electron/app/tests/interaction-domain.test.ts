@@ -66,7 +66,7 @@ describe('spatial plane reuse', () => {
     expect(parentPath('C:\\photo.png')).toBe('C:\\');
     expect(parentPath('C:\\images\\photo.png')).toBe('C:\\images');
   });
-  it('reuses only matching type/path in this workspace, preferring the active existing duplicate', () => {
+  it('reuses only matching type/path within the originating root', () => {
     const workspace: Workspace = {
       id: 'one',
       name: 'One',
@@ -77,17 +77,43 @@ describe('spatial plane reuse', () => {
         { id: 'second', type: 'preview', path: '/fixtures/model.glb' },
       ],
     };
-    expect(matchingPane(workspace, '/fixtures/./model.glb', 'preview', 'first', 'darwin')?.id).toBe(
-      'first',
-    );
-    expect(matchingPane(workspace, '/fixtures/model.glb', 'preview', 'other', 'darwin')?.id).toBe(
-      'second',
-    );
+    const scope = {
+      rootID: 'root-one',
+      owners: new Map([
+        ['first', 'root-one'],
+        ['second', 'root-two'],
+      ]),
+    };
     expect(
-      matchingPane(workspace, '/fixtures/model.glb', 'folder', 'first', 'darwin'),
+      matchingPane(workspace, '/fixtures/./model.glb', 'preview', 'first', 'darwin', scope)?.id,
+    ).toBe('first');
+    expect(
+      matchingPane(workspace, '/fixtures/model.glb', 'preview', 'other', 'darwin', scope)?.id,
+    ).toBe('first');
+    expect(
+      matchingPane(workspace, '/fixtures/model.glb', 'folder', 'first', 'darwin', scope),
     ).toBeUndefined();
     expect(
-      matchingPane({ ...workspace, panes: [] }, '/fixtures/model.glb', 'preview', '', 'darwin'),
+      matchingPane(
+        { ...workspace, panes: [] },
+        '/fixtures/model.glb',
+        'preview',
+        '',
+        'darwin',
+        scope,
+      ),
+    ).toBeUndefined();
+    expect(
+      matchingPane(workspace, '/fixtures/model.glb', 'preview', 'first', 'darwin', {
+        ...scope,
+        rootID: 'root-two',
+      })?.id,
+    ).toBe('second');
+    expect(
+      matchingPane(workspace, '/fixtures/model.glb', 'preview', '', 'darwin', {
+        ...scope,
+        rootID: 'root-three',
+      }),
     ).toBeUndefined();
     expect(workspace.panes).toHaveLength(2);
     expect(normalizedPanePath('C:\\Files\\.\\model.glb', 'win32')).toBe('c:/files/model.glb');

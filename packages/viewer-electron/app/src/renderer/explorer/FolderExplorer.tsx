@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
 import {
   formatBytes,
@@ -17,8 +17,9 @@ import {
   updatePane,
   useViewer,
 } from '../state/store';
+import { browseSession, useBrowseField } from '../workspace/sessions';
 import { useWorkspace } from '../workspace/context';
-import { IconButton, Empty, Loading, NameDialog, Dialog } from '../ui/primitives';
+import { IconButton, Empty, Loading } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
 import { useFolder } from './useFolder';
@@ -27,39 +28,46 @@ import { ContextMenu } from '../ui/ContextMenu';
 import { useCommands, useCommandSource } from '../commands/context';
 import { folderCommands } from '../commands/folder';
 import { editable } from '../commands/editing';
-import type { CommandContext, CommandRequest } from '../commands/registry';
-import { DestinationDialog } from '../commands/DestinationDialog';
-import { FileInformation } from './FileInformation';
+import type { CommandRequest } from '../commands/registry';
+import { useFileDialogs } from './FileDialogs';
 
-export function FolderExplorer({ id, engineID }: { id: string; engineID?: string }) {
+export const FolderExplorer = memo(function FolderExplorer({
+  id,
+  engineID,
+}: {
+  id: string;
+  engineID?: string;
+}) {
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id)) as
     FolderPane | undefined;
   const workspace = useWorkspace();
   const registry = useCommands();
+  const activeID = useViewer((state) => state.activePane);
+  const recipes = useViewer((state) => state.settings.settings.recipes);
+  const foldersFirst = useViewer((state) => state.settings.settings.browsing.foldersFirst);
   const listing = useFolder(pane?.path || getState().bootstrap.home);
-  const [selection, setSelection] = useState<string[]>([]);
-  const anchor = useRef('');
-  const [query, setQuery] = useState('');
-  const [subtree, setSubtree] = useState(false);
+  const path = pane?.path || '';
+  const session = browseSession(id, path);
+  const [selection, setSelection] = useBrowseField(id, path, 'selection');
+  const anchor = {
+    get current() {
+      return session.anchor;
+    },
+    set current(value: string) {
+      session.anchor = value;
+    },
+  };
+  const [query, setQuery] = useBrowseField(id, path, 'query');
+  const [subtree, setSubtree] = useBrowseField(id, path, 'subtree');
   const input = useRef<HTMLInputElement>(null);
   const surface = useRef<HTMLDivElement>(null);
-  const selectionCache = useRef(new Map<string, FileEntry>());
+  const selectionCache = { current: session.cache };
   const columnScope = useRef<FileEntry[] | null>(null);
-  const [dialog, setDialog] = useState<{
-    kind: 'rename' | 'mkdir' | 'go-to';
-    context: CommandContext;
-  } | null>(null);
-  const [destination, setDestination] = useState<{
-    kind: 'copy' | 'move';
-    context: CommandContext;
-  } | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [pathOpen, setPathOpen] = useState(false);
-  const [trash, setTrash] = useState<CommandContext | null>(null);
-  const [info, setInfo] = useState<CommandContext | null>(null);
+  const fileDialogs = useFileDialogs();
+  const [searchOpen, setSearchOpen] = useBrowseField(id, path, 'searchOpen');
+  const [pathOpen, setPathOpen] = useBrowseField(id, path, 'pathOpen');
   const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest } | null>(null);
   const [dropping, setDropping] = useState(false);
-  const path = pane?.path || '';
   const search = useSearch(path, query, subtree, pane?.showHidden || false);
   const sources = subtree && query.trim() ? search.entries : listing.entries;
   const sourceIndex = useMemo(() => indexEntries(sources), [sources]);
@@ -78,9 +86,10 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
           ),
           sort,
           descending ?? false,
+          foldersFirst,
         )
       : [];
-  }, [sources, showHidden, sort, descending, subtree, query]);
+  }, [sources, showHidden, sort, descending, subtree, query, foldersFirst]);
   const selected = useMemo(
     () =>
       selection
@@ -89,14 +98,6 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
     [sourceIndex, selection],
   );
   const selectionSet = useMemo(() => new Set(selection), [selection]);
-  useEffect(() => {
-    setSelection([]);
-    anchor.current = '';
-    setQuery('');
-    setMenu(null);
-    selectionCache.current.clear();
-    columnScope.current = null;
-  }, [path]);
   useEffect(() => {
     if (listing.loading || listing.error) return;
     setSelection((value) => {
@@ -120,6 +121,10 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
     },
     [selection],
   );
+  useEffect(() => {
+    const content = surface.current?.querySelector('.file-scroll');
+    if (content) content.scrollTop = session.scroll;
+  }, [id, listing.loading]);
   const open = useCallback(
     (entry: FileEntry, linked = false, another = false) => {
       if (entry.directory && !linked) navigate(id, entry.path);
@@ -153,7 +158,7 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
         setSelection([entry.path]);
       }
     },
-    [entries, id],
+    [entries, id, path, setSelection],
   );
   useEffect(() => {
     if (searchOpen) input.current?.focus();
@@ -184,10 +189,7 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
           open: (entries, linked, another) => {
             for (const entry of entries) open(entry, linked, another);
           },
-          dialog: (kind, context) => setDialog({ kind, context }),
-          trash: setTrash,
-          info: setInfo,
-          destination: (kind, context) => setDestination({ kind, context }),
+          ...fileDialogs.actions,
           search: () => {
             if (searchOpen) closeSearch();
             else setSearchOpen(true);
@@ -205,8 +207,22 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
         invocation.path === live.path &&
         !!live.folder,
     },
-    [pane, selected, entries, searchOpen],
+    [pane, selected, entries, searchOpen, recipes],
   );
+  useEffect(() => {
+    if (activeID !== id) return;
+    const rootID = workspace.rootID(id);
+    if (rootID)
+      void window.viewer
+        .contextPublish({
+          workspaceID: activeWorkspace().id,
+          paneID: id,
+          rootID,
+          sources: selected.map((file) => file.path),
+          actor: 'user',
+        })
+        .catch(report);
+  }, [activeID, id, path, selected, workspace]);
   const command = (name: string) => {
     void registry.invoke(name, { paneID: id }).catch(report);
     setMenu(null);
@@ -260,6 +276,11 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
     <div
       className={`folder-explorer ${dropping ? 'drop-target' : ''}`}
       ref={surface}
+      data-file-owner={id}
+      onScrollCapture={(event) => {
+        if ((event.target as HTMLElement).classList.contains('file-scroll'))
+          session.scroll = (event.target as HTMLElement).scrollTop;
+      }}
       tabIndex={0}
       aria-label={`Folder ${path}`}
       onFocus={() => setActivePane(id)}
@@ -532,77 +553,7 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
           onClose={() => setMenu(null)}
         />
       )}
-      {dialog && (
-        <NameDialog
-          title={
-            dialog.kind === 'rename'
-              ? 'Rename file'
-              : dialog.kind === 'mkdir'
-                ? 'New folder'
-                : 'Go to folder'
-          }
-          label={dialog.kind === 'go-to' ? 'Folder path' : 'Name'}
-          maxLength={dialog.kind === 'go-to' ? 32768 : 255}
-          initial={
-            dialog.kind === 'rename'
-              ? dialog.context.selection[0]?.name
-              : dialog.kind === 'go-to'
-                ? path
-                : ''
-          }
-          action={dialog.kind === 'rename' ? 'Rename' : dialog.kind === 'mkdir' ? 'Create' : 'Go'}
-          onClose={() => setDialog(null)}
-          onSubmit={async (name) => {
-            if (dialog.kind === 'go-to') {
-              const resolved =
-                name === '~' || name.startsWith('~/')
-                  ? getState().bootstrap.home + name.slice(1)
-                  : name;
-              const entry = await window.viewer.stat(resolved);
-              if (!entry.directory) throw new Error('Choose a folder path.');
-              navigate(id, entry.path);
-            } else
-              await operate(dialog.kind === 'rename' ? 'rename' : 'mkdir', {
-                name,
-                sources: dialog.context.selection.map((entry) => entry.path),
-                destination: dialog.kind === 'mkdir' ? dialog.context.directory : undefined,
-              });
-          }}
-        />
-      )}
-      {destination && (
-        <DestinationDialog
-          kind={destination.kind}
-          context={destination.context}
-          onClose={() => setDestination(null)}
-        />
-      )}
-      {info && <FileInformation entries={[...info.selection]} onClose={() => setInfo(null)} />}
-      {trash && (
-        <Dialog title="Move to Trash?" onClose={() => setTrash(null)}>
-          <p className="dialog-copy">
-            Move{' '}
-            {trash.selection.length === 1
-              ? `“${trash.selection[0]?.name}”`
-              : `${trash.selection.length} items`}{' '}
-            to the macOS Trash?
-          </p>
-          <footer>
-            <button onClick={() => setTrash(null)}>Cancel</button>
-            <button
-              className="danger"
-              onClick={() => {
-                void operate('trash', {
-                  sources: trash.selection.map((entry) => entry.path),
-                }).catch(report);
-                setTrash(null);
-              }}
-            >
-              Move to Trash
-            </button>
-          </footer>
-        </Dialog>
-      )}
+      {fileDialogs.content}
     </div>
   );
-}
+});

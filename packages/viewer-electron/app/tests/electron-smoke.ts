@@ -8,6 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createFixtures } from './fixtures';
+import { defaultSettings } from '../src/domain/services';
+import { normalizePreferences } from '../src/domain/preferences';
 import { repeatedPreviewFixture } from './workspace-fixtures';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
 
@@ -21,6 +23,15 @@ const profile = path.join(fixture.root, 'profile');
 await mkdir(profile);
 const stateFile = path.join(profile, 'viewer-state-v1.json');
 await writeFile(stateFile, JSON.stringify(fixture.state));
+await writeFile(
+  path.join(profile, 'settings-v1.json'),
+  JSON.stringify({
+    version: 1,
+    revision: 0,
+    settings: { ...defaultSettings(fixture.files), appearance: fixture.state.look },
+    ui: normalizePreferences(fixture.state.ui),
+  }),
+);
 const captureRoot = path.resolve(appRoot, '../../..', '.impeccable/review');
 await mkdir(captureRoot, { recursive: true });
 const listener = net.createServer();
@@ -115,7 +126,75 @@ async function evaluate<T>(expression: string): Promise<T> {
     throw new Error(value.exceptionDetails.exception?.description || value.exceptionDetails.text);
   return value.result.value;
 }
-const text = () => evaluate<string>('document.body.innerText');
+let settingsMode = false;
+let settingsSocket: WebSocket | undefined;
+let settingsNext = 0;
+const settingsPending = new Map<
+  number,
+  { resolve(value: unknown): void; reject(error: Error): void }
+>();
+async function settingsCommand<T>(
+  method: string,
+  params: Record<string, unknown> = {},
+): Promise<T> {
+  if (!settingsSocket || settingsSocket.readyState !== WebSocket.OPEN) {
+    const target = await until(
+      async () =>
+        (
+          (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as {
+            url: string;
+            webSocketDebuggerUrl: string;
+          }[]
+        ).find((target) => target.url.includes('window=settings')),
+      Boolean,
+      'native Settings target',
+    );
+    settingsSocket = new WebSocket(target!.webSocketDebuggerUrl);
+    await new Promise<void>((resolve, reject) => {
+      settingsSocket!.addEventListener('open', () => resolve(), { once: true });
+      settingsSocket!.addEventListener(
+        'error',
+        () => reject(new Error('Settings debugging connection failed')),
+        { once: true },
+      );
+    });
+    settingsSocket.addEventListener('message', (event) => {
+      const reply = JSON.parse(String(event.data));
+      const pending = settingsPending.get(reply.id);
+      if (pending) {
+        settingsPending.delete(reply.id);
+        if (reply.error) pending.reject(new Error(reply.error.message));
+        else pending.resolve(reply.result);
+      }
+    });
+  }
+  return new Promise<T>((resolve, reject) => {
+    const id = ++settingsNext;
+    settingsPending.set(id, { resolve: (value) => resolve(value as T), reject });
+    settingsSocket!.send(JSON.stringify({ id, method, params }));
+  });
+}
+async function settingsEvaluate<T>(expression: string): Promise<T> {
+  const result = await settingsCommand<{ result: { value: T }; exceptionDetails?: unknown }>(
+    'Runtime.evaluate',
+    { expression, returnByValue: true, awaitPromise: true },
+  );
+  if (result.exceptionDetails)
+    throw new Error('Settings evaluation failed: ' + JSON.stringify(result.exceptionDetails));
+  return result.result.value;
+}
+async function openSettingsProbe() {
+  settingsMode = true;
+  await until(
+    () => settingsEvaluate<boolean>('!!document.querySelector(".settings-window")'),
+    Boolean,
+    'loaded native Settings',
+  );
+}
+const text = () =>
+  settingsMode
+    ? settingsEvaluate<string>('document.body.innerText')
+    : evaluate<string>('document.body.innerText');
 const fileSelector = (file: string) => `[data-file-path=${JSON.stringify(file)}]`;
 async function activateTestWindow(): Promise<void> {
   // Activate our PID: Launch Services can select a user's already-running Viewer
@@ -152,6 +231,22 @@ async function reloadPage(): Promise<void> {
   await activateTestWindow();
 }
 async function click(selector: string, count = 1): Promise<void> {
+  if (settingsMode && selector === 'dialog [aria-label="Close"]') {
+    await settingsEvaluate('window.close()');
+    await until(
+      async () =>
+        (
+          (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as { url: string }[]
+        ).some((target) => target.url.includes('window=settings')),
+      (present) => !present,
+      'flushed and closed native Settings',
+    );
+    settingsSocket?.close();
+    settingsSocket = undefined;
+    settingsMode = false;
+    await activateTestWindow();
+    return;
+  }
   const point = await evaluate<{ x: number; y: number; hit: boolean }>(
     `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) throw new Error('Missing control: ' + ${JSON.stringify(selector)}); const rect = element.getBoundingClientRect(); const x=rect.x+rect.width/2,y=rect.y+rect.height/2; return { x, y, hit:element.contains(document.elementFromPoint(x,y)) }; })()`,
   );
@@ -179,14 +274,27 @@ async function click(selector: string, count = 1): Promise<void> {
     });
   }
 }
-async function key(key: string, code: string, modifiers = 0): Promise<void> {
-  const windowsVirtualKeyCode = key === 'Enter' ? 13 : key === 'Escape' ? 27 : undefined;
+async function key(
+  key: string,
+  code: string,
+  modifiers = 0,
+  commands: string[] = [],
+): Promise<void> {
+  const windowsVirtualKeyCode =
+    key === 'Enter'
+      ? 13
+      : key === 'Escape'
+        ? 27
+        : key.length === 1
+          ? key.toUpperCase().charCodeAt(0)
+          : undefined;
   await command('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key,
     code,
     modifiers,
     windowsVirtualKeyCode,
+    commands,
   });
   await command('Input.dispatchKeyEvent', {
     type: 'keyUp',
@@ -196,24 +304,26 @@ async function key(key: string, code: string, modifiers = 0): Promise<void> {
     windowsVirtualKeyCode,
   });
 }
-async function setting(label: string): Promise<void> {
-  await evaluate(`(() => {
-    const row = Array.from(document.querySelectorAll('.settings-row')).find(row => row.textContent.trim() === ${JSON.stringify(label)});
-    const input = row?.querySelector('input');
-    if (!input) throw new Error('Missing setting ' + ${JSON.stringify(label)});
-    input.dataset.qaSetting = ${JSON.stringify(label)};
-    input.scrollIntoView({ block: 'nearest' });
-  })()`);
-  await click(`[data-qa-setting=${JSON.stringify(label)}]`);
+async function setting(label: string, wait = true): Promise<void> {
+  const revision = await settingsEvaluate<number>(
+    'window.viewer.settingsGet().then(value => value.revision)',
+  );
+  await settingsEvaluate(
+    `(() => { const row = Array.from(document.querySelectorAll('.settings-row')).find(row => row.textContent.trim() === ${JSON.stringify(label)}); const input = row?.querySelector('input'); if (!input) throw new Error('Missing setting'); input.click(); })()`,
+  );
+  if (wait)
+    await until(
+      () => evaluate<number>('window.viewer.settingsGet().then(value => value.revision)'),
+      (value) => value > revision,
+      `live setting ${label}`,
+    );
 }
 async function tab(label: string): Promise<void> {
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".settings-dialog[open]")'),
-    (present) => present,
-    'open Settings dialog',
-  );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.settings-tabs button')).find(button => button.textContent === ${JSON.stringify(label)}).click()`,
+  await openSettingsProbe();
+  const category =
+    ({ Appearance: 'Browsing', Sidebar: 'Navigation' } as Record<string, string>)[label] || label;
+  await settingsEvaluate(
+    `Array.from(document.querySelectorAll('.settings-navigation button')).find(button => button.textContent.trim() === ${JSON.stringify(category)}).click()`,
   );
 }
 /** Read the public application ref from React's test-only fiber; never expose it in production. */
@@ -352,12 +462,14 @@ async function paletteCommand(label: string): Promise<void> {
 }
 async function appearance(look: 'dark' | 'light'): Promise<void> {
   await paletteCommand('Settings');
+  await openSettingsProbe();
+  await tab('Browsing');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Appearance"]')`),
+    () => settingsEvaluate<boolean>(`!!document.querySelector('[aria-label="Appearance"]')`),
     (present) => present,
     'appearance setting',
   );
-  await evaluate(
+  await settingsEvaluate(
     `(() => { const field = document.querySelector('[aria-label="Appearance"]'); field.value=${JSON.stringify(look)}; field.dispatchEvent(new Event('change', { bubbles:true })); })()`,
   );
   await until(
@@ -369,6 +481,14 @@ async function appearance(look: 'dark' | 'light'): Promise<void> {
 }
 async function preview(file: string, expected: string): Promise<void> {
   await click(fileSelector(file));
+  await until(
+    () =>
+      evaluate<boolean>(
+        `document.querySelector(${JSON.stringify(fileSelector(file))})?.getAttribute('aria-selected') === 'true'`,
+      ),
+    Boolean,
+    `selected preview source ${path.basename(file)}`,
+  );
   await key(' ', 'Space');
   await until(text, (value) => value.includes(expected), `preview ${path.basename(file)}`);
   console.log(`Preview: ${path.basename(file)}`);
@@ -380,7 +500,8 @@ async function snapshot(name: string, clip?: Record<string, number>): Promise<st
   await evaluate(
     'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
   );
-  const value = await command<{ data: string }>('Page.captureScreenshot', {
+  const capture = settingsMode ? settingsCommand : command;
+  const value = await capture<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
     ...(clip ? { clip } : {}),
   });
@@ -413,6 +534,17 @@ async function verifyRestoredPreviews(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
   const untouched = await inventory();
+  await until(
+    () => evaluate<{ running: boolean; count: number }>('window.viewer.indexStatus()'),
+    (status) => !status.running && status.count > 10,
+    'packaged SQLite utility index',
+  );
+  assert.equal(
+    await evaluate(
+      `window.viewer.indexedQuery({ query: 'Book ext:epub', root: ${JSON.stringify(fixture.files)} }).then(result => result.entries.length)`,
+    ),
+    1,
+  );
   const restore = async (state: SavedState, count: number) => {
     await delay(800);
     await evaluate(`window.viewer.save(${JSON.stringify(state)})`);
@@ -560,10 +692,360 @@ async function verifyRestoredPreviews(): Promise<void> {
   await snapshot('desktop-native-workspace-recovered.png');
   await restore(original, original.workspaces[0].panes.length);
 }
+async function verifyServiceWorkflows(): Promise<void> {
+  await delay(800);
+  const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
+  const unchanged = await inventory();
+  const documents = path.join(fixture.files, 'Documents');
+  const book = path.join(documents, 'Book.epub');
+  const bookBytes = await readFile(book);
+  const document = await evaluate<{
+    text: string;
+    evidence: { source: string; text: string }[];
+  }>(`(async () => {
+    const source = await window.viewer.resource(${JSON.stringify(path.join(documents, 'Project brief.pdf'))});
+    try { return await window.viewer.document(source.id); } finally { await window.viewer.release(source.id); }
+  })()`);
+  assert.ok(document.text.includes('Searchable PDF text'));
+  assert.ok(
+    document.evidence.some((item) => item.source.startsWith('OCR page')),
+    'Packaged local OCR helper must execute',
+  );
+  await click(fileSelector(documents), 2);
+  await until(text, (value) => value.includes('Book.epub'), 'book fixture listing');
+  await click(fileSelector(book));
+  await click('.plane-controls [aria-label="Frame plane"]');
+  await settleCamera();
+  await key(' ', 'Space');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".quick-preview .epub-viewer")'),
+    Boolean,
+    'Space after the frame control',
+  );
+  await key('Escape', 'Escape');
+  await click(fileSelector(book));
+  await paletteCommand('Rename as book');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".action-config")'),
+    Boolean,
+    'book action configuration',
+  );
+  await click('.action-config .primary');
+  const plan = await until(
+    () => evaluate<import('../src/domain/services').ActionPlan[]>('window.viewer.actionList()'),
+    (plans) => plans.some((plan) => plan.recipeID === 'book-name' && plan.status === 'review'),
+    'local book proposal',
+  ).then((plans) =>
+    plans.find((plan) => plan.recipeID === 'book-name' && plan.status === 'review')!,
+  );
+  assert.equal(
+    path.basename(plan.rows[0].destination),
+    '2000, J. E. Rehder, Fire in antiquity, Fixture Press.epub',
+  );
+  assert.deepEqual(await inventory(), unchanged, 'Creating a proposal must not modify files');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Evidence for Book.epub"]')`),
+    Boolean,
+    'rendered proposal',
+  );
+  const destinationSelector = '[aria-label="Destination for Book.epub"]';
+  assert.equal(
+    await evaluate<string>(`document.querySelector(${JSON.stringify(destinationSelector)}).value`),
+    path.basename(plan.rows[0].destination),
+    'Review must show the complete proposed filename ahead of its directory',
+  );
+  await click(destinationSelector);
+  await evaluate(`window.viewer.textEdit('selectAll')`);
+  await until(
+    () =>
+      evaluate<boolean>(
+        `(() => { const input = document.querySelector(${JSON.stringify(destinationSelector)}); return input.selectionStart === 0 && input.selectionEnd === input.value.length; })()`,
+      ),
+    Boolean,
+    'native Select All in review input',
+  );
+  // CDP bypasses Cocoa key bindings; pass the native editing command explicitly.
+  await key('a', 'KeyA', 4, ['selectAll']);
+  const editedName = '2000, J. E. Rehder, Reviewed title, Fixture Press.epub';
+  await command('Input.insertText', { text: editedName });
+  await click('[aria-label="Edit path for Book.epub"]');
+  assert.equal(
+    await evaluate<string>(`document.querySelector(${JSON.stringify(destinationSelector)}).value`),
+    path.join(documents, editedName),
+    'Filename edits retain the intended destination directory',
+  );
+  await click(destinationSelector);
+  await key('a', 'KeyA', 4, ['selectAll']);
+  await command('Input.insertText', { text: plan.rows[0].destination });
+  await click('[aria-label="Edit filename for Book.epub"]');
+  await click('[aria-label="Evidence for Book.epub"]');
+  await snapshot('action-review-native.png');
+  await click('.task-dialog footer .primary');
+  await until(
+    () =>
+      evaluate<import('../src/domain/services').ActionPlan>(
+        `window.viewer.actionGet(${JSON.stringify(plan.id)})`,
+      ),
+    (plan) => plan.status === 'completed',
+    'apply reviewed book rename',
+  );
+  assert.deepEqual(await readFile(plan.rows[0].destination), bookBytes);
+  await click('.task-dialog footer button');
+  await until(
+    () =>
+      evaluate<import('../src/domain/services').ActionPlan>(
+        `window.viewer.actionGet(${JSON.stringify(plan.id)})`,
+      ),
+    (plan) => !plan.undoable,
+    'undo reviewed rename',
+  );
+  assert.deepEqual(await inventory(), unchanged);
+  await closePreview();
+  await paletteCommand('Parent folder');
+  await evaluate(
+    `(async () => { const snapshot = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{ path: 'settings.savedSearches', value: [{id:'qa-publications', name:'Publication files', query:'ext:pdf,epub', root:${JSON.stringify(fixture.files)}, recursive:true}] }], snapshot.revision); })()`,
+  );
+  await paletteCommand('Publication files');
+  await restoredEngine(2);
+  await settleCamera();
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".search-explorer [data-file-path]")'),
+    Boolean,
+    'indexed search root',
+  );
+  await snapshot('search-native.png');
+  await click(`.search-explorer ${fileSelector(book)}`);
+  await key(' ', 'Space');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".quick-preview .epub-viewer")'),
+    Boolean,
+    'Quick Preview from virtual search',
+  );
+  await key('Escape', 'Escape');
+  await contextMenu(`.search-explorer ${fileSelector(book)}`);
+  await command('Input.insertText', { text: 'Get info' });
+  await key('Enter', 'Enter');
+  await until(
+    text,
+    (value) => value.includes('File information'),
+    'shared search result file information',
+  );
+  await closePreview();
+  await evaluate(
+    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.search.contentRoots',value:[${JSON.stringify(documents)}]}],current.revision); })()`,
+  );
+  await until(
+    () =>
+      evaluate<import('../src/domain/services').IndexedResult>(
+        `window.viewer.indexedQuery({query:'local chapter fixture',content:true,root:${JSON.stringify(documents)}})`,
+      ),
+    (result) => result.entries.some((file) => file.path === book),
+    'explicitly granted local document-text indexing',
+  );
+  await evaluate(
+    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.search.contentRoots',value:[]},{path:'settings.search.paused',value:true}],current.revision); })()`,
+  );
+  await until(
+    () =>
+      evaluate<import('../src/domain/services').IndexedResult>(
+        `window.viewer.indexedQuery({query:'local chapter fixture',content:true,root:${JSON.stringify(documents)}})`,
+      ),
+    (result) => !result.entries.length,
+    'revoking text permission clears stored content while paused',
+  );
+  await evaluate(
+    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.search.paused',value:false}],current.revision); })()`,
+  );
+  await paletteCommand('Settings');
+  for (const category of ['Browsing', 'Search', 'Actions', 'Models', 'Agents', 'Shortcuts']) {
+    await tab(category);
+    await snapshot('settings-' + category.toLowerCase() + '-native.png');
+  }
+  await evaluate(
+    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(documents)}]}],current.revision); })()`,
+  );
+  const configuration = JSON.parse(
+    await settingsEvaluate<string>('window.viewer.agentToken()'),
+  ) as {
+    mcpServers: { viewer: { env: Record<string, string> } };
+  };
+  const agent = spawn(binary, ['--mcp'], {
+    env: { ...process.env, ...configuration.mcpServers.viewer.env },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  let agentOutput = '';
+  agent.stdout.on('data', (chunk) => {
+    agentOutput += String(chunk);
+  });
+  const exited = new Promise<number | null>((resolve, reject) => {
+    agent.once('error', reject);
+    agent.once('exit', resolve);
+  });
+  try {
+    agent.stdin.end(
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-11-25',
+            capabilities: {},
+            clientInfo: { name: 'fixture', version: '1' },
+          },
+        },
+        { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+        {
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: { name: 'read_metadata', arguments: { path: book } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: {
+            name: 'read_metadata',
+            arguments: { path: path.join(fixture.files, 'README.md') },
+          },
+        },
+      ]
+        .map((request) => JSON.stringify(request))
+        .join('\n') + '\n',
+    );
+    const code = await Promise.race([
+      exited,
+      delay(15000).then(() => {
+        throw new Error('Packaged MCP client timed out');
+      }),
+    ]);
+    assert.equal(code, 0);
+    const replies = agentOutput
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    assert.equal(replies.find((reply) => reply.id === 1)?.result.serverInfo.name, 'viewer');
+    const tools = replies
+      .find((reply) => reply.id === 2)
+      ?.result.tools.map((tool: { name: string }) => tool.name);
+    assert.ok(tools.includes('run_action'));
+    assert.ok(!tools.some((name: string) => /apply|trash|delete/.test(name)));
+    assert.equal(
+      JSON.parse(replies.find((reply) => reply.id === 3).result.content[0].text).path,
+      book,
+    );
+    assert.ok(
+      replies.find((reply) => reply.id === 4)?.error.message.includes('authorized folders'),
+    );
+  } finally {
+    if (agent.exitCode === null && agent.signalCode === null) agent.kill('SIGKILL');
+    await evaluate(
+      `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.agents.enabled',value:false},{path:'settings.agents.roots',value:[]}],current.revision); })()`,
+    );
+  }
+  await click('dialog [aria-label="Close"]');
+  await delay(800);
+  await assert.rejects(readFile(path.join(profile, 'credentials-v1.json')), { code: 'ENOENT' });
+  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await reloadPage();
+  await restoredEngine(1);
+  await settleCamera();
+  assert.deepEqual(await inventory(), unchanged);
+  console.log(
+    'Services: packaged PDF extraction and OCR, Space after Frame, book proposal/review/apply/Undo, indexed virtual search, shared result commands and modeless Settings.',
+  );
+}
+
+async function verifyPreviewOwnership(): Promise<void> {
+  await delay(800);
+  const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
+  const before = await inventory();
+  const folderPath = path.join(fixture.files, 'Images');
+  const image = path.join(folderPath, 'Color.png');
+  const base = original.workspaces[0].panes.find((pane) => pane.type === 'folder')!;
+  const seeded = structuredClone(original);
+  seeded.workspaces[0] = {
+    ...seeded.workspaces[0],
+    roots: ['qa-root-one', 'qa-root-two'],
+    activePane: 'qa-root-one',
+    arrangement: {},
+    panes: ['qa-root-one', 'qa-root-two'].map((id) => ({
+      ...base,
+      id,
+      path: folderPath,
+      history: [folderPath],
+      historyIndex: 0,
+    })),
+  };
+  await evaluate(`window.viewer.save(${JSON.stringify(seeded)})`);
+  await reloadPage();
+  await restoredEngine(2);
+  const face = async (id: string) => {
+    await evaluate(
+      `(() => { const info = window.__qaEngine.inspect().planes.find(plane=>plane.route.endsWith('/'+${JSON.stringify(id)})); window.__qaEngine.tree.open(info.planeID); window.__qaEngine.camera.frame({planeID:info.planeID},{animate:false}); })()`,
+    );
+    await settleCamera();
+    await until(
+      () => evaluate<boolean>(`!!document.querySelector('[data-viewer-plane="${id}"]')`),
+      Boolean,
+      'root available after culling',
+    );
+    await evaluate(
+      `document.querySelector('[data-viewer-plane="${id}"]').closest('[data-plurid-plane]').dataset.qaOwner=${JSON.stringify(id)}`,
+    );
+  };
+  const readTree = () =>
+    evaluate<{ id: string; children: string[] }[]>(
+      `window.__qaEngine.tree.get().map(plane=>({id:plane.routeDivisions.plane.parameters.id||plane.routeDivisions.path.parameters.id,children:(plane.children||[]).map(child=>child.routeDivisions.plane.parameters.id||child.routeDivisions.path.parameters.id)}))`,
+    );
+  for (const id of ['qa-root-one', 'qa-root-two']) {
+    await face(id);
+    await click(`[data-qa-owner="${id}"] ${fileSelector(image)}`, 2);
+    await until(
+      readTree,
+      (tree) => tree.find((root) => root.id === id)?.children.length === 1,
+      `${id} owns its preview`,
+    );
+    await delay(1200);
+    await settleCamera();
+  }
+  const owned = await readTree();
+  assert.notEqual(owned[0].children[0], owned[1].children[0]);
+  await face('qa-root-two');
+  await click(`[data-qa-owner="qa-root-two"] ${fileSelector(image)}`, 2);
+  await delay(650);
+  assert.deepEqual(await readTree(), owned, 'reopening a file stays inside its own root');
+  await delay(800);
+  const identities = await enginePlaneIDs();
+  await reloadPage();
+  await restoredEngine(4);
+  assert.equal(await enginePlaneIDs(), identities);
+  assert.deepEqual(await readTree(), owned, 'root ownership survives saved-layout reopening');
+  assert.deepEqual(await inventory(), before);
+  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await reloadPage();
+  await restoredEngine(1);
+  await settleCamera();
+  console.log(
+    'Preview ownership: independent same-file children in two roots, same-root reuse and exact restoration without duplicates.',
+  );
+}
 async function verifyRootPlanes(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
   const untouched = await inventory();
+  await until(
+    () => evaluate<{ running: boolean; count: number }>('window.viewer.indexStatus()'),
+    (status) => !status.running && status.count > 10,
+    'packaged SQLite utility index',
+  );
+  assert.equal(
+    await evaluate(
+      `window.viewer.indexedQuery({ query: 'Book ext:epub', root: ${JSON.stringify(fixture.files)} }).then(result => result.entries.length)`,
+    ),
+    1,
+  );
   const jobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
   const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
   const roots = async (count: number) => {
@@ -954,7 +1436,20 @@ try {
   );
   await snapshot('desktop-native-initial.png');
   const untouched = await inventory();
+  await until(
+    () => evaluate<{ running: boolean; count: number }>('window.viewer.indexStatus()'),
+    (status) => !status.running && status.count > 10,
+    'packaged SQLite utility index',
+  );
+  assert.equal(
+    await evaluate(
+      `window.viewer.indexedQuery({ query: 'Book ext:epub', root: ${JSON.stringify(fixture.files)} }).then(result => result.entries.length)`,
+    ),
+    1,
+  );
   await captureEngine();
+  await verifyServiceWorkflows();
+  await verifyPreviewOwnership();
   await verifyRestoredPreviews();
   await verifyRootPlanes();
   await click('[aria-label="Show window navigation"]');
@@ -1042,25 +1537,16 @@ try {
   await command('Input.insertText', { text: 'Settings' });
   await snapshot('palette-native.png');
   await key('Enter', 'Enter');
-  await until(
-    text,
-    (value) => value.includes('Settings') && value.includes('Appearance'),
-    'Settings from keyboard',
-  );
+  await openSettingsProbe();
+  await tab('Browsing');
+  await until(text, (value) => value.includes('Appearance'), 'Settings from keyboard');
   const dimensions = [];
   for (const category of ['Appearance', 'Sidebar', 'Space']) {
     await tab(category);
-    dimensions.push(
-      await evaluate(
-        '(() => { const r = document.querySelector(".settings-dialog").getBoundingClientRect(); return [r.width, r.height]; })()',
-      ),
-    );
+    dimensions.push(await settingsEvaluate('([innerWidth, innerHeight])'));
   }
-  assert.deepEqual(dimensions, [
-    [500, 540],
-    [500, 540],
-    [500, 540],
-  ]);
+  assert.deepEqual(dimensions, [dimensions[0], dimensions[0], dimensions[0]]);
+  assert.ok((dimensions[0] as number[])[0] >= 760);
   await snapshot('settings-native.png');
   for (const [label, selector] of [
     ['Show bottom toolbar', '[data-plurid-entity="PluridToolbar"]'],
@@ -1076,7 +1562,10 @@ try {
   }
   await click('dialog [aria-label="Close"]');
   await until(
-    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
+    async () =>
+      JSON.parse(await readFile(path.join(profile, 'settings-v1.json'), 'utf8')) as {
+        ui: NonNullable<SavedState['ui']>;
+      },
     (state) =>
       state.ui?.version === 3 &&
       !state.ui.space.toolbar &&
@@ -1105,7 +1594,7 @@ try {
   await setting('Show resize handles');
   assert.equal(await evaluate(`!!document.querySelector('[aria-label^="resize plane"]')`), false);
   await setting('Show resize handles');
-  await setting('Drag planes by their title');
+  await setting('Drag planes by their title', false);
   await click('dialog [aria-label="Close"]');
   const stationary = await evaluate<string>(
     'JSON.stringify(window.__qaEngine.tree.get()[0].location)',
@@ -1298,7 +1787,7 @@ try {
   );
   await command('Input.insertText', { text: 'Project brief.pdf' });
   await evaluate(
-    'Array.from(document.querySelectorAll("dialog button")).find(button=>button.textContent === "Include subfolders").click()',
+    `(() => { const input = document.querySelector('[aria-label="Search scope"]'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(input,'subfolders'); input.dispatchEvent(new Event('change',{bubbles:true})); })()`,
   );
   await until(
     () =>
@@ -1338,6 +1827,10 @@ try {
   await click(fileSelector(path.join(fixture.files, 'Documents')), 2);
   await until(text, (value) => value.includes('Project brief.pdf'), 'documents');
   await preview(path.join(fixture.files, 'Documents', 'Project notes.md'), 'A wider view');
+  await closePreview();
+  await preview(path.join(fixture.files, 'Documents', 'Book.epub'), 'A local chapter fixture.');
+  assert.equal(await evaluate('window.__epubUnsafe === undefined'), true);
+  await snapshot('epub-native.png');
   await closePreview();
   await preview(path.join(fixture.files, 'Documents', 'Project brief.pdf'), 'Searchable PDF text');
   await click('[aria-label="Search PDF"]');

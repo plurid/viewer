@@ -29,6 +29,22 @@ function pdf(): Buffer {
     .join('')}trailer\n<< /Size ${bodies.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return Buffer.from(document);
 }
+export function epubFixture(): Buffer {
+  return Buffer.from(
+    zipSync({
+      mimetype: strToU8('application/epub+zip'),
+      'META-INF/container.xml': strToU8(
+        '<container><rootfiles><rootfile full-path="Book/package.opf"/></rootfiles></container>',
+      ),
+      'Book/package.opf': strToU8(
+        '<package><metadata><dc:title>Fire in antiquity</dc:title><dc:creator>John E. Rehder</dc:creator><dc:publisher>Fixture Press</dc:publisher><dc:date>2000</dc:date></metadata><manifest><item id="first" href="first.xhtml"/></manifest><spine><itemref idref="first"/></spine></package>',
+      ),
+      'Book/first.xhtml': strToU8(
+        '<html><body><h1>Fire in antiquity</h1><p>A local chapter fixture.</p><script>window.__epubUnsafe = true</script></body></html>',
+      ),
+    }),
+  );
+}
 function tar(): Buffer {
   const data = Buffer.from('# Archive note\n\nAn entry preview without extraction.\n');
   const header = Buffer.alloc(512);
@@ -124,6 +140,7 @@ export async function createFixtures(): Promise<{
     '# A wider view\n\nViewer keeps folders and previews together in one workspace.\n\n## This week\n\n- Compare the model variants\n- Organize the reference files\n- Share the final archive\n\n```typescript\nconst workspace = { name: "Studio", previews: true };\n```\n',
   );
   await writeFile(path.join(files, 'Documents', 'Project brief.pdf'), pdf());
+  await writeFile(path.join(files, 'Documents', 'Book.epub'), epubFixture());
   await writeFile(
     path.join(files, 'Data', 'Materials.json'),
     JSON.stringify(

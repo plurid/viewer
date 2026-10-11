@@ -1,3 +1,4 @@
+import { actionCommands } from '../actions/commands';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath } from '../../domain/planes';
 export { parentPath } from '../../domain/planes';
@@ -27,7 +28,8 @@ export interface FolderActions {
 export function folderCommands(actions: FolderActions): CommandDefinition[] {
   const folder = (context: CommandContext) =>
     !!context.folder && ['window', 'folder', 'files'].includes(context.scope);
-  const selected = (context: CommandContext) => folder(context) && context.selection.length > 0;
+  const selected = (context: CommandContext) =>
+    ['window', 'files', 'folder'].includes(context.scope) && context.selection.length > 0;
   const paths = (context: CommandContext) => context.selection.map((entry) => entry.path);
   const commands: CommandDefinition[] = [
     {
@@ -59,9 +61,12 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       aliases: ['qp', 'preview'],
       shortcut: 'Space',
       primary: true,
-      when: (context) =>
-        selected(context) && context.selection.length === 1 && !context.selection[0].directory,
-      run: (context) => quickPreview(context.selection[0].path),
+      when: (context) => selected(context) && context.selection.some((file) => !file.directory),
+      run: (context) =>
+        quickPreview(
+          context.selection.filter((file) => !file.directory).map((file) => file.path),
+          context,
+        ),
     },
     {
       id: 'another-plane',
@@ -300,5 +305,5 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       when: folder,
       run: (context) => updatePane(context.paneID!, { mode }),
     });
-  return commands;
+  return [...commands, ...actionCommands()];
 }

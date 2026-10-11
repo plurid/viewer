@@ -10,9 +10,10 @@ import {
 } from './registry';
 import { parentPath } from './folder';
 import { activeWorkspace, getState, report, useViewer } from '../state/store';
-import { Dialog, IconButton } from '../ui/primitives';
+import { Dialog, IconButton, NameDialog } from '../ui/primitives';
 import { useFolder } from '../explorer/useFolder';
 import { useSearch } from '../explorer/useSearch';
+import { useIndexedSearch } from '../explorer/useIndexedSearch';
 import { useWorkspace } from '../workspace/context';
 
 export function CommandPalette({
@@ -115,24 +116,49 @@ function FileFinder({
   const workspace = useWorkspace();
   useCommandRevision();
   const [query, setQuery] = useState('');
-  const [subtree, setSubtree] = useState(false);
+  const [scope, setScope] = useState<'folder' | 'subfolders' | 'all'>('folder');
+  const subtree = scope === 'subfolders';
+  const [saving, setSaving] = useState(false);
+  const [content, setContent] = useState(false);
+  const indexedMode = scope === 'all' || content;
+  const contentRoots = useViewer((state) => state.settings.settings.search.contentRoots);
+  const indexed = useIndexedSearch(
+    query,
+    scope === 'all' ? undefined : directory,
+    indexedMode,
+    context.folder?.showHidden || false,
+    0,
+    content,
+    scope !== 'folder',
+  );
   const listing = useFolder(directory);
   const search = useSearch(
     directory,
     query.slice(0, 300),
-    subtree,
+    subtree && !content,
     context.folder?.showHidden || false,
   );
   const sourceID = useMemo(() => `finder:${crypto.randomUUID()}`, []);
   const matches = useMemo(
     () =>
-      rankFiles(
-        (subtree && query.trim() ? search.entries : listing.entries).filter(
-          (entry) => context.folder?.showHidden || !entry.hidden,
-        ),
-        query,
-      ),
-    [listing.entries, search.entries, subtree, query, context.folder?.showHidden],
+      indexedMode
+        ? indexed.result?.entries || []
+        : subtree && query.trim()
+          ? search.entries
+          : rankFiles(
+              listing.entries.filter((entry) => context.folder?.showHidden || !entry.hidden),
+              query,
+            ),
+    [
+      listing.entries,
+      search.entries,
+      indexed.result,
+      scope,
+      indexedMode,
+      subtree,
+      query,
+      context.folder?.showHidden,
+    ],
   );
   const fileCommands: CommandDefinition[] = matches.map((entry) => ({
     id: `find-result:${entry.path}`,
@@ -176,8 +202,12 @@ function FileFinder({
         onSelect={select}
         onClose={onClose}
         label="Find file by name"
-        empty={listing.loading ? 'Reading folder…' : 'No matching files'}
-        placeholder="Find by filename…"
+        empty={
+          (indexedMode ? indexed.running : subtree ? search.running : listing.loading)
+            ? 'Searching…'
+            : 'No matching files'
+        }
+        placeholder={content ? 'Find in indexed document text…' : 'Find by filename…'}
         leading={<IconButton icon="left" label="Back to commands" onClick={onCommands} />}
       />
       <div className="palette-context">
@@ -185,15 +215,93 @@ function FileFinder({
           {context.selection.length ? `${context.selection.length} selected · ` : ''}
           {directory}
         </span>
-        {
-          <button aria-pressed={subtree} onClick={() => setSubtree(!subtree)}>
-            Include subfolders
-          </button>
-        }
+        <select
+          aria-label="Search scope"
+          value={scope}
+          onChange={(event) => setScope(event.target.value as typeof scope)}
+        >
+          <option value="folder">This folder</option>
+          <option value="subfolders">Subfolders</option>
+          <option value="all">Indexed locations</option>
+        </select>
+        <label className="search-content-option">
+          <input
+            type="checkbox"
+            checked={content}
+            onChange={(event) => setContent(event.target.checked)}
+          />
+          Document text
+        </label>
+        <button
+          disabled={!query.trim()}
+          onClick={() => {
+            workspace.newSearch(
+              query,
+              query,
+              scope === 'all' ? undefined : directory,
+              scope !== 'folder',
+              content,
+            );
+            onClose();
+          }}
+        >
+          Open results
+        </button>
+        <button disabled={!query.trim()} onClick={() => setSaving(true)}>
+          Save search…
+        </button>
         {search.running && (
           <IconButton icon="pause" label="Cancel search" onClick={search.cancel} />
         )}
       </div>
+      {content && !contentRoots.length && (
+        <p className="inline-warning">
+          Document text indexing is off. Enable it for a location in Settings → Search.
+        </p>
+      )}
+      {content && indexed.result?.indexed === false && (
+        <p className="inline-warning">This folder is outside the indexed locations.</p>
+      )}
+      {(indexed.result?.status.running || search.running) && (
+        <p className="inline-warning">
+          Indexing or search in progress · results may be incomplete.
+        </p>
+      )}
+      {indexed.error && indexedMode && (
+        <p className="inline-warning" role="alert">
+          {indexed.error}
+        </p>
+      )}
+      {saving && (
+        <NameDialog
+          title="Save search"
+          action="Save"
+          initial={query}
+          onClose={() => setSaving(false)}
+          onSubmit={async (name) => {
+            const state = getState();
+            await window.viewer.settingsPatch(
+              [
+                {
+                  path: 'settings.savedSearches',
+                  value: [
+                    ...state.settings.settings.savedSearches,
+                    {
+                      id: crypto.randomUUID(),
+                      name,
+                      query,
+                      root: scope === 'all' ? undefined : directory,
+                      recursive: scope !== 'folder',
+                      content,
+                    },
+                  ],
+                },
+              ],
+              state.settings.revision,
+            );
+          }}
+        />
+      )}
       {listing.error && (
         <p className="inline-warning" role="alert">
           {listing.error}

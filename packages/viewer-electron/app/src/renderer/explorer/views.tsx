@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent, type DragEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry } from '../../domain/contracts';
+import { getState, useViewer } from '../state/store';
 import { fileFamily, formatBytes, sortEntries } from '../../domain/files';
 import { Icon, type IconName } from '../ui/Icon';
 import { PreviewHost } from '../previews/PreviewHost';
@@ -39,7 +40,7 @@ export const FileRow = memo(function FileRow({
 }: {
   entry: FileEntry;
   selected: boolean;
-  props: FileViewProps;
+  props: Pick<FileViewProps, 'select' | 'open' | 'context' | 'drag'>;
   compact?: boolean;
 }) {
   return (
@@ -79,12 +80,27 @@ export const FileRow = memo(function FileRow({
     </div>
   );
 });
+function useRowActions(props: FileViewProps) {
+  const current = useRef(props);
+  current.current = props;
+  return useMemo(
+    () => ({
+      select: (...args: Parameters<FileViewProps['select']>) => current.current.select(...args),
+      open: (...args: Parameters<FileViewProps['open']>) => current.current.open(...args),
+      context: (...args: Parameters<FileViewProps['context']>) => current.current.context(...args),
+      drag: (...args: Parameters<FileViewProps['drag']>) => current.current.drag(...args),
+    }),
+    [],
+  );
+}
 export function ListView(props: FileViewProps) {
+  const actions = useRowActions(props);
+  const compact = useViewer((state) => state.settings.settings.browsing.density === 'compact');
   const scroll = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: props.entries.length,
     getScrollElement: () => scroll.current,
-    estimateSize: () => 36,
+    estimateSize: () => (compact ? 30 : 36),
     overscan: 12,
   });
   useEffect(() => {
@@ -108,7 +124,7 @@ export function ListView(props: FileViewProps) {
             <FileRow
               entry={props.entries[item.index]}
               selected={props.selectionSet.has(props.entries[item.index].path)}
-              props={props}
+              props={actions}
             />
           </div>
         ))}
@@ -127,19 +143,17 @@ function Thumbnail({ entry }: { entry: FileEntry }) {
       entry.size > 30 * 1024 * 1024
     )
       return;
-    let live = true,
-      id = '';
+    let live = true;
     void window.viewer
-      .resource(entry.path)
-      .then((resource) => {
-        id = resource.id;
-        if (live) setURL(resource.url);
-        else void window.viewer.release(id);
+      .thumbnail(entry.path, getState().settings.settings.previews.thumbnailSize)
+      .then((url) => {
+        if (live) setURL(url);
       })
-      .catch(() => setError(true));
+      .catch(() => {
+        if (live) setError(true);
+      });
     return () => {
       live = false;
-      if (id) void window.viewer.release(id);
     };
   }, [entry.path, entry.modified, entry.extension, entry.size]);
   return url && !error ? (
@@ -263,11 +277,13 @@ function Column({
   );
 }
 function ListViewCompact({ props }: { props: FileViewProps }) {
+  const actions = useRowActions(props);
+  const compact = useViewer((state) => state.settings.settings.browsing.density === 'compact');
   const scroll = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: props.entries.length,
     getScrollElement: () => scroll.current,
-    estimateSize: () => 36,
+    estimateSize: () => (compact ? 30 : 36),
     overscan: 8,
   });
   useEffect(() => {
@@ -283,7 +299,7 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
               compact
               entry={props.entries[item.index]}
               selected={props.selectionSet.has(props.entries[item.index].path)}
-              props={props}
+              props={actions}
             />
           </div>
         ))}

@@ -6,6 +6,7 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    extraResource: process.platform === 'darwin' ? ['assets/viewer-ocr'] : [],
     appBundleId: 'com.plurid.viewer',
     appCategoryType: 'public.app-category.utilities',
     name: 'Viewer',
@@ -25,6 +26,7 @@ const config: ForgeConfig = {
     new VitePlugin({
       build: [
         { entry: 'src/main.ts', config: 'vite.main.config.ts', target: 'main' },
+        { entry: 'src/desktop/worker.ts', config: 'vite.services.config.ts', target: 'main' },
         { entry: 'src/preload.ts', config: 'vite.preload.config.ts', target: 'preload' },
       ],
       renderer: [{ name: 'main_window', config: 'vite.renderer.config.ts' }],

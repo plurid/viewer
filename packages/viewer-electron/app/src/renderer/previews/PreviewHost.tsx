@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { memo, lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
@@ -6,6 +6,7 @@ import { activeWorkspace, getState, report, useViewer } from '../state/store';
 import { useCommands } from '../commands/context';
 import { usePreviewControlsSlot } from './controls';
 import type { PreviewContext, PreviewModule } from './contracts';
+import { previewState } from './state';
 import { choosePreview } from './registry';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
@@ -18,12 +19,14 @@ function componentFor(module: PreviewModule) {
   return component;
 }
 const services: PreviewContext['services'] = {
+  thumbnail: (file, size) => window.viewer.thumbnail(file, size),
+  document: (id) => window.viewer.document(id),
   read: (id, limit) => window.viewer.read(id, limit),
   archive: (id) => window.viewer.archive(id),
   archiveEntry: (id, name) => window.viewer.archiveEntry(id, name),
   release: (id) => window.viewer.release(id),
 };
-export function PreviewHost({
+export const PreviewHost = memo(function PreviewHost({
   path,
   active = true,
   interactive = true,
@@ -44,6 +47,11 @@ export function PreviewHost({
   useEffect(() => {
     if (active) setActivated(true);
   }, [active]);
+  const viewState = useMemo(
+    () => previewState(paneID || path || supplied?.id || 'temporary'),
+    [paneID, path, supplied?.id],
+  );
+  const limits = useViewer((state) => state.settings.settings.previews);
   const look = useViewer((state) => state.saved.look);
   const abort = useMemo(() => new AbortController(), [path, supplied?.id]);
   const commands = useMemo<PreviewContext['commands']>(
@@ -139,6 +147,8 @@ export function PreviewHost({
               services={services}
               look={look}
               commands={commands}
+              state={viewState}
+              limits={limits}
             />
           </Suspense>
         </ErrorBoundary>
@@ -160,4 +170,4 @@ export function PreviewHost({
       </footer>
     </div>
   );
-}
+});

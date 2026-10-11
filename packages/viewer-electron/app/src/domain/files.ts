@@ -39,9 +39,14 @@ export function reconcileSelection(
   }
   return [...new Set(next)];
 }
-export function sortEntries(entries: FileEntry[], key: SortKey, descending: boolean): FileEntry[] {
+export function sortEntries(
+  entries: FileEntry[],
+  key: SortKey,
+  descending: boolean,
+  foldersFirst = true,
+): FileEntry[] {
   return [...entries].sort((a, b) => {
-    if (a.directory !== b.directory) return a.directory ? -1 : 1;
+    if (foldersFirst && a.directory !== b.directory) return a.directory ? -1 : 1;
     const value =
       key === 'name'
         ? collator.compare(a.name, b.name)

@@ -1,0 +1,58 @@
+import { useEffect, useState } from 'react';
+import type { IndexedResult } from '../../domain/services';
+/** Generation ownership drops obsolete replies; a query never copies the full index. */
+export function useIndexedSearch(
+  query: string,
+  root: string | undefined,
+  enabled: boolean,
+  showHidden = false,
+  offset = 0,
+  content = false,
+  recursive = true,
+) {
+  const [generation, setGeneration] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let last = 0;
+    return window.viewer.onEvent((event) => {
+      if (event.type === 'index' && (!event.status.running || Date.now() - last > 2000)) {
+        last = Date.now();
+        setGeneration((value) => value + 1);
+      }
+    });
+  }, [enabled]);
+  const [result, setResult] = useState<IndexedResult>();
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!enabled) {
+      setResult(undefined);
+      setRunning(false);
+      return;
+    }
+    let live = true;
+    setRunning(true);
+    setError('');
+    const timer = setTimeout(() => {
+      void window.viewer
+        .indexedQuery({ query: query.slice(0, 300), root, showHidden, offset, content, recursive })
+        .then((value) => {
+          if (live) {
+            setResult(value);
+            setRunning(false);
+          }
+        })
+        .catch((error) => {
+          if (live) {
+            setError(error.message);
+            setRunning(false);
+          }
+        });
+    }, 150);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [query, root, enabled, showHidden, offset, content, recursive, generation]);
+  return { result, running, error };
+}

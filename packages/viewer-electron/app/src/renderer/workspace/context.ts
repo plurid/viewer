@@ -1,11 +1,19 @@
 import { createContext, useContext } from 'react';
 import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 export interface WorkspaceController {
+  rootID(paneID: string): string | undefined;
+  newSearch(
+    query: string,
+    name: string,
+    root?: string,
+    recursive?: boolean,
+    content?: boolean,
+  ): void;
   newRootFolder(target?: NewRootFolderTarget): void;
   open(entry: FileEntry, parentEngineID?: string, options?: { another?: boolean }): void;
   openPath(
     path: string,
-    target?: { paneID?: string; workspaceID?: string; linked?: boolean },
+    target?: { paneID?: string; workspaceID?: string; linked?: boolean; another?: boolean },
   ): Promise<void>;
   focusPane(hostID: string): void;
   frameAll(): void;

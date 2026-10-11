@@ -7,6 +7,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 
@@ -45,7 +46,7 @@ export default function ModelPreview(context: PreviewContext) {
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState<string[]>([]);
   const [info, setInfo] = useState('');
-  const [wire, setWire] = useState(false);
+  const [wire, setWire] = usePreviewState(context, 'model.wire', false);
   const [animations, setAnimations] = useState<string[]>([]);
   const [animation, setAnimation] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -68,8 +69,8 @@ export default function ModelPreview(context: PreviewContext) {
     setLoading(true);
     setError('');
     setWarnings([]);
-    if (resource.entry.size > 256 * 1024 * 1024) {
-      setError('Models larger than 256 MB need a streaming model adapter.');
+    if (resource.entry.size > (context.limits?.maxModelMB ?? 256) * 1024 * 1024) {
+      setError('This model exceeds the file limit in Settings.');
       setLoading(false);
       return;
     }

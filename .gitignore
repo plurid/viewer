@@ -6,3 +6,5 @@ coverage/
 .impeccable/review/
 .impeccable/config.local.json
 .DS_Store
+
+packages/viewer-electron/app/assets/viewer-ocr

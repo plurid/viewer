@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
+import { useIndexedSearch } from './useIndexedSearch';
 import { report } from '../state/store';
+const emptyEntries: FileEntry[] = [];
 
 /** Search lifetime belongs to a folder plane, independently of its view mode. */
 export function useSearch(path: string, query: string, enabled: boolean, showHidden: boolean) {
+  const indexed = useIndexedSearch(query, path, enabled && !!query.trim(), showHidden);
+  const fallback = enabled && (indexed.result?.indexed === false || !!indexed.error);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [running, setRunning] = useState(false);
   const [summary, setSummary] = useState('');
@@ -11,7 +15,7 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
   useEffect(() => {
     setEntries([]);
     setSummary('');
-    if (!enabled || !query.trim()) {
+    if (!fallback || !query.trim()) {
       setRunning(false);
       return;
     }
@@ -41,11 +45,22 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
       if (search.current === id) search.current = '';
       void window.viewer.cancelSearch(id).catch(report);
     };
-  }, [path, query, enabled, showHidden]);
+  }, [path, query, fallback, showHidden]);
   return {
-    entries,
-    running,
-    summary,
+    // Keep an unchanged empty result stable: command subscriptions invalidate
+    // after result changes, so a fresh array here would create a render loop.
+    entries: fallback ? entries : indexed.result?.entries || emptyEntries,
+    running: fallback ? running : indexed.running,
+    summary:
+      !enabled || !query.trim()
+        ? ''
+        : fallback
+          ? summary
+          : indexed.result?.more
+            ? 'More matches available in a search plane'
+            : indexed.result?.status.running
+              ? 'Indexing in progress · results may be incomplete'
+              : 'Indexed search',
     cancel: () => {
       if (search.current) void window.viewer.cancelSearch(search.current).catch(report);
       setRunning(false);

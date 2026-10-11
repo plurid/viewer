@@ -1555,13 +1555,14 @@ select {
   align-items: center;
   gap: 8px;
   min-height: 38px;
+  flex-wrap: wrap;
   padding: 6px 14px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 11px;
 }
 .palette-context > span {
-  flex: 1;
+  flex: 1 0 100%;
   min-width: 0;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1668,4 +1669,398 @@ select {
 }
 .workspace-recovery button {
   color: var(--accent);
+}
+
+/* Settings is a modeless native window; its navigation and body scroll independently. */
+.settings-window {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  background: var(--surface);
+}
+.settings-navigation {
+  padding: 18px 12px;
+  border-right: 1px solid var(--line);
+  background: var(--space);
+  overflow-y: auto;
+}
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+.settings-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.settings-navigation nav {
+  display: grid;
+  gap: 3px;
+}
+.settings-navigation nav button {
+  text-align: left;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+}
+.settings-navigation nav button.selected {
+  background: var(--selection);
+  color: var(--ink);
+}
+.settings-page {
+  padding: 28px 32px 40px;
+  overflow-y: auto;
+  min-width: 0;
+}
+.settings-page header {
+  padding-bottom: 18px;
+}
+.settings-page h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+.settings-page h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 28px 0 12px;
+}
+.settings-group .settings-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-page .settings-row {
+  gap: 24px;
+}
+.settings-row small,
+.settings-location small {
+  display: block;
+  margin-top: 5px;
+  line-height: 1.5;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.settings-page .settings-row > input:not([type='checkbox']),
+.settings-page .settings-row select {
+  width: 180px;
+}
+.settings-page textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+.settings-error {
+  color: var(--danger);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.settings-location {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-location > span {
+  flex: 1;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.settings-location label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.settings-editor {
+  padding: 8px 0 20px;
+}
+.settings-editor > label:not(.settings-row) {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin: 14px 0;
+  color: var(--muted);
+}
+.settings-editor input,
+.settings-editor select {
+  width: 100%;
+}
+.settings-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.settings-editor-heading h2 {
+  margin-top: 8px;
+}
+.settings-recipe {
+  border-bottom: 1px solid var(--line);
+}
+.settings-recipe summary {
+  padding: 16px 0;
+  cursor: pointer;
+}
+.settings-recipe summary small {
+  float: right;
+  color: var(--muted);
+  font-size: 12px;
+}
+.button-label {
+  display: inline-flex;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.button-label input {
+  display: none;
+}
+.agent-configuration {
+  margin-top: 16px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+[data-density='compact'] .file-row {
+  height: 30px;
+  min-height: 30px;
+}
+
+.settings-window textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 9px;
+  caret-color: var(--accent);
+}
+.tasks-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+.task-dialog {
+  width: min(920px, calc(100vw - 80px));
+  height: min(700px, calc(100vh - 90px));
+  display: flex;
+  flex-direction: column;
+}
+.task-dialog:not([open]) {
+  display: none;
+}
+.task-context,
+.task-selection {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.task-context > span:last-child,
+.task-selection > span {
+  margin-left: auto;
+}
+.task-selection label,
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.task-list {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+.task-list > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto 90px;
+  gap: 20px;
+  padding: 14px;
+  text-align: left;
+}
+.task-list > button > span {
+  color: var(--muted);
+}
+.task-rows {
+  flex: 1;
+  min-height: 160px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.task-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.task-source {
+  display: flex;
+  gap: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-bottom: 8px;
+}
+.task-source span {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.task-destination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.task-destination input {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+.task-location {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0 42px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.task-location > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-location > button {
+  flex-shrink: 0;
+  padding: 2px 0;
+  font-size: inherit;
+}
+.task-evidence {
+  max-height: 160px;
+  overflow: auto;
+  padding: 16px 18px;
+  border-top: 1px solid var(--line);
+}
+.task-evidence p {
+  margin: 8px 0;
+}
+.task-evidence p > span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.task-summary {
+  flex: 1;
+  min-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  padding: 18px;
+  line-height: 1.6;
+  font-family: inherit;
+}
+.action-config form {
+  padding: 18px;
+}
+.action-config footer {
+  padding: 14px 0 0;
+}
+.batch-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.batch-fields > :first-child,
+.batch-fields > p {
+  grid-column: 1 / -1;
+}
+.action-config textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 90px;
+}
+.epub-viewer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.epub-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.epub-body nav {
+  width: 200px;
+  flex: none;
+  padding: 14px;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+}
+.epub-body nav button {
+  display: block;
+  text-align: left;
+  width: 100%;
+  padding: 8px;
+  line-height: 1.5;
+}
+.epub-body nav button[aria-current] {
+  background: var(--selection);
+}
+.epub-chapter {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 24px 32px;
+  line-height: 1.7;
+}
+.epub-chapter p {
+  margin: 0 0 1em;
+}
+.epub-chapter h1,
+.epub-chapter h2,
+.epub-chapter h3 {
+  line-height: 1.3;
+}
+.settings-discovery {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  margin-bottom: 8px;
+  text-align: left;
+}
+
+.search-content-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.search-content-option input {
+  width: auto;
 }

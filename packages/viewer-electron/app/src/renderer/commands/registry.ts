@@ -60,7 +60,23 @@ export class CommandRegistry {
   private sources = new Map<string, CommandSource>();
   private listeners = new Set<() => void>();
   private revision = 0;
-  constructor(private chosen: (id: string) => void = () => {}) {}
+  private revisions = new Map<string, number>();
+  private definitions = new Map<
+    string,
+    { revision: number; items: readonly CommandDefinition[] }
+  >();
+  private catalog(id: string, source: CommandSource) {
+    const revision = this.revisions.get(id) || 0;
+    const cached = this.definitions.get(id);
+    if (cached?.revision === revision) return cached.items;
+    const items = source.definitions();
+    this.definitions.set(id, { revision, items });
+    return items;
+  }
+  constructor(
+    private chosen: (id: string) => void = () => {},
+    private shortcut: (id: string) => string | undefined = () => undefined,
+  ) {}
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
@@ -68,17 +84,23 @@ export class CommandRegistry {
     };
   };
   snapshot = () => this.revision;
-  touch = () => {
+  scopedSnapshot = (paneID: string) =>
+    (this.revisions.get('window') || 0) +
+    (this.revisions.get(`folder:${paneID}`) || 0) +
+    (this.revisions.get(`preview:${paneID}`) || 0);
+  touch = (source = 'window') => {
+    this.revisions.set(source, (this.revisions.get(source) || 0) + 1);
     this.revision++;
     for (const listener of this.listeners) listener();
   };
   register(id: string, source: CommandSource): () => void {
     this.sources.set(id, source);
-    this.touch();
+    this.touch(id);
     return () => {
       if (this.sources.get(id) !== source) return;
       this.sources.delete(id);
-      this.touch();
+      this.definitions.delete(id);
+      this.touch(id);
     };
   }
   context(paneID?: string): CommandContext | undefined {
@@ -104,7 +126,7 @@ export class CommandRegistry {
         ...request.context,
         ...(request.scope ? { scope: request.scope } : {}),
       };
-      for (const definition of source.definitions()) {
+      for (const definition of this.catalog(id, source)) {
         if (request.ids && !request.ids.includes(definition.id)) continue;
         if (seen.has(definition.id) || !definition.when(context)) continue;
         seen.add(definition.id);
@@ -119,7 +141,7 @@ export class CommandRegistry {
           group: definition.group,
           icon: definition.icon,
           aliases: definition.aliases ?? [],
-          shortcut: definition.shortcut,
+          shortcut: this.shortcut(definition.id) ?? definition.shortcut,
           primary:
             typeof definition.primary === 'function'
               ? definition.primary(context)
@@ -136,7 +158,7 @@ export class CommandRegistry {
     if (!source) return false;
     const live = source.context();
     if (source.valid && !source.valid(command.context, live)) return false;
-    const definition = source.definitions().find((item) => item.id === command.id);
+    const definition = this.catalog(command.source, source).find((item) => item.id === command.id);
     const context = {
       ...live,
       ...command.context,
@@ -147,7 +169,7 @@ export class CommandRegistry {
     if (!definition?.when(context)) return false;
     await definition.run(context);
     if (definition.remember !== false) this.chosen(definition.id);
-    this.touch();
+    this.touch(command.source);
     return true;
   }
   async invoke(id: string, request: CommandRequest): Promise<boolean> {

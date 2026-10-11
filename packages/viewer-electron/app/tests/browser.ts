@@ -19,6 +19,33 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  openSettings: () => {
+    window.open(
+      location.pathname + '?window=settings',
+      'viewer-fixture-settings',
+      'width=900,height=640',
+    );
+    return invoke('openSettings');
+  },
+  settingsGet: () => invoke('settingsGet'),
+  settingsPatch: (patches, revision) => invoke('settingsPatch', patches, revision),
+  providerCredential: (id, key) => invoke('providerCredential', id, key),
+  providerModels: (id) => invoke('providerModels', id),
+  indexStatus: () => invoke('indexStatus'),
+  indexedQuery: (query) => invoke('indexedQuery', query),
+  indexRebuild: () => invoke('indexRebuild'),
+  actionStart: (request) => invoke('actionStart', request),
+  actionGet: (id) => invoke('actionGet', id),
+  actionList: () => invoke('actionList'),
+  actionApply: (approval) => invoke('actionApply', approval),
+  actionCancel: (id) => invoke('actionCancel', id),
+  actionUndo: (id) => invoke('actionUndo', id),
+  actionRecover: (id) => invoke('actionRecover', id),
+  actionExportSummary: (id, destination) => invoke('actionExportSummary', id, destination),
+  agentToken: () => invoke('agentToken'),
+  contextPublish: (context) => invoke('contextPublish', context),
+  thumbnail: (path, size) => invoke('thumbnail', path, size),
+  document: (id) => invoke('document', id),
   bootstrap: () => invoke('bootstrap'),
   list: (path) => invoke('list', path),
   stat: (path) => invoke('stat', path),

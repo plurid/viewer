@@ -19,6 +19,16 @@ const id = z.string().min(1).max(200);
 const pane = z.discriminatedUnion('type', [
   z.object({
     id,
+    type: z.literal('search'),
+    path: localPath,
+    query: z.string().max(300),
+    name: z.string().max(100),
+    allLocations: z.boolean(),
+    recursive: z.boolean().optional(),
+    content: z.boolean().optional(),
+  }),
+  z.object({
+    id,
     type: z.literal('folder'),
     path: localPath,
     mode: z.enum(['list', 'grid', 'columns', 'gallery']),
@@ -41,7 +51,8 @@ const pane = z.discriminatedUnion('type', [
 ]);
 const savedStateSchema = z
   .object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
+    preferencesRevision: z.number().int().min(0).optional(),
     workspaces: z
       .array(
         z.object({
@@ -138,6 +149,25 @@ export class Storage {
       .catch(() => undefined)
       .then(async () => {
         await mkdir(path.dirname(this.file), { recursive: true });
+        if (state.version === 2) {
+          const old = await readFile(this.file, 'utf8').catch((error) => {
+            if (error.code === 'ENOENT') return '';
+            throw error;
+          });
+          if (old && JSON.parse(old).version === 1) {
+            const backup = await open(
+              this.file + '.before-services-v2-' + randomUUID() + '.bak',
+              'wx',
+              0o600,
+            );
+            try {
+              await backup.writeFile(old);
+              await backup.sync();
+            } finally {
+              await backup.close();
+            }
+          }
+        }
         const temporary = `${this.file}.${randomUUID()}.tmp`;
         try {
           const handle = await open(temporary, 'wx', 0o600);

@@ -1,4 +1,25 @@
-import { clipboard, dialog, ipcMain, shell, type BrowserWindow } from 'electron';
+import {
+  nativeTheme,
+  safeStorage,
+  clipboard,
+  dialog,
+  ipcMain,
+  shell,
+  type BrowserWindow,
+} from 'electron';
+import { FileServices } from './file-services';
+import { SettingsService } from './settings';
+import { Credentials, Providers } from './providers';
+import { Thumbnails } from './thumbnails';
+import { ActionPlanner } from './actions/planner';
+import { AgentBroker } from './agent-broker';
+import type {
+  ActionContext,
+  ActionRequest,
+  ActionApproval,
+  SettingsPatch,
+  IndexedQuery,
+} from '../domain/services';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,7 +38,70 @@ const localPath = z
   .max(32768)
   .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
 const id = z.string().min(1).max(200);
+const contextSchema = z.object({
+  workspaceID: id,
+  rootID: id,
+  paneID: id,
+  sources: z.array(localPath).max(2000),
+  actor: z.enum(['user', 'agent']),
+  recursive: z.boolean().optional(),
+});
 const schemas = {
+  openSettings: z.tuple([]),
+  settingsGet: z.tuple([]),
+  settingsPatch: z.tuple([
+    z.array(z.object({ path: z.string().max(200), value: z.unknown() })).max(100),
+    z.number().int().min(0),
+  ]),
+  providerCredential: z.tuple([id, z.string().max(10000)]),
+  providerModels: z.tuple([id]),
+  indexStatus: z.tuple([]),
+  indexedQuery: z.tuple([
+    z.object({
+      query: z.string().max(300),
+      root: localPath.optional(),
+      offset: z.number().int().min(0).max(1000000).optional(),
+      limit: z.number().int().min(1).max(500).optional(),
+      showHidden: z.boolean().optional(),
+      content: z.boolean().optional(),
+      recursive: z.boolean().optional(),
+    }),
+  ]),
+  indexRebuild: z.tuple([]),
+  actionStart: z.tuple([
+    z.object({
+      recipeID: id,
+      context: contextSchema,
+      instructions: z.string().max(12000).optional(),
+      options: z
+        .object({
+          template: z.string().max(1000).optional(),
+          prefix: z.string().max(1000).optional(),
+          suffix: z.string().max(1000).optional(),
+          find: z.string().max(1000).optional(),
+          replace: z.string().max(1000).optional(),
+          start: z.number().int().min(0).optional(),
+        })
+        .optional(),
+    }),
+  ]),
+  actionGet: z.tuple([id]),
+  actionList: z.tuple([]),
+  actionCancel: z.tuple([id]),
+  actionUndo: z.tuple([id]),
+  actionRecover: z.tuple([id]),
+  actionApply: z.tuple([
+    z.object({
+      id,
+      revision: z.number().int().min(0),
+      rows: z.array(z.object({ id, destination: localPath, approved: z.boolean() })).max(4000),
+    }),
+  ]),
+  actionExportSummary: z.tuple([id, localPath]),
+  agentToken: z.tuple([]),
+  contextPublish: z.tuple([contextSchema]),
+  thumbnail: z.tuple([localPath, z.number().int().min(128).max(512)]),
+  document: z.tuple([id]),
   bootstrap: z.tuple([]),
   list: z.tuple([localPath]),
   stat: z.tuple([localPath]),
@@ -60,21 +144,94 @@ export class Desktop {
   readonly search: Search;
   readonly storage: Storage;
   private ready = false;
+  private windows = new Map<number, { window: BrowserWindow; role: 'viewer' | 'settings' }>();
+  private window?: BrowserWindow;
+  private bootstrapped = false;
+  readonly settings: SettingsService;
+  readonly files: FileServices;
+  readonly credentials: Credentials;
+  readonly providers: Providers;
+  readonly actions: ActionPlanner;
+  readonly agents: AgentBroker;
+  readonly thumbnails = new Thumbnails();
+  private context?: ActionContext;
+  private indexConfiguration = '';
   private openPaths: string[] = [];
   private flushes = new Map<string, () => void>();
   private fileClipboard: { paths: string[]; cut: boolean; text: string } | null = null;
   constructor(
-    private window: BrowserWindow,
     dataPath: string,
     private allowedURL: (url: string) => boolean,
+    private options: {
+      openSettings(): Promise<void>;
+      worker: string;
+      ocr: string;
+      settingsChanged?(): void;
+    },
   ) {
-    const emit = (event: DesktopEvent) => {
-      if (!window.isDestroyed()) window.webContents.send('viewer:event', event);
+    const emit = (event: DesktopEvent) => this.emit(event);
+    this.settings = new SettingsService(
+      dataPath,
+      os.homedir(),
+      () => nativeTheme.shouldUseDarkColors,
+      (snapshot) => {
+        this.options.settingsChanged?.();
+        emit({ type: 'settings', snapshot: { ...snapshot, credentials: this.credentials.ids() } });
+        void this.configureIndex(snapshot.settings.search).catch(() =>
+          emit({
+            type: 'index',
+            status: {
+              roots: snapshot.settings.search.roots.map((path) => ({
+                path,
+                status: 'offline',
+                count: 0,
+                errors: 1,
+              })),
+              count: 0,
+              running: false,
+            },
+          }),
+        );
+      },
+    );
+    this.credentials = new Credentials(
+      dataPath,
+      (value) => safeStorage.encryptStringAsync(value),
+      async (value) => (await safeStorage.decryptStringAsync(value)).result,
+    );
+    this.providers = new Providers(this.credentials);
+    this.files = new FileServices(dataPath, options.worker, options.ocr, (status) =>
+      emit({ type: 'index', status }),
+    );
+    const changed = (changes: import('../domain/changes').FileChange[]) => {
+      emit({ type: 'file-changes', changes });
+      for (const change of changes) {
+        void this.files.update(change.source, true).catch(() => {});
+        void this.files.update(change.destination).catch(() => {});
+      }
+      this.thumbnails.clear();
     };
     this.operations = new Operations(
       (file) => shell.trashItem(file),
       (job) => emit({ type: 'job', job }),
       (progress) => emit({ type: 'job-progress', progress }),
+      changed,
+    );
+    this.actions = new ActionPlanner(dataPath, {
+      recipes: () => this.settings.snapshot().settings.recipes,
+      providers: () => this.settings.snapshot().settings.providers,
+      extract: (file, signal) => this.files.extract(file, signal),
+      generate: (...args) => this.providers.generate(...args),
+      operations: this.operations,
+      emit: (plan) => emit({ type: 'action', plan }),
+      changed,
+    });
+    this.agents = new AgentBroker(
+      dataPath,
+      () => this.settings.snapshot().settings,
+      () => (this.window && !this.window.isDestroyed() ? this.context : undefined),
+      this.files,
+      this.actions,
     );
     this.watchers = new Watchers(emit);
     this.search = new Search((batch) => emit({ type: 'search', batch }));
@@ -84,17 +241,34 @@ export class Desktop {
       async (event, method: unknown, args: unknown): Promise<ApiResult<unknown>> => {
         try {
           if (
-            event.sender !== window.webContents ||
-            event.senderFrame !== window.webContents.mainFrame ||
+            !this.windows.has(event.sender.id) ||
+            event.senderFrame !== event.sender.mainFrame ||
             !this.allowedURL(event.senderFrame.url)
           )
             throw new Error('Untrusted IPC sender.');
           if (typeof method !== 'string' || !Object.hasOwn(schemas, method))
             throw new Error('Unknown Viewer API method.');
           const name = method as ApiMethod;
+          const role = this.windows.get(event.sender.id)!.role;
+          const settingsMethods: ApiMethod[] = [
+            'settingsGet',
+            'settingsPatch',
+            'providerCredential',
+            'providerModels',
+            'indexStatus',
+            'indexRebuild',
+            'chooseFolder',
+            'agentToken',
+            'textEdit',
+            'flushed',
+          ];
+          if (role === 'settings' && !settingsMethods.includes(name))
+            throw new Error('This API is unavailable in Settings.');
+          if (role !== 'settings' && ['providerCredential', 'agentToken'].includes(name))
+            throw new Error('Manage credentials in Settings.');
           return {
             ok: true,
-            value: await this.invoke(name, schemas[name].parse(args) as unknown[]),
+            value: await this.invoke(name, schemas[name].parse(args) as unknown[], event.sender.id),
           };
         } catch (error) {
           return {
@@ -106,16 +280,70 @@ export class Desktop {
       },
     );
   }
+  private async configureIndex(
+    config: import('../domain/services').ApplicationSettings['search'],
+  ): Promise<void> {
+    const key = JSON.stringify(config);
+    if (key === this.indexConfiguration) return;
+    this.indexConfiguration = key;
+    try {
+      await this.files.configure(config);
+    } catch (error) {
+      this.indexConfiguration = '';
+      throw error;
+    }
+  }
+  attach(window: BrowserWindow, role: 'viewer' | 'settings'): void {
+    const sender = window.webContents.id;
+    this.windows.set(sender, { window, role });
+    if (role === 'viewer') this.window = window;
+    window.on('closed', () => {
+      this.windows.delete(sender);
+      if (this.window === window) {
+        this.window = undefined;
+        this.ready = false;
+        this.context = undefined;
+        this.resources.clear();
+      }
+    });
+  }
   emit(event: DesktopEvent): void {
-    if (!this.window.isDestroyed()) this.window.webContents.send('viewer:event', event);
+    for (const { window, role } of this.windows.values())
+      if (
+        !window.isDestroyed() &&
+        (role === 'viewer' || ['settings', 'index'].includes(event.type))
+      )
+        window.webContents.send('viewer:event', event);
   }
   open(paths: string[]): void {
     const normalized = paths.map(absolute);
     if (this.ready) this.emit({ type: 'open', paths: normalized });
     else this.openPaths.push(...normalized);
   }
+  async flushSettings(window: BrowserWindow): Promise<void> {
+    if (window.isDestroyed()) return;
+    const token = randomUUID();
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.flushes.delete(token);
+        resolve();
+      }, 5000);
+      this.flushes.set(token, () => {
+        clearTimeout(timer);
+        this.flushes.delete(token);
+        resolve();
+      });
+      window.webContents.send('viewer:event', { type: 'flush-settings', token });
+    });
+    await this.settings.flush();
+  }
   async flush(): Promise<void> {
-    if (this.ready && !this.window.isDestroyed()) {
+    await Promise.all(
+      [...this.windows.values()]
+        .filter((item) => item.role === 'settings')
+        .map((item) => this.flushSettings(item.window)),
+    );
+    if (this.ready && this.window && !this.window.isDestroyed()) {
       const token = randomUUID();
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
@@ -130,25 +358,124 @@ export class Desktop {
         this.emit({ type: 'flush', token });
       });
     }
-    await this.storage.flush();
+    await Promise.all([this.storage.flush(), this.settings.flush()]);
   }
   async dispose(): Promise<void> {
     this.ready = false;
     ipcMain.removeHandler('viewer:request');
     this.search.close();
     this.resources.clear();
-    await Promise.all([this.watchers.close(), this.operations.close()]);
+    await this.actions.close();
+    await this.agents.close();
+    await Promise.all([this.watchers.close(), this.operations.close(), this.files.close()]);
   }
-  private async invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
+  private async invoke(method: ApiMethod, args: unknown[], senderID?: number): Promise<unknown> {
     switch (method) {
+      case 'openSettings':
+        return this.options.openSettings();
+      case 'settingsGet':
+        await this.settings.load();
+        await this.credentials.load();
+        return this.settings.snapshot(this.credentials.ids());
+      case 'settingsPatch':
+        return {
+          ...(await this.settings.patch(args[0] as SettingsPatch[], args[1] as number)),
+          credentials: this.credentials.ids(),
+        };
+      case 'providerCredential':
+        await this.credentials.set(args[0] as string, args[1] as string);
+        this.settings.announce();
+        return;
+      case 'providerModels': {
+        const provider = this.settings
+          .snapshot()
+          .settings.providers.find((provider) => provider.id === args[0]);
+        if (!provider) throw new Error('Provider is unavailable.');
+        return this.providers.models(provider);
+      }
+      case 'indexedQuery':
+        return this.files.query(args[0] as IndexedQuery);
+      case 'indexStatus':
+        return this.files.status();
+      case 'indexRebuild':
+        return this.files.configure(this.settings.snapshot().settings.search);
+      case 'actionStart':
+        return this.actions.start({
+          ...(args[0] as ActionRequest),
+          context: { ...(args[0] as ActionRequest).context, actor: 'user' },
+        });
+      case 'actionGet':
+        return this.actions.get(args[0] as string);
+      case 'actionList':
+        return this.actions.all();
+      case 'actionApply':
+        return this.actions.apply(args[0] as ActionApproval);
+      case 'actionCancel':
+        this.actions.cancel(args[0] as string);
+        return;
+      case 'actionUndo':
+        return this.actions.undo(args[0] as string);
+      case 'actionRecover':
+        return this.actions.recovery(args[0] as string);
+      case 'actionExportSummary':
+        return this.actions.exportSummary(args[0] as string, args[1] as string);
+      case 'agentToken':
+        await this.agents.start();
+        return JSON.stringify(
+          {
+            mcpServers: {
+              viewer: {
+                command: process.execPath,
+                args: ['--mcp'],
+                env: {
+                  VIEWER_AGENT_TOKEN: await this.agents.credential(),
+                  ...(process.env.VIEWER_DATA_DIRECTORY
+                    ? { VIEWER_DATA_DIRECTORY: process.env.VIEWER_DATA_DIRECTORY }
+                    : {}),
+                },
+              },
+            },
+          },
+          null,
+          2,
+        );
+      case 'contextPublish':
+        this.context = { ...(args[0] as ActionContext), actor: 'user' };
+        return;
+      case 'thumbnail':
+        return this.thumbnails.get(args[0] as string, args[1] as number);
+      case 'document': {
+        const file = this.resources.documentSource(args[0] as string);
+        const document = await this.files.extract(file, undefined, true);
+        this.resources.documentSource(args[0] as string);
+        return document;
+      }
       case 'bootstrap': {
         const home = os.homedir();
         const stored = await this.storage.load();
+        await this.settings.load(stored.state || undefined);
+        await this.credentials.load();
+        if (stored.state)
+          stored.state = {
+            ...stored.state,
+            ui: this.settings.snapshot().ui,
+            look: this.settings.snapshot().look,
+            preferencesRevision: this.settings.snapshot().revision,
+          };
+        void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
+        await this.actions.load();
+        this.options.settingsChanged?.();
+        await this.agents.start();
         const paths = this.openPaths.splice(0);
         this.ready = true;
+        const freshSession =
+          !this.bootstrapped && !this.settings.snapshot().settings.browsing.restoreSession;
+        this.bootstrapped = true;
         return {
           ...stored,
           home,
+          freshSession,
+          settings: this.settings.snapshot(this.credentials.ids()),
           platform: process.platform,
           locations: [
             { name: 'Home', path: home },
@@ -169,7 +496,9 @@ export class Desktop {
       case 'stat':
         return entry(args[0] as string);
       case 'chooseFolder': {
-        const result = await dialog.showOpenDialog(this.window, { properties: ['openDirectory'] });
+        const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
+          properties: ['openDirectory'],
+        });
         return result.canceled ? null : result.filePaths[0];
       }
       case 'reveal':
@@ -213,7 +542,12 @@ export class Desktop {
       case 'archiveEntry':
         return this.resources.archiveEntry(args[0] as string, args[1] as string);
       case 'save':
-        return this.storage.save(args[0] as Parameters<Storage['save']>[0]);
+        return this.storage.save({
+          ...(args[0] as import('../domain/contracts').SavedState),
+          ui: this.settings.snapshot().ui,
+          look: this.settings.snapshot().look,
+          preferencesRevision: this.settings.snapshot().revision,
+        } as Parameters<Storage['save']>[0]);
       case 'flushed':
         return this.flushes.get(args[0] as string)?.();
       case 'clipboardWrite': {
@@ -231,7 +565,7 @@ export class Desktop {
       }
       case 'textEdit': {
         const command = args[0] as import('../domain/contracts').TextEditCommand;
-        this.window.webContents[command]();
+        this.windows.get(senderID!)!.window.webContents[command]();
         return;
       }
     }

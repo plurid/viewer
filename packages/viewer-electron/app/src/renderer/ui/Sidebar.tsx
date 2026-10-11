@@ -54,6 +54,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   const resizing = useRef<{
     x: number;
     width: number;
+    latest?: number;
     localX: (point: Point) => number | undefined;
   } | null>(null);
   const current = owner?.path;
@@ -299,12 +300,23 @@ export function Sidebar({ paneID }: { paneID?: string }) {
           if (!drag) return;
           event.stopPropagation();
           const x = drag.localX({ x: event.clientX, y: event.clientY });
-          if (x !== undefined) resize(drag.width + x - drag.x);
+          if (x !== undefined && element.current) {
+            const width = Math.max(160, Math.min(360, Math.round(drag.width + x - drag.x)));
+            drag.latest = width;
+            element.current.style.width = paneID ? `min(${width}px, 50%)` : `${width}px`;
+            event.currentTarget.setAttribute('aria-valuenow', String(width));
+          }
         }}
         onPointerUp={() => {
+          const width = resizing.current?.latest;
           resizing.current = null;
+          if (width !== undefined) resize(width);
         }}
         onPointerCancel={() => {
+          if (element.current)
+            element.current.style.width = paneID
+              ? `min(${layout.width}px, 50%)`
+              : `${layout.width}px`;
           resizing.current = null;
         }}
       />

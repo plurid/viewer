@@ -1,64 +1,116 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-
-const emptyEntries: FileEntry[] = [];
-
-export function useFolder(path: string) {
-  const [entries, setEntries] = useState<FileEntry[]>([]);
-  const [loadedPath, setLoadedPath] = useState('');
-  const [error, setError] = useState('');
-  const [revision, setRevision] = useState(0);
-  const refresh = useCallback(() => setRevision((value) => value + 1), []);
-  useEffect(() => {
-    let live = true;
-    setError('');
-    void window.viewer
-      .list(path)
-      .then((listing) => {
-        if (live) {
-          setEntries(listing.entries);
-          setLoadedPath(path);
-        }
-      })
-      .catch((error) => {
-        if (live) {
-          setError(error.message);
-          setLoadedPath(path);
-          setEntries([]);
-        }
-      });
-    return () => {
-      live = false;
+interface Dataset {
+  entries: FileEntry[];
+  loading: boolean;
+  error: string;
+}
+interface Subscription {
+  state: Dataset;
+  listeners: Set<() => void>;
+  request?: Promise<void>;
+  dirty: boolean;
+  stop?: () => void;
+}
+const datasets = new Map<string, Subscription>();
+function dataset(path: string): Subscription {
+  let value = datasets.get(path);
+  if (!value) {
+    value = {
+      state: { entries: [], loading: true, error: '' },
+      listeners: new Set(),
+      dirty: false,
     };
-  }, [path, revision]);
-  useEffect(() => {
-    const subscriber = crypto.randomUUID();
-    let live = true;
-    const remove = window.viewer.onEvent((event) => {
-      if (event.type === 'folder-changed' && event.path === path) refresh();
-      if (event.type === 'watch-error' && event.path === path)
-        setError(`Folder watching is unavailable: ${event.message}`);
+    datasets.set(path, value);
+  }
+  return value;
+}
+function notify(value: Subscription) {
+  value.listeners.forEach((listener) => listener());
+}
+function load(path: string): void {
+  const value = dataset(path);
+  if (value.request) {
+    value.dirty = true;
+    return;
+  }
+  value.request = window.viewer
+    .list(path)
+    .then((listing) => {
+      value.state = { entries: listing.entries, loading: false, error: '' };
+    })
+    .catch((error) => {
+      value.state = { entries: [], loading: false, error: String(error.message || error) };
+    })
+    .finally(() => {
+      value.request = undefined;
+      notify(value);
+      if (value.dirty) {
+        value.dirty = false;
+        load(path);
+      }
     });
-    void window.viewer
-      .watch(path, subscriber)
-      .then(() => {
-        if (!live) void window.viewer.unwatch(subscriber);
-      })
-      .catch((error) => {
-        if (live) setError(error.message);
-      });
-    window.addEventListener('viewer:refresh', refresh);
-    return () => {
-      live = false;
-      remove();
-      window.removeEventListener('viewer:refresh', refresh);
-      void window.viewer.unwatch(subscriber);
-    };
-  }, [path, refresh]);
-  return {
-    entries: loadedPath === path ? entries : emptyEntries,
-    loading: loadedPath !== path,
-    error,
-    refresh,
-  };
+}
+export function useFolder(path: string) {
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const value = dataset(path);
+      value.listeners.add(listener);
+      if (!value.stop) {
+        const subscriber = crypto.randomUUID();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const refresh = () => {
+          clearTimeout(timer);
+          timer = setTimeout(() => load(path), 80);
+        };
+        const off = window.viewer.onEvent((event) => {
+          if (event.type === 'folder-changed' && event.path === path) refresh();
+          if (event.type === 'watch-error' && event.path === path) {
+            value.state = {
+              ...value.state,
+              error: `Folder watching is unavailable: ${event.message}`,
+            };
+            notify(value);
+          }
+        });
+        let stopped = false;
+        void window.viewer
+          .watch(path, subscriber)
+          .then(() => {
+            if (stopped) void window.viewer.unwatch(subscriber);
+          })
+          .catch((error) => {
+            if (!stopped) {
+              value.state = { ...value.state, error: String(error.message) };
+              notify(value);
+            }
+          });
+        window.addEventListener('viewer:refresh', refresh);
+        value.stop = () => {
+          stopped = true;
+          off();
+          clearTimeout(timer);
+          window.removeEventListener('viewer:refresh', refresh);
+          void window.viewer.unwatch(subscriber);
+        };
+        load(path);
+      }
+      return () => {
+        value.listeners.delete(listener);
+        if (!value.listeners.size) {
+          value.stop?.();
+          value.stop = undefined;
+        }
+        if (datasets.size > 80)
+          for (const [key, item] of datasets) {
+            if (!item.listeners.size && !item.request && key !== path) datasets.delete(key);
+            if (datasets.size <= 80) break;
+          }
+      };
+    },
+    [path],
+  );
+  const state = useSyncExternalStore(subscribe, () => dataset(path).state);
+  const refresh = useCallback(() => load(path), [path]);
+  return { ...state, refresh };
 }

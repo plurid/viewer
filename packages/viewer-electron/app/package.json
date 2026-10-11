@@ -26,7 +26,7 @@
   },
   "main": ".vite/build/main.cjs",
   "scripts": {
-    "start": "electron-forge start",
+    "start": "tsx tools/build-helpers.ts && electron-forge start",
     "check": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && tsc -p tsconfig.renderer.json && tsc -p tsconfig.tools.json",
     "lint": "eslint src tests tools *.ts",
     "format": "prettier --write src tests tools *.ts *.json *.mjs *.html",
@@ -35,8 +35,8 @@
     "test:watch": "vitest",
     "test:browser": "tsx tests/browser-server.ts",
     "test:desktop": "tsx tests/electron-smoke.ts",
-    "package": "electron-forge package",
-    "make": "electron-forge make"
+    "package": "tsx tools/build-helpers.ts && electron-forge package",
+    "make": "tsx tools/build-helpers.ts && electron-forge make"
   },
   "devDependencies": {
     "@electron-forge/cli": "8.0.1",

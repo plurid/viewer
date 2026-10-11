@@ -11,6 +11,16 @@ import { Watchers } from '../src/desktop/watchers';
 import { Search } from '../src/desktop/search';
 import { Storage } from '../src/desktop/storage';
 import { entry, list } from '../src/desktop/filesystem';
+import { SettingsService } from '../src/desktop/settings';
+import { FileIndex } from '../src/desktop/index-core';
+import { ActionPlanner } from '../src/desktop/actions/planner';
+import { extractDocument } from '../src/desktop/formats';
+import type {
+  SettingsPatch,
+  IndexedQuery,
+  ActionRequest,
+  ActionApproval,
+} from '../src/domain/services';
 import type {
   ApiMethod,
   DesktopEvent,
@@ -37,6 +47,44 @@ const operations = new Operations(
 );
 const storage = new Storage(path.join(fixture.root, 'state.json'));
 await storage.save(fixture.state);
+const index = await FileIndex.open(
+  path.join(fixture.root, 'files.sqlite'),
+  (status) => emit({ type: 'index', status }),
+  async (file) => (await extractDocument(file)).text,
+);
+let indexSettings = '';
+const settings = new SettingsService(
+  fixture.root,
+  fixture.files,
+  () => true,
+  (snapshot) => {
+    emit({ type: 'settings', snapshot });
+    const next = JSON.stringify(snapshot.settings.search);
+    if (next !== indexSettings) {
+      indexSettings = next;
+      index.configure(snapshot.settings.search);
+    }
+  },
+);
+await settings.load(fixture.state);
+index.configure(settings.snapshot().settings.search);
+const actions = new ActionPlanner(fixture.root, {
+  recipes: () => settings.snapshot().settings.recipes,
+  providers: () => [],
+  extract: (file, signal) => extractDocument(scoped(file), { signal }),
+  generate: async () => {
+    throw new Error('External providers are disabled in the synthetic browser fixture.');
+  },
+  operations,
+  emit: (plan) => emit({ type: 'action', plan }),
+  changed: (changes) => {
+    emit({ type: 'file-changes', changes });
+    for (const change of changes) {
+      void index.update(change.source, true);
+      void index.update(change.destination);
+    }
+  },
+});
 let clipboard: { paths: string[]; cut: boolean } | null = null;
 const resourceURL = (value: Resource) => ({
   ...value,
@@ -62,8 +110,72 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
           })),
         ],
         ...(await storage.load()),
+        settings: settings.snapshot(),
         openPaths: [],
       };
+    case 'openSettings':
+      return;
+    case 'settingsGet':
+      return settings.snapshot();
+    case 'settingsPatch': {
+      const patches = args[0] as SettingsPatch[];
+      for (const patch of patches)
+        if (
+          [
+            'settings.search',
+            'settings.search.roots',
+            'settings.search.contentRoots',
+            'settings.agents.roots',
+          ].includes(patch.path)
+        ) {
+          const value = patch.value as string[] | { roots: string[]; contentRoots: string[] };
+          const paths = Array.isArray(value) ? value : [...value.roots, ...value.contentRoots];
+          paths.forEach(scoped);
+        }
+      return settings.patch(patches, args[1] as number);
+    }
+    case 'indexStatus':
+      return index.status();
+    case 'indexedQuery': {
+      const query = args[0] as IndexedQuery;
+      if (query.root) scoped(query.root);
+      return index.query(query);
+    }
+    case 'indexRebuild':
+      return index.configure(settings.snapshot().settings.search);
+    case 'actionStart': {
+      const request = args[0] as ActionRequest;
+      request.context.sources.forEach(scoped);
+      return actions.start(request);
+    }
+    case 'actionGet':
+      return actions.get(args[0] as string);
+    case 'actionList':
+      return actions.all();
+    case 'actionApply': {
+      const approval = args[0] as ActionApproval;
+      approval.rows.forEach((row) => scoped(row.destination));
+      return actions.apply(approval);
+    }
+    case 'actionCancel':
+      return actions.cancel(args[0] as string);
+    case 'actionUndo':
+      return actions.undo(args[0] as string);
+    case 'actionRecover':
+      return actions.recovery(args[0] as string);
+    case 'actionExportSummary':
+      return actions.exportSummary(args[0] as string, scoped(args[1] as string));
+    case 'document':
+      return extractDocument(resources.documentSource(args[0] as string));
+    case 'thumbnail':
+      return '';
+    case 'contextPublish':
+      return;
+    case 'providerModels':
+      return [];
+    case 'providerCredential':
+    case 'agentToken':
+      throw new Error('Credentials and agents are only available in the native app.');
     case 'chooseFolder':
       return fixture.files;
     case 'list':
@@ -187,7 +299,8 @@ console.log(
 async function close() {
   resources.clear();
   search.close();
-  await Promise.all([watchers.close(), operations.close()]);
+  await actions.close();
+  await Promise.all([watchers.close(), operations.close(), index.close(), settings.flush()]);
   for (const client of clients) client.end();
   await server.close();
   await rm(fixture.root, { recursive: true, force: true });

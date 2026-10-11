@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 import { lookup } from 'mime-types';
 import type { Resource, ResourceRead } from '../domain/contracts';
 import { absolute, entry } from './filesystem';
+import { imageDimensions, readImageDimensions } from './image-dimensions';
 import { Archives } from './archives';
 
 interface Grant {
@@ -31,6 +32,9 @@ export class Resources {
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     const id = randomUUID();
     const resource = {
+      dimensions: item.mime.startsWith('image/')
+        ? await readImageDimensions(actual).catch(() => undefined)
+        : undefined,
       id,
       url: `viewer-resource://${id}/asset/${encodeURIComponent(path.basename(actual))}`,
       entry: {
@@ -61,6 +65,11 @@ export class Resources {
     const grant = this.grants.get(id);
     if (!grant) throw new Error('This preview resource has expired.');
     return grant;
+  }
+  documentSource(id: string): string {
+    const grant = this.get(id);
+    if (!grant.file) throw new Error('Nested document extraction is unavailable.');
+    return grant.file;
   }
   async read(id: string, requested = MAX_READ): Promise<ResourceRead> {
     const grant = this.get(id);
@@ -106,6 +115,7 @@ export class Resources {
     const childID = randomUUID();
     const basename = path.basename(name);
     const resource: Resource = {
+      dimensions: imageDimensions(data),
       id: childID,
       url: `viewer-resource://${childID}/asset/${encodeURIComponent(basename)}`,
       entry: {

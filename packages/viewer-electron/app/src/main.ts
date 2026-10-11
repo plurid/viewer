@@ -1,8 +1,10 @@
-import { app, BrowserWindow, Menu, protocol, session } from 'electron';
+import { nativeTheme, app, BrowserWindow, Menu, protocol, session } from 'electron';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import { lookup } from 'mime-types';
+import { accelerator } from './domain/shortcuts';
+import { runMCPClient } from './desktop/mcp-client';
 import { Desktop } from './desktop/bridge';
 protocol.registerSchemesAsPrivileged([
   {
@@ -30,10 +32,14 @@ if (process.env.VIEWER_DATA_DIRECTORY) {
 }
 let window: BrowserWindow | null = null;
 let desktop: Desktop | null = null;
+let settingsWindow: BrowserWindow | null = null;
+let settingsClosing: Promise<void> | undefined;
+const mcpMode = process.argv.includes('--mcp');
+const ownsInstance = mcpMode || app.requestSingleInstanceLock();
+if (!ownsInstance) app.quit();
 let closing = false;
 let quitting = false;
 let quitPending = false;
-let disposing: Promise<void> = Promise.resolve();
 const pendingPaths: string[] = [];
 const devURL = MAIN_WINDOW_VITE_DEV_SERVER_URL;
 const rendererRoot = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
@@ -48,8 +54,44 @@ const trusted = (url: string) => {
     return false;
   }
 };
+let menuBindings = '';
 function menu(): void {
-  const command = (value: string) => () => desktop?.emit({ type: 'command', command: value });
+  const settings = desktop?.settings.snapshot().settings;
+  const bindings = JSON.stringify([
+    settings?.shortcuts,
+    settings?.recipes.map((recipe) => [recipe.id, recipe.name, recipe.shortcut]),
+  ]);
+  if (bindings === menuBindings) return;
+  menuBindings = bindings;
+  const command = (value: string) => () => {
+    if (value === 'settings') {
+      void openSettingsWindow();
+      return;
+    }
+    const focused = BrowserWindow.getFocusedWindow();
+    if (focused === settingsWindow) {
+      const edits: Record<string, string> = {
+        'undo-file': 'undo',
+        'redo-file': 'redo',
+        cut: 'cut',
+        copy: 'copy',
+        paste: 'paste',
+        'select-all': 'selectAll',
+      };
+      const method = edits[value];
+      if (method) {
+        const contents = focused!.webContents;
+        if (method === 'selectAll') contents.selectAll();
+        else if (method === 'copy') contents.copy();
+        else if (method === 'cut') contents.cut();
+        else if (method === 'paste') contents.paste();
+        else if (method === 'undo') contents.undo();
+        else contents.redo();
+      }
+      return;
+    }
+    desktop?.emit({ type: 'command', command: value });
+  };
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       ...(process.platform === 'darwin'
@@ -59,7 +101,11 @@ function menu(): void {
               submenu: [
                 { role: 'about' as const },
                 { type: 'separator' as const },
-                { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: command('settings') },
+                {
+                  label: 'Settings…',
+                  accelerator: accelerator(settings?.shortcuts['settings'] ?? 'Cmd+,'),
+                  click: command('settings'),
+                },
                 { type: 'separator' as const },
                 { role: 'services' as const },
                 { type: 'separator' as const },
@@ -77,7 +123,7 @@ function menu(): void {
         submenu: [
           {
             label: 'New Folder Plane',
-            accelerator: 'CmdOrCtrl+N',
+            accelerator: accelerator(settings?.shortcuts['new-root-folder'] ?? 'Cmd+N'),
             click: command('new-root-folder'),
           },
           {
@@ -115,12 +161,24 @@ function menu(): void {
       {
         label: 'View',
         submenu: [
-          { label: 'Commands…', accelerator: 'CmdOrCtrl+K', click: command('palette') },
-          { label: 'Find File…', accelerator: 'CmdOrCtrl+F', click: command('find-file') },
-          { label: 'Go to Folder…', accelerator: 'CmdOrCtrl+L', click: command('go-to') },
+          {
+            label: 'Commands…',
+            accelerator: accelerator(settings?.shortcuts['palette'] ?? 'Cmd+K'),
+            click: command('palette'),
+          },
+          {
+            label: 'Find File…',
+            accelerator: accelerator(settings?.shortcuts['find-file'] ?? 'Cmd+F'),
+            click: command('find-file'),
+          },
+          {
+            label: 'Go to Folder…',
+            accelerator: accelerator(settings?.shortcuts['go-to'] ?? 'Cmd+L'),
+            click: command('go-to'),
+          },
           {
             label: 'Show / Hide Window Navigation',
-            accelerator: 'CmdOrCtrl+Alt+S',
+            accelerator: accelerator(settings?.shortcuts['toggle-sidebar'] ?? 'Cmd+Alt+S'),
             click: command('toggle-sidebar'),
           },
           { label: 'Show / Hide Plane Navigation', click: command('plane-sidebar') },
@@ -130,8 +188,16 @@ function menu(): void {
             click: command('hidden'),
           },
           { type: 'separator' },
-          { label: 'Frame All Planes', accelerator: 'CmdOrCtrl+0', click: command('frame-all') },
-          { label: 'Dock / Reveal', accelerator: 'CmdOrCtrl+Return', click: command('dock') },
+          {
+            label: 'Frame All Planes',
+            accelerator: accelerator(settings?.shortcuts['frame-all'] ?? 'Cmd+0'),
+            click: command('frame-all'),
+          },
+          {
+            label: 'Dock / Reveal',
+            accelerator: accelerator(settings?.shortcuts['dock'] ?? 'Cmd+Return'),
+            click: command('dock'),
+          },
           {
             label: 'Undo Arrangement',
             accelerator: 'CmdOrCtrl+Alt+Z',
@@ -150,6 +216,18 @@ function menu(): void {
         ],
       },
       {
+        label: 'Actions',
+        submenu: [
+          ...(settings?.recipes || []).map((recipe) => ({
+            label: recipe.name + '…',
+            accelerator: accelerator(recipe.shortcut || ''),
+            click: command('recipe.' + recipe.id),
+          })),
+          { type: 'separator' as const },
+          { label: 'Action Tasks…', click: command('tasks') },
+        ],
+      },
+      {
         label: 'Workspace',
         submenu: [
           { label: 'New Workspace…', click: command('new-workspace') },
@@ -163,7 +241,6 @@ function menu(): void {
   );
 }
 async function createWindow(): Promise<void> {
-  await disposing;
   if (window) return;
   closing = false;
   window = new BrowserWindow({
@@ -191,9 +268,8 @@ async function createWindow(): Promise<void> {
   });
   const createdWindow = window;
   let closePending = false;
-  const services = new Desktop(window, app.getPath('userData'), trusted);
-  desktop = services;
-  protocol.handle('viewer-resource', (request) => services.resources.response(request));
+  const services = desktop!;
+  services.attach(window, 'viewer');
   services.open(pendingPaths.splice(0));
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => {
@@ -213,21 +289,124 @@ async function createWindow(): Promise<void> {
       });
   });
   window.on('closed', () => {
-    protocol.unhandle('viewer-resource');
-    desktop = null;
     window = null;
-    disposing = services.dispose().catch((error) => console.error('Desktop cleanup failed', error));
   });
   menu();
   await window.loadURL(devURL || 'viewer-app://app/index.html');
   window.show();
 }
+async function openSettingsWindow(): Promise<void> {
+  await settingsClosing;
+  if (!desktop) return;
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  await desktop.settings.load();
+  const dimensions = desktop.settings.snapshot().settings.settingsWindow;
+  const created = new BrowserWindow({
+    width: dimensions.width,
+    height: dimensions.height,
+    minWidth: 760,
+    minHeight: 540,
+    title: 'Settings',
+    backgroundColor: '#272a30',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+      spellcheck: false,
+    },
+  });
+  settingsWindow = created;
+  desktop.attach(created, 'settings');
+  const services = desktop;
+  let closePending = false,
+    allowedClose = false;
+  created.on('close', (event) => {
+    if (allowedClose || quitting) return;
+    event.preventDefault();
+    if (closePending) return;
+    closePending = true;
+    settingsClosing = services
+      .flushSettings(created)
+      .catch((error) => console.error('Settings flush failed', error))
+      .finally(() => {
+        allowedClose = true;
+        if (!created.isDestroyed()) created.close();
+        settingsClosing = undefined;
+      });
+  });
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('will-navigate', (event, url) => {
+    if (!trusted(url)) event.preventDefault();
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  created.on('resize', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (created.isDestroyed()) return;
+      const [width, height] = created.getSize();
+      void desktop?.settings
+        .patch(
+          [
+            { path: 'settings.settingsWindow.width', value: width },
+            { path: 'settings.settingsWindow.height', value: height },
+          ],
+          desktop.settings.snapshot().revision,
+        )
+        .catch(console.error);
+    }, 250);
+  });
+  created.on('closed', () => {
+    clearTimeout(timer);
+    settingsWindow = null;
+  });
+  const url = new URL(devURL || 'viewer-app://app/index.html');
+  url.searchParams.set('window', 'settings');
+  await created.loadURL(url.toString());
+  created.show();
+}
+app.on('second-instance', () => {
+  if (window) {
+    window.show();
+    window.focus();
+  } else void createWindow();
+});
 app.on('open-file', (event, file) => {
   event.preventDefault();
   if (desktop) desktop.open([file]);
   else pendingPaths.push(file);
 });
 app.whenReady().then(async () => {
+  if (!ownsInstance) return;
+  if (mcpMode) {
+    app.dock?.hide();
+    try {
+      await runMCPClient(app.getPath('userData'));
+    } catch (error) {
+      process.stderr.write((error instanceof Error ? error.message : String(error)) + '\n');
+      process.exitCode = 1;
+    }
+    quitting = true;
+    app.quit();
+    return;
+  }
+  desktop = new Desktop(app.getPath('userData'), trusted, {
+    openSettings: openSettingsWindow,
+    settingsChanged: menu,
+    worker: path.join(__dirname, 'worker.cjs'),
+    ocr: app.isPackaged
+      ? path.join(process.resourcesPath, 'viewer-ocr')
+      : path.resolve('assets/viewer-ocr'),
+  });
+  protocol.handle('viewer-resource', (request) => desktop!.resources.response(request));
+  nativeTheme.on('updated', () => desktop?.settings.announce());
   protocol.handle('viewer-app', async (request) => {
     const url = new URL(request.url);
     const relative = decodeURIComponent(url.pathname);
@@ -266,7 +445,7 @@ app.whenReady().then(async () => {
   await createWindow();
 });
 app.on('activate', () => {
-  if (!window) void createWindow();
+  if (!mcpMode && desktop && !window) void createWindow();
 });
 app.on('before-quit', (event) => {
   if (quitting) return;
@@ -275,8 +454,7 @@ app.on('before-quit', (event) => {
   quitPending = true;
   void (async () => {
     await desktop?.flush();
-    await desktop?.operations.close();
-    await disposing;
+    await desktop?.dispose();
   })()
     .catch((error) => console.error(error))
     .finally(() => {

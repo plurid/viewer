@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 
@@ -9,8 +10,8 @@ GlobalWorkerOptions.workerSrc = workerURL;
 export default function PDFPreview(context: PreviewContext) {
   const { resource, signal, active } = context;
   const [pdf, setPDF] = useState<PDFDocumentProxy | null>(null);
-  const [page, setPage] = useState(1);
-  const [zoom, setZoom] = useState(1);
+  const [page, setPage] = usePreviewState(context, 'pdf.page', 1);
+  const [zoom, setZoom] = usePreviewState(context, 'pdf.zoom', 1);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);

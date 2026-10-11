@@ -12,14 +12,18 @@ import type {
   Workspace,
 } from '../../domain/contracts';
 import { migratePlaneNavigation, normalizePreferences, reorder } from '../../domain/preferences';
+import { clearSessions, focusFiles, trimSessions, remapSessions } from '../workspace/sessions';
+import { pathMapper, type FileChange } from '../../domain/changes';
 import { parentPath } from '../../domain/planes';
+import { defaultSettings, type SettingsSnapshot } from '../../domain/services';
 
 interface ViewerState {
+  settings: SettingsSnapshot;
   saved: SavedState & { ui: UIPreferences };
   bootstrap: Bootstrap;
   jobs: OperationJob[];
   activePane: string;
-  quickPreview: string | null;
+  quickPreview: { paths: string[]; index: number; paneID?: string; workspaceID: string } | null;
   notice: string | null;
   operationsOpen: boolean;
   operationsHistory: boolean;
@@ -29,8 +33,32 @@ interface ViewerState {
 }
 let current: ViewerState;
 const listeners = new Set<() => void>();
+let preferenceTimer: ReturnType<typeof setTimeout> | undefined;
+const pendingPreferences = new Map<string, unknown>();
+let preferenceWrite: Promise<void> | undefined;
+async function flushPreferences(): Promise<void> {
+  clearTimeout(preferenceTimer);
+  if (preferenceWrite) {
+    await preferenceWrite;
+    if (pendingPreferences.size) await flushPreferences();
+    return;
+  }
+  if (!pendingPreferences.size || !window.viewer.settingsPatch) return;
+  const patches = [...pendingPreferences].map(([path, value]) => ({ path, value }));
+  pendingPreferences.clear();
+  preferenceWrite = window.viewer
+    .settingsPatch(patches, current.settings.revision)
+    .then(receiveSettings)
+    .catch(report)
+    .finally(() => {
+      preferenceWrite = undefined;
+    });
+  await preferenceWrite;
+  if (pendingPreferences.size) await flushPreferences();
+}
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 const adapters = new Map<string, Map<string, string>>();
+const dirtyArrangements = new Set<string>();
 // Host records survive an arrangement undo in memory, never as unreferenced saved panes.
 const closedPanes = new Map<string, Map<string, { pane: Pane; root: boolean }>>();
 const uuid = () => crypto.randomUUID();
@@ -38,10 +66,10 @@ export const folderPane = (path: string, sidebar?: PaneSidebar): FolderPane => (
   id: uuid(),
   type: 'folder',
   path,
-  mode: 'list',
+  mode: current?.settings.settings.browsing.mode ?? 'list',
   sort: 'name',
   descending: false,
-  showHidden: false,
+  showHidden: current?.settings.settings.browsing.showHidden ?? false,
   history: [path],
   historyIndex: 0,
   sidebar,
@@ -64,9 +92,24 @@ function update(next: ViewerState, persist = false): void {
 }
 export function initialize(bootstrap: Bootstrap): void {
   clearTimeout(persistTimer);
+  clearTimeout(preferenceTimer);
+  pendingPreferences.clear();
   adapters.clear();
+  dirtyArrangements.clear();
+  clearSessions();
   closedPanes.clear();
-  const pane = folderPane(bootstrap.home, { visible: true, width: 210 });
+  const settings = bootstrap.settings ?? {
+    revision: 0,
+    settings: defaultSettings(bootstrap.home),
+    ui: normalizePreferences(bootstrap.state?.ui),
+    look: bootstrap.state?.look ?? 'dark',
+    credentials: [],
+  };
+  const pane = {
+    ...folderPane(bootstrap.home, { visible: settings.ui.sidebar.inNewPlanes, width: 210 }),
+    mode: settings.settings.browsing.mode,
+    showHidden: settings.settings.browsing.showHidden,
+  };
   const workspace: Workspace = {
     id: uuid(),
     name: 'Workspace',
@@ -82,10 +125,15 @@ export function initialize(bootstrap: Bootstrap): void {
     recents: [],
     look: 'dark' as const,
   };
-  const saved = { ...original, ui: normalizePreferences(original.ui) };
+  const saved = { ...original, ui: settings.ui, look: settings.look };
+  if (bootstrap.freshSession && saved.workspaces.length < 30) {
+    saved.workspaces = [...saved.workspaces, workspace];
+    saved.activeWorkspace = workspace.id;
+  }
   const active = activeWorkspace({ saved } as ViewerState);
   current = {
     bootstrap,
+    settings,
     saved,
     jobs: [],
     activePane: active.activePane || active.panes[0]?.id || '',
@@ -121,12 +169,51 @@ export function dismissNotice(): void {
 }
 export function setActivePane(id: string): void {
   if (current.activePane !== id) {
-    update({ ...current, activePane: id });
-    changeWorkspace((space) => ({ ...space, activePane: id || undefined }));
+    update(
+      {
+        ...current,
+        activePane: id,
+        saved: {
+          ...current.saved,
+          workspaces: current.saved.workspaces.map((space) =>
+            space.id === current.saved.activeWorkspace
+              ? { ...space, activePane: id || undefined }
+              : space,
+          ),
+        },
+      },
+      true,
+    );
   }
 }
-export function quickPreview(path: string | null): void {
-  update({ ...current, quickPreview: path });
+export function quickPreview(
+  paths: string | string[] | null,
+  origin?: { paneID?: string; workspaceID: string },
+): void {
+  const old = current.quickPreview;
+  update({
+    ...current,
+    quickPreview: paths
+      ? {
+          paths: typeof paths === 'string' ? [paths] : paths,
+          index: 0,
+          paneID: origin?.paneID ?? current.activePane,
+          workspaceID: origin?.workspaceID ?? current.saved.activeWorkspace,
+        }
+      : null,
+  });
+  if (!paths && old?.paneID) focusFiles(old.paneID);
+}
+export function stepQuickPreview(delta: number): void {
+  const quick = current.quickPreview;
+  if (quick)
+    update({
+      ...current,
+      quickPreview: {
+        ...quick,
+        index: (quick.index + delta + quick.paths.length) % quick.paths.length,
+      },
+    });
 }
 export function setOperationsOpen(open: boolean, history = false): void {
   update({
@@ -197,7 +284,21 @@ function savePatch(patch: Partial<SavedState>): void {
   );
 }
 export function changePreferences(transform: (ui: UIPreferences) => UIPreferences): void {
-  savePatch({ ui: normalizePreferences(transform(current.saved.ui)) });
+  const old = current.saved.ui;
+  const ui = transform(old);
+  if (ui === old) return;
+  savePatch({ ui });
+  for (const group of ['sidebar', 'space'] as const)
+    for (const key of Object.keys(ui[group]) as (keyof (typeof ui)[typeof group])[]) {
+      if (old[group][key] !== ui[group][key])
+        pendingPreferences.set(`ui.${group}.${key}`, ui[group][key]);
+    }
+  if (old.recentCommands !== ui.recentCommands)
+    pendingPreferences.set('ui.recentCommands', ui.recentCommands);
+  clearTimeout(preferenceTimer);
+  preferenceTimer = setTimeout(() => {
+    void flushPreferences().catch(report);
+  }, 80);
 }
 export function rememberCommand(id: string): void {
   changePreferences((ui) => ({
@@ -207,6 +308,11 @@ export function rememberCommand(id: string): void {
 }
 export function setLook(look: 'dark' | 'light'): void {
   savePatch({ look });
+  if (window.viewer.settingsPatch)
+    void window.viewer
+      .settingsPatch([{ path: 'settings.appearance', value: look }], current.settings.revision)
+      .then(receiveSettings)
+      .catch(report);
 }
 export async function refreshClipboard(): Promise<void> {
   const clipboard = await window.viewer.clipboardRead();
@@ -336,6 +442,12 @@ export function removePanes(ids: string[]): void {
   // Match the engine's bounded history rather than retaining closed previews indefinitely.
   while (records.size > 200) records.delete(records.keys().next().value!);
   closedPanes.set(space.id, records);
+  trimSessions(
+    new Set([
+      ...current.saved.workspaces.flatMap((space) => space.panes.map((pane) => pane.id)),
+      ...records.keys(),
+    ]),
+  );
   changeWorkspace((space) => ({
     ...space,
     panes: space.panes.filter((pane) => !removed.has(pane.id)),
@@ -470,27 +582,132 @@ export function storageAdapter(id: string) {
   return {
     getItem: (key: string) => map.get(key) ?? null,
     setItem: (key: string, value: string) => {
+      if (map.get(key) === value) return;
       map.set(key, value);
+      dirtyArrangements.add(id);
       clearTimeout(persistTimer);
       persistTimer = setTimeout(() => {
         void flushState(false).catch(report);
       }, 400);
     },
     removeItem: (key: string) => {
-      map.delete(key);
+      if (map.delete(key)) dirtyArrangements.add(id);
     },
   };
 }
 export async function flushState(flushEngine = true): Promise<void> {
   clearTimeout(persistTimer);
   if (flushEngine) window.dispatchEvent(new Event('pagehide'));
+  await flushPreferences();
   const saved = {
     ...current.saved,
-    workspaces: current.saved.workspaces.map((space) => ({
-      ...space,
-      arrangement: Object.fromEntries(adapters.get(space.id) ?? []),
-    })),
+    workspaces: current.saved.workspaces.map((space) =>
+      dirtyArrangements.has(space.id)
+        ? { ...space, arrangement: Object.fromEntries(adapters.get(space.id) ?? []) }
+        : space,
+    ),
   };
   current = { ...current, saved };
+  dirtyArrangements.clear();
   await window.viewer.save(saved);
+}
+
+export function receiveFileChanges(changes: FileChange[]): void {
+  const map = pathMapper(changes);
+  const saved = current.saved;
+  update(
+    {
+      ...current,
+      saved: {
+        ...saved,
+        workspaces: saved.workspaces.map((space) => ({
+          ...space,
+          panes: space.panes.map((pane) =>
+            pane.type === 'folder'
+              ? { ...pane, path: map(pane.path), history: pane.history.map(map) }
+              : { ...pane, path: map(pane.path) },
+          ),
+        })),
+        favorites: saved.favorites.map((item) => ({ ...item, path: map(item.path) })),
+        recents: saved.recents.map(map),
+        ui: {
+          ...saved.ui,
+          sidebar: {
+            ...saved.ui.sidebar,
+            locations: saved.ui.sidebar.locations.map(map),
+            hidden: saved.ui.sidebar.hidden.map(map),
+            labels: Object.fromEntries(
+              Object.entries(saved.ui.sidebar.labels).map(([path, label]) => [map(path), label]),
+            ),
+          },
+        },
+      },
+      quickPreview: current.quickPreview
+        ? { ...current.quickPreview, paths: current.quickPreview.paths.map(map) }
+        : null,
+    },
+    true,
+  );
+  for (const key of ['labels', 'locations', 'hidden'] as const)
+    if (JSON.stringify(current.saved.ui.sidebar[key]) !== JSON.stringify(saved.ui.sidebar[key]))
+      pendingPreferences.set('ui.sidebar.' + key, current.saved.ui.sidebar[key]);
+  clearTimeout(preferenceTimer);
+  preferenceTimer = setTimeout(() => {
+    void flushPreferences().catch(report);
+  }, 80);
+  remapSessions(changes);
+  window.dispatchEvent(new Event('viewer:refresh'));
+}
+
+export function receiveSettings(snapshot: SettingsSnapshot): void {
+  if (snapshot.revision < current.settings.revision) return;
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const ui = { ...snapshot.ui };
+  // Other-window updates cannot rewind the user's not-yet-flushed navigation edits.
+  for (const [path, value] of pendingPreferences) {
+    const [, group, key] = path.split('.');
+    if (group === 'recentCommands') ui.recentCommands = value as string[];
+    else if (group === 'sidebar' || group === 'space')
+      Object.assign(ui, { [group]: { ...ui[group], [key]: value } });
+  }
+  for (const key of ['space', 'sidebar', 'recentCommands'] as const)
+    if (same(ui[key], current.saved.ui[key])) Object.assign(ui, { [key]: current.saved.ui[key] });
+  const settings = { ...snapshot.settings };
+  for (const key of Object.keys(settings) as (keyof typeof settings)[])
+    if (same(settings[key], current.settings.settings[key]))
+      Object.assign(settings, { [key]: current.settings.settings[key] });
+  update({
+    ...current,
+    settings: { ...snapshot, settings, ui },
+    saved: { ...current.saved, ui, look: snapshot.look, preferencesRevision: snapshot.revision },
+  });
+}
+export function addSearchPane(
+  query: string,
+  name: string,
+  root?: string,
+  recursive = true,
+  content = false,
+): string {
+  if (activeWorkspace().panes.length >= 200)
+    throw new Error('Close a plane before adding another.');
+  const pane: Pane = {
+    id: uuid(),
+    type: 'search',
+    recursive,
+    content,
+    path: root || current.bootstrap.home,
+    query,
+    name,
+    allLocations: !root,
+  };
+  changeWorkspace((space) => ({
+    ...space,
+    roots: [...space.roots, pane.id],
+    panes: [...space.panes, pane],
+    activePane: pane.id,
+  }));
+  savePatch({ version: 2 });
+  setActivePane(pane.id);
+  return pane.id;
 }

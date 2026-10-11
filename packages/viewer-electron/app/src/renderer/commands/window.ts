@@ -11,6 +11,7 @@ import {
   updatePane,
 } from '../state/store';
 import type { WorkspaceController } from '../workspace/context';
+import { actionCommands } from '../actions/commands';
 import { repeatedPreviews } from '../workspace/recovery';
 import type { CommandContext, CommandDefinition } from './registry';
 
@@ -521,5 +522,34 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       when: windowScope,
       run: () => actions.workspace.openPath(item.path),
     });
-  return commands;
+  for (const search of state.settings.settings.savedSearches)
+    commands.push({
+      id: `saved-search:${search.id}`,
+      label: search.name,
+      group: 'Saved searches',
+      aliases: ['search', search.query],
+      detail: search.query,
+      icon: 'search',
+      when: windowScope,
+      run: () =>
+        actions.workspace.newSearch(
+          search.query,
+          search.name,
+          search.root,
+          search.recursive,
+          search.content,
+        ),
+    });
+  commands.push({
+    id: 'tasks',
+    label: 'Action tasks…',
+    group: 'Actions',
+    icon: 'command',
+    aliases: ['history', 'proposals'],
+    when: windowScope,
+    run: () => {
+      window.dispatchEvent(new Event('viewer:tasks'));
+    },
+  });
+  return [...commands, ...actionCommands()];
 }

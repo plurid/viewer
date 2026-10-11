@@ -62,6 +62,13 @@ export const previewModules: PreviewModule[] = [
     load: () => import('./modules/ModelPreview'),
   },
   {
+    id: 'epub',
+    label: 'EPUB book',
+    formats: ['epub'],
+    detect: extension(['epub']),
+    load: () => import('./modules/EPUBPreview'),
+  },
+  {
     id: 'pdf',
     label: 'PDF document',
     formats: ['pdf'],

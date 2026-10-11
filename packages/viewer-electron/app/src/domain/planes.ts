@@ -29,10 +29,14 @@ export function matchingPane(
   type: Pane['type'],
   active: string,
   platform: string,
+  scope: { rootID: string; owners: ReadonlyMap<string, string> },
 ): Pane | undefined {
   const target = normalizedPanePath(path, platform);
   const matches = workspace.panes.filter(
-    (pane) => pane.type === type && normalizedPanePath(pane.path, platform) === target,
+    (pane) =>
+      scope.owners.get(pane.id) === scope.rootID &&
+      pane.type === type &&
+      normalizedPanePath(pane.path, platform) === target,
   );
   return matches.find((pane) => pane.id === active) ?? matches.at(-1);
 }

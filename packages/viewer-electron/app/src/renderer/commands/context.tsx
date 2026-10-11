@@ -6,9 +6,12 @@ export function useCommands(): CommandRegistry {
   if (!registry) throw new Error('Command registry is missing.');
   return registry;
 }
-export function useCommandRevision(): void {
+export function useCommandRevision(paneID?: string): void {
   const registry = useCommands();
-  useSyncExternalStore(registry.subscribe, registry.snapshot);
+  useSyncExternalStore(
+    registry.subscribe,
+    paneID ? () => registry.scopedSnapshot(paneID) : registry.snapshot,
+  );
 }
 export function useCommandSource(
   id: string,
@@ -28,6 +31,6 @@ export function useCommandSource(
     [registry, id],
   );
   useEffect(() => {
-    registry.touch();
+    registry.touch(id);
   }, dependencies);
 }

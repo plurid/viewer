@@ -8,6 +8,7 @@ import {
   setActivePane,
   useViewer,
 } from '../state/store';
+import { focusFiles } from './sessions';
 import { useCommands, useCommandRevision } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
 import { Icon } from '../ui/Icon';
@@ -27,7 +28,7 @@ export function PlaneHeader({
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id));
   const dragging = useViewer((state) => state.saved.ui.space.dragging);
   const registry = useCommands();
-  useCommandRevision();
+  useCommandRevision(id);
   const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest } | null>(null);
   const slot = useCallback(
     (element: HTMLDivElement | null) => setPreviewControlsSlot(id, element),
@@ -35,13 +36,18 @@ export function PlaneHeader({
   );
   const request: CommandRequest = {
     paneID: id,
-    scope: pane?.type === 'folder' ? 'folder' : 'preview',
+    scope: pane?.type === 'folder' ? 'folder' : pane?.type === 'search' ? 'files' : 'preview',
     context: { paneID: id, selection: [], path: pane?.path },
   };
   const available = registry.list(request);
   const run = (command: string) => {
     setActivePane(id);
-    void registry.invoke(command, request).catch(report);
+    void registry
+      .invoke(command, request)
+      .then(() => {
+        if (!['search', 'close-plane'].includes(command)) focusFiles(id);
+      })
+      .catch(report);
   };
   const openMenu = (event: React.MouseEvent<HTMLButtonElement>, ids?: string[]) => {
     setActivePane(id);
@@ -105,7 +111,9 @@ export function PlaneHeader({
       >
         <Icon name={pane?.type === 'folder' ? 'folder' : 'file'} size={16} />
         <span className="plane-title">
-          {pane?.path.split(/[\\/]/).pop() || pane?.path || 'Plane'}
+          {pane?.type === 'search'
+            ? pane.name
+            : pane?.path.split(/[\\/]/).pop() || pane?.path || 'Plane'}
         </span>
       </span>
       {pane?.type === 'folder' ? (
@@ -141,7 +149,13 @@ export function PlaneHeader({
       </div>
       <IconButton
         icon="more"
-        label={pane?.type === 'folder' ? 'Folder actions' : 'Preview actions'}
+        label={
+          pane?.type === 'folder'
+            ? 'Folder actions'
+            : pane?.type === 'search'
+              ? 'Search actions'
+              : 'Preview actions'
+        }
         aria-haspopup="dialog"
         onClick={(event) => openMenu(event)}
       />

@@ -13,12 +13,16 @@ export interface PreviewCommand {
 
 export interface PreviewContext {
   resource: Resource;
+  state?: { get(key: string): unknown; set(key: string, value: unknown): void };
+  limits?: { maxImagePixels: number; maxModelMB: number };
   active: boolean;
   interactive: boolean;
   signal: AbortSignal;
   look: 'dark' | 'light';
   commands?: { header?: HTMLElement; register(commands: readonly PreviewCommand[]): () => void };
   services: {
+    thumbnail(file: string, size: number): Promise<string>;
+    document(id: string): Promise<import('../../domain/services').DocumentData>;
     read(id: string, limit?: number): Promise<ResourceRead>;
     archive(id: string): Promise<ArchiveListing>;
     archiveEntry(id: string, name: string): Promise<Resource>;

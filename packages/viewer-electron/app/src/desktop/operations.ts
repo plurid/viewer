@@ -60,12 +60,14 @@ export class Operations {
   private tasks = new Map<string, Task>();
   private queue: Task[] = [];
   private running = false;
+  private exclusiveQueue: Promise<void> = Promise.resolve();
   private stopped = false;
   private idle: (() => void)[] = [];
   constructor(
     private trash: (file: string) => Promise<void>,
     private changed: (job: OperationJob) => void,
     private progressed: (progress: OperationProgress) => void = () => {},
+    private filesChanged: (changes: import('../domain/changes').FileChange[]) => void = () => {},
   ) {}
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
@@ -158,6 +160,7 @@ export class Operations {
       for (const step of [...task.undo].reverse()) {
         if (step.caseOnly && (await exists(step.to))) await this.changeCase(step.from, step.to);
         else await this.publish(step.from, step.to);
+        this.filesChanged([{ source: step.from, destination: step.to }]);
         task.undo.splice(task.undo.indexOf(step), 1);
       }
       task.job.undoable = false;
@@ -166,6 +169,29 @@ export class Operations {
       this.running = false;
       void this.run();
     }
+  }
+  exclusive<T>(
+    work: (publish: (source: string, destination: string) => Promise<void>) => Promise<T>,
+  ): Promise<T> {
+    const task = this.exclusiveQueue
+      .catch(() => {})
+      .then(async () => {
+        while (this.running) await new Promise<void>((resolve) => this.idle.push(resolve));
+        if (this.stopped) throw new Error('The operation service is closed.');
+        this.running = true;
+        try {
+          return await work((source, destination) => this.publish(source, destination));
+        } finally {
+          this.running = false;
+          for (const resolve of this.idle.splice(0)) resolve();
+          void this.run();
+        }
+      });
+    this.exclusiveQueue = task.then(
+      () => {},
+      () => {},
+    );
+    return task;
   }
   private emit(task: Task): void {
     task.job.revision++;
@@ -504,6 +530,8 @@ export class Operations {
               }
             }
             job.completed.push({ source, destination });
+            if (destination && ['rename', 'move'].includes(request.kind))
+              this.filesChanged([{ source, destination }]);
             job.itemsDone++;
           } catch (error) {
             if (task.abort.signal.aborted) break;

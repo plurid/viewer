@@ -51,7 +51,17 @@ export interface PreviewPane {
   /** Explicit Open another plane copies survive duplicate-preview recovery. */
   keepSeparate?: boolean;
 }
-export type Pane = FolderPane | PreviewPane;
+export interface SearchPane {
+  id: string;
+  type: 'search';
+  path: string;
+  query: string;
+  name: string;
+  allLocations: boolean;
+  recursive?: boolean;
+  content?: boolean;
+}
+export type Pane = FolderPane | PreviewPane | SearchPane;
 export interface Workspace {
   id: string;
   name: string;
@@ -61,7 +71,8 @@ export interface Workspace {
   arrangement: Record<string, string>;
 }
 export interface SavedState {
-  version: 1;
+  version: 1 | 2;
+  preferencesRevision?: number;
   workspaces: Workspace[];
   activeWorkspace: string;
   favorites: { name: string; path: string }[];
@@ -96,12 +107,14 @@ export interface UIPreferences {
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
+  freshSession?: boolean;
   home: string;
   platform: 'darwin' | 'win32' | 'linux';
   locations: { name: string; path: string }[];
   state: SavedState | null;
   openPaths: string[];
   recovery?: string;
+  settings?: import('./services').SettingsSnapshot;
 }
 export type OperationKind = 'copy' | 'move' | 'duplicate' | 'rename' | 'mkdir' | 'trash';
 export interface OperationRequest {
@@ -158,6 +171,7 @@ export interface SearchBatch {
   truncated: boolean;
 }
 export interface Resource {
+  dimensions?: { width: number; height: number };
   id: string;
   url: string;
   entry: FileEntry;
@@ -178,6 +192,10 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'settings'; snapshot: import('./services').SettingsSnapshot }
+  | { type: 'index'; status: import('./services').IndexStatus }
+  | { type: 'action'; plan: import('./services').ActionPlan }
+  | { type: 'file-changes'; changes: import('./changes').FileChange[] }
   | { type: 'folder-changed'; path: string }
   | { type: 'watch-error'; path: string; message: string }
   | { type: 'search'; batch: SearchBatch }
@@ -185,9 +203,35 @@ export type DesktopEvent =
   | { type: 'job-progress'; progress: OperationProgress }
   | { type: 'open'; paths: string[] }
   | { type: 'command'; command: string }
-  | { type: 'flush'; token: string };
+  | { type: 'flush'; token: string }
+  | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
   bootstrap(): Promise<Bootstrap>;
+  openSettings(): Promise<void>;
+  settingsGet(): Promise<import('./services').SettingsSnapshot>;
+  settingsPatch(
+    patches: import('./services').SettingsPatch[],
+    revision: number,
+  ): Promise<import('./services').SettingsSnapshot>;
+  providerCredential(id: string, key: string): Promise<void>;
+  providerModels(id: string): Promise<string[]>;
+  indexStatus(): Promise<import('./services').IndexStatus>;
+  indexedQuery(
+    query: import('./services').IndexedQuery,
+  ): Promise<import('./services').IndexedResult>;
+  indexRebuild(): Promise<void>;
+  actionStart(request: import('./services').ActionRequest): Promise<string>;
+  actionGet(id: string): Promise<import('./services').ActionPlan>;
+  actionList(): Promise<import('./services').ActionPlan[]>;
+  actionApply(approval: import('./services').ActionApproval): Promise<void>;
+  actionCancel(id: string): Promise<void>;
+  actionUndo(id: string): Promise<void>;
+  actionRecover(id: string): Promise<void>;
+  actionExportSummary(id: string, destination: string): Promise<void>;
+  agentToken(): Promise<string>;
+  contextPublish(context: import('./services').ActionContext): Promise<void>;
+  thumbnail(path: string, size: number): Promise<string>;
+  document(id: string): Promise<import('./services').DocumentData>;
   list(path: string): Promise<FolderListing>;
   stat(path: string): Promise<FileEntry>;
   chooseFolder(): Promise<string | null>;

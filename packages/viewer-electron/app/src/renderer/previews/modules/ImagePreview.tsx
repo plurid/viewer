@@ -1,13 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { Empty, IconButton } from '../../ui/primitives';
 
 export default function ImagePreview(context: PreviewContext) {
   const { resource, active, interactive } = context;
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = usePreviewState(context, 'image.zoom', 1);
+  const [pan, setPan] = usePreviewState(context, 'image.pan', { x: 0, y: 0 });
   const [dimensions, setDimensions] = useState('');
+  const large =
+    (!!resource.dimensions &&
+      resource.dimensions.width * resource.dimensions.height >
+        (context.limits?.maxImagePixels ?? 64000000)) ||
+    resource.entry.size > 64000000;
+  const [thumbnail, setThumbnail] = useState('');
+  useEffect(() => {
+    if (!large) return;
+    let live = true;
+    void context.services.thumbnail(resource.entry.path, 512).then((value) => {
+      if (live) setThumbnail(value);
+    });
+    return () => {
+      live = false;
+    };
+  }, [large, resource.entry.path]);
   const [error, setError] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
@@ -73,6 +90,12 @@ export default function ImagePreview(context: PreviewContext) {
     );
   return (
     <div className="image-viewer">
+      {large && (
+        <p className="inline-warning">
+          Large image · showing a bounded preview. Adjust the limit in Settings to load the full
+          image.
+        </p>
+      )}
       <PreviewToolbar context={context}>
         <IconButton
           icon="frame"
@@ -124,7 +147,7 @@ export default function ImagePreview(context: PreviewContext) {
         }}
       >
         <img
-          src={resource.url}
+          src={large ? thumbnail || undefined : resource.url}
           alt={resource.entry.name}
           draggable={false}
           onError={() => setError(true)}

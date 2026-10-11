@@ -1,12 +1,12 @@
 # Performance analysis
 
-Measured on October 11, 2026, in the packaged Apple Silicon app on macOS 15.1. The menu's sluggish scrolling came from hover-driven scrolling fighting the wheel. A separate quadratic selection lookup caused a visible stall in large folders. Both are fixed. Operation source pruning and repeated full-job progress messages also scaled poorly and have been replaced.
+Measured on October 11, 2026, in the packaged Apple Silicon app on macOS 15.1. The first table records the preceding interface pass; the service/root-isolation measurements below describe this implementation. The menu's sluggish scrolling came from hover-driven scrolling fighting the wheel. A separate quadratic selection lookup caused a visible stall in large folders. Both are fixed. Operation source pruning and repeated full-job progress messages also scaled poorly and have been replaced.
 
 ## Method and scope
 
 Native probes used disposable profiles and generated files, the packaged Electron binary, Chrome DevTools Protocol Performance/Profiler metrics, `PerformanceObserver` long-task entries, and instrumented scroll calls. Node microbenchmarks isolated selection indexes, source pruning and parsers. An additional real 1,000-file copy measured the operation event stream and verified both source and destination contents. No existing user files, folders, application profile or native Trash were changed.
 
-The measured stack is Electron 44.7.0 / Chromium 152.0.7977.130, React 19.3.0, Plurid React 0.0.0-40 / data 0.0.0-26, Three 0.186.1, PDF.js 6.4.299, TypeScript 6.0.3 and Vite 8.3.4. Node probes used 26.8.2. Dependency versions are recorded in the root lockfile. The newer sibling Plurid source informed API analysis; verification used the installed, packaged engine.
+The measured stack is Electron 44.7.0 / Chromium 152.0.7977.130, React 19.3.0, Plurid React 0.0.0-40 / data 0.0.0-26, Three 0.186.1, PDF.js 6.4.299, TypeScript 6.0.3 and Vite 8.3.4. Node probes used 26.8.2. Dependency versions are recorded in the root lockfile. The newer sibling Plurid source and dechat informed API/context analysis; verification used the installed, packaged engine.
 
 Duration figures below are CPU work over controlled observation windows, not end-to-end interaction latency or frame-rate guarantees. These are single-machine diagnostic samples, not a statistical benchmark or a network-drive test. The updated app shows three native spatial aids by default, adding DOM compared with the baseline.
 
@@ -20,7 +20,7 @@ Duration figures below are CPU work over controlled observation windows, not end
 | Prune 10,000 independent operation sources, Node     | 1,304.55ms                                                                                    | 3.84–3.92ms                                                        | Ancestor Set membership replaces all-pairs prefix comparison.                               |
 | Resolve a 10,000-item selection, Node                | 175.13ms for repeated `find`                                                                  | 1.54–1.90ms including construction of both indexes and path lookup | The hot lookup scales with listing plus selection size.                                     |
 | Idle 10,000-file folder, 3 seconds                   | 0.18ms task work                                                                              | 0.37ms task work, 0ms script work                                  | Both samples are effectively idle; there is no evidence of a continuous renderer loop here. |
-| Settings tab dimensions                              | Heights varied: 180.9 / 586.2 / 332.3px                                                       | 500×540px on all three tabs                                        | Content scrolls inside a stable viewport-constrained dialog.                                |
+| Settings tab dimensions, preceding pass             | Heights varied: 180.9 / 586.2 / 332.3px                                                       | Fixed dialog in that pass; now a separate 900×640 native window    | Categories scroll inside a stable window and preserve its size.                              |
 
 ### Menu scrolling
 
@@ -36,7 +36,9 @@ The 10,000-file folder still renders 28 file rows. The updated initial document 
 
 Commands and file finding have separate mounted children. Command mode does not call the folder listing/watch or recursive search hooks. File mode scores lightweight filename entries before constructing a maximum of 150 executable result definitions; matching still considers the whole listing, so a late match in a 10,000-file directory is found. Context, aliases, recency, destination selection and availability rechecks remain shared through the command registry.
 
-Remaining renderer opportunities are broader command-registry invalidation and whole-folder refreshes. Multiple planes viewing the same path share a desktop watcher but can each request metadata again. Profile these with several large open folders before adding caches or changing subscription ownership.
+This implementation caches command definitions by source revision and gives headers scoped snapshots. Mounted folder scenes and preview hosts use stable props. Folder views now share a path-keyed listing request, watcher and bounded idle cache; refreshes coalesce at 80ms. This avoids duplicate metadata requests from several visible roots at the same path. A whole-folder metadata refresh still costs proportional to its entry count.
+
+Native verification also reproduced an update loop in file finding: a fresh empty search array invalidated command definitions on every render. Shared empty snapshots remove the loop. Another reproduced failure came from replacing a session cache Map after a rename while memoized Columns-view selection handlers retained its old identity. Updating that Map in place keeps child selections visible to both commands and Space preview. The regression covers the real retained-reference pattern.
 
 ### Plurid and spatial interaction
 
@@ -66,9 +68,9 @@ The change preserves serial ownership, exclusive publication, source revalidatio
 
 ### Persistence
 
-UI preferences use version 3 independently of core saved-state version 1. The version-3 whole-state migration enables existing plane navigation and hides window navigation once after an exclusive synced metadata backup; subsequent choices remain authoritative. Unversioned profiles restore toolbar, minimap and viewcube once; versioned false choices survive reload. Optional malformed fields fall back individually. Folder-plane navigation stores only visibility and width; order, labels, Favorites and folding remain shared. Native tests check persistence and unchanged fixture inventories for UI-only actions.
+UI preferences use version 3 independently of core saved-state version 2. Core version 1 is read with an additive, backed-up migration for virtual search roots. The version-3 whole-state migration enables existing plane navigation and hides window navigation once after an exclusive synced metadata backup; subsequent choices remain authoritative. Unversioned profiles restore toolbar, minimap and viewcube once; versioned false choices survive reload. Optional malformed fields fall back individually. Folder-plane navigation stores only visibility and width; order, labels, Favorites and folding remain shared. Native tests check persistence and unchanged fixture inventories for UI-only actions.
 
-Persistence debounces at 400ms, serializes all workspace arrangements and uses validated atomic writes. The preload boundary and storage service both validate the state. Large arrangements can therefore create a renderer serialization pause and main-process validation/serialization work. Incremental workspace persistence is a future profiling target; this pass does not change the durable format or remove validation to chase throughput.
+Persistence debounces at 400ms, captures dirty workspace arrangements and uses validated atomic writes. Settings use a separate revisioned document with coalesced field patches. Closing native Settings waits for its queued edits to flush. The preload boundary and storage service both validate the state. Large arrangements can therefore create a renderer serialization pause and main-process validation/serialization work. The final saved-state document still serializes the complete layout. Large arrangements and cold storage remain profiling targets; validation is retained.
 
 ### Previews and memory
 
@@ -79,16 +81,49 @@ Several expensive tasks remain synchronous:
 - A roughly 4MiB / 55,188-row CSV preview produced 80ms and 68ms native long tasks in a cold-load probe. Total task work was 286ms; script 113.6ms, style recalculation 71.8ms and layout 15.5ms. CPU sampling attributed about 40.8ms to garbage collection and roughly 25ms to parsing/filtering. It would be incorrect to attribute the whole stall to the CSV parser. A separate Node parse/filter probe took 42.55 / 2.73ms.
 - A roughly 3.97MiB JSON parsed in 4.93ms in Node. Rendering expanded trees, syntax highlighting and repeated filters can add work that this parser-only measurement does not include.
 - Three's OBJ parser took 70.61ms for a 1.53MiB synthetic source with 200,000 triangles; Node heap reached about 108MB and the position buffer alone occupied 6.87MB. This is an isolated parser measurement, not a native GPU allocation or leak trace. A 256MiB source limit does not bound decoded geometry or texture memory.
-- Thumbnails currently open full image resources for visible tiles, capped at a 30MiB source file. CSS resizing does not limit decoded pixel memory. A bounded thumbnail service/cache is the next likely improvement for image-heavy grids.
+- Visible image tiles now request platform-generated PNG thumbnails rather than original image resources. Requested dimensions are capped at 512px, generation is serialized, pending identical requests are shared, and the cache is bounded at 128 entries / 16MB of encoded data. Full previews retain separate source and decoded-pixel budgets. Encoded cache bounds do not constitute a native decoder/GPU-memory trace.
 - PDF search visits up to the first 1,000 pages, with cancellation, but does not yet cache extracted text across queries. Large document search merits its own trace.
 
-Worker parsing, decoded-content budgets and thumbnail generation should be separate changes with representative real files and cancellation tests. None is claimed as fixed by this UI/performance pass.
+Document extraction and indexing now run in a utility process; native PDF extraction/OCR and granted EPUB content indexing are exercised. Large CSV/model parser work and decoded model texture budgets remain separate profiling targets.
 
 ### Bundles and startup
 
-The current static renderer graph is approximately 989.3KiB uncompressed: main entry 681.6KiB, React/Redux chunk 289.4KiB, controls 10.0KiB and React shared chunk 8.4KiB. The baseline was approximately 983KiB. Preview chunks remain lazy: model 712.9KiB, PDF 423.5KiB and text 194.0KiB; the PDF worker is 2,177.5KiB. The app ASAR is 18.9MiB.
+The current static renderer graph is approximately 1,040.3KiB uncompressed: main entry 732.3KiB, React/Redux chunk 289.4KiB, controls 10.0KiB, React shared chunk 8.4KiB and a small Plurid re-export. The preceding pass was approximately 989KiB. Preview chunks remain lazy: model 713.0KiB, PDF 423.5KiB, text 194.0KiB and EPUB 2.9KiB; the PDF worker is 2,177.5KiB. The app ASAR is 25.0MiB, including the service worker, PDF extraction bundle and native OCR helper.
 
 These are on-disk JavaScript sizes, not measured cold-start times. Gzip sizes are less relevant to a local packaged protocol than parse/compile cost and module execution. Heavy preview libraries are already split from routine browsing. The spatial engine/React graph is the meaningful startup profiling target; changing dependencies or adding dynamic imports without tracing the startup path would not establish a benefit.
+
+## Root/service pass measurements
+
+Fresh packaged-native probes used isolated profiles, 120Hz frame observations, generated files and a React DevTools commit hook. They checked source hashes afterward and recorded no renderer exceptions or observer long tasks. These include asynchronous waits and instrumentation; elapsed duration is the observation window, not click latency.
+
+| Workload | React commits / engine emissions | Frame p95 | Largest frame interval |
+| --- | --- | --- | --- |
+| Two roots: open/scroll contextual actions, 24 wheel steps with pointer jitter | 51 / 7 in 1.65s | 9.1ms | 175ms |
+| Two roots: repeated hover on one command row | 8 / 1 in 1.41s | 9.1ms | 9.4ms |
+| Two roots: camera wheel rotation | 607 / 202 in 2.01s | 8.5ms | 9.3ms |
+| Twelve roots / 1,000 generated files: contextual menu scrolling | 30 / 1 in 1.44s | 8.9ms | 15.8ms |
+| Same layout plus four 4,096×4,096 image roots: contextual menu scrolling | 27 / 0 in 1.43s | 9.5ms | 12.8ms |
+| Image-root layout: camera wheel rotation | 751 / 251 in 2.40s | 8.9ms | 9.3ms |
+| Image-root layout: plane title drag | 125 / 46 in 1.41s | 9.3ms | 10.3ms |
+
+The small-menu sample contains one 175ms frame gap despite no JavaScript long task. This must not be hidden by percentile reporting or interpreted as a solved compositor stall. The larger menu samples did not reproduce that gap. The image-root camera trace recorded 194.4ms of FunctionCall work (largest 2.8ms), 15.9ms of style updates, 34.3ms layout, 8.8ms event dispatch and 33.0ms paint across its observation window. This is renderer trace data, not a GPU-memory or platform-compositor measurement.
+
+Camera gestures still cause about three React root commits per engine emission. Stable folder/preview props keep heavy browsing work out of those updates, but the engine's subscriber scheduling remains a meaningful investigation target. The twelve-root camera attempt with only four emissions did not exercise rotation and is excluded from the table. Culling means the image-root workload does not establish that all decoded images remain simultaneously resident; the roots are present in the layout, and visibility is engine-controlled.
+
+The probes also verified independent same-image children in two roots, same-root reuse, Space after row/search/frame controls and selection surviving culling. They are generated diagnostic workloads, not representative real book libraries or network mounts.
+
+### SQLite filename/metadata index
+
+The checked-in `tools/index-benchmark.ts` ingests synthetic records into a temporary disk SQLite/WAL database, then alternates publication-extension queries and frequent filename/size queries over 30 samples. It does not crawl a user's filesystem.
+
+| Records | Ingestion | Query p50 | Query p95 |
+| --- | --- | --- | --- |
+| 100,000 | 980ms | 21.46ms | 22.50ms |
+| 1,000,000 | 10,878ms | 18.69ms | 19.61ms |
+
+Before the frequent-term query-plan correction, the million-record fixture took 285.81ms p50 / 296.2ms p95. The current plan uses a bounded count probe and scans matching names in stable order when a term is frequent, avoiding a large intermediate FTS sort. A regression checks disjoint pages through this branch. These figures measure indexed warm queries over synthetic filenames/metadata; extraction, first crawl, real document search and mount latency have separate costs.
+
+Reproduce from the app package with `node --import tsx tools/index-benchmark.ts 100000` and `node --import tsx tools/index-benchmark.ts 1000000`. The script removes only its owned temporary database directory.
 
 ## Regression evidence and follow-up
 
@@ -96,4 +131,4 @@ The unit suite covers identity reconciliation, normalized pane reuse, bounded fi
 
 To reproduce functional checks, run `pnpm check`, `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm make`, then `pnpm test:desktop`. The native harness uses generated fixtures and an isolated profile. For performance comparison, use the same binary/profile setup, enable CDP Performance/Profiler and a long-task observer, and measure: 14 alternating ±60px menu wheel events with 1px pointer jitter; three seconds of idle in a generated 10,000-file folder; command opening and select-all over one-second windows. Keep window visibility and fixture size identical and distinguish full observations from parser-only Node probes.
 
-The next evidence-driven priorities are decoded thumbnail memory, large CSV/model parsing, multi-preview GPU usage, cold/mounted-folder metadata and large workspace saves. Ordinary menu scrolling and large-folder selection no longer show the previously measured stalls.
+The next evidence-driven priorities are camera subscriber/commit work, large CSV/model parsing, multi-preview GPU usage, cold/mounted-folder metadata and large workspace saves. Ordinary menu scrolling and large-folder selection no longer show the previously measured stalls.
