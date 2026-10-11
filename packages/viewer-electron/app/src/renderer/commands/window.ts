@@ -8,8 +8,10 @@ import {
   getState,
   removeFavorite,
   setOperationsOpen,
+  updatePane,
 } from '../state/store';
 import type { WorkspaceController } from '../workspace/context';
+import { repeatedPreviews } from '../workspace/recovery';
 import type { CommandContext, CommandDefinition } from './registry';
 
 export interface WindowActions {
@@ -91,12 +93,31 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       icon: 'sidebar',
       aliases: ['sb'],
       shortcut: '⌥⌘S',
-      when: (context) => windowScope(context) || sidebar(context),
+      when: (context) => windowScope(context) || (sidebar(context) && !context.paneID),
       run: () =>
         changePreferences((ui) => ({
           ...ui,
           sidebar: { ...ui.sidebar, visible: !ui.sidebar.visible },
         })),
+    },
+    {
+      id: 'plane-sidebar',
+      label: (context) =>
+        context.folder?.sidebar?.visible ? 'Hide plane navigation' : 'Show plane navigation',
+      group: 'Plane',
+      icon: 'sidebar',
+      aliases: ['ps', 'sidebar', 'navigation'],
+      when: (context) => paneScope(context) && !!context.folder,
+      run: (context) => {
+        const pane = activeWorkspace().panes.find((pane) => pane.id === context.paneID);
+        if (pane?.type === 'folder')
+          updatePane(pane.id, {
+            sidebar: {
+              visible: !pane.sidebar?.visible,
+              width: pane.sidebar?.width ?? 210,
+            },
+          });
+      },
     },
     {
       id: 'new-workspace',
@@ -166,6 +187,25 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       primary: true,
       when: (context) => windowScope(context) && actions.ready && space.panes.length > 0,
       run: actions.workspace.frameAll,
+    },
+    {
+      id: 'consolidate-previews',
+      label: 'Consolidate repeated previews',
+      group: 'Space',
+      icon: 'copy',
+      aliases: ['duplicates', 'repeated', 'clean previews'],
+      detail: 'Close redundant views · layout only · Undo arrangement restores them',
+      when: (context) =>
+        windowScope(context) &&
+        actions.ready &&
+        !!actions.engine.current &&
+        repeatedPreviews(
+          space,
+          actions.engine.current.tree.get(),
+          state.activePane,
+          state.bootstrap.platform,
+        ).length > 0,
+      run: actions.workspace.consolidatePreviews,
     },
     {
       id: 'frame-plane',
@@ -261,7 +301,11 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       group: 'Sidebar',
       icon: 'folder',
       when: shortcut,
-      run: (context) => actions.workspace.openPath(context.sidebar!.path!),
+      run: (context) =>
+        actions.workspace.openPath(context.sidebar!.path!, {
+          paneID: context.paneID,
+          workspaceID: context.workspaceID,
+        }),
     },
     {
       id: 'shortcut-rename',

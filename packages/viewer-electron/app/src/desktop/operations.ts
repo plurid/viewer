@@ -15,7 +15,12 @@ import {
   utimes,
 } from 'node:fs/promises';
 import path from 'node:path';
-import type { CollisionDecision, OperationJob, OperationRequest } from '../domain/contracts';
+import type {
+  CollisionDecision,
+  OperationJob,
+  OperationProgress,
+  OperationRequest,
+} from '../domain/contracts';
 import { absolute, exists, message, validName } from './filesystem';
 import { guardMoveMetadata } from './metadata';
 
@@ -34,6 +39,22 @@ interface Task {
   decision?: (decision: CollisionDecision) => void;
   policy?: CollisionDecision;
   undo: UndoStep[];
+  lastProgress: number;
+}
+
+/** Selected ancestors carry their descendants; membership checks preserve source order. */
+export function operationRoots(sources: readonly string[], paths = path): string[] {
+  const selected = new Set(sources);
+  return [...selected].filter((file) => {
+    let parent = paths.dirname(file);
+    while (parent !== file) {
+      if (selected.has(parent)) return false;
+      const next = paths.dirname(parent);
+      if (next === parent) break;
+      parent = next;
+    }
+    return true;
+  });
 }
 export class Operations {
   private tasks = new Map<string, Task>();
@@ -44,6 +65,7 @@ export class Operations {
   constructor(
     private trash: (file: string) => Promise<void>,
     private changed: (job: OperationJob) => void,
+    private progressed: (progress: OperationProgress) => void = () => {},
   ) {}
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
@@ -52,9 +74,7 @@ export class Operations {
     if (this.stopped) throw new Error('The file operation queue has closed.');
     const sources = [...new Set(request.sources.map(absolute))];
     // A selected descendant is already carried by its selected parent.
-    const roots = sources.filter(
-      (file) => !sources.some((other) => other !== file && file.startsWith(other + path.sep)),
-    );
+    const roots = operationRoots(sources);
     if (request.destination) request = { ...request, destination: absolute(request.destination) };
     if (request.name !== undefined) validName(request.name);
     if (['copy', 'move', 'mkdir'].includes(request.kind) && !request.destination)
@@ -65,6 +85,7 @@ export class Operations {
     if (request.kind === 'mkdir' && !request.name) throw new Error('Enter a folder name.');
     const job: OperationJob = {
       id: randomUUID(),
+      revision: 0,
       kind: request.kind,
       status: 'queued',
       sources: roots,
@@ -75,6 +96,7 @@ export class Operations {
       itemsTotal: request.kind === 'mkdir' ? 1 : roots.length,
       completed: [],
       errors: [],
+      errorCount: 0,
       undoable: false,
     };
     const task: Task = {
@@ -82,6 +104,7 @@ export class Operations {
       request: { ...request, sources: roots },
       abort: new AbortController(),
       undo: [],
+      lastProgress: 0,
     };
     this.tasks.set(job.id, task);
     this.queue.push(task);
@@ -145,7 +168,28 @@ export class Operations {
     }
   }
   private emit(task: Task): void {
+    task.job.revision++;
+    task.job.errorCount = task.job.errors.length;
+    task.lastProgress = performance.now();
     this.changed(structuredClone(task.job));
+  }
+  private progress(task: Task): void {
+    const now = performance.now();
+    if (now - task.lastProgress < 80) return;
+    task.lastProgress = now;
+    const job = task.job;
+    job.revision++;
+    job.errorCount = job.errors.length;
+    this.progressed({
+      id: job.id,
+      revision: job.revision,
+      current: job.current,
+      bytesDone: job.bytesDone,
+      bytesTotal: job.bytesTotal,
+      itemsDone: job.itemsDone,
+      itemsTotal: job.itemsTotal,
+      errorCount: job.errorCount,
+    });
   }
   private check(task: Task): void {
     task.abort.signal.throwIfAborted();
@@ -228,6 +272,7 @@ export class Operations {
       task.decision = undefined;
       task.job.collision = undefined;
       task.job.status = 'running';
+      this.emit(task);
     }
     this.check(task);
     if (decision === 'cancel') {
@@ -270,14 +315,16 @@ export class Operations {
     await utimes(target, info.atime, info.mtime);
   }
   private async copyFile(source: string, target: string, info: Stats, task?: Task): Promise<void> {
-    if (task) task.job.bytesTotal += info.size;
+    if (task) {
+      task.job.current = source;
+      task.job.bytesTotal += info.size;
+    }
     const input = await open(source, 'r');
     let output: Awaited<ReturnType<typeof open>> | undefined, owned: Stats | undefined;
     try {
       output = await open(target, 'wx', info.mode);
       owned = await output.stat();
       const buffer = Buffer.allocUnsafe(256 * 1024);
-      let tick = 0;
       for (;;) {
         if (task) this.check(task);
         const { bytesRead } = await input.read(buffer, 0, buffer.length, null);
@@ -289,10 +336,7 @@ export class Operations {
         }
         if (task) {
           task.job.bytesDone += bytesRead;
-          if (Date.now() - tick > 80) {
-            tick = Date.now();
-            this.emit(task);
-          }
+          this.progress(task);
         }
       }
       await output.sync();
@@ -380,7 +424,7 @@ export class Operations {
           try {
             this.check(task);
             job.current = source || request.destination;
-            this.emit(task);
+            this.progress(task);
             let destination: string | undefined;
             let undoable = false,
               caseOnly = false;
@@ -433,6 +477,7 @@ export class Operations {
                 const resolved = await this.target(task, source, destination);
                 if (!resolved) {
                   job.itemsDone++;
+                  this.progress(task);
                   continue;
                 }
                 destination = resolved;
@@ -465,7 +510,7 @@ export class Operations {
             job.errors.push({ path: source || request.destination!, message: message(error) });
             job.itemsDone++;
           }
-          this.emit(task);
+          this.progress(task);
         }
         job.status = task.abort.signal.aborted
           ? 'cancelled'

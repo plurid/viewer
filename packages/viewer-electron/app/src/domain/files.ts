@@ -1,6 +1,44 @@
 import type { FileEntry, SortKey } from './contracts';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+export function indexEntries(entries: readonly FileEntry[]) {
+  const paths = new Map<string, FileEntry>();
+  const identities = new Map<string, FileEntry | null>();
+  for (const entry of entries) {
+    paths.set(entry.path, entry);
+    identities.set(entry.identity, identities.has(entry.identity) ? null : entry);
+  }
+  return { paths, identities };
+}
+
+/** Keep the exact selected item across refresh/rename. An ambiguous identity never retargets it. */
+export function reconcileSelection(
+  selection: readonly string[],
+  cache: Map<string, FileEntry>,
+  directory: string,
+  index: ReturnType<typeof indexEntries>,
+): string[] {
+  const next: string[] = [];
+  for (const path of selection) {
+    const cached = cache.get(path);
+    if (cached && cached.parent !== directory) {
+      next.push(path);
+      continue;
+    }
+    const exact = index.paths.get(path);
+    const entry =
+      exact && (!cached || exact.identity === cached.identity)
+        ? exact
+        : cached?.identity
+          ? index.identities.get(cached.identity)
+          : undefined;
+    if (entry) {
+      cache.set(entry.path, entry);
+      next.push(entry.path);
+    }
+  }
+  return [...new Set(next)];
+}
 export function sortEntries(entries: FileEntry[], key: SortKey, descending: boolean): FileEntry[] {
   return [...entries].sort((a, b) => {
     if (a.directory !== b.directory) return a.directory ? -1 : 1;

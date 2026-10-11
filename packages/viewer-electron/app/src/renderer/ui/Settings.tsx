@@ -32,11 +32,52 @@ export function Settings({ onClose }: { onClose(): void }) {
         )}
         {tab === 'space' && (
           <>
+            <label className="settings-row">
+              <span>When opening a plane</span>
+              <select
+                aria-label="When opening a plane"
+                value={saved.ui.space.opening}
+                onChange={(event) =>
+                  changePreferences((ui) => ({
+                    ...ui,
+                    space: { ...ui.space, opening: event.target.value as typeof ui.space.opening },
+                  }))
+                }
+              >
+                <option value="face-on">Face the plane</option>
+                <option value="pair">Show linked pair</option>
+                <option value="dock">Dock the plane</option>
+              </select>
+            </label>
+            <h3>Space controls</h3>
             {(
               [
-                ['backs', 'Show plane backs'],
+                ['toolbar', 'Show bottom toolbar'],
                 ['minimap', 'Show minimap'],
                 ['viewcube', 'Show viewcube'],
+              ] as const
+            ).map(([key, label]) => (
+              <label className="settings-row" key={key}>
+                <span>{label}</span>
+                <input
+                  type="checkbox"
+                  checked={saved.ui.space[key]}
+                  onChange={(event) =>
+                    changePreferences((ui) => ({
+                      ...ui,
+                      space: { ...ui.space, [key]: event.target.checked },
+                    }))
+                  }
+                />
+              </label>
+            ))}
+            <h3>Planes</h3>
+            {(
+              [
+                ['planeHeaders', 'Show plane headers'],
+                ['dragging', 'Drag planes by their title'],
+                ['resizing', 'Show resize handles'],
+                ['backs', 'Show plane backs'],
                 ['origin', 'Show transform origin'],
               ] as const
             ).map(([key, label]) => (
@@ -55,7 +96,7 @@ export function Settings({ onClose }: { onClose(): void }) {
               </label>
             ))}
             <p className="settings-note">
-              Plane backs show mirrored content. Spatial tools are available in Commands.
+              Plane backs show mirrored content. Plane actions remain available in Commands.
             </p>
           </>
         )}
@@ -70,6 +111,19 @@ export function Settings({ onClose }: { onClose(): void }) {
                   changePreferences((ui) => ({
                     ...ui,
                     sidebar: { ...ui.sidebar, visible: event.target.checked },
+                  }))
+                }
+              />
+            </label>
+            <label className="settings-row">
+              <span>Show navigation in new folder planes</span>
+              <input
+                type="checkbox"
+                checked={saved.ui.sidebar.inNewPlanes}
+                onChange={(event) =>
+                  changePreferences((ui) => ({
+                    ...ui,
+                    sidebar: { ...ui.sidebar, inNewPlanes: event.target.checked },
                   }))
                 }
               />

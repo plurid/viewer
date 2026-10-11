@@ -38,6 +38,7 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
     return () => {
       clearTimeout(timer);
       remove();
+      if (search.current === id) search.current = '';
       void window.viewer.cancelSearch(id).catch(report);
     };
   }, [path, query, enabled, showHidden]);
@@ -46,7 +47,7 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
     running,
     summary,
     cancel: () => {
-      void window.viewer.cancelSearch(search.current).catch(report);
+      if (search.current) void window.viewer.cancelSearch(search.current).catch(report);
       setRunning(false);
     },
   };

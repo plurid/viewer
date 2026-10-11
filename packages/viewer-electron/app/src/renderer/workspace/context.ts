@@ -1,12 +1,16 @@
 import { createContext, useContext } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 export interface WorkspaceController {
-  open(entry: FileEntry, parentEngineID?: string): void;
-  openPath(path: string): Promise<void>;
+  open(entry: FileEntry, parentEngineID?: string, options?: { another?: boolean }): void;
+  openPath(
+    path: string,
+    target?: { paneID?: string; workspaceID?: string; linked?: boolean },
+  ): Promise<void>;
   focusPane(hostID: string): void;
   frameAll(): void;
   dock(hostID?: string): void;
   closePane(hostID: string): void;
+  consolidatePreviews(): void;
   arrange(axis: 'x' | 'y'): void;
   undo(): void;
   redo(): void;

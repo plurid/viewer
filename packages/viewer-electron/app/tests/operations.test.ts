@@ -14,7 +14,7 @@ import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
-import type { OperationJob, OperationRequest } from '../src/domain/contracts';
+import type { OperationJob, OperationProgress, OperationRequest } from '../src/domain/contracts';
 const exdev = vi.hoisted(() => ({ source: '', race: '', noLinks: false }));
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof import('node:fs/promises')>();
@@ -59,6 +59,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await operations.close();
+  vi.restoreAllMocks();
   exdev.source = '';
   exdev.race = '';
   exdev.noLinks = false;
@@ -206,8 +207,11 @@ describe('file operation queue', () => {
   it('cancels an active copy and cleans only its staging files', async () => {
     const source = path.join(root, 'large.bin');
     await writeFile(source, Buffer.alloc(16 * 1024 * 1024, 7));
+    let time = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => (time += 100));
     operations = new Operations(
       async () => undefined,
+      () => undefined,
       (job) => {
         if (job.bytesDone > 0) operations.cancel(job.id);
       },
@@ -216,6 +220,39 @@ describe('file operation queue', () => {
     expect(job.status).toBe('cancelled');
     expect(await readdir(destination)).toEqual([]);
     expect((await lstat(source)).size).toBe(16 * 1024 * 1024);
+  });
+  it('throttles small-file progress across the whole job and sends authoritative lifecycle snapshots', async () => {
+    let time = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => (time += 20));
+    const snapshots: OperationJob[] = [];
+    const updates: { progress: OperationProgress; time: number }[] = [];
+    const revisions: number[] = [];
+    operations = new Operations(
+      async () => undefined,
+      (job) => {
+        snapshots.push(job);
+        revisions.push(job.revision);
+      },
+      (progress) => {
+        updates.push({ progress, time });
+        revisions.push(progress.revision);
+      },
+    );
+    const sources = Array.from({ length: 12 }, (_, index) => path.join(root, `small-${index}.txt`));
+    await Promise.all(sources.map((source) => writeFile(source, 'synthetic')));
+    const job = await run({ kind: 'copy', sources, destination });
+    expect(snapshots.map((job) => job.status)).toEqual(['queued', 'running', 'completed']);
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates.length).toBeLessThan(sources.length);
+    for (let i = 1; i < updates.length; i++)
+      expect(updates[i].time - updates[i - 1].time).toBeGreaterThanOrEqual(80);
+    expect(revisions).toEqual(Array.from({ length: revisions.length }, (_, index) => index + 1));
+    expect(updates[0].progress).not.toHaveProperty('completed');
+    expect(updates[0].progress).not.toHaveProperty('sources');
+    expect(job.completed).toHaveLength(12);
+    expect(job).toMatchObject({ bytesDone: 108, itemsDone: 12, errorCount: 0 });
+    expect(snapshots.at(-1)).toEqual(job);
+    expect(await readFile(sources[0], 'utf8')).toBe('synthetic');
   });
   it('rejects copying a folder inside itself through a symlink', async () => {
     const folder = path.join(root, 'folder');

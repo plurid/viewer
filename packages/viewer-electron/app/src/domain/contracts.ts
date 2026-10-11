@@ -33,11 +33,18 @@ export interface FolderPane {
   showHidden: boolean;
   history: string[];
   historyIndex: number;
+  sidebar?: PaneSidebar;
+}
+export interface PaneSidebar {
+  visible: boolean;
+  width: number;
 }
 export interface PreviewPane {
   id: string;
   type: 'preview';
   path: string;
+  /** Explicit Open another plane copies survive duplicate-preview recovery. */
+  keepSeparate?: boolean;
 }
 export type Pane = FolderPane | PreviewPane;
 export interface Workspace {
@@ -59,8 +66,10 @@ export interface SavedState {
 }
 export type SidebarSection = 'locations' | 'favorites' | 'recents';
 export interface UIPreferences {
+  version: 2;
   sidebar: {
     visible: boolean;
+    inNewPlanes: boolean;
     width: number;
     order: SidebarSection[];
     collapsed: SidebarSection[];
@@ -68,7 +77,17 @@ export interface UIPreferences {
     hidden: string[];
     labels: Record<string, string>;
   };
-  space: { backs: boolean; minimap: boolean; viewcube: boolean; origin: boolean };
+  space: {
+    backs: boolean;
+    toolbar: boolean;
+    minimap: boolean;
+    viewcube: boolean;
+    origin: boolean;
+    planeHeaders: boolean;
+    dragging: boolean;
+    resizing: boolean;
+    opening: 'face-on' | 'pair' | 'dock';
+  };
   recentCommands: string[];
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
@@ -94,6 +113,7 @@ export interface Collision {
 }
 export interface OperationJob {
   id: string;
+  revision: number;
   kind: OperationKind;
   status: 'queued' | 'running' | 'collision' | 'completed' | 'cancelled' | 'failed';
   sources: string[];
@@ -105,8 +125,19 @@ export interface OperationJob {
   itemsTotal: number;
   completed: { source: string; destination?: string }[];
   errors: { path: string; message: string }[];
+  errorCount: number;
   collision?: Collision;
   undoable: boolean;
+}
+export interface OperationProgress {
+  id: string;
+  revision: number;
+  current?: string;
+  bytesDone: number;
+  bytesTotal: number;
+  itemsDone: number;
+  itemsTotal: number;
+  errorCount: number;
 }
 export interface SearchRequest {
   id: string;
@@ -147,6 +178,7 @@ export type DesktopEvent =
   | { type: 'watch-error'; path: string; message: string }
   | { type: 'search'; batch: SearchBatch }
   | { type: 'job'; job: OperationJob }
+  | { type: 'job-progress'; progress: OperationProgress }
   | { type: 'open'; paths: string[] }
   | { type: 'command'; command: string }
   | { type: 'flush'; token: string };

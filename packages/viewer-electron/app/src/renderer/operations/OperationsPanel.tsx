@@ -95,6 +95,8 @@ export function OperationsPanel() {
           <div className="operation-count muted">
             {job.itemsDone} / {job.itemsTotal} items{' '}
             {job.bytesDone > 0 && `· ${formatBytes(job.bytesDone)} transferred`}
+            {job.errorCount > 0 &&
+              ` · ${job.errorCount} ${job.errorCount === 1 ? 'error' : 'errors'}`}
           </div>
           {job.collision && (
             <div className="collision">

@@ -8,6 +8,7 @@ export interface CommandContext {
   paneID?: string;
   selection: readonly FileEntry[];
   folder?: FolderPane;
+  searchOpen?: boolean;
   directory?: string;
   resourceID?: string;
   path?: string;
@@ -173,6 +174,24 @@ function scoreLabel(label: string, query: string): number {
     if (first < 0) first = position;
   }
   return 100 - Math.min(90, position - first - query.length + 1);
+}
+/** Rank lightweight filenames before constructing at most 150 executable commands. */
+export function rankFiles(entries: readonly FileEntry[], query: string, limit = 150): FileEntry[] {
+  const needle = normalize(query.trim());
+  if (!needle) return entries.slice(0, limit);
+  return entries
+    .map((entry, index) => ({
+      entry,
+      index,
+      score: Math.max(
+        scoreLabel(normalize(entry.name), needle),
+        'files'.startsWith(needle) ? 500 : 'files'.includes(needle) ? 400 : 0,
+      ),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit)
+    .map((item) => item.entry);
 }
 export function rankCommands(
   commands: readonly ResolvedCommand[],

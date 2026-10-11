@@ -17,6 +17,7 @@ export function frameWorkspace(
   engine: RefObject<PluridApplicationHandle | null>,
   surface: RefObject<HTMLDivElement | null>,
   targets?: string[],
+  options: { dock?: boolean; recover?: boolean } = {},
 ): void {
   const api = engine.current;
   const element = surface.current;
@@ -52,8 +53,13 @@ export function frameWorkspace(
       return;
     }
     const nodes = flatten(api.tree.get()).filter(
-      (node) => node.show && (!targets || targets.includes(hostID(node))),
+      (node) => (node.show || options.recover) && (!targets || targets.includes(hostID(node))),
     );
+    if (options.recover && nodes.some((node) => !node.show)) {
+      for (const node of nodes) if (!node.show) api.tree.open(node.planeID);
+      requestAnimationFrame(frame);
+      return;
+    }
     const expected = !targets || targets.every((id) => nodes.some((node) => hostID(node) === id));
     const boxes = new Map(
       Array.from(element.querySelectorAll<HTMLElement>('[data-plurid-plane]')).map((plane) => [
@@ -76,25 +82,45 @@ export function frameWorkspace(
     const viewport =
       inspection.view.width === element.clientWidth &&
       inspection.view.height === element.clientHeight;
+    const resolved = api.getSnapshot().space.resolvedLayout;
     const signature = JSON.stringify([
       inspection.view,
-      nodes.map((node) => [node.planeID, node.width, node.height]),
+      nodes.map((node) => [node.planeID, node.width, node.height, node.location]),
     ]);
     stable = signature === previous ? stable + 1 : 0;
     previous = signature;
-    if (!(expected && measured && viewport && stable >= 3)) {
+    if (!(resolved && expected && measured && viewport && stable >= 3)) {
       if (performance.now() < deadline) requestAnimationFrame(frame);
       else cleanup();
       return;
     }
     cleanup();
-    if (targets?.length === 1) api.camera.frame({ planeID: nodes[0].planeID }, { animate: true });
+    if (options.recover) {
+      // Restore a useful saved view verbatim. Only recover an active plane that the
+      // old camera or changed viewport would leave clipped or completely offscreen.
+      const view = element.getBoundingClientRect();
+      if (
+        nodes.every((node) => {
+          const box = boxes.get(node.planeID)!.getBoundingClientRect();
+          return (
+            box.left >= view.left - 1 &&
+            box.top >= view.top - 1 &&
+            box.right <= view.right + 1 &&
+            box.bottom <= view.bottom + 1
+          );
+        })
+      )
+        return;
+    }
+    const motion = { animate: !options.recover };
+    if (options.dock && targets?.length === 1) api.camera.dock(nodes[0].planeID, motion);
+    else if (targets?.length === 1) api.camera.frame({ planeID: nodes[0].planeID }, motion);
     else if (targets?.length)
       api.pubsub.publish({
         topic: PLURID_PUBSUB_TOPIC.SPACE_FRAME,
-        data: { planeIDs: nodes.map((node) => node.planeID), yaw: 'best', animate: true },
+        data: { planeIDs: nodes.map((node) => node.planeID), yaw: 'best', ...motion },
       });
-    else api.camera.fit({ animate: true });
+    else api.camera.fit(motion);
     const record = () => {
       if (
         engine.current !== api ||

@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent, type DragEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry } from '../../domain/contracts';
-import { fileFamily, formatBytes } from '../../domain/files';
+import { fileFamily, formatBytes, sortEntries } from '../../domain/files';
 import { Icon, type IconName } from '../ui/Icon';
 import { PreviewHost } from '../previews/PreviewHost';
 import { useFolder } from './useFolder';
@@ -10,6 +10,7 @@ import { Empty, Loading } from '../ui/primitives';
 export interface FileViewProps {
   entries: FileEntry[];
   selection: string[];
+  selectionSet: ReadonlySet<string>;
   select(entry: FileEntry, event: MouseEvent, scope?: FileEntry[]): void;
   showHidden: boolean;
   open(entry: FileEntry, linked?: boolean): void;
@@ -106,7 +107,7 @@ export function ListView(props: FileViewProps) {
           >
             <FileRow
               entry={props.entries[item.index]}
-              selected={props.selection.includes(props.entries[item.index].path)}
+              selected={props.selectionSet.has(props.entries[item.index].path)}
               props={props}
             />
           </div>
@@ -191,8 +192,8 @@ export function GridView(props: FileViewProps) {
             {props.entries.slice(row.index * columns, (row.index + 1) * columns).map((entry) => (
               <div
                 role="option"
-                aria-selected={props.selection.includes(entry.path)}
-                className={`file-tile ${props.selection.includes(entry.path) ? 'is-selected' : ''}`}
+                aria-selected={props.selectionSet.has(entry.path)}
+                className={`file-tile ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
                 key={entry.path}
                 title={entry.path}
                 data-file-path={entry.path}
@@ -231,13 +232,11 @@ function Column({
   const listing = useFolder(path);
   const filtered = useMemo(
     () =>
-      listing.entries
-        .filter((entry) => props.showHidden || !entry.hidden)
-        .sort(
-          (a, b) =>
-            Number(b.directory) - Number(a.directory) ||
-            a.name.localeCompare(b.name, undefined, { numeric: true }),
-        ),
+      sortEntries(
+        listing.entries.filter((entry) => props.showHidden || !entry.hidden),
+        'name',
+        false,
+      ),
     [listing.entries, props.showHidden],
   );
   const columnProps = {
@@ -283,7 +282,7 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
             <FileRow
               compact
               entry={props.entries[item.index]}
-              selected={props.selection.includes(props.entries[item.index].path)}
+              selected={props.selectionSet.has(props.entries[item.index].path)}
               props={props}
             />
           </div>
@@ -353,11 +352,11 @@ export function GalleryView(props: FileViewProps) {
             const entry = props.entries[item.index];
             return (
               <button
-                className={`gallery-item ${props.selection.includes(entry.path) ? 'is-selected' : ''}`}
+                className={`gallery-item ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
                 style={{ position: 'absolute', left: item.start, height: '100%' }}
                 key={entry.path}
                 data-file-path={entry.path}
-                aria-selected={props.selection.includes(entry.path)}
+                aria-selected={props.selectionSet.has(entry.path)}
                 role="option"
                 onClick={(event) => props.select(entry, event)}
                 onDoubleClick={(event) =>

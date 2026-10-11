@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
-import { formatBytes, selectedRange, sortEntries } from '../../domain/files';
+import {
+  formatBytes,
+  indexEntries,
+  reconcileSelection,
+  selectedRange,
+  sortEntries,
+} from '../../domain/files';
 import {
   activeWorkspace,
   getState,
@@ -56,33 +62,33 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
   const path = pane?.path || '';
   const search = useSearch(path, query, subtree, pane?.showHidden || false);
   const sources = subtree && query.trim() ? search.entries : listing.entries;
-  const entries = useMemo(
-    () =>
-      pane
-        ? sortEntries(
-            sources.filter(
-              (entry) =>
-                (pane.showHidden || !entry.hidden) &&
-                (subtree ||
-                  !query ||
-                  entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())),
-            ),
-            pane.sort,
-            pane.descending,
-          )
-        : [],
-    [sources, pane, subtree, query],
-  );
+  const sourceIndex = useMemo(() => indexEntries(sources), [sources]);
+  const listingIndex = useMemo(() => indexEntries(listing.entries), [listing.entries]);
+  const showHidden = pane?.showHidden;
+  const sort = pane?.sort;
+  const descending = pane?.descending;
+  const entries = useMemo(() => {
+    const needle = query.toLocaleLowerCase();
+    return sort
+      ? sortEntries(
+          sources.filter(
+            (entry) =>
+              (showHidden || !entry.hidden) &&
+              (subtree || !query || entry.name.toLocaleLowerCase().includes(needle)),
+          ),
+          sort,
+          descending ?? false,
+        )
+      : [];
+  }, [sources, showHidden, sort, descending, subtree, query]);
   const selected = useMemo(
     () =>
       selection
-        .map(
-          (path) =>
-            sources.find((entry) => entry.path === path) || selectionCache.current.get(path),
-        )
+        .map((path) => sourceIndex.paths.get(path) || selectionCache.current.get(path))
         .filter((entry): entry is FileEntry => !!entry),
-    [sources, selection],
+    [sourceIndex, selection],
   );
+  const selectionSet = useMemo(() => new Set(selection), [selection]);
   useEffect(() => {
     setSelection([]);
     anchor.current = '';
@@ -94,19 +100,12 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
   useEffect(() => {
     if (listing.loading || listing.error) return;
     setSelection((value) => {
-      const next = value.flatMap((file) => {
-        const cached = selectionCache.current.get(file);
-        if (!cached || cached.parent !== path) return [file];
-        const entry = listing.entries.find((item) => item.identity === cached.identity);
-        if (!entry) return [];
-        selectionCache.current.set(entry.path, entry);
-        return [entry.path];
-      });
+      const next = reconcileSelection(value, selectionCache.current, path, listingIndex);
       return next.length === value.length && next.every((file, index) => file === value[index])
         ? value
         : next;
     });
-  }, [listing.entries, listing.loading, listing.error, path]);
+  }, [listingIndex, listing.loading, listing.error, path]);
   const operate = useCallback(
     async (
       kind: 'copy' | 'move' | 'duplicate' | 'rename' | 'mkdir' | 'trash',
@@ -122,9 +121,9 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
     [selection],
   );
   const open = useCallback(
-    (entry: FileEntry, linked = false) => {
+    (entry: FileEntry, linked = false, another = false) => {
       if (entry.directory && !linked) navigate(id, entry.path);
-      else workspace.open(entry, engineID);
+      else workspace.open(entry, engineID, { another });
     },
     [workspace, engineID, id],
   );
@@ -159,6 +158,12 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
   useEffect(() => {
     if (searchOpen) input.current?.focus();
   }, [searchOpen]);
+  const closeSearch = () => {
+    search.cancel();
+    setQuery('');
+    setSearchOpen(false);
+    surface.current?.focus({ preventScroll: true });
+  };
   useCommandSource(
     `folder:${id}`,
     {
@@ -167,6 +172,7 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
         workspaceID: activeWorkspace().id,
         paneID: id,
         folder: pane,
+        searchOpen,
         directory: pane?.mode === 'columns' ? selected[0]?.parent || path : path,
         path,
         selection: selected,
@@ -175,14 +181,17 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
       }),
       definitions: () =>
         folderCommands({
-          open: (entries, linked) => {
-            for (const entry of entries) open(entry, linked);
+          open: (entries, linked, another) => {
+            for (const entry of entries) open(entry, linked, another);
           },
           dialog: (kind, context) => setDialog({ kind, context }),
           trash: setTrash,
           info: setInfo,
           destination: (kind, context) => setDestination({ kind, context }),
-          search: () => setSearchOpen(true),
+          search: () => {
+            if (searchOpen) closeSearch();
+            else setSearchOpen(true);
+          },
           path: () => setPathOpen((value) => !value),
           refresh: listing.refresh,
           selectAll: () => {
@@ -196,7 +205,7 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
         invocation.path === live.path &&
         !!live.folder,
     },
-    [pane, selected, entries],
+    [pane, selected, entries, searchOpen],
   );
   const command = (name: string) => {
     void registry.invoke(name, { paneID: id }).catch(report);
@@ -206,13 +215,14 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
   const viewProps: FileViewProps = {
     entries,
     selection,
+    selectionSet,
     select,
     open,
     showHidden: pane.showHidden,
     context: (entry, event) => {
       event.preventDefault();
       selectionCache.current.set(entry.path, entry);
-      if (!selection.includes(entry.path)) {
+      if (!selectionSet.has(entry.path)) {
         setSelection([entry.path]);
         anchor.current = entry.path;
       }
@@ -225,17 +235,17 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
           paneID: id,
           scope: 'files',
           context: {
-            selection: selection.includes(entry.path) ? selected : [entry],
+            selection: selectionSet.has(entry.path) ? selected : [entry],
             directory: pane.mode === 'columns' ? entry.parent : path,
           },
         },
       });
     },
     drag: (entry, event) => {
-      const files = selection.includes(entry.path) ? selection : [entry.path];
+      const files = selectionSet.has(entry.path) ? selection : [entry.path];
       event.dataTransfer.setData('application/x-viewer-files', JSON.stringify(files));
       const shortcuts = files.flatMap((path) => {
-        const item = selectionCache.current.get(path) || entries.find((item) => item.path === path);
+        const item = selectionCache.current.get(path) || sourceIndex.paths.get(path);
         return item?.directory ? [{ path: item.path }] : [];
       });
       if (shortcuts.length)
@@ -411,15 +421,7 @@ export function FolderExplorer({ id, engineID }: { id: string; engineID?: string
           >
             Subfolders
           </button>
-          <IconButton
-            icon="close"
-            label="Close search"
-            onClick={() => {
-              setQuery('');
-              setSearchOpen(false);
-              surface.current?.focus();
-            }}
-          />
+          <IconButton icon="close" label="Close search" onClick={closeSearch} />
           {search.running && (
             <IconButton icon="pause" label="Cancel search" onClick={search.cancel} />
           )}

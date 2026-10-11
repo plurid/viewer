@@ -74,6 +74,7 @@ export class Desktop {
     this.operations = new Operations(
       (file) => shell.trashItem(file),
       (job) => emit({ type: 'job', job }),
+      (progress) => emit({ type: 'job-progress', progress }),
     );
     this.watchers = new Watchers(emit);
     this.search = new Search((batch) => emit({ type: 'search', batch }));

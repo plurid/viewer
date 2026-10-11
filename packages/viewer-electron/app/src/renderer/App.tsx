@@ -1,8 +1,10 @@
 /** Native window chrome stays quiet; commands follow the active file, folder or preview. */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PluridApplicationHandle } from '@plurid/plurid-react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
 import type { FileEntry, FolderPane } from '../domain/contracts';
+import { matchingPane } from '../domain/planes';
+import { repeatedPreviews } from './workspace/recovery';
 import {
   activeWorkspace,
   addPane,
@@ -15,6 +17,7 @@ import {
   newWorkspace,
   quickPreview,
   receiveJob,
+  receiveProgress,
   reconcilePanes,
   rememberCommand,
   removePanes,
@@ -72,12 +75,44 @@ function AppWindow() {
   const [settings, setSettings] = useState(false);
   const [palette, setPalette] = useState<'commands' | 'files' | null>(null);
   const [goTo, setGoTo] = useState(false);
-  const [tool, setTool] = useState<'rotate' | 'scale' | 'translate' | null>(null);
   const [busy, setBusy] = useState(false);
   const [showWorkspaceUndo, setShowWorkspaceUndo] = useState(false);
   const initialOpenHandled = useRef(false);
   const saved = useViewer((state) => state.saved);
   const space = useViewer(activeWorkspace);
+  const subscribeEngine = useCallback(
+    (listener: () => void) => engine.current?.store.subscribe(listener) ?? (() => {}),
+    [ready, space.id],
+  );
+  const mode = useSyncExternalStore(
+    subscribeEngine,
+    () => engine.current?.getSnapshot().configuration.space.transformMode ?? 'ALL',
+  );
+  const tool =
+    mode === 'ROTATION'
+      ? 'rotate'
+      : mode === 'SCALE'
+        ? 'scale'
+        : mode === 'TRANSLATION'
+          ? 'translate'
+          : null;
+  const spatialTool = useCallback((value: 'rotate' | 'scale' | 'translate' | null) => {
+    engine.current?.pubsub.publish({
+      topic: PLURID_PUBSUB_TOPIC.CONFIGURATION,
+      data: {
+        space: {
+          transformMode:
+            value === 'rotate'
+              ? 'ROTATION'
+              : value === 'scale'
+                ? 'SCALE'
+                : value === 'translate'
+                  ? 'TRANSLATION'
+                  : 'ALL',
+        },
+      },
+    });
+  }, []);
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
   const quick = useViewer((state) => state.quickPreview);
@@ -93,13 +128,28 @@ function AppWindow() {
   }, [deleted]);
   const controller = useMemo<WorkspaceController>(
     () => ({
-      open(entry: FileEntry, parentEngineID?: string) {
+      open(entry: FileEntry, parentEngineID?: string, options?: { another?: boolean }) {
+        const existing =
+          !options?.another &&
+          matchingPane(
+            activeWorkspace(),
+            entry.path,
+            entry.directory ? 'folder' : 'preview',
+            getState().activePane,
+            getState().bootstrap.platform,
+          );
+        if (existing) {
+          controller.focusPane(existing.id);
+          return;
+        }
         const api = engine.current;
         const linked =
           !!parentEngineID &&
           !!api &&
           flattenTree(api.tree.get()).some((node) => node.planeID === parentEngineID);
-        const pane = addPane(entry.path, entry.directory ? 'folder' : 'preview', !linked);
+        const pane = addPane(entry.path, entry.directory ? 'folder' : 'preview', !linked, {
+          keepSeparate: options?.another,
+        });
         setActivePane(pane.id);
         if (api && linked) {
           api.pubsub.publish({
@@ -113,13 +163,26 @@ function AppWindow() {
           const parent = flattenTree(api.tree.get()).find(
             (node) => node.planeID === parentEngineID,
           );
-          frameWorkspace(engine, surface, parent ? [hostID(parent), pane.id] : [pane.id]);
-        } else frameWorkspace(engine, surface);
+          const opening = getState().saved.ui.space.opening;
+          frameWorkspace(
+            engine,
+            surface,
+            opening === 'pair' && parent ? [hostID(parent), pane.id] : [pane.id],
+            { dock: opening === 'dock' },
+          );
+        } else
+          frameWorkspace(engine, surface, [pane.id], {
+            dock: getState().saved.ui.space.opening === 'dock',
+          });
       },
-      async openPath(path) {
+      async openPath(path, target) {
+        const workspaceID = target?.workspaceID ?? activeWorkspace().id;
+        const paneID = target?.paneID ?? getState().activePane;
         const entry = await window.viewer.stat(path);
-        const current = activeWorkspace().panes.find((pane) => pane.id === getState().activePane);
-        if (entry.directory && current?.type === 'folder') {
+        if (activeWorkspace().id !== workspaceID) return;
+        const current = activeWorkspace().panes.find((pane) => pane.id === paneID);
+        if (target?.paneID && !current) return;
+        if (entry.directory && current?.type === 'folder' && !target?.linked) {
           navigate(current.id, entry.path);
           controller.focusPane(current.id);
         } else {
@@ -130,13 +193,14 @@ function AppWindow() {
         }
       },
       focusPane(id) {
+        if (!activeWorkspace().panes.some((pane) => pane.id === id)) return;
         const node =
           engine.current &&
           flattenTree(engine.current.tree.get()).find((node) => hostID(node) === id);
         if (node) {
           engine.current?.tree.open(node.planeID);
-          frameWorkspace(engine, surface, [id]);
         }
+        frameWorkspace(engine, surface, [id]);
         setActivePane(id);
       },
       frameAll: () => frameWorkspace(engine, surface),
@@ -156,6 +220,30 @@ function AppWindow() {
         if (!node) return;
         api!.tree.remove(node.planeID);
         removePanes(flattenTree([node]).map(hostID));
+      },
+      consolidatePreviews: () => {
+        const api = engine.current;
+        if (!api) return;
+        const active = getState().activePane;
+        const groups = repeatedPreviews(
+          activeWorkspace(),
+          api.tree.get(),
+          active,
+          getState().bootstrap.platform,
+        );
+        if (!groups.length) return;
+        // The exported engine history actions group all removals into one undoable edit.
+        api.store.dispatch(pluridStateModules.space.actions.historyBegin());
+        try {
+          const closed = groups.flatMap((group) => group.close);
+          for (const node of closed) api.tree.remove(node.planeID);
+          removePanes(closed.map(hostID));
+        } finally {
+          api.store.dispatch(pluridStateModules.space.actions.historyEnd());
+        }
+        controller.focusPane(
+          hostID(groups.find((group) => hostID(group.keep) === active)?.keep ?? groups[0].keep),
+        );
       },
       arrange: (axis) => {
         const api = engine.current;
@@ -183,7 +271,7 @@ function AppWindow() {
   );
   async function transitionWorkspace(change: () => Promise<void>) {
     setReady(false);
-    setTool(null);
+    spatialTool(null);
     try {
       await change();
     } catch (error) {
@@ -226,12 +314,10 @@ function AppWindow() {
           renameShortcut: (path, name) => setShortcutDialog({ path, name }),
           switchWorkspace: switchTo,
           restoreWorkspace: () => transitionWorkspace(restoreWorkspace),
-          spatialTool: setTool,
+          spatialTool,
           goTo: () => setGoTo(true),
         }),
-      valid: (invocation) =>
-        invocation.scope === 'sidebar' ||
-        invocation.workspaceID === getState().saved.activeWorkspace,
+      valid: (invocation) => invocation.workspaceID === getState().saved.activeWorkspace,
     },
     [saved, ready, tool, jobs],
   );
@@ -270,8 +356,28 @@ function AppWindow() {
   const invokeRef = useRef(invoke);
   invokeRef.current = invoke;
   useEffect(() => {
+    let syncing: Promise<void> | undefined;
+    let resyncAgain = false;
+    const resync = () => {
+      if (syncing) {
+        resyncAgain = true;
+        return;
+      }
+      syncing = window.viewer
+        .jobs()
+        .then(setJobs)
+        .catch(report)
+        .finally(() => {
+          syncing = undefined;
+          if (resyncAgain) {
+            resyncAgain = false;
+            resync();
+          }
+        });
+    };
     const remove = window.viewer.onEvent((event) => {
       if (event.type === 'job') receiveJob(event.job);
+      else if (event.type === 'job-progress' && !receiveProgress(event.progress)) resync();
       else if (event.type === 'open')
         for (const path of event.paths) void controller.openPath(path).catch(report);
       else if (event.type === 'flush')
@@ -280,7 +386,7 @@ function AppWindow() {
           .catch(report);
       else if (event.type === 'command') void invokeRef.current(event.command).catch(report);
     });
-    void window.viewer.jobs().then(setJobs).catch(report);
+    resync();
     const focus = () => {
       void refreshClipboard().catch(report);
     };
@@ -309,7 +415,7 @@ function AppWindow() {
         tool &&
         !document.querySelector('dialog[open], .context-menu')
       ) {
-        setTool(null);
+        spatialTool(null);
         event.preventDefault();
       }
       if (!(event.metaKey || event.ctrlKey) || event.isComposing) return;
@@ -387,13 +493,7 @@ function AppWindow() {
           <Sidebar />
           <main className="workspace-main">
             <ErrorBoundary>
-              <WorkspaceSurface
-                engine={engine}
-                surface={surface}
-                onReady={() => setReady(true)}
-                tool={tool}
-                onToolDone={() => setTool(null)}
-              />
+              <WorkspaceSurface engine={engine} surface={surface} onReady={() => setReady(true)} />
             </ErrorBoundary>
           </main>
         </div>

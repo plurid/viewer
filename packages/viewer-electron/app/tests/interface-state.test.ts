@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import type { OperationJob } from '../src/domain/contracts';
+import type { OperationJob, OperationProgress } from '../src/domain/contracts';
 import { stateSchema } from '../src/desktop/storage';
 import { normalizePreferences, reorder } from '../src/domain/preferences';
 import { CommandRegistry } from '../src/renderer/commands/registry';
@@ -16,6 +16,9 @@ import {
   needsOperations,
   newWorkspace,
   receiveJob,
+  receiveProgress,
+  setJobs,
+  updatePane,
   renameShortcut,
   restoreWorkspace,
   setOperationsOpen,
@@ -150,13 +153,66 @@ describe('layout-only changes', () => {
     expect(corrupt.ui.sidebar.width).toBe(210);
     expect(corrupt.ui.sidebar.order).toEqual(['recents', 'locations', 'favorites']);
     expect(corrupt.ui.space).toEqual({
+      ...normalizePreferences().space,
       backs: false,
-      minimap: true,
-      viewcube: false,
-      origin: false,
     });
     expect(corrupt.ui.recentCommands).toEqual(['rename']);
     expect(normalizePreferences('broken')).toEqual(normalizePreferences());
+  });
+  it('restores spatial aids once, then preserves explicit off choices across reloads', async () => {
+    const migrated = normalizePreferences({
+      space: { toolbar: false, minimap: false, viewcube: false },
+    });
+    expect(migrated.version).toBe(2);
+    expect(migrated.space).toMatchObject({ toolbar: true, minimap: true, viewcube: true });
+    changePreferences((ui) => ({
+      ...ui,
+      space: { ...ui.space, toolbar: false, minimap: false, viewcube: false },
+    }));
+    await flushState(false);
+    initialize({ ...getState().bootstrap, state: stateSchema.parse(getState().saved) });
+    expect(getState().saved.ui.space).toMatchObject({
+      toolbar: false,
+      minimap: false,
+      viewcube: false,
+    });
+    expect(
+      stateSchema.parse({
+        ...getState().saved,
+        ui: { version: 2, space: { minimap: 'bad', viewcube: false } },
+      }).ui.space,
+    ).toMatchObject({ minimap: true, viewcube: false });
+  });
+  it('saves independent plane navigation and applies its default only to newly created folders', async () => {
+    const first = activeWorkspace().panes[0];
+    changePreferences((ui) => ({ ...ui, sidebar: { ...ui.sidebar, inNewPlanes: true } }));
+    const second = addPane('/fixtures/second', 'folder', true);
+    updatePane(second.id, { sidebar: { visible: true, width: 280 } });
+    expect(first.type === 'folder' && first.sidebar?.visible).toBeUndefined();
+    expect(getState().saved.ui.sidebar.width).toBe(210);
+    await flushState(false);
+    const parsed = stateSchema.parse(getState().saved);
+    expect(parsed.workspaces[0].panes[1]).toMatchObject({ sidebar: { visible: true, width: 280 } });
+    const corrupt = structuredClone(parsed);
+    Object.assign(corrupt.workspaces[0].panes[1], { sidebar: { visible: true, width: 'wide' } });
+    expect(stateSchema.parse(corrupt).workspaces[0].panes[1]).toMatchObject({
+      sidebar: { visible: true, width: 210 },
+    });
+    expect(operate).not.toHaveBeenCalled();
+  });
+  it('persists intentional preview copies independently of legacy duplicate records', async () => {
+    addPane('/fixtures/image.png', 'preview', false);
+    addPane('/fixtures/image.png', 'preview', false, { keepSeparate: true });
+    await flushState(false);
+    const parsed = stateSchema.parse(getState().saved);
+    expect(parsed.workspaces[0].panes[1]).toMatchObject({ keepSeparate: undefined });
+    expect(parsed.workspaces[0].panes[2]).toMatchObject({ keepSeparate: true });
+    const corrupt = structuredClone(parsed);
+    Object.assign(corrupt.workspaces[0].panes[2], { keepSeparate: 'bad' });
+    expect(stateSchema.parse(corrupt).workspaces[0].panes[2]).toMatchObject({
+      keepSeparate: undefined,
+    });
+    expect(operate).not.toHaveBeenCalled();
   });
   it('persists hiding, width, collapses and section order with existing favorites intact', async () => {
     addFavorite('/fixtures/one', 'One');
@@ -183,6 +239,52 @@ describe('layout-only changes', () => {
   });
 });
 describe('conditional operations', () => {
+  it('merges sequenced progress, requests resync for gaps, and rejects stale snapshots', () => {
+    const job: OperationJob = {
+      id: 'sequenced',
+      revision: 2,
+      kind: 'copy',
+      status: 'running',
+      sources: ['/fixtures/a'],
+      bytesDone: 0,
+      bytesTotal: 100,
+      itemsDone: 0,
+      itemsTotal: 1,
+      completed: [],
+      errors: [],
+      errorCount: 0,
+      undoable: false,
+    };
+    receiveJob(job);
+    const progress: OperationProgress = {
+      id: job.id,
+      revision: 3,
+      bytesDone: 50,
+      bytesTotal: 100,
+      itemsDone: 0,
+      itemsTotal: 1,
+      errorCount: 0,
+      current: '/fixtures/a',
+    };
+    expect(receiveProgress(progress)).toBe(true);
+    expect(getState().jobs[0].bytesDone).toBe(50);
+    expect(getState().jobs[0].completed).toBe(job.completed);
+    expect(receiveProgress({ ...progress, revision: 5 })).toBe(false);
+    expect(receiveProgress({ ...progress, id: 'unknown' })).toBe(false);
+    setJobs([job]);
+    expect(getState().jobs[0].revision).toBe(3);
+    receiveJob({
+      ...job,
+      revision: 6,
+      status: 'completed',
+      bytesDone: 100,
+      completed: [{ source: '/fixtures/a', destination: '/fixtures/b' }],
+    });
+    expect(receiveProgress(progress)).toBe(true);
+    setJobs([{ ...job, revision: 4 }]);
+    expect(getState().jobs[0]).toMatchObject({ revision: 6, status: 'completed', bytesDone: 100 });
+    expect(getState().jobs[0].completed).toHaveLength(1);
+  });
   it('shows only pending work or unacknowledged failures and keeps history reachable', () => {
     expect(needsOperations()).toBe(false);
     const job = { id: 'job', status: 'running' } as OperationJob;

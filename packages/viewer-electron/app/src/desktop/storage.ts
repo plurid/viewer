@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SavedState } from '../domain/contracts';
-import { normalizePreferences } from '../domain/preferences';
+import { normalizePaneSidebar, normalizePreferences } from '../domain/preferences';
 
 const localPath = z
   .string()
@@ -22,8 +22,17 @@ const pane = z.discriminatedUnion('type', [
     showHidden: z.boolean(),
     history: z.array(localPath).max(200),
     historyIndex: z.number().int().min(0).max(199),
+    sidebar: z.unknown().optional().transform(normalizePaneSidebar),
   }),
-  z.object({ id, type: z.literal('preview'), path: localPath }),
+  z.object({
+    id,
+    type: z.literal('preview'),
+    path: localPath,
+    keepSeparate: z
+      .unknown()
+      .optional()
+      .transform((value) => value === true || undefined),
+  }),
 ]);
 export const stateSchema = z
   .object({

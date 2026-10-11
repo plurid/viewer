@@ -26,11 +26,15 @@ The app is built under `packages/viewer-electron/app/out/Viewer-darwin-<architec
 
 ## File work
 
-Browse local folders, external volumes and mounted network folders in virtualized list, grid, columns or gallery views. Folder double-click navigates within a plane. Option-double-click, **Open linked plane**, or a quick preview’s linked action opens a child plane. Space opens a quick preview. Command-Return switches between focused and spatial views. Each plane has one compact header; its view menu and searchable actions replace the stacked toolbars.
+Browse local folders, external volumes and mounted network folders in virtualized list, grid, columns or gallery views. Folder double-click navigates within a plane. Option-double-click, **Open linked plane**, or a quick preview’s linked action opens a child plane. Opening an already open path focuses its existing plane in the current workspace; **Open another plane** creates an intentional copy. New planes face the camera by default; Settings also offers linked-pair framing or immediate docking. Space opens a quick preview. Command-Return switches between focused and spatial views. Each plane has one compact header with frame/dock actions; narrower headers keep those actions in their searchable menu. The search button toggles its row and clears the query on close.
+
+Reopening preserves a usable saved camera view and brings a clipped active plane back into view. **Consolidate repeated previews** in Commands closes redundant image or other preview views from older layouts, retaining the active view and its placement. It preserves explicit copies, manually positioned views and branches; one **Undo arrangement** restores the closed views. This changes workspace layout only.
 
 Command-K searches commands, workspaces, open planes and places using the active folder, file selection or preview. Command-F finds filenames in that context, with optional subfolder search. Right-click opens an autofocus search with aliases such as `rn` (rename), `cp` (copy) and `nf` (new folder). The last two applicable actions appear first; history stores command IDs, never previous file targets. Breadcrumbs and folder filtering appear on demand.
 
-The sidebar can be resized, hidden, and arranged by dragging sections or shortcuts. Sections fold; Recent stays chronological. Drag a folder into Favorites to add a shortcut. Rename shortcut and Hide location change only the sidebar. Equivalent movement commands are available in its searchable menus. Appearance and spatial aids live in Settings (Command-comma); plane backs are visible by default, while minimap and viewcube are opt-in.
+The sidebar can be resized, hidden, and arranged by dragging sections or shortcuts. Sections fold; Recent stays chronological. Drag a folder into Favorites to add a shortcut. Rename shortcut and Hide location change only the sidebar. Equivalent movement commands are available in its searchable menus. **Show plane navigation** places the same sidebar inside a folder plane, with independent width/visibility and navigation scoped to that plane. New folder planes start with navigation hidden; Settings can change that default.
+
+Appearance and spatial controls live in Settings (Command-comma), which keeps a fixed size across tabs. Plurid’s native bottom toolbar, minimap and viewcube are on by default and can each be hidden. Plane headers, title dragging, resize handles and visible backs are independently configurable; transform origin starts hidden. Existing unversioned preferences receive the restored spatial aids once, and subsequent choices persist. Toolbar actions, commands and Escape share the engine’s transform mode. Focus outlines and halos are suppressed throughout the interface; caret, active command and selection feedback remain visible.
 
 The workspace switcher provides New, Rename and Delete. Deletion confirms the workspace name and plane count, removes only saved layout, and can be undone during the session. Deleting the final workspace leaves an empty replacement. Files, folders and running jobs are unaffected.
 
@@ -72,7 +76,7 @@ Transfers preserve contents, symlinks, POSIX modes and modification times. Finde
 
 The [architecture guide](docs/architecture.md) explains boundaries and Plurid integration. The [preview extension guide](docs/preview-modules.md) shows how to add a typed, lazy viewer without changing the explorer or engine. [PRODUCT.md](PRODUCT.md) records the agreed scope; [DESIGN.md](DESIGN.md) records the implemented visual system.
 
-The [verification report](docs/verification.md) records executed checks and the remaining platform and format limits.
+The [verification report](docs/verification.md) records executed checks and the remaining platform and format limits. The [performance analysis](docs/performance.md) records native measurements, implemented fixes and remaining workload limits across the stack.
 
 The renderer is sandboxed and isolated, with no Node access or arbitrary IPC. Previews receive revocable local resources, bounded reads and range streams. Downloaded files and Markdown cannot execute scripts, open remote pages or fetch network assets inside the application.
 

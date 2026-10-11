@@ -5,8 +5,9 @@ import {
   activeWorkspace,
   addFavorite,
   changePreferences,
-  getState,
   report,
+  setActivePane,
+  updatePane,
   useViewer,
 } from '../state/store';
 import { useWorkspace } from '../workspace/context';
@@ -33,17 +34,31 @@ export function readSidebarDrag(data: string): SidebarDrag | null {
     return null;
   }
 }
-export function Sidebar() {
+export function Sidebar({ paneID }: { paneID?: string }) {
   const saved = useViewer((state) => state.saved);
   const bootstrap = useViewer((state) => state.bootstrap);
   const space = useViewer(activeWorkspace);
   const active = useViewer((state) => state.activePane);
   const workspace = useWorkspace();
   const sidebar = saved.ui.sidebar;
+  const owner = space.panes.find((pane) => pane.id === (paneID || active));
+  const layout = paneID
+    ? owner?.type === 'folder'
+      ? (owner.sidebar ?? { visible: false, width: 210 })
+      : { visible: false, width: 210 }
+    : sidebar;
   const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest } | null>(null);
   const [drop, setDrop] = useState('');
   const resizing = useRef<{ x: number; width: number } | null>(null);
-  const current = space.panes.find((pane) => pane.id === active)?.path;
+  const current = owner?.path;
+  const target = { paneID, workspaceID: space.id };
+  function resize(width: number) {
+    width = Math.max(160, Math.min(360, Math.round(width)));
+    if (paneID) {
+      if (activeWorkspace().id === space.id)
+        updatePane(paneID, { sidebar: { visible: layout.visible, width } });
+    } else changePreferences((ui) => ({ ...ui, sidebar: { ...ui.sidebar, width } }));
+  }
   const order = [
     ...sidebar.locations,
     ...bootstrap.locations
@@ -73,7 +88,7 @@ export function Sidebar() {
       request: {
         sources: ['window'],
         scope: 'sidebar',
-        context: { sidebar: { section, ...item }, selection: [] },
+        context: { ...target, sidebar: { section, ...item }, selection: [] },
       },
     });
   }
@@ -119,13 +134,21 @@ export function Sidebar() {
       report(error);
     }
   }
-  if (!sidebar.visible) return null;
+  if (!layout.visible) return null;
   return (
-    <aside className="location-sidebar" aria-label="Locations" style={{ width: sidebar.width }}>
+    <aside
+      className="location-sidebar"
+      aria-label={paneID ? 'Plane navigation' : 'Locations'}
+      style={{ width: layout.width }}
+      onPointerDown={() => {
+        if (paneID) setActivePane(paneID);
+      }}
+    >
       <div className="sidebar-scroll">
         {sidebar.order.map((section) => (
           <section
             key={section}
+            aria-label={titles[section]}
             className={`sidebar-group ${drop === section ? 'sidebar-drop' : ''}`}
             onDragOver={(event) => {
               const supported =
@@ -198,12 +221,9 @@ export function Sidebar() {
                       void finishDrop(event, section, item.path).catch(report);
                     }}
                     onClick={(event) => {
-                      if (event.altKey)
-                        void window.viewer
-                          .stat(item.path)
-                          .then((entry) => workspace.open(entry))
-                          .catch(report);
-                      else void workspace.openPath(item.path).catch(report);
+                      void workspace
+                        .openPath(item.path, { ...target, linked: event.altKey })
+                        .catch(report);
                     }}
                   >
                     <Icon
@@ -236,7 +256,7 @@ export function Sidebar() {
         role="separator"
         aria-label="Sidebar width"
         aria-orientation="vertical"
-        aria-valuenow={sidebar.width}
+        aria-valuenow={layout.width}
         aria-valuemin={160}
         aria-valuemax={360}
         tabIndex={0}
@@ -248,22 +268,15 @@ export function Sidebar() {
               ? 160
               : event.key === 'End'
                 ? 360
-                : sidebar.width + (event.key === 'ArrowRight' ? 10 : -10);
-          changePreferences((ui) => ({ ...ui, sidebar: { ...ui.sidebar, width } }));
+                : layout.width + (event.key === 'ArrowRight' ? 10 : -10);
+          resize(width);
         }}
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
-          resizing.current = { x: event.clientX, width: getState().saved.ui.sidebar.width };
+          resizing.current = { x: event.clientX, width: layout.width };
         }}
         onPointerMove={(event) => {
-          if (resizing.current)
-            changePreferences((ui) => ({
-              ...ui,
-              sidebar: {
-                ...ui.sidebar,
-                width: resizing.current!.width + event.clientX - resizing.current!.x,
-              },
-            }));
+          if (resizing.current) resize(resizing.current.width + event.clientX - resizing.current.x);
         }}
         onPointerUp={() => {
           resizing.current = null;

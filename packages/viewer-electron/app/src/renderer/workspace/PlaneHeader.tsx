@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type RefObject } from 'react';
+import type { PluridApplicationHandle } from '@plurid/plurid-react';
 import type { PluridPlaneChromeContext, TreePlane } from '@plurid/plurid-data';
 import {
   activeWorkspace,
@@ -14,10 +15,17 @@ import { IconButton } from '../ui/primitives';
 import { ContextMenu } from '../ui/ContextMenu';
 import { setPreviewControlsSlot } from '../previews/controls';
 
-export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) {
+export function PlaneHeader({
+  context,
+  engine,
+}: {
+  context: PluridPlaneChromeContext;
+  engine: RefObject<PluridApplicationHandle | null>;
+}) {
   const node = context.treePlane as TreePlane;
   const id = node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id));
+  const dragging = useViewer((state) => state.saved.ui.space.dragging);
   const registry = useCommands();
   useCommandRevision();
   const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest } | null>(null);
@@ -71,7 +79,16 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       )}
       <span
         className="plane-heading"
-        data-plurid-drag-handle
+        data-plurid-drag-handle={dragging ? '' : undefined}
+        data-dragging={dragging}
+        onPointerDownCapture={(event) => {
+          if (event.button !== 0 || !dragging) return;
+          // The engine evaluates this press on its native bubble listener. Select first,
+          // keeping a deliberate multi-selection when this plane already belongs to it.
+          const api = engine.current;
+          if (api && !api.selection.get().includes(node.planeID)) api.selection.set([node.planeID]);
+          setActivePane(id);
+        }}
         title={pane?.path}
         onDoubleClick={() => {
           if (pane?.type === 'folder') run('path');
@@ -95,11 +112,24 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
             <Icon name={pane.mode} size={17} />
             <Icon name="down" size={10} />
           </button>
-          <IconButton icon="search" label="Search this folder" onClick={() => run('search')} />
+          <IconButton
+            icon="search"
+            label={registry.context(id)?.searchOpen ? 'Close search' : 'Search this folder'}
+            aria-pressed={!!registry.context(id)?.searchOpen}
+            onClick={() => run('search')}
+          />
         </>
       ) : (
         <div className="plane-module-controls" ref={slot} />
       )}
+      <div className="plane-spatial-controls">
+        <IconButton icon="frame" label="Frame plane" onClick={() => run('frame-plane')} />
+        <IconButton
+          icon="dock"
+          label={available.find((item) => item.id === 'dock')?.label ?? 'Dock plane'}
+          onClick={() => run('dock')}
+        />
+      </div>
       <IconButton
         icon="more"
         label={pane?.type === 'folder' ? 'Folder actions' : 'Preview actions'}

@@ -33,6 +33,7 @@ await mkdir(trash);
 const operations = new Operations(
   (file) => rename(file, path.join(trash, path.basename(file) + crypto.randomUUID())),
   (job) => emit({ type: 'job', job }),
+  (progress) => emit({ type: 'job-progress', progress }),
 );
 const storage = new Storage(path.join(fixture.root, 'state.json'));
 await storage.save(fixture.state);

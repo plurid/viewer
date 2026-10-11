@@ -3,7 +3,9 @@ import type {
   Bootstrap,
   FolderPane,
   OperationJob,
+  OperationProgress,
   Pane,
+  PaneSidebar,
   SavedState,
   UIPreferences,
   Workspace,
@@ -30,7 +32,7 @@ const adapters = new Map<string, Map<string, string>>();
 // Host records survive an arrangement undo in memory, never as unreferenced saved panes.
 const closedPanes = new Map<string, Map<string, { pane: Pane; root: boolean }>>();
 const uuid = () => crypto.randomUUID();
-export const folderPane = (path: string): FolderPane => ({
+export const folderPane = (path: string, sidebar?: PaneSidebar): FolderPane => ({
   id: uuid(),
   type: 'folder',
   path,
@@ -40,6 +42,7 @@ export const folderPane = (path: string): FolderPane => ({
   showHidden: false,
   history: [path],
   historyIndex: 0,
+  sidebar,
 });
 export function activeWorkspace(state = current): Workspace {
   return state.saved.workspaces.find((workspace) => workspace.id === state.saved.activeWorkspace)!;
@@ -146,10 +149,17 @@ export function needsOperations(state = current): boolean {
   );
 }
 export function setJobs(jobs: OperationJob[]): void {
-  update({ ...current, jobs });
+  // A jobs() reply can race newer IPC events. It must never rewind a job.
+  const merged = new Map(jobs.map((job) => [job.id, job]));
+  for (const job of current.jobs) {
+    const fetched = merged.get(job.id);
+    if (!fetched || job.revision > fetched.revision) merged.set(job.id, job);
+  }
+  for (const job of merged.values()) receiveJob(job);
 }
 export function receiveJob(job: OperationJob): void {
   const old = current.jobs.find((item) => item.id === job.id);
+  if (old && job.revision < old.revision) return;
   const jobs = [job, ...current.jobs.filter((item) => item.id !== job.id)].slice(0, 100);
   update({
     ...current,
@@ -165,6 +175,18 @@ export function receiveJob(job: OperationJob): void {
   });
   if (old && old.status !== job.status && ['completed', 'failed', 'cancelled'].includes(job.status))
     window.dispatchEvent(new CustomEvent('viewer:refresh'));
+}
+/** False asks the caller for an authoritative snapshot after an unknown/missed revision. */
+export function receiveProgress(progress: OperationProgress): boolean {
+  const job = current.jobs.find((job) => job.id === progress.id);
+  if (!job) return false;
+  if (progress.revision <= job.revision) return true;
+  if (progress.revision !== job.revision + 1 || job.status !== 'running') return false;
+  update({
+    ...current,
+    jobs: current.jobs.map((job) => (job.id === progress.id ? { ...job, ...progress } : job)),
+  });
+  return true;
 }
 function savePatch(patch: Partial<SavedState>): void {
   update(
@@ -249,10 +271,18 @@ export function remember(path: string): void {
     recents: [path, ...current.saved.recents.filter((item) => item !== path)].slice(0, 50),
   });
 }
-export function addPane(path: string, type: 'folder' | 'preview', root: boolean): Pane {
+export function addPane(
+  path: string,
+  type: 'folder' | 'preview',
+  root: boolean,
+  options?: { keepSeparate?: boolean },
+): Pane {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('This workspace has 200 planes. Close a plane or create another workspace.');
-  const pane: Pane = type === 'folder' ? folderPane(path) : { id: uuid(), type, path };
+  const pane: Pane =
+    type === 'folder'
+      ? folderPane(path, { visible: current.saved.ui.sidebar.inNewPlanes, width: 210 })
+      : { id: uuid(), type, path, keepSeparate: options?.keepSeparate || undefined };
   changeWorkspace((space) => ({
     ...space,
     panes: [...space.panes, pane],
@@ -323,7 +353,10 @@ export async function newWorkspace(name: string): Promise<void> {
   if (current.saved.workspaces.length >= 30)
     throw new Error('The maximum of 30 workspaces has been reached.');
   await flushState();
-  const pane = folderPane(current.bootstrap.home);
+  const pane = folderPane(current.bootstrap.home, {
+    visible: current.saved.ui.sidebar.inNewPlanes,
+    width: 210,
+  });
   const workspace = {
     id: uuid(),
     name,

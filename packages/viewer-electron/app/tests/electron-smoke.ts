@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createFixtures } from './fixtures';
+import { repeatedPreviewFixture } from './workspace-fixtures';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,6 +67,7 @@ async function until<T>(
       last = value;
       if (accepts(value)) return value;
     } catch (error) {
+      if (error instanceof Error && error.message.includes('SyntaxError')) throw error;
       last = error;
     }
     if (child.exitCode !== null || child.signalCode !== null)
@@ -115,6 +117,36 @@ async function evaluate<T>(expression: string): Promise<T> {
 }
 const text = () => evaluate<string>('document.body.innerText');
 const fileSelector = (file: string) => `[data-file-path=${JSON.stringify(file)}]`;
+async function activateTestWindow(): Promise<void> {
+  // Activate our PID: Launch Services can select a user's already-running Viewer
+  // instead, leaving this disposable instance's native paint loop suspended.
+  await new Promise<void>((resolve, reject) => {
+    const activation = spawn('osascript', [
+      '-l',
+      'JavaScript',
+      '-e',
+      `ObjC.import('AppKit'); if (!$.NSRunningApplication.runningApplicationWithProcessIdentifier(${child.pid}).activateWithOptions(2)) throw new Error('Activation failed');`,
+    ]);
+    activation.once('error', reject);
+    activation.once('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error('Could not activate the Viewer test window')),
+    );
+  });
+  await command('Page.bringToFront');
+}
+async function reloadPage(): Promise<void> {
+  await evaluate('window.__qaReloadPending = true');
+  await command('Page.reload');
+  await until(
+    () =>
+      evaluate<boolean>(
+        '!window.__qaReloadPending && document.readyState === "complete" && !!document.querySelector("[data-plurid-plane]")',
+      ),
+    Boolean,
+    'new document after reload',
+  );
+  await activateTestWindow();
+}
 async function click(selector: string, count = 1): Promise<void> {
   const point = await evaluate<{ x: number; y: number; hit: boolean }>(
     `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) throw new Error('Missing control: ' + ${JSON.stringify(selector)}); const rect = element.getBoundingClientRect(); const x=rect.x+rect.width/2,y=rect.y+rect.height/2; return { x, y, hit:element.contains(document.elementFromPoint(x,y)) }; })()`,
@@ -144,8 +176,107 @@ async function click(selector: string, count = 1): Promise<void> {
   }
 }
 async function key(key: string, code: string, modifiers = 0): Promise<void> {
-  await command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers });
-  await command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers });
+  const windowsVirtualKeyCode = key === 'Enter' ? 13 : key === 'Escape' ? 27 : undefined;
+  await command('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key,
+    code,
+    modifiers,
+    windowsVirtualKeyCode,
+  });
+  await command('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key,
+    code,
+    modifiers,
+    windowsVirtualKeyCode,
+  });
+}
+async function setting(label: string): Promise<void> {
+  await evaluate(`(() => {
+    const row = Array.from(document.querySelectorAll('.settings-row')).find(row => row.textContent.trim() === ${JSON.stringify(label)});
+    const input = row?.querySelector('input');
+    if (!input) throw new Error('Missing setting ' + ${JSON.stringify(label)});
+    input.dataset.qaSetting = ${JSON.stringify(label)};
+    input.scrollIntoView({ block: 'nearest' });
+  })()`);
+  await click(`[data-qa-setting=${JSON.stringify(label)}]`);
+}
+async function tab(label: string): Promise<void> {
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".settings-dialog[open]")'),
+    (present) => present,
+    'open Settings dialog',
+  );
+  await evaluate(
+    `Array.from(document.querySelectorAll('.settings-tabs button')).find(button => button.textContent === ${JSON.stringify(label)}).click()`,
+  );
+}
+/** Read the public application ref from React's test-only fiber; never expose it in production. */
+async function captureEngine(): Promise<void> {
+  assert.equal(
+    await evaluate(`(() => {
+    const element = document.querySelector('[data-viewer-plane]');
+    const key = Object.keys(element).find(key => key.startsWith('__reactFiber'));
+    for (let fiber = element[key]; fiber; fiber = fiber.return) {
+      for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+        const api = hook.memoizedState?.current;
+        if (api?.camera?.frame && api?.tree?.get) { window.__qaEngine = api; return true; }
+      }
+    }
+    return false;
+  })()`),
+    true,
+  );
+}
+async function restoredEngine(count: number): Promise<void> {
+  await until(
+    () => evaluate<boolean>('!!document.querySelector("[data-viewer-plane]")'),
+    Boolean,
+    'restored plane controls',
+  );
+  await captureEngine();
+  await until(
+    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    (value) => value === count,
+    'restored engine topology, including culled planes',
+  );
+}
+const enginePlaneIDs = () =>
+  evaluate<string>(
+    'JSON.stringify(window.__qaEngine.inspect().planes.map(plane=>plane.planeID).sort())',
+  );
+async function drag(selector: string): Promise<void> {
+  const point = await evaluate<{ x: number; y: number }>(`(() => {
+    const rect = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  })()`);
+  await command('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+    ...point,
+  });
+  for (let i = 1; i <= 8; i++) {
+    await command('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      button: 'left',
+      buttons: 1,
+      x: point.x + i * 8,
+      y: point.y + 2,
+    });
+    await delay(20);
+  }
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+    x: point.x + 64,
+    y: point.y + 2,
+  });
+  await delay(250);
 }
 async function contextMenu(selector: string): Promise<void> {
   const point = await evaluate<{ x: number; y: number }>(
@@ -189,17 +320,18 @@ async function inventory(): Promise<string[]> {
 async function paletteCommand(label: string): Promise<void> {
   await click('[aria-label="Commands (⌘K)"]');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Search commands"]')`),
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
     (present) => present,
     'focused command palette',
   );
   await command('Input.insertText', { text: label });
   await until(
     () =>
-      evaluate<string>(
-        `document.querySelector('.command-result[aria-selected="true"]')?.textContent || ""`,
+      evaluate<{ query: string; selected: string }>(
+        `({query:document.querySelector('[aria-label="Search commands"]')?.getAttribute('value') || '',selected:document.querySelector('.command-result[aria-selected="true"]')?.textContent || ''})`,
       ),
-    (text) => text.includes(label),
+    (value) => value.query === label && value.selected.includes(label),
     `command ${label}`,
   );
   await key('Enter', 'Enter');
@@ -208,7 +340,11 @@ async function paletteCommand(label: string): Promise<void> {
     (present) => !present,
     'closed command palette',
   );
-  await delay(60);
+  // The menu closes before its action runs on the next animation frame. Waiting
+  // for two paints observes that action even when a native frame takes >60ms.
+  await evaluate(
+    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+  );
 }
 async function appearance(look: 'dark' | 'light'): Promise<void> {
   await paletteCommand('Settings');
@@ -249,20 +385,170 @@ async function snapshot(name: string, clip?: Record<string, number>): Promise<st
   return createHash('sha256').update(buffer).digest('hex');
 }
 async function settleCamera(): Promise<void> {
+  // A stable DOM observation is meaningful only after the native window paints;
+  // otherwise an occluded window can look idle with recovery still queued.
+  await evaluate(
+    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
+  );
   let prior = '',
     stable = 0;
   await until(
     async () => {
-      const state = await evaluate<{ transform: string; moving: boolean }>(
-        '({transform:JSON.stringify(Array.from(document.querySelectorAll(".workspace-surface [style*=transform]")).map(element=>element.getAttribute("style"))),moving:!!document.querySelector("[data-plurid-motion], .workspace-surface [style*=will-change]") || Array.from(document.querySelectorAll("[data-plurid-plane]")).some(element => {for(let parent=element;parent && parent.closest(".workspace-surface");parent=parent.parentElement){if(Number(getComputedStyle(parent).opacity)<0.99)return true;}return false;})})',
+      const state = await evaluate<{ transform: string; moving: boolean; ready: boolean }>(
+        `({transform:JSON.stringify(Array.from(document.querySelectorAll('[data-plurid-plane]')).map(element=>getComputedStyle(element).transform)),moving:window.__qaEngine ? window.__qaEngine.camera.motion() !== 'idle' : !!document.querySelector('[data-plurid-motion]'),ready:(!window.__qaEngine || window.__qaEngine.getSnapshot().space.resolvedLayout) && getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]')).opacity === '1'})`,
       );
-      stable = state.transform === prior && !state.moving ? stable + 1 : 0;
+      stable = state.ready && state.transform === prior && !state.moving ? stable + 1 : 0;
       prior = state.transform;
       return stable;
     },
     (count) => count >= 4,
     'settled spatial camera',
   );
+}
+async function verifyRestoredPreviews(): Promise<void> {
+  await delay(800);
+  const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
+  const untouched = await inventory();
+  const restore = async (state: SavedState, count: number) => {
+    await delay(800);
+    await evaluate(`window.viewer.save(${JSON.stringify(state)})`);
+    await reloadPage();
+    await restoredEngine(count);
+    await settleCamera();
+  };
+  const containedActive = () =>
+    evaluate<boolean>(`(() => {
+      const surface = document.querySelector('.workspace-surface').getBoundingClientRect();
+      const plane = document.querySelector('[data-plurid-plane]:has([data-viewer-plane="legacy-preview-3"])').getBoundingClientRect();
+      return plane.left >= surface.left && plane.top >= surface.top && plane.right <= surface.right && plane.bottom <= surface.bottom;
+    })()`);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await restore(repeatedPreviewFixture(fixture.files), 4);
+    assert.equal(
+      await containedActive(),
+      true,
+      `Restoration ${attempt + 1} must recover an offscreen active plane instead of replaying a clipped oblique view: ${await evaluate('JSON.stringify({camera:window.__qaEngine.camera.get(),resolved:window.__qaEngine.getSnapshot().space.resolvedLayout,view:window.__qaEngine.inspect().view,planes:window.__qaEngine.inspect().planes.map(plane=>({id:plane.planeID,width:plane.width,height:plane.height,location:plane.location}))})')}`,
+    );
+  }
+  const planeIDs = await enginePlaneIDs();
+  await evaluate(
+    'window.__qaEngine.camera.frame({planeID:window.__qaEngine.tree.get()[0].planeID},{animate:false})',
+  );
+  await settleCamera();
+  const image = fileSelector(path.join(fixture.files, 'Images', 'Color.png'));
+  await click(image, 2);
+  await evaluate(`(() => {
+    const row = document.querySelector(${JSON.stringify(image)});
+    for (let count=0;count<3;count++) row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));
+  })()`);
+  await settleCamera();
+  assert.equal(
+    await enginePlaneIDs(),
+    planeIDs,
+    'Normal repeated activation of a restored image never adds another preview',
+  );
+  assert.equal(await containedActive(), true);
+  const geometry = await evaluate<string>(
+    'JSON.stringify(window.__qaEngine.tree.get()[0].children[2].location)',
+  );
+  const history = await evaluate<number>('window.__qaEngine.history.get().undoDepth');
+  await paletteCommand('Consolidate repeated previews');
+  await until(
+    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    (count) => count === 2,
+    'consolidated repeated image previews',
+  );
+  await settleCamera();
+  assert.equal(await containedActive(), true);
+  assert.equal(
+    await evaluate('JSON.stringify(window.__qaEngine.tree.get()[0].children[0].location)'),
+    geometry,
+    'Recovery keeps the active preview and its placement',
+  );
+  assert.equal(await evaluate('window.__qaEngine.history.get().undoDepth'), history + 1);
+  await paletteCommand('Undo arrangement');
+  await until(
+    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    (count) => count === 4,
+    'one undo restores every consolidated preview',
+  );
+  await paletteCommand('Redo arrangement');
+  await until(
+    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    (count) => count === 2,
+    'redo preview recovery',
+  );
+  // A deliberate oblique view that fits remains exact on reopen. Recovery is not
+  // a blanket reset of users' saved camera arrangements.
+  await evaluate(
+    'window.__qaEngine.camera.moveBy({absolute:{yaw:-74,pitch:8,scale:0.6}},{animate:false})',
+  );
+  await settleCamera();
+  assert.equal(await containedActive(), true);
+  const viewpoint = await evaluate<string>('window.__qaEngine.getViewpoint({version:2})');
+  await until(
+    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
+    (state) =>
+      Object.values(state.workspaces[0].arrangement).some(
+        (value) => JSON.parse(value).space.camera.yaw === -74,
+      ),
+    'deliberate camera view persisted',
+  );
+  await reloadPage();
+  await restoredEngine(2);
+  await settleCamera();
+  assert.equal(await evaluate('window.__qaEngine.getViewpoint({version:2})'), viewpoint);
+  await evaluate(
+    'window.__qaEngine.camera.frame({planeID:window.__qaEngine.tree.get()[0].planeID},{animate:false})',
+  );
+  await settleCamera();
+  await click(fileSelector(path.join(fixture.files, 'Images', 'Color.png')));
+  await paletteCommand('Open another plane');
+  await until(
+    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    (count) => count === 3,
+    'explicit independent image preview',
+  );
+  await settleCamera();
+  await until(
+    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
+    (state) =>
+      state.workspaces[0].panes.some((pane) => pane.type === 'preview' && pane.keepSeparate),
+    'explicit copies retain their purpose in saved metadata',
+  );
+  await reloadPage();
+  await restoredEngine(3);
+  await settleCamera();
+  await click('[aria-label="Commands (⌘K)"]');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".command-results")'),
+    Boolean,
+    'commands after restoring explicit copy',
+  );
+  await command('Input.insertText', { text: 'Consolidate repeated previews' });
+  await until(
+    () =>
+      evaluate<string>(
+        `document.querySelector('[aria-label="Search commands"]').getAttribute('value')`,
+      ),
+    (value) => value === 'Consolidate repeated previews',
+    'query for unavailable consolidation after reopening an intentional copy',
+  );
+  assert.equal(
+    await evaluate(
+      'Array.from(document.querySelectorAll(".command-result")).some(row => row.textContent.includes("Consolidate repeated previews"))',
+    ),
+    false,
+    'Explicit copies must be excluded from recovery',
+  );
+  await key('Escape', 'Escape');
+  assert.deepEqual(
+    await inventory(),
+    untouched,
+    'Preview recovery never changes filesystem contents',
+  );
+  await snapshot('desktop-native-workspace-recovered.png');
+  await restore(original, original.workspaces[0].panes.length);
 }
 async function job(request: Record<string, unknown>): Promise<OperationJob> {
   const id = await evaluate<string>(`window.viewer.operate(${JSON.stringify(request)})`);
@@ -323,16 +609,7 @@ try {
   });
   await command('Runtime.enable');
   await command('Page.enable');
-  await command('Page.bringToFront');
-  // Launch Services activation makes the real window visible to macOS's occlusion
-  // detector. CDP focus alone leaves RAF suspended when another app covers it.
-  await new Promise<void>((resolve, reject) => {
-    const activation = spawn('open', ['-a', path.resolve(binary, '../../..')]);
-    activation.once('error', reject);
-    activation.once('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error('Could not activate the Viewer test window')),
-    );
-  });
+  await activateTestWindow();
   await until(
     () => evaluate<string>('document.visibilityState'),
     (value) => value === 'visible',
@@ -348,6 +625,67 @@ try {
     { require: 'undefined', process: 'undefined', bridge: 'object' },
   );
   await snapshot('desktop-native-initial.png');
+  const untouched = await inventory();
+  await captureEngine();
+  await verifyRestoredPreviews();
+  assert.deepEqual(
+    await evaluate(`({
+    toolbar: !!document.querySelector('[data-plurid-entity="PluridToolbar"]'),
+    minimap: !!document.querySelector('[data-plurid-minimap]'),
+    viewcube: !!document.querySelector('[data-plurid-overlay="viewcube"]'),
+  })`),
+    { toolbar: true, minimap: true, viewcube: true },
+  );
+
+  // The first press on the title selects the engine plane before its gesture listener.
+  const firstLocation = await evaluate<string>(
+    'JSON.stringify(window.__qaEngine.tree.get()[0].location)',
+  );
+  const firstCamera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  await drag('.plane-heading');
+  assert.notEqual(
+    await evaluate('JSON.stringify(window.__qaEngine.tree.get()[0].location)'),
+    firstLocation,
+  );
+  assert.equal(await evaluate('JSON.stringify(window.__qaEngine.camera.get())'), firstCamera);
+  assert.equal(await evaluate('window.__qaEngine.selection.get().length'), 1);
+  assert.equal(await evaluate(`!!document.querySelector('[aria-label^="resize plane"]')`), true);
+  await paletteCommand('Frame plane');
+  await settleCamera();
+  await click('[aria-label="Rotate mode"]');
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
+    'ROTATION',
+  );
+  await paletteCommand('Finish spatial tool');
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
+    'ALL',
+  );
+  await paletteCommand('Translate space');
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
+    'TRANSLATION',
+  );
+  await key('Escape', 'Escape');
+  assert.equal(
+    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
+    'ALL',
+  );
+
+  await click('.plane-controls [aria-label="Search this folder"]');
+  assert.equal(await evaluate('document.activeElement.getAttribute("aria-label")'), 'Find files');
+  assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none');
+  await command('Input.insertText', { text: 'README' });
+  await click('.plane-controls [aria-label="Close search"]');
+  assert.equal(await evaluate('!!document.querySelector(".search-row")'), false);
+  assert.equal(
+    await evaluate('document.activeElement.classList.contains("folder-explorer")'),
+    true,
+  );
+  await click('.plane-controls [aria-label="Search this folder"]');
+  assert.equal(await evaluate('document.querySelector(".search-row input").value'), '');
+  await click('.plane-controls [aria-label="Close search"]');
 
   assert.equal(
     await evaluate(
@@ -377,11 +715,81 @@ try {
     (value) => value.includes('Settings') && value.includes('Appearance'),
     'Settings from keyboard',
   );
-  await evaluate(
-    'Array.from(document.querySelectorAll(".settings-tabs button")).find(button=>button.textContent === "Space").click()',
-  );
+  const dimensions = [];
+  for (const category of ['Appearance', 'Sidebar', 'Space']) {
+    await tab(category);
+    dimensions.push(
+      await evaluate(
+        '(() => { const r = document.querySelector(".settings-dialog").getBoundingClientRect(); return [r.width, r.height]; })()',
+      ),
+    );
+  }
+  assert.deepEqual(dimensions, [
+    [500, 540],
+    [500, 540],
+    [500, 540],
+  ]);
   await snapshot('settings-native.png');
-  await click('.settings-content input');
+  for (const [label, selector] of [
+    ['Show bottom toolbar', '[data-plurid-entity="PluridToolbar"]'],
+    ['Show minimap', '[data-plurid-minimap]'],
+    ['Show viewcube', '[data-plurid-overlay="viewcube"]'],
+  ]) {
+    await setting(label);
+    await until(
+      () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
+      (value) => !value,
+      label,
+    );
+  }
+  await click('dialog [aria-label="Close"]');
+  await until(
+    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
+    (state) =>
+      state.ui?.version === 2 &&
+      !state.ui.space.toolbar &&
+      !state.ui.space.minimap &&
+      !state.ui.space.viewcube,
+    'disabled spatial controls saved',
+  );
+  await reloadPage();
+  await until(
+    text,
+    (value) => value.includes('Reference files.zip'),
+    'restored controls preferences',
+  );
+  await captureEngine();
+  await settleCamera();
+  assert.equal(
+    await evaluate(
+      '!!document.querySelector("[data-plurid-minimap], [data-plurid-overlay=viewcube], [data-plurid-entity=PluridToolbar]")',
+    ),
+    false,
+  );
+  await paletteCommand('Settings');
+  await tab('Space');
+  for (const label of ['Show bottom toolbar', 'Show minimap', 'Show viewcube'])
+    await setting(label);
+  await setting('Show resize handles');
+  assert.equal(await evaluate(`!!document.querySelector('[aria-label^="resize plane"]')`), false);
+  await setting('Show resize handles');
+  await setting('Drag planes by their title');
+  await click('dialog [aria-label="Close"]');
+  const stationary = await evaluate<string>(
+    'JSON.stringify(window.__qaEngine.tree.get()[0].location)',
+  );
+  await drag('.plane-heading');
+  assert.equal(
+    await evaluate('JSON.stringify(window.__qaEngine.tree.get()[0].location)'),
+    stationary,
+  );
+  await paletteCommand('Settings');
+  await tab('Space');
+  await setting('Drag planes by their title');
+  await setting('Show plane headers');
+  assert.equal(await evaluate('!!document.querySelector(".plane-controls")'), false);
+  await setting('Show plane headers');
+  await setting('Show plane backs');
   await until(
     () =>
       evaluate<string>(
@@ -390,7 +798,7 @@ try {
     (value) => value === 'hidden',
     'plane backs setting',
   );
-  await click('.settings-content input');
+  await setting('Show plane backs');
   await until(
     () =>
       evaluate<string>(
@@ -400,9 +808,48 @@ try {
     'visible plane backs restored',
   );
   await click('dialog [aria-label="Close"]');
+  await paletteCommand('Show plane navigation');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".folder-plane .location-sidebar")'),
+    (value) => value,
+    'in-plane navigation',
+  );
+  assert.equal(
+    await evaluate(
+      'document.querySelector(".folder-plane .sidebar-resizer").getAttribute("aria-valuenow")',
+    ),
+    '210',
+  );
+  await click('.folder-plane .sidebar-resizer');
+  await key('ArrowRight', 'ArrowRight');
+  assert.equal(
+    await evaluate(
+      'document.querySelector(".folder-plane .sidebar-resizer").getAttribute("aria-valuenow")',
+    ),
+    '220',
+  );
+  assert.equal(
+    await evaluate(
+      'document.querySelector(".app-main > .location-sidebar .sidebar-resizer").getAttribute("aria-valuenow")',
+    ),
+    '210',
+  );
+  await click(
+    `.folder-plane .location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
+  );
+  await until(text, (value) => value.includes('Triangle.glb'), 'in-plane shortcut navigation');
+  await paletteCommand('Parent folder');
+  await paletteCommand('Hide plane navigation');
+  assert.deepEqual(
+    await inventory(),
+    untouched,
+    'Plane controls and navigation preserve every fixture file',
+  );
 
   const readme = path.join(fixture.files, 'README.md');
   await contextMenu(fileSelector(readme));
+  assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none');
+  assert.equal(await evaluate('getComputedStyle(document.activeElement).boxShadow'), 'none');
   await command('Input.insertText', { text: 'rn' });
   await until(
     () =>
@@ -446,10 +893,7 @@ try {
   await click('dialog [aria-label="Close"]');
 
   const sidebarJobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
-  const favorites =
-    '.sidebar-group:has(.location[title=' +
-    JSON.stringify(path.join(fixture.files, 'Models')) +
-    '])';
+  const favorites = '.app-main > .location-sidebar .sidebar-group[aria-label="Favorites"]';
   await click(`${favorites} .sidebar-section-title`);
   assert.equal(
     await evaluate(`!!document.querySelector(${JSON.stringify(favorites + ' .location')})`),
@@ -788,6 +1232,41 @@ try {
     'linked spatial preview',
   );
   await settleCamera();
+  const facing = await evaluate<{ yaw: number; rotateY: number }>(
+    '({yaw:window.__qaEngine.camera.get().yaw,rotateY:window.__qaEngine.tree.get()[0].children[0].location.rotateY})',
+  );
+  assert.ok(
+    Math.abs(((facing.yaw + facing.rotateY + 540) % 360) - 180) < 0.1,
+    `New plane must face the camera: ${JSON.stringify(facing)}`,
+  );
+  await paletteCommand('Models');
+  await settleCamera();
+  const modelFile = path.join(fixture.files, 'Models', 'Triangle.glb');
+  // Repeated activation reuses the original linked node, including a rapid repeated event.
+  const branch = await evaluate<string>('JSON.stringify(window.__qaEngine.tree.get())');
+  await evaluate(`(() => { const row = document.querySelector(${JSON.stringify(fileSelector(modelFile))});
+    for (let i = 0; i < 3; i++) row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); })()`);
+  await settleCamera();
+  assert.equal(await evaluate('document.querySelectorAll("[data-viewer-plane]").length'), 2);
+  assert.equal(await evaluate('JSON.stringify(window.__qaEngine.tree.get())'), branch);
+  await paletteCommand('Models');
+  await settleCamera();
+  await click(fileSelector(modelFile));
+  await paletteCommand('Open another plane');
+  await until(
+    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    (count) => count === 3,
+    'intentional second view',
+  );
+  await settleCamera();
+  await paletteCommand('Close plane');
+  await until(
+    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    (count) => count === 2,
+    'closed second view',
+  );
+  await paletteCommand('Triangle.glb');
+  await settleCamera();
   assert.equal(await evaluate('document.querySelector(".model-stage canvas") !== null'), true);
   assert.equal(
     await evaluate('!!document.querySelector(".plane-module-controls .preview-toolbar")'),
@@ -977,7 +1456,7 @@ try {
     (state) => state.activeWorkspace === fixture.state.activeWorkspace,
     'workspace switch persisted',
   );
-  await command('Page.reload');
+  await reloadPage();
   await until(
     () => evaluate<number>('document.querySelectorAll("[data-plurid-plane]").length'),
     (count) => count === 2,

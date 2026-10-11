@@ -176,7 +176,7 @@ The defining visual behavior is a titled file plane beside its folder, with a vi
 **Key Characteristics:**
 
 - Coordinated dark and light shell and engine looks, with appearance in Settings.
-- Dense rows, quiet metadata, and explicit selection and keyboard focus.
+- Dense rows, quiet metadata, and explicit selection and active-command feedback.
 - Linked spatial planes with compact contextual controls and focused docking.
 - Searchable actions with an explicit target and truthful feedback.
 - File-content previews within the same visual system.
@@ -189,7 +189,7 @@ The palette uses graphite neutrals in dark mode and pale neutral space with whit
 
 ### Primary
 
-- **Muted blue accent:** `accent` and `light-accent` mark folder/model icons, active navigation icons, focus, links, progress, and the primary action. They do not replace the neutral content surface.
+- **Muted blue accent:** `accent` and `light-accent` mark folder/model icons, active navigation icons, the input caret, links, progress, and the primary action. They do not replace the neutral content surface.
 - **Blue selection:** `selection` and `light-selection` identify selected controls and files. Selected file metadata uses the corresponding `selection-muted` value.
 
 ### Neutral
@@ -228,11 +228,11 @@ Use tabular numerals for file sizes and operation counts. File and plane names t
 
 The shell fills the native window. The draggable titlebar (56px) reserves the left inset for macOS window controls (94px). It contains sidebar visibility, the searchable workspace selector, conditional operations, and Commands. The window has no in-window wordmark, tagline, plane tabs, global arrangement toolbar, or global shortcut/count footer. Buttons remain outside the native drag region.
 
-The visible sidebar starts at its saved/default width (210px), resizes within its bounds (160–360px), and can hide completely. It and the plane bodies scroll independently of their chrome. The native window minimum is implemented (780×560). Adapt to available workspace and plane dimensions rather than switching to a phone navigation pattern.
+The visible sidebar starts at its saved/default width (210px), resizes within its bounds (160–360px), and can hide completely. A folder plane may show the same navigation component with independent width and visibility; its actions navigate that plane. Shortcut order, aliases, Favorites and section folding are shared. New plane navigation starts hidden, with a Settings default. Sidebars and plane bodies scroll independently of their chrome. The native window minimum is implemented (780×560). Adapt to available workspace and plane dimensions rather than switching to a phone navigation pattern.
 
-Every plane has one contextual header (40px), with compact icon actions (28px). A plane-width container query (540px) hides the forward-navigation button and secondary preview labels, and narrows the preview control slot from 64% to 50%; that slot can scroll horizontally. Titles retain ellipsis. Path entry, breadcrumbs/filtering, folder search, and secondary actions appear on demand. Scoped commands keep actions available when compact chrome hides them.
+Every plane has one contextual header (40px), with compact icon actions (28px). A plane-width container query (540px) hides forward navigation, frame/dock icons and secondary preview labels, and narrows the preview control slot from 64% to 50%; that slot can scroll horizontally. Titles retain ellipsis. Path entry, breadcrumbs/filtering, folder search, and secondary actions appear on demand. Search toggles from the header and clears/cancels its query on close. Scoped commands keep actions available when compact chrome hides them.
 
-Automatic planes follow the measured workspace: width is bounded from 380px to 960px with 32px of horizontal clearance; height is bounded from 300px to 660px with 72px of vertical clearance. Manual resizing remains available. Framing waits for the live viewport and measured planes to settle before fitting the visible relationship. A compact overview contains the linked pair; docking gives the relevant content a readable focused view. Refitting preserves deliberate camera movement.
+Automatic planes follow the measured workspace: width is bounded from 380px to 960px with 32px of horizontal clearance; height is bounded from 300px to 660px with 72px of vertical clearance. Manual resizing is configurable. Framing waits for the live viewport and measured planes to settle. Opening normally faces the new plane; Settings offers linked-pair framing or docking. An existing path/type focuses its current-workspace plane while retaining the link and position; Open another plane creates an explicit copy. Refitting preserves deliberate camera movement. Reopening keeps a usable saved view and brings a clipped active plane into view. Explicit consolidation of repeated previews keeps the active placement, protects deliberate copies and branches, and offers one-step arrangement undo.
 
 File lists use virtualized rows (36px), with a flexible name column and fixed metadata columns. Grid and gallery use contained thumbnails and truncated file names; columns retain separate scrollable folder lists. Small control gaps and the repeated frontmatter spacing steps keep chrome compact. Dialog content uses the larger panel/dialog steps.
 
@@ -250,7 +250,7 @@ Depth comes from the spatial engine, layered neutral surfaces, dividers, and res
 - **Light overlay:** `box-shadow: 0 18px 56px #20304025` for the corresponding light surfaces.
 - **PDF sheet:** `box-shadow: 0 2px 12px #0003` for the rendered white page within its content stage.
 
-Engine camera transitions support framing and docking. Media and model activity is bounded by visibility; a model can orbit independently of its plane. Plane backs show mirrored content by default. Minimap, viewcube, and transform origin are off by default; Settings controls those aids, and a transform control appears only during deliberate tool use. CSS honors reduced motion, including the loading indicator.
+Engine camera transitions support framing and docking. Media and model activity is bounded by visibility; a model can orbit independently of its plane. Plane backs show mirrored content by default. Plurid's native bottom toolbar, minimap and viewcube are on by default and each has a Settings switch. Transform origin defaults off. Headers, title dragging and resize handles have independent Settings switches. The toolbar, scoped commands and Escape share the engine's transform mode. CSS honors reduced motion, including the loading indicator.
 
 **The Task Depth Rule.** Use elevation for spatial relationships and transient controls; preserve flat file rows for scanning.
 
@@ -258,7 +258,7 @@ Engine camera transitions support framing and docking. Media and model activity 
 
 Controls have modest rounding, grid tiles slightly larger rounding, and searchable actions/dialogs progressively softer corners, using the recorded radius roles. File rows, column separators, and preview content stages remain straight edged. Thin borders separate shell regions, inputs, and overlays.
 
-Icons are authored outline SVGs on a 24×24 viewBox with a consistent stroke (1.6), rounded caps and joins, and inherited color. Normal interface icons are usually 18px; file aliases use the same SVG system as a small overlay (11px). Retain the existing native application icon; preview imagery comes from the user's files.
+Icons are authored SVGs on a 24×24 viewBox with a consistent outline stroke (1.6), rounded caps and joins, and inherited color. The shared More glyph uses three evenly spaced filled circles. Normal interface icons are usually 18px; file aliases use the same SVG system as a small overlay (11px). Retain the existing native application icon; preview imagery comes from the user's files.
 
 ## Components
 
@@ -276,7 +276,7 @@ Planes are the recurring content containers: neutral content surface, a raised c
 
 ### Inputs / Fields
 
-Fields use the field surface, line border, control radius, and subtle placeholder text. The accent caret and inset focus outline identify input focus. On-demand folder filtering and command search use transparent fields within separated search rows. Name dialogs focus their input after the native modal enters the top layer, and show readable inline errors.
+Fields use the field surface, line border, control radius, and subtle placeholder text. Inputs retain an accent caret; focus outlines and halos are suppressed at the user's request, including engine chrome. On-demand folder filtering and command search use transparent fields within separated search rows. Name dialogs focus their input after the native modal enters the top layer, and show readable inline errors.
 
 ### Navigation
 
@@ -290,7 +290,7 @@ The dense row separates file identity from muted date, kind, and size metadata; 
 
 ### Contextual Plane Header
 
-Folder headers combine back/forward navigation, a titled drag region, view menu, search, more actions, and close. Preview headers replace folder navigation/view/search with the module's primary controls in the same header. There is no second permanent preview toolbar in a linked plane. The title region moves the plane; file selection, text selection, media, image, and model gestures keep their own functions. Duplicate floating engine controls remain disabled.
+Folder headers combine back/forward navigation, a titled drag region, view menu, search, frame/dock, more actions, and close. Preview headers replace folder navigation/view/search with the module's primary controls in the same header. There is no second permanent preview toolbar in a linked plane. The first title press selects and moves the plane; pressing an already selected plane retains the current multiselection. File selection, text selection, media, image, and model gestures keep their own functions. Duplicate floating engine controls remain disabled.
 
 Images, models, PDF, text, and media contribute commands scoped to their preview. Keep zoom, fit, page, search, and playback actions with the preview they affect; unavailable actions do not appear as command results. Supplemental file information stays compact within the plane body.
 
@@ -298,17 +298,17 @@ Images, models, PDF, text, and media contribute commands scoped to their preview
 
 Command-K and autofocus right-click actions share the typed command registry, row appearance, and keyboard navigation. Action rows pair an SVG and label with optional detail and shortcut. Search retains focus while the active result uses the selection surface and selected metadata role. Arrow keys, Home/End, Enter, and Escape navigate, invoke, and dismiss. Aliases such as `rn`, `cp`, and `nf` rank the corresponding action; at most two applicable recent IDs appear once, without duplicate or unavailable results.
 
-Targets remain explicit: a context menu binds its clicked item or captured selection; Commands reflects the active context. Command-F opens file finding in the active folder with an explicit Include subfolders choice. Copy/Move to continues through a destination step. Empty searches state that no actions/files match, and folder reading or errors receive their own readable feedback.
+Targets remain explicit: a context menu binds its clicked item or captured selection; Commands reflects the active context. Pointer hover updates the active result without forcing scroll; keyboard movement scrolls that result into view, and a changed query returns to the top. Menu scroll is contained. Command-F opens file finding in the active folder with an explicit Include subfolders choice. Copy/Move to continues through a destination step. Empty searches state that no actions/files match, and folder reading or errors receive their own readable feedback.
 
 ### Settings and Operations
 
-Command-comma opens Settings. Compact category buttons separate Appearance, Sidebar, and Space; ordinary labeled selects and checkboxes carry the choices. Appearance has Dark and Light. Space starts with Show plane backs checked and its three spatial aids unchecked. Settings keeps those preferences out of the routine browsing chrome.
+Command-comma opens Settings. Its 500×540px dialog remains the same size across Appearance, Sidebar and Space, constrained by the viewport, with scrolling inside the content area. Ordinary labeled selects and checkboxes carry the choices. Appearance has Dark and Light. Space defaults to face-on opening, visible backs, headers, title dragging, resize handles and all three native spatial aids; transform origin remains off. Sidebar includes the navigation default for new planes. Settings keeps those preferences out of the routine browsing chrome.
 
 The operations control appears for pending work, conflicts, or unseen failures. Its anchored popover shows bounded progress, cancellation, paths, errors, and available undo; past jobs open through Commands or the native menu. Conflicts provide Skip, Keep both, and Replace, with an explicit remaining-conflicts checkbox. Replace explains that the existing item goes to Trash and requires its own confirmation. Idle browsing keeps the workspace open.
 
 ### Menus and Feedback
 
-Searchable context actions render through body portals with viewport-bounded overflow. Dialogs use native modal focus behavior; transient surfaces restore focus to their initiating control when it remains available. Keyboard focus is an accent outline (2px) inset into the control; errors use the danger role and wrap long paths. Empty/loading views use SVGs, plain task text, and the existing type hierarchy. Session workspace recovery is a compact transient status with Undo, rather than permanent window chrome.
+Searchable context actions render through body portals with viewport-bounded overflow. Dialogs use native modal focus behavior; transient surfaces restore focus to their initiating control when it remains available. Focus rings and halos are suppressed across app and engine chrome; carets, active-command surfaces, selected files and drag/drop feedback remain visible. Errors use the danger role and wrap long paths. Empty/loading views use SVGs, plain task text, and the existing type hierarchy. Session workspace recovery is a compact transient status with Undo, rather than permanent window chrome.
 
 ## Do's and Don'ts
 
@@ -316,9 +316,9 @@ Searchable context actions render through body portals with viewport-bounded ove
 
 - Do coordinate the shell, engine, and preview look through the shared surface and text roles.
 - Do preserve dense file rows and readable selected metadata across list, grid, and gallery.
-- Do use authored SVG icons, accessible action labels, and visible keyboard focus.
+- Do use authored SVG icons, accessible action labels, keyboard navigation and visible active-command feedback.
 - Do keep one contextual header per plane, scoped frame/dock commands reachable, and plane dragging on the title region.
-- Do bind commands to an explicit target and show only applicable results, with visible focus and useful empty states.
+- Do bind commands to an explicit target and show only applicable results, with an active result and useful empty states.
 - Do keep appearance and spatial aids in Settings, and show operations only when work or explicit history needs attention.
 - Do state layout-only consequences for sidebar/workspace actions and the Trash consequence before replacing a file.
 - Do retain file-content conventions such as syntax coloring, contained imagery, and the Markdown quotation border.

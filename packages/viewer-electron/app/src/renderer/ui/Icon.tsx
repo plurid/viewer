@@ -79,7 +79,13 @@ export function Icon({
       className={className}
       style={style}
     >
-      <path d={paths[name]} />
+      {name === 'more' ? (
+        [5, 12, 19].map((cx) => (
+          <circle key={cx} cx={cx} cy={12} r={1.6} fill="currentColor" stroke="none" />
+        ))
+      ) : (
+        <path d={paths[name]} />
+      )}
     </svg>
   );
 }

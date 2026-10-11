@@ -27,6 +27,8 @@ export function CommandResults({
   leading?: React.ReactNode;
 }) {
   const [activeID, setActiveID] = useState('');
+  const [keyboardScroll, setKeyboardScroll] = useState(0);
+  const previousQuery = useRef(query);
   const index = Math.max(
     0,
     rows.findIndex((row) => row.id === activeID),
@@ -38,8 +40,13 @@ export function CommandResults({
     input.current?.focus({ preventScroll: true });
   }, [label]);
   useEffect(() => {
-    list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
-  }, [index, query]);
+    if (previousQuery.current !== query) {
+      previousQuery.current = query;
+      if (list.current) list.current.scrollTop = 0;
+    } else if (keyboardScroll) {
+      list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [keyboardScroll, query]);
   return (
     <div
       className="command-search"
@@ -59,6 +66,7 @@ export function CommandResults({
                 ? rows.length - 1
                 : (index + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
           setActiveID(rows[next].id);
+          setKeyboardScroll((value) => value + 1);
         } else if (event.key === 'Enter' && rows[index]) {
           event.preventDefault();
           event.stopPropagation();

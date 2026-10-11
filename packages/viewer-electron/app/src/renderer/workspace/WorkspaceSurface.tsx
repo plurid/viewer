@@ -5,11 +5,18 @@ import {
   usePluridPlane,
   type PluridApplicationHandle,
 } from '@plurid/plurid-react';
-import type { PluridPartialConfiguration, PluridPlane, TreePlane } from '@plurid/plurid-data';
+import {
+  PLURID_PUBSUB_TOPIC,
+  type PluridApi,
+  type PluridPartialConfiguration,
+  type PluridPlane,
+  type TreePlane,
+} from '@plurid/plurid-data';
 import { activeWorkspace, setActivePane, storageAdapter, useViewer } from '../state/store';
 import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
-import { Empty, IconButton } from '../ui/primitives';
+import { Empty } from '../ui/primitives';
+import { Sidebar } from '../ui/Sidebar';
 import { PlaneHeader } from './PlaneHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
 export { frameWorkspace } from './framing';
@@ -24,7 +31,12 @@ export function hostID(node: TreePlane): string {
 }
 function FolderContent() {
   const plane = usePluridPlane();
-  return <FolderExplorer id={plane.parameters.id} engineID={plane.planeID} />;
+  return (
+    <div className="folder-plane">
+      <Sidebar paneID={plane.parameters.id} />
+      <FolderExplorer id={plane.parameters.id} engineID={plane.planeID} />
+    </div>
+  );
 }
 function PreviewContent() {
   const plane = usePluridPlane();
@@ -58,25 +70,25 @@ export function WorkspaceSurface({
   engine,
   surface,
   onReady,
-  tool,
-  onToolDone,
 }: {
   engine: RefObject<PluridApplicationHandle | null>;
   surface: RefObject<HTMLDivElement | null>;
   onReady: () => void;
-  tool: 'rotate' | 'scale' | 'translate' | null;
-  onToolDone(): void;
 }) {
   const space = useViewer(activeWorkspace);
   const look = useViewer((state) => state.saved.look);
   const workspace = useWorkspace();
   const preferences = useViewer((state) => state.saved.ui.space);
   const [size, setSize] = useState({ width: 992, height: 692 });
+  const [api, setApi] = useState<PluridApi | null>(null);
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (width > 0 && height > 0) {
-        setSize({ width: Math.round(width), height: Math.round(height) });
+        const next = { width: Math.round(width), height: Math.round(height) };
+        setSize((previous) =>
+          previous.width === next.width && previous.height === next.height ? previous : next,
+        );
         refitWorkspace(engine, surface);
       }
     });
@@ -99,14 +111,6 @@ export function WorkspaceSurface({
         dimensions: { width: '100%', height: '100%' },
         presentation: 'space',
         transformOrigin: { show: preferences.origin },
-        transformMode:
-          tool === 'rotate'
-            ? 'ROTATION'
-            : tool === 'scale'
-              ? 'SCALE'
-              : tool === 'translate'
-                ? 'TRANSLATION'
-                : 'ALL',
         // Workspace persistence owns navigation; a shared window URL must not
         // restore a plane belonging to another workspace.
         docking: { url: false },
@@ -126,7 +130,7 @@ export function WorkspaceSurface({
       elements: {
         minimap: { show: preferences.minimap },
         viewcube: { show: preferences.viewcube },
-        toolbar: { show: false },
+        toolbar: { show: preferences.toolbar },
         shortcuts: { show: false },
         palette: { show: false },
         // Viewer owns frame/dock commands in the workspace header. The engine's
@@ -137,13 +141,39 @@ export function WorkspaceSurface({
         plane: {
           width: Math.max(380, Math.min(960, size.width - 32)),
           height: Math.max(300, Math.min(660, size.height - 72)),
-          resizable: true,
+          controls: { show: preferences.planeHeaders },
+          resizable: preferences.resizing,
           backface: preferences.backs ? 'visible' : 'hidden',
         },
       },
     }),
-    [look, size, preferences, tool],
+    [look, size, preferences],
   );
+  useEffect(() => {
+    if (!api) return;
+    let publishing = false;
+    const synchronize = () => {
+      if (publishing || api.store !== engine.current?.store) return;
+      const { elements, space } = api.getSnapshot().configuration;
+      if (
+        elements.toolbar.show === preferences.toolbar &&
+        elements.minimap?.show === preferences.minimap &&
+        elements.viewcube.show === preferences.viewcube &&
+        elements.plane.controls.show === preferences.planeHeaders &&
+        elements.plane.resizable === preferences.resizing &&
+        elements.plane.backface === (preferences.backs ? 'visible' : 'hidden') &&
+        space.transformOrigin.show === preferences.origin
+      )
+        return;
+      // Saved engine configuration must not undo the host's preference migration,
+      // including when the engine restores its measured tree after hydration.
+      publishing = true;
+      api.pubsub.publish({ topic: PLURID_PUBSUB_TOPIC.CONFIGURATION, data: configuration });
+      publishing = false;
+    };
+    synchronize();
+    return api.store.subscribe(synchronize);
+  }, [api, configuration, preferences, engine]);
   return (
     <div className="workspace-surface" ref={surface}>
       <PluridApplication
@@ -155,12 +185,20 @@ export function WorkspaceSurface({
         configuration={configuration}
         useLocalStorage
         storageAdapter={storage}
-        onReady={() => {
+        onReady={(api) => {
+          setApi(api);
           onReady();
           if (!Object.keys(space.arrangement).length)
             requestAnimationFrame(() => frameWorkspace(engine, surface));
+          else {
+            const active = space.activePane || space.roots[0];
+            if (active)
+              requestAnimationFrame(() =>
+                frameWorkspace(engine, surface, [active], { recover: true }),
+              );
+          }
         }}
-        renderPlaneControls={(context) => <PlaneHeader context={context} />}
+        renderPlaneControls={(context) => <PlaneHeader context={context} engine={engine} />}
         renderEmpty={() => (
           <Empty
             title="Open a folder"
@@ -179,12 +217,6 @@ export function WorkspaceSurface({
           </Empty>
         )}
       />
-      {tool && (
-        <div className="spatial-tool" role="toolbar" aria-label="Spatial tool">
-          <span>{tool[0].toUpperCase() + tool.slice(1)} space</span>
-          <IconButton icon="check" label="Finish spatial tool" onClick={onToolDone} />
-        </div>
-      )}
     </div>
   );
 }

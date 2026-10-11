@@ -18,7 +18,7 @@ export function parentPath(path: string): string {
   return end <= 0 ? separator : normalized.slice(0, end);
 }
 export interface FolderActions {
-  open(entries: readonly FileEntry[], linked: boolean): void;
+  open(entries: readonly FileEntry[], linked: boolean, another?: boolean): void;
   dialog(kind: 'rename' | 'mkdir' | 'go-to', context: CommandContext): void;
   trash(context: CommandContext): void;
   info(context: CommandContext): void;
@@ -66,6 +66,15 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       when: (context) =>
         selected(context) && context.selection.length === 1 && !context.selection[0].directory,
       run: (context) => quickPreview(context.selection[0].path),
+    },
+    {
+      id: 'another-plane',
+      label: 'Open another plane',
+      group: 'Files',
+      icon: 'link',
+      aliases: ['another', 'copy plane'],
+      when: selected,
+      run: (context) => actions.open(context.selection, true, true),
     },
     {
       id: 'rename',
@@ -223,7 +232,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'search',
-      label: 'Search this folder…',
+      label: (context) => (context.searchOpen ? 'Close folder search' : 'Search this folder…'),
       group: 'Navigation',
       icon: 'search',
       aliases: ['sf', 'filter'],
