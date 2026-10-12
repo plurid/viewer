@@ -8,6 +8,7 @@ import { usePreviewControlsSlot } from './controls';
 import type { PreviewContext, PreviewModule } from './contracts';
 import { previewState } from './state';
 import { choosePreview } from './registry';
+import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
 function componentFor(module: PreviewModule) {
@@ -43,6 +44,8 @@ export const PreviewHost = memo(function PreviewHost({
 }) {
   const [resource, setResource] = useState<Resource | null>(supplied ?? null);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
+  const [retry, setRetry] = useState(0);
   const [activated, setActivated] = useState(active);
   const registry = useCommands();
   const header = usePreviewControlsSlot(paneID);
@@ -55,7 +58,7 @@ export const PreviewHost = memo(function PreviewHost({
   );
   const limits = useViewer((state) => state.settings.settings.previews);
   const look = useViewer((state) => state.saved.look);
-  const abort = useMemo(() => new AbortController(), [path, supplied?.id]);
+  const abort = useMemo(() => new AbortController(), [path, supplied?.id, retry]);
   const commands = useMemo<PreviewContext['commands']>(
     () =>
       !paneID || !resource
@@ -105,6 +108,7 @@ export const PreviewHost = memo(function PreviewHost({
     }
     setResource(null);
     setError('');
+    setErrorCode('');
     if (path)
       void window.viewer
         .resource(path)
@@ -117,14 +121,27 @@ export const PreviewHost = memo(function PreviewHost({
           setResource(value);
         })
         .catch((error) => {
-          if (!abort.signal.aborted) setError(String(error.message || error));
+          if (!abort.signal.aborted) {
+            setError(String(error.message || error));
+            setErrorCode(error.code || '');
+          }
         });
     return () => {
       abort.abort();
       if (owned) void window.viewer.release(owned.id);
     };
   }, [path, supplied, abort]);
-  if (error) return <Empty icon="warning" title="File unavailable" detail={error} />;
+  if (error)
+    return (
+      <Empty icon="warning" title="File unavailable" detail={error}>
+        {path && needsFolderAccess(errorCode) && (
+          <FolderAccessButton
+            folder={path.replace(/[/\\][^/\\]+$/, '') || '/'}
+            onGranted={() => setRetry((value) => value + 1)}
+          />
+        )}
+      </Empty>
+    );
   if (!resource) return <Loading label="Opening preview…" />;
   if (!activated)
     return (

@@ -1,7 +1,8 @@
 import { FolderSizes } from './folder-sizes';
+import { workerPort } from './worker-port';
 
 // Independent of indexing, SQLite, document extraction and recursive watching.
-const port = process.parentPort;
+const port = workerPort;
 const sizes = new FolderSizes((value) => port.postMessage({ event: 'folder-size', value }));
 port.on('message', (event) => {
   const request = event.data as { id: string; method: string; args: unknown[] };
@@ -17,6 +18,7 @@ port.on('message', (event) => {
     port.postMessage({
       id: request.id,
       error: error instanceof Error ? error.message : String(error),
+      code: (error as NodeJS.ErrnoException).code,
     });
   }
 });

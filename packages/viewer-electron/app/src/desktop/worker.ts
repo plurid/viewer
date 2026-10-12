@@ -3,6 +3,7 @@ import chokidar, { type FSWatcher } from 'chokidar';
 import type { ApplicationSettings, IndexedQuery } from '../domain/services';
 import { FileIndex } from './index-core';
 import { extractDocument } from './formats';
+import { workerPort } from './worker-port';
 interface Request {
   id: string;
   method: 'init' | 'configure' | 'query' | 'status' | 'update' | 'extract' | 'cancel' | 'close';
@@ -11,7 +12,7 @@ interface Request {
 let index: FileIndex | undefined;
 let watcher: FSWatcher | undefined;
 let ocr: string | undefined;
-const port = process.parentPort;
+const port = workerPort;
 const extracted = new Map<string, Awaited<ReturnType<typeof extractDocument>>>();
 const controllers = new Map<string, AbortController>();
 let config: ApplicationSettings['search'];
@@ -55,11 +56,18 @@ port.on('message', async (event) => {
     let value: unknown;
     if (request.method === 'init') {
       ocr = request.args[1] as string;
+      let ready = false;
       index = await FileIndex.open(
         request.args[0] as string,
-        (value) => port.postMessage({ event: 'index', value }),
+        (value) => {
+          if (ready) port.postMessage({ event: 'index', value });
+        },
         async (file) => (await extractDocument(file)).text,
+        { roots: [], contentRoots: [], exclusions: [], paused: false },
       );
+      // Persisted index rows are private derived data. Before any query/status
+      // is served, limit them to the roots authorized in this session.
+      ready = true;
       value = true;
     } else if (!index) throw new Error('File services are not ready.');
     else if (request.method === 'configure') {
@@ -113,6 +121,7 @@ port.on('message', async (event) => {
     port.postMessage({
       id: request.id,
       error: error instanceof Error ? error.message : String(error),
+      code: (error as NodeJS.ErrnoException).code,
     });
   }
 });

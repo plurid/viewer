@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { ApiMethod, ApiResult, DesktopEvent, ViewerAPI } from './domain/contracts';
 async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   const result = (await ipcRenderer.invoke('viewer:request', method, args)) as ApiResult<T>;
-  if (!result.ok) throw new Error(result.error);
+  // Electron drops custom Error properties when crossing contextBridge. A
+  // plain rejection envelope preserves the code; the renderer restores Error.
+  if (!result.ok) return Promise.reject({ message: result.error, code: result.code });
   return result.value;
 }
 const api: ViewerAPI = {
@@ -49,7 +51,7 @@ const api: ViewerAPI = {
   bootstrap: () => invoke('bootstrap'),
   list: (file) => invoke('list', file),
   stat: (file) => invoke('stat', file),
-  chooseFolder: () => invoke('chooseFolder'),
+  chooseFolder: (defaultPath) => invoke('chooseFolder', defaultPath),
   reveal: (file) => invoke('reveal', file),
   openExternal: (file) => invoke('openExternal', file),
   applications: (paths) => invoke('applications', paths),
@@ -84,4 +86,4 @@ const api: ViewerAPI = {
     return () => ipcRenderer.removeListener('viewer:event', handler);
   },
 };
-contextBridge.exposeInMainWorld('viewer', Object.freeze(api));
+contextBridge.exposeInMainWorld('viewerNative', Object.freeze(api));

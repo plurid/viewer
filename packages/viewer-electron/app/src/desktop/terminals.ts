@@ -18,6 +18,7 @@ export class Terminals {
     private workerPath: string,
     private settings: () => ApplicationSettings,
     private emit: (owner: number, event: TerminalEvent) => void,
+    private access: (files: readonly string[]) => Promise<void> = async () => {},
   ) {}
   start(request: TerminalStart, owner: number): Promise<void> {
     const pending = this.pending.get(request.id);
@@ -54,6 +55,7 @@ export class Terminals {
     }
     if (this.sessions.size + this.pending.size > 100)
       throw new Error('Close a terminal before opening another.');
+    await this.access([request.cwd]);
     const cwd = await fs.realpath(absolute(request.cwd));
     if (!(await fs.stat(cwd)).isDirectory()) throw new Error('Terminal folder is unavailable.');
     const profile = this.settings().terminals.profiles.find(

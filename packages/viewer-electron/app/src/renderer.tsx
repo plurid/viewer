@@ -1,3 +1,4 @@
+import './renderer/native-api';
 import { createRoot } from 'react-dom/client';
 import { SettingsWindow } from './renderer/ui/Settings';
 import { App } from './renderer/App';

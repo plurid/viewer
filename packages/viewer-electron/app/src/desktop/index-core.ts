@@ -28,7 +28,9 @@ export class FileIndex {
     file: string,
     private emit: (value: IndexStatus) => void = () => {},
     private extract?: (file: string) => Promise<string>,
+    initialScope?: ApplicationSettings['search'],
   ) {
+    this.config = initialScope;
     this.db = new DatabaseSync(file);
     this.db.exec(
       "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=2000; CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, root TEXT, name TEXT, extension TEXT, size INTEGER, modified REAL, hidden INTEGER, directory INTEGER, data TEXT, seen INTEGER); CREATE INDEX IF NOT EXISTS files_root ON files(root); CREATE INDEX IF NOT EXISTS files_ext ON files(extension); CREATE INDEX IF NOT EXISTS files_name ON files(name,path); CREATE VIRTUAL TABLE IF NOT EXISTS names USING fts5(name, content, path UNINDEXED, tokenize='trigram');",
@@ -47,9 +49,10 @@ export class FileIndex {
     file: string,
     emit?: (value: IndexStatus) => void,
     extract?: (file: string) => Promise<string>,
+    initialScope?: ApplicationSettings['search'],
   ) {
     await mkdir(path.dirname(file), { recursive: true });
-    return new FileIndex(file, emit, extract);
+    return new FileIndex(file, emit, extract, initialScope);
   }
   put(item: FileEntry, root: string, seen = Date.now(), content = ''): void {
     this.putMany([{ item, root, seen, content }]);

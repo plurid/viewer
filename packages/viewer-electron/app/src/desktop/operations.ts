@@ -68,6 +68,7 @@ export class Operations {
     private changed: (job: OperationJob) => void,
     private progressed: (progress: OperationProgress) => void = () => {},
     private filesChanged: (changes: import('../domain/changes').FileChange[]) => void = () => {},
+    private access: (files: readonly string[]) => Promise<void> = async () => {},
   ) {}
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
@@ -141,6 +142,7 @@ export class Operations {
     const task = this.tasks.get(id);
     if (!task?.job.undoable) throw new Error('This operation cannot be undone.');
     if (this.running) throw new Error('Wait for the current file operation before undoing.');
+    await this.access(task.undo.flatMap((step) => [step.from, step.to]));
     // Validate the entire undo first, so a known conflict never produces a partial undo.
     for (const step of task.undo) {
       const info = await lstat(step.from);
@@ -223,6 +225,7 @@ export class Operations {
   /** Files use an exclusive hard link; directory publication reserves an empty destination.
    * A concurrent writer can make publication fail, but its file is never overwritten. */
   private async publish(source: string, destination: string, task?: Task): Promise<void> {
+    await this.access([source, destination]);
     const info = await lstat(source);
     if (!info.isDirectory()) {
       if (!info.isFile() && !info.isSymbolicLink())
@@ -449,6 +452,9 @@ export class Operations {
         for (const source of items) {
           try {
             this.check(task);
+            await this.access(
+              [source, request.destination].filter((file): file is string => !!file),
+            );
             job.current = source || request.destination;
             this.progress(task);
             let destination: string | undefined;
@@ -465,6 +471,7 @@ export class Operations {
                       ? await this.unique(source)
                       : path.join(request.destination!, path.basename(source));
               if (source === destination) throw new Error('Source and destination are the same.');
+              await this.access([destination]);
               if (source && destination.startsWith(source + path.sep))
                 throw new Error('A folder cannot be placed inside itself.');
               // Resolve symlinks in the destination's ancestry as well.
@@ -508,6 +515,7 @@ export class Operations {
                 }
                 destination = resolved;
                 this.check(task);
+                await this.access([destination]);
                 if (request.kind === 'mkdir') await mkdir(destination);
                 else
                   undoable = await this.transfer(

@@ -58,6 +58,7 @@ const contained = (file: string, root: string) =>
 const same = (a: FileEntry, b: FileEntry) =>
   a.identity === b.identity && a.size === b.size && a.modified === b.modified && a.kind === b.kind;
 interface Dependencies {
+  access?(files: readonly string[]): Promise<void>;
   recipes(): ActionRecipe[];
   providers(): ModelProvider[];
   extract(file: string, signal: AbortSignal): Promise<DocumentData>;
@@ -229,6 +230,7 @@ export class ActionPlanner {
   }
   async start(request: ActionRequest): Promise<string> {
     await this.load();
+    await this.dependencies.access?.(request.context.sources);
     const recipe = this.dependencies.recipes().find((recipe) => recipe.id === request.recipeID);
     if (!recipe) throw new Error('This action recipe is unavailable.');
     if (!request.context.sources.length) throw new Error('Select files or a folder first.');
@@ -565,6 +567,10 @@ export class ActionPlanner {
       if (!plan.rows.some((row) => row.id === edit.id)) throw new Error('Unknown proposal row.');
     const selected = updated.filter((row) => row.approved);
     if (!selected.length) throw new Error('Select at least one change.');
+    await this.dependencies.access?.([
+      ...plan.context.sources,
+      ...selected.flatMap((row) => [row.destination, ...(row.source ? [row.source.path] : [])]),
+    ]);
     if (selected.some((row) => row.kind === 'summary')) await this.validateSummary(plan);
     await this.checkRows(selected);
     if (selected.some((row) => row.issue)) {
@@ -680,6 +686,11 @@ export class ActionPlanner {
     const plan = this.plans.get(id);
     if (!plan?.undoable || plan.status !== 'completed')
       throw new Error('This task cannot be undone.');
+    await this.dependencies.access?.(
+      plan.rows
+        .filter((row) => row.completed)
+        .flatMap((row) => [row.destination, ...(row.source ? [row.source.path] : [])]),
+    );
     for (const row of plan.rows.filter((row) => row.completed && row.source)) {
       const current = await entry(row.destination);
       if (!same(row.source!, current))
@@ -724,6 +735,7 @@ export class ActionPlanner {
     await this.load();
     const plan = this.plans.get(id);
     if (!plan?.summary || plan.status !== 'review') throw new Error('This summary is unavailable.');
+    await this.dependencies.access?.([...plan.context.sources, destination]);
     await this.validateSummary(plan);
     if (await exists(destination)) throw new Error('Choose a new summary filename.');
     plan.outputRoot = path.dirname(absolute(destination));
@@ -743,6 +755,13 @@ export class ActionPlanner {
     const plan = this.plans.get(id);
     if (!plan || !['partial', 'recovery'].includes(plan.status))
       throw new Error('This task does not need recovery.');
+    await this.dependencies.access?.(
+      plan.rows.flatMap((row) => [
+        row.destination,
+        ...(row.source ? [row.source.path] : []),
+        ...(row.stagedPath ? [row.stagedPath] : []),
+      ]),
+    );
     const rows: ProposedChange[] = [];
     for (const row of plan.rows)
       if (row.source) {

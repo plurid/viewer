@@ -13,11 +13,13 @@ export class Executions {
   constructor(
     private settings: () => ApplicationSettings,
     private emit: (task: ExecutionTask) => void,
+    private access: (files: readonly string[]) => Promise<void> = async () => {},
   ) {}
   list(): ExecutionTask[] {
     return [...this.tasks.values()];
   }
   async start(actionID: string, target: CapturedTarget): Promise<string> {
+    await this.access([target.directory, ...target.selection.map((file) => file.path)]);
     if ([...this.tasks.values()].filter((task) => task.status === 'running').length >= 20)
       throw new Error('Wait for an action to finish or cancel one before starting another.');
     const action = this.settings().customActions.find((action) => action.id === actionID);

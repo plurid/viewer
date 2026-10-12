@@ -21,7 +21,9 @@ const MAX_READ = 4 * 1024 * 1024;
 export class Resources {
   private grants = new Map<string, Grant>();
   readonly archives = new Archives();
+  constructor(private access: (files: readonly string[]) => Promise<void> = async () => {}) {}
   async grant(file: string): Promise<Resource> {
+    await this.access([file]);
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     const item = await entry(absolute(file));
     if (item.directory || (item.kind !== 'file' && item.kind !== 'symlink'))
@@ -154,6 +156,7 @@ export class Resources {
         file = await realpath(resolved);
         if (!file.startsWith(grant.root + path.sep)) return new Response(null, { status: 403 });
       } else if (relative !== grant.resource.entry.name) return new Response(null, { status: 404 });
+      if (!grant.data) await this.access([file!]);
       const info = grant.data ? null : await stat(file!);
       if (info && !info.isFile()) return new Response(null, { status: 403 });
       if (info) {

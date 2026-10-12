@@ -233,7 +233,7 @@ export type DesktopEvent =
   | { type: 'action'; plan: import('./services').ActionPlan }
   | { type: 'file-changes'; changes: import('./changes').FileChange[] }
   | { type: 'folder-changed'; path: string }
-  | { type: 'watch-error'; path: string; message: string }
+  | { type: 'watch-error'; path: string; message: string; code?: string }
   | { type: 'search'; batch: SearchBatch }
   | { type: 'job'; job: OperationJob }
   | { type: 'job-progress'; progress: OperationProgress }
@@ -297,7 +297,7 @@ export interface ViewerAPI {
   document(id: string): Promise<import('./services').DocumentData>;
   list(path: string): Promise<FolderListing>;
   stat(path: string): Promise<FileEntry>;
-  chooseFolder(): Promise<string | null>;
+  chooseFolder(defaultPath?: string): Promise<string | null>;
   reveal(path: string): Promise<void>;
   openExternal(path: string): Promise<void>;
   applications(paths: string[]): Promise<import('./metadata').ApplicationChoices>;
@@ -334,5 +334,6 @@ export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: string; 
 declare global {
   interface Window {
     viewer: ViewerAPI;
+    viewerNative?: ViewerAPI;
   }
 }

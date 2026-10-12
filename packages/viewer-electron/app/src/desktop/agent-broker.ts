@@ -193,6 +193,7 @@ export class AgentBroker {
       catalog(): { target: CapturedTarget; commands: CommandDescriptor[] } | undefined;
       requests: AgentRequests;
       config: SettingsService;
+      access?(files: readonly string[]): Promise<void>;
     },
   ) {
     this.connection = new DocumentStore(path.join(dataPath, 'agent-connection-v1.json'), (value) =>
@@ -222,7 +223,10 @@ export class AgentBroker {
     // Darwin's sockaddr_un path is limited to 104 bytes. User-data paths can
     // exceed that on their own; keep the socket in an owned private directory.
     this.socketDirectory = await mkdtemp(
-      path.join(process.platform === 'darwin' ? '/tmp' : os.tmpdir(), 'viewer-agent-'),
+      path.join(
+        process.platform === 'darwin' && !process.mas ? '/tmp' : os.tmpdir(),
+        'viewer-agent-',
+      ),
     );
     await chmod(this.socketDirectory, 0o700);
     const socket = path.join(this.socketDirectory, 'v.sock');
@@ -290,6 +294,7 @@ export class AgentBroker {
     return token;
   }
   async authorize(file: string): Promise<string> {
+    await this.extension?.access?.([file]);
     const actual = await realpath(absolute(file));
     const roots = await Promise.all(
       this.settings().agents.roots.map((root) => realpath(root).catch(() => '')),

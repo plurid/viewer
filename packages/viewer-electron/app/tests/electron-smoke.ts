@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { createRequire } from 'node:module';
 import { zipSync, strToU8 } from 'fflate';
@@ -168,6 +168,9 @@ const child = spawn(
       VIEWER_DATA_DIRECTORY: profile,
       VIEWER_RENDER_TEST: '1',
       VIEWER_BACKGROUND_TEST: foreground ? '0' : '1',
+      ...(process.env.VIEWER_TEST_SCENARIO === 'store-file-services'
+        ? { VIEWER_TEST_FILE_THREADS: '1' }
+        : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   },
@@ -3387,6 +3390,103 @@ async function verifyServiceWorkflows(): Promise<void> {
     'Services: packaged PDF extraction and OCR, Space after Frame, book proposal/review/apply/Undo, indexed virtual search, shared result commands and modeless Settings.',
   );
 }
+async function verifyStoreFileServices(): Promise<void> {
+  const task = await evaluate<import('../src/domain/metadata').FolderSizeTask>(
+    `window.viewer.folderSizeStart([${JSON.stringify(path.join(fixture.files, 'Models'))}])`,
+  );
+  const measured = await until(
+    () =>
+      evaluate<import('../src/domain/metadata').FolderSizeTask>(
+        `window.viewer.folderSizeGet(${JSON.stringify(task.id)})`,
+      ),
+    (value) => value.status === 'completed',
+    'thread-backed recursive size calculation',
+  );
+  assert.ok(measured.bytes > 0);
+  const deniedPDF = path.join(fixture.files, 'Documents', 'Denied.pdf');
+  await writeFile(
+    deniedPDF,
+    await readFile(path.join(fixture.files, 'Documents', 'Project brief.pdf')),
+  );
+  try {
+    await chmod(deniedPDF, 0o000);
+    const failure = await evaluate<{ code: string }>(`(async () => {
+      const resource = await window.viewer.resource(${JSON.stringify(deniedPDF)});
+      try {
+        return await window.viewer.document(resource.id).then(() => ({ code: 'UNEXPECTED_SUCCESS' }), error => ({ code: error.code, message: error.message }));
+      } finally { await window.viewer.release(resource.id); }
+    })()`);
+    assert.ok(
+      ['EACCES', 'EPERM'].includes(failure.code),
+      'Reader permissions survive the worker and IPC boundaries: ' + JSON.stringify(failure),
+    );
+  } finally {
+    await chmod(deniedPDF, 0o600);
+    await rm(deniedPDF);
+  }
+  await verifyServiceWorkflows();
+  const { stdout } = await execNative('/bin/ps', ['-axo', 'pid=,ppid=,command=']);
+  assert.ok(
+    !stdout.split('\n').some((line) => {
+      const match = line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/);
+      return (
+        match &&
+        Number(match[2]) === child.pid &&
+        match[3].includes('--utility-sub-type=node.mojom.NodeService')
+      );
+    }),
+    'Store file services use main-process threads, not a separate Node utility process',
+  );
+  const restricted = path.join(fixture.files, 'Access required');
+  await mkdir(restricted);
+  try {
+    await chmod(restricted, 0o000);
+    await until(
+      () =>
+        evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(restricted))})`),
+      Boolean,
+      'new permission fixture appears in the watched folder',
+    );
+    await click(fileSelector(restricted), 2);
+    await until(
+      () =>
+        evaluate<boolean>(
+          `[...document.querySelectorAll('.folder-error button')].some(button => button.textContent.includes('Allow folder access'))`,
+        ),
+      Boolean,
+      'actionable native folder access control',
+    );
+    assert.ok((await text()).includes('Folder access required'));
+    assert.ok(!(await text()).includes('This folder is empty'));
+    await snapshot('desktop-native-folder-access.png');
+    await chmod(restricted, 0o700);
+    await evaluate(`window.dispatchEvent(new Event('viewer:refresh'))`);
+    await until(
+      text,
+      (value) => !value.includes('Folder access required'),
+      'granted folder reloads',
+    );
+    await delay(500);
+    const recovered = path.join(restricted, 'Recovered.txt');
+    await writeFile(recovered, 'Generated watcher recovery fixture.');
+    await until(
+      () =>
+        evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(recovered))})`),
+      Boolean,
+      'watch resumes after folder permission recovery',
+    );
+    await snapshot('desktop-native-folder-access-recovered.png');
+  } finally {
+    await chmod(restricted, 0o700);
+    await paletteCommand('Parent folder');
+    await rm(restricted, { recursive: true, force: true });
+  }
+  await verifyBackgroundApp();
+  assert.deepEqual(exceptions, []);
+  console.log(
+    'Store reader strategy verified on the ordinary runtime: real thread-backed SQLite/indexing, recursive sizes, PDF/EPUB extraction, OCR over stdin, reviewed actions/Undo, and permission-error UI. Apple security-scoped bookmarks still require the signed MAS development runtime.',
+  );
+}
 
 async function verifyPreviewOwnership(): Promise<void> {
   await delay(800);
@@ -4153,6 +4253,10 @@ async function verify(): Promise<void> {
   }
   if (process.env.VIEWER_TEST_SCENARIO === 'foundations') {
     await verifyFoundations();
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'store-file-services') {
+    await verifyStoreFileServices();
     return;
   }
   if (process.env.VIEWER_TEST_SCENARIO === 'file-workflows') {

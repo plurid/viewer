@@ -17,6 +17,7 @@ import { Icon, type IconName } from '../ui/Icon';
 import { PreviewHost } from '../previews/PreviewHost';
 import { useFolder } from './useFolder';
 import { Empty, Loading } from '../ui/primitives';
+import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
 import { useFileReveal } from './anchors';
 import type { ColumnNavigation } from './column-navigation';
 import type { FileModifiers } from './selection';
@@ -376,7 +377,9 @@ function Column({
       {listing.loading ? (
         <Loading />
       ) : listing.error ? (
-        <Empty title="Folder unavailable" detail={listing.error} />
+        <Empty title="Folder unavailable" detail={listing.error}>
+          {needsFolderAccess(listing.errorCode) && <FolderAccessButton folder={path} />}
+        </Empty>
       ) : (
         <ListViewCompact props={columnProps} />
       )}

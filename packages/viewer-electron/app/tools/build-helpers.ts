@@ -21,7 +21,10 @@ if (process.platform === 'darwin') {
     ],
     { encoding: 'utf8' },
   ).trim();
-  const target = `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${minimum}`;
+  const arch = process.env.VIEWER_BUILD_ARCH ?? process.arch;
+  if (arch !== 'arm64' && arch !== 'x64')
+    throw new Error('Native helpers support arm64 and x64 builds.');
+  const target = `${arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${minimum}`;
   execFileSync(
     'xcrun',
     [

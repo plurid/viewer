@@ -241,6 +241,32 @@ describe('authoritative settings', () => {
   });
 });
 describe('background filename and metadata index', () => {
+  it('hides a restored cache until permission is configured without discarding authorized cached text', async () => {
+    const file = path.join(root, 'index.sqlite');
+    const document = path.join(root, 'Document.txt');
+    await writeFile(document, 'cached document');
+    const original = await FileIndex.open(file);
+    original.put(await entry(document), root, Date.now(), 'distinctive cached excerpt');
+    await original.close();
+    const restored = await FileIndex.open(file, undefined, undefined, {
+      roots: [],
+      contentRoots: [],
+      exclusions: [],
+      paused: false,
+    });
+    try {
+      expect(restored.status().count).toBe(0);
+      expect(restored.query({ query: 'Document' }).entries).toEqual([]);
+      expect(restored.query({ query: 'distinctive', content: true }).entries).toEqual([]);
+      restored.configure({ roots: [root], contentRoots: [root], exclusions: [], paused: true });
+      await restored.settled();
+      expect(
+        restored.query({ query: 'distinctive', content: true }).entries.map((item) => item.path),
+      ).toEqual([document]);
+    } finally {
+      await restored.close();
+    }
+  });
   it('keeps direct-folder scope distinct and reconciles old FTS row ownership', async () => {
     const file = path.join(root, 'old-index.sqlite');
     const old = new DatabaseSync(file);

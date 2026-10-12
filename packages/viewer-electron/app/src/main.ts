@@ -524,6 +524,8 @@ app.whenReady().then(async () => {
     openSettings: openSettingsWindow,
     settingsChanged: menu,
     worker: path.join(__dirname, 'worker.cjs'),
+    fileBackend:
+      backgroundTest && process.env.VIEWER_TEST_FILE_THREADS === '1' ? 'thread' : undefined,
     terminalWorker: path.join(__dirname, 'terminal-worker.cjs'),
     ocr: app.isPackaged
       ? path.join(process.resourcesPath, 'viewer-ocr')

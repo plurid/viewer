@@ -17,6 +17,7 @@ import { browseSession, useBrowseField } from '../workspace/sessions';
 import { useWorkspace } from '../workspace/context';
 import { IconButton, Empty, Loading } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
+import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
 import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
 import { useFolder } from './useFolder';
 import { useSearch } from './useSearch';
@@ -413,7 +414,17 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
         <div className="folder-error" role="alert">
           <Icon name="warning" />
           <span>{listing.error}</span>
-          <button onClick={listing.refresh}>Retry</button>
+          {needsFolderAccess(listing.errorCode) ? (
+            <FolderAccessButton
+              folder={path}
+              onGranted={(folder) => {
+                if (folder !== path) navigate(id, folder);
+                else listing.refresh();
+              }}
+            />
+          ) : (
+            <button onClick={listing.refresh}>Retry</button>
+          )}
         </div>
       )}
       <div className="folder-content">
@@ -428,6 +439,16 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
         >
           {listing.loading && !subtree ? (
             <Loading label="Reading folder…" />
+          ) : listing.error && !query ? (
+            <Empty
+              icon="warning"
+              title={
+                needsFolderAccess(listing.errorCode)
+                  ? 'Folder access required'
+                  : 'Folder unavailable'
+              }
+              detail="Use the controls above to reopen this folder."
+            />
           ) : !entries.length ? (
             <Empty
               icon={query ? 'search' : 'folder'}

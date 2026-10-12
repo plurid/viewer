@@ -5,6 +5,7 @@ import { Executions } from './executions';
 import { Terminals } from './terminals';
 import { ExternalTerminals } from './terminal-launch';
 import {
+  app,
   nativeTheme,
   safeStorage,
   clipboard,
@@ -38,6 +39,7 @@ import { Resources } from './resources';
 import { Search } from './search';
 import { Storage, stateSchema } from './storage';
 import { Watchers } from './watchers';
+import { FileAccess } from './file-access';
 
 const localPath = z
   .string()
@@ -233,7 +235,7 @@ const schemas = {
   bootstrap: z.tuple([]),
   list: z.tuple([localPath]),
   stat: z.tuple([localPath]),
-  chooseFolder: z.tuple([]),
+  chooseFolder: z.tuple([localPath.optional()]),
   reveal: z.tuple([localPath]),
   openExternal: z.tuple([localPath]),
   applications: z.tuple([z.array(localPath).min(1).max(2000)]),
@@ -278,7 +280,8 @@ export class Desktop {
   readonly terminals: Terminals;
   readonly externalTerminals: ExternalTerminals;
   readonly executions: Executions;
-  readonly resources = new Resources();
+  readonly resources: Resources;
+  readonly fileAccess: FileAccess;
   readonly operations: Operations;
   readonly watchers: Watchers;
   readonly search: Search;
@@ -295,6 +298,9 @@ export class Desktop {
   readonly actions: ActionPlanner;
   readonly agents: AgentBroker;
   readonly thumbnails = new Thumbnails();
+  // HOME becomes the container in App Sandbox. Sidebar/default paths describe
+  // the actual user's folders; knowing those paths does not confer access.
+  private readonly home = process.mas ? os.userInfo().homedir : os.homedir();
   private context?: ActionContext;
   private indexConfiguration = '';
   private openPaths: string[] = [];
@@ -314,14 +320,28 @@ export class Desktop {
       terminalWorker: string;
       ocr: string;
       applications: string;
+      fileBackend?: 'process' | 'thread';
       settingsChanged?(): void;
     },
   ) {
     const emit = (event: DesktopEvent) => this.emit(event);
+    this.fileAccess = new FileAccess(
+      dataPath,
+      process.mas
+        ? {
+            start: (bookmark) => {
+              const stop = app.startAccessingSecurityScopedResource(bookmark);
+              return () => stop();
+            },
+          }
+        : undefined,
+    );
+    const access = (files: readonly string[]) => this.fileAccess.require(files);
+    this.resources = new Resources(access);
     this.applications = new Applications(options.applications);
     this.settings = new SettingsService(
       dataPath,
-      os.homedir(),
+      this.home,
       () => nativeTheme.shouldUseDarkColors,
       (snapshot) => {
         this.options.settingsChanged?.();
@@ -358,6 +378,7 @@ export class Desktop {
         if (window && !window.isDestroyed())
           window.webContents.send('viewer:event', { type: 'terminal', event });
       },
+      access,
     );
     this.externalTerminals = new ExternalTerminals(
       path.join(dataPath, 'terminal-launches'),
@@ -370,6 +391,7 @@ export class Desktop {
         emit({ type: 'execution', task });
         this.agentRequests?.execution(task);
       },
+      access,
     );
     this.credentials = new Credentials(
       dataPath,
@@ -383,6 +405,7 @@ export class Desktop {
       options.ocr,
       (status) => emit({ type: 'index', status }),
       (task) => emit({ type: 'folder-size', task }),
+      { backend: process.mas ? 'thread' : options.fileBackend, access },
     );
     const changed = (changes: import('../domain/changes').FileChange[]) => {
       emit({ type: 'file-changes', changes });
@@ -398,8 +421,10 @@ export class Desktop {
       (job) => emit({ type: 'job', job }),
       (progress) => emit({ type: 'job-progress', progress }),
       changed,
+      access,
     );
     this.actions = new ActionPlanner(dataPath, {
+      access,
       recipes: () => this.settings.snapshot().settings.recipes,
       providers: () => this.settings.snapshot().settings.providers,
       extract: (file, signal) => this.files.extract(file, signal),
@@ -455,7 +480,12 @@ export class Desktop {
       () => (this.window && !this.window.isDestroyed() ? this.context : undefined),
       this.files,
       this.actions,
-      { catalog: () => this.commandCatalog, requests: this.agentRequests, config: this.settings },
+      {
+        catalog: () => this.commandCatalog,
+        requests: this.agentRequests,
+        config: this.settings,
+        access,
+      },
     );
     this.watchers = new Watchers(emit);
     this.search = new Search((batch) => emit({ type: 'search', batch }));
@@ -636,6 +666,7 @@ export class Desktop {
       this.watchers.close(),
       this.operations.close(),
     ]);
+    await this.fileAccess.close();
     for (const request of this.agentCommands.values())
       request.finish('The application closed before completing the action.');
     ipcMain.removeHandler('viewer:request');
@@ -682,24 +713,35 @@ export class Desktop {
         return this.settings.reload();
       case 'configTransfer': {
         if (args[0] === 'export') {
-          const { canceled, filePath } = await dialog.showSaveDialog({
+          const { canceled, filePath, bookmark } = await dialog.showSaveDialog({
             title: 'Export configuration',
             defaultPath: 'config.jsonc',
+            securityScopedBookmarks: this.fileAccess.scoped,
           });
-          if (!canceled && filePath) await this.settings.exportConfiguration(filePath);
+          if (!canceled && filePath) {
+            await this.fileAccess.remember(filePath, false, bookmark);
+            await this.fileAccess.require([filePath]);
+            await this.settings.exportConfiguration(filePath);
+          }
         } else {
-          const { canceled, filePaths } = await dialog.showOpenDialog({
+          const { canceled, filePaths, bookmarks } = await dialog.showOpenDialog({
             title: 'Import configuration',
             properties: ['openFile'],
             filters: [{ name: 'Configuration', extensions: ['jsonc', 'json'] }],
+            securityScopedBookmarks: this.fileAccess.scoped,
           });
-          if (!canceled && filePaths[0]) return this.settings.importConfiguration(filePaths[0]);
+          if (!canceled && filePaths[0]) {
+            await this.fileAccess.remember(filePaths[0], false, bookmarks?.[0]);
+            await this.fileAccess.require([filePaths[0]]);
+            return this.settings.importConfiguration(filePaths[0]);
+          }
         }
         return this.settings.snapshot();
       }
       case 'terminalApplication':
         return this.externalTerminals.application();
       case 'terminalExternal':
+        await this.fileAccess.require([args[0] as string]);
         return this.externalTerminals.open(args[0] as string, args[1] as boolean);
       case 'terminalStart':
         return this.terminals.start(
@@ -755,7 +797,8 @@ export class Desktop {
       case 'indexStatus':
         return this.files.status();
       case 'indexRebuild':
-        return this.files.configure(this.settings.snapshot().settings.search);
+        this.indexConfiguration = '';
+        return this.configureIndex(this.settings.snapshot().settings.search);
       case 'actionStart':
         return this.actions.start({
           ...(args[0] as ActionRequest),
@@ -800,6 +843,7 @@ export class Desktop {
         this.context = { ...(args[0] as ActionContext), actor: 'user' };
         return;
       case 'thumbnail':
+        await this.fileAccess.require([args[0] as string]);
         return this.thumbnails.get(args[0] as string, args[1] as number);
       case 'document': {
         const file = this.resources.documentSource(args[0] as string);
@@ -808,7 +852,8 @@ export class Desktop {
         return document;
       }
       case 'bootstrap': {
-        const home = os.homedir();
+        const home = this.home;
+        await this.fileAccess.load();
         const stored = await this.storage.load();
         await this.settings.load(stored.state || undefined);
         if (stored.state) {
@@ -863,19 +908,32 @@ export class Desktop {
         };
       }
       case 'list':
+        await this.fileAccess.require([args[0] as string]);
         return list(args[0] as string);
       case 'stat':
+        await this.fileAccess.require([args[0] as string]);
         return entry(args[0] as string);
       case 'chooseFolder': {
         const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
           properties: ['openDirectory'],
+          defaultPath: args[0] as string | undefined,
+          securityScopedBookmarks: this.fileAccess.scoped,
         });
-        return result.canceled ? null : result.filePaths[0];
+        if (result.canceled || !result.filePaths[0]) return null;
+        await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
+        await this.fileAccess.require([result.filePaths[0]]);
+        // Granting a configured index root can unblock its watcher/indexer.
+        this.indexConfiguration = '';
+        void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
+        this.emit({ type: 'folder-changed', path: result.filePaths[0] });
+        return result.filePaths[0];
       }
       case 'reveal':
+        await this.fileAccess.require([args[0] as string]);
         shell.showItemInFolder(args[0] as string);
         return;
       case 'openExternal': {
+        await this.fileAccess.require([args[0] as string]);
         const error = await shell.openPath(args[0] as string);
         if (error) throw new Error(error);
         return;
@@ -887,8 +945,10 @@ export class Desktop {
       case 'folderSizeCancel':
         return this.files.sizeCancel(args[0] as string);
       case 'applications':
+        await this.fileAccess.require(args[0] as string[]);
         return this.applications.list(args[0] as string[]);
       case 'openWith':
+        await this.fileAccess.require(args[0] as string[]);
         return this.applications.open(args[0] as string[], args[1] as string);
       case 'chooseApplication': {
         if (process.platform !== 'darwin')
@@ -898,14 +958,22 @@ export class Desktop {
           defaultPath: '/Applications',
           properties: ['openFile'],
           filters: [{ name: 'Applications', extensions: ['app'] }],
+          securityScopedBookmarks: this.fileAccess.scoped,
         });
-        return result.canceled ? null : this.applications.register(result.filePaths[0]);
+        if (result.canceled || !result.filePaths[0]) return null;
+        await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
+        await this.fileAccess.require([result.filePaths[0]]);
+        return this.applications.register(result.filePaths[0]);
       }
       case 'watch':
+        await this.fileAccess.require([args[0] as string]);
         return this.watchers.add(args[0] as string, args[1] as string);
       case 'unwatch':
         return this.watchers.remove(args[0] as string);
       case 'search':
+        await this.fileAccess.require([
+          (args[0] as import('../domain/contracts').SearchRequest).root,
+        ]);
         return this.search.start(args[0] as Parameters<Search['start']>[0]);
       case 'cancelSearch':
         return this.search.cancel(args[0] as string);

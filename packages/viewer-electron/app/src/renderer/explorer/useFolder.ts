@@ -4,6 +4,7 @@ interface Dataset {
   entries: FileEntry[];
   loading: boolean;
   error: string;
+  errorCode?: string;
 }
 interface Subscription {
   state: Dataset;
@@ -11,6 +12,7 @@ interface Subscription {
   request?: Promise<void>;
   dirty: boolean;
   stop?: () => void;
+  refresh?: () => void;
 }
 const datasets = new Map<string, Subscription>();
 function dataset(path: string): Subscription {
@@ -40,7 +42,12 @@ function load(path: string): void {
       value.state = { entries: listing.entries, loading: false, error: '' };
     })
     .catch((error) => {
-      value.state = { entries: [], loading: false, error: String(error.message || error) };
+      value.state = {
+        entries: [],
+        loading: false,
+        error: String(error.message || error),
+        errorCode: error.code,
+      };
     })
     .finally(() => {
       value.request = undefined;
@@ -59,35 +66,60 @@ export function useFolder(path: string) {
       if (!value.stop) {
         const subscriber = crypto.randomUUID();
         let timer: ReturnType<typeof setTimeout> | undefined;
+        let watchFailed = false;
+        let stopped = false;
+        let watchRequest: Promise<void> | undefined;
+        const startWatch = (): Promise<void> => {
+          if (stopped || watchRequest) return watchRequest ?? Promise.resolve();
+          watchFailed = false;
+          return (watchRequest = window.viewer
+            .watch(path, subscriber)
+            .then(() => {
+              if (stopped) void window.viewer.unwatch(subscriber);
+            })
+            .catch((error) => {
+              watchFailed = true;
+              if (!stopped) {
+                value.state = {
+                  ...value.state,
+                  error: String(error.message),
+                  errorCode: error.code,
+                };
+                notify(value);
+              }
+            })
+            .finally(() => {
+              watchRequest = undefined;
+            }));
+        };
         const refresh = () => {
+          if (watchFailed) void startWatch();
           clearTimeout(timer);
           timer = setTimeout(() => load(path), 80);
         };
         const off = window.viewer.onEvent((event) => {
-          if (event.type === 'folder-changed' && event.path === path) refresh();
+          if (
+            event.type === 'folder-changed' &&
+            (event.path === path || path.startsWith(event.path.replace(/\/$/, '') + '/'))
+          ) {
+            refresh();
+          }
           if (event.type === 'watch-error' && event.path === path) {
+            watchFailed = true;
             value.state = {
               ...value.state,
               error: `Folder watching is unavailable: ${event.message}`,
+              errorCode: event.code ?? value.state.errorCode,
             };
             notify(value);
           }
         });
-        let stopped = false;
-        void window.viewer
-          .watch(path, subscriber)
-          .then(() => {
-            if (stopped) void window.viewer.unwatch(subscriber);
-          })
-          .catch((error) => {
-            if (!stopped) {
-              value.state = { ...value.state, error: String(error.message) };
-              notify(value);
-            }
-          });
+        void startWatch();
+        value.refresh = refresh;
         window.addEventListener('viewer:refresh', refresh);
         value.stop = () => {
           stopped = true;
+          value.refresh = undefined;
           off();
           clearTimeout(timer);
           window.removeEventListener('viewer:refresh', refresh);
@@ -111,6 +143,10 @@ export function useFolder(path: string) {
     [path],
   );
   const state = useSyncExternalStore(subscribe, () => dataset(path).state);
-  const refresh = useCallback(() => load(path), [path]);
+  const refresh = useCallback(() => {
+    const value = dataset(path);
+    if (value.refresh) value.refresh();
+    else load(path);
+  }, [path]);
   return { ...state, refresh };
 }

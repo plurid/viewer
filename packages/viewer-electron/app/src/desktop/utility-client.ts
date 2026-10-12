@@ -1,16 +1,52 @@
 import { utilityProcess, type UtilityProcess } from 'electron';
 import { randomUUID } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
 
 interface Reply {
   id?: string;
   value?: unknown;
   error?: string;
+  code?: string;
   event?: string;
 }
+interface OwnedWorker {
+  process?: UtilityProcess;
+  thread?: Worker;
+  postMessage(value: unknown): void;
+  message(listener: (reply: Reply) => void): void;
+  exit(listener: () => void, once?: boolean): void;
+}
+function launch(worker: string, name: string, backend?: 'process' | 'thread'): OwnedWorker {
+  if (backend === 'thread') {
+    const child = new Worker(worker, { name, stdout: true, stderr: true });
+    if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
+    return {
+      thread: child,
+      postMessage: (value) => child.postMessage(value),
+      message: (listener) => child.on('message', listener),
+      exit: (listener, once) => {
+        if (once) child.once('exit', listener);
+        else child.on('exit', listener);
+      },
+    };
+  }
+  const child = utilityProcess.fork(worker, [], { serviceName: name, stdio: 'pipe' });
+  if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
+  return {
+    process: child,
+    postMessage: (value) => child.postMessage(value),
+    message: (listener) => child.on('message', listener),
+    exit: (listener, once) => {
+      if (once) child.once('exit', listener);
+      else child.on('exit', listener);
+    },
+  };
+}
 
-/** Owns one read-only worker, its pending calls, restart and bounded shutdown. */
+/** Owns one read-only worker. MAS threads share the main process's dynamic
+ * sandbox grants; direct builds keep utility-process crash isolation. */
 export class UtilityClient {
-  private child?: UtilityProcess;
+  private child?: OwnedWorker;
   private ready?: Promise<unknown>;
   private closed = false;
   private closing?: Promise<void>;
@@ -27,6 +63,7 @@ export class UtilityClient {
     private worker: string,
     private options: {
       name: string;
+      backend?: 'process' | 'thread';
       timeout?: number;
       initialize?(client: UtilityClient): Promise<unknown>;
       event?(reply: Reply): void;
@@ -38,12 +75,9 @@ export class UtilityClient {
     if (this.closed)
       return Promise.reject(new Error('Background file services are shutting down.'));
     if (this.ready) return this.ready;
-    const child = utilityProcess.fork(this.worker, [], {
-      serviceName: this.options.name,
-      stdio: 'pipe',
-    });
+    const child = launch(this.worker, this.options.name, this.options.backend);
     this.child = child;
-    child.on('message', (reply: Reply) => {
+    child.message((reply: Reply) => {
       if (reply.event) {
         this.options.event?.(reply);
         return;
@@ -53,19 +87,19 @@ export class UtilityClient {
       clearTimeout(pending.timer);
       pending.cleanup();
       this.pending.delete(reply.id!);
-      if (reply.error) pending.reject(new Error(reply.error));
+      if (reply.error) pending.reject(Object.assign(new Error(reply.error), { code: reply.code }));
       else pending.resolve(reply.value);
     });
-    child.on('exit', () => {
+    child.exit(() => {
       if (this.child !== child) return;
       this.rejectPending('Background file services stopped. Retry the operation.');
       this.child = undefined;
       this.ready = undefined;
       this.options.stopped?.();
     });
-    child.stderr?.on('data', (data) => {
-      if (process.env.VIEWER_RENDER_TEST === '1') process.stderr.write(data);
-    });
+    child.thread?.on('error', () =>
+      this.rejectPending('Background file services stopped. Retry the operation.'),
+    );
     return (this.ready = this.options.initialize?.(this) ?? Promise.resolve());
   }
   async call<T>(method: string, args: unknown[] = [], signal?: AbortSignal): Promise<T> {
@@ -136,18 +170,23 @@ export class UtilityClient {
       // Workers only read source files and write derived metadata. Allow a
       // checkpoint, then stop only this owned worker if reads are stuck.
       await this.post('close', [], undefined, 2000).catch(() => {});
-      const pid = child.pid;
+      if (child.thread) {
+        await child.thread.terminate();
+        return;
+      }
+      const processChild = child.process!;
+      const pid = processChild.pid;
       let exited = pid === undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const stopped = new Promise<void>((resolve) => {
-        child.once('exit', () => {
+        child.exit(() => {
           exited = true;
           clearTimeout(timer);
           resolve();
-        });
+        }, true);
         timer = setTimeout(resolve, 1000);
       });
-      child.kill();
+      processChild.kill();
       if (!exited) await stopped;
       clearTimeout(timer);
       if (!exited && pid !== undefined) {

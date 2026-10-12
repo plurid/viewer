@@ -120,11 +120,17 @@ export async function extractDocument(
           .reduce((size, item) => size + item.text.length, 0) < 100 &&
         options.ocr
       ) {
-        const output = await run(options.ocr, [file, String(pages)], {
+        // A subprocess does not inherit folder grants acquired later through
+        // PowerBox. Read in the authorized process and send bounded PDF bytes.
+        const input = await bytes(file, 64000000);
+        const pending = run(options.ocr, ['-', String(pages)], {
           timeout: 90000,
           maxBuffer: 2000000,
           signal: options.signal,
         });
+        pending.child.stdin?.on('error', () => {}); // execFile reports early exit/abort.
+        pending.child.stdin?.end(Buffer.from(input));
+        const output = await pending;
         const records: unknown = JSON.parse(output.stdout);
         if (Array.isArray(records))
           for (const record of records)
