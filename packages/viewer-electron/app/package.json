@@ -35,6 +35,7 @@
     "test:watch": "vitest",
     "test:browser": "tsx tests/browser-server.ts",
     "test:desktop": "tsx tests/electron-smoke.ts",
+    "test:mas": "tsx tests/mas-native.ts",
     "package": "tsx tools/build-helpers.ts && electron-forge package",
     "make": "tsx tools/build-helpers.ts && electron-forge make",
     "mas:preflight": "tsx tools/mas.ts preflight",

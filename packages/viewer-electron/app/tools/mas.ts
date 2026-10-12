@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   storeConfiguration,
+  provisioningDeviceID,
   storeEntitlements,
   storeInputs,
   validateStoreProfile,
@@ -92,7 +93,8 @@ print(json.dumps(dict(
  expires=p['ExpirationDate'].isoformat() + 'Z',
  applicationIdentifier=e.get('com.apple.application-identifier', e.get('application-identifier', '')),
  applicationGroups=e.get('com.apple.security.application-groups', []),
- development=e.get('com.apple.security.get-task-allow', e.get('get-task-allow', False)),
+ getTaskAllow=e.get('com.apple.security.get-task-allow', e.get('get-task-allow')),
+ allDevices=p.get('ProvisionsAllDevices', False),
  devices=p.get('ProvisionedDevices', []),
  certificateHashes=[hashlib.sha1(c).hexdigest().upper() for c in p.get('DeveloperCertificates', [])]
 )))`,
@@ -117,8 +119,8 @@ print(json.dumps(dict(
   } else {
     const hardware = JSON.parse(run('/usr/sbin/system_profiler', ['SPHardwareDataType', '-json']))
       .SPHardwareDataType?.[0];
-    const device = hardware?.provisioning_udid ?? hardware?.platform_UUID;
-    if (!device || !profile.devices.some((value) => value.toLowerCase() === device.toLowerCase()))
+    const device = provisioningDeviceID(hardware);
+    if (!profile.devices.some((value) => value.toLowerCase() === device.toLowerCase()))
       throw new Error(
         'This Mac is not registered in the development profile. Add its provisioning UDID in Apple Developer and regenerate the profile.',
       );

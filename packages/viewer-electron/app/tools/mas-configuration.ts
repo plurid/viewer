@@ -14,6 +14,21 @@ export const storeConfiguration = z
   );
 export type StoreConfiguration = z.infer<typeof storeConfiguration>;
 export type StoreChannel = 'mas-dev' | 'mas';
+export function provisioningDeviceID(hardware?: Record<string, unknown>): string {
+  // system_profiler spells Apple's Silicon provisioning field with uppercase
+  // UDID. Its Hardware UUID is a different identifier that macOS will reject.
+  // Intel Macs without a Provisioning UDID use their Hardware UUID.
+  const value =
+    hardware?.provisioning_UDID ?? hardware?.provisioning_udid ?? hardware?.platform_UUID;
+  if (
+    typeof value !== 'string' ||
+    !/^[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{16}|[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12})$/.test(
+      value,
+    )
+  )
+    throw new Error('Cannot determine this Mac’s provisioning device identifier.');
+  return value;
+}
 export function macChannel(value?: string): 'direct' | StoreChannel {
   if (!value || value === 'direct') return 'direct';
   if (value === 'mas-dev' || value === 'mas') return value;
@@ -46,7 +61,8 @@ export interface ProfileSummary {
   expires: string;
   applicationIdentifier: string;
   applicationGroups: string[];
-  development: boolean;
+  getTaskAllow: boolean | null;
+  allDevices: boolean;
   devices: string[];
   certificateHashes: string[];
 }
@@ -70,12 +86,23 @@ export function validateStoreProfile(
     throw new Error(
       'Register Viewer’s explicit bundle ID and choose its matching provisioning profile. Wildcard profiles are unsupported.',
     );
-  if (!profile.applicationGroups.includes(config.applicationGroup))
-    throw new Error(
-      'The provisioning profile must authorize Viewer’s application group: ' +
-        config.applicationGroup,
-    );
-  if (profile.development !== (channel === 'mas-dev'))
+  // Viewer uses macOS's TEAM_ID.group convention, authorized by the signing
+  // team's identity rather than a profile entry. storeConfiguration validates
+  // that prefix and the preflight checks the certificate's actual Team ID.
+  // Only group.-prefixed groups require registration/profile authorization.
+  // https://developer.apple.com/documentation/xcode/accessing-app-group-containers
+  if (profile.allDevices)
+    throw new Error('Developer ID or unrestricted profiles cannot be used for a Store build.');
+  // get-task-allow is unrestricted on macOS and may be absent from a valid
+  // development profile. The device list constrains this channel; the preflight
+  // additionally verifies the authorized certificate's development/distribution
+  // role and this Mac's membership. Do not classify macOS profiles as iOS ones.
+  // https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles
+  if (
+    channel === 'mas-dev'
+      ? profile.getTaskAllow === false
+      : profile.getTaskAllow === true || profile.devices.length > 0
+  )
     throw new Error(
       'Choose a ' +
         (channel === 'mas-dev' ? 'development' : 'Mac App Store distribution') +
