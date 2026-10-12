@@ -32,6 +32,10 @@ import type {
 } from '../src/domain/contracts';
 
 const fixture = await createFixtures();
+const permissionScenario = process.env.VIEWER_TEST_SCENARIO === 'folder-access';
+const restrictedFolder = path.join(fixture.files, 'Models');
+let permissionGranted = false;
+let pickerRequests = 0;
 const clients = new Set<ServerResponse>();
 const emit = (event: DesktopEvent) => {
   for (const client of clients) client.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -107,7 +111,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
         locations: [
           { name: 'Studio', path: fixture.files },
           ...['Models', 'Documents', 'Images', 'Data', 'Source', 'Transfers'].map((name) => ({
-            name,
+            name: permissionScenario && name === 'Models' ? 'Volumes' : name,
             path: path.join(fixture.files, name),
           })),
         ],
@@ -117,6 +121,10 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       };
     case 'openSettings':
       return;
+    case 'agentReviewList':
+    case 'agentGrants':
+    case 'executionList':
+      return [];
     case 'settingsGet':
       return settings.snapshot();
     case 'settingsPatch': {
@@ -191,10 +199,25 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'folderSizeCancel':
       return sizes.cancel(args[0] as string);
     case 'chooseFolder':
+      if (permissionScenario && args[0] === restrictedFolder) {
+        // The first simulated native picker is cancelled; the second authorizes
+        // only the generated folder. No real volume or native grant is touched.
+        if (++pickerRequests === 1) return null;
+        permissionGranted = true;
+        return restrictedFolder;
+      }
       return fixture.files;
     case 'list':
+      if (permissionScenario && args[0] === restrictedFolder && !permissionGranted)
+        throw Object.assign(new Error('Choose this folder to allow access.'), {
+          code: 'FILE_ACCESS_REQUIRED',
+        });
       return list(scoped(args[0] as string));
     case 'stat':
+      if (permissionScenario && args[0] === restrictedFolder && !permissionGranted)
+        throw Object.assign(new Error('Choose this folder to allow access.'), {
+          code: 'FILE_ACCESS_REQUIRED',
+        });
       return entry(scoped(args[0] as string));
     case 'watch':
       return watchers.add(scoped(args[0] as string), args[1] as string);
@@ -296,7 +319,13 @@ const server = await createServer({
               const { method, args } = JSON.parse(text);
               response.end(JSON.stringify({ ok: true, value: await invoke(method, args) }));
             } catch (error) {
-              response.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+              response.end(
+                JSON.stringify({
+                  ok: false,
+                  error: (error as Error).message,
+                  code: (error as NodeJS.ErrnoException).code,
+                }),
+              );
             }
             return;
           }

@@ -370,6 +370,25 @@ describe('background filename and metadata index', () => {
       await index.close();
     }
   });
+  it('does not traverse a new directory symlink during incremental reconciliation', async () => {
+    const files = path.join(root, 'files');
+    const outside = path.join(root, 'outside');
+    await mkdir(files);
+    await mkdir(outside);
+    await writeFile(path.join(outside, 'Unindexed.txt'), 'Outside the configured index root.');
+    const index = new FileIndex(':memory:');
+    try {
+      index.configure({ roots: [files], exclusions: [], contentRoots: [], paused: false });
+      await index.settled();
+      const link = path.join(files, 'alias');
+      await symlink(outside, link);
+      await index.update(link);
+      expect(index.query({ query: 'alias' }).entries).toHaveLength(1);
+      expect(index.query({ query: 'Unindexed' }).entries).toEqual([]);
+    } finally {
+      await index.close();
+    }
+  });
   it('reads document content only after an explicit content-root grant', async () => {
     const file = path.join(root, 'book.txt');
     await writeFile(file, 'body marker');

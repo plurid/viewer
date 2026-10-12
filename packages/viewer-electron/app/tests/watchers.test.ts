@@ -1,10 +1,9 @@
-import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { Watchers } from '../src/desktop/watchers';
 
 const watch = vi.hoisted(() => vi.fn());
-vi.mock('chokidar', () => ({ default: { watch } }));
-class Watch extends EventEmitter {
+vi.mock('../src/desktop/directory-watch', () => ({ watchDirectory: watch }));
+class Watch {
   close = vi.fn(async () => {});
 }
 
@@ -17,7 +16,8 @@ describe('shared watcher recovery', () => {
     const watchers = new Watchers(events);
     await watchers.add('/chosen', 'first');
     await watchers.add('/chosen', 'second');
-    first.emit('error', Object.assign(new Error('Permission denied'), { code: 'EACCES' }));
+    const firstCallbacks = watch.mock.calls[0][1];
+    firstCallbacks.failed(Object.assign(new Error('Permission denied'), { code: 'EACCES' }));
     expect(events).toHaveBeenLastCalledWith({
       type: 'watch-error',
       path: '/chosen',
@@ -29,7 +29,8 @@ describe('shared watcher recovery', () => {
     expect(first.close).toHaveBeenCalledTimes(1);
     expect(watchers.count).toBe(1);
     events.mockClear();
-    first.emit('error', new Error('retired event'));
+    firstCallbacks.failed(new Error('retired event'));
+    firstCallbacks.changed('/chosen/file');
     expect(events).not.toHaveBeenCalled();
     await watchers.remove('first');
     expect(recovered.close).not.toHaveBeenCalled();

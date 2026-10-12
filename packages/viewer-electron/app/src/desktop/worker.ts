@@ -1,7 +1,7 @@
 import { entry } from './filesystem';
-import chokidar, { type FSWatcher } from 'chokidar';
-import type { ApplicationSettings, IndexedQuery } from '../domain/services';
+import type { ApplicationSettings, IndexedQuery, IndexStatus } from '../domain/services';
 import { FileIndex } from './index-core';
+import { IndexWatcher } from './index-watch';
 import { extractDocument } from './formats';
 import { workerPort } from './worker-port';
 interface Request {
@@ -10,37 +10,44 @@ interface Request {
   args: unknown[];
 }
 let index: FileIndex | undefined;
-let watcher: FSWatcher | undefined;
+let watcher: IndexWatcher | undefined;
 let ocr: string | undefined;
 const port = workerPort;
 const extracted = new Map<string, Awaited<ReturnType<typeof extractDocument>>>();
 const controllers = new Map<string, AbortController>();
 let config: ApplicationSettings['search'];
 let configurationQueue: Promise<void> = Promise.resolve();
+const watchFailures = new Set<string>();
+const watchedStatus = (value: IndexStatus): IndexStatus => ({
+  ...value,
+  roots: value.roots.map((root) =>
+    watchFailures.has(root.path) ? { ...root, status: 'offline', errors: root.errors + 1 } : root,
+  ),
+});
 async function configureNow(value: ApplicationSettings['search']) {
+  const retired = watcher?.stop();
+  watcher = undefined;
+  watchFailures.clear();
   config = value;
   index!.configure(config);
-  await watcher?.close();
+  await retired;
   if (value.paused || !value.roots.length) {
     watcher = undefined;
     return;
   }
-  watcher = chokidar.watch(value.roots, {
-    ignoreInitial: true,
-    followSymlinks: false,
-    ignored: (file) =>
-      value.exclusions.some((rule) =>
-        rule.startsWith('/')
-          ? file === rule || file.startsWith(rule + '/')
-          : file.split('/').includes(rule),
-      ),
-    awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 100 },
-  });
-  watcher.on('all', (event, file) => {
-    for (const key of extracted.keys()) if (key.startsWith(file + ':')) extracted.delete(key);
-    void index?.update(file, event === 'unlink' || event === 'unlinkDir').catch(() => {});
-  });
-  watcher.on('error', () => port.postMessage({ event: 'index', value: index!.status() }));
+  watcher = new IndexWatcher(
+    value,
+    async (file) => {
+      for (const key of extracted.keys())
+        if (key.startsWith(file + ':') || key.startsWith(file.replace(/\/$/, '') + '/'))
+          extracted.delete(key);
+      await index?.update(file);
+    },
+    (root) => {
+      watchFailures.add(root);
+      port.postMessage({ event: 'index', value: watchedStatus(index!.status()) });
+    },
+  );
 }
 function configure(value: ApplicationSettings['search']): Promise<void> {
   const work = configurationQueue.catch(() => {}).then(() => configureNow(value));
@@ -60,7 +67,7 @@ port.on('message', async (event) => {
       index = await FileIndex.open(
         request.args[0] as string,
         (value) => {
-          if (ready) port.postMessage({ event: 'index', value });
+          if (ready) port.postMessage({ event: 'index', value: watchedStatus(value) });
         },
         async (file) => (await extractDocument(file)).text,
         { roots: [], contentRoots: [], exclusions: [], paused: false },
@@ -73,8 +80,10 @@ port.on('message', async (event) => {
     else if (request.method === 'configure') {
       await configure(request.args[0] as ApplicationSettings['search']);
       value = true;
-    } else if (request.method === 'query') value = index.query(request.args[0] as IndexedQuery);
-    else if (request.method === 'status') value = index.status();
+    } else if (request.method === 'query') {
+      const result = index.query(request.args[0] as IndexedQuery);
+      value = { ...result, status: watchedStatus(result.status) };
+    } else if (request.method === 'status') value = watchedStatus(index.status());
     else if (request.method === 'update') {
       await index.update(request.args[0] as string, request.args[1] as boolean);
       value = true;
@@ -113,6 +122,7 @@ port.on('message', async (event) => {
       for (const abort of controllers.values()) abort.abort();
       await configurationQueue;
       await watcher?.close();
+      watcher = undefined;
       await index.close();
       value = true;
     } else throw new Error('Unknown background operation.');

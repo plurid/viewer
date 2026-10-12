@@ -1,8 +1,8 @@
-/** Signed MAS startup and permission-boundary check; no native picker is automated. */
+/** Signed MAS startup, handle-pressure and permission-boundary checks. */
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import store from '../mac-app-store.json' with { type: 'json' };
 import type { Bootstrap, FolderListing } from '../src/domain/contracts';
-import type { SettingsSnapshot } from '../src/domain/services';
+import type { IndexedResult, IndexStatus, SettingsSnapshot } from '../src/domain/services';
 
 assert.equal(process.platform, 'darwin', 'The signed MAS check requires macOS.');
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -59,13 +59,32 @@ const profile = path.join(
 const fixture = await mkdtemp('/private/tmp/viewer-mas-native-');
 const externalFile = path.join(fixture, 'Unselected.txt');
 await writeFile(externalFile, 'Generated unselected MAS verification file.', { mode: 0o600 });
+// Only generated files in this isolated app container are indexed. A large flat
+// directory also exercises plane watches, separately from recursive indexing.
+const stress = path.join(profile, 'watch-pressure');
+await mkdir(stress, { recursive: true });
+for (let directory = 0; directory < 16; directory++) {
+  const nested = path.join(stress, 'nested-' + directory);
+  await mkdir(nested);
+  for (let file = 0; file < 80; file++)
+    await writeFile(path.join(nested, `Generated-${file}.txt`), 'Generated watcher fixture.');
+}
+for (let file = 0; file < 1024; file++)
+  await writeFile(path.join(stress, `Flat-${file}.txt`), 'Generated watcher fixture.');
 const listener = net.createServer();
 await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
 const port = (listener.address() as net.AddressInfo).port;
 await new Promise<void>((resolve) => listener.close(() => resolve()));
 const child = spawn(
-  path.join(bundle, 'Contents/MacOS/Viewer'),
-  [`--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1'],
+  'python3',
+  [
+    '-c',
+    // Limit only this owned test process; never change the user's global limits.
+    'import os,resource,sys; resource.setrlimit(resource.RLIMIT_NOFILE,(512,512)); os.execv(sys.argv[1],sys.argv[1:])',
+    path.join(bundle, 'Contents/MacOS/Viewer'),
+    `--remote-debugging-port=${port}`,
+    '--remote-debugging-address=127.0.0.1',
+  ],
   {
     env: {
       ...process.env,
@@ -198,6 +217,71 @@ try {
     Boolean,
     'the native-grant recovery action',
   );
+  const saved = await until(
+    () => evaluate<Bootstrap>('window.viewer.bootstrap()'),
+    (value) => !!value.state,
+    'the initial workspace save',
+  );
+  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
+    {path:'settings.search.roots',value:[${JSON.stringify(stress)}]},
+    {path:'settings.search.exclusions',value:[]},
+    {path:'settings.search.contentRoots',value:[]}
+  ],snapshot.revision))`);
+  await evaluate(`window.viewer.watch(${JSON.stringify(stress)},'mas-watch-pressure')`);
+  await delay(2000);
+  const stateWrite = await evaluate<{ saved: boolean; code?: string }>(
+    `(async () => { try { await window.viewer.save(${JSON.stringify(saved.state)}); return {saved:true}; } catch(error) { return {saved:false,code:error.code}; } })()`,
+  );
+  assert.deepEqual(
+    stateWrite,
+    { saved: true },
+    'Workspace saving must survive 2,304 watched files.',
+  );
+  const handles = native('/usr/sbin/lsof', ['-p', String(child.pid), '-Ff'])
+    .split('\n')
+    .filter((line) => /^f\d/.test(line)).length;
+  assert.ok(handles < 192, `Directory watches must stay bounded; found ${handles} open handles.`);
+  await until(
+    () => evaluate<IndexStatus>('window.viewer.indexStatus()'),
+    (value) =>
+      !value.running && value.count >= 2304 && value.roots.every((root) => root.errors === 0),
+    'the complete stress index',
+  );
+  const liveDirectory = path.join(stress, 'new-folder');
+  const liveFile = path.join(liveDirectory, 'Live-watch-added.txt');
+  await mkdir(liveDirectory);
+  await writeFile(liveFile, 'Generated live update.');
+  const find = (name: string) =>
+    evaluate<IndexedResult>(
+      `window.viewer.indexedQuery({query:${JSON.stringify(name)},root:${JSON.stringify(stress)}})`,
+    );
+  await until(
+    () => find('Live-watch-added'),
+    (value) => value.entries.some((entry) => entry.path === liveFile),
+    'a newly created nested file',
+  );
+  const renamed = path.join(liveDirectory, 'Live-watch-renamed.txt');
+  await rename(liveFile, renamed);
+  await until(
+    () => find('Live-watch-renamed'),
+    (value) => value.entries.some((entry) => entry.path === renamed),
+    'the renamed nested file',
+  );
+  await until(
+    () => find('Live-watch-added'),
+    (value) => value.entries.length === 0,
+    'removal of the old index row',
+  );
+  await rm(liveDirectory, { recursive: true });
+  await until(
+    () => find('Live-watch-renamed'),
+    (value) => value.entries.length === 0,
+    'removal of the deleted subtree',
+  );
+  await evaluate(`window.viewer.unwatch('mas-watch-pressure')`);
+  await evaluate(
+    'window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([{path:"settings.search.paused",value:true}],snapshot.revision))',
+  );
   assert.deepEqual(exceptions, []);
   assert.equal((await stat(path.join(profile, 'config.jsonc'))).mode & 0o777, 0o600);
   assert.equal(await readFile(externalFile, 'utf8'), 'Generated unselected MAS verification file.');
@@ -213,7 +297,7 @@ try {
     else child.once('exit', finish);
   });
   console.log(
-    'Signed MAS verification passed: startup, private container configuration, actual home, unselected-folder/file denial, permission recovery UI and graceful Quit. Native picker/bookmark acceptance remains a separate check.',
+    `Signed MAS verification passed: startup, private container configuration, actual home, unselected-folder/file denial, permission recovery UI, 2,304 generated files under a 512-handle limit (${handles} open handles), workspace saves, live nested add/rename/delete and graceful Quit. Native picker/bookmark acceptance remains a separate check.`,
   );
 } catch (error) {
   if (socket?.readyState === WebSocket.OPEN)

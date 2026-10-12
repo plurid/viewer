@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { report } from '../state/store';
 
-export const needsFolderAccess = (code?: string) =>
-  ['FILE_ACCESS_REQUIRED', 'EACCES', 'EPERM'].includes(code ?? '');
+export { needsFolderAccess } from '../../domain/file-access';
 
 export function FolderAccessButton({
   folder,

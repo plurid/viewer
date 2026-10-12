@@ -1,9 +1,9 @@
-import chokidar, { type FSWatcher } from 'chokidar';
+import { watchDirectory, type DirectoryWatch } from './directory-watch';
 import { absolute, message } from './filesystem';
 import type { DesktopEvent } from '../domain/contracts';
 
 interface SharedWatch {
-  watcher: FSWatcher;
+  watcher: DirectoryWatch;
   subscribers: Set<string>;
   failed?: boolean;
   timer?: ReturnType<typeof setTimeout>;
@@ -36,31 +36,29 @@ export class Watchers {
     await Promise.all([cleanup, retired]);
   }
   private create(folder: string, subscribers = new Set<string>()): SharedWatch {
-    const watcher = chokidar.watch(folder, {
-      depth: 0,
-      ignoreInitial: true,
-      followSymlinks: false,
-      awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 60 },
+    const owned = { subscribers } as SharedWatch;
+    owned.watcher = watchDirectory(folder, {
+      changed: () => {
+        if (this.watches.get(folder) !== owned || owned.failed) return;
+        clearTimeout(owned.timer);
+        owned.timer = setTimeout(() => {
+          if (this.watches.get(folder) === owned && owned.subscribers.size && !owned.failed)
+            this.emit({ type: 'folder-changed', path: folder });
+        }, 100);
+      },
+      failed: (error) => {
+        if (this.watches.get(folder) !== owned) return;
+        owned.failed = true;
+        clearTimeout(owned.timer);
+        this.emit({
+          type: 'watch-error',
+          path: folder,
+          message: message(error),
+          code: (error as NodeJS.ErrnoException).code,
+        });
+      },
     });
-    const owned = { watcher, subscribers } as SharedWatch;
     this.watches.set(folder, owned);
-    watcher.on('all', () => {
-      clearTimeout(owned.timer);
-      owned.timer = setTimeout(() => {
-        if (this.watches.get(folder) === owned && owned.subscribers.size)
-          this.emit({ type: 'folder-changed', path: folder });
-      }, 100);
-    });
-    watcher.on('error', (error) => {
-      if (this.watches.get(folder) !== owned) return;
-      owned.failed = true;
-      this.emit({
-        type: 'watch-error',
-        path: folder,
-        message: message(error),
-        code: (error as NodeJS.ErrnoException).code,
-      });
-    });
     return owned;
   }
   async remove(subscriber: string): Promise<void> {

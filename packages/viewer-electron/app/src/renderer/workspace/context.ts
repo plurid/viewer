@@ -24,6 +24,8 @@ export interface WorkspaceController {
       linked?: boolean;
       another?: boolean;
       link?: string;
+      /** Known folder destinations may request a native access grant. */
+      directory?: boolean;
     },
   ): Promise<void>;
   focusPane(hostID: string): void;

@@ -408,7 +408,7 @@ export class FileIndex {
             content = (await this.extract?.(file).catch(() => '')) ?? '';
           if (generation !== this.generation) return;
           this.put(item, root, Date.now(), content.slice(0, 150000));
-          if (item.directory)
+          if (item.directory && item.kind !== 'symlink')
             await this.crawl(
               { path: file, status: 'indexing', count: 0, errors: 0 },
               this.generation,

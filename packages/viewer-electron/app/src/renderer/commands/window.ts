@@ -355,6 +355,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
         actions.workspace.openPath(context.sidebar!.path!, {
           paneID: context.paneID,
           workspaceID: context.workspaceID,
+          directory: true,
         }),
     },
     {
@@ -549,7 +550,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       aliases: ['goto', 'location'],
       remember: false,
       when: windowScope,
-      run: () => actions.workspace.openPath(item.path),
+      run: () => actions.workspace.openPath(item.path, { directory: true }),
     });
   for (const search of state.settings.settings.savedSearches)
     commands.push({

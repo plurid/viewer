@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   stat,
   symlink,
@@ -132,6 +133,33 @@ describe('search, subscriptions and persistence', () => {
     await Promise.all([watchers.add(second, 'plane'), watchers.remove('plane')]);
     expect(watchers.count).toBe(0);
     await watchers.close();
+  });
+  it('refreshes shallow folders after file writes, atomic replacement, rename and deletion', async () => {
+    const file = path.join(root, 'Watched.txt');
+    await writeFile(file, 'Initial');
+    const events: DesktopEvent[] = [];
+    const watchers = new Watchers((event) => events.push(event));
+    const changes = () => events.filter((event) => event.type === 'folder-changed').length;
+    await watchers.add(root, 'plane');
+    try {
+      await writeFile(file, 'Updated');
+      await vi.waitFor(() => expect(changes()).toBeGreaterThan(0), { timeout: 5000 });
+      let previous = changes();
+      const temporary = file + '.tmp';
+      await writeFile(temporary, 'Replacement');
+      await rename(temporary, file);
+      await vi.waitFor(() => expect(changes()).toBeGreaterThan(previous), { timeout: 5000 });
+      previous = changes();
+      const renamed = path.join(root, 'Renamed.txt');
+      await rename(file, renamed);
+      await vi.waitFor(() => expect(changes()).toBeGreaterThan(previous), { timeout: 5000 });
+      previous = changes();
+      await rm(renamed);
+      await vi.waitFor(() => expect(changes()).toBeGreaterThan(previous), { timeout: 5000 });
+      expect(events.filter((event) => event.type === 'watch-error')).toEqual([]);
+    } finally {
+      await watchers.close();
+    }
   });
   it('writes atomic versioned state and retains corrupted state as a backup', async () => {
     const storage = new Storage(path.join(root, 'state.json'));

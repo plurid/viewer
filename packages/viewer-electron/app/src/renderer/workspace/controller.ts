@@ -10,7 +10,6 @@ import {
   addSearchPane,
   addTerminalPane,
   getState,
-  navigate,
   reconcilePanes,
   removePanes,
   setActivePane,
@@ -20,6 +19,7 @@ import { repeatedPreviews } from './recovery';
 import { flattenTree, hostID } from './tree';
 import { frameWorkspace } from './framing';
 import type { WorkspaceController } from './context';
+import { openWorkspacePath } from './open-path';
 /** Owns host-plane identity and creation. Engine routes/IDs stay inside the adapter. */
 export function useWorkspaceController({
   engine,
@@ -31,7 +31,7 @@ export function useWorkspaceController({
   readyRef: RefObject<boolean>;
 }): WorkspaceController {
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
-  const controller = useMemo<WorkspaceController>(
+  const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
       newTerminal(target, profileID) {
         const api = engine.current;
@@ -146,20 +146,7 @@ export function useWorkspaceController({
             dock: getState().saved.ui.space.opening === 'dock',
           });
       },
-      async openPath(path, target) {
-        const workspaceID = target?.workspaceID ?? activeWorkspace().id;
-        const paneID = target?.paneID ?? getState().activePane;
-        const entry = await window.viewer.stat(path);
-        if (activeWorkspace().id !== workspaceID) return;
-        const current = activeWorkspace().panes.find((pane) => pane.id === paneID);
-        if (target?.paneID && !current) return;
-        if (entry.directory && current?.type === 'folder' && !target?.linked) {
-          navigate(current.id, entry.path);
-          controller.focusPane(current.id);
-        } else {
-          controller.open(entry, current?.id, { another: target?.another, link: target?.link });
-        }
-      },
+      openPath: (path, target): Promise<void> => openWorkspacePath(path, target, controller),
       focusPane(id) {
         if (!activeWorkspace().panes.some((pane) => pane.id === id)) return;
         const node =

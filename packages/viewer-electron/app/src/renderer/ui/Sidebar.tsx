@@ -233,7 +233,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                     }}
                     onClick={(event) => {
                       void workspace
-                        .openPath(item.path, { ...target, linked: event.altKey })
+                        .openPath(item.path, { ...target, linked: event.altKey, directory: true })
                         .catch(report);
                     }}
                   >

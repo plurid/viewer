@@ -15,7 +15,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
     body: JSON.stringify({ method, args }),
   });
   const result = await response.json();
-  if (!result.ok) throw new Error(result.error);
+  if (!result.ok) throw Object.assign(new Error(result.error), { code: result.code });
   return result.value;
 }
 const api: ViewerAPI = {
@@ -71,7 +71,7 @@ const api: ViewerAPI = {
   bootstrap: () => invoke('bootstrap'),
   list: (path) => invoke('list', path),
   stat: (path) => invoke('stat', path),
-  chooseFolder: () => invoke('chooseFolder'),
+  chooseFolder: (defaultPath) => invoke('chooseFolder', defaultPath),
   reveal: (path) => invoke('reveal', path),
   openExternal: (path) => invoke('openExternal', path),
   applications: (paths) => invoke('applications', paths),
