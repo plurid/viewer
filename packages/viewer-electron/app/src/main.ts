@@ -1,4 +1,4 @@
-import { nativeTheme, app, BrowserWindow, Menu, protocol, session } from 'electron';
+import { nativeTheme, app, BrowserWindow, Menu, protocol, session, screen } from 'electron';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
@@ -6,6 +6,7 @@ import { lookup } from 'mime-types';
 import { defaultShortcuts, accelerator } from './domain/shortcuts';
 import { runMCPClient } from './desktop/mcp-client';
 import { Desktop } from './desktop/bridge';
+import { WindowState, captureWindowFrame, restoreWindowFrame } from './desktop/window-state';
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -37,6 +38,7 @@ if (process.env.VIEWER_DATA_DIRECTORY) {
 }
 let window: BrowserWindow | null = null;
 let desktop: Desktop | null = null;
+let windowState: WindowState | undefined;
 let settingsWindow: BrowserWindow | null = null;
 let settingsClosing: Promise<void> | undefined;
 const mcpMode = process.argv.includes('--mcp');
@@ -330,11 +332,15 @@ function menu(): void {
 async function createWindow(): Promise<void> {
   if (window || quitPending || quitting) return;
   closing = false;
+  const restored = restoreWindowFrame(
+    windowState?.value ?? null,
+    screen.getAllDisplays(),
+    screen.getPrimaryDisplay(),
+  );
   window = new BrowserWindow({
-    width: 1440,
-    height: 940,
-    minWidth: 780,
-    minHeight: 560,
+    ...restored.bounds,
+    minWidth: restored.minWidth,
+    minHeight: restored.minHeight,
     title: 'Viewer',
     backgroundColor: '#272a30',
     titleBarStyle: 'hiddenInset',
@@ -355,6 +361,14 @@ async function createWindow(): Promise<void> {
     },
   });
   const createdWindow = window;
+  const remember = () => rememberWindow(createdWindow);
+  createdWindow.on('move', remember);
+  createdWindow.on('resize', remember);
+  createdWindow.on('maximize', remember);
+  createdWindow.on('unmaximize', remember);
+  createdWindow.on('enter-full-screen', remember);
+  createdWindow.on('leave-full-screen', remember);
+  createdWindow.on('restore', remember);
   let closePending = false;
   const services = desktop!;
   services.attach(window, 'viewer');
@@ -368,20 +382,31 @@ async function createWindow(): Promise<void> {
     event.preventDefault();
     if (closePending) return;
     closePending = true;
-    void services
-      .flush()
-      .catch((error) => console.error('Workspace flush failed', error))
-      .finally(() => {
-        closing = true;
-        if (!createdWindow.isDestroyed()) createdWindow.close();
-      });
+    remember();
+    void Promise.all([
+      services.flush().catch((error) => console.error('Workspace flush failed', error)),
+      windowState?.flush().catch((error) => console.error('Window placement save failed', error)),
+    ]).finally(() => {
+      closing = true;
+      if (!createdWindow.isDestroyed()) createdWindow.close();
+    });
   });
   window.on('closed', () => {
     window = null;
   });
   menu();
   await window.loadURL(devURL || 'viewer-app://app/index.html');
-  if (!backgroundTest) window.show();
+  if (!backgroundTest && !createdWindow.isDestroyed() && !closePending && !quitPending) {
+    if (restored.maximized) createdWindow.maximize();
+    createdWindow.show();
+    if (restored.fullscreen) createdWindow.setFullScreen(true);
+  }
+}
+function rememberWindow(created: BrowserWindow): void {
+  if (created.isDestroyed() || created.isMinimized()) return;
+  windowState?.remember(
+    captureWindowFrame(created, screen.getDisplayMatching(created.getBounds())),
+  );
 }
 async function openSettingsWindow(): Promise<void> {
   await settingsClosing;
@@ -492,6 +517,9 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  windowState = new WindowState(path.join(app.getPath('userData'), 'window-state-v1.json'));
+  await windowState.load();
+  if (quitPending || quitting) return;
   desktop = new Desktop(app.getPath('userData'), trusted, {
     openSettings: openSettingsWindow,
     settingsChanged: menu,
@@ -553,13 +581,15 @@ app.on('before-quit', (event) => {
   quitPending = true;
   // Keep the bridge and services alive until every renderer has saved and
   // Electron has closed its windows. Cleanup belongs to will-quit.
-  void (desktop?.flush() ?? Promise.resolve())
-    .catch((error) => console.error(error))
-    .finally(() => {
-      quitting = true;
-      closing = true;
-      app.quit();
-    });
+  if (window) rememberWindow(window);
+  void Promise.all([
+    desktop?.flush().catch((error) => console.error(error)),
+    windowState?.flush().catch((error) => console.error('Window placement save failed', error)),
+  ]).finally(() => {
+    quitting = true;
+    closing = true;
+    app.quit();
+  });
 });
 app.on('will-quit', (event) => {
   if (disposed || !desktop) return;

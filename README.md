@@ -24,6 +24,10 @@ The app is built under `packages/viewer-electron/app/out/Viewer-darwin-<architec
 
 To install a local build, extract the ZIP and drag `Viewer.app` into Applications. The native Swift helpers inherit the bundled Electron runtime's minimum macOS version (currently 13.0), rather than the build machine's SDK default.
 
+The main window remembers its native size and position across closing and reopening, including Rectangle's full-width/full-height sizing. Restoration keeps the frame visible when a display moves, changes resolution or disconnects. Window placement is separate from the saved Plurid camera/layout and the Settings window's size.
+
+The [Mac App Store readiness assessment](docs/mac-app-store-readiness.md) records the current release blockers and implementation order. The local installer uses explicit JIT-only ad-hoc entitlements; a Store build needs its own runtime, signing and persistent sandbox file permissions.
+
 `pnpm test:browser` serves the same renderer and filesystem services with an isolated synthetic workspace at `http://127.0.0.1:4173/tests/browser.html`. Its native picker, clipboard and Trash use fixture adapters. Stop the server to clean up its files. The desktop check uses the real sandboxed preload, IPC and resource protocols in hidden, GPU-backed offscreen windows. It never activates the test app or shows Settings. The isolated macOS process stays out of the Dock, and the harness checks its native activation state. Normal launches retain visible windows and background throttling.
 
 Physical frame-rate profiling is separate: `VIEWER_TEST_FOREGROUND=1 pnpm test:desktop` deliberately shows and activates the owned test app. Use it only when a foreground profiling session is explicitly wanted; hidden-window frame timings are not comparable. `VIEWER_TEST_SCENARIO=spatial pnpm test:desktop` runs the short toolbar/command/Escape regression in the background.

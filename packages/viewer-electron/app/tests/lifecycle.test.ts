@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../src/domain/services';
 
@@ -8,6 +11,7 @@ const native = vi.hoisted(() => ({
   flushSettings: vi.fn<() => Promise<void>>(),
   bridge: true,
   options: undefined as { openSettings(): Promise<void> } | undefined,
+  profile: '',
 }));
 class NativeEvent {
   prevented = false;
@@ -18,12 +22,22 @@ class NativeEvent {
 class TestWindow extends EventEmitter {
   static windows: TestWindow[] = [];
   destroyed = false;
+  bounds: { x: number; y: number; width: number; height: number };
+  maximized = false;
+  fullscreen = false;
+  minimized = false;
   webContents = Object.assign(new EventEmitter(), {
     id: TestWindow.windows.length + 1,
     setWindowOpenHandler: vi.fn(),
   });
-  constructor() {
+  constructor(options: { x?: number; y?: number; width: number; height: number }) {
     super();
+    this.bounds = {
+      x: options.x ?? 100,
+      y: options.y ?? 100,
+      width: options.width,
+      height: options.height,
+    };
     TestWindow.windows.push(this);
   }
   static getFocusedWindow() {
@@ -34,6 +48,32 @@ class TestWindow extends EventEmitter {
   focus() {}
   getSize() {
     return [900, 640];
+  }
+  getBounds() {
+    return { ...this.bounds };
+  }
+  getNormalBounds() {
+    return { ...this.bounds };
+  }
+  isMaximized() {
+    return this.maximized;
+  }
+  isFullScreen() {
+    return this.fullscreen;
+  }
+  isMinimized() {
+    return this.minimized;
+  }
+  maximize() {
+    this.maximized = true;
+  }
+  setFullScreen(value: boolean) {
+    this.fullscreen = value;
+  }
+  setBounds(bounds: typeof this.bounds) {
+    this.bounds = { ...bounds };
+    this.emit('move');
+    this.emit('resize');
   }
   isDestroyed() {
     return this.destroyed;
@@ -50,7 +90,7 @@ class TestWindow extends EventEmitter {
 const application = Object.assign(new EventEmitter(), {
   setName: vi.fn(),
   requestSingleInstanceLock: () => true,
-  getPath: () => '/isolated-test-profile',
+  getPath: () => native.profile,
   whenReady: () => Promise.resolve(),
   terminated: false,
   quit(): void {
@@ -68,6 +108,11 @@ vi.mock('electron', () => ({
   app: application,
   BrowserWindow: TestWindow,
   nativeTheme: new EventEmitter(),
+  screen: {
+    getAllDisplays: () => [{ id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } }],
+    getPrimaryDisplay: () => ({ id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } }),
+    getDisplayMatching: () => ({ id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } }),
+  },
   Menu: { buildFromTemplate: (value: unknown) => value, setApplicationMenu: vi.fn() },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
   session: {
@@ -120,15 +165,41 @@ beforeEach(async () => {
   native.flush.mockReset().mockResolvedValue();
   native.dispose.mockReset().mockResolvedValue();
   native.flushSettings.mockReset().mockResolvedValue();
+  native.profile = await mkdtemp(path.join(os.tmpdir(), 'viewer-lifecycle-'));
   await import('../src/main');
   await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(1));
 });
-afterEach(() => {
+afterEach(async () => {
+  application.quit();
+  await vi.waitFor(() => expect(application.terminated).toBe(true));
   application.removeAllListeners();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  await rm(native.profile, { recursive: true, force: true });
 });
 describe('native window and application shutdown', () => {
+  it('retains a Rectangle-sized frame when closing and reopening on macOS', async () => {
+    const frame = { x: 0, y: 25, width: 1920, height: 1000 };
+    const window = TestWindow.windows[0];
+    window.setBounds(frame);
+    window.close();
+    await vi.waitFor(() => expect(window.destroyed).toBe(true));
+    application.emit('activate');
+    await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(2));
+    expect(TestWindow.windows[1].getBounds()).toEqual(frame);
+  });
+  it('saves the final position when closing before the resize debounce fires', async () => {
+    const frame = { x: 185, y: 140, width: 1000, height: 700 };
+    const window = TestWindow.windows[0];
+    window.setBounds(frame);
+    application.quit();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    const { readFile } = await import('node:fs/promises');
+    const saved = JSON.parse(
+      await readFile(path.join(native.profile, 'window-state-v1.json'), 'utf8'),
+    );
+    expect(saved.bounds).toEqual(frame);
+  });
   it('closes every window before disposing IPC, saves once and refuses reopening during Quit', async () => {
     await native.options!.openSettings();
     const save = gate();

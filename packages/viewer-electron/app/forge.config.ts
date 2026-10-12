@@ -24,7 +24,12 @@ const config: ForgeConfig = {
       identity: '-',
       identityValidation: false,
       preAutoEntitlements: false,
-      optionsForFile: () => ({ hardenedRuntime: false }),
+      // Do not inherit the signer's broad camera/microphone/device defaults.
+      // The MAS build will need its own sandbox and helper-inheritance entitlements.
+      optionsForFile: () => ({
+        hardenedRuntime: false,
+        entitlements: 'assets/entitlements.mac.plist',
+      }),
     },
   },
   rebuildConfig: { onlyModules: ['node-pty'] },
