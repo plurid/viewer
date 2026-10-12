@@ -6,6 +6,11 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
+import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { cadFormats } from '../../../domain/model-formats';
+import { importCad } from '../model/cad';
+import { printingScale } from '../model/printing';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
@@ -16,12 +21,18 @@ interface ModelSession {
   wireframe(value: boolean): void;
   animate(index: number, playing: boolean): void;
   active(value: boolean, interactive: boolean): void;
+  measure(value: boolean): void;
+  clearMeasure(): void;
 }
 function disposeObject(object: THREE.Object3D): void {
   const materials = new Set<THREE.Material>(),
     textures = new Set<THREE.Texture>();
   object.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
+    if (
+      child instanceof THREE.Mesh ||
+      child instanceof THREE.Line ||
+      child instanceof THREE.Points
+    ) {
       child.geometry.dispose();
       for (const material of Array.isArray(child.material) ? child.material : [child.material])
         materials.add(material);
@@ -46,14 +57,21 @@ export default function ModelPreview(context: PreviewContext) {
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState<string[]>([]);
   const [info, setInfo] = useState('');
+  const [dimensions, setDimensions] = useState<number[]>([]);
+  const [distance, setDistance] = useState<number>();
+  const [measure, setMeasure] = usePreviewState(context, 'model.measure', false);
+  const [assumedUnit, setAssumedUnit] = usePreviewState(context, 'model.unit', 'units');
+  const physicalUnits =
+    cadFormats.includes(resource.entry.extension) || resource.entry.extension === '3mf';
+  const unit = physicalUnits ? 'mm' : assumedUnit;
   const [wire, setWire] = usePreviewState(context, 'model.wire', false);
   const [animations, setAnimations] = useState<string[]>([]);
   const [animation, setAnimation] = useState(0);
   const [playing, setPlaying] = useState(false);
   const visibility = useRef({ active, interactive });
   visibility.current = { active, interactive };
-  const playback = useRef({ wire, animation, playing });
-  playback.current = { wire, animation, playing };
+  const playback = useRef({ wire, animation, playing, measure });
+  playback.current = { wire, animation, playing, measure };
   useEffect(() => {
     session.current?.active(active, interactive);
   }, [active, interactive]);
@@ -64,11 +82,18 @@ export default function ModelPreview(context: PreviewContext) {
     session.current?.animate(animation, playing);
   }, [animation, playing]);
   useEffect(() => {
+    session.current?.measure(measure);
+  }, [measure]);
+  useEffect(() => {
     const element = stage.current;
     if (!element) return;
     setLoading(true);
     setError('');
     setWarnings([]);
+    setDimensions([]);
+    setDistance(undefined);
+    setInfo('');
+    setAnimations([]);
     if (resource.entry.size > (context.limits?.maxModelMB ?? 256) * 1024 * 1024) {
       setError('This model exceeds the file limit in Settings.');
       setLoading(false);
@@ -86,6 +111,23 @@ export default function ModelPreview(context: PreviewContext) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(look === 'dark' ? '#292d34' : '#e9edf1');
     const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10000);
+    if (
+      cadFormats.includes(resource.entry.extension) ||
+      ['stl', '3mf'].includes(resource.entry.extension)
+    )
+      camera.up.set(0, 0, 1);
+    const markings = new THREE.Group();
+    scene.add(markings);
+    const points: THREE.Vector3[] = [];
+    let measuring = playback.current.measure;
+    const clearMeasure = () => {
+      disposeObject(markings);
+      markings.clear();
+      points.length = 0;
+      setDistance(undefined);
+      dirty = true;
+      schedule();
+    };
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -126,6 +168,60 @@ export default function ModelPreview(context: PreviewContext) {
     for (const type of ['pointerdown', 'contextmenu', 'dblclick'])
       renderer.domElement.addEventListener(type, isolate);
     renderer.domElement.addEventListener('wheel', wheel, { passive: false });
+    let press: { x: number; y: number; id: number } | undefined;
+    const down = (event: PointerEvent) => {
+      press =
+        event.button === 0 && measuring
+          ? { x: event.clientX, y: event.clientY, id: event.pointerId }
+          : undefined;
+    };
+    const pick = (event: PointerEvent) => {
+      const start = press;
+      press = undefined;
+      if (
+        !start ||
+        start.id !== event.pointerId ||
+        !measuring ||
+        !controls.enabled ||
+        !object ||
+        Math.hypot(start.x - event.clientX, start.y - event.clientY) > 4
+      )
+        return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const ray = new THREE.Raycaster();
+      ray.setFromCamera(
+        new THREE.Vector2(
+          ((event.clientX - rect.left) / rect.width) * 2 - 1,
+          (-(event.clientY - rect.top) / rect.height) * 2 + 1,
+        ),
+        camera,
+      );
+      const hit = ray.intersectObject(object, true).find((hit) => hit.object instanceof THREE.Mesh);
+      if (!hit) return;
+      if (points.length === 2) clearMeasure();
+      points.push(hit.point.clone());
+      const extent = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3()).length();
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.max(extent / 250, 0.0001), 12, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffc56a, depthTest: false }),
+      );
+      marker.position.copy(hit.point);
+      marker.renderOrder = 10;
+      markings.add(marker);
+      if (points.length === 2) {
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(points),
+          new THREE.LineBasicMaterial({ color: 0xffc56a, depthTest: false }),
+        );
+        line.renderOrder = 10;
+        markings.add(line);
+        setDistance(points[0].distanceTo(points[1]));
+      }
+      dirty = true;
+      schedule();
+    };
+    renderer.domElement.addEventListener('pointerdown', down);
+    renderer.domElement.addEventListener('pointerup', pick);
     scene.add(new THREE.HemisphereLight(0xffffff, 0x58616b, 2));
     const key = new THREE.DirectionalLight(0xffffff, 3);
     key.position.set(3, 5, 4);
@@ -243,16 +339,60 @@ export default function ModelPreview(context: PreviewContext) {
             side: THREE.DoubleSide,
           }),
         );
-      } else {
+      } else if (cadFormats.includes(ext)) {
+        if (resource.entry.size > 64 * 1024 * 1024)
+          throw new Error('This CAD file exceeds the conversion limit (64 MB).');
+        loaded = new THREE.Group();
+        const meshes = await importCad(await response.arrayBuffer(), ext, abort.signal);
+        for (const mesh of meshes) {
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3));
+          geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
+          if (mesh.normals)
+            geometry.setAttribute('normal', new THREE.BufferAttribute(mesh.normals, 3));
+          else geometry.computeVertexNormals();
+          const part = new THREE.Mesh(
+            geometry,
+            new THREE.MeshStandardMaterial({
+              color: mesh.color
+                ? new THREE.Color().setRGB(
+                    ...(mesh.color as [number, number, number]),
+                    THREE.SRGBColorSpace,
+                  )
+                : 0xb5c4cc,
+              roughness: 0.55,
+              metalness: 0.08,
+              side: THREE.DoubleSide,
+            }),
+          );
+          part.name = mesh.name;
+          loaded.add(part);
+        }
+      } else if (ext === '3mf') {
+        const data = await response.arrayBuffer();
+        const scale = printingScale(data);
+        loaded = new ThreeMFLoader(manager).parse(data);
+        loaded.scale.multiplyScalar(scale);
+      } else if (ext === 'ply') {
+        const geometry = new PLYLoader(manager).parse(await response.arrayBuffer());
+        geometry.computeVertexNormals();
+        loaded = new THREE.Mesh(
+          geometry,
+          new THREE.MeshStandardMaterial({
+            color: 0xb5c4cc,
+            vertexColors: !!geometry.attributes.color,
+            side: THREE.DoubleSide,
+          }),
+        );
+      } else if (ext === 'fbx') {
         loaded = new FBXLoader(manager).parse(await response.arrayBuffer(), base);
         clips = loaded.animations;
-      }
+      } else throw new Error('This 3D format is not supported.');
       if (disposed || signal.aborted) {
         disposeObject(loaded);
         return;
       }
       object = loaded;
-      scene.add(loaded);
       let meshes = 0,
         vertices = 0,
         triangles = 0;
@@ -265,6 +405,16 @@ export default function ModelPreview(context: PreviewContext) {
         }
       });
       if (!meshes) throw new Error('No renderable geometry was found in this model.');
+      if (vertices > 4000000 || triangles > 2000000)
+        throw new Error('This model exceeds the geometry limit for previews.');
+      const bounds = new THREE.Box3().setFromObject(loaded);
+      if (
+        bounds.isEmpty() ||
+        [...bounds.min.toArray(), ...bounds.max.toArray()].some((value) => !Number.isFinite(value))
+      )
+        throw new Error('This model has invalid geometry.');
+      setDimensions(bounds.getSize(new THREE.Vector3()).toArray());
+      scene.add(loaded);
       setInfo(
         `${meshes.toLocaleString()} meshes · ${Math.round(triangles).toLocaleString()} triangles · ${vertices.toLocaleString()} vertices`,
       );
@@ -272,6 +422,11 @@ export default function ModelPreview(context: PreviewContext) {
       if (clips.length) mixer = new THREE.AnimationMixer(loaded);
       session.current = {
         frame,
+        clearMeasure,
+        measure: (value) => {
+          measuring = value;
+          if (!value) clearMeasure();
+        },
         wireframe: (value) => {
           loaded.traverse((child) => {
             if (child instanceof THREE.Mesh)
@@ -324,6 +479,7 @@ export default function ModelPreview(context: PreviewContext) {
       cancelAnimationFrame(frameRequest);
       resize.disconnect();
       controls.dispose();
+      disposeObject(markings);
       mixer?.stopAllAction();
       if (object) {
         mixer?.uncacheRoot(object);
@@ -332,6 +488,8 @@ export default function ModelPreview(context: PreviewContext) {
       for (const type of ['pointerdown', 'contextmenu', 'dblclick'])
         renderer.domElement.removeEventListener(type, isolate);
       renderer.domElement.removeEventListener('wheel', wheel);
+      renderer.domElement.removeEventListener('pointerdown', down);
+      renderer.domElement.removeEventListener('pointerup', pick);
       renderer.dispose();
       renderer.forceContextLoss();
       renderer.domElement.remove();
@@ -341,6 +499,12 @@ export default function ModelPreview(context: PreviewContext) {
     context,
     useMemo(
       () => [
+        {
+          id: 'model-measure',
+          label: measure ? 'Stop measuring model' : 'Measure model distance',
+          available: !loading && !error,
+          run: () => setMeasure((value) => !value),
+        },
         {
           id: 'model-frame',
           label: 'Frame model',
@@ -372,16 +536,30 @@ export default function ModelPreview(context: PreviewContext) {
           },
         })),
       ],
-      [loading, error, wire, playing, animations],
+      [loading, error, wire, playing, animations, measure],
     ),
   );
   return (
     <div className="model-viewer">
       <PreviewToolbar context={context}>
-        <IconButton icon="frame" label="Frame model" onClick={() => session.current?.frame()} />
+        <IconButton
+          icon="frame"
+          label="Frame model"
+          disabled={loading || !!error}
+          onClick={() => session.current?.frame()}
+        />
+        <button
+          className={measure ? 'selected' : ''}
+          aria-pressed={measure}
+          disabled={loading || !!error}
+          onClick={() => setMeasure(!measure)}
+        >
+          Measure
+        </button>
         <button
           className={wire ? 'selected' : ''}
           aria-pressed={wire}
+          disabled={loading || !!error}
           onClick={() => setWire(!wire)}
         >
           Wireframe
@@ -407,6 +585,20 @@ export default function ModelPreview(context: PreviewContext) {
           </>
         )}
         <span className="toolbar-spacer" />
+        {!physicalUnits && (
+          <select
+            aria-label="Assumed model units"
+            title="This format does not declare physical units. Choose the units used when it was exported."
+            value={assumedUnit}
+            onChange={(event) => setAssumedUnit(event.target.value)}
+          >
+            <option value="units">Model units</option>
+            <option value="mm">Millimeters</option>
+            <option value="cm">Centimeters</option>
+            <option value="m">Meters</option>
+            <option value="in">Inches</option>
+          </select>
+        )}
         <span className="muted">{resource.entry.extension.toUpperCase()}</span>
       </PreviewToolbar>
       <div className="model-stage" ref={stage}>
@@ -425,8 +617,20 @@ export default function ModelPreview(context: PreviewContext) {
         <p className="inline-warning">Missing companion assets: {warnings.join(', ')}</p>
       )}
       <footer className="model-info">
-        <span>{info}</span>
-        <span>Drag orbit · right-drag pan · scroll zoom</span>
+        <span title={info} className="model-dimensions">
+          {dimensions.length > 0 &&
+            `${dimensions.map((value) => value.toLocaleString(undefined, { maximumFractionDigits: 3 })).join(' × ')} ${unit}`}
+        </span>
+        {measure ? (
+          <span className="model-measurement" role="status">
+            {distance === undefined
+              ? 'Click two surface points · drag to orbit'
+              : `Distance: ${distance.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${unit}`}
+            <button onClick={() => session.current?.clearMeasure()}>Clear</button>
+          </span>
+        ) : (
+          <span className="model-statistics">{info}</span>
+        )}
       </footer>
     </div>
   );

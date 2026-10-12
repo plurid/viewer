@@ -6,7 +6,7 @@ import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { SettingsService } from '../src/desktop/settings';
 import { FileIndex } from '../src/desktop/index-core';
-import { defaultSettings } from '../src/domain/services';
+import { defaultSettings, newPlaneFolder } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import { extractDocument, localBookFields } from '../src/desktop/formats';
 import { Credentials, Providers } from '../src/desktop/providers';
@@ -41,7 +41,13 @@ export function epubFixture() {
 describe('authoritative settings', () => {
   it('preserves existing settings when adding the new-plane folder preference and validates custom folders', async () => {
     const old = defaultSettings(root);
-    const { newPlaneLocation: _location, newPlanePath: _path, ...browsing } = old.browsing;
+    const {
+      newPlaneLocation: _location,
+      newPlanePath: _path,
+      emptyWorkspaceLocation: _empty,
+      emptyWorkspacePath: _emptyPath,
+      ...browsing
+    } = old.browsing;
     await writeFile(
       path.join(root, 'settings-v1.json'),
       JSON.stringify({
@@ -62,7 +68,12 @@ describe('authoritative settings', () => {
     expect(settings.snapshot().settings.browsing).toMatchObject({
       newPlaneLocation: 'current',
       newPlanePath: '',
+      emptyWorkspaceLocation: 'home',
+      emptyWorkspacePath: '',
     });
+    await expect(
+      settings.patch([{ path: 'settings.browsing.emptyWorkspaceLocation', value: 'custom' }], 4),
+    ).rejects.toThrow('Choose the folder');
     await expect(
       settings.patch([{ path: 'settings.browsing.newPlaneLocation', value: 'custom' }], 4),
     ).rejects.toThrow('Choose the folder');
@@ -87,6 +98,15 @@ describe('authoritative settings', () => {
       newPlaneLocation: 'custom',
       newPlanePath: root,
     });
+    await restored.patch(
+      [{ path: 'settings.browsing.emptyWorkspaceLocation', value: 'downloads' }],
+      5,
+    );
+    expect(newPlaneFolder(restored.snapshot().settings.browsing, root, '/current')).toBe(root);
+    expect(newPlaneFolder(restored.snapshot().settings.browsing, root, undefined, true)).toBe(
+      path.join(root, 'Downloads'),
+    );
+    expect(restored.snapshot().settings.browsing.newPlaneLocation).toBe('custom');
   });
   it('persists toolbar choices and list layout without changing legacy defaults or file data', async () => {
     const settings = new SettingsService(

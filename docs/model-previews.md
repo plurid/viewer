@@ -1,0 +1,11 @@
+# CAD and printing model previews
+
+STEP/STP and IGES/IGS use the bundled [occt-import-js importer](https://github.com/kovacsv/occt-import-js). Conversion runs locally in a disposable worker; it sends validated position, normal and index buffers to the existing Three.js stage and then terminates. No file content is uploaded. The importer normalizes physical dimensions to millimeters. Files over 64 MB, overly complex output and conversions exceeding 45 seconds receive visible errors.
+
+STL and PLY use the existing mesh stage. These formats do not reliably declare physical units: the toolbar's **Assumed model units** selector labels dimensions and measurements using the export units chosen by the user. It does not rescale geometry or rewrite the source file. GLB/glTF, OBJ and FBX retain their existing loaders, companion-resource restrictions and animation support.
+
+3MF uses Three.js's [3MF loader](https://github.com/mrdoob/three.js/blob/dev/examples/jsm/loaders/3MFLoader.js). The wrapper bounds archive entry counts and expanded sizes before loading, reads declared model units and normalizes them to millimeters. Mixed-unit model documents receive an error; slicing/toolpath settings are not interpreted. G-code toolpath viewing remains outside this pass.
+
+**Measure** selects two points on rendered mesh surfaces and reports their straight-line distance. Markers and the connecting line remain visible while orbiting. A third point starts a fresh measurement; Clear removes the markers. These are measurements of tessellated geometry, with no edge, face or vertex snapping, and do not modify a model. The status bar shows X × Y × Z bounds; ordinary viewing retains mesh/triangle/vertex counts. Frame, wireframe, orbit, pan and zoom work in both Quick Preview and linked/root planes. Model gestures stay separate from spatial plane gestures.
+
+The general file-size setting still applies. Geometry is bounded to four million vertices and two million triangles. Unsupported/invalid data receives an error rather than silently opening as text. Importer and Open CASCADE notices ship in the application's Resources/licenses directory; their source links and build instructions are recorded alongside the notices.

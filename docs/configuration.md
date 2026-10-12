@@ -6,6 +6,8 @@ The file has `version: 1`, `$schema`, `settings` and `ui`. Start with the genera
 
 Settings writes preserve unrelated comments and values. External edits reload within the watcher interval. A Settings edit based on an older revision merges when it touches independent fields; overlapping edits report a conflict. Atomic replacement checks for an intervening disk change before publishing. Legacy `settings-v1.json` receives an exclusive backup before migration. Existing folder appearances seed shared overrides once, with the active explorer winning a conflict.
 
+Generated files include an agent editing guide and comments beside browsing, folder overrides, providers, recipes, custom actions, terminals/tmux, search, agent access and UI preferences. The comments explain IDs and references, supported placeholders, units, choices, numeric limits and examples for empty sections. The settings catalog supplies the displayed choices and ranges. An existing uncommented file receives the guide on its next Settings save; exports retain it. Annotation inserts comments without reserializing existing values or user comments, and subsequent saves preserve the guide.
+
 Credentials, authentication tokens, effective execution grants, workspace arrangement, navigation sessions and caches are separate metadata. Adding an approval field to JSONC is invalid and cannot authorize an agent.
 
 ## Folder presentation
@@ -35,13 +37,13 @@ Supported overrides include view, sort/direction, grouping, hidden files, folder
 
 List headers and searchable column actions control fields, ordering and widths. Browser-column edges resize with drag or Left/Right when the separator is focused; Shift changes the keyboard step, double-click fits filenames, and Option applies a width to the visible trail. Names retain full-text tooltips. **Use as default folder view** updates defaults; **Reset this folder’s view** removes that folder's overrides. Grouping currently renders in List view.
 
-`settings.browsing.newPlaneLocation` chooses `current`, `home`, `desktop`, `documents`, `downloads`, `pictures`, `movies`, `music` or `custom`. A custom location uses `newPlanePath`. Current follows a folder plane, a terminal's working folder or a preview's parent, with Home as the fallback. Creating a plane always creates a fresh root.
+`settings.browsing.newPlaneLocation` chooses `current`, `home`, `desktop`, `documents`, `downloads`, `pictures`, `movies`, `music` or `custom`. A custom location uses `newPlanePath`. Current follows a folder plane, a terminal's working folder or a preview's parent, with Home as the fallback. `emptyWorkspaceLocation` is a separate preference for the first plane in an empty workspace, used by its New folder plane button, + and Command-N. It defaults to `home` and accepts the same choices except `current`; custom uses the separate `emptyWorkspacePath`. Later planes use `newPlaneLocation`. Both paths must be absolute. Creating a plane always creates a fresh root.
 
 ## Opening and shortcuts
 
-`settings.fileOpening.default` is `automatic`, `plane` or `native`. Automatic uses an available preview module, otherwise the OS association. `types` overrides individual lowercase extensions, for example `{ "pdf": "plane", "mkv": "native" }`. Office extensions start with native opening. Explicit **Open linked plane**, **Open another plane**, **Open in …** and **Open With…** remain available regardless of automatic opening policy.
+`settings.fileOpening.default` is `automatic`, `plane` or `native`. Automatic uses an available preview module, otherwise the OS association. `types` overrides individual lowercase extensions, for example `{ "pdf": "plane", "mkv": "native" }`. Office extensions start with native opening. Explicit **Open linked plane**, **Open in another plane**, **Open in …** and **Open With…** remain available regardless of automatic opening policy.
 
-`settings.shortcuts` maps command IDs to `Cmd+…` or `Ctrl+…`, with optional `Alt` and `Shift`; an empty string disables an override's binding. Settings → Shortcuts lists the defaults. Useful IDs include `open-selection`, `parent`, `back`, `forward`, `view-list`, `view-grid`, `view-columns`, `view-gallery`, `new-root-folder`, `open-terminal`, `open-tmux`, `open-terminal-plane` and `open-config`. Recipe and custom-action shortcuts join the same conflict checks. Text editing, dialogs and terminal input retain their own key handling.
+`settings.shortcuts` maps command IDs to `Cmd+…` or `Ctrl+…`, with optional `Alt` and `Shift`; an empty string disables an override's binding. Settings → Shortcuts lists the defaults. Useful IDs include `copy-path` (Option-Command-C, newline-separated absolute paths as plain text), `open-selection`, `parent`, `back`, `forward`, `view-list`, `view-grid`, `view-columns`, `view-gallery`, `new-root-folder`, `open-terminal`, `open-tmux`, `open-terminal-plane` and `open-config`. Recipe and custom-action shortcuts join the same conflict checks. Text editing, dialogs and terminal input retain their own key handling.
 
 ## Declarative custom actions
 

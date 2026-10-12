@@ -97,6 +97,7 @@ const api: ViewerAPI = {
   save: (state) => invoke('save', state),
   flushed: (token) => invoke('flushed', token),
   clipboardWrite: (paths, cut) => invoke('clipboardWrite', paths, cut),
+  copyPaths: (paths) => invoke('copyPaths', paths),
   clipboardRead: () => invoke('clipboardRead'),
   textEdit: (command) => {
     document.execCommand(command);

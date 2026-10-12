@@ -1,5 +1,6 @@
 import type { FileEntry } from '../../domain/contracts';
 import type { PreviewModule } from './contracts';
+import { modelFormats } from '../../domain/model-formats';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
   formats.includes(entry.extension) ? 100 : 0;
@@ -64,8 +65,8 @@ export const previewModules: PreviewModule[] = [
   {
     id: 'model',
     label: '3D model',
-    formats: ['glb', 'gltf', 'obj', 'stl', 'fbx'],
-    detect: extension(['glb', 'gltf', 'obj', 'stl', 'fbx']),
+    formats: modelFormats,
+    detect: extension(modelFormats),
     load: () => import('./modules/ModelPreview'),
   },
   {

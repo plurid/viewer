@@ -47,6 +47,8 @@ export interface ApplicationSettings {
       | 'music'
       | 'custom';
     newPlanePath: string;
+    emptyWorkspaceLocation: Exclude<ApplicationSettings['browsing']['newPlaneLocation'], 'current'>;
+    emptyWorkspacePath: string;
   };
   folders: Record<string, FolderOverride>;
   fileOpening: {
@@ -258,6 +260,8 @@ export function defaultSettings(home: string): ApplicationSettings {
       restoreSession: true,
       newPlaneLocation: 'current',
       newPlanePath: '',
+      emptyWorkspaceLocation: 'home',
+      emptyWorkspacePath: '',
     },
     folders: {},
     fileOpening: {
@@ -298,11 +302,14 @@ export function newPlaneFolder(
   browsing: ApplicationSettings['browsing'],
   home: string,
   currentFolder?: string,
+  emptyWorkspace = false,
 ): string {
-  if (browsing.newPlaneLocation === 'current') return currentFolder || home;
-  if (browsing.newPlaneLocation === 'home') return home;
-  if (browsing.newPlaneLocation === 'custom') return browsing.newPlanePath || home;
-  const name = browsing.newPlaneLocation;
+  const location = emptyWorkspace ? browsing.emptyWorkspaceLocation : browsing.newPlaneLocation;
+  const customPath = emptyWorkspace ? browsing.emptyWorkspacePath : browsing.newPlanePath;
+  if (location === 'current') return currentFolder || home;
+  if (location === 'home') return home;
+  if (location === 'custom') return customPath || home;
+  const name = location;
   const separator = home.includes('\\') ? '\\' : '/';
   return home.replace(/[\\/]$/, '') + separator + name[0].toUpperCase() + name.slice(1);
 }

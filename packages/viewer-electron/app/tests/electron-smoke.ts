@@ -4,6 +4,8 @@ import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
+import { createRequire } from 'node:module';
+import { zipSync, strToU8 } from 'fflate';
 import path from 'node:path';
 import { parse } from 'jsonc-parser';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +29,39 @@ const binary = path.join(
   `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`,
 );
 const fixture = await createFixtures();
+if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
+  const require = createRequire(import.meta.url);
+  await writeFile(
+    path.join(fixture.files, 'Cube.step'),
+    await readFile(
+      path.join(
+        path.dirname(require.resolve('occt-import-js/package.json')),
+        'test/testfiles/simple-basic-cube/cube.stp',
+      ),
+    ),
+  );
+  await writeFile(path.join(fixture.files, 'Broken.step'), 'not a STEP file');
+  await writeFile(
+    path.join(fixture.files, 'Printed.3mf'),
+    zipSync({
+      '_rels/.rels': strToU8(
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model"/></Relationships>',
+      ),
+      '3D/3dmodel.model': strToU8(
+        '<model unit="inch" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/><vertex x="0" y="0" z="1"/></vertices><triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="1" v3="3"/><triangle v1="0" v2="3" v3="2"/><triangle v1="1" v2="2" v3="3"/></triangles></mesh></object></resources><build><item objectid="1"/></build></model>',
+      ),
+    }),
+  );
+  await writeFile(
+    path.join(fixture.files, 'Triangle.ply'),
+    'ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\nelement face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n3 0 1 2\n',
+  );
+  if (process.env.VIEWER_TEST_STEP_FILE)
+    await writeFile(
+      path.join(fixture.files, 'User panel.step'),
+      await readFile(process.env.VIEWER_TEST_STEP_FILE),
+    );
+}
 if (process.env.VIEWER_TEST_SCENARIO === 'drawings-workspaces') {
   await writeFile(path.join(fixture.files, 'Panel.dxf'), panelDrawing);
   await writeFile(path.join(fixture.files, 'Broken.dxf'), '0\nSECTION\n');
@@ -1779,6 +1814,12 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
     await evaluate('document.querySelectorAll(".context-menu [data-menu-id=rename]").length'),
     1,
   );
+  assert.equal(
+    await evaluate(
+      'document.querySelectorAll(\'.context-menu [data-menu-id="recent.rename"]\').length',
+    ),
+    1,
+  );
   await key('Escape', 'Escape');
   await until(
     () => evaluate<number>('document.querySelectorAll(".context-menu").length'),
@@ -1918,6 +1959,375 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   await click('dialog [aria-label="Close"]');
   console.log(
     'Grouped menus: flyouts, keyboard return, global search, recent actions, captured targets and minimum-window bounds. Models: all five new provider presets persisted with content off and no credentials.',
+  );
+}
+async function verifyRefinements(): Promise<void> {
+  await paletteCommand('Dock plane');
+  const readme = path.join(fixture.files, 'README.md');
+  // Preserve all pasteboard items/types, including images and rich text, without logging them.
+  const previousClipboard = await execNative(
+    '/usr/bin/osascript',
+    [
+      '-l',
+      'JavaScript',
+      '-e',
+      `
+    ObjC.import('AppKit');
+    const items=$.NSPasteboard.generalPasteboard.pasteboardItems, saved=[];
+    for(let i=0;i<items.count;i++) {
+      const item=items.objectAtIndex(i), types=item.types, fields=[];
+      for(let j=0;j<types.count;j++) {
+        const type=ObjC.unwrap(types.objectAtIndex(j)), data=item.dataForType(type);
+        if(data) fields.push([type,ObjC.unwrap(data.base64EncodedStringWithOptions(0))]);
+      }
+      saved.push(fields);
+    }
+    JSON.stringify(saved);
+  `,
+    ],
+    { maxBuffer: 32 * 1024 * 1024 },
+  )
+    .then((result) => result.stdout)
+    .catch(() => {
+      throw new Error('Could not preserve the test clipboard.');
+    });
+  let copiedText = '';
+  try {
+    await evaluate(`window.viewer.clipboardWrite([${JSON.stringify(readme)}], true)`);
+    await contextMenu(fileSelector(readme));
+    await click('.context-menu [data-menu-id="copy-path"]');
+    copiedText = readme;
+    await until(
+      async () => (await execNative('/usr/bin/pbpaste')).stdout,
+      (value) => value === copiedText,
+      'Copy path writes the selected file pathname',
+    );
+    await until(
+      () => evaluate('window.viewer.clipboardRead()'),
+      (value) => value === null,
+      'Copy path clears an earlier cut operation',
+    );
+    await contextMenu(fileSelector(readme));
+    assert.equal(
+      await evaluate('document.querySelectorAll(\'[data-menu-id="recent.copy-path"]\').length'),
+      1,
+    );
+    assert.equal(
+      await evaluate('document.querySelectorAll(\'[data-menu-id="copy-path"]\').length'),
+      1,
+    );
+    await snapshot('desktop-native-additive-recents.png');
+    await command('Input.insertText', { text: 'copy path' });
+    assert.equal(
+      await evaluate(
+        'document.querySelectorAll(\'.context-menu [data-menu-id="copy-path"]\').length',
+      ),
+      1,
+      'Search has one result per command',
+    );
+    await key('Escape', 'Escape');
+    await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
+    await click('.context-menu [data-menu-id="copy-path"]');
+    copiedText = path.join(fixture.files, 'Models');
+    await until(
+      async () => (await execNative('/usr/bin/pbpaste')).stdout,
+      (value) => value === copiedText,
+      'Copy path writes folder pathname',
+    );
+    await evaluate(
+      `document.querySelector('.file-scroll').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:450,clientY:420}))`,
+    );
+    await until(
+      () =>
+        evaluate<boolean>('!!document.querySelector(\'.context-menu [data-menu-id="copy-path"]\')'),
+      Boolean,
+      'Copy path is available in the current folder menu',
+    );
+    await click('.context-menu [data-menu-id="copy-path"]');
+    copiedText = fixture.files;
+    await until(
+      async () => (await execNative('/usr/bin/pbpaste')).stdout,
+      (value) => value === copiedText,
+      'Background menu copies current folder pathname',
+    );
+  } finally {
+    // Restore only our last write; preserve anything the user copied during this check.
+    if (copiedText && (await execNative('/usr/bin/pbpaste')).stdout === copiedText) {
+      const restoreFile = path.join(fixture.root, 'clipboard-restore.json');
+      await writeFile(restoreFile, previousClipboard, { mode: 0o600 });
+      await execNative('/usr/bin/osascript', [
+        '-l',
+        'JavaScript',
+        '-e',
+        `
+        ObjC.import('AppKit'); ObjC.import('Foundation');
+        const saved=JSON.parse(ObjC.unwrap($.NSString.stringWithContentsOfFileEncodingError(${JSON.stringify(restoreFile)},$.NSUTF8StringEncoding,null)));
+        const board=$.NSPasteboard.generalPasteboard, items=$.NSMutableArray.alloc.init;
+        for(const fields of saved) {
+          const item=$.NSPasteboardItem.alloc.init;
+          for(const [type,encoded] of fields) item.setDataForType($.NSData.alloc.initWithBase64EncodedStringOptions(encoded,0),type);
+          items.addObject(item);
+        }
+        board.clearContents;
+        if(saved.length) board.writeObjects(items);
+      `,
+      ]).catch(() => {
+        throw new Error('Could not restore the test clipboard.');
+      });
+      await rm(restoreFile);
+    }
+  }
+  const headerGap = await evaluate<number>(
+    `(() => {const name=document.querySelector('.file-heading[data-column=name] .column-label').getBoundingClientRect(); const next=document.querySelector('.file-heading[data-column=modified] .column-label').getBoundingClientRect(); return next.left-name.right;})()`,
+  );
+  assert.ok(headerGap >= 12, 'Sort-button paint has a gutter before the next column');
+  await evaluate(`document.querySelector('.file-heading[data-column=name] .column-label').focus()`);
+  await snapshot('desktop-native-header-gutter.png');
+
+  await preview(path.join(fixture.files, 'Cube.step'), 'Wireframe');
+  await until(
+    () => evaluate<string>('document.querySelector(".model-dimensions")?.textContent || ""'),
+    (value) => value === '300 × 300 × 300 mm',
+    'Packaged STEP worker renders physical dimensions',
+    60000,
+  );
+  await click('.model-viewer button[aria-pressed=false]');
+  const center = await evaluate<{ x: number; y: number }>(
+    `(() => { const r=document.querySelector('.model-stage canvas').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`,
+  );
+  for (const offset of [-20, 20]) {
+    const point = { x: center.x + offset, y: center.y };
+    await command('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      button: 'left',
+      buttons: 1,
+      clickCount: 1,
+      ...point,
+    });
+    await command('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      button: 'left',
+      buttons: 0,
+      clickCount: 1,
+      ...point,
+    });
+  }
+  await until(
+    () => evaluate<string>('document.querySelector(".model-measurement")?.textContent || ""'),
+    (value) => /^Distance: [1-9]/.test(value),
+    'Surface-point distance measurement',
+  );
+  await snapshot('desktop-native-step-measure.png');
+  await closePreview();
+  await preview(path.join(fixture.files, 'Printed.3mf'), 'Wireframe');
+  await until(
+    () => evaluate<string>('document.querySelector(".model-dimensions")?.textContent || ""'),
+    (value) => value === '25.4 × 25.4 × 25.4 mm',
+    '3MF inch coordinates normalize to millimeters',
+  );
+  await snapshot('desktop-native-printing-3mf.png');
+  await closePreview();
+  await preview(path.join(fixture.files, 'Triangle.ply'), 'Wireframe');
+  await until(
+    () => evaluate<string>('document.querySelector(".model-dimensions")?.textContent || ""'),
+    (value) => value === '1 × 1 × 0 units',
+    'PLY geometry renders with explicit unknown units',
+  );
+  await closePreview();
+  await preview(path.join(fixture.files, 'Broken.step'), 'Model could not be loaded');
+  await closePreview();
+  if (process.env.VIEWER_TEST_STEP_FILE) {
+    await evaluate(
+      `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'User panel.step')))}).scrollIntoView({block:'center'})`,
+    );
+    await preview(path.join(fixture.files, 'User panel.step'), 'Wireframe');
+    await until(
+      () => evaluate<string>('document.querySelector(".model-dimensions")?.textContent || ""'),
+      (value) => /mm$/.test(value),
+      'Read-only copy of the user STEP model renders',
+    );
+    await snapshot('desktop-native-user-step.png');
+    await closePreview();
+  }
+  await evaluate('document.querySelector(".file-scroll").scrollTop=0');
+  await until(
+    () =>
+      evaluate<boolean>(`(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      const row=document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Models')))});
+      const scroll=document.querySelector('.file-scroll');
+      return !!row && row.getBoundingClientRect().top >= scroll.getBoundingClientRect().top && row.getBoundingClientRect().bottom <= scroll.getBoundingClientRect().bottom;
+    })()`),
+    Boolean,
+    'Models row settles after virtual scrolling',
+  );
+  await click(fileSelector(path.join(fixture.files, 'Models')), 2);
+  await until(text, (value) => value.includes('Triangle.glb'), 'Model fixture folder opened');
+  for (const extension of ['glb', 'gltf', 'obj', 'stl', 'fbx']) {
+    await preview(
+      path.join(fixture.files, 'Models', `Triangle.${extension}`),
+      '1 meshes · 1 triangles · 3 vertices',
+    );
+    await closePreview();
+  }
+  await paletteCommand('Parent folder');
+  await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
+  await command('Input.insertText', { text: 'Open in another plane' });
+  await key('Enter', 'Enter');
+  await restoredEngine(2);
+  await paletteCommand('Dock plane');
+  await until(
+    () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState),
+    (state) =>
+      state.workspaces[0].roots.length === 2 &&
+      state.workspaces[0].panes.at(-1)?.path === path.join(fixture.files, 'Models'),
+    'Folder opens as an independent root',
+  );
+  await contextMenu(fileSelector(path.join(fixture.files, 'Models', 'Triangle.stl')));
+  await command('Input.insertText', { text: 'Open in another plane' });
+  await key('Enter', 'Enter');
+  await restoredEngine(3);
+  await until(
+    () => evaluate<number>('window.__qaEngine.tree.get().length'),
+    (count) => count === 3,
+    'File opens as an independent root',
+  );
+  assert.equal(
+    await evaluate('window.__qaEngine.tree.get().every(node=>!node.children?.length)'),
+    true,
+  );
+
+  await tab('Models');
+  for (const width of [900, 760]) {
+    await settingsCommand('Emulation.setDeviceMetricsOverride', {
+      width,
+      height: width === 760 ? 540 : 640,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    for (const category of [
+      'Models',
+      'Actions',
+      'Agents',
+      'Navigation',
+      'Space',
+      'Browsing',
+      'Terminals',
+      'Configuration',
+      'Shortcuts',
+      'Previews',
+      'Search',
+    ]) {
+      await tab(category);
+      assert.equal(
+        await settingsEvaluate(
+          'document.querySelector(".settings-page").scrollWidth > document.querySelector(".settings-page").clientWidth',
+        ),
+        false,
+        `${width}px ${category} has no horizontal overflow`,
+      );
+      const gaps = await settingsEvaluate<number[]>(
+        `Array.from(document.querySelectorAll('.settings-actions')).flatMap(actions=>{const before=actions.previousElementSibling;if(before?.matches('p'))return [actions.getBoundingClientRect().top-before.getBoundingClientRect().bottom];return [];})`,
+      );
+      assert.ok(
+        gaps.every((gap) => gap >= 15),
+        `${width}px ${category} separates descriptions from actions`,
+      );
+      if (['Models', 'Actions', 'Agents', 'Navigation', 'Browsing'].includes(category))
+        await snapshot(`desktop-native-settings-${category.toLowerCase()}-${width}.png`);
+      if (category === 'Agents')
+        assert.ok(
+          (await settingsEvaluate<number>(
+            'document.querySelector(".settings-wide-field select").clientWidth',
+          )) >= 240,
+          'Authorized-folder choice fits its placeholder',
+        );
+      if (category === 'Space') {
+        assert.equal(
+          await settingsEvaluate(
+            'document.querySelectorAll(".settings-toolbar-preview svg").length',
+          ),
+          10,
+        );
+        await settingsEvaluate(
+          'document.querySelector(".settings-toolbar-preview").scrollIntoView({block:"start"})',
+        );
+        await snapshot(`desktop-native-settings-toolbar-${width}.png`);
+      }
+    }
+  }
+  await tab('Agents');
+  await settingsEvaluate(
+    `window.viewer.settingsGet().then(value=>window.viewer.settingsPatch([{path:'settings.agents.roots',value:[${JSON.stringify(path.join(fixture.files, 'Folder with a deliberately long descriptive name for permissions and display'))}]}],value.revision))`,
+  );
+  await until(
+    () =>
+      settingsEvaluate<string>(
+        'document.querySelector(".settings-field-detail")?.textContent || ""',
+      ),
+    (value) => value.includes('deliberately long'),
+    'Authorized-folder path remains fully readable',
+  );
+  await snapshot('desktop-native-settings-long-path.png');
+  await tab('Space');
+  await setting('Navigation button');
+  await setting('Back button');
+  await settingsEvaluate(
+    'document.querySelector(".settings-toolbar-preview").scrollIntoView({block:"start"})',
+  );
+  assert.equal(
+    await settingsEvaluate(
+      'document.querySelectorAll(".settings-toolbar-preview[data-enabled=false]").length',
+    ),
+    2,
+  );
+  await snapshot('desktop-native-settings-toolbar-states.png');
+  await setting('Navigation button');
+  await setting('Back button');
+  await tab('Browsing');
+  await settingsEvaluate(`window.viewer.settingsGet().then(value=>window.viewer.settingsPatch([
+    {path:'settings.browsing.newPlaneLocation',value:'custom'}, {path:'settings.browsing.newPlanePath',value:${JSON.stringify(path.join(fixture.files, 'Documents'))}},
+    {path:'settings.browsing.emptyWorkspaceLocation',value:'custom'}, {path:'settings.browsing.emptyWorkspacePath',value:${JSON.stringify(path.join(fixture.files, 'Data'))}}
+  ],value.revision))`);
+  await until(
+    () => settingsEvaluate<number>('document.querySelectorAll(".settings-folder-choice").length'),
+    (count) => count === 2,
+    'Independent custom starting folders',
+  );
+  await settingsEvaluate(
+    `document.querySelector('[aria-label="New folder planes start in"]').closest('.settings-row').scrollIntoView({block:'start'})`,
+  );
+  await snapshot('desktop-native-independent-plane-settings.png');
+  await click('dialog [aria-label="Close"]');
+  const empty = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
+  empty.workspaces[0].panes = [];
+  empty.workspaces[0].roots = [];
+  empty.workspaces[0].activePane = undefined;
+  empty.workspaces[0].arrangement = {};
+  await evaluate(`window.viewer.save(${JSON.stringify(empty)})`);
+  await command('Page.reload');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".empty-actions .primary:not(:disabled)")'),
+    Boolean,
+    'Empty workspace action',
+  );
+  await click('.empty-actions .primary');
+  await restoredEngine(1);
+  await until(
+    () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState),
+    (state) => state.workspaces[0].panes[0]?.path === path.join(fixture.files, 'Data'),
+    'Empty button uses its own configured folder',
+  );
+  await click('[aria-label="New folder plane (⌘N)"]');
+  await restoredEngine(2);
+  await until(
+    () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState),
+    (state) => state.workspaces[0].panes.at(-1)?.path === path.join(fixture.files, 'Documents'),
+    'Workspace plus uses the populated-workspace preference',
+  );
+  console.log(
+    'Refinements: additive recents, text path clipboard, independent roots, STEP/3MF/PLY and measurements, all Settings categories at normal/minimum sizes, toolbar states and separate first-plane preference.',
   );
 }
 async function inventory(): Promise<string[]> {
@@ -2511,7 +2921,7 @@ async function verifyRestoredPreviews(): Promise<void> {
   );
   await settleCamera();
   await click(fileSelector(path.join(fixture.files, 'Images', 'Color.png')));
-  await paletteCommand('Open another plane');
+  await paletteCommand('Open in another plane');
   await until(
     () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
     (count) => count === 3,
@@ -3229,7 +3639,14 @@ async function verifyEntryAndPalette(): Promise<void> {
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
   const settings = await evaluate<{
     revision: number;
-    settings: { browsing: { newPlaneLocation: string; newPlanePath: string } };
+    settings: {
+      browsing: {
+        newPlaneLocation: string;
+        newPlanePath: string;
+        emptyWorkspaceLocation: string;
+        emptyWorkspacePath: string;
+      };
+    };
   }>('window.viewer.settingsGet()');
   await evaluate('window.viewer.openSettings()');
   await openSettingsProbe();
@@ -3265,7 +3682,9 @@ async function verifyEntryAndPalette(): Promise<void> {
   );
   await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
     {path:'settings.browsing.newPlaneLocation',value:'custom'},
-    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(fixture.files)}}
+    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(fixture.files)}},
+    {path:'settings.browsing.emptyWorkspaceLocation',value:'custom'},
+    {path:'settings.browsing.emptyWorkspacePath',value:${JSON.stringify(path.join(fixture.files, 'Data'))}}
   ],snapshot.revision))`);
   await until(
     () => settingsEvaluate<string>('document.body.innerText'),
@@ -3301,8 +3720,9 @@ async function verifyEntryAndPalette(): Promise<void> {
   await until(
     async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
     (value) =>
-      value.workspaces[0].panes.length === 1 && value.workspaces[0].panes[0].path === fixture.files,
-    'empty-state root uses the configured folder',
+      value.workspaces[0].panes.length === 1 &&
+      value.workspaces[0].panes[0].path === path.join(fixture.files, 'Data'),
+    'empty-state root uses its separate configured folder',
   );
   await click('[aria-label="New folder plane (⌘N)"]');
   await restoredEngine(2);
@@ -3312,12 +3732,15 @@ async function verifyEntryAndPalette(): Promise<void> {
     async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
     (value) =>
       value.workspaces[0].panes.length === 3 &&
-      value.workspaces[0].panes.every((pane) => pane.path === fixture.files),
-    'plus and Command-N share the configured folder',
+      value.workspaces[0].panes[0].path === path.join(fixture.files, 'Data') &&
+      value.workspaces[0].panes.slice(1).every((pane) => pane.path === fixture.files),
+    'plus and Command-N use the populated-workspace preference',
   );
   await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
     {path:'settings.browsing.newPlaneLocation',value:${JSON.stringify(settings.settings.browsing.newPlaneLocation)}},
-    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(settings.settings.browsing.newPlanePath)}}
+    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(settings.settings.browsing.newPlanePath)}},
+    {path:'settings.browsing.emptyWorkspaceLocation',value:${JSON.stringify(settings.settings.browsing.emptyWorkspaceLocation)}},
+    {path:'settings.browsing.emptyWorkspacePath',value:${JSON.stringify(settings.settings.browsing.emptyWorkspacePath)}}
   ],snapshot.revision))`);
   await delay(800);
   await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
@@ -3545,6 +3968,13 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
+    await verifyRefinements();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'drawings-workspaces') {
     await verifyDrawingsAndWorkspaces();
     await verifyBackgroundApp();
@@ -4228,7 +4658,7 @@ async function verify(): Promise<void> {
   await paletteCommand('Models');
   await settleCamera();
   await click(fileSelector(modelFile));
-  await paletteCommand('Open another plane');
+  await paletteCommand('Open in another plane');
   await until(
     () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
     (count) => count === 3,

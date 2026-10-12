@@ -34,11 +34,23 @@ describe('preview extension contract', () => {
     expect(choosePreview({ ...file('movie.mp4'), mime: 'video/mp4' }).id).toBe('media');
   });
   it('routes every initial 3D format through the lazy model module', () => {
-    for (const extension of ['glb', 'gltf', 'obj', 'stl', 'fbx'])
+    for (const extension of [
+      'glb',
+      'gltf',
+      'obj',
+      'stl',
+      'fbx',
+      'step',
+      'stp',
+      'iges',
+      'igs',
+      '3mf',
+      'ply',
+    ])
       expect(choosePreview(file(`model.${extension}`)).id).toBe('model');
   });
   it('does not claim unsupported creative formats are raster images', () => {
-    for (const extension of ['psd', 'ai', 'heic', 'step', 'usd'])
+    for (const extension of ['psd', 'ai', 'heic', 'usd'])
       expect(choosePreview(file(`file.${extension}`)).id).toBe('fallback');
   });
   it('supports a new typed module without changing the explorer or engine', () => {

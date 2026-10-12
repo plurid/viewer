@@ -12,7 +12,7 @@ export type MenuEntry =
 // Contextual presentation is separate from search ranking and command execution.
 const direct = [
   ['open-selection', 'quick-preview', 'open-with'],
-  ['rename', 'copy', 'paste', 'new-folder', 'select-all'],
+  ['rename', 'copy', 'copy-path', 'paste', 'new-folder', 'select-all'],
   ['info', 'trash'],
 ];
 const icons: Record<string, IconName> = {
@@ -97,7 +97,13 @@ export function contextMenuSections(
   };
   const sections: MenuSection[] = [];
   const applicableRecent = [...new Set(recent)].filter((id) => remaining.has(id)).slice(0, 2);
-  if (applicableRecent.length) sections.push(section(take(applicableRecent), 'Recent'));
+  if (applicableRecent.length)
+    sections.push({
+      label: 'Recent',
+      // A recent shortcut is an additional placement of the same captured command.
+      // Distinct row IDs keep keyboard focus separate from its normal menu placement.
+      entries: applicableRecent.map((id) => ({ ...leaf(remaining.get(id)!), id: 'recent.' + id })),
+    });
   const pinned = commands.filter((item) => item.id.startsWith('custom.') && item.primary);
   if (pinned.length) sections.push(section(take(pinned.map((item) => item.id)), 'Pinned'));
 

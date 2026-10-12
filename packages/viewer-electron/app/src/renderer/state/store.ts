@@ -467,6 +467,7 @@ export function addRootFolder(target: NewRootFolderTarget = {}): FolderPane | un
         : owner
           ? parentPath(owner.path)
           : undefined,
+      space.panes.length === 0,
     );
   const pane = addPane(path, 'folder', true) as FolderPane;
   setActivePane(pane.id);

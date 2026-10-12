@@ -12,6 +12,7 @@ import {
 } from '../state/store';
 import type { WorkspaceController } from '../workspace/context';
 import { actionCommands } from '../actions/commands';
+import { copyPathCommand } from './copy-path';
 import { repeatedPreviews } from '../workspace/recovery';
 import type { CommandContext, CommandDefinition } from './registry';
 
@@ -44,6 +45,11 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
   const sidebar = (context: CommandContext) => context.scope === 'sidebar' && !!context.sidebar;
   const shortcut = (context: CommandContext) => sidebar(context) && !!context.sidebar?.path;
   const commands: CommandDefinition[] = [
+    {
+      ...copyPathCommand,
+      when: (context) =>
+        ['preview', 'sidebar'].includes(context.scope) && copyPathCommand.when(context),
+    },
     {
       id: 'new-root-folder',
       label: 'New folder plane',

@@ -115,11 +115,11 @@ export function useWorkspaceController({
           controller.focusPane(existing.id);
           return;
         }
-        const linked = !!parent;
+        const linked = !!parent && !options?.another;
         const pane = addPane(entry.path, entry.directory ? 'folder' : 'preview', !linked, {
           keepSeparate: options?.another,
         });
-        pending.set(pane.id, rootID ?? pane.id);
+        pending.set(pane.id, linked ? (rootID ?? pane.id) : pane.id);
         setActivePane(pane.id);
         if (api && linked) {
           api.pubsub.publish({

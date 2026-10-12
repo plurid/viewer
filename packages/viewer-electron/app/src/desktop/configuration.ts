@@ -3,6 +3,7 @@ import { watchFile, unwatchFile, type Stats } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { applyEdits, modify, parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
+import { documentConfiguration } from './configuration-comments';
 
 export interface ConfigChange {
   keys: string[];
@@ -78,11 +79,7 @@ export class JsoncConfiguration<T> {
   async write(value: T): Promise<void> {
     if (this.diagnostics.length)
       throw new Error('Fix config.jsonc before saving Settings: ' + this.diagnostics[0]);
-    let text =
-      this.text ||
-      '// Viewer configuration. Settings and this file stay in sync.\n' +
-        JSON.stringify(value, null, 2) +
-        '\n';
+    let text = this.text || JSON.stringify(value, null, 2) + '\n';
     if (this.text) {
       for (const change of configChanges(this.decode(this.text), value))
         text = applyEdits(
@@ -92,6 +89,7 @@ export class JsoncConfiguration<T> {
           }),
         );
     }
+    text = documentConfiguration(text);
     this.decode(text);
     const disk = await fs.readFile(this.file, 'utf8').catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return '';

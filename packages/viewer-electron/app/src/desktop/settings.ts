@@ -63,6 +63,19 @@ export const settingsSchema = z
           ])
           .default('current'),
         newPlanePath: z.union([z.literal(''), localPath]).default(''),
+        emptyWorkspaceLocation: z
+          .enum([
+            'home',
+            'desktop',
+            'documents',
+            'downloads',
+            'pictures',
+            'movies',
+            'music',
+            'custom',
+          ])
+          .default('home'),
+        emptyWorkspacePath: z.union([z.literal(''), localPath]).default(''),
       })
       .strict(),
     folders: z.record(localPath, folderOverrideSchema).default({}),
@@ -185,6 +198,12 @@ export const settingsSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.browsing.emptyWorkspaceLocation === 'custom' && !value.browsing.emptyWorkspacePath)
+      context.addIssue({
+        code: 'custom',
+        path: ['browsing', 'emptyWorkspacePath'],
+        message: 'Choose the folder to open in an empty workspace.',
+      });
     if (value.browsing.newPlaneLocation === 'custom' && !value.browsing.newPlanePath)
       context.addIssue({
         code: 'custom',

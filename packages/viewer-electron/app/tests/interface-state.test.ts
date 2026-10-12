@@ -17,6 +17,7 @@ import {
   needsOperations,
   newWorkspace,
   receiveJob,
+  receiveSettings,
   receiveProgress,
   setJobs,
   setActivePane,
@@ -25,6 +26,7 @@ import {
   restoreWorkspace,
   setOperationsOpen,
   storageAdapter,
+  removePanes,
 } from '../src/renderer/state/store';
 
 const operate = vi.fn();
@@ -58,6 +60,29 @@ afterEach(async () => {
 });
 
 describe('layout-only changes', () => {
+  it('uses independent first-plane and populated-workspace folder preferences', () => {
+    const snapshot = getState().settings;
+    receiveSettings({
+      ...snapshot,
+      revision: snapshot.revision + 1,
+      settings: {
+        ...snapshot.settings,
+        browsing: {
+          ...snapshot.settings.browsing,
+          newPlaneLocation: 'current',
+          emptyWorkspaceLocation: 'downloads',
+        },
+      },
+    });
+    removePanes(activeWorkspace().panes.map((pane) => pane.id));
+    const first = addRootFolder()!;
+    expect(first.path).toBe('/fixtures/Downloads');
+    const second = addRootFolder({ paneID: first.id, path: '/fixtures/Documents' })!;
+    expect(second.path).toBe('/fixtures/Documents');
+    expect(addRootFolder({ paneID: second.id })?.path).toBe('/fixtures/Documents');
+    expect(activeWorkspace().roots).toHaveLength(3);
+    expect(operate).not.toHaveBeenCalled();
+  });
   it('creates a root from captured command ownership even if the active pane changes', async () => {
     const owner = activeWorkspace().panes[0];
     const workspaceID = activeWorkspace().id;

@@ -323,6 +323,7 @@ export interface ViewerAPI {
   save(state: SavedState): Promise<void>;
   flushed(token: string): Promise<void>;
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
+  copyPaths(paths: string[]): Promise<void>;
   clipboardRead(): Promise<{ paths: string[]; cut: boolean } | null>;
   textEdit(command: TextEditCommand): Promise<void>;
   onEvent(listener: (event: DesktopEvent) => void): () => void;

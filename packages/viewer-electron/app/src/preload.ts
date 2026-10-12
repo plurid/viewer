@@ -75,6 +75,7 @@ const api: ViewerAPI = {
   save: (state) => invoke('save', state),
   flushed: (token) => invoke('flushed', token),
   clipboardWrite: (files, cut) => invoke('clipboardWrite', files, cut),
+  copyPaths: (files) => invoke('copyPaths', files),
   clipboardRead: () => invoke('clipboardRead'),
   textEdit: (command) => invoke('textEdit', command),
   onEvent: (listener) => {

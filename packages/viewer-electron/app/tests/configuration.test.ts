@@ -2,11 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { parse } from 'jsonc-parser';
+import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
 import { SettingsService } from '../src/desktop/settings';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import type { FolderPane } from '../src/domain/contracts';
+import { documentConfiguration } from '../src/desktop/configuration-comments';
 
 let root: string;
 const services: SettingsService[] = [];
@@ -26,6 +27,57 @@ afterEach(async () => {
 });
 
 describe('authoritative JSONC configuration', () => {
+  it('adds guidance for newly introduced fields in an already-commented configuration', () => {
+    const original = documentConfiguration(
+      '{"settings":{"browsing":{"newPlaneLocation":"current","newPlanePath":""}}}',
+    );
+    const updated = applyEdits(
+      original,
+      modify(original, ['settings', 'browsing', 'emptyWorkspaceLocation'], 'downloads', {
+        formattingOptions: { insertSpaces: true, tabSize: 2 },
+      }),
+    );
+    const documented = documentConfiguration(updated);
+    expect(parse(documented)).toEqual(parse(updated));
+    expect(documented).toContain('Independent starting folder for the first plane');
+    expect(documented.match(/Viewer configuration editing guide \(v1\)\./g)).toHaveLength(1);
+    expect(documentConfiguration(documented)).toBe(documented);
+  });
+  it.each(['multiline', 'compact', 'crlf'])(
+    'documents %s configuration without altering values or user comments',
+    async (format) => {
+      const service = create();
+      await service.load();
+      const config = await read();
+      config.settings.folders[path.join(root, 'books.2026')] = { mode: 'columns' };
+      config.settings.recipes[0].instructions =
+        '// Viewer configuration editing guide (v1).\nKeep "quotes", {name}, $() and Unicode: ș.';
+      let original =
+        '// Keep my explanation.\n' + JSON.stringify(config, null, format === 'compact' ? 0 : 2);
+      if (format !== 'compact') original = original.replace(/\n}$/, ',\n}');
+      if (format === 'crlf') original = original.replaceAll('\n', '\r\n');
+      const documented = documentConfiguration(original);
+      const errors: ParseError[] = [];
+      expect(parse(documented, errors, { allowTrailingComma: true })).toEqual(config);
+      expect(errors).toEqual([]);
+      expect(documented).toContain('// Keep my explanation.');
+      expect(documented).not.toBe(original);
+      expect(documentConfiguration(documented)).toBe(documented);
+      expect(documentConfiguration(original)).toBe(documented);
+      if (format === 'crlf') expect(documented.replaceAll('\r\n', '')).not.toContain('\n');
+      await fs.writeFile(file(), documented);
+      await service.reload();
+      expect(service.snapshot().config!.diagnostics).toEqual([]);
+      expect(service.snapshot().settings.folders).toEqual(config.settings.folders);
+      await service.patch(
+        [{ path: 'settings.appearance', value: 'dark' }],
+        service.snapshot().revision,
+      );
+      const saved = await fs.readFile(file(), 'utf8');
+      expect(saved).toContain('// Keep my explanation.');
+      expect((await read()).settings.recipes).toEqual(config.settings.recipes);
+    },
+  );
   it('preserves comments, merges independent external/UI edits, and rejects overlapping stale edits', async () => {
     const service = create();
     await service.load();

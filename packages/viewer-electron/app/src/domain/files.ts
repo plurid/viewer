@@ -1,4 +1,5 @@
 import type { FileEntry, SortKey } from './contracts';
+import { modelFormats } from './model-formats';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 export function indexEntries(entries: readonly FileEntry[]) {
@@ -64,7 +65,7 @@ export function formatBytes(value: number): string {
 export function fileFamily(entry: Pick<FileEntry, 'extension' | 'directory' | 'mime'>): string {
   if (entry.directory) return 'folder';
   if (entry.extension === 'dxf') return 'drawing';
-  if (['glb', 'gltf', 'obj', 'stl', 'fbx'].includes(entry.extension)) return 'model';
+  if (modelFormats.includes(entry.extension)) return 'model';
   if (['zip', 'tar', 'gz', 'tgz'].includes(entry.extension)) return 'archive';
   if (entry.extension === 'pdf') return 'pdf';
   if (['csv', 'tsv', 'json', 'jsonl'].includes(entry.extension)) return 'data';

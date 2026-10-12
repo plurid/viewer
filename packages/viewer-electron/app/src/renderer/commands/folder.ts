@@ -1,5 +1,6 @@
 import { actionCommands } from '../actions/commands';
 import { columnCommands } from './columns';
+import { copyPathCommand } from './copy-path';
 import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath } from '../../domain/planes';
@@ -102,10 +103,11 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'another-plane',
-      label: 'Open another plane',
+      label: 'Open in another plane',
       group: 'Files',
-      icon: 'link',
-      aliases: ['another', 'copy plane'],
+      icon: 'plus',
+      detail: 'Independent root plane',
+      aliases: ['another', 'copy plane', 'root plane', 'independent plane'],
       when: selected,
       run: (context) => actions.open(context.selection, true, true),
     },
@@ -140,6 +142,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       when: selected,
       run: (context) => writeFileClipboard(paths(context), false),
     },
+    copyPathCommand,
     {
       id: 'cut',
       label: 'Cut',

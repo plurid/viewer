@@ -6,6 +6,9 @@ export function AgentGrants({ settings }: { settings: ApplicationSettings }) {
   const [root, setRoot] = useState(settings.agents.roots[0] || '');
   const [error, setError] = useState('');
   useEffect(() => {
+    if (!settings.agents.roots.includes(root)) setRoot(settings.agents.roots[0] || '');
+  }, [settings.agents.roots, root]);
+  useEffect(() => {
     void window.viewer
       .agentGrants()
       .then(setGrants)
@@ -30,15 +33,21 @@ export function AgentGrants({ settings }: { settings: ApplicationSettings }) {
         config.jsonc. Changing a custom command invalidates its execution grant. A working directory
         does not restrict which files a command can access.
       </p>
-      <label className="settings-row">
+      <label className="settings-row settings-wide-field">
         <span>Grant for folder</span>
-        <select value={root} onChange={(event) => setRoot(event.target.value)}>
+        <select
+          value={root}
+          title={root}
+          disabled={!settings.agents.roots.length}
+          onChange={(event) => setRoot(event.target.value)}
+        >
           <option value="">Choose an authorized folder</option>
           {settings.agents.roots.map((root) => (
             <option key={root}>{root}</option>
           ))}
         </select>
       </label>
+      {root && <p className="settings-field-detail">{root}</p>}
       {root && (
         <>
           {settings.customActions.map((action) => (
@@ -83,7 +92,7 @@ export function AgentGrants({ settings }: { settings: ApplicationSettings }) {
         <details>
           <summary>Existing grants</summary>
           {grants.map((grant) => (
-            <div className="settings-folder-override" key={grant.id}>
+            <div className="settings-grant" key={grant.id}>
               <span title={grant.root}>
                 {grant.actionID} · {grant.capability} · {grant.root}
               </span>

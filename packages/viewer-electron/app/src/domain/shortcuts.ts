@@ -12,6 +12,7 @@ export const defaultShortcuts: Record<string, string> = {
   back: 'Cmd+[',
   forward: 'Cmd+]',
   copy: 'Cmd+C',
+  'copy-path': 'Cmd+Alt+C',
   cut: 'Cmd+X',
   paste: 'Cmd+V',
   'select-all': 'Cmd+A',

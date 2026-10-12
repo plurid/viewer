@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { SettingsPatch, SettingsSnapshot } from '../../domain/services';
 import type { CustomAction, TerminalProfile } from '../../domain/automation';
 import { Field } from './SettingField';
+import { Icon } from './Icon';
 import {
   customActionEdit,
   terminalProfileEdit,
@@ -90,7 +91,10 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
       <h2>Shell profiles</h2>
       {value.profiles.map((item) => (
         <details className="settings-recipe" key={item.id}>
-          <summary>{item.name}</summary>
+          <summary>
+            <Icon name="right" size={12} />
+            <span>{item.name}</span>
+          </summary>
           <label className="settings-row">
             <span>Name</span>
             <Field
@@ -130,22 +134,24 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
           )}
         </details>
       ))}
-      <button
-        onClick={() =>
-          patchProfiles((profiles) => [
-            ...profiles,
-            {
-              id: crypto.randomUUID(),
-              name: 'New shell profile',
-              executable: '',
-              args: ['-l'],
-              env: {},
-            },
-          ])
-        }
-      >
-        New shell profile
-      </button>
+      <div className="settings-actions">
+        <button
+          onClick={() =>
+            patchProfiles((profiles) => [
+              ...profiles,
+              {
+                id: crypto.randomUUID(),
+                name: 'New shell profile',
+                executable: '',
+                args: ['-l'],
+                env: {},
+              },
+            ])
+          }
+        >
+          New shell profile
+        </button>
+      </div>
       <h2>tmux</h2>
       <p className="settings-note">
         Open in tmux creates one window in this shared session. Viewer leaves external tmux sessions
@@ -201,7 +207,10 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
       </p>
       {actions.map((action) => (
         <details className="settings-recipe" key={action.id}>
-          <summary>{action.name}</summary>
+          <summary>
+            <Icon name="right" size={12} />
+            <span>{action.name}</span>
+          </summary>
           <label className="settings-row">
             <span>Name</span>
             <Field
@@ -457,26 +466,28 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
           </button>
         </details>
       ))}
-      <button
-        onClick={() =>
-          set((actions) => [
-            ...actions,
-            {
-              id: crypto.randomUUID(),
-              name: 'New command',
-              aliases: [],
-              icon: 'command',
-              shortcut: '',
-              order: actions.length,
-              pinned: false,
-              when: { target: 'any', extensions: [], min: 0, max: 10000 },
-              executor: { kind: 'builtin', command: 'open-terminal' },
-            },
-          ])
-        }
-      >
-        New command
-      </button>
+      <div className="settings-actions">
+        <button
+          onClick={() =>
+            set((actions) => [
+              ...actions,
+              {
+                id: crypto.randomUUID(),
+                name: 'New command',
+                aliases: [],
+                icon: 'command',
+                shortcut: '',
+                order: actions.length,
+                pinned: false,
+                when: { target: 'any', extensions: [], min: 0, max: 10000 },
+                executor: { kind: 'builtin', command: 'open-terminal' },
+              },
+            ])
+          }
+        >
+          New command
+        </button>
+      </div>
     </>
   );
 }
@@ -608,22 +619,24 @@ export function FolderOverrideSettings({ snapshot, save }: Props) {
           </button>
         </div>
       ))}
-      <button
-        onClick={() => {
-          void window.viewer.chooseFolder().then((path) => {
-            if (path)
-              save([
-                {
-                  path: 'settings.folders',
-                  keys: ['settings', 'folders', path, 'mode'],
-                  value: snapshot.settings.browsing.mode,
-                },
-              ]);
-          });
-        }}
-      >
-        Add folder override…
-      </button>
+      <div className="settings-actions">
+        <button
+          onClick={() => {
+            void window.viewer.chooseFolder().then((path) => {
+              if (path)
+                save([
+                  {
+                    path: 'settings.folders',
+                    keys: ['settings', 'folders', path, 'mode'],
+                    value: snapshot.settings.browsing.mode,
+                  },
+                ]);
+            });
+          }}
+        >
+          Add folder override…
+        </button>
+      </div>
     </>
   );
 }

@@ -268,6 +268,7 @@ const schemas = {
   save: z.tuple([stateSchema]),
   flushed: z.tuple([id]),
   clipboardWrite: z.tuple([z.array(localPath).max(10000), z.boolean()]),
+  copyPaths: z.tuple([z.array(localPath).min(1).max(10000)]),
   clipboardRead: z.tuple([]),
   textEdit: z.tuple([z.enum(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])]),
 } satisfies Record<ApiMethod, z.ZodType>;
@@ -953,6 +954,12 @@ export class Desktop {
         return value && (await clipboard.readText()) === value.text
           ? { paths: value.paths, cut: value.cut }
           : null;
+      }
+      case 'copyPaths': {
+        await clipboard.writeText((args[0] as string[]).join('\n'));
+        // Plain-text paths must not retain a previous cut/copy file operation.
+        this.fileClipboard = null;
+        return;
       }
       case 'textEdit': {
         const command = args[0] as import('../domain/contracts').TextEditCommand;

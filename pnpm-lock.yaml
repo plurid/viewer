@@ -46,6 +46,9 @@ importers:
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
+      occt-import-js:
+        specifier: 0.0.23
+        version: 0.0.23
       pdfjs-dist:
         specifier: 6.4.299
         version: 6.4.299
@@ -1682,6 +1685,9 @@ packages:
   obug@2.2.1:
     resolution: {integrity: sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==}
     engines: {node: '>=12.20.0'}
+
+  occt-import-js@0.0.23:
+    resolution: {integrity: sha512-RFfYQXYFX5C1mB1Aywm0ShcUKzXOr/VzTnlzhBSDJOR6YCAPt1HYCzeXWg1vwwjn/cUxwqRNhhtf1dlewoZYCQ==}
 
   onetime@5.1.2:
     resolution: {integrity: sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg==}
@@ -3957,6 +3963,8 @@ snapshots:
       abbrev: 4.0.0
 
   obug@2.2.1: {}
+
+  occt-import-js@0.0.23: {}
 
   onetime@5.1.2:
     dependencies:

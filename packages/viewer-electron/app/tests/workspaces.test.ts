@@ -35,7 +35,7 @@ afterEach(async () => {
 });
 
 describe('workspace host and engine lifecycle', () => {
-  it('uses the configured starting folder for roots, including an empty workspace, and honors explicit location commands', () => {
+  it('uses independent empty-workspace defaults and honors explicit location commands', () => {
     const owner = activeWorkspace().panes[0];
     navigate(owner.id, '/fixtures/project');
     for (const location of ['home', 'desktop', 'downloads'] as const) {
@@ -53,8 +53,11 @@ describe('workspace host and engine lifecycle', () => {
     snapshot.revision++;
     snapshot.settings.browsing.newPlaneLocation = 'custom';
     snapshot.settings.browsing.newPlanePath = '/fixtures/library';
+    snapshot.settings.browsing.emptyWorkspaceLocation = 'custom';
+    snapshot.settings.browsing.emptyWorkspacePath = '/fixtures/first';
     receiveSettings(snapshot);
     removePanes(activeWorkspace().panes.map((pane) => pane.id));
+    expect(addRootFolder()?.path).toBe('/fixtures/first');
     expect(addRootFolder()?.path).toBe('/fixtures/library');
     expect(addRootFolder({ path: '/fixtures/explicit' })?.path).toBe('/fixtures/explicit');
   });

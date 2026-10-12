@@ -10,8 +10,10 @@ const require = createRequire(import.meta.url);
 const config: ForgeConfig = {
   packagerConfig: {
     asar: { unpack: '**/node-pty/**' },
-    extraResource:
-      process.platform === 'darwin' ? ['assets/viewer-ocr', 'assets/viewer-applications'] : [],
+    extraResource: [
+      'assets/licenses',
+      ...(process.platform === 'darwin' ? ['assets/viewer-ocr', 'assets/viewer-applications'] : []),
+    ],
     appBundleId: 'com.plurid.viewer',
     appCategoryType: 'public.app-category.utilities',
     name: 'Viewer',

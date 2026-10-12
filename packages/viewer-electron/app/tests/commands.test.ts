@@ -9,6 +9,7 @@ import {
 import { folderCommands, type FolderActions } from '../src/renderer/commands/folder';
 import { contextMenuSections, type MenuSection } from '../src/renderer/commands/menu';
 import { textEditFor } from '../src/renderer/commands/editing';
+import { copyPathCommand } from '../src/renderer/commands/copy-path';
 import {
   activeWorkspace,
   flushState,
@@ -53,7 +54,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
-    viewer: { save, operate, clipboardRead: vi.fn(async () => null) },
+    viewer: {
+      save,
+      operate,
+      copyPaths: vi.fn(async () => {}),
+      clipboardRead: vi.fn(async () => null),
+    },
   });
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
   const pane = activeWorkspace().panes[0];
@@ -88,7 +94,7 @@ describe('contextual commands', () => {
         entry.kind === 'command' ? [entry.command.id] : commandsIn(entry.sections),
       ),
     );
-  it('groups every contextual command exactly once while promoting recent and pinned actions', () => {
+  it('keeps recent shortcuts in their normal groups with independent row IDs', () => {
     const commands = registry.list({ paneID: context.paneID });
     const pinned = { ...commands[0], id: 'custom.fixture', group: 'Actions', primary: true };
     commands.push(pinned);
@@ -97,7 +103,18 @@ describe('contextual commands', () => {
     expect(commandsIn([sections[0]])).toEqual(['rename', 'copy']);
     expect(sections[1].label).toBe('Pinned');
     expect(commandsIn([sections[1]])).toEqual(['custom.fixture']);
-    expect(commandsIn(sections).sort()).toEqual(commands.map((command) => command.id).sort());
+    expect(commandsIn(sections.slice(1)).sort()).toEqual(
+      commands.map((command) => command.id).sort(),
+    );
+    const rowIDs = (sections: MenuSection[]): string[] =>
+      sections.flatMap((section) =>
+        section.entries.flatMap((entry) => [
+          entry.id,
+          ...(entry.kind === 'submenu' ? rowIDs(entry.sections) : []),
+        ]),
+      );
+    expect(new Set(rowIDs(sections)).size).toBe(rowIDs(sections).length);
+    expect(commandsIn(sections).filter((id) => id === 'rename')).toHaveLength(2);
     const view = sections
       .flatMap((section) => section.entries)
       .find((entry) => entry.id === 'menu.View');
@@ -155,6 +172,32 @@ describe('contextual commands', () => {
     expect(ranked.slice(0, 2).map((item) => item.id)).toEqual(['rename', 'copy']);
     expect(ranked.filter((item) => item.id === 'rename')).toHaveLength(1);
     expect(rankCommands(rows, 'new', ['rename', 'copy'])[0].id).toBe('new-folder');
+  });
+  it('copies selected paths as text and falls back to the clicked folder without a selection', async () => {
+    const paths = [file('first.txt'), file('folder with spaces', true)];
+    const selected = registry
+      .list({ paneID: context.paneID, context: { selection: paths } })
+      .find((command) => command.id === 'copy-path')!;
+    context = { ...context, selection: [file('other.txt')] };
+    await registry.run(selected);
+    expect(window.viewer.copyPaths).toHaveBeenLastCalledWith(paths.map((file) => file.path));
+    const background = registry
+      .list({ paneID: context.paneID, scope: 'folder', context: { selection: [] } })
+      .find((command) => command.id === 'copy-path')!;
+    await registry.run(background);
+    expect(window.viewer.copyPaths).toHaveBeenLastCalledWith([context.directory]);
+    expect(operate).not.toHaveBeenCalled();
+  });
+  it('copies preview and sidebar paths without treating an unrelated file selection as their target', async () => {
+    await copyPathCommand.run({ ...context, scope: 'preview', path: '/fixtures/model.step' });
+    expect(window.viewer.copyPaths).toHaveBeenLastCalledWith(['/fixtures/model.step']);
+    await copyPathCommand.run({
+      ...context,
+      scope: 'sidebar',
+      sidebar: { section: 'favorites', path: '/fixtures/project' },
+    });
+    expect(window.viewer.copyPaths).toHaveBeenLastCalledWith(['/fixtures/project']);
+    expect(copyPathCommand.when({ ...context, scope: 'workspace' })).toBe(false);
   });
   it('binds a menu action to its clicked target, while the next invocation uses the next target', async () => {
     const first = registry

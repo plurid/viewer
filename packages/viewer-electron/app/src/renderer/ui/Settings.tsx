@@ -20,8 +20,19 @@ import type {
 import { builtInRecipes, defaultSettings } from '../../domain/services';
 import { categories, settingCatalog, settingValue } from '../../domain/setting-catalog';
 import { normalizePreferences } from '../../domain/preferences';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { IconButton, Loading } from './primitives';
+const toolbarIcons: Record<string, IconName> = {
+  sidebar: 'sidebar',
+  back: 'left',
+  forward: 'right',
+  view: 'list',
+  search: 'search',
+  frame: 'frame',
+  dock: 'dock',
+  actions: 'more',
+  close: 'close',
+};
 export function SettingsWindow() {
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [category, setCategory] = useState('Browsing');
@@ -86,14 +97,19 @@ export function SettingsWindow() {
   };
   const patch = (path: string, value: unknown) => enqueue(() => [{ path, value }]);
   const patches = (values: SettingsPatch[]) => enqueue(() => values);
-  const chooseNewPlaneFolder = () => {
+  const chooseNewPlaneFolder = (field: 'newPlaneLocation' | 'emptyWorkspaceLocation') => {
     void window.viewer
       .chooseFolder()
       .then((path) => {
         if (path)
           patches([
-            { path: 'settings.browsing.newPlanePath', value: path },
-            { path: 'settings.browsing.newPlaneLocation', value: 'custom' },
+            {
+              path:
+                'settings.browsing.' +
+                (field === 'newPlaneLocation' ? 'newPlanePath' : 'emptyWorkspacePath'),
+              value: path,
+            },
+            { path: 'settings.browsing.' + field, value: 'custom' },
           ]);
       })
       .catch((error) => setError((error as Error).message));
@@ -202,71 +218,97 @@ export function SettingsWindow() {
             </button>
           ))}
         <div className="settings-group">
-          {definitions.map((definition, index) => (
-            <Fragment key={definition.path}>
-              {definition.section && definition.section !== definitions[index - 1]?.section && (
-                <h2>{definition.section}</h2>
-              )}
-              <label className="settings-row">
-                <span>
-                  {definition.label}
-                  {definition.detail && <small>{definition.detail}</small>}
-                  {query && <small>{definition.category}</small>}
-                </span>
-                {definition.kind === 'boolean' ? (
-                  <input
-                    type="checkbox"
-                    checked={settingValue(snapshot, definition.path) === true}
-                    onChange={(event) => patch(definition.path, event.target.checked)}
-                  />
-                ) : definition.kind === 'choice' ? (
-                  <select
-                    aria-label={definition.label}
-                    value={String(settingValue(snapshot, definition.path))}
-                    onChange={(event) => {
-                      if (
-                        definition.path === 'settings.browsing.newPlaneLocation' &&
-                        event.target.value === 'custom'
-                      ) {
-                        chooseNewPlaneFolder();
-                        return;
-                      }
-                      patch(
-                        definition.path,
-                        definition.path === 'settings.previews.thumbnailSize'
-                          ? Number(event.target.value)
-                          : event.target.value,
-                      );
-                    }}
-                  >
-                    {definition.choices?.map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    aria-label={definition.label}
-                    type="number"
-                    min={definition.min}
-                    max={definition.max}
-                    defaultValue={Number(settingValue(snapshot, definition.path))}
-                    onBlur={(event) => patch(definition.path, Number(event.target.value))}
-                  />
+          {definitions.map((definition, index) => {
+            const locationField =
+              definition.path === 'settings.browsing.newPlaneLocation'
+                ? 'newPlaneLocation'
+                : definition.path === 'settings.browsing.emptyWorkspaceLocation'
+                  ? 'emptyWorkspaceLocation'
+                  : undefined;
+            const customPath =
+              locationField === 'newPlaneLocation'
+                ? settings.browsing.newPlanePath
+                : settings.browsing.emptyWorkspacePath;
+            const toolbarKey = definition.path.startsWith('ui.space.headerControls.')
+              ? definition.path.split('.').at(-1)!
+              : undefined;
+            const checked = settingValue(snapshot, definition.path) === true;
+            return (
+              <Fragment key={definition.path}>
+                {definition.section && definition.section !== definitions[index - 1]?.section && (
+                  <h2>{definition.section}</h2>
                 )}
-              </label>
-              {definition.path === 'settings.browsing.newPlaneLocation' &&
-                settings.browsing.newPlaneLocation === 'custom' && (
+                <label className="settings-row">
+                  <span>
+                    {toolbarKey ? (
+                      <span className="settings-toolbar-label">
+                        <span
+                          className="settings-toolbar-preview"
+                          data-enabled={checked}
+                          aria-hidden="true"
+                        >
+                          <Icon name={toolbarIcons[toolbarKey]} size={18} />
+                          {toolbarKey === 'view' && <Icon name="down" size={9} />}
+                        </span>
+                        <span>{definition.label}</span>
+                      </span>
+                    ) : (
+                      definition.label
+                    )}
+                    {definition.detail && <small>{definition.detail}</small>}
+                    {query && <small>{definition.category}</small>}
+                  </span>
+                  {definition.kind === 'boolean' ? (
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => patch(definition.path, event.target.checked)}
+                    />
+                  ) : definition.kind === 'choice' ? (
+                    <select
+                      aria-label={definition.label}
+                      value={String(settingValue(snapshot, definition.path))}
+                      onChange={(event) => {
+                        if (locationField && event.target.value === 'custom') {
+                          chooseNewPlaneFolder(locationField);
+                          return;
+                        }
+                        patch(
+                          definition.path,
+                          definition.path === 'settings.previews.thumbnailSize'
+                            ? Number(event.target.value)
+                            : event.target.value,
+                        );
+                      }}
+                    >
+                      {definition.choices?.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      aria-label={definition.label}
+                      type="number"
+                      min={definition.min}
+                      max={definition.max}
+                      defaultValue={Number(settingValue(snapshot, definition.path))}
+                      onBlur={(event) => patch(definition.path, Number(event.target.value))}
+                    />
+                  )}
+                </label>
+                {locationField && settings.browsing[locationField] === 'custom' && (
                   <div className="settings-folder-choice">
-                    <span title={settings.browsing.newPlanePath}>
-                      {settings.browsing.newPlanePath}
-                    </span>
-                    <button onClick={chooseNewPlaneFolder}>Change folder…</button>
+                    <span title={customPath}>{customPath}</span>
+                    <button onClick={() => chooseNewPlaneFolder(locationField)}>
+                      Change folder…
+                    </button>
                   </div>
                 )}
-            </Fragment>
-          ))}
+              </Fragment>
+            );
+          })}
         </div>
         {!query && category === 'Navigation' && (
           <>
@@ -291,9 +333,11 @@ export function SettingsWindow() {
             <p className="settings-note">
               Drag section headings and shortcuts in any sidebar to change their order.
             </p>
-            <button onClick={() => patch('ui.sidebar', normalizePreferences().sidebar)}>
-              Reset navigation defaults
-            </button>
+            <div className="settings-actions">
+              <button onClick={() => patch('ui.sidebar', normalizePreferences().sidebar)}>
+                Reset navigation defaults
+              </button>
+            </div>
           </>
         )}
         {!query && category === 'Search' && (
@@ -430,6 +474,7 @@ export function SettingsWindow() {
         )}
         {!query && category === 'Actions' && (
           <>
+            <h2>Recipes</h2>
             <p className="settings-note">
               Recipes appear in Commands and file actions. Every file-change proposal opens for
               review.
@@ -437,7 +482,8 @@ export function SettingsWindow() {
             {settings.recipes.map((recipe) => (
               <details className="settings-recipe" key={recipe.id}>
                 <summary>
-                  {recipe.name}
+                  <Icon name="right" size={12} />
+                  <span>{recipe.name}</span>
                   <small>{recipe.kind}</small>
                 </summary>
                 <div className="settings-editor">
@@ -633,7 +679,6 @@ export function SettingsWindow() {
             </div>
           </>
         )}
-        {!query && category === 'Agents' && <AgentGrants settings={settings} />}
         {!query && category === 'Agents' && (
           <>
             <p className="settings-note">
@@ -656,35 +701,40 @@ export function SettingsWindow() {
                 />
               </div>
             ))}
-            <button
-              onClick={() => {
-                void window.viewer
-                  .chooseFolder()
-                  .then((root) => {
-                    if (root && !settings.agents.roots.includes(root))
-                      patch('settings.agents.roots', [...settings.agents.roots, root]);
-                  })
-                  .catch((error) => setError(error.message));
-              }}
-            >
-              Authorize folder…
-            </button>
+            <div className="settings-actions">
+              <button
+                onClick={() => {
+                  void window.viewer
+                    .chooseFolder()
+                    .then((root) => {
+                      if (root && !settings.agents.roots.includes(root))
+                        patch('settings.agents.roots', [...settings.agents.roots, root]);
+                    })
+                    .catch((error) => setError(error.message));
+                }}
+              >
+                Authorize folder…
+              </button>
+            </div>
+            <AgentGrants settings={settings} />
             <h2>Connect a client</h2>
             <p className="settings-note">
               Keep Viewer open for proposal review. Regenerating the token disconnects previous
               credentials.
             </p>
-            <button
-              disabled={!settings.agents.enabled || !settings.agents.roots.length}
-              onClick={() => {
-                void window.viewer
-                  .agentToken()
-                  .then(setAgentConfig)
-                  .catch((error) => setError(error.message));
-              }}
-            >
-              Generate MCP configuration
-            </button>
+            <div className="settings-actions">
+              <button
+                disabled={!settings.agents.enabled || !settings.agents.roots.length}
+                onClick={() => {
+                  void window.viewer
+                    .agentToken()
+                    .then(setAgentConfig)
+                    .catch((error) => setError(error.message));
+                }}
+              >
+                Generate MCP configuration
+              </button>
+            </div>
             {agentConfig && (
               <textarea
                 className="agent-configuration"
@@ -717,9 +767,11 @@ export function SettingsWindow() {
                   />
                 </label>
               ))}
-            <button onClick={() => patch('settings.shortcuts', {})}>
-              Reset keyboard shortcuts
-            </button>
+            <div className="settings-actions">
+              <button onClick={() => patch('settings.shortcuts', {})}>
+                Reset keyboard shortcuts
+              </button>
+            </div>
           </>
         )}
         {!query && ['Browsing', 'Previews', 'Space'].includes(category) && (
