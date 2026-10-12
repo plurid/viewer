@@ -22,7 +22,8 @@ export interface FolderListing {
   entries: FileEntry[];
 }
 export type ViewMode = 'list' | 'grid' | 'columns' | 'gallery';
-export type SortKey = 'name' | 'modified' | 'size' | 'kind';
+export type SortKey = 'name' | 'modified' | 'created' | 'size' | 'kind' | 'extension';
+export type ListColumn = SortKey;
 export interface FolderPane {
   id: string;
   type: 'folder';
@@ -61,7 +62,13 @@ export interface SearchPane {
   recursive?: boolean;
   content?: boolean;
 }
-export type Pane = FolderPane | PreviewPane | SearchPane;
+export interface TerminalPane {
+  id: string;
+  type: 'terminal';
+  path: string;
+  profileID: string;
+}
+export type Pane = FolderPane | PreviewPane | SearchPane | TerminalPane;
 export interface Workspace {
   id: string;
   name: string;
@@ -71,7 +78,7 @@ export interface Workspace {
   arrangement: Record<string, string>;
 }
 export interface SavedState {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   preferencesRevision?: number;
   workspaces: Workspace[];
   activeWorkspace: string;
@@ -102,6 +109,24 @@ export interface UIPreferences {
     dragging: boolean;
     resizing: boolean;
     opening: 'face-on' | 'pair' | 'dock';
+    headerControls: {
+      sidebar: boolean;
+      back: boolean;
+      forward: boolean;
+      view: boolean;
+      search: boolean;
+      frame: boolean;
+      dock: boolean;
+      actions: boolean;
+      close: boolean;
+    };
+  };
+  list: {
+    visible: Record<Exclude<ListColumn, 'name'>, boolean>;
+    /** A zero name width fills the space left by the metadata columns. */
+    widths: Record<ListColumn, number>;
+    wrapNames: boolean;
+    order?: ListColumn[];
   };
   recentCommands: string[];
 }
@@ -192,6 +217,16 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'service-error'; service: string; message: string }
+  | { type: 'agent-proposal'; proposal: import('./agent-requests').AgentProposal }
+  | {
+      type: 'agent-command';
+      id: string;
+      command: string;
+      target: import('./automation').CapturedTarget;
+    }
+  | { type: 'terminal'; event: import('./automation').TerminalEvent }
+  | { type: 'execution'; task: import('./automation').ExecutionTask }
   | { type: 'folder-size'; task: import('./metadata').FolderSizeTask }
   | { type: 'settings'; snapshot: import('./services').SettingsSnapshot }
   | { type: 'index'; status: import('./services').IndexStatus }
@@ -207,6 +242,33 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  commandsPublish(
+    target: import('./automation').CapturedTarget,
+    commands: import('./agent-requests').CommandDescriptor[],
+  ): Promise<void>;
+  agentCommandResult(id: string, error?: string): Promise<void>;
+  agentReviewList(): Promise<import('./agent-requests').AgentProposal[]>;
+  agentReview(id: string, approve: boolean): Promise<void>;
+  agentGrants(): Promise<import('./agent-requests').ExecutionGrant[]>;
+  agentGrant(
+    actionID: string,
+    root: string,
+    capability: import('./agent-requests').ExecutionGrant['capability'],
+    allow: boolean,
+  ): Promise<void>;
+  configOpen(): Promise<void>;
+  configValidate(): Promise<import('./services').SettingsSnapshot>;
+  configTransfer(kind: 'import' | 'export'): Promise<import('./services').SettingsSnapshot>;
+  terminalApplication(): Promise<{ name: string; path: string; running: boolean }>;
+  terminalExternal(cwd: string, tmux: boolean): Promise<void>;
+  terminalStart(request: import('./automation').TerminalStart): Promise<void>;
+  terminalWrite(id: string, data: string): Promise<void>;
+  terminalResize(id: string, cols: number, rows: number): Promise<void>;
+  terminalAck(id: string, bytes: number): Promise<void>;
+  terminalClose(id: string): Promise<void>;
+  customExecute(actionID: string, target: import('./automation').CapturedTarget): Promise<string>;
+  executionList(): Promise<import('./automation').ExecutionTask[]>;
+  executionCancel(id: string): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
   openSettings(): Promise<void>;
   settingsGet(): Promise<import('./services').SettingsSnapshot>;

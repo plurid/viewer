@@ -2,6 +2,6 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   build: {
     sourcemap: true,
-    rollupOptions: { external: ['electron', 'pdfjs-dist/legacy/build/pdf.mjs'] },
+    rollupOptions: { external: ['electron', 'node-pty', 'pdfjs-dist/legacy/build/pdf.mjs'] },
   },
 });

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 const paths = {
+  terminal: 'M3 4h18v16H3V4Zm4 5 3 3-3 3m6 0h4',
   folder: 'M3 7V5a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z',
   file: 'M14 3H5v18h14V8l-5-5Zm0 0v5h5',
   image: 'M3 3h18v18H3V3Zm0 14 6-6 4 4 3-3 5 5M16 7h.01',

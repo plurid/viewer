@@ -1,20 +1,39 @@
-import { memo, useEffect, useMemo, useRef, useState, type MouseEvent, type DragEvent } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type DragEvent,
+} from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { FileEntry } from '../../domain/contracts';
-import { getState, useViewer } from '../state/store';
-import { fileFamily, formatBytes, sortEntries } from '../../domain/files';
+import type { FileEntry, ListColumn } from '../../domain/contracts';
+import { visibleListColumns } from '../../domain/list-columns';
+import { getState, useFolderPresentation, useViewer } from '../state/store';
+import { fileFamily, fileGroup, formatBytes, sortEntries } from '../../domain/files';
 import { Icon, type IconName } from '../ui/Icon';
 import { PreviewHost } from '../previews/PreviewHost';
 import { useFolder } from './useFolder';
 import { Empty, Loading } from '../ui/primitives';
 import { useFileReveal } from './anchors';
+import type { ColumnNavigation } from './column-navigation';
+import type { FileModifiers } from './selection';
+
+import type { FolderPresentation } from '../../domain/folder-presentation';
+import { BrowserColumn } from './BrowserColumn';
 
 export interface FileViewProps {
+  presentation?: FolderPresentation;
+  depths?: ReadonlyMap<string, number>;
+  expanded?: string[];
+  toggle?(entry: FileEntry): void;
   entries: FileEntry[];
   selection: string[];
   cursor?: string;
   selectionSet: ReadonlySet<string>;
-  select(entry: FileEntry, event: MouseEvent, scope?: FileEntry[]): void;
+  select(entry: FileEntry, event: FileModifiers, scope?: FileEntry[]): void;
   showHidden: boolean;
   open(entry: FileEntry, linked?: boolean): void;
   context(entry: FileEntry, event: MouseEvent): void;
@@ -39,11 +58,16 @@ export const FileRow = memo(function FileRow({
   selected,
   props,
   compact = false,
+  columns = ['name', 'modified', 'kind', 'size'],
 }: {
   entry: FileEntry;
   selected: boolean;
-  props: Pick<FileViewProps, 'select' | 'open' | 'context' | 'drag'>;
+  props: Pick<
+    FileViewProps,
+    'select' | 'open' | 'context' | 'drag' | 'toggle' | 'expanded' | 'depths'
+  >;
   compact?: boolean;
+  columns?: readonly ListColumn[];
 }) {
   return (
     <div
@@ -51,6 +75,10 @@ export const FileRow = memo(function FileRow({
       role="option"
       aria-selected={selected}
       data-file-path={entry.path}
+      data-directory-path={entry.directory ? entry.path : undefined}
+      aria-expanded={
+        entry.directory && props.toggle ? props.expanded?.includes(entry.path) : undefined
+      }
       title={entry.error || entry.path}
       onClick={(event) => props.select(entry, event)}
       onDoubleClick={(event) => props.open(entry, event.metaKey || event.altKey || event.ctrlKey)}
@@ -58,26 +86,59 @@ export const FileRow = memo(function FileRow({
       draggable
       onDragStart={(event) => props.drag(entry, event)}
     >
-      <span className="file-name">
+      <span
+        className="file-name"
+        style={
+          props.depths
+            ? { paddingInlineStart: (props.depths.get(entry.path) || 0) * 18 }
+            : undefined
+        }
+      >
+        {props.toggle && entry.directory && (
+          <button
+            className="folder-disclosure"
+            style={{ left: 2 + (props.depths?.get(entry.path) || 0) * 18 }}
+            aria-label={props.expanded?.includes(entry.path) ? 'Collapse folder' : 'Expand folder'}
+            onClick={(event) => {
+              event.stopPropagation();
+              props.toggle?.(entry);
+            }}
+          >
+            <Icon name={props.expanded?.includes(entry.path) ? 'down' : 'right'} size={12} />
+          </button>
+        )}
         <FileIcon entry={entry} />
-        <span>{entry.name}</span>
+        <span className="filename" title={entry.name}>
+          {entry.name}
+        </span>
         {entry.error && <Icon name="warning" size={14} />}
       </span>
-      {!compact && (
-        <>
-          <span className="file-date">{entry.modified ? date.format(entry.modified) : '—'}</span>
-          <span className="file-kind">
-            {entry.directory
-              ? 'Folder'
-              : entry.kind === 'symlink'
-                ? 'Alias'
-                : entry.extension.toUpperCase() || 'File'}
-          </span>
-          <span className="file-size tabular">
-            {entry.directory ? '—' : formatBytes(entry.size)}
-          </span>
-        </>
-      )}
+      {!compact &&
+        columns
+          .filter((column) => column !== 'name')
+          .map((column) => (
+            <span
+              key={column}
+              data-column={column}
+              className={`file-${column} ${column === 'modified' ? 'file-date' : ''} ${column === 'size' ? 'tabular' : ''}`}
+            >
+              {column === 'modified' || column === 'created'
+                ? entry[column]
+                  ? date.format(entry[column])
+                  : '—'
+                : column === 'kind'
+                  ? entry.directory
+                    ? 'Folder'
+                    : entry.kind === 'symlink'
+                      ? 'Alias'
+                      : entry.extension.toUpperCase() || 'File'
+                  : column === 'extension'
+                    ? entry.extension || '—'
+                    : entry.directory
+                      ? '—'
+                      : formatBytes(entry.size)}
+            </span>
+          ))}
       {compact && entry.directory && <Icon name="right" size={14} />}
     </div>
   );
@@ -97,14 +158,41 @@ function useRowActions(props: FileViewProps) {
 }
 export function ListView(props: FileViewProps) {
   const actions = useRowActions(props);
-  const compact = useViewer((state) => state.settings.settings.browsing.density === 'compact');
+  const rowProps = useMemo(
+    () => ({ ...actions, toggle: props.toggle, expanded: props.expanded, depths: props.depths }),
+    [actions, props.toggle, props.expanded, props.depths],
+  );
+  const defaultCompact = useViewer(
+    (state) => state.settings.settings.browsing.density === 'compact',
+  );
+  const compact = props.presentation ? props.presentation.density === 'compact' : defaultCompact;
+  const defaultList = useViewer((state) => state.saved.ui.list);
+  const list = props.presentation?.list || defaultList;
+  const columns = useMemo(() => visibleListColumns(list), [list.visible, list.order]);
+  const groups = useMemo(() => {
+    const groups = new Map<number, string>();
+    let last = '';
+    for (const [index, entry] of props.entries.entries()) {
+      if (props.depths?.get(entry.path)) continue;
+      const name = fileGroup(entry, props.presentation?.group || 'none');
+      if (name && name !== last) groups.set(index, name);
+      last = name;
+    }
+    return groups;
+  }, [props.entries, props.depths, props.presentation?.group]);
+  const getItemKey = useCallback((index: number) => props.entries[index].path, [props.entries]);
   const scroll = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: props.entries.length,
+    getItemKey,
     getScrollElement: () => scroll.current,
-    estimateSize: () => (compact ? 30 : 36),
+    estimateSize: (index) => (compact ? 30 : 36) + (groups.has(index) ? 26 : 0),
     overscan: 12,
   });
+  useEffect(() => {
+    // Wrapped measurements must not survive a return to fixed-height rows.
+    virtual.measure();
+  }, [compact, list.wrapNames, groups, virtual]);
   useFileReveal(scroll, props.entries, (index) => virtual.scrollToIndex(index, { align: 'auto' }));
   useEffect(() => {
     const index = props.entries.findIndex((entry) => entry.path === props.cursor);
@@ -122,12 +210,23 @@ export function ListView(props: FileViewProps) {
         {virtual.getVirtualItems().map((item) => (
           <div
             key={item.key}
-            style={{ position: 'absolute', width: '100%', top: item.start, height: item.size }}
+            data-index={item.index}
+            ref={list.wrapNames ? virtual.measureElement : undefined}
+            style={{
+              position: 'absolute',
+              width: '100%',
+              top: item.start,
+              height: list.wrapNames ? undefined : item.size,
+            }}
           >
+            {groups.has(item.index) && (
+              <div className="file-group-label">{groups.get(item.index)}</div>
+            )}
             <FileRow
               entry={props.entries[item.index]}
               selected={props.selectionSet.has(props.entries[item.index].path)}
-              props={actions}
+              props={rowProps}
+              columns={columns}
             />
           </div>
         ))}
@@ -217,6 +316,7 @@ export function GridView(props: FileViewProps) {
                 key={entry.path}
                 title={entry.path}
                 data-file-path={entry.path}
+                data-directory-path={entry.directory ? entry.path : undefined}
                 onClick={(event) => props.select(entry, event)}
                 onDoubleClick={(event) =>
                   props.open(entry, event.altKey || event.metaKey || event.ctrlKey)
@@ -241,37 +341,38 @@ export function GridView(props: FileViewProps) {
 function Column({
   path,
   props,
-  depth,
-  onFolder,
+  navigation,
 }: {
   path: string;
   props: FileViewProps;
-  depth: number;
-  onFolder: (path: string, depth: number) => void;
+  navigation: ColumnNavigation;
 }) {
   const listing = useFolder(path);
+  const presentation = useFolderPresentation(path);
   const filtered = useMemo(
     () =>
       sortEntries(
-        listing.entries.filter((entry) => props.showHidden || !entry.hidden),
-        'name',
-        false,
+        listing.entries.filter((entry) => presentation.showHidden || !entry.hidden),
+        presentation.sort,
+        presentation.descending,
+        presentation.foldersFirst,
       ),
-    [listing.entries, props.showHidden],
+    [listing.entries, presentation],
   );
   const columnProps = {
     ...props,
     entries: filtered,
-    select: (entry: FileEntry, event: MouseEvent) => {
+    presentation,
+    select: (entry: FileEntry, event: FileModifiers) => {
       props.select(entry, event, filtered);
-      onFolder(entry.directory ? entry.path : '', depth);
     },
   };
+  useEffect(() => {
+    if (!listing.loading && !listing.error) navigation.register(path, filtered);
+    return () => navigation.unregister(path);
+  }, [path, filtered, listing.loading, listing.error, navigation.register, navigation.unregister]);
   return (
-    <div className="file-column">
-      <div className="column-title" title={path}>
-        {path.split(/[\\/]/).pop() || path}
-      </div>
+    <BrowserColumn path={path} entries={filtered} onActivate={() => navigation.activate(path)}>
       {listing.loading ? (
         <Loading />
       ) : listing.error ? (
@@ -279,15 +380,19 @@ function Column({
       ) : (
         <ListViewCompact props={columnProps} />
       )}
-    </div>
+    </BrowserColumn>
   );
 }
 function ListViewCompact({ props }: { props: FileViewProps }) {
   const actions = useRowActions(props);
-  const compact = useViewer((state) => state.settings.settings.browsing.density === 'compact');
+  const defaultCompact = useViewer(
+    (state) => state.settings.settings.browsing.density === 'compact',
+  );
+  const compact = props.presentation ? props.presentation.density === 'compact' : defaultCompact;
   const scroll = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: props.entries.length,
+    getItemKey: (index) => props.entries[index].path,
     getScrollElement: () => scroll.current,
     estimateSize: () => (compact ? 30 : 36),
     overscan: 8,
@@ -314,26 +419,31 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
     </div>
   );
 }
-export function ColumnsView({ path, ...props }: FileViewProps & { path: string }) {
-  const [trail, setTrail] = useState<string[]>([]);
-  useEffect(() => setTrail([]), [path]);
-  const onFolder = (next: string, depth: number) =>
-    setTrail((value) => [...value.slice(0, depth), ...(next ? [next] : [])]);
-  const rootProps = {
-    ...props,
-    select: (entry: FileEntry, event: MouseEvent) => {
-      props.select(entry, event);
-      onFolder(entry.directory ? entry.path : '', 0);
-    },
-  };
+export function ColumnsView({
+  path,
+  navigation,
+  ...props
+}: FileViewProps & { path: string; navigation: ColumnNavigation }) {
+  const scroll = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const last = scroll.current?.querySelector<HTMLElement>('.file-column:last-child');
+    if (last && scroll.current) {
+      const right = last.offsetLeft + last.offsetWidth;
+      if (right > scroll.current.scrollLeft + scroll.current.clientWidth)
+        scroll.current.scrollLeft = right - scroll.current.clientWidth;
+    }
+  }, [navigation.trail]);
   return (
-    <div className="columns-view">
-      <div className="file-column">
-        <div className="column-title">{path.split(/[\\/]/).pop() || path}</div>
-        <ListViewCompact props={rootProps} />
-      </div>
-      {trail.map((folder, index) => (
-        <Column key={folder} path={folder} props={props} depth={index + 1} onFolder={onFolder} />
+    <div className="columns-view" ref={scroll}>
+      <BrowserColumn
+        path={path}
+        entries={props.entries}
+        onActivate={() => navigation.activate(path)}
+      >
+        <ListViewCompact props={props} />
+      </BrowserColumn>
+      {navigation.trail.map((folder) => (
+        <Column key={folder} path={folder} props={props} navigation={navigation} />
       ))}
     </div>
   );
@@ -344,6 +454,7 @@ export function GalleryView(props: FileViewProps) {
   const virtual = useVirtualizer({
     horizontal: true,
     count: props.entries.length,
+    getItemKey: (index) => props.entries[index].path,
     getScrollElement: () => scroll.current,
     estimateSize: () => 106,
     overscan: 4,
@@ -380,6 +491,7 @@ export function GalleryView(props: FileViewProps) {
                 style={{ position: 'absolute', left: item.start, height: '100%' }}
                 key={entry.path}
                 data-file-path={entry.path}
+                data-directory-path={entry.directory ? entry.path : undefined}
                 aria-selected={props.selectionSet.has(entry.path)}
                 role="option"
                 onClick={(event) => props.select(entry, event)}

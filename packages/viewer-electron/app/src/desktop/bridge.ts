@@ -1,3 +1,9 @@
+import { AgentRequests } from './agent-requests';
+import type { CapturedTarget } from '../domain/automation';
+import type { CommandDescriptor } from '../domain/agent-requests';
+import { Executions } from './executions';
+import { Terminals } from './terminals';
+import { ExternalTerminals } from './terminal-launch';
 import {
   nativeTheme,
   safeStorage,
@@ -47,11 +53,132 @@ const contextSchema = z.object({
   actor: z.enum(['user', 'agent']),
   recursive: z.boolean().optional(),
 });
+const targetSchema = z.object({
+  workspaceID: id,
+  rootID: id,
+  paneID: id,
+  directory: localPath,
+  panePath: localPath.optional(),
+  selection: z
+    .array(
+      z.object({
+        path: localPath,
+        name: z.string().max(32768),
+        parent: localPath,
+        extension: z.string().max(100),
+        kind: z.enum(['directory', 'file', 'symlink', 'other']),
+        directory: z.boolean(),
+        size: z.number(),
+        modified: z.number(),
+        created: z.number(),
+        hidden: z.boolean(),
+        mime: z.string().max(100),
+        identity: z.string().max(300),
+        linkTarget: z.string().optional(),
+        error: z.string().optional(),
+      }),
+    )
+    .max(2000),
+});
 const schemas = {
+  commandsPublish: z.tuple([
+    targetSchema,
+    z
+      .array(
+        z.object({
+          id,
+          label: z.string().max(500),
+          group: z.string().max(100),
+          aliases: z.array(z.string().max(200)).max(100),
+          shortcut: z.string().max(80).optional(),
+        }),
+      )
+      .max(1000),
+  ]),
+  agentCommandResult: z.tuple([id, z.string().max(2000).optional()]),
+  agentReviewList: z.tuple([]),
+  agentReview: z.tuple([id, z.boolean()]),
+  agentGrants: z.tuple([]),
+  agentGrant: z.tuple([
+    id,
+    localPath,
+    z.enum(['execute', 'terminal-read', 'terminal-write']),
+    z.boolean(),
+  ]),
+  configOpen: z.tuple([]),
+  configValidate: z.tuple([]),
+  configTransfer: z.tuple([z.enum(['import', 'export'])]),
+  terminalApplication: z.tuple([]),
+  terminalExternal: z.tuple([localPath, z.boolean()]),
+  terminalStart: z.tuple([
+    z.object({
+      id,
+      workspaceID: id,
+      rootID: id,
+      cwd: localPath,
+      profileID: id,
+      cols: z.number().int().min(2).max(1000),
+      rows: z.number().int().min(1).max(500),
+    }),
+  ]),
+  terminalWrite: z.tuple([id, z.string().max(65536)]),
+  terminalResize: z.tuple([
+    id,
+    z.number().int().min(2).max(1000),
+    z.number().int().min(1).max(500),
+  ]),
+  terminalAck: z.tuple([
+    id,
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(2 * 1024 * 1024),
+  ]),
+  terminalClose: z.tuple([id]),
+  customExecute: z.tuple([
+    id,
+    z.object({
+      workspaceID: id,
+      rootID: id,
+      paneID: id,
+      directory: localPath,
+      selection: z
+        .array(
+          z.object({
+            path: localPath,
+            name: z.string(),
+            parent: localPath,
+            extension: z.string(),
+            kind: z.enum(['directory', 'file', 'symlink', 'other']),
+            directory: z.boolean(),
+            size: z.number(),
+            modified: z.number(),
+            created: z.number(),
+            hidden: z.boolean(),
+            mime: z.string(),
+            identity: z.string(),
+            linkTarget: z.string().optional(),
+            error: z.string().optional(),
+          }),
+        )
+        .max(2000),
+    }),
+  ]),
+  executionList: z.tuple([]),
+  executionCancel: z.tuple([id]),
   openSettings: z.tuple([]),
   settingsGet: z.tuple([]),
   settingsPatch: z.tuple([
-    z.array(z.object({ path: z.string().max(200), value: z.unknown() })).max(100),
+    z
+      .array(
+        z.object({
+          path: z.string().max(200),
+          value: z.unknown(),
+          keys: z.array(z.string().max(32768)).max(10).optional(),
+        }),
+      )
+      .max(100),
     z.number().int().min(0),
   ]),
   providerCredential: z.tuple([id, z.string().max(10000)]),
@@ -145,6 +272,11 @@ const schemas = {
   textEdit: z.tuple([z.enum(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])]),
 } satisfies Record<ApiMethod, z.ZodType>;
 export class Desktop {
+  readonly agentRequests: AgentRequests;
+  private commandCatalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
+  readonly terminals: Terminals;
+  readonly externalTerminals: ExternalTerminals;
+  readonly executions: Executions;
   readonly resources = new Resources();
   readonly operations: Operations;
   readonly watchers: Watchers;
@@ -165,6 +297,9 @@ export class Desktop {
   private context?: ActionContext;
   private indexConfiguration = '';
   private openPaths: string[] = [];
+  private agentCommands = new Map<string, { finish(error?: string): void; owner: number }>();
+  private agentsEnabled?: boolean;
+  private agentsConfiguration: Promise<void> = Promise.resolve();
   private flushes = new Map<string, () => void>();
   private flushing?: Promise<void>;
   private disposal?: Promise<void>;
@@ -175,6 +310,7 @@ export class Desktop {
     private options: {
       openSettings(): Promise<void>;
       worker: string;
+      terminalWorker: string;
       ocr: string;
       applications: string;
       settingsChanged?(): void;
@@ -189,6 +325,13 @@ export class Desktop {
       (snapshot) => {
         this.options.settingsChanged?.();
         emit({ type: 'settings', snapshot: { ...snapshot, credentials: this.credentials.ids() } });
+        void this.configureAgents(snapshot.settings.agents.enabled).catch(() =>
+          emit({
+            type: 'service-error',
+            service: 'agents',
+            message: 'Agent server could not start. Check Settings → Agents.',
+          }),
+        );
         void this.configureIndex(snapshot.settings.search).catch(() =>
           emit({
             type: 'index',
@@ -206,6 +349,27 @@ export class Desktop {
         );
       },
     );
+    this.terminals = new Terminals(
+      options.terminalWorker,
+      () => this.settings.snapshot().settings,
+      (owner, event) => {
+        const window = this.windows.get(owner)?.window;
+        if (window && !window.isDestroyed())
+          window.webContents.send('viewer:event', { type: 'terminal', event });
+      },
+    );
+    this.externalTerminals = new ExternalTerminals(
+      path.join(dataPath, 'terminal-launches'),
+      () => this.settings.snapshot().settings,
+      options.applications,
+    );
+    this.executions = new Executions(
+      () => this.settings.snapshot().settings,
+      (task) => {
+        emit({ type: 'execution', task });
+        this.agentRequests?.execution(task);
+      },
+    );
     this.credentials = new Credentials(
       dataPath,
       (value) => safeStorage.encryptStringAsync(value),
@@ -221,6 +385,7 @@ export class Desktop {
     );
     const changed = (changes: import('../domain/changes').FileChange[]) => {
       emit({ type: 'file-changes', changes });
+      void this.settings.remapFolders(changes).catch(() => this.settings.announce());
       for (const change of changes) {
         void this.files.update(change.source, true).catch(() => {});
         void this.files.update(change.destination).catch(() => {});
@@ -242,12 +407,54 @@ export class Desktop {
       emit: (plan) => emit({ type: 'action', plan }),
       changed,
     });
+    this.agentRequests = new AgentRequests(
+      dataPath,
+      this.settings,
+      (proposal) => emit({ type: 'agent-proposal', proposal }),
+      async (command, target) => {
+        const action = this.settings
+          .snapshot()
+          .settings.customActions.find((action) => 'custom.' + action.id === command);
+        if (action && (action.executor.kind === 'executable' || action.executor.kind === 'shell'))
+          return { taskID: await this.executions.start(action.id, target) };
+        else {
+          const window = this.window;
+          if (!window || window.isDestroyed())
+            throw new Error('Open the workspace before running this action.');
+          await new Promise<void>((resolve, reject) => {
+            const id = randomUUID();
+            const timer = setTimeout(() => {
+              this.agentCommands.delete(id);
+              reject(
+                new Error('The workspace did not finish this action. Request a fresh proposal.'),
+              );
+            }, 25000);
+            timer.unref();
+            this.agentCommands.set(id, {
+              owner: window.webContents.id,
+              finish: (error) => {
+                clearTimeout(timer);
+                this.agentCommands.delete(id);
+                if (error) reject(new Error(error));
+                else resolve();
+              },
+            });
+            emit({ type: 'agent-command', id, command, target });
+          });
+        }
+      },
+      {
+        read: (id) => this.terminals.agentRead(id),
+        write: (id, data) => this.terminals.agentWrite(id, data),
+      },
+    );
     this.agents = new AgentBroker(
       dataPath,
       () => this.settings.snapshot().settings,
       () => (this.window && !this.window.isDestroyed() ? this.context : undefined),
       this.files,
       this.actions,
+      { catalog: () => this.commandCatalog, requests: this.agentRequests, config: this.settings },
     );
     this.watchers = new Watchers(emit);
     this.search = new Search((batch) => emit({ type: 'search', batch }));
@@ -267,6 +474,12 @@ export class Desktop {
           const name = method as ApiMethod;
           const role = this.windows.get(event.sender.id)!.role;
           const settingsMethods: ApiMethod[] = [
+            'configOpen',
+            'configValidate',
+            'configTransfer',
+            'terminalApplication',
+            'agentGrants',
+            'agentGrant',
             'settingsGet',
             'settingsPatch',
             'providerCredential',
@@ -280,7 +493,10 @@ export class Desktop {
           ];
           if (role === 'settings' && !settingsMethods.includes(name))
             throw new Error('This API is unavailable in Settings.');
-          if (role !== 'settings' && ['providerCredential', 'agentToken'].includes(name))
+          if (
+            role !== 'settings' &&
+            ['providerCredential', 'agentToken', 'agentGrant'].includes(name)
+          )
             throw new Error('Manage credentials in Settings.');
           return {
             ok: true,
@@ -309,16 +525,33 @@ export class Desktop {
       throw error;
     }
   }
+  private configureAgents(enabled: boolean): Promise<void> {
+    if (this.agentsEnabled === enabled) return this.agentsConfiguration;
+    this.agentsEnabled = enabled;
+    const task = this.agentsConfiguration
+      .catch(() => {})
+      .then(() => (enabled ? this.agents.start() : this.agents.close()));
+    this.agentsConfiguration = task.catch((error) => {
+      if (this.agentsEnabled === enabled) this.agentsEnabled = undefined;
+      throw error;
+    });
+    return this.agentsConfiguration;
+  }
   attach(window: BrowserWindow, role: 'viewer' | 'settings'): void {
     const sender = window.webContents.id;
     this.windows.set(sender, { window, role });
     if (role === 'viewer') this.window = window;
     window.on('closed', () => {
+      this.terminals.stopOwner(sender);
+      for (const request of this.agentCommands.values())
+        if (request.owner === sender)
+          request.finish('The workspace closed before completing the action.');
       this.windows.delete(sender);
       if (this.window === window) {
         this.window = undefined;
         this.ready = false;
         this.context = undefined;
+        this.commandCatalog = undefined;
         this.resources.clear();
       }
     });
@@ -327,7 +560,7 @@ export class Desktop {
     for (const { window, role } of this.windows.values())
       if (
         !window.isDestroyed() &&
-        (role === 'viewer' || ['settings', 'index'].includes(event.type))
+        (role === 'viewer' || ['settings', 'index', 'service-error'].includes(event.type))
       )
         window.webContents.send('viewer:event', event);
   }
@@ -389,16 +622,21 @@ export class Desktop {
   private async disposeServices(): Promise<void> {
     this.ready = false;
     this.search.close();
+    this.settings.close();
+    this.executions.close();
     this.resources.clear();
     // Cancel the read-only worker before waiting for planners that may be
     // awaiting extraction. File mutations still drain through their journal.
     const results = await Promise.allSettled([
+      this.terminals.close(),
       this.files.close(),
       this.actions.close(),
-      this.agents.close(),
+      this.agentsConfiguration.catch(() => {}).then(() => this.agents.close()),
       this.watchers.close(),
       this.operations.close(),
     ]);
+    for (const request of this.agentCommands.values())
+      request.finish('The application closed before completing the action.');
     ipcMain.removeHandler('viewer:request');
     const errors = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],
@@ -407,6 +645,88 @@ export class Desktop {
   }
   private async invoke(method: ApiMethod, args: unknown[], senderID?: number): Promise<unknown> {
     switch (method) {
+      case 'commandsPublish':
+        this.commandCatalog = {
+          target: args[0] as CapturedTarget,
+          commands: args[1] as CommandDescriptor[],
+        };
+        return;
+      case 'agentCommandResult': {
+        const request = this.agentCommands.get(args[0] as string);
+        if (!request || request.owner !== senderID)
+          throw new Error('Action acknowledgement is no longer available.');
+        request.finish(args[1] as string | undefined);
+        return;
+      }
+      case 'agentReviewList':
+        return this.agentRequests.list();
+      case 'agentReview':
+        return this.agentRequests.review(args[0] as string, args[1] as boolean);
+      case 'agentGrants':
+        return this.agentRequests.listGrants();
+      case 'agentGrant':
+        return this.agentRequests.grant(
+          args[0] as string,
+          args[1] as string,
+          args[2] as import('../domain/agent-requests').ExecutionGrant['capability'],
+          args[3] as boolean,
+        );
+      case 'configOpen': {
+        await this.settings.load();
+        const error = await shell.openPath(this.settings.snapshot().config!.path);
+        if (error) throw new Error(error);
+        return;
+      }
+      case 'configValidate':
+        return this.settings.reload();
+      case 'configTransfer': {
+        if (args[0] === 'export') {
+          const { canceled, filePath } = await dialog.showSaveDialog({
+            title: 'Export configuration',
+            defaultPath: 'config.jsonc',
+          });
+          if (!canceled && filePath) await this.settings.exportConfiguration(filePath);
+        } else {
+          const { canceled, filePaths } = await dialog.showOpenDialog({
+            title: 'Import configuration',
+            properties: ['openFile'],
+            filters: [{ name: 'Configuration', extensions: ['jsonc', 'json'] }],
+          });
+          if (!canceled && filePaths[0]) return this.settings.importConfiguration(filePaths[0]);
+        }
+        return this.settings.snapshot();
+      }
+      case 'terminalApplication':
+        return this.externalTerminals.application();
+      case 'terminalExternal':
+        return this.externalTerminals.open(args[0] as string, args[1] as boolean);
+      case 'terminalStart':
+        return this.terminals.start(
+          args[0] as import('../domain/automation').TerminalStart,
+          senderID!,
+        );
+      case 'terminalWrite':
+        return this.terminals.write(args[0] as string, args[1] as string, senderID!);
+      case 'terminalResize':
+        return this.terminals.resize(
+          args[0] as string,
+          args[1] as number,
+          args[2] as number,
+          senderID!,
+        );
+      case 'terminalAck':
+        return this.terminals.ack(args[0] as string, args[1] as number, senderID!);
+      case 'terminalClose':
+        return this.terminals.stop(args[0] as string, senderID!);
+      case 'customExecute':
+        return this.executions.start(
+          args[0] as string,
+          args[1] as import('../domain/automation').CapturedTarget,
+        );
+      case 'executionList':
+        return this.executions.list();
+      case 'executionCancel':
+        return this.executions.cancel(args[0] as string);
       case 'openSettings':
         return this.options.openSettings();
       case 'settingsGet':
@@ -490,6 +810,20 @@ export class Desktop {
         const home = os.homedir();
         const stored = await this.storage.load();
         await this.settings.load(stored.state || undefined);
+        if (stored.state) {
+          const spaces = [...stored.state.workspaces].sort(
+            (a, b) =>
+              Number(a.id === stored.state!.activeWorkspace) -
+              Number(b.id === stored.state!.activeWorkspace),
+          );
+          await this.settings.seedFolders(
+            spaces.flatMap((space) =>
+              [...space.panes].sort(
+                (a, b) => Number(a.id === space.activePane) - Number(b.id === space.activePane),
+              ),
+            ),
+          );
+        }
         await this.credentials.load();
         if (stored.state)
           stored.state = {
@@ -501,7 +835,7 @@ export class Desktop {
         void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
         await this.actions.load();
         this.options.settingsChanged?.();
-        await this.agents.start();
+        await this.configureAgents(this.settings.snapshot().settings.agents.enabled);
         const paths = this.openPaths.splice(0);
         this.ready = true;
         const freshSession =

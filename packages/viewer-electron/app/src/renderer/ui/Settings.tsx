@@ -1,3 +1,13 @@
+import { AgentGrants } from './AgentGrants';
+import { Field } from './SettingField';
+import { saveSettingsChange, type SettingsChange } from './settings-edits';
+import { defaultShortcuts } from '../../domain/shortcuts';
+import {
+  TerminalSettings,
+  CustomActionSettings,
+  ConfigurationSettings,
+  FolderOverrideSettings,
+} from './AutomationSettings';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type {
   ActionRecipe,
@@ -11,42 +21,6 @@ import { categories, settingCatalog, settingValue } from '../../domain/setting-c
 import { normalizePreferences } from '../../domain/preferences';
 import { Icon } from './Icon';
 import { IconButton, Loading } from './primitives';
-function Field({
-  value,
-  save,
-  multiline = false,
-  label,
-  placeholder,
-}: {
-  value: string;
-  save(value: string): void;
-  multiline?: boolean;
-  label: string;
-  placeholder?: string;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  const props = {
-    'aria-label': label,
-    value: draft,
-    placeholder,
-    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setDraft(event.target.value),
-    onBlur: () => {
-      if (draft !== value) save(draft);
-    },
-  };
-  return multiline ? (
-    <textarea {...props} rows={4} />
-  ) : (
-    <input
-      {...props}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') event.currentTarget.blur();
-      }}
-    />
-  );
-}
 export function SettingsWindow() {
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [category, setCategory] = useState('Browsing');
@@ -79,6 +53,7 @@ export function SettingsWindow() {
       .then(setIndex)
       .catch((error) => setError(error.message));
     return window.viewer.onEvent((event) => {
+      if (event.type === 'service-error') setError(event.message);
       if (event.type === 'settings') accept(event.snapshot);
       if (event.type === 'index') setIndex(event.status);
       if (event.type === 'flush-settings') {
@@ -95,21 +70,19 @@ export function SettingsWindow() {
       document.documentElement.style.colorScheme = snapshot.look;
     }
   }, [snapshot?.look]);
-  const enqueue = (build: (snapshot: SettingsSnapshot) => SettingsPatch[]) => {
+  const enqueue = (build: SettingsChange) => {
     setError('');
-    writes.current = writes.current
-      .catch(() => {})
-      .then(async () => {
-        const current = latest.current;
-        if (!current) return;
-        try {
-          accept(await window.viewer.settingsPatch(build(current), current.revision));
-        } catch (error) {
-          setError((error as Error).message);
-          accept(await window.viewer.settingsGet());
-        }
-      })
-      .catch((error) => setError((error as Error).message));
+    writes.current = saveSettingsChange(
+      writes.current,
+      {
+        current: () => latest.current,
+        write: (patches, revision) => window.viewer.settingsPatch(patches, revision),
+        refresh: () => window.viewer.settingsGet(),
+        accept,
+        error: setError,
+      },
+      build,
+    );
   };
   const patch = (path: string, value: unknown) => enqueue(() => [{ path, value }]);
   const patches = (values: SettingsPatch[]) => enqueue(() => values);
@@ -139,7 +112,7 @@ export function SettingsWindow() {
   const settings = snapshot.settings;
   const definitions = settingCatalog.filter((item) =>
     query
-      ? (item.label + ' ' + item.category + ' ' + item.detail)
+      ? (item.label + ' ' + item.category + ' ' + item.detail + ' ' + item.section)
           .toLowerCase()
           .includes(query.toLowerCase())
       : item.category === category,
@@ -174,6 +147,8 @@ export function SettingsWindow() {
       category: 'Agents',
       terms: 'mcp token client authorization folders scope agent configuration',
     },
+    { category: 'Terminals', terms: 'shell profiles environment tmux iterm external terminal' },
+    { category: 'Configuration', terms: 'jsonc config file validate changes import export reset' },
     { category: 'Shortcuts', terms: 'keyboard hotkeys commands bindings' },
   ].filter((item) => query && item.terms.toLowerCase().includes(query.toLowerCase()));
   const recipePatch = (id: string, values: Partial<ActionRecipe>) =>
@@ -234,8 +209,11 @@ export function SettingsWindow() {
             </button>
           ))}
         <div className="settings-group">
-          {definitions.map((definition) => (
+          {definitions.map((definition, index) => (
             <Fragment key={definition.path}>
+              {definition.section && definition.section !== definitions[index - 1]?.section && (
+                <h2>{definition.section}</h2>
+              )}
               <label className="settings-row">
                 <span>
                   {definition.label}
@@ -597,6 +575,18 @@ export function SettingsWindow() {
             </div>
           </>
         )}
+        {!query && category === 'Browsing' && (
+          <FolderOverrideSettings snapshot={snapshot} save={patches} />
+        )}
+        {!query && category === 'Terminals' && (
+          <TerminalSettings snapshot={snapshot} save={enqueue} />
+        )}
+        {!query && category === 'Configuration' && (
+          <ConfigurationSettings snapshot={snapshot} save={patches} />
+        )}
+        {!query && category === 'Actions' && (
+          <CustomActionSettings snapshot={snapshot} save={enqueue} />
+        )}
         {!query && category === 'Actions' && (
           <>
             <p className="settings-note">
@@ -802,6 +792,7 @@ export function SettingsWindow() {
             </div>
           </>
         )}
+        {!query && category === 'Agents' && <AgentGrants settings={settings} />}
         {!query && category === 'Agents' && (
           <>
             <p className="settings-note">
@@ -871,27 +862,20 @@ export function SettingsWindow() {
               Recipe shortcuts are configured in Actions. Use Cmd, Ctrl, Alt, Shift, and a key.
               Space remains quick preview.
             </p>
-            {[
-              ['palette', 'Commands', 'Cmd+K'],
-              ['find-file', 'Find file', 'Cmd+F'],
-              ['new-root-folder', 'New folder plane', 'Cmd+N'],
-              ['settings', 'Settings', 'Cmd+,'],
-              ['frame-all', 'Frame all planes', 'Cmd+0'],
-              ['dock', 'Dock / reveal', 'Cmd+Enter'],
-              ['toggle-sidebar', 'Window navigation', 'Cmd+Alt+S'],
-              ['go-to', 'Go to folder', 'Cmd+L'],
-            ].map(([id, label, shortcut]) => (
-              <label className="settings-row" key={id}>
-                <span>{label}</span>
-                <Field
-                  label={label + ' shortcut'}
-                  value={settings.shortcuts[id] ?? shortcut}
-                  save={(value) =>
-                    patch('settings.shortcuts', { ...settings.shortcuts, [id]: value })
-                  }
-                />
-              </label>
-            ))}
+            {Object.entries(defaultShortcuts)
+              .map(([id, shortcut]) => [id, id.replaceAll('-', ' '), shortcut])
+              .map(([id, label, shortcut]) => (
+                <label className="settings-row" key={id}>
+                  <span>{label}</span>
+                  <Field
+                    label={label + ' shortcut'}
+                    value={settings.shortcuts[id] ?? shortcut}
+                    save={(value) =>
+                      patch('settings.shortcuts', { ...settings.shortcuts, [id]: value })
+                    }
+                  />
+                </label>
+              ))}
             <button onClick={() => patch('settings.shortcuts', {})}>
               Reset keyboard shortcuts
             </button>
@@ -908,6 +892,7 @@ export function SettingsWindow() {
                 patches([
                   { path: 'settings.browsing', value: defaults.browsing },
                   { path: 'settings.appearance', value: defaults.appearance },
+                  { path: 'ui.list', value: normalizePreferences().list },
                 ]);
             }}
           >

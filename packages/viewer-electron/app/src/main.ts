@@ -3,7 +3,7 @@ import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import { lookup } from 'mime-types';
-import { accelerator } from './domain/shortcuts';
+import { defaultShortcuts, accelerator } from './domain/shortcuts';
 import { runMCPClient } from './desktop/mcp-client';
 import { Desktop } from './desktop/bridge';
 protocol.registerSchemesAsPrivileged([
@@ -138,18 +138,50 @@ function menu(): void {
             accelerator: 'CmdOrCtrl+Shift+O',
             click: command('choose-folder'),
           },
-          { label: 'New Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: command('new-folder') },
-          { label: 'Open Selection', accelerator: 'CmdOrCtrl+O', click: command('open-selection') },
+          {
+            label: 'New Folder…',
+            accelerator: accelerator(
+              settings?.shortcuts['new-folder'] ?? defaultShortcuts['new-folder'] ?? 'Cmd+Shift+N',
+            ),
+            click: command('new-folder'),
+          },
+          {
+            label: 'Open Selection',
+            accelerator: accelerator(
+              settings?.shortcuts['open-selection'] ??
+                defaultShortcuts['open-selection'] ??
+                'Cmd+O',
+            ),
+            click: command('open-selection'),
+          },
           { label: 'Open in Default App', click: command('open-default') },
           { label: 'Open With…', click: command('open-with') },
           { label: 'Quick Preview', click: command('quick-preview') },
-          { label: 'Get Info…', accelerator: 'CmdOrCtrl+I', click: command('info') },
+          {
+            label: 'Get Info…',
+            accelerator: accelerator(
+              settings?.shortcuts['info'] ?? defaultShortcuts['info'] ?? 'Cmd+I',
+            ),
+            click: command('info'),
+          },
           { label: 'Calculate Size', click: command('calculate-size') },
           { type: 'separator' },
-          { label: 'Duplicate', accelerator: 'CmdOrCtrl+D', click: command('duplicate') },
+          {
+            label: 'Duplicate',
+            accelerator: accelerator(
+              settings?.shortcuts['duplicate'] ?? defaultShortcuts['duplicate'] ?? 'Cmd+D',
+            ),
+            click: command('duplicate'),
+          },
           { label: 'Copy To…', click: command('copy-to') },
           { label: 'Move To…', click: command('move-to') },
-          { label: 'Move to Trash…', accelerator: 'CmdOrCtrl+Backspace', click: command('trash') },
+          {
+            label: 'Move to Trash…',
+            accelerator: accelerator(
+              settings?.shortcuts['trash'] ?? defaultShortcuts['trash'] ?? 'Cmd+Backspace',
+            ),
+            click: command('trash'),
+          },
           { type: 'separator' },
           { label: 'Recent File Operations', click: command('recent-operations') },
           { type: 'separator' },
@@ -159,13 +191,49 @@ function menu(): void {
       {
         label: 'Edit',
         submenu: [
-          { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: command('undo-file') },
-          { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: command('redo-file') },
+          {
+            label: 'Undo',
+            accelerator: accelerator(
+              settings?.shortcuts['undo-file'] ?? defaultShortcuts['undo-file'] ?? 'Cmd+Z',
+            ),
+            click: command('undo-file'),
+          },
+          {
+            label: 'Redo',
+            accelerator: accelerator(
+              settings?.shortcuts['redo-file'] ?? defaultShortcuts['redo-file'] ?? 'Cmd+Shift+Z',
+            ),
+            click: command('redo-file'),
+          },
           { type: 'separator' },
-          { label: 'Cut', accelerator: 'CmdOrCtrl+X', click: command('cut') },
-          { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: command('copy') },
-          { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: command('paste') },
-          { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: command('select-all') },
+          {
+            label: 'Cut',
+            accelerator: accelerator(
+              settings?.shortcuts['cut'] ?? defaultShortcuts['cut'] ?? 'Cmd+X',
+            ),
+            click: command('cut'),
+          },
+          {
+            label: 'Copy',
+            accelerator: accelerator(
+              settings?.shortcuts['copy'] ?? defaultShortcuts['copy'] ?? 'Cmd+C',
+            ),
+            click: command('copy'),
+          },
+          {
+            label: 'Paste',
+            accelerator: accelerator(
+              settings?.shortcuts['paste'] ?? defaultShortcuts['paste'] ?? 'Cmd+V',
+            ),
+            click: command('paste'),
+          },
+          {
+            label: 'Select All',
+            accelerator: accelerator(
+              settings?.shortcuts['select-all'] ?? defaultShortcuts['select-all'] ?? 'Cmd+A',
+            ),
+            click: command('select-all'),
+          },
         ],
       },
       {
@@ -194,7 +262,9 @@ function menu(): void {
           { label: 'Show / Hide Plane Navigation', click: command('plane-sidebar') },
           {
             label: 'Show / Hide Hidden Files',
-            accelerator: 'CmdOrCtrl+Shift+.',
+            accelerator: accelerator(
+              settings?.shortcuts['toggle-hidden'] ?? defaultShortcuts['toggle-hidden'],
+            ),
             click: command('hidden'),
           },
           { type: 'separator' },
@@ -228,6 +298,13 @@ function menu(): void {
       {
         label: 'Actions',
         submenu: [
+          ...(settings?.customActions || [])
+            .toSorted((a, b) => a.order - b.order)
+            .map((action) => ({
+              label: action.name,
+              accelerator: accelerator(action.shortcut),
+              click: command('custom.' + action.id),
+            })),
           ...(settings?.recipes || []).map((recipe) => ({
             label: recipe.name + '…',
             accelerator: accelerator(recipe.shortcut || ''),
@@ -419,6 +496,7 @@ app.whenReady().then(async () => {
     openSettings: openSettingsWindow,
     settingsChanged: menu,
     worker: path.join(__dirname, 'worker.cjs'),
+    terminalWorker: path.join(__dirname, 'terminal-worker.cjs'),
     ocr: app.isPackaged
       ? path.join(process.resourcesPath, 'viewer-ocr')
       : path.resolve('assets/viewer-ocr'),

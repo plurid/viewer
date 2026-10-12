@@ -19,6 +19,28 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  commandsPublish: (target, commands) => invoke('commandsPublish', target, commands),
+  agentCommandResult: (id, error) => invoke('agentCommandResult', id, error),
+  agentReviewList: () => invoke('agentReviewList'),
+  agentReview: (id, approve) => invoke('agentReview', id, approve),
+  agentGrants: () => invoke('agentGrants'),
+  agentGrant: (actionID, root, capability, allow) =>
+    invoke('agentGrant', actionID, root, capability, allow),
+
+  configOpen: () => invoke('configOpen'),
+  configValidate: () => invoke('configValidate'),
+  configTransfer: (kind) => invoke('configTransfer', kind),
+  terminalApplication: () => invoke('terminalApplication'),
+  terminalExternal: (cwd, tmux) => invoke('terminalExternal', cwd, tmux),
+  terminalStart: (request) => invoke('terminalStart', request),
+  terminalWrite: (id, data) => invoke('terminalWrite', id, data),
+  terminalResize: (id, cols, rows) => invoke('terminalResize', id, cols, rows),
+  terminalAck: (id, bytes) => invoke('terminalAck', id, bytes),
+  terminalClose: (id) => invoke('terminalClose', id),
+  customExecute: (actionID, target) => invoke('customExecute', actionID, target),
+  executionList: () => invoke('executionList'),
+  executionCancel: (id) => invoke('executionCancel', id),
+
   openSettings: () => {
     window.open(
       location.pathname + '?window=settings',

@@ -17,6 +17,7 @@ const localPath = z
   .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
 const id = z.string().min(1).max(200);
 const pane = z.discriminatedUnion('type', [
+  z.object({ id, type: z.literal('terminal'), path: localPath, profileID: id }),
   z.object({
     id,
     type: z.literal('search'),
@@ -32,7 +33,7 @@ const pane = z.discriminatedUnion('type', [
     type: z.literal('folder'),
     path: localPath,
     mode: z.enum(['list', 'grid', 'columns', 'gallery']),
-    sort: z.enum(['name', 'modified', 'size', 'kind']),
+    sort: z.enum(['name', 'modified', 'created', 'size', 'kind', 'extension']),
     descending: z.boolean(),
     showHidden: z.boolean(),
     history: z.array(localPath).max(200),
@@ -51,7 +52,7 @@ const pane = z.discriminatedUnion('type', [
 ]);
 const savedStateSchema = z
   .object({
-    version: z.union([z.literal(1), z.literal(2)]),
+    version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     preferencesRevision: z.number().int().min(0).optional(),
     workspaces: z
       .array(

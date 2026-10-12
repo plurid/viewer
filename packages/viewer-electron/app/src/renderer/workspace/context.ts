@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 export interface WorkspaceController {
+  newTerminal(target: import('../../domain/automation').CapturedTarget, profileID?: string): void;
   rootID(paneID: string): string | undefined;
   newSearch(
     query: string,
@@ -12,7 +13,7 @@ export interface WorkspaceController {
   newRootFolder(target?: NewRootFolderTarget): void;
   open(
     entry: FileEntry,
-    parentEngineID?: string,
+    parentPaneID?: string,
     options?: { another?: boolean; link?: string },
   ): void;
   openPath(

@@ -13,13 +13,28 @@ export interface BrowseSession {
   anchor: string;
   cursor: string;
   scroll: number;
+  expanded: string[];
+  listChildren: Map<string, FileEntry[]>;
+  columnTrail: string[];
+  columnScope: string;
+  columnDirectory: string;
   cache: Map<string, FileEntry>;
 }
 const sessions = new Map<string, BrowseSession>();
+const historySessions = new Map<string, Map<string, BrowseSession>>();
 const listeners = new Map<string, Set<() => void>>();
 export function browseSession(id: string, path: string): BrowseSession {
   let state = sessions.get(id);
   if (!state || state.path !== path) {
+    const history = historySessions.get(id) || new Map<string, BrowseSession>();
+    historySessions.set(id, history);
+    if (state) history.set(state.path, state);
+    const previous = history.get(path);
+    if (previous) {
+      sessions.set(id, previous);
+      return previous;
+    }
+    while (history.size > 20) history.delete(history.keys().next().value!);
     state = {
       path,
       selection: [],
@@ -30,6 +45,11 @@ export function browseSession(id: string, path: string): BrowseSession {
       anchor: '',
       cursor: '',
       scroll: 0,
+      expanded: [],
+      listChildren: new Map(),
+      columnTrail: [],
+      columnScope: path,
+      columnDirectory: path,
       cache: new Map(),
     };
     sessions.set(id, state);
@@ -71,9 +91,14 @@ export function useBrowseField<K extends keyof BrowseSession>(
 }
 export function clearSessions(): void {
   sessions.clear();
+  historySessions.clear();
 }
 export function trimSessions(ids: ReadonlySet<string>): void {
-  for (const id of sessions.keys()) if (!ids.has(id)) sessions.delete(id);
+  for (const id of sessions.keys())
+    if (!ids.has(id)) {
+      sessions.delete(id);
+      historySessions.delete(id);
+    }
 }
 export function selectedFiles(id: string): FileEntry[] {
   const session = sessions.get(id);
@@ -121,25 +146,48 @@ export function rootOwners<T extends { children?: T[] }>(
 
 export function remapSessions(changes: readonly FileChange[]): void {
   const map = pathMapper(changes);
-  for (const [id, state] of sessions) {
-    state.path = map(state.path);
-    state.selection = state.selection.map((path) => map(path));
-    state.anchor = map(state.anchor);
-    state.cursor = map(state.cursor);
-    const cache = new Map<string, FileEntry>();
-    for (const entry of state.cache.values()) {
-      const path = map(entry.path);
-      cache.set(path, {
-        ...entry,
-        path,
-        parent: map(entry.parent),
-        name: path.split('/').pop() || entry.name,
-      });
+  for (const [id, current] of sessions) {
+    const states = new Set([current, ...(historySessions.get(id)?.values() || [])]);
+    for (const state of states) {
+      state.path = map(state.path);
+      state.selection = state.selection.map((path) => map(path)).filter(Boolean);
+      state.anchor = map(state.anchor);
+      state.cursor = map(state.cursor);
+      state.expanded = state.expanded.map((path) => map(path)).filter(Boolean);
+      state.columnTrail = state.columnTrail.map((path) => map(path)).filter(Boolean);
+      state.columnScope = map(state.columnScope);
+      state.columnDirectory = map(state.columnDirectory);
+      state.listChildren = new Map(
+        [...state.listChildren].map(([parent, entries]) => [
+          map(parent),
+          entries.map((entry) => ({
+            ...entry,
+            path: map(entry.path),
+            parent: map(entry.parent),
+            name: map(entry.path).split('/').pop() || entry.name,
+          })),
+        ]),
+      );
+      const cache = new Map<string, FileEntry>();
+      for (const entry of state.cache.values()) {
+        const path = map(entry.path);
+        cache.set(path, {
+          ...entry,
+          path,
+          parent: map(entry.parent),
+          name: path.split('/').pop() || entry.name,
+        });
+      }
+      // Mounted, memoized selection handlers retain this Map. Preserve its identity
+      // while replacing the entries after a batch rename, including cyclic swaps.
+      state.cache.clear();
+      for (const [path, entry] of cache) state.cache.set(path, entry);
     }
-    // Mounted, memoized selection handlers retain this Map. Preserve its identity
-    // while replacing the entries after a batch rename, including cyclic swaps.
-    state.cache.clear();
-    for (const [path, entry] of cache) state.cache.set(path, entry);
+    if (historySessions.has(id))
+      historySessions.set(
+        id,
+        new Map([...states].filter((state) => state.path).map((state) => [state.path, state])),
+      );
     listeners.get(id)?.forEach((listener) => listener());
   }
 }

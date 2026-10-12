@@ -11,11 +11,13 @@ export function ContextMenu({
   request,
   onClose,
   label = 'Actions',
+  anchor,
 }: {
   position: { x: number; y: number };
   request: CommandRequest;
   onClose(): void;
   label?: string;
+  anchor?: HTMLElement;
 }) {
   const registry = useCommands();
   useCommandRevision();
@@ -23,7 +25,9 @@ export function ContextMenu({
   const [query, setQuery] = useState('');
   const menu = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
+  const trigger = useRef(anchor);
   close.current = onClose;
+  trigger.current = anchor;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const element = menu.current;
@@ -33,7 +37,8 @@ export function ContextMenu({
       element.style.top = `${Math.max(8, Math.min(position.y, innerHeight - rect.height - 8))}px`;
     }
     const dismiss = (event: PointerEvent) => {
-      if (!menu.current?.contains(event.target as Node)) close.current();
+      const target = event.target as Node;
+      if (!menu.current?.contains(target) && !trigger.current?.contains(target)) close.current();
     };
     window.addEventListener('pointerdown', dismiss);
     return () => {

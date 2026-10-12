@@ -1,22 +1,23 @@
+import { routeFileKeyboard } from './explorer/selection';
+import { AgentReview } from './actions/AgentReview';
+import { captureTarget } from './commands/programs';
+import { useWorkspaceController } from './workspace/controller';
+import { programCommands } from './commands/programs';
+import { ExecutionPanel } from './terminals/ExecutionPanel';
+import { trimTerminals, terminalEditing } from './terminals/sessions';
+import { explorerCommandIDs, keyCommand } from './explorer/input';
 /** Native window chrome stays quiet; commands follow the active file, folder or preview. */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
+import { type PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
-import type { FileEntry, FolderPane } from '../domain/contracts';
-import { rootOwners, selectedFiles } from './workspace/sessions';
-import { defaultShortcuts, matchesShortcut } from '../domain/shortcuts';
-import { matchingPane } from '../domain/planes';
-import { repeatedPreviews } from './workspace/recovery';
+import type { FolderPane } from '../domain/contracts';
+import { selectedFiles } from './workspace/sessions';
 import {
   activeWorkspace,
-  addPane,
-  addSearchPane,
-  addRootFolder,
   deleteWorkspace,
   dismissNotice,
   flushState,
   getState,
-  navigate,
   needsOperations,
   newWorkspace,
   quickPreview,
@@ -25,27 +26,19 @@ import {
   receiveSettings,
   receiveFileChanges,
   receiveProgress,
-  reconcilePanes,
   rememberCommand,
-  removePanes,
   renameShortcut,
   renameWorkspace,
   report,
   restoreWorkspace,
-  setActivePane,
   setJobs,
   setOperationsOpen,
   switchWorkspace,
   refreshClipboard,
   useViewer,
 } from './state/store';
-import { WorkspaceContext, type WorkspaceController } from './workspace/context';
-import {
-  flattenTree,
-  frameWorkspace,
-  hostID,
-  WorkspaceSurface,
-} from './workspace/WorkspaceSurface';
+import { WorkspaceContext } from './workspace/context';
+import { WorkspaceSurface } from './workspace/WorkspaceSurface';
 import { Icon } from './ui/Icon';
 import { Dialog, ErrorBoundary, IconButton, NameDialog } from './ui/primitives';
 import { ActionHub } from './actions/ActionHub';
@@ -90,10 +83,25 @@ function AppWindow() {
 
   const [palette, setPalette] = useState<'commands' | 'files' | null>(null);
   const [goTo, setGoTo] = useState(false);
+  const [terminalName, setTerminalName] = useState<string>();
+  const terminalConfig = useViewer((state) => state.settings.settings.terminals);
+  useEffect(() => {
+    let live = true;
+    void window.viewer
+      .terminalApplication()
+      .then((app) => {
+        if (live) setTerminalName(app.name);
+      })
+      .catch(() => {
+        if (live) setTerminalName(undefined);
+      });
+    return () => {
+      live = false;
+    };
+  }, [terminalConfig.application]);
   const [busy, setBusy] = useState(false);
   const [showWorkspaceUndo, setShowWorkspaceUndo] = useState(false);
   const initialOpenHandled = useRef(false);
-  const pendingOwners = useRef(new Map<string, Map<string, string>>());
   const saved = useViewer((state) => state.saved);
   const space = useViewer(activeWorkspace);
   const subscribeEngine = useCallback(
@@ -143,187 +151,7 @@ function AppWindow() {
     const timer = setTimeout(() => setShowWorkspaceUndo(false), 8000);
     return () => clearTimeout(timer);
   }, [deleted]);
-  const controller = useMemo<WorkspaceController>(
-    () => ({
-      rootID(id) {
-        const space = activeWorkspace();
-        return rootOwners(
-          engine.current?.tree.get() || [],
-          hostID,
-          space.roots,
-          pendingOwners.current.get(space.id) || new Map(),
-        ).get(id);
-      },
-      newSearch(query, name, root, recursive, content) {
-        if (!engine.current || !readyRef.current) return;
-        const id = addSearchPane(query, name, root, recursive, content);
-        frameWorkspace(engine, surface, [id]);
-      },
-      newRootFolder(target) {
-        if (!engine.current || !readyRef.current) return;
-        const pane = addRootFolder(target);
-        if (pane)
-          frameWorkspace(engine, surface, [pane.id], {
-            dock: getState().saved.ui.space.opening === 'dock',
-          });
-      },
-      open(
-        entry: FileEntry,
-        parentEngineID?: string,
-        options?: { another?: boolean; link?: string },
-      ) {
-        const api = engine.current;
-        if (!api || !readyRef.current) return;
-        const space = activeWorkspace();
-        const tree = api.tree.get();
-        const parent =
-          parentEngineID && flattenTree(tree).find((node) => node.planeID === parentEngineID);
-        if (parentEngineID && !parent)
-          throw new Error('The originating plane is no longer available.');
-        const pending = pendingOwners.current.get(space.id) ?? new Map<string, string>();
-        pendingOwners.current.set(space.id, pending);
-        const owners = rootOwners(tree, hostID, space.roots, pending);
-        const rootID = parent ? owners.get(hostID(parent)) : undefined;
-        const existing =
-          !options?.another &&
-          rootID &&
-          matchingPane(
-            space,
-            entry.path,
-            entry.directory ? 'folder' : 'preview',
-            getState().activePane,
-            getState().bootstrap.platform,
-            { rootID, owners },
-          );
-        if (existing) {
-          controller.focusPane(existing.id);
-          return;
-        }
-        const linked = !!parent;
-        const pane = addPane(entry.path, entry.directory ? 'folder' : 'preview', !linked, {
-          keepSeparate: options?.another,
-        });
-        pending.set(pane.id, rootID ?? pane.id);
-        setActivePane(pane.id);
-        if (api && linked) {
-          api.pubsub.publish({
-            topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
-            data: {
-              route: `/${entry.directory ? 'folders' : 'previews'}/${pane.id}`,
-              parentPlaneID: parentEngineID!,
-              link: options?.link,
-              framing: 'none',
-            },
-          });
-          const parent = flattenTree(api.tree.get()).find(
-            (node) => node.planeID === parentEngineID,
-          );
-          const opening = getState().saved.ui.space.opening;
-          frameWorkspace(
-            engine,
-            surface,
-            opening === 'pair' && parent ? [hostID(parent), pane.id] : [pane.id],
-            { dock: opening === 'dock' },
-          );
-        } else
-          frameWorkspace(engine, surface, [pane.id], {
-            dock: getState().saved.ui.space.opening === 'dock',
-          });
-      },
-      async openPath(path, target) {
-        const workspaceID = target?.workspaceID ?? activeWorkspace().id;
-        const paneID = target?.paneID ?? getState().activePane;
-        const entry = await window.viewer.stat(path);
-        if (activeWorkspace().id !== workspaceID) return;
-        const current = activeWorkspace().panes.find((pane) => pane.id === paneID);
-        if (target?.paneID && !current) return;
-        if (entry.directory && current?.type === 'folder' && !target?.linked) {
-          navigate(current.id, entry.path);
-          controller.focusPane(current.id);
-        } else {
-          const node =
-            engine.current &&
-            flattenTree(engine.current.tree.get()).find((node) => hostID(node) === current?.id);
-          controller.open(entry, node?.planeID, { another: target?.another, link: target?.link });
-        }
-      },
-      focusPane(id) {
-        if (!activeWorkspace().panes.some((pane) => pane.id === id)) return;
-        const node =
-          engine.current &&
-          flattenTree(engine.current.tree.get()).find((node) => hostID(node) === id);
-        if (node) {
-          engine.current?.tree.open(node.planeID);
-        }
-        frameWorkspace(engine, surface, [id]);
-        setActivePane(id);
-      },
-      frameAll: () => frameWorkspace(engine, surface),
-      dock: (id) => {
-        const api = engine.current;
-        if (!api) return;
-        const node = flattenTree(api.tree.get()).find(
-          (node) => hostID(node) === (id || getState().activePane),
-        );
-        if (node) setActivePane(hostID(node));
-        if (api.camera.docked()) api.camera.reveal({ animate: true });
-        else api.camera.dock(node?.planeID, { animate: true });
-      },
-      closePane: (id) => {
-        const api = engine.current;
-        const node = api && flattenTree(api.tree.get()).find((node) => hostID(node) === id);
-        if (!node) return;
-        api!.tree.remove(node.planeID);
-        removePanes(flattenTree([node]).map(hostID));
-      },
-      consolidatePreviews: () => {
-        const api = engine.current;
-        if (!api) return;
-        const active = getState().activePane;
-        const groups = repeatedPreviews(
-          activeWorkspace(),
-          api.tree.get(),
-          active,
-          getState().bootstrap.platform,
-        );
-        if (!groups.length) return;
-        // The exported engine history actions group all removals into one undoable edit.
-        api.store.dispatch(pluridStateModules.space.actions.historyBegin());
-        try {
-          const closed = groups.flatMap((group) => group.close);
-          for (const node of closed) api.tree.remove(node.planeID);
-          removePanes(closed.map(hostID));
-        } finally {
-          api.store.dispatch(pluridStateModules.space.actions.historyEnd());
-        }
-        controller.focusPane(
-          hostID(groups.find((group) => hostID(group.keep) === active)?.keep ?? groups[0].keep),
-        );
-      },
-      arrange: (axis) => {
-        const api = engine.current;
-        if (!api) return;
-        api.selection.set(
-          flattenTree(api.tree.get())
-            .filter((node) => node.show)
-            .map((node) => node.planeID),
-        );
-        api.selection.align(axis === 'x' ? 'top' : 'left');
-        api.selection.distribute(axis);
-        api.selection.clear();
-        frameWorkspace(engine, surface);
-      },
-      undo: () => {
-        engine.current?.history.undo();
-        if (engine.current) reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
-      },
-      redo: () => {
-        engine.current?.history.redo();
-        if (engine.current) reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
-      },
-    }),
-    [],
-  );
+  const controller = useWorkspaceController({ engine, surface, readyRef });
   async function transitionWorkspace(change: () => Promise<void>) {
     setReady(false);
     spatialTool(null);
@@ -344,6 +172,7 @@ function AppWindow() {
     return {
       scope: 'window',
       workspaceID: state.saved.activeWorkspace,
+      rootID: controller.rootID(state.activePane),
       paneID: state.activePane || undefined,
       path: pane?.path,
       directory: pane?.type === 'folder' ? pane.path : undefined,
@@ -357,8 +186,15 @@ function AppWindow() {
     'window',
     {
       context: windowContext,
-      definitions: () =>
-        windowCommands({
+      definitions: () => [
+        ...programCommands(
+          controller,
+          async (id, context) => {
+            await registry.invoke(id, { paneID: context.paneID, context });
+          },
+          terminalName,
+        ),
+        ...windowCommands({
           workspace: controller,
           engine,
           ready,
@@ -375,10 +211,68 @@ function AppWindow() {
           goTo: () => setGoTo(true),
           openWith: setOpenWithPaths,
         }),
-      valid: (invocation) => invocation.workspaceID === getState().saved.activeWorkspace,
+      ],
+      valid: (invocation) =>
+        invocation.workspaceID === getState().saved.activeWorkspace &&
+        (!invocation.paneID ||
+          activeWorkspace().panes.some(
+            (pane) =>
+              pane.id === invocation.paneID &&
+              (!invocation.folder || pane.path === invocation.folder.path),
+          )),
     },
-    [saved, ready, tool, jobs],
+    [saved, ready, tool, jobs, terminalName],
   );
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const publish = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const context = registry.context(getState().activePane) || windowContext();
+        if (!context.directory && !context.folder) {
+          const space = activeWorkspace();
+          void window.viewer
+            .commandsPublish(
+              {
+                workspaceID: space.id,
+                rootID: space.roots[0] || 'none',
+                paneID: space.activePane || 'none',
+                directory: getState().bootstrap.home,
+                selection: [],
+              },
+              [],
+            )
+            .catch(report);
+          return;
+        }
+        const target = captureTarget(context, controller);
+        const commands =
+          target.selection.length > 2000
+            ? []
+            : registry
+                .list({
+                  paneID: context.paneID,
+                  scope: context.selection.length ? 'files' : 'folder',
+                  context,
+                })
+                .map(({ id, label, group, aliases, shortcut }) => ({
+                  id,
+                  label,
+                  group,
+                  aliases: [...aliases],
+                  shortcut,
+                }));
+        if (target.selection.length > 2000) target.selection = [];
+        void window.viewer.commandsPublish(target, commands).catch(report);
+      }, 80);
+    };
+    const off = registry.subscribe(publish);
+    publish();
+    return () => {
+      off();
+      clearTimeout(timer);
+    };
+  }, [registry, controller, getState().activePane]);
   useEffect(() => {
     const api = engine.current;
     if (!ready || !api) return;
@@ -392,12 +286,27 @@ function AppWindow() {
       }
     });
   }, [ready, registry]);
+  useEffect(() => {
+    trimTerminals(
+      new Set(
+        saved.workspaces.flatMap((space) =>
+          space.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
+        ),
+      ),
+    );
+  }, [saved.workspaces]);
   const invoke = async (id: string) => {
+    if (
+      document.activeElement?.closest('.terminal-plane') &&
+      (await terminalEditing(getState().activePane, id))
+    )
+      return;
     const edit = textEditFor(id, editable(document.activeElement));
     if (edit) {
       await window.viewer.textEdit(edit);
       return;
     }
+    if (editable(document.activeElement) && explorerCommandIDs.has(id)) return;
     if (
       document.querySelector('dialog[open], .context-menu') &&
       !['palette', 'settings'].includes(id)
@@ -408,7 +317,7 @@ function AppWindow() {
     await registry.invoke(id, {
       paneID: context.paneID,
       scope: 'window',
-      context,
+      context: { ...context, clipboard: getState().clipboard },
     });
   };
   const invokeRef = useRef(invoke);
@@ -434,7 +343,8 @@ function AppWindow() {
         });
     };
     const remove = window.viewer.onEvent((event) => {
-      if (event.type === 'folder-size') receiveFolderSize(event.task);
+      if (event.type === 'service-error') report(event.message);
+      else if (event.type === 'folder-size') receiveFolderSize(event.task);
       else if (event.type === 'folder-changed') invalidateFolderSizes(event.path);
       else if (event.type === 'settings') receiveSettings(event.snapshot);
       else if (event.type === 'file-changes') {
@@ -451,7 +361,57 @@ function AppWindow() {
         void flushState()
           .then(() => window.viewer.flushed(event.token))
           .catch(report);
-      else if (event.type === 'command') void invokeRef.current(event.command).catch(report);
+      else if (event.type === 'agent-command') {
+        const finish = (error?: string) => {
+          void window.viewer.agentCommandResult(event.id, error?.slice(0, 2000)).catch(report);
+        };
+        const deadline = performance.now() + 3000;
+        const execute = () => {
+          if (document.querySelector('dialog[open]')) {
+            if (performance.now() < deadline) requestAnimationFrame(execute);
+            else {
+              report('Close the open dialog and request the action again.');
+              finish('Another dialog prevented the action.');
+            }
+            return;
+          }
+          const { target } = event;
+          const space = activeWorkspace();
+          const pane = space.panes.find((pane) => pane.id === target.paneID);
+          if (
+            space.id !== target.workspaceID ||
+            !pane ||
+            (target.panePath && pane.path !== target.panePath) ||
+            controller.rootID(pane.id) !== target.rootID
+          ) {
+            report('The originating plane is no longer available. Request a new proposal.');
+            finish('The originating plane or folder changed.');
+            return;
+          }
+          void registry
+            .invoke(event.command, {
+              paneID: target.paneID,
+              scope: target.selection.length ? 'files' : 'folder',
+              context: {
+                workspaceID: target.workspaceID,
+                rootID: target.rootID,
+                paneID: target.paneID,
+                directory: target.directory,
+                selection: target.selection,
+                path: pane.path,
+                folder: pane.type === 'folder' ? pane : undefined,
+              },
+            })
+            .then((executed) =>
+              finish(executed ? undefined : 'The command is no longer available for this context.'),
+            )
+            .catch((error: Error) => {
+              report(error);
+              finish(error.message);
+            });
+        };
+        requestAnimationFrame(execute);
+      } else if (event.type === 'command') void invokeRef.current(event.command).catch(report);
     });
     resync();
     const focus = () => {
@@ -523,20 +483,18 @@ function AppWindow() {
         event.preventDefault();
       }
       if (!(event.metaKey || event.ctrlKey) || event.isComposing || event.repeat) return;
-      const settings = getState().settings.settings;
-      const bindings = {
-        ...defaultShortcuts,
-        ...settings.shortcuts,
-        ...Object.fromEntries(
-          settings.recipes
-            .filter((recipe) => recipe.shortcut)
-            .map((recipe) => ['recipe.' + recipe.id, recipe.shortcut!]),
-        ),
-      };
-      const id = Object.entries(bindings).find(([, shortcut]) =>
-        matchesShortcut(shortcut, event),
-      )?.[0];
+      const id = keyCommand(event, getState().settings.settings);
+      if (
+        (event.target as Element).closest('.terminal-plane') &&
+        !['palette', 'settings'].includes(id || '')
+      )
+        return;
       if (editable(event.target) && !['palette', 'settings'].includes(id || '')) return;
+      if (id && explorerCommandIDs.has(id)) {
+        if (!document.querySelector('dialog[open], .context-menu'))
+          routeFileKeyboard(getState().activePane, event);
+        return;
+      }
       if (id) {
         event.preventDefault();
         event.stopPropagation();
@@ -555,6 +513,8 @@ function AppWindow() {
   return (
     <WorkspaceContext.Provider value={controller}>
       <div className="app-shell" data-look={saved.look} data-density={density}>
+        <AgentReview />
+        <ExecutionPanel />
         <header className="app-titlebar">
           <div className="traffic-space" />
           <IconButton

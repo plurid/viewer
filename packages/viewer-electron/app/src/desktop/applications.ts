@@ -15,12 +15,16 @@ const choicesSchema = z.object({
     .max(128),
   defaultName: z.string().max(500).nullish(),
 });
-export async function readApplications(helper: string, paths: string[]): Promise<unknown> {
+export async function readApplications(
+  helper: string,
+  paths: string[],
+  flags: string[] = [],
+): Promise<unknown> {
   const input = JSON.stringify(paths);
   if (Buffer.byteLength(input) > 1024 * 1024)
     throw new Error('Choose a smaller selection to list compatible applications.');
   return new Promise((resolve, reject) => {
-    const child = spawn(helper, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(helper, flags, { stdio: ['pipe', 'pipe', 'pipe'] });
     const timeout = setTimeout(() => {
       child.kill();
       reject(new Error('Application discovery timed out. Try Choose Application.'));

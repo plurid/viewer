@@ -1,4 +1,5 @@
 import type { PaneSidebar, SidebarSection, UIPreferences } from './contracts';
+import { columnWidth, listColumns } from './list-columns';
 
 export const sidebarSections: SidebarSection[] = ['locations', 'favorites', 'recents'];
 const object = (value: unknown): Record<string, unknown> =>
@@ -71,6 +72,10 @@ export function normalizePreferences(value?: unknown): UIPreferences {
   const ui = object(value);
   const sidebar = object(ui.sidebar);
   const space = object(ui.space);
+  const controls = object(space.headerControls);
+  const list = object(ui.list);
+  const visible = object(list.visible);
+  const widths = object(list.widths);
   const order = strings(sidebar.order, 3, 20).filter((item): item is SidebarSection =>
     sidebarSections.includes(item as SidebarSection),
   );
@@ -111,6 +116,50 @@ export function normalizePreferences(value?: unknown): UIPreferences {
       opening: ['face-on', 'pair', 'dock'].includes(String(space.opening))
         ? (space.opening as UIPreferences['space']['opening'])
         : 'face-on',
+      headerControls: {
+        sidebar: boolean(controls.sidebar, true),
+        back: boolean(controls.back, true),
+        forward: boolean(controls.forward, true),
+        view: boolean(controls.view, true),
+        search: boolean(controls.search, true),
+        frame: boolean(controls.frame, true),
+        dock: boolean(controls.dock, true),
+        actions: boolean(controls.actions, true),
+        close: boolean(controls.close, true),
+      },
+    },
+    list: {
+      visible: Object.fromEntries(
+        listColumns
+          .filter((column) => column.id !== 'name')
+          .map((column) => [column.id, boolean(visible[column.id], column.visible)]),
+      ) as UIPreferences['list']['visible'],
+      widths: Object.fromEntries(
+        listColumns.map((column) => {
+          const value = widths[column.id];
+          return [
+            column.id,
+            typeof value === 'number' && Number.isFinite(value)
+              ? column.id === 'name' && value === 0
+                ? 0
+                : columnWidth(column.id, value)
+              : column.width,
+          ];
+        }),
+      ) as UIPreferences['list']['widths'],
+      wrapNames: boolean(list.wrapNames, false),
+      ...(Array.isArray(list.order)
+        ? {
+            order: [
+              ...new Set([
+                'name',
+                ...strings(list.order, 6, 30).filter((key) =>
+                  listColumns.some((column) => column.id === key),
+                ),
+              ]),
+            ] as import('./contracts').ListColumn[],
+          }
+        : {}),
     },
     recentCommands: strings(ui.recentCommands, 20, 300),
   };

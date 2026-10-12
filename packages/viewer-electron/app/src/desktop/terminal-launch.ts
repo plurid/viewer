@@ -1,0 +1,211 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { constants } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import type { ApplicationSettings } from '../domain/services';
+import { absolute } from './filesystem';
+import { readApplications } from './applications';
+const exec = promisify(execFile);
+export const shellQuote = (value: string): string => "'" + value.replace(/'/g, "'\\''") + "'";
+export async function executablePath(value: string): Promise<string> {
+  if (value.includes('\0')) throw new Error('Invalid executable.');
+  const candidates = path.isAbsolute(value)
+    ? [value]
+    : [
+        ...new Set([
+          ...(process.env.PATH || '').split(path.delimiter),
+          '/opt/homebrew/bin',
+          '/usr/local/bin',
+          '/usr/bin',
+          '/bin',
+        ]),
+      ]
+        .filter(Boolean)
+        .map((directory) => path.join(directory, value));
+  for (const file of candidates) {
+    try {
+      await fs.access(file, constants.X_OK);
+      if ((await fs.stat(file)).isFile()) return file;
+    } catch {
+      /* try next directory */
+    }
+  }
+  throw new Error(`Executable not found: ${value}. Choose its path in Settings → Terminals.`);
+}
+export interface TerminalApplication {
+  path: string;
+  name: string;
+  running: boolean;
+}
+export interface ExternalTerminalAdapter {
+  discover(): Promise<TerminalApplication[]>;
+  run(executable: string, args: string[]): Promise<string>;
+  open(application: string, file: string): Promise<void>;
+  bundledCLI?(application: TerminalApplication): Promise<string | undefined>;
+}
+export class ExternalTerminals {
+  private queue: Promise<unknown> = Promise.resolve();
+  constructor(
+    private directory: string,
+    private settings: () => ApplicationSettings,
+    helper: string,
+    private adapter: ExternalTerminalAdapter = {
+      discover: async () =>
+        (await readApplications(helper, [], ['--terminals'])) as TerminalApplication[],
+      run: async (file, args) =>
+        (await exec(file, args, { timeout: 15000, maxBuffer: 1024 * 1024 })).stdout,
+      bundledCLI: async (app) => {
+        if (!/iterm/i.test(app.name)) return;
+        // Only use the official executable inside the selected app bundle, never a same-named PATH tool.
+        for (const relative of [
+          'Contents/MacOS/it2',
+          'Contents/Resources/it2',
+          'Contents/Resources/utilities/it2',
+        ]) {
+          const file = path.join(app.path, relative);
+          try {
+            const resolved = await fs.realpath(file);
+            if (resolved.startsWith(app.path + '/')) return await executablePath(resolved);
+          } catch {
+            /* older app: use the command-file adapter */
+          }
+        }
+      },
+      open: async (app, file) => {
+        await exec('/usr/bin/open', ['-a', app, '--', file]);
+      },
+    },
+  ) {}
+  async application(): Promise<TerminalApplication> {
+    if (process.platform !== 'darwin')
+      throw new Error(
+        'External terminal adapters currently support macOS. Embedded terminals remain available.',
+      );
+    const configured = this.settings().terminals.application;
+    const apps = await this.adapter.discover();
+    if (configured !== 'auto') {
+      const found = apps.find(
+        (app) =>
+          app.path === configured ||
+          app.name.toLowerCase().replace(/2$/, '') === configured.toLowerCase().replace(/2$/, ''),
+      );
+      if (found) return found;
+      if (
+        path.isAbsolute(configured) &&
+        configured.endsWith('.app') &&
+        (await fs.stat(configured)).isDirectory()
+      )
+        return { path: configured, name: path.basename(configured, '.app'), running: false };
+      throw new Error(
+        'The configured terminal application is unavailable. Choose another in Settings → Terminals.',
+      );
+    }
+    const app =
+      apps.find((app) => app.running) ||
+      apps.find((app) => /iterm/i.test(app.name)) ||
+      apps.find((app) => app.name === 'Terminal');
+    if (!app)
+      throw new Error(
+        'No supported terminal application found. Configure its app path in Settings → Terminals.',
+      );
+    return app;
+  }
+  open(cwd: string, tmux = false): Promise<void> {
+    const task = this.queue.catch(() => {}).then(() => this.launch(cwd, tmux));
+    this.queue = task;
+    return task;
+  }
+  private async launch(cwd: string, tmux: boolean): Promise<void> {
+    cwd = await fs.realpath(absolute(cwd));
+    if (!(await fs.stat(cwd)).isDirectory()) throw new Error('Choose a folder to open a terminal.');
+    const application = await this.application();
+    const settings = this.settings().terminals;
+    const profile = settings.profiles.find((profile) => profile.id === settings.profileID)!;
+    let executable = await executablePath(profile.executable || process.env.SHELL || '/bin/zsh');
+    let args = profile.args;
+    if (tmux) {
+      executable = await executablePath(settings.tmux.executable);
+      const prefix = settings.tmux.socket ? ['-S', settings.tmux.socket] : [];
+      const target = '=' + settings.tmux.session;
+      const name = settings.tmux.windowName.replace(/\{folder\}/g, path.basename(cwd));
+      let existing = true;
+      try {
+        await this.adapter.run(executable, [...prefix, 'has-session', '-t', target]);
+      } catch (error) {
+        const failure = error as { code?: number; stderr?: string };
+        if (
+          failure.code !== 1 &&
+          !/no server running|no sessions|can.t find session|error connecting/.test(
+            failure.stderr || '',
+          )
+        )
+          throw error;
+        existing = false;
+      }
+      await this.adapter.run(executable, [
+        ...prefix,
+        ...(existing
+          ? ['new-window', '-t', target]
+          : ['new-session', '-d', '-s', settings.tmux.session]),
+        '-n',
+        name,
+        '-c',
+        cwd,
+        '-P',
+        '-F',
+        '#{window_id}',
+      ]);
+      if (existing) {
+        const clients = await this.adapter.run(executable, [
+          ...prefix,
+          'list-clients',
+          '-t',
+          target,
+          '-F',
+          '#{client_control_mode}',
+        ]);
+        if (/iterm/i.test(application.name) && clients.split('\n').includes('1')) return;
+      }
+      args = [
+        ...prefix,
+        ...(/iterm/i.test(application.name) ? ['-CC'] : []),
+        'attach-session',
+        '-t',
+        target,
+      ];
+    }
+    await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
+    const file = path.join(this.directory, randomUUID() + '.command');
+    const env = Object.entries(profile.env).map(([key, value]) => key + '=' + shellQuote(value));
+    const script =
+      '#!/bin/zsh\n/bin/rm -- ' +
+      shellQuote(file) +
+      '\ncd -- ' +
+      shellQuote(cwd) +
+      ' || exit\nexec /usr/bin/env ' +
+      [...env, shellQuote(executable), ...args.map(shellQuote)].join(' ') +
+      '\n';
+    await fs.writeFile(file, script, { mode: 0o700, flag: 'wx' });
+    try {
+      const cli = await this.adapter.bundledCLI?.(application);
+      if (cli && application.running) {
+        const help = await this.adapter.run(cli, ['window', 'new', '--help']).catch(() => '');
+        if (help.includes('--command')) {
+          await this.adapter.run(cli, [
+            'window',
+            'new',
+            '--command',
+            '/bin/zsh ' + shellQuote(file),
+          ]);
+          return;
+        }
+      }
+      await this.adapter.open(application.path, file);
+    } catch (error) {
+      await fs.rm(file, { force: true });
+      throw error;
+    }
+  }
+}

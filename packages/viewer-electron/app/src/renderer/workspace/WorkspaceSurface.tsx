@@ -1,4 +1,13 @@
-import { memo, useEffect, useMemo, useState, useSyncExternalStore, type RefObject } from 'react';
+import {
+  lazy,
+  Suspense,
+  memo,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from 'react';
 import {
   PluridApplication,
   usePluridApi,
@@ -10,7 +19,6 @@ import {
   type PluridApi,
   type PluridPartialConfiguration,
   type PluridPlane,
-  type TreePlane,
 } from '@plurid/plurid-data';
 import { activeWorkspace, report, setActivePane, storageAdapter, useViewer } from '../state/store';
 import { SearchExplorer } from '../explorer/SearchExplorer';
@@ -18,7 +26,6 @@ import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
 import { Empty } from '../ui/primitives';
 import { Sidebar } from '../ui/Sidebar';
-import { NewPlaneLocation } from '../ui/NewPlaneLocation';
 import { PlaneHeader } from './PlaneHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
 export { frameWorkspace } from './framing';
@@ -27,23 +34,19 @@ import { useWorkspace } from './context';
 import { looks } from './look';
 import { routeFileKeyboard } from '../explorer/selection';
 
-export function flattenTree(tree: TreePlane[]): TreePlane[] {
-  return tree.flatMap((node) => [node, ...flattenTree(node.children ?? [])]);
-}
-export function hostID(node: TreePlane): string {
-  return node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id || '';
-}
-const FolderScene = memo(function FolderScene({ id, engineID }: { id: string; engineID?: string }) {
+import { flattenTree, hostID } from './tree';
+export { flattenTree, hostID } from './tree';
+const FolderScene = memo(function FolderScene({ id }: { id: string }) {
   return (
     <div className="folder-plane">
       <Sidebar paneID={id} />
-      <FolderExplorer id={id} engineID={engineID} />
+      <FolderExplorer id={id} />
     </div>
   );
 });
 function FolderContent() {
   const plane = usePluridPlane();
-  return <FolderScene id={plane.parameters.id} engineID={plane.planeID} />;
+  return <FolderScene id={plane.parameters.id} />;
 }
 function PreviewContent() {
   const plane = usePluridPlane();
@@ -69,11 +72,28 @@ function PreviewContent() {
     </div>
   );
 }
+const LazyTerminalPlane = lazy(() =>
+  import('../terminals/TerminalPlane').then((module) => ({ default: module.TerminalPlane })),
+);
+function TerminalContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((pane) => pane.id === plane.parameters.id),
+  );
+  return pane?.type === 'terminal' ? (
+    <Suspense fallback={<Empty title="Opening terminal…" />}>
+      <LazyTerminalPlane pane={pane} />
+    </Suspense>
+  ) : (
+    <Empty title="Terminal unavailable" />
+  );
+}
 function SearchContent() {
   const plane = usePluridPlane();
   return <SearchExplorer id={plane.parameters.id} />;
 }
 const planes: PluridPlane<React.ComponentType>[] = [
+  { route: '/terminals/:id', component: TerminalContent },
   { route: '/folders/:id', component: FolderContent },
   { route: '/searches/:id', component: SearchContent },
   { route: '/previews/:id', component: PreviewContent },
@@ -111,7 +131,7 @@ export function WorkspaceSurface({
     () =>
       space.roots.map((id) => {
         const pane = space.panes.find((item) => item.id === id);
-        return `/${pane?.type === 'folder' ? 'folders' : pane?.type === 'search' ? 'searches' : 'previews'}/${id}`;
+        return `/${pane?.type === 'folder' ? 'folders' : pane?.type === 'search' ? 'searches' : pane?.type === 'terminal' ? 'terminals' : 'previews'}/${id}`;
       }),
     [space.roots],
   );
@@ -210,7 +230,7 @@ export function WorkspaceSurface({
       className="workspace-surface"
       ref={surface}
       onKeyDownCapture={(event) => {
-        if (event.shiftKey && event.key.startsWith('Arrow')) {
+        if (!(event.target as Element).closest('.terminal-plane') && event.key !== undefined) {
           const header = (event.target as Element).closest<HTMLElement>('[data-viewer-plane]');
           if (header) routeFileKeyboard(header.dataset.viewerPlane!, event);
           if (event.isPropagationStopped()) return;
@@ -283,7 +303,6 @@ export function WorkspaceSurface({
                 Open folder…
               </button>
             </div>
-            <NewPlaneLocation />
           </Empty>
         )}
       />

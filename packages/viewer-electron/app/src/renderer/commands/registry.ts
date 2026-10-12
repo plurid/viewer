@@ -5,6 +5,7 @@ export type CommandScope = 'window' | 'folder' | 'files' | 'preview' | 'sidebar'
 export interface CommandContext {
   scope: CommandScope;
   workspaceID: string;
+  rootID?: string;
   paneID?: string;
   selection: readonly FileEntry[];
   folder?: FolderPane;

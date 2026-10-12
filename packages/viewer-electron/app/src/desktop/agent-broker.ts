@@ -1,3 +1,7 @@
+import type { CapturedTarget } from '../domain/automation';
+import type { CommandDescriptor } from '../domain/agent-requests';
+import type { AgentRequests } from './agent-requests';
+import type { SettingsService } from './settings';
 import { createServer, type Server, type Socket } from 'node:net';
 import { chmod, realpath, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -18,6 +22,88 @@ import { DocumentStore } from './document-store';
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 const tools = [
+  {
+    name: 'list_commands',
+    description: 'List available commands for the captured active folder and selection.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'explain_command',
+    description: 'Explain a command and whether execution requires user review.',
+    inputSchema: {
+      type: 'object',
+      properties: { commandID: { type: 'string' } },
+      required: ['commandID'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'propose_command',
+    description:
+      'Propose a command for the captured active context. User review is the default; explicit executor grants may permit unattended execution.',
+    inputSchema: {
+      type: 'object',
+      properties: { commandID: { type: 'string' } },
+      required: ['commandID'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_config',
+    description:
+      'Read the effective editable configuration, excluding credentials and execution approvals.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'validate_config',
+    description: 'Validate proposed configuration patches without applying them.',
+    inputSchema: {
+      type: 'object',
+      properties: { patches: { type: 'array', items: { type: 'object' } } },
+      required: ['patches'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'propose_config',
+    description: 'Submit valid configuration patches for user review.',
+    inputSchema: {
+      type: 'object',
+      properties: { patches: { type: 'array', items: { type: 'object' } } },
+      required: ['patches'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_terminal',
+    description: 'Read bounded terminal output with a separate terminal read grant.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'write_terminal',
+    description: 'Propose terminal input; needs user review or a separate terminal write grant.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, data: { type: 'string' } },
+      required: ['id', 'data'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_proposal',
+    description: 'Read the status of an agent proposal.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'get_context',
     description: 'Read the active Viewer context within your granted folders.',
@@ -103,6 +189,11 @@ export class AgentBroker {
     private context: () => ActionContext | undefined,
     private files: FileServices,
     private actions: ActionPlanner,
+    private extension?: {
+      catalog(): { target: CapturedTarget; commands: CommandDescriptor[] } | undefined;
+      requests: AgentRequests;
+      config: SettingsService;
+    },
   ) {
     this.connection = new DocumentStore(path.join(dataPath, 'agent-connection-v1.json'), (value) =>
       z.object({ socket: z.string(), pid: z.number() }).parse(value),
@@ -235,7 +326,91 @@ export class AgentBroker {
       .parse(message.params);
     const args = call.arguments || {};
     let value: unknown;
-    if (call.name === 'get_context') {
+    if (['list_commands', 'explain_command', 'propose_command'].includes(call.name)) {
+      const extension = this.extension;
+      const catalog = extension?.catalog();
+      if (!extension || !catalog) throw new Error('Focus a folder plane in Viewer first.');
+      await this.authorize(catalog.target.directory);
+      for (const file of catalog.target.selection) await this.authorize(file.path);
+      if (call.name === 'list_commands')
+        value = { target: catalog.target, commands: catalog.commands, reviewByDefault: true };
+      else {
+        const input = z
+          .object({ commandID: z.string().max(200) })
+          .strict()
+          .parse(args);
+        const command = catalog.commands.find((command) => command.id === input.commandID);
+        if (!command) throw new Error('Command is unavailable in the captured context.');
+        if (call.name === 'explain_command')
+          value = {
+            ...command,
+            target: catalog.target,
+            reviewByDefault: true,
+            customAction: this.settings().customActions.find(
+              (action) => 'custom.' + action.id === command.id,
+            ),
+            cwdIsNotASandbox: true,
+          };
+        else {
+          value = await extension.requests.command(command.id, catalog.target, command.label);
+          this.owned.add((value as { id: string }).id);
+        }
+      }
+    } else if (call.name === 'read_config') {
+      if (!this.extension) throw new Error('Configuration API is unavailable.');
+      const snapshot = this.extension.config.snapshot();
+      value = {
+        version: 1,
+        settings: snapshot.settings,
+        ui: snapshot.ui,
+        revision: snapshot.revision,
+      };
+    } else if (['validate_config', 'propose_config'].includes(call.name)) {
+      if (!this.extension) throw new Error('Configuration API is unavailable.');
+      const input = z
+        .object({
+          patches: z
+            .array(
+              z
+                .object({
+                  path: z.string().max(200),
+                  keys: z.array(z.string().max(32768)).max(10).optional(),
+                  value: z.unknown(),
+                })
+                .strict(),
+            )
+            .max(100),
+        })
+        .strict()
+        .parse(args);
+      if (call.name === 'validate_config') value = this.extension.config.preview(input.patches);
+      else {
+        value = this.extension.requests.configuration(input.patches);
+        this.owned.add((value as { id: string }).id);
+      }
+    } else if (['read_terminal', 'write_terminal'].includes(call.name)) {
+      if (!this.extension) throw new Error('Terminal API is unavailable.');
+      const input = z
+        .object({ id: z.string(), data: z.string().max(65536).optional() })
+        .strict()
+        .parse(args);
+      const terminal = this.extension.requests;
+      await this.authorize(terminal.terminalDirectory(input.id));
+      if (call.name === 'read_terminal') {
+        const output = await terminal.readTerminal(input.id);
+        await this.authorize(output.cwd);
+        value = output;
+      } else {
+        if (input.data === undefined) throw new Error('Provide terminal input.');
+        value = await terminal.writeTerminal(input.id, input.data);
+        this.owned.add((value as { id: string }).id);
+      }
+    } else if (call.name === 'get_proposal') {
+      if (!this.extension) throw new Error('Proposal API is unavailable.');
+      const input = z.object({ id: z.string() }).strict().parse(args);
+      if (!this.owned.has(input.id)) throw new Error('Proposal belongs to another actor.');
+      value = this.extension.requests.get(input.id);
+    } else if (call.name === 'get_context') {
       const context = this.context();
       const sources: string[] = [];
       for (const file of context?.sources || []) {
@@ -315,7 +490,10 @@ export class AgentBroker {
         this.actions.cancel(input.id);
         value = { cancelled: true };
       } else value = plan;
-    } else throw new Error('Unknown tool. Agents cannot apply or delete files.');
+    } else
+      throw new Error(
+        'Unknown agent tool. Commands require review or an explicit execution grant.',
+      );
     return { content: [{ type: 'text', text: JSON.stringify(value) }] };
   }
   async close(): Promise<void> {

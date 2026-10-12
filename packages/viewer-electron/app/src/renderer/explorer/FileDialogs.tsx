@@ -7,6 +7,7 @@ import { Dialog, NameDialog } from '../ui/primitives';
 import { getState, report } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { OpenWithDialog } from '../ui/OpenWithDialog';
+import { RenameActions } from '../actions/RenameActions';
 /** Physical folders and virtual results share the same file-operation dialogs. */
 export function useFileDialogs(): {
   actions: Pick<FolderActions, 'dialog' | 'destination' | 'info' | 'trash' | 'openWith'>;
@@ -60,6 +61,17 @@ export function useFileDialogs(): {
             }
             maxLength={name.kind === 'go-to' ? 32768 : 255}
             action={name.kind === 'rename' ? 'Rename' : name.kind === 'mkdir' ? 'Create' : 'Go'}
+            secondaryAction={
+              name.kind === 'rename'
+                ? (busy) => (
+                    <RenameActions
+                      context={name.context}
+                      disabled={busy}
+                      onChoose={() => setName(undefined)}
+                    />
+                  )
+                : undefined
+            }
             onClose={() => setName(undefined)}
             onSubmit={async (value) => {
               if (name.kind === 'go-to') {

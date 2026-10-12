@@ -27,9 +27,16 @@ export function PlaneHeader({
   const id = node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id));
   const dragging = useViewer((state) => state.saved.ui.space.dragging);
+  const controls = useViewer((state) => state.saved.ui.space.headerControls);
   const registry = useCommands();
   useCommandRevision(id);
-  const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest } | null>(null);
+  const [menu, setMenu] = useState<{
+    kind: 'view' | 'actions';
+    anchor: HTMLButtonElement;
+    x: number;
+    y: number;
+    request: CommandRequest;
+  } | null>(null);
   const slot = useCallback(
     (element: HTMLDivElement | null) => setPreviewControlsSlot(id, element),
     [id],
@@ -50,11 +57,18 @@ export function PlaneHeader({
       .catch(report);
   };
   const openMenu = (event: React.MouseEvent<HTMLButtonElement>, ids?: string[]) => {
+    const kind = ids ? 'view' : 'actions';
+    if (menu?.kind === kind) {
+      setMenu(null);
+      return;
+    }
     setActivePane(id);
     void refreshClipboard().catch(report);
     const rect = event.currentTarget.getBoundingClientRect();
     const target = registry.context(id);
     setMenu({
+      kind,
+      anchor: event.currentTarget,
       x: rect.left,
       y: rect.bottom + 5,
       request: {
@@ -67,29 +81,35 @@ export function PlaneHeader({
   };
   return (
     <div className="plane-controls" data-viewer-plane={id} onPointerDown={() => setActivePane(id)}>
-      {pane?.type === 'folder' && (
+      {pane?.type === 'folder' && (controls.sidebar || controls.back || controls.forward) && (
         <div className="plane-navigation">
-          <IconButton
-            icon="sidebar"
-            label={
-              pane.sidebar?.visible !== false ? 'Hide plane navigation' : 'Show plane navigation'
-            }
-            aria-pressed={pane.sidebar?.visible !== false}
-            onClick={() => run('plane-sidebar')}
-          />
-          <IconButton
-            icon="left"
-            label="Back"
-            disabled={!available.some((item) => item.id === 'back')}
-            onClick={() => run('back')}
-          />
-          <IconButton
-            icon="right"
-            className="plane-forward"
-            label="Forward"
-            disabled={!available.some((item) => item.id === 'forward')}
-            onClick={() => run('forward')}
-          />
+          {controls.sidebar && (
+            <IconButton
+              icon="sidebar"
+              label={
+                pane.sidebar?.visible !== false ? 'Hide plane navigation' : 'Show plane navigation'
+              }
+              aria-pressed={pane.sidebar?.visible !== false}
+              onClick={() => run('plane-sidebar')}
+            />
+          )}
+          {controls.back && (
+            <IconButton
+              icon="left"
+              label="Back"
+              disabled={!available.some((item) => item.id === 'back')}
+              onClick={() => run('back')}
+            />
+          )}
+          {controls.forward && (
+            <IconButton
+              icon="right"
+              className="plane-forward"
+              label="Forward"
+              disabled={!available.some((item) => item.id === 'forward')}
+              onClick={() => run('forward')}
+            />
+          )}
         </div>
       )}
       <span
@@ -109,61 +129,86 @@ export function PlaneHeader({
           if (pane?.type === 'folder') run('path');
         }}
       >
-        <Icon name={pane?.type === 'folder' ? 'folder' : 'file'} size={16} />
+        <Icon
+          name={
+            pane?.type === 'folder' ? 'folder' : pane?.type === 'terminal' ? 'terminal' : 'file'
+          }
+          size={16}
+        />
         <span className="plane-title">
           {pane?.type === 'search'
             ? pane.name
-            : pane?.path.split(/[\\/]/).pop() || pane?.path || 'Plane'}
+            : pane?.type === 'terminal'
+              ? 'Terminal · ' + (pane.path.split(/[\\/]/).pop() || pane.path)
+              : pane?.path.split(/[\\/]/).pop() || pane?.path || 'Plane'}
         </span>
       </span>
       {pane?.type === 'folder' ? (
         <>
-          <button
-            className="plane-view-button"
-            aria-label="View mode"
-            aria-haspopup="dialog"
-            onClick={(event) =>
-              openMenu(event, ['view-list', 'view-grid', 'view-columns', 'view-gallery'])
-            }
-          >
-            <Icon name={pane.mode} size={17} />
-            <Icon name="down" size={10} />
-          </button>
-          <IconButton
-            icon="search"
-            label={registry.context(id)?.searchOpen ? 'Close search' : 'Search this folder'}
-            aria-pressed={!!registry.context(id)?.searchOpen}
-            onClick={() => run('search')}
-          />
+          {controls.view && (
+            <button
+              className="plane-view-button"
+              aria-label="View mode"
+              aria-haspopup="dialog"
+              aria-expanded={menu?.kind === 'view'}
+              onClick={(event) =>
+                openMenu(event, ['view-list', 'view-grid', 'view-columns', 'view-gallery'])
+              }
+            >
+              <Icon name={pane.mode} size={17} />
+              <Icon name="down" size={10} />
+            </button>
+          )}
+          {controls.search && (
+            <IconButton
+              icon="search"
+              label={registry.context(id)?.searchOpen ? 'Close search' : 'Search this folder'}
+              aria-pressed={!!registry.context(id)?.searchOpen}
+              onClick={() => run('search')}
+            />
+          )}
         </>
       ) : (
         <div className="plane-module-controls" ref={slot} />
       )}
-      <div className="plane-spatial-controls">
-        <IconButton icon="frame" label="Frame plane" onClick={() => run('frame-plane')} />
+      {(controls.frame || controls.dock) && (
+        <div className="plane-spatial-controls">
+          {controls.frame && (
+            <IconButton icon="frame" label="Frame plane" onClick={() => run('frame-plane')} />
+          )}
+          {controls.dock && (
+            <IconButton
+              icon="dock"
+              label={available.find((item) => item.id === 'dock')?.label ?? 'Dock plane'}
+              onClick={() => run('dock')}
+            />
+          )}
+        </div>
+      )}
+      {controls.actions && (
         <IconButton
-          icon="dock"
-          label={available.find((item) => item.id === 'dock')?.label ?? 'Dock plane'}
-          onClick={() => run('dock')}
+          icon="more"
+          label={
+            pane?.type === 'folder'
+              ? 'Folder actions'
+              : pane?.type === 'search'
+                ? 'Search actions'
+                : 'Preview actions'
+          }
+          aria-haspopup="dialog"
+          aria-expanded={menu?.kind === 'actions'}
+          onClick={(event) => openMenu(event)}
         />
-      </div>
-      <IconButton
-        icon="more"
-        label={
-          pane?.type === 'folder'
-            ? 'Folder actions'
-            : pane?.type === 'search'
-              ? 'Search actions'
-              : 'Preview actions'
-        }
-        aria-haspopup="dialog"
-        onClick={(event) => openMenu(event)}
-      />
-      <IconButton icon="close" label="Close plane" onClick={() => run('close-plane')} />
+      )}
+      {controls.close && (
+        <IconButton icon="close" label="Close plane" onClick={() => run('close-plane')} />
+      )}
       {menu && (
         <ContextMenu
+          key={menu.kind}
           position={menu}
           request={menu.request}
+          anchor={menu.anchor}
           onClose={() => setMenu(null)}
           label="Plane actions"
         />

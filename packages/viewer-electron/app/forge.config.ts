@@ -3,9 +3,13 @@ import { MakerZIP } from '@electron-forge/maker-zip';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: { unpack: '**/node-pty/**' },
     extraResource:
       process.platform === 'darwin' ? ['assets/viewer-ocr', 'assets/viewer-applications'] : [],
     appBundleId: 'com.plurid.viewer',
@@ -21,12 +25,27 @@ const config: ForgeConfig = {
       optionsForFile: () => ({ hardenedRuntime: false }),
     },
   },
-  rebuildConfig: {},
+  rebuildConfig: { onlyModules: ['node-pty'] },
+  hooks: {
+    // Vite packages its bundles only. Keep external native modules available to
+    // Electron's rebuild and ASAR unpacking, including node-pty's spawn helper.
+    packageAfterCopy: async (_config, buildPath) => {
+      for (const dependency of ['node-pty', 'node-addon-api']) {
+        const source = path.dirname(require.resolve(dependency + '/package.json'));
+        await fs.cp(source, path.join(buildPath, 'node_modules', dependency), { recursive: true });
+      }
+    },
+  },
   makers: [new MakerZIP({}, ['darwin'])],
   plugins: [
     new VitePlugin({
       build: [
         { entry: 'src/main.ts', config: 'vite.main.config.ts', target: 'main' },
+        {
+          entry: 'src/desktop/terminal-worker.ts',
+          config: 'vite.services.config.ts',
+          target: 'main',
+        },
         { entry: 'src/desktop/worker.ts', config: 'vite.services.config.ts', target: 'main' },
         {
           entry: 'src/desktop/folder-size-worker.ts',

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import type {
   Bootstrap,
   FolderPane,
@@ -16,6 +16,13 @@ import { clearSessions, focusFiles, trimSessions, remapSessions } from '../works
 import { pathMapper, type FileChange } from '../../domain/changes';
 import { parentPath } from '../../domain/planes';
 import { defaultSettings, newPlaneFolder, type SettingsSnapshot } from '../../domain/services';
+
+import {
+  panePresentation,
+  resolveFolderPresentation,
+  type FolderOverride,
+  type FolderPresentation,
+} from '../../domain/folder-presentation';
 
 interface ViewerState {
   settings: SettingsSnapshot;
@@ -44,7 +51,11 @@ async function flushPreferences(): Promise<void> {
     return;
   }
   if (!pendingPreferences.size || !window.viewer.settingsPatch) return;
-  const patches = [...pendingPreferences].map(([path, value]) => ({ path, value }));
+  const patches = [...pendingPreferences].map(([path, value]) =>
+    path.startsWith('@')
+      ? { path: 'settings.folders', keys: JSON.parse(path.slice(1)) as string[], value }
+      : { path, value },
+  );
   pendingPreferences.clear();
   preferenceWrite = window.viewer
     .settingsPatch(patches, current.settings.revision)
@@ -66,10 +77,11 @@ export const folderPane = (path: string, sidebar?: PaneSidebar): FolderPane => (
   id: uuid(),
   type: 'folder',
   path,
-  mode: current?.settings.settings.browsing.mode ?? 'list',
-  sort: 'name',
-  descending: false,
-  showHidden: current?.settings.settings.browsing.showHidden ?? false,
+  ...panePresentation(
+    current
+      ? folderPresentation(path)
+      : resolveFolderPresentation(path, defaultSettings(''), normalizePreferences()),
+  ),
   history: [path],
   historyIndex: 0,
   sidebar,
@@ -107,8 +119,7 @@ export function initialize(bootstrap: Bootstrap): void {
   };
   const pane = {
     ...folderPane(bootstrap.home, { visible: settings.ui.sidebar.inNewPlanes, width: 210 }),
-    mode: settings.settings.browsing.mode,
-    showHidden: settings.settings.browsing.showHidden,
+    ...panePresentation(resolveFolderPresentation(bootstrap.home, settings.settings, settings.ui)),
   };
   const workspace: Workspace = {
     id: uuid(),
@@ -125,7 +136,24 @@ export function initialize(bootstrap: Bootstrap): void {
     recents: [],
     look: 'dark' as const,
   };
-  const saved = { ...original, ui: settings.ui, look: settings.look };
+  const saved = {
+    ...original,
+    ui: settings.ui,
+    look: settings.look,
+    workspaces: original.workspaces.map((space) => ({
+      ...space,
+      panes: space.panes.map((pane) =>
+        pane.type === 'folder'
+          ? {
+              ...pane,
+              ...panePresentation(
+                resolveFolderPresentation(pane.path, settings.settings, settings.ui),
+              ),
+            }
+          : pane,
+      ),
+    })),
+  };
   if (bootstrap.freshSession && saved.workspaces.length < 30) {
     saved.workspaces = [...saved.workspaces, workspace];
     saved.activeWorkspace = workspace.id;
@@ -288,7 +316,7 @@ export function changePreferences(transform: (ui: UIPreferences) => UIPreference
   const ui = transform(old);
   if (ui === old) return;
   savePatch({ ui });
-  for (const group of ['sidebar', 'space'] as const)
+  for (const group of ['sidebar', 'space', 'list'] as const)
     for (const key of Object.keys(ui[group]) as (keyof (typeof ui)[typeof group])[]) {
       if (old[group][key] !== ui[group][key])
         pendingPreferences.set(`ui.${group}.${key}`, ui[group][key]);
@@ -355,6 +383,15 @@ export function changeWorkspace(transform: (space: Workspace) => Workspace): voi
   });
 }
 export function updatePane(id: string, patch: Partial<Pane>): void {
+  const pane = activeWorkspace().panes.find((pane) => pane.id === id);
+  if (pane?.type === 'folder' && !('path' in patch)) {
+    const presentation = Object.fromEntries(
+      Object.entries(patch).filter(([key]) =>
+        ['mode', 'sort', 'descending', 'showHidden'].includes(key),
+      ),
+    );
+    if (Object.keys(presentation).length) updateFolderPresentation(pane.path, presentation);
+  }
   changeWorkspace((space) => ({
     ...space,
     panes: space.panes.map((pane) => (pane.id === id ? ({ ...pane, ...patch } as Pane) : pane)),
@@ -364,7 +401,12 @@ export function navigate(id: string, path: string): void {
   const pane = activeWorkspace().panes.find((item) => item.id === id);
   if (!pane || pane.type !== 'folder' || pane.path === path) return;
   const history = [...pane.history.slice(0, pane.historyIndex + 1), path].slice(-200);
-  updatePane(id, { path, history, historyIndex: history.length - 1 });
+  updatePane(id, {
+    path,
+    history,
+    historyIndex: history.length - 1,
+    ...panePresentation(folderPresentation(path)),
+  });
   remember(path);
 }
 export function historyNavigate(id: string, delta: number): void {
@@ -372,7 +414,11 @@ export function historyNavigate(id: string, delta: number): void {
   if (pane?.type !== 'folder') return;
   const index = pane.historyIndex + delta;
   if (index >= 0 && index < pane.history.length)
-    updatePane(id, { path: pane.history[index], historyIndex: index });
+    updatePane(id, {
+      path: pane.history[index],
+      historyIndex: index,
+      ...panePresentation(folderPresentation(pane.history[index])),
+    });
 }
 export function remember(path: string): void {
   savePatch({
@@ -416,19 +462,13 @@ export function addRootFolder(target: NewRootFolderTarget = {}): FolderPane | un
     newPlaneFolder(
       current.settings.settings.browsing,
       current.bootstrap.home,
-      owner?.type === 'folder' ? owner.path : owner ? parentPath(owner.path) : undefined,
+      owner?.type === 'folder' || owner?.type === 'terminal'
+        ? owner.path
+        : owner
+          ? parentPath(owner.path)
+          : undefined,
     );
-  const pane = addPane(path, 'folder', true, {
-    folderView:
-      owner?.type === 'folder'
-        ? {
-            mode: owner.mode,
-            sort: owner.sort,
-            descending: owner.descending,
-            showHidden: owner.showHidden,
-          }
-        : undefined,
-  }) as FolderPane;
+  const pane = addPane(path, 'folder', true) as FolderPane;
   setActivePane(pane.id);
   return pane;
 }
@@ -655,31 +695,148 @@ export function receiveFileChanges(changes: FileChange[]): void {
   preferenceTimer = setTimeout(() => {
     void flushPreferences().catch(report);
   }, 80);
+  const folders = Object.fromEntries(
+    Object.entries(current.settings.settings.folders).map(([path, value]) => [map(path), value]),
+  );
+  if (JSON.stringify(folders) !== JSON.stringify(current.settings.settings.folders)) {
+    current = {
+      ...current,
+      settings: { ...current.settings, settings: { ...current.settings.settings, folders } },
+    };
+    for (const [key, value] of [...pendingPreferences]) {
+      if (!key.startsWith('@')) continue;
+      const keys = JSON.parse(key.slice(1)) as string[];
+      if (keys[0] === 'settings' && keys[1] === 'folders' && keys[2]) {
+        pendingPreferences.delete(key);
+        keys[2] = map(keys[2]);
+        pendingPreferences.set('@' + JSON.stringify(keys), value);
+      }
+    }
+  }
   remapSessions(changes);
   window.dispatchEvent(new Event('viewer:refresh'));
 }
 
+export function folderPresentation(path: string): FolderPresentation {
+  return resolveFolderPresentation(path, current.settings.settings, current.saved.ui);
+}
+export function useFolderPresentation(path: string): FolderPresentation {
+  const browsing = useViewer((state) => state.settings.settings.browsing);
+  const override = useViewer((state) => state.settings.settings.folders[path]);
+  const list = useViewer((state) => state.saved.ui.list);
+  return useMemo(() => folderPresentation(path), [path, browsing, override, list]);
+}
+export function updateFolderPresentation(path: string, patch: FolderOverride | null): void {
+  const folders = { ...current.settings.settings.folders };
+  if (patch === null) delete folders[path];
+  else
+    folders[path] = {
+      ...folders[path],
+      ...patch,
+      ...(patch.list ? { list: { ...folders[path]?.list, ...patch.list } } : {}),
+    };
+  const settings = { ...current.settings.settings, folders };
+  const saved = {
+    ...current.saved,
+    workspaces: current.saved.workspaces.map((space) => ({
+      ...space,
+      panes: space.panes.map((pane) =>
+        pane.type === 'folder' && pane.path === path
+          ? {
+              ...pane,
+              ...panePresentation(resolveFolderPresentation(path, settings, current.saved.ui)),
+            }
+          : pane,
+      ),
+    })),
+  };
+  update({ ...current, settings: { ...current.settings, settings }, saved }, true);
+  if (patch === null)
+    pendingPreferences.set('@' + JSON.stringify(['settings', 'folders', path]), null);
+  else
+    for (const [key, value] of Object.entries(patch))
+      pendingPreferences.set(
+        '@' + JSON.stringify(['settings', 'folders', path, key]),
+        key === 'list' ? folders[path].list : value,
+      );
+  clearTimeout(preferenceTimer);
+  preferenceTimer = setTimeout(() => {
+    void flushPreferences().catch(report);
+  }, 80);
+}
+export function useFolderAsDefaults(path: string): void {
+  const value = folderPresentation(path);
+  const { list, mode, sort, descending, showHidden, density, foldersFirst, group, columnWidth } =
+    value;
+  void window.viewer
+    .settingsPatch(
+      [
+        {
+          path: 'settings.browsing',
+          value: {
+            ...current.settings.settings.browsing,
+            mode,
+            sort,
+            descending,
+            showHidden,
+            density,
+            foldersFirst,
+            group,
+            columnWidth,
+          },
+        },
+        { path: 'ui.list', value: list },
+      ],
+      current.settings.revision,
+    )
+    .then(receiveSettings)
+    .catch(report);
+}
 export function receiveSettings(snapshot: SettingsSnapshot): void {
   if (snapshot.revision < current.settings.revision) return;
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-  const ui = { ...snapshot.ui };
-  // Other-window updates cannot rewind the user's not-yet-flushed navigation edits.
+  const next = structuredClone({ ui: snapshot.ui, settings: snapshot.settings });
   for (const [path, value] of pendingPreferences) {
-    const [, group, key] = path.split('.');
-    if (group === 'recentCommands') ui.recentCommands = value as string[];
-    else if (group === 'sidebar' || group === 'space')
-      Object.assign(ui, { [group]: { ...ui[group], [key]: value } });
+    const keys: string[] = path.startsWith('@') ? JSON.parse(path.slice(1)) : path.split('.');
+    let object = next as unknown as Record<string, unknown>;
+    for (const key of keys.slice(0, -1)) {
+      object[key] ||= {};
+      object = object[key] as Record<string, unknown>;
+    }
+    if (value === null && keys[1] === 'folders') delete object[keys.at(-1)!];
+    else object[keys.at(-1)!] = value;
   }
-  for (const key of ['space', 'sidebar', 'recentCommands'] as const)
+  const { ui, settings } = next;
+  for (const [path, override] of Object.entries(settings.folders))
+    if (same(override, current.settings.settings.folders[path]))
+      settings.folders[path] = current.settings.settings.folders[path];
+  for (const key of Object.keys(ui) as (keyof typeof ui)[])
     if (same(ui[key], current.saved.ui[key])) Object.assign(ui, { [key]: current.saved.ui[key] });
-  const settings = { ...snapshot.settings };
   for (const key of Object.keys(settings) as (keyof typeof settings)[])
     if (same(settings[key], current.settings.settings[key]))
       Object.assign(settings, { [key]: current.settings.settings[key] });
+  const workspaces = current.saved.workspaces.map((space) => {
+    let changed = false;
+    const panes = space.panes.map((pane) => {
+      if (pane.type !== 'folder') return pane;
+      const value = panePresentation(resolveFolderPresentation(pane.path, settings, ui));
+      if (Object.entries(value).every(([key, value]) => pane[key as keyof typeof pane] === value))
+        return pane;
+      changed = true;
+      return { ...pane, ...value };
+    });
+    return changed ? { ...space, panes } : space;
+  });
   update({
     ...current,
     settings: { ...snapshot, settings, ui },
-    saved: { ...current.saved, ui, look: snapshot.look, preferencesRevision: snapshot.revision },
+    saved: {
+      ...current.saved,
+      workspaces,
+      ui,
+      look: snapshot.look,
+      preferencesRevision: snapshot.revision,
+    },
   });
 }
 export function addSearchPane(
@@ -707,7 +864,31 @@ export function addSearchPane(
     panes: [...space.panes, pane],
     activePane: pane.id,
   }));
-  savePatch({ version: 2 });
+  savePatch({ version: Math.max(2, current.saved.version) as 2 | 3 });
   setActivePane(pane.id);
   return pane.id;
+}
+
+export function addTerminalPane(
+  path: string,
+  profileID: string,
+  root: boolean,
+): import('../../domain/contracts').TerminalPane {
+  if (activeWorkspace().panes.length >= 200)
+    throw new Error('Close a plane before opening another.');
+  const pane: import('../../domain/contracts').TerminalPane = {
+    id: uuid(),
+    type: 'terminal',
+    path,
+    profileID,
+  };
+  changeWorkspace((space) => ({
+    ...space,
+    panes: [...space.panes, pane],
+    roots: root ? [...space.roots, pane.id] : space.roots,
+    activePane: pane.id,
+  }));
+  savePatch({ version: 3 });
+  setActivePane(pane.id);
+  return pane;
 }

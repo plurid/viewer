@@ -1,3 +1,4 @@
+import { nativeOpening } from './opening';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { FileEntry, SearchPane } from '../../domain/contracts';
 import {
@@ -17,10 +18,12 @@ import { Empty, Loading } from '../ui/primitives';
 import { useCommandSource } from '../commands/context';
 import { folderCommands } from '../commands/folder';
 import { useFileDialogs } from './FileDialogs';
+import { FileTable } from './FileTable';
+import { FILE_DRAG, useFileDrop } from './file-drop';
 import { revealFile } from './anchors';
 import { SelectionSize } from './sizes';
-import { blankFileSpace, fileControlOwnsKey, useFileKeyboard, useFileSelection } from './selection';
-import { editable } from '../commands/editing';
+import { blankFileSpace, useFileKeyboard, useFileSelection } from './selection';
+import { routeExplorerInput } from './input';
 import { useCommands } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
 const emptyEntries: FileEntry[] = [];
@@ -35,7 +38,27 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
   const [selection, select] = useBrowseField(id, pane?.path || '', 'selection');
   const session = browseSession(id, pane?.path || '');
   const selecting = useFileSelection(session, select);
+  const drops = useFileDrop(() => (pane?.allLocations ? undefined : pane?.path));
   const registry = useCommands();
+  const opening = useViewer((state) => state.settings.settings.fileOpening);
+  const openEntry = (entry: FileEntry, linked = false, another = false) => {
+    if (nativeOpening(entry, opening, linked)) {
+      void window.viewer.openExternal(entry.path).catch(report);
+      return;
+    }
+    const origin = activeWorkspace().id;
+    void revealFile(id, entry.path)
+      .then((link) =>
+        workspace.openPath(entry.path, {
+          workspaceID: origin,
+          paneID: id,
+          linked: true,
+          another,
+          link,
+        }),
+      )
+      .catch(report);
+  };
   const surface = useRef<HTMLDivElement>(null);
   const search = useIndexedSearch(
     pane?.query || '',
@@ -69,20 +92,8 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       definitions: () =>
         folderCommands({
           ...fileDialogs.actions,
-          open: (entries, _linked, another) => {
-            const origin = activeWorkspace().id;
-            for (const entry of entries)
-              void revealFile(id, entry.path)
-                .then((link) =>
-                  workspace.openPath(entry.path, {
-                    workspaceID: origin,
-                    paneID: id,
-                    linked: true,
-                    another,
-                    link,
-                  }),
-                )
-                .catch(report);
+          open: (entries, linked, another) => {
+            for (const entry of entries) openEntry(entry, linked, another);
           },
           path: () => {},
           search: () => {},
@@ -93,7 +104,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         }),
       valid: (context) => context.workspaceID === activeWorkspace().id,
     },
-    [selected, recipes],
+    [selected, recipes, opening],
   );
   useEffect(() => {
     if (active !== id) return;
@@ -109,61 +120,19 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         })
         .catch(report);
   }, [active, id, selected, workspace]);
-  const handleKey = useFileKeyboard(id, (event) => {
-    if (
-      editable(event.target) ||
-      fileControlOwnsKey(event) ||
-      document.querySelector('dialog[open], .context-menu')
-    )
-      return;
-    const mod = event.metaKey || event.ctrlKey;
-    const invoke = (name: string) => {
-      void registry.invoke(name, { paneID: id }).catch(report);
-    };
-    if (
-      [
-        'ArrowDown',
-        'ArrowUp',
-        'ArrowLeft',
-        'ArrowRight',
-        'Home',
-        'End',
-        'PageUp',
-        'PageDown',
-      ].includes(event.key)
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      selecting.move(entries, event.key, event.shiftKey);
-    } else if (mod && event.key.toLowerCase() === 'a') {
-      event.preventDefault();
-      event.stopPropagation();
-      selecting.all(entries);
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      selecting.clear();
-    } else {
-      const command =
-        event.key === ' '
-          ? 'quick-preview'
-          : event.key === 'Enter' && !mod
-            ? 'rename'
-            : mod
-              ? (
-                  { c: 'copy', x: 'cut', v: 'paste', o: 'open-selection', i: 'info' } as Record<
-                    string,
-                    string
-                  >
-                )[event.key.toLowerCase()]
-              : undefined;
-      if (command) {
-        event.preventDefault();
-        event.stopPropagation();
-        invoke(command);
-      }
-    }
-  });
+  const handleKey = useFileKeyboard(id, (event) =>
+    routeExplorerInput(event, {
+      settings: getState().settings.settings,
+      command: (name) => {
+        void (async () => {
+          if (name === 'paste') await refreshClipboard();
+          await registry.invoke(name, { paneID: id });
+        })().catch(report);
+      },
+      move: (key, range) => selecting.move(entries, key, range),
+      clear: () => selecting.clear(),
+    }),
+  );
   if (!pane) return <Empty title="Search is unavailable" />;
   const props: FileViewProps = {
     entries,
@@ -176,19 +145,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       surface.current?.focus({ preventScroll: true });
       selecting.click(entry, event, entries);
     },
-    open: (entry) => {
-      const origin = activeWorkspace().id;
-      void revealFile(id, entry.path)
-        .then((link) =>
-          workspace.openPath(entry.path, {
-            workspaceID: origin,
-            paneID: id,
-            linked: true,
-            link,
-          }),
-        )
-        .catch(report);
-    },
+    open: (entry) => openEntry(entry),
     context: (entry, event) => {
       event.preventDefault();
       void refreshClipboard().catch(report);
@@ -206,7 +163,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
     },
     drag: (entry: FileEntry, event) => {
       const files = set.has(entry.path) ? selection : [entry.path];
-      event.dataTransfer.setData('application/x-viewer-files', JSON.stringify(files));
+      event.dataTransfer.setData(FILE_DRAG, JSON.stringify(files));
       event.dataTransfer.setData('text/plain', files.join('\n'));
       event.dataTransfer.effectAllowed = 'copyMove';
     },
@@ -221,6 +178,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       data-file-owner={id}
       onPointerDown={() => setActivePane(id)}
       onKeyDownCapture={handleKey}
+      {...drops}
       onClick={(event) => {
         if (
           event.button === 0 &&
@@ -253,23 +211,21 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         <span className="toolbar-spacer" />
         <span>{pane.allLocations ? 'Indexed locations' : pane.path}</span>
       </div>
-      <div className="file-head">
-        <span>Name</span>
-        <span>Date modified</span>
-        <span>Kind</span>
-        <span>Size</span>
-      </div>
-      {search.error ? (
-        <Empty title="Search failed" detail={search.error} />
-      ) : search.running && !entries.length ? (
-        <Loading label="Searching…" />
-      ) : !entries.length ? (
-        <Empty
-          title={search.result?.status.running ? 'Indexing these locations…' : 'No matching files'}
-        />
-      ) : (
-        <ListView {...props} />
-      )}
+      <FileTable paneID={id}>
+        {search.error ? (
+          <Empty title="Search failed" detail={search.error} />
+        ) : search.running && !entries.length ? (
+          <Loading label="Searching…" />
+        ) : !entries.length ? (
+          <Empty
+            title={
+              search.result?.status.running ? 'Indexing these locations…' : 'No matching files'
+            }
+          />
+        ) : (
+          <ListView {...props} />
+        )}
+      </FileTable>
       <footer className="folder-status">
         <span>
           {search.result?.status.running

@@ -28,6 +28,18 @@ function selection() {
   };
 }
 describe('file input selection', () => {
+  it('clears only the removed column branch, including its cursor and cached descendants', () => {
+    const { session, controller } = selection();
+    const nested = { ...entries[0], path: '/files/folder/note.txt', parent: '/files/folder' };
+    controller.click(entries[1], plain, entries);
+    controller.click(nested, { ...plain, metaKey: true }, [nested]);
+    controller.removeBranch('/files/folder');
+    expect(session.selection).toEqual([entries[1].path]);
+    expect(session.cache.has(nested.path)).toBe(false);
+    expect(session.cursor).toBe('');
+    expect(session.anchor).toBe('');
+    expect(session.cache.has(entries[1].path)).toBe(true);
+  });
   it('extends upward repeatedly, shrinks on reversal and crosses its fixed anchor', () => {
     const { session, controller } = selection();
     controller.click(entries[4], plain, entries);

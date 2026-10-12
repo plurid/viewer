@@ -50,7 +50,7 @@ export function sortEntries(
     const value =
       key === 'name'
         ? collator.compare(a.name, b.name)
-        : key === 'kind'
+        : key === 'kind' || key === 'extension'
           ? collator.compare(a.extension, b.extension)
           : a[key] - b[key];
     return (value || collator.compare(a.name, b.name)) * (descending ? -1 : 1);
@@ -84,4 +84,26 @@ export function selectedRange(entries: FileEntry[], anchor: string, target: stri
   return a < 0 || b < 0
     ? [target]
     : entries.slice(Math.min(a, b), Math.max(a, b) + 1).map((entry) => entry.path);
+}
+
+export function fileGroup(entry: FileEntry, group: 'none' | 'kind' | 'modified'): string {
+  if (group === 'none') return '';
+  if (group === 'kind')
+    return entry.directory
+      ? 'Folders'
+      : entry.extension
+        ? entry.extension.toUpperCase() + ' files'
+        : 'Files';
+  return entry.modified ? new Date(entry.modified).toISOString().slice(0, 10) : 'Unknown date';
+}
+export function groupEntries(
+  entries: FileEntry[],
+  group: 'none' | 'kind' | 'modified',
+): FileEntry[] {
+  return group === 'none'
+    ? entries
+    : entries.toSorted(
+        (a, b) =>
+          (group === 'modified' ? -1 : 1) * fileGroup(a, group).localeCompare(fileGroup(b, group)),
+      );
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import type { BrowseSession } from '../workspace/sessions';
 
-type Modifiers = { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean };
+export type FileModifiers = { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean };
 export type FileKey = Pick<
   KeyboardEvent,
   | 'key'
@@ -35,6 +35,7 @@ export function routeFileKeyboard(id: string, event: FileKey): void {
 }
 export function fileControlOwnsKey(event: FileKey): boolean {
   if (!(event.target instanceof Element)) return false;
+  if (event.target.closest('[role="separator"]')) return true;
   if (event.target.closest('.preview-host')) {
     if (
       [
@@ -68,7 +69,7 @@ export class FileSelection {
     const paths = entries.map((entry) => entry.path);
     this.commit(preserve ? [...new Set([...this.session.selection, ...paths])] : paths);
   }
-  click(entry: FileEntry, modifiers: Modifiers, scope: readonly FileEntry[]) {
+  click(entry: FileEntry, modifiers: FileModifiers, scope: readonly FileEntry[]) {
     const { session } = this;
     session.cursor = entry.path;
     if (modifiers.shiftKey) {
@@ -130,6 +131,16 @@ export class FileSelection {
     this.session.cursor = '';
     this.session.anchor = '';
     this.commit([]);
+  }
+  removeBranch(path: string) {
+    const belongs = (value: string) =>
+      value === path ||
+      value.startsWith(path.replace(/[\\/]$/, '') + (path.includes('\\') ? '\\' : '/'));
+    for (const key of this.session.cache.keys()) if (belongs(key)) this.session.cache.delete(key);
+    if (belongs(this.session.cursor)) this.session.cursor = '';
+    if (belongs(this.session.anchor)) this.session.anchor = '';
+    const next = this.session.selection.filter((value) => !belongs(value));
+    if (next.length !== this.session.selection.length) this.commit(next);
   }
 }
 export function useFileSelection(session: BrowseSession, commit: (paths: string[]) => void) {

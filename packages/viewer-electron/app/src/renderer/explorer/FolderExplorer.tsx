@@ -1,6 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { nativeOpening } from './opening';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
-import { indexEntries, reconcileSelection, sortEntries } from '../../domain/files';
+import { groupEntries, indexEntries, reconcileSelection, sortEntries } from '../../domain/files';
 import {
   activeWorkspace,
   getState,
@@ -10,6 +11,7 @@ import {
   setActivePane,
   updatePane,
   useViewer,
+  useFolderPresentation,
 } from '../state/store';
 import { browseSession, useBrowseField } from '../workspace/sessions';
 import { useWorkspace } from '../workspace/context';
@@ -22,26 +24,26 @@ import { ContextMenu } from '../ui/ContextMenu';
 import { useCommands, useCommandSource } from '../commands/context';
 import { folderCommands } from '../commands/folder';
 import { editable } from '../commands/editing';
+import { useListNavigation } from './ListNavigation';
+import { routeExplorerInput } from './input';
 import type { CommandRequest } from '../commands/registry';
 import { revealFile } from './anchors';
 import { SelectionSize } from './sizes';
 import { useFileDialogs } from './FileDialogs';
-import { blankFileSpace, fileControlOwnsKey, useFileKeyboard, useFileSelection } from './selection';
+import { FileTable } from './FileTable';
+import { useColumnNavigation } from './column-navigation';
+import { FILE_DRAG, useFileDrop } from './file-drop';
+import { blankFileSpace, useFileKeyboard, useFileSelection, type FileModifiers } from './selection';
 
-export const FolderExplorer = memo(function FolderExplorer({
-  id,
-  engineID,
-}: {
-  id: string;
-  engineID?: string;
-}) {
+export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string }) {
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id)) as
     FolderPane | undefined;
   const workspace = useWorkspace();
   const registry = useCommands();
   const activeID = useViewer((state) => state.activePane);
   const recipes = useViewer((state) => state.settings.settings.recipes);
-  const foldersFirst = useViewer((state) => state.settings.settings.browsing.foldersFirst);
+  const presentation = useFolderPresentation(pane?.path || '');
+  const foldersFirst = presentation.foldersFirst;
   const listing = useFolder(pane?.path || getState().bootstrap.home);
   const path = pane?.path || '';
   const session = browseSession(id, path);
@@ -52,12 +54,10 @@ export const FolderExplorer = memo(function FolderExplorer({
   const input = useRef<HTMLInputElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const selectionCache = { current: session.cache };
-  const columnScope = useRef<FileEntry[] | null>(null);
   const fileDialogs = useFileDialogs();
   const [searchOpen, setSearchOpen] = useBrowseField(id, path, 'searchOpen');
   const [pathOpen, setPathOpen] = useBrowseField(id, path, 'pathOpen');
   const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest } | null>(null);
-  const [dropping, setDropping] = useState(false);
   const search = useSearch(path, query, subtree, pane?.showHidden || false);
   const sources = subtree && query.trim() ? search.entries : listing.entries;
   const sourceIndex = useMemo(() => indexEntries(sources), [sources]);
@@ -65,21 +65,31 @@ export const FolderExplorer = memo(function FolderExplorer({
   const showHidden = pane?.showHidden;
   const sort = pane?.sort;
   const descending = pane?.descending;
-  const entries = useMemo(() => {
+  const baseEntries = useMemo(() => {
     const needle = query.toLocaleLowerCase();
     return sort
-      ? sortEntries(
-          sources.filter(
-            (entry) =>
-              (showHidden || !entry.hidden) &&
-              (subtree || !query || entry.name.toLocaleLowerCase().includes(needle)),
+      ? groupEntries(
+          sortEntries(
+            sources.filter(
+              (entry) =>
+                (showHidden || !entry.hidden) &&
+                (subtree || !query || entry.name.toLocaleLowerCase().includes(needle)),
+            ),
+            sort,
+            descending ?? false,
+            foldersFirst,
           ),
-          sort,
-          descending ?? false,
-          foldersFirst,
+          presentation.group,
         )
       : [];
-  }, [sources, showHidden, sort, descending, subtree, query, foldersFirst]);
+  }, [sources, showHidden, sort, descending, subtree, query, foldersFirst, presentation.group]);
+  const tree = useListNavigation(
+    id,
+    path,
+    baseEntries,
+    pane?.mode === 'list' && !query && !listing.loading && !listing.error,
+  );
+  const entries = pane?.mode === 'list' ? tree.entries : baseEntries;
   const selected = useMemo(
     () =>
       selection
@@ -88,6 +98,14 @@ export const FolderExplorer = memo(function FolderExplorer({
     [sourceIndex, selection],
   );
   const selectionSet = useMemo(() => new Set(selection), [selection]);
+  const columns = useColumnNavigation(
+    id,
+    path,
+    entries,
+    pane?.mode === 'columns' && !listing.loading && !listing.error,
+    selecting,
+  );
+  const drops = useFileDrop(() => (pane?.mode === 'columns' ? columns.directory() : path));
   useEffect(() => {
     if (listing.loading || listing.error) return;
     setSelection((value) => {
@@ -97,28 +115,17 @@ export const FolderExplorer = memo(function FolderExplorer({
         : next;
     });
   }, [listingIndex, listing.loading, listing.error, path]);
-  const operate = useCallback(
-    async (
-      kind: 'copy' | 'move' | 'duplicate' | 'rename' | 'mkdir' | 'trash',
-      options: { name?: string; destination?: string; sources?: string[] } = {},
-    ) => {
-      await window.viewer.operate({
-        kind,
-        sources: options.sources ?? selection,
-        destination: options.destination,
-        name: options.name,
-      });
-    },
-    [selection],
-  );
   useEffect(() => {
     const content = surface.current?.querySelector('.file-scroll');
     if (content) content.scrollTop = session.scroll;
   }, [id, listing.loading]);
+  const opening = useViewer((state) => state.settings.settings.fileOpening);
   const open = useCallback(
     (entry: FileEntry, linked = false, another = false) => {
       if (entry.directory && !linked) navigate(id, entry.path);
-      else {
+      else if (nativeOpening(entry, opening, linked)) {
+        void window.viewer.openExternal(entry.path).catch(report);
+      } else {
         const origin = activeWorkspace().id;
         void revealFile(id, entry.path)
           .then((link) => {
@@ -126,21 +133,21 @@ export const FolderExplorer = memo(function FolderExplorer({
               activeWorkspace().id === origin &&
               activeWorkspace().panes.some((pane) => pane.id === id && pane.path === path)
             )
-              workspace.open(entry, engineID, { another, link });
+              workspace.open(entry, id, { another, link });
           })
           .catch(report);
       }
     },
-    [workspace, engineID, id, path],
+    [workspace, id, path, opening],
   );
   const select = useCallback(
-    (entry: FileEntry, event: MouseEvent, scope = entries) => {
-      columnScope.current = scope;
+    (entry: FileEntry, event: FileModifiers, scope = entries) => {
       setActivePane(id);
       surface.current?.focus({ preventScroll: true });
-      selecting.click(entry, event, scope);
+      if (pane?.mode === 'columns') columns.choose(entry, event, scope);
+      else selecting.click(entry, event, scope);
     },
-    [entries, id, selecting],
+    [entries, id, selecting, pane?.mode, columns.choose],
   );
   useEffect(() => {
     if (searchOpen) input.current?.focus();
@@ -157,10 +164,11 @@ export const FolderExplorer = memo(function FolderExplorer({
       context: () => ({
         scope: selected.length ? 'files' : 'folder',
         workspaceID: activeWorkspace().id,
+        rootID: workspace.rootID(id),
         paneID: id,
         folder: pane,
         searchOpen,
-        directory: pane?.mode === 'columns' ? selected[0]?.parent || path : path,
+        directory: pane?.mode === 'columns' ? columns.directory() : path,
         path,
         selection: selected,
         clipboard: getState().clipboard,
@@ -179,7 +187,7 @@ export const FolderExplorer = memo(function FolderExplorer({
           path: () => setPathOpen((value) => !value),
           refresh: listing.refresh,
           selectAll: () => {
-            const scope = pane?.mode === 'columns' ? columnScope.current || entries : entries;
+            const scope = pane?.mode === 'columns' ? columns.scope() : entries;
             selecting.all(scope);
           },
         }),
@@ -205,90 +213,51 @@ export const FolderExplorer = memo(function FolderExplorer({
         .catch(report);
   }, [activeID, id, path, selected, workspace]);
   const command = (name: string) => {
-    void registry.invoke(name, { paneID: id }).catch(report);
     setMenu(null);
+    void (async () => {
+      if (name === 'paste') await refreshClipboard();
+      await registry.invoke(name, { paneID: id });
+    })().catch(report);
   };
   const handleKey = useFileKeyboard(id, (event) => {
-    if (
-      !pane ||
-      editable(event.target) ||
-      fileControlOwnsKey(event) ||
-      document.querySelector('dialog[open], .context-menu')
-    )
-      return;
-    const mod = event.metaKey || event.ctrlKey;
-    const scope = pane.mode === 'columns' ? columnScope.current || entries : entries;
-    if (event.altKey && event.key === 'ArrowLeft') {
-      event.preventDefault();
-      event.stopPropagation();
-      command('back');
-    } else if (event.altKey && event.key === 'ArrowRight') {
-      event.preventDefault();
-      event.stopPropagation();
-      command('forward');
-    } else if (mod && event.key === 'ArrowUp') {
-      event.preventDefault();
-      event.stopPropagation();
-      command('parent');
-    } else if (
-      [
-        'ArrowDown',
-        'ArrowUp',
-        'ArrowLeft',
-        'ArrowRight',
-        'Home',
-        'End',
-        'PageUp',
-        'PageDown',
-      ].includes(event.key)
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      const stride =
-        pane.mode === 'grid' && ['ArrowDown', 'ArrowUp'].includes(event.key)
-          ? surface.current?.querySelector('.grid-row')?.childElementCount || 1
-          : 1;
-      selecting.move(scope, event.key, event.shiftKey, stride);
-    } else if (mod && event.key.toLowerCase() === 'a') {
-      event.preventDefault();
-      event.stopPropagation();
-      selecting.all(scope);
-    } else if (mod && ['c', 'x', 'v'].includes(event.key.toLowerCase())) {
-      event.preventDefault();
-      event.stopPropagation();
-      command(
-        ({ c: 'copy', x: 'cut', v: 'paste' } as Record<string, string>)[event.key.toLowerCase()],
-      );
-    } else if (event.key === ' ') {
-      event.preventDefault();
-      event.stopPropagation();
-      command('quick-preview');
-    } else if (event.key === 'Enter' && !mod) {
-      event.preventDefault();
-      event.stopPropagation();
-      command('rename');
-    } else if (mod && event.key.toLowerCase() === 'o') {
-      event.preventDefault();
-      event.stopPropagation();
-      command('open-selection');
-    } else if (mod && event.key.toLowerCase() === 'i') {
-      event.preventDefault();
-      event.stopPropagation();
-      command('info');
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      selecting.clear();
-      setMenu(null);
-    } else if (mod && event.key === 'Backspace') {
-      event.preventDefault();
-      event.stopPropagation();
-      command('trash');
-    }
+    if (!pane) return;
+    routeExplorerInput(event, {
+      settings: getState().settings.settings,
+      command,
+      clear: () => selecting.clear(),
+      horizontal:
+        pane.mode === 'columns'
+          ? (direction) => {
+              if (direction === 'right') columns.right();
+              else if (!columns.left()) command('parent');
+            }
+          : pane.mode === 'list'
+            ? (direction) =>
+                tree.horizontal(direction, (entry) =>
+                  selecting.click(
+                    entry,
+                    { shiftKey: false, metaKey: false, ctrlKey: false },
+                    entries,
+                  ),
+                )
+            : undefined,
+      move: (key, range) => {
+        const stride =
+          pane.mode === 'grid' && ['ArrowUp', 'ArrowDown'].includes(key)
+            ? surface.current?.querySelector('.grid-row')?.childElementCount || 1
+            : 1;
+        if (pane.mode === 'columns') columns.move(key, range);
+        else selecting.move(entries, key, range, stride);
+      },
+    });
   });
-  if (!pane || pane.type !== 'folder') return <Empty title="Folder plane is unavailable" />;
+  if (!pane) return <Empty title="Folder is unavailable" />;
   const viewProps: FileViewProps = {
     entries,
+    presentation,
+    depths: tree.depths,
+    expanded: tree.expanded,
+    toggle: tree.toggle,
     selection,
     cursor: session.cursor,
     selectionSet,
@@ -298,6 +267,7 @@ export const FolderExplorer = memo(function FolderExplorer({
     context: (entry, event) => {
       event.preventDefault();
       selecting.target(entry);
+      if (pane.mode === 'columns') columns.reveal(entry);
       setActivePane(id);
       void refreshClipboard().catch(report);
       setMenu({
@@ -308,14 +278,15 @@ export const FolderExplorer = memo(function FolderExplorer({
           scope: 'files',
           context: {
             selection: selectionSet.has(entry.path) ? selected : [entry],
-            directory: pane.mode === 'columns' ? entry.parent : path,
+            directory: pane.mode === 'columns' ? columns.directory() : path,
           },
         },
       });
     },
     drag: (entry, event) => {
       const files = selectionSet.has(entry.path) ? selection : [entry.path];
-      event.dataTransfer.setData('application/x-viewer-files', JSON.stringify(files));
+      event.dataTransfer.setData(FILE_DRAG, JSON.stringify(files));
+      event.dataTransfer.effectAllowed = 'copyMove';
       const shortcuts = files.flatMap((path) => {
         const item = selectionCache.current.get(path) || sourceIndex.paths.get(path);
         return item?.directory ? [{ path: item.path }] : [];
@@ -330,7 +301,7 @@ export const FolderExplorer = memo(function FolderExplorer({
   const separator = path.includes('\\') ? '\\' : '/';
   return (
     <div
-      className={`folder-explorer ${dropping ? 'drop-target' : ''}`}
+      className="folder-explorer"
       ref={surface}
       data-file-owner={id}
       onScrollCapture={(event) => {
@@ -351,7 +322,6 @@ export const FolderExplorer = memo(function FolderExplorer({
           blankFileSpace(event.target)
         ) {
           selecting.clear();
-          columnScope.current = null;
           surface.current?.focus({ preventScroll: true });
         }
       }}
@@ -363,7 +333,14 @@ export const FolderExplorer = memo(function FolderExplorer({
         setMenu({
           x: event.clientX,
           y: event.clientY,
-          request: { paneID: id, scope: 'folder', context: { selection: [], directory: path } },
+          request: {
+            paneID: id,
+            scope: 'folder',
+            context: {
+              selection: [],
+              directory: pane.mode === 'columns' ? columns.directory() : path,
+            },
+          },
         });
       }}
       onCopy={(event) => {
@@ -384,31 +361,7 @@ export const FolderExplorer = memo(function FolderExplorer({
           command('paste');
         }
       }}
-      onDragOver={(event) => {
-        if (event.dataTransfer.types.includes('application/x-viewer-files')) {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move';
-          setDropping(true);
-        }
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropping(false);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        setDropping(false);
-        const data = event.dataTransfer.getData('application/x-viewer-files');
-        if (!data) return;
-        try {
-          const files: unknown = JSON.parse(data);
-          if (!Array.isArray(files) || files.some((file) => typeof file !== 'string')) return;
-          void operate(event.altKey ? 'copy' : 'move', { sources: files, destination: path }).catch(
-            report,
-          );
-        } catch {
-          report('The dragged file selection could not be read.');
-        }
-      }}
+      {...drops}
     >
       {pathOpen && (
         <div className="breadcrumb-row">
@@ -463,65 +416,47 @@ export const FolderExplorer = memo(function FolderExplorer({
           <button onClick={listing.refresh}>Retry</button>
         </div>
       )}
-      {pane.mode === 'list' && (
-        <div className="file-head">
-          <button
-            onClick={() =>
-              updatePane(id, { sort: 'name', descending: pane.sort === 'name' && !pane.descending })
-            }
-          >
-            Name {pane.sort === 'name' && (pane.descending ? '↓' : '↑')}
-          </button>
-          <button
-            onClick={() =>
-              updatePane(id, {
-                sort: 'modified',
-                descending: pane.sort === 'modified' && !pane.descending,
-              })
-            }
-          >
-            Date modified
-          </button>
-          <button
-            onClick={() =>
-              updatePane(id, { sort: 'kind', descending: pane.sort === 'kind' && !pane.descending })
-            }
-          >
-            Kind
-          </button>
-          <button
-            onClick={() =>
-              updatePane(id, { sort: 'size', descending: pane.sort === 'size' && !pane.descending })
-            }
-          >
-            Size
-          </button>
-        </div>
-      )}
       <div className="folder-content">
-        {listing.loading && !subtree ? (
-          <Loading label="Reading folder…" />
-        ) : !entries.length ? (
-          <Empty
-            icon={query ? 'search' : 'folder'}
-            title={
-              query ? (search.running ? 'Searching…' : 'No matching files') : 'This folder is empty'
-            }
-            detail={
-              query
-                ? 'Try a different name or include subfolders.'
-                : 'Create a folder or drop files here.'
-            }
-          />
-        ) : pane.mode === 'grid' ? (
-          <GridView {...viewProps} />
-        ) : pane.mode === 'columns' ? (
-          <ColumnsView path={path} {...viewProps} />
-        ) : pane.mode === 'gallery' ? (
-          <GalleryView {...viewProps} />
-        ) : (
-          <ListView {...viewProps} />
-        )}
+        <FileTable
+          paneID={id}
+          enabled={pane.mode === 'list'}
+          sort={pane.sort}
+          descending={pane.descending}
+          onSort={(sort) =>
+            updatePane(id, { sort, descending: pane.sort === sort && !pane.descending })
+          }
+        >
+          {listing.loading && !subtree ? (
+            <Loading label="Reading folder…" />
+          ) : !entries.length ? (
+            <Empty
+              icon={query ? 'search' : 'folder'}
+              title={
+                query
+                  ? search.running
+                    ? 'Searching…'
+                    : 'No matching files'
+                  : 'This folder is empty'
+              }
+              detail={
+                query
+                  ? 'Try a different name or include subfolders.'
+                  : 'Create a folder or drop files here.'
+              }
+            />
+          ) : pane.mode === 'grid' ? (
+            <GridView {...viewProps} />
+          ) : pane.mode === 'columns' ? (
+            <ColumnsView path={path} navigation={columns} {...viewProps} />
+          ) : pane.mode === 'gallery' ? (
+            <GalleryView {...viewProps} />
+          ) : (
+            <>
+              <ListView {...viewProps} />
+              {tree.monitors}
+            </>
+          )}
+        </FileTable>
       </div>
       <footer className="folder-status">
         <span>

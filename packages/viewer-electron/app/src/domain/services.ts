@@ -1,4 +1,6 @@
-import type { FileEntry, UIPreferences, ViewMode } from './contracts';
+import type { FileEntry, UIPreferences, ViewMode, SortKey } from './contracts';
+import type { FolderOverride } from './folder-presentation';
+import type { CustomAction, TerminalProfile } from './automation';
 export type ProviderKind = 'openai' | 'anthropic' | 'local';
 export interface ModelProvider {
   id: string;
@@ -25,6 +27,10 @@ export interface ApplicationSettings {
   appearance: 'system' | 'dark' | 'light';
   browsing: {
     mode: ViewMode;
+    sort: SortKey;
+    descending: boolean;
+    group: 'none' | 'kind' | 'modified';
+    columnWidth: number;
     density: 'comfortable' | 'compact';
     foldersFirst: boolean;
     showHidden: boolean;
@@ -40,6 +46,19 @@ export interface ApplicationSettings {
       | 'music'
       | 'custom';
     newPlanePath: string;
+  };
+  folders: Record<string, FolderOverride>;
+  fileOpening: {
+    default: 'automatic' | 'plane' | 'native';
+    types: Record<string, 'plane' | 'native'>;
+  };
+  customActions: CustomAction[];
+  terminals: {
+    application: string;
+    profileID: string;
+    profiles: TerminalProfile[];
+    scrollback: number;
+    tmux: { executable: string; session: string; socket: string; windowName: string };
   };
   previews: { thumbnailSize: number; maxImagePixels: number; maxModelMB: number };
   search: { roots: string[]; exclusions: string[]; contentRoots: string[]; paused: boolean };
@@ -63,10 +82,12 @@ export interface SettingsSnapshot {
   ui: UIPreferences;
   look: 'dark' | 'light';
   credentials: string[];
+  config?: { path: string; diagnostics: string[]; changes: string[] };
 }
 export interface SettingsPatch {
   path: string;
   value: unknown;
+  keys?: string[];
 }
 export interface IndexStatus {
   roots: {
@@ -226,12 +247,36 @@ export function defaultSettings(home: string): ApplicationSettings {
     appearance: 'system',
     browsing: {
       mode: 'list',
+      sort: 'name',
+      descending: false,
+      group: 'none',
+      columnWidth: 280,
       density: 'comfortable',
       foldersFirst: true,
       showHidden: false,
       restoreSession: true,
       newPlaneLocation: 'current',
       newPlanePath: '',
+    },
+    folders: {},
+    fileOpening: {
+      default: 'automatic',
+      types: {
+        doc: 'native',
+        docx: 'native',
+        xls: 'native',
+        xlsx: 'native',
+        ppt: 'native',
+        pptx: 'native',
+      },
+    },
+    customActions: [],
+    terminals: {
+      application: 'auto',
+      profileID: 'login',
+      profiles: [{ id: 'login', name: 'Login shell', executable: '', args: ['-l'], env: {} }],
+      scrollback: 10000,
+      tmux: { executable: 'tmux', session: 'viewer', socket: '', windowName: '{folder}' },
     },
     previews: { thumbnailSize: 256, maxImagePixels: 64000000, maxModelMB: 256 },
     search: {

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
+import { parse } from 'jsonc-parser';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
@@ -25,6 +26,21 @@ const binary = path.join(
   `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`,
 );
 const fixture = await createFixtures();
+const longFilename =
+  '2000, J. E. Rehder, The mastery and uses of fire in antiquity, McGill-Queen’s University Press, notes and references for the publication naming workflow.txt';
+if (process.env.VIEWER_TEST_SCENARIO === 'chrome')
+  await writeFile(
+    path.join(fixture.files, longFilename),
+    'Generated long-filename layout fixture.',
+  );
+if (process.env.VIEWER_TEST_SCENARIO === 'file-workflows') {
+  for (const folder of ['Source', 'Target', 'Peer'])
+    await mkdir(path.join(fixture.files, 'Transfers', folder));
+  await writeFile(
+    path.join(fixture.files, 'Transfers', 'Source', 'Note.txt'),
+    'Generated clipboard and drag fixture.',
+  );
+}
 const profile = path.join(fixture.root, 'profile');
 await mkdir(profile);
 const stateFile = path.join(profile, 'viewer-state-v1.json');
@@ -34,7 +50,38 @@ await writeFile(
   JSON.stringify({
     version: 1,
     revision: 0,
-    settings: { ...defaultSettings(fixture.files), appearance: fixture.state.look },
+    settings: {
+      ...defaultSettings(fixture.files),
+      appearance: fixture.state.look,
+      ...(process.env.VIEWER_TEST_SCENARIO === 'foundations'
+        ? {
+            terminals: {
+              ...defaultSettings(fixture.files).terminals,
+              profiles: [
+                { id: 'login', name: 'Fixture shell', executable: '/bin/sh', args: [], env: {} },
+              ],
+            },
+            customActions: [
+              {
+                id: 'inspect-path',
+                name: 'Inspect path',
+                aliases: ['ip'],
+                icon: 'code',
+                shortcut: '',
+                order: 0,
+                pinned: true,
+                when: { target: 'any', extensions: [], min: 0, max: 10000 },
+                executor: {
+                  kind: 'executable',
+                  executable: '/usr/bin/printf',
+                  args: ['%s\\n', '{directory}'],
+                  perItem: false,
+                },
+              },
+            ],
+          }
+        : {}),
+    },
     ui: normalizePreferences(fixture.state.ui),
   }),
 );
@@ -98,7 +145,9 @@ async function until<T>(
       );
     await delay(100);
   }
-  throw new Error(`Timed out: ${label}. Last observation: ${String(last).slice(0, 2000)}`);
+  throw new Error(
+    `Timed out: ${label}. Last observation: ${(typeof last === 'object' && !(last instanceof Error) ? JSON.stringify(last) : String(last)).slice(0, 2000)}`,
+  );
 }
 function command<T = Record<string, unknown>>(
   method: string,
@@ -345,7 +394,7 @@ async function setting(label: string, wait = true): Promise<void> {
     'window.viewer.settingsGet().then(value => value.revision)',
   );
   await settingsEvaluate(
-    `(() => { const row = Array.from(document.querySelectorAll('.settings-row')).find(row => row.textContent.trim() === ${JSON.stringify(label)}); const input = row?.querySelector('input'); if (!input) throw new Error('Missing setting'); input.click(); })()`,
+    `(() => { const row = Array.from(document.querySelectorAll('.settings-row')).find(row => row.querySelector('span')?.firstChild?.textContent.trim() === ${JSON.stringify(label)}); const input = row?.querySelector('input'); if (!input) throw new Error('Missing setting'); input.click(); })()`,
   );
   if (wait)
     await until(
@@ -355,9 +404,18 @@ async function setting(label: string, wait = true): Promise<void> {
     );
 }
 async function tab(label: string): Promise<void> {
+  if (!settingsMode) await evaluate('window.viewer.openSettings()');
   await openSettingsProbe();
   const category =
     ({ Appearance: 'Browsing', Sidebar: 'Navigation' } as Record<string, string>)[label] || label;
+  await until(
+    () =>
+      settingsEvaluate<boolean>(
+        `Array.from(document.querySelectorAll('.settings-navigation button')).some(button => button.textContent.trim() === ${JSON.stringify(category)})`,
+      ),
+    Boolean,
+    `Settings category ${category}`,
+  );
   await settingsEvaluate(
     `Array.from(document.querySelectorAll('.settings-navigation button')).find(button => button.textContent.trim() === ${JSON.stringify(category)}).click()`,
   );
@@ -531,17 +589,673 @@ async function verifySelectionReliability(): Promise<void> {
   );
 }
 
+async function verifyFoundations(): Promise<void> {
+  const folderID = fixture.state.workspaces[0].panes[0].id;
+  const rootNode = () =>
+    `window.__qaEngine.tree.get().find(node=>node.routeDivisions.plane.parameters.id===${JSON.stringify(folderID)})`;
+  await key('3', 'Digit3', 4);
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".file-column").length'),
+    (count) => count > 0,
+    'Finder columns shortcut',
+  );
+  const edge = '.browser-column-resizer';
+  await click(edge);
+  await key('ArrowRight', 'ArrowRight', 8);
+  await until(
+    () =>
+      evaluate<number>(
+        `window.viewer.settingsGet().then(value=>value.settings.folders[${JSON.stringify(fixture.files)}]?.columnWidth)`,
+      ),
+    (width) => width === 330,
+    'keyboard browser column resize persisted',
+  );
+  await click(fileSelector(path.join(fixture.files, 'Transfers')));
+  await key('ArrowRight', 'ArrowRight');
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".file-column").length'),
+    (count) => count === 2,
+    'Finder Right enters the selected folder',
+  );
+  await key('ArrowLeft', 'ArrowLeft');
+  assert.deepEqual(
+    await evaluate(
+      'Array.from(document.querySelectorAll(".file-column [aria-selected=true]")).map(el=>el.dataset.filePath)',
+    ),
+    [path.join(fixture.files, 'Transfers')],
+    'Finder Left returns selection to the parent folder',
+  );
+  await key('1', 'Digit1', 4);
+  await click(fileSelector(path.join(fixture.files, 'Transfers')));
+  await key('ArrowDown', 'ArrowDown', 4);
+  await until(
+    () => evaluate<string>('document.querySelector(".plane-title")?.textContent || ""'),
+    (name) => name.includes('Transfers'),
+    'Cmd Down enters a list folder',
+  );
+  await key('3', 'Digit3', 4);
+  await key('ArrowUp', 'ArrowUp', 4);
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".file-head").length'),
+    (count) => count > 0,
+    'parent restores its own List view',
+  );
+  await evaluate('document.querySelector(".file-scroll").click()');
+  await paletteCommand('Open terminal plane');
+  await until(
+    () =>
+      evaluate<string[]>(
+        'Array.from(document.querySelectorAll(".terminal-plane")).map(el=>el.dataset.terminalId)',
+      ),
+    (ids) => ids.length === 1,
+    'embedded terminal lazy mount',
+  );
+  const terminalID = await evaluate<string>(
+    'document.querySelector(".terminal-plane").dataset.terminalId',
+  );
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".terminal-plane .xterm-screen").length'),
+    (count) => count === 1,
+    'packaged xterm ready',
+  );
+  await evaluate(
+    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify("printf 'PTY_%s\\n' READY; stty size\r")})`,
+  );
+  await until(
+    () =>
+      evaluate<string>('document.querySelector(".terminal-plane .xterm-rows")?.textContent || ""'),
+    (text) => text.includes('PTY_READY'),
+    'real PTY output',
+  );
+  await evaluate(
+    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify('sleep 30\r')})`,
+  );
+  await delay(100);
+  await evaluate(
+    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify("\u0003printf 'INTERRUPT%s\\n' ED\r")})`,
+  );
+  await until(
+    () =>
+      evaluate<string>('document.querySelector(".terminal-plane .xterm-rows")?.textContent || ""'),
+    (text) => text.includes('INTERRUPTED'),
+    'Ctrl C interrupts the foreground PTY command',
+  );
+  const child = await evaluate<{ parent: string; child: string; angle: number }>(
+    `(() => { const parent=${rootNode()};const child=parent.children.find(node=>node.routeDivisions.plane.parameters.id===${JSON.stringify(terminalID)});return {parent:parent.planeID,child:child.planeID,angle:Math.abs(child.location.rotateY-parent.location.rotateY)}; })()`,
+  );
+  assert.ok(child.child, 'Terminal belongs to the originating root');
+  assert.ok(Math.abs(child.angle - 90.1) < 0.001, 'Terminal opens at 90.1 degrees to its parent');
+  await snapshot('desktop-native-terminal.png');
+  await paletteCommand('New folder plane');
+  await until(
+    () => evaluate<number>('window.__qaEngine.tree.get().length'),
+    (count) => count === 2,
+    'new root from terminal context',
+  );
+  await paletteCommand('Open terminal plane');
+  await until(
+    () => evaluate<number>('window.__qaEngine.tree.get().flatMap(node=>node.children||[]).length'),
+    (count) => count === 2,
+    'each root owns its terminal',
+  );
+  const terminals = await evaluate<string[]>(
+    'window.__qaEngine.tree.get().flatMap(root=>(root.children||[]).filter(node=>node.route.includes("terminals")).map(node=>node.routeDivisions.plane.parameters.id))',
+  );
+  assert.equal(new Set(terminals).size, 2);
+  await settleCamera();
+  await evaluate(
+    'window.__qaEngine.focus();window.__qaEngine.selection.clear();window.__qaEngine.camera.moveBy({pan:{x:100000,y:0}},{animate:false})',
+  );
+  await until(
+    () =>
+      evaluate<boolean>(
+        `!document.querySelector('.terminal-plane[data-terminal-id="${terminalID}"]')`,
+      ),
+    Boolean,
+    'inactive terminal React view detaches outside the camera',
+  );
+  // Exceed the flow-control high-water mark while no terminal React view is mounted.
+  await evaluate(
+    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify("yes CULL_OUTPUT_abcdefghijklmnopqrstuvwxyz | head -c 1200000; printf '\\nSURVIVED_%s\\n' CULL\r")})`,
+  );
+  await delay(300);
+  await paletteCommand('Frame all planes');
+  await settleCamera();
+  await until(
+    () => evaluate<string>('document.body.textContent'),
+    (text) => text.includes('SURVIVED_CULL'),
+    'terminal screen and PTY survive culling',
+  );
+  for (const category of ['Terminals', 'Configuration', 'Agents']) {
+    await tab(category);
+    await snapshot('desktop-native-' + category.toLowerCase() + '.png');
+  }
+  await tab('Actions');
+  await settingsEvaluate(
+    '(() => { const summary=Array.from(document.querySelectorAll("details summary")).find(el=>el.textContent.includes("Inspect path"));summary.click();summary.scrollIntoView({block:"start"}); })()',
+  );
+  await snapshot('desktop-native-custom-action.png');
+  await click('dialog [aria-label="Close"]');
+  const configPath = path.join(profile, 'config.jsonc');
+  const config = JSON.parse((await readFile(configPath, 'utf8')).replace(/^\/\/.*$/gm, ''));
+  config.settings.folders[fixture.files].mode = 'grid';
+  await writeFile(
+    configPath,
+    '// Native external editor fixture.\n' + JSON.stringify(config, null, 2),
+  );
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".grid-scroll").length'),
+    (count) => count > 0,
+    'external configuration edit reaches all matching roots',
+  );
+  await evaluate(
+    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(fixture.root)}]}],s.revision))`,
+  );
+  const agentCall = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
+    const connection = JSON.parse(
+      await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
+    );
+    const token = JSON.parse(await readFile(path.join(profile, 'agent-token-v1.json'), 'utf8'));
+    return new Promise<T>((resolve, reject) => {
+      const stream = net.createConnection(connection.socket);
+      const timer = setTimeout(() => {
+        stream.destroy();
+        reject(new Error('Fixture MCP request timed out.'));
+      }, 10000);
+      let data = '';
+      stream.on('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      stream.on('connect', () =>
+        stream.write(
+          JSON.stringify({
+            id: 1,
+            token,
+            request: { method: 'tools/call', params: { name, arguments: args } },
+          }) + '\n',
+        ),
+      );
+      stream.on('data', (chunk) => {
+        data += chunk.toString();
+        if (!data.includes('\n')) return;
+        clearTimeout(timer);
+        stream.end();
+        const reply = JSON.parse(data.slice(0, data.indexOf('\n')));
+        if (reply.error) reject(new Error(reply.error));
+        else resolve(JSON.parse(reply.value.content[0].text));
+      });
+    });
+  };
+  await click(`[data-file-owner=${JSON.stringify(folderID)}] .file-scroll`);
+  await until(
+    () => agentCall<{ commands: { id: string }[] }>('list_commands'),
+    (catalog) => catalog.commands.some((command) => command.id === 'open-terminal-plane'),
+    'agent command catalog uses the focused file context',
+  );
+  const processProposal = await agentCall<{ id: string; requiresUserReview: boolean }>(
+    'propose_command',
+    { commandID: 'custom.inspect-path' },
+  );
+  assert.equal(processProposal.requiresUserReview, true);
+  await until(
+    () =>
+      evaluate<boolean>(
+        'Array.from(document.querySelectorAll("dialog[open] button")).some(button=>button.textContent==="Run action")',
+      ),
+    Boolean,
+    'custom process proposal requires review',
+  );
+  await evaluate(
+    'Array.from(document.querySelectorAll("dialog[open] button")).find(button=>button.textContent==="Run action").click()',
+  );
+  const processResult = await until(
+    () =>
+      agentCall<{ status: string; task?: { output: string } }>('get_proposal', {
+        id: processProposal.id,
+      }),
+    (result) => result.status === 'completed',
+    'agent process completion and bounded output',
+  );
+  assert.ok(processResult.task?.output.includes(fixture.files));
+  const proposal = await agentCall<{ id: string; requiresUserReview: boolean }>('propose_command', {
+    commandID: 'open-terminal-plane',
+  });
+  assert.equal(proposal.requiresUserReview, true);
+  await until(
+    () =>
+      evaluate<boolean>(
+        'Array.from(document.querySelectorAll("dialog[open] button")).some(button=>button.textContent==="Run action")',
+      ),
+    Boolean,
+    'agent action review appears before execution',
+  );
+  await snapshot('desktop-native-agent-review.png');
+  await evaluate(
+    'Array.from(document.querySelectorAll("dialog[open] button")).find(button=>button.textContent==="Run action").click()',
+  );
+  await until(
+    () => agentCall<{ status: string }>('get_proposal', { id: proposal.id }),
+    (result) => result.status === 'completed',
+    'agent action waits for the renderer acknowledgement',
+  );
+  assert.equal(
+    await evaluate<number>(`${rootNode()}.children.length`),
+    2,
+    'The approved terminal is created under its captured root',
+  );
+  await assert.rejects(
+    () => agentCall('propose_config', { patches: [{ path: 'executionApprovals', value: [] }] }),
+    /Unknown setting/,
+  );
+  await evaluate(
+    'window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:"settings.folders",value:{}}],s.revision))',
+  );
+  await reloadPage();
+  await until(
+    () => evaluate<boolean>('!!document.querySelector("[data-viewer-plane]")'),
+    Boolean,
+    'reloaded workspace',
+  );
+  assert.deepEqual(
+    await evaluate('window.viewer.settingsGet().then(value=>value.settings.folders)'),
+    {},
+    'cleared folder overrides stay cleared after reopening',
+  );
+  await verifyBackgroundApp();
+  assert.deepEqual(exceptions, []);
+  console.log(
+    'Native foundations verified: folder preferences, Finder keys, columns resize, real PTYs, independent roots, Ctrl C, culling, and JSONC live reload.',
+  );
+}
+
+async function verifyConfiguredChrome(): Promise<void> {
+  const unchanged = await inventory();
+  const view = '.plane-controls [aria-label="View mode"]';
+  for (let index = 0; index < 2; index++) {
+    await click(view);
+    assert.equal(await evaluate('document.querySelectorAll(".context-menu").length'), 1);
+    assert.equal(
+      await evaluate(
+        `document.querySelector(${JSON.stringify(view)}).getAttribute('aria-expanded')`,
+      ),
+      'true',
+    );
+    await click(view);
+    assert.equal(await evaluate('document.querySelectorAll(".context-menu").length'), 0);
+    assert.equal(
+      await evaluate(
+        `document.querySelector(${JSON.stringify(view)}).getAttribute('aria-expanded')`,
+      ),
+      'false',
+    );
+  }
+  await click(view);
+  await key('Escape', 'Escape');
+  await click(view);
+  await evaluate('document.body.click()');
+  await key('Escape', 'Escape');
+  await tab('Space');
+  const controls = [
+    'Navigation button',
+    'Back button',
+    'Forward button',
+    'View menu',
+    'Folder search',
+    'Frame plane button',
+    'Dock plane button',
+    'Actions menu',
+    'Close plane button',
+  ];
+  for (const control of controls) await setting(control);
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".plane-controls button").length'),
+    (count) => count === 0,
+    'all toolbar controls can be hidden independently',
+  );
+  await settingsEvaluate(
+    `Array.from(document.querySelectorAll('.settings-page h2')).find(heading => heading.textContent === 'Plane toolbar').scrollIntoView({block:'start'})`,
+  );
+  await snapshot('desktop-native-toolbar-settings.png');
+  for (const control of controls) await setting(control);
+  await tab('Browsing');
+  for (const column of ['Date modified', 'Kind', 'Size']) await setting(column);
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".file-head [data-column]").length'),
+    (count) => count === 1,
+    'metadata columns can all be hidden while Name remains visible',
+  );
+  for (const column of ['Date modified', 'Kind', 'Size', 'Date created', 'Extension'])
+    await setting(column);
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".file-head [data-column]").length'),
+    (count) => count === 6,
+    'optional created and extension columns appear',
+  );
+  for (const column of ['Date created', 'Extension']) await setting(column);
+  await click('dialog [aria-label="Close"]');
+  const widths = () =>
+    evaluate<number[]>(
+      `Array.from(document.querySelectorAll('.file-head [data-column]')).map(cell=>cell.offsetWidth)`,
+    );
+  const before = await widths();
+  const edge = await evaluate<{ x: number; y: number }>(
+    `(() => { const r=document.querySelector('[aria-label="Resize Name column"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`,
+  );
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    button: 'none',
+    buttons: 0,
+    ...edge,
+  });
+  await command('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+    ...edge,
+  });
+  // Settings-close publication and the pointer's focus change are separate from
+  // resizing. Let those commits settle before measuring pointer-movement work.
+  await until(
+    async () => {
+      const before = await evaluate<number>('window.__qaCommits');
+      await delay(100);
+      return (await evaluate<number>('window.__qaCommits')) === before;
+    },
+    Boolean,
+    'renderer settled before measuring column resize',
+  );
+  const commits = await evaluate<number>('window.__qaCommits');
+  for (let index = 1; index <= 5; index++)
+    await command('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      button: 'left',
+      buttons: 1,
+      x: edge.x + index * 25,
+      y: edge.y,
+    });
+  assert.equal(
+    await evaluate('window.__qaCommits'),
+    commits,
+    'Resizing should not rerender the file list on every pointer movement',
+  );
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+    x: edge.x + 125,
+    y: edge.y,
+  });
+  const after = await widths();
+  assert.ok(after[0] > before[0] + 50, `Name column grew from ${before[0]} to ${after[0]}`);
+  assert.deepEqual(after.slice(1), before.slice(1));
+  await until(
+    () =>
+      evaluate<number>(
+        `window.viewer.settingsGet().then(value=>value.settings.folders[${JSON.stringify(fixture.files)}]?.list?.widths?.name ?? 0)`,
+      ),
+    (value) => value === after[0],
+    'resized width persisted to settings',
+  );
+  await click('[aria-label="Resize Name column"]', 2);
+  await until(
+    () =>
+      evaluate<number>(
+        `window.viewer.settingsGet().then(value=>value.settings.folders[${JSON.stringify(fixture.files)}]?.list?.widths?.name ?? 0)`,
+      ),
+    (value) => value === 0,
+    'double-click restores flexible Name width',
+  );
+  await tab('Browsing');
+  await setting('Wrap long filenames');
+  await click('dialog [aria-label="Close"]');
+  await evaluate(
+    `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, longFilename)))}).scrollIntoView({block:'nearest'})`,
+  );
+  const fullName = await evaluate<{ title: string; wraps: boolean }>(
+    `(() => { const text=document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, longFilename)))}).querySelector('.filename');return {title:text.title,wraps:text.offsetHeight>parseFloat(getComputedStyle(text).lineHeight)*1.5}; })()`,
+  );
+  assert.equal(fullName.title, longFilename);
+  assert.equal(fullName.wraps, true);
+  await snapshot('desktop-native-list-wrap.png');
+  await tab('Browsing');
+  await setting('Wrap long filenames');
+  await click('dialog [aria-label="Close"]');
+  await until(
+    () =>
+      evaluate<number>(
+        `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, longFilename)))}).parentElement.offsetHeight`,
+      ),
+    (height) => height === 36,
+    'disabling wrapping restores the normal virtual row height',
+    3000,
+  );
+  await click(fileSelector(path.join(fixture.files, 'README.md')));
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Rename actions"]')`),
+    Boolean,
+    'rename action picker',
+  );
+  assert.deepEqual(
+    await evaluate(
+      `Array.from(document.querySelector('[aria-label="Rename actions"]').options).slice(1).map(option=>option.value)`,
+    ),
+    ['recipe.rename', 'recipe.batch-rename'],
+  );
+  await snapshot('desktop-native-rename-actions.png');
+  await click('dialog [aria-label="Close"]');
+  await click(fileSelector(path.join(fixture.files, 'Documents')), 2);
+  const book = path.join(fixture.files, 'Documents', 'Book.epub');
+  await until(text, (value) => value.includes('Book.epub'), 'book listing for rename');
+  await click(fileSelector(book));
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Rename actions"]')`),
+    Boolean,
+    'book rename action picker',
+  );
+  // Exercise selection changing independently after the modal captured its target.
+  await evaluate(
+    `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Documents', 'Project notes.md')))}).click()`,
+  );
+  await evaluate(
+    `(() => { const picker=document.querySelector('[aria-label="Rename actions"]');picker.value='recipe.book-name';picker.dispatchEvent(new Event('change',{bubbles:true})); })()`,
+  );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".action-config")'),
+    Boolean,
+    'rename modal transfers to action setup',
+  );
+  assert.equal(await evaluate('document.querySelectorAll("dialog[open]").length'), 1);
+  await click('.action-config .primary');
+  const plans = await until(
+    () => evaluate<import('../src/domain/services').ActionPlan[]>('window.viewer.actionList()'),
+    (plans) => plans.some((plan) => plan.recipeID === 'book-name' && plan.status === 'review'),
+    'rename action produces a review proposal',
+  );
+  const plan = plans.find((plan) => plan.recipeID === 'book-name' && plan.status === 'review')!;
+  assert.deepEqual(plan.context.sources, [book]);
+  assert.equal(
+    path.basename(plan.rows[0].destination),
+    '2000, J. E. Rehder, Fire in antiquity, Fixture Press.epub',
+  );
+  assert.deepEqual(
+    await inventory(),
+    unchanged,
+    'Choosing a rename action must not apply any file change',
+  );
+  await click('dialog [aria-label="Close"]');
+  console.log(
+    'Configured chrome: toolbar toggles, view-menu toggle, column visibility/resize/wrapping, captured-target rename action review.',
+  );
+}
+
+async function verifyColumnWorkflows(): Promise<void> {
+  await paletteCommand('Columns view');
+  await click(fileSelector(path.join(fixture.files, 'Data')));
+  await key('ArrowDown', 'ArrowDown');
+  const selected = await evaluate<string>(
+    'document.querySelector(".file-row.is-selected")?.getAttribute("data-file-path") || ""',
+  );
+  assert.equal(path.basename(selected), 'Documents');
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".file-column:nth-child(2) .column-title")?.textContent || ""',
+      ),
+    (title) => title === 'Documents',
+    'arrow selection reveals the selected folder column',
+    3000,
+  );
+  await key('ArrowRight', 'ArrowRight');
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".file-row.is-selected")?.getAttribute("data-file-path") || ""',
+      ),
+    (value) => path.dirname(value) === path.join(fixture.files, 'Documents'),
+    'Right selects inside the folder',
+  );
+  await evaluate(
+    'window.__qaEngine.focus();window.__qaEngine.selection.clear();window.__qaEngine.camera.moveBy({pan:{x:100000,y:0}},{animate:false})',
+  );
+  await until(
+    () => evaluate<boolean>('!document.querySelector(".folder-explorer")'),
+    Boolean,
+    'offscreen column explorer detaches',
+    5000,
+  );
+  await evaluate(
+    'window.__qaEngine.camera.frame({planeID:window.__qaEngine.tree.get()[0].planeID},{animate:false})',
+  );
+  await settleCamera();
+  await until(text, (value) => value.includes('Project brief.pdf'), 'column branch reattaches');
+  await evaluate('document.querySelector(".folder-explorer").focus()');
+  await key('ArrowDown', 'ArrowDown');
+  assert.equal(
+    path.dirname(
+      await evaluate<string>(
+        'document.querySelector(".file-row.is-selected").getAttribute("data-file-path")',
+      ),
+    ),
+    path.join(fixture.files, 'Documents'),
+    'the child column keeps keyboard ownership after Plurid detachment',
+  );
+  await key('ArrowLeft', 'ArrowLeft');
+  assert.equal(
+    await evaluate(
+      'document.querySelector(".file-row.is-selected").getAttribute("data-file-path")',
+    ),
+    path.join(fixture.files, 'Documents'),
+  );
+  await click(fileSelector(path.join(fixture.files, 'Transfers')), 2);
+  await until(
+    text,
+    (value) => value.includes('Source') && value.includes('Target'),
+    'transfer fixtures',
+  );
+  // Presentation belongs to the folder, so this new fixture starts with the
+  // default List view rather than inheriting its parent's Columns override.
+  await paletteCommand('Columns view');
+  const source = path.join(fixture.files, 'Transfers', 'Source');
+  const target = path.join(fixture.files, 'Transfers', 'Target');
+  const peer = path.join(fixture.files, 'Transfers', 'Peer');
+  await click(fileSelector(source));
+  await until(
+    () =>
+      evaluate<boolean>(`!!document.querySelector('.file-column[data-folder-path="${source}"]')`),
+    Boolean,
+    'Source is shown as a browsing column before copying',
+  );
+  await key('c', 'KeyC', 4);
+  await until(
+    () => evaluate<{ paths: string[] } | null>('window.viewer.clipboardRead()'),
+    (value) => value?.paths[0] === source,
+    'Command-C captures the selected folder',
+  );
+  await click(fileSelector(target));
+  await until(
+    () =>
+      evaluate<boolean>(`!!document.querySelector('.file-column[data-folder-path="${target}"]')`),
+    Boolean,
+    'Target is shown as the paste destination column',
+  );
+  await key('v', 'KeyV', 4);
+  await until(
+    async () => {
+      try {
+        return await readFile(path.join(target, 'Source', 'Note.txt'), 'utf8');
+      } catch {
+        return '';
+      }
+    },
+    (value) => value === 'Generated clipboard and drag fixture.',
+    'Command-V copies the folder into the shown target column',
+  );
+  await click(fileSelector(source));
+  await until(text, (value) => value.includes('Note.txt'), 'source column contents');
+  // Use the production dragstart payload, then deliver trusted Chromium drop events.
+  const payload = await evaluate<string>(`(() => {
+    const row=document.querySelector(${JSON.stringify(fileSelector(source))});
+    const data=new DataTransfer();row.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:data}));
+    return data.getData('application/x-viewer-files');
+  })()`);
+  assert.deepEqual(JSON.parse(payload), [source]);
+  const point = await evaluate<{ x: number; y: number }>(
+    `(() => { const r=document.querySelector(${JSON.stringify(fileSelector(peer))}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`,
+  );
+  const data = {
+    items: [{ mimeType: 'application/x-viewer-files', data: payload }],
+    dragOperationsMask: 17,
+  };
+  for (const type of ['dragEnter', 'dragOver', 'drop'])
+    await command('Input.dispatchDragEvent', { type, ...point, data });
+  await until(
+    async () => {
+      try {
+        return await readFile(path.join(peer, 'Source', 'Note.txt'), 'utf8');
+      } catch {
+        return '';
+      }
+    },
+    (value) => value === 'Generated clipboard and drag fixture.',
+    'folder drop moves into the folder under the pointer',
+  );
+  await until(
+    () =>
+      evaluate<string[]>(
+        'Array.from(document.querySelectorAll(".file-column")).map(column=>column.dataset.folderPath)',
+      ),
+    (paths) => !paths.includes(source),
+    'removal closes the obsolete column branch',
+  );
+  assert.equal(await evaluate('document.querySelectorAll(".file-row.is-selected").length'), 0);
+  assert.equal((await text()).includes('Folder unavailable'), false);
+  assert.equal(
+    await readFile(path.join(target, 'Source', 'Note.txt'), 'utf8'),
+    'Generated clipboard and drag fixture.',
+  );
+  await snapshot('desktop-native-column-workflows.png');
+  console.log(
+    'Column workflows: arrow reveal/traversal, folder copy/paste, folder drop, removed branch cleanup.',
+  );
+}
+
 async function verifyListAlignment(): Promise<void> {
   const measure = () =>
     evaluate<{ name: string; delta: number }[]>(
       `(() => {
       const head=document.querySelector('.file-head'),row=document.querySelector('.file-row');
-      const targets=['.file-name > span:last-child','.file-date','.file-kind','.file-size'];
+      const targets={name:'.filename',modified:'.file-date',created:'.file-created',kind:'.file-kind',extension:'.file-extension',size:'.file-size'};
       const textRect=element=>{const range=document.createRange();range.selectNodeContents(element);return range.getBoundingClientRect();};
-      return Array.from(head.children).flatMap((cell,i)=>{
+      return Array.from(head.children).flatMap((cell)=>{
         if(getComputedStyle(cell).display==='none') return [];
-        const heading=textRect(cell),value=textRect(row.querySelector(targets[i]));
-        return {name:cell.textContent.trim(),delta:i===3?heading.right-value.right:heading.left-value.left};
+        const column=cell.dataset.column;
+        const heading=textRect(cell.querySelector('.column-label')),value=textRect(row.querySelector(targets[column]));
+        return {name:cell.textContent.trim(),delta:column==='size'?heading.right-value.right:heading.left-value.left};
       });
     })()`,
     );
@@ -1985,25 +2699,10 @@ async function verifyEntryAndPalette(): Promise<void> {
     'empty workspace can create a root directly',
   );
   await snapshot('desktop-native-empty-workspace.png');
-  await evaluate(
-    `(() => { const select=document.querySelector('.empty-plane-location select');select.value='desktop';select.dispatchEvent(new Event('change',{bubbles:true})); })()`,
-  );
-  await until(
-    () =>
-      evaluate<{ settings: { browsing: { newPlaneLocation: string } } }>(
-        'window.viewer.settingsGet()',
-      ),
-    (snapshot) => snapshot.settings.browsing.newPlaneLocation === 'desktop',
-    'empty workspace changes the shared starting-folder preference',
-  );
-  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
-    {path:'settings.browsing.newPlaneLocation',value:'custom'},
-    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(fixture.files)}}
-  ],snapshot.revision))`);
-  await until(
-    () => evaluate<string>('document.querySelector(".empty-plane-location select").value'),
-    (value) => value === 'custom',
-    'Settings updates the empty workspace preference',
+  assert.equal(
+    await evaluate(`document.querySelector('[aria-label="New folder planes start in"]')`),
+    null,
+    'The starting-folder preference belongs only in Settings',
   );
   await click('.empty-actions .primary');
   await restoredEngine(1);
@@ -2255,6 +2954,24 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'foundations') {
+    await verifyFoundations();
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'file-workflows') {
+    await verifyColumnWorkflows();
+    await verifyBackgroundApp();
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'chrome') {
+    await verifyConfiguredChrome();
+    await verifyListAlignment();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'shutdown') {
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
@@ -2393,7 +3110,7 @@ async function verify(): Promise<void> {
   await click('dialog [aria-label="Close"]');
   await until(
     async () =>
-      JSON.parse(await readFile(path.join(profile, 'settings-v1.json'), 'utf8')) as {
+      parse(await readFile(path.join(profile, 'config.jsonc'), 'utf8')) as {
         ui: NonNullable<SavedState['ui']>;
       },
     (state) =>

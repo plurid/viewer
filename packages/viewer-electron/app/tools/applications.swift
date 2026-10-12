@@ -11,6 +11,20 @@ struct Choices: Encodable {
     let defaultName: String?
     let supported = true
 }
+struct TerminalApplication: Encodable { let path: String; let name: String; let running: Bool }
+if CommandLine.arguments.contains("--terminals") {
+    let workspace = NSWorkspace.shared
+    let running = Set(workspace.runningApplications.compactMap { $0.bundleIdentifier })
+    let ids = ["com.googlecode.iterm2", "com.apple.Terminal", "com.mitchellh.ghostty", "net.kovidgoyal.kitty", "com.github.wez.wezterm", "org.alacritty"]
+    let apps = ids.compactMap { id -> TerminalApplication? in
+        guard let url = workspace.urlForApplication(withBundleIdentifier: id) else { return nil }
+        let bundle = Bundle(url: url)
+        let name = bundle?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? bundle?.object(forInfoDictionaryKey: "CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent
+        return TerminalApplication(path: url.path, name: name, running: running.contains(id))
+    }
+    FileHandle.standardOutput.write(try! JSONEncoder().encode(apps))
+    exit(0)
+}
 do {
     let data = FileHandle.standardInput.readDataToEndOfFile()
     let paths = try JSONDecoder().decode([String].self, from: data)

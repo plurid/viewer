@@ -297,7 +297,7 @@ describe('scoped proposal-only MCP broker', () => {
     await expect(broker.handle('invalid', { method: 'tools/list' })).rejects.toThrow('invalid');
     await expect(
       broker.handle(token, { method: 'tools/call', params: { name: 'apply', arguments: {} } }),
-    ).rejects.toThrow('cannot apply');
+    ).rejects.toThrow('Unknown agent tool');
     const outside = path.join(root, 'private.txt');
     await writeFile(outside, 'outside');
     await symlink(outside, path.join(files, 'link'));

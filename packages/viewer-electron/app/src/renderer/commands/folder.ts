@@ -1,4 +1,5 @@
 import { actionCommands } from '../actions/commands';
+import { columnCommands } from './columns';
 import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath } from '../../domain/planes';
@@ -336,5 +337,5 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       when: folder,
       run: (context) => updatePane(context.paneID!, { mode }),
     });
-  return [...commands, ...actionCommands()];
+  return [...commands, ...columnCommands(), ...actionCommands()];
 }

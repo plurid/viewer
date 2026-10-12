@@ -111,6 +111,7 @@ export function NameDialog({
   onClose,
   label = 'Name',
   maxLength = 255,
+  secondaryAction,
 }: {
   title: string;
   initial?: string;
@@ -119,6 +120,7 @@ export function NameDialog({
   onClose: () => void;
   label?: string;
   maxLength?: number;
+  secondaryAction?: (busy: boolean) => ReactNode;
 }) {
   const [name, setName] = useState(initial);
   const [error, setError] = useState('');
@@ -129,7 +131,7 @@ export function NameDialog({
     input.current?.focus();
   }, []);
   return (
-    <Dialog title={title} onClose={onClose}>
+    <Dialog title={title} onClose={onClose} className="name-dialog">
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -164,6 +166,9 @@ export function NameDialog({
           </p>
         )}
         <footer>
+          {secondaryAction && (
+            <div className="dialog-secondary-action">{secondaryAction(busy)}</div>
+          )}
           <button type="button" onClick={onClose}>
             Cancel
           </button>

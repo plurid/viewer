@@ -2,6 +2,8 @@
 
 Actions produce a proposal bound to the workspace, root, plane and files captured when invoked. Switching planes later does not retarget that task. Open them through a file's searchable context menu, Command-K, the native Actions menu or a recipe shortcut. Recipes can be edited, duplicated, imported and exported in Settings → Actions.
 
+The manual file-rename dialog also offers **Rename actions…**. It lists applicable instruction, book and batch-rename recipes, retains the dialog's original target and opens the usual action setup. Choosing a recipe creates no file change by itself; its proposal still requires review and Apply.
+
 ## Publication naming
 
 The default **Rename as book** template is:
@@ -45,8 +47,12 @@ When updating from a build that encrypted its local agent token, generate fresh 
 
 The packaged executable's `--mcp` mode is a headless stdio client for the running Viewer instance; that instance owns the index, proposals and user review. The Unix socket has mode 0600 in an owned mode-0700 temporary directory, avoiding macOS path-length limits.
 
-Tools are `get_context`, `list_actions`, `read_metadata`, `search_files`, `run_action`, `get_task` and `cancel_task`. Canonical-path checks apply on each request, including after permission revocation. Only tasks started by the current token can be read/cancelled. Rotating the token disconnects current clients. Clients sharing one token share its folder grants; separate per-client grants are future work.
+The recipe tools remain `get_context`, `list_actions`, `read_metadata`, `search_files`, `run_action`, `get_task` and `cancel_task`. The shared command/configuration tools are `list_commands`, `explain_command`, `propose_command`, `read_config`, `validate_config`, `propose_config` and `get_proposal`; terminal tools are `read_terminal` and `write_terminal`. Canonical-path checks apply to file/terminal requests, including after permission revocation. Only tasks/proposals started by the current token can be inspected. Rotating the token disconnects current clients. Clients sharing one token share its folder grants; separate per-client grants are future work.
 
-Agents can create proposals and inspect granted metadata. No tool applies changes, trashes files or deletes files. Disabling access immediately rejects further requests. Viewer must be running to supply the captured context and review UI.
+Command discovery uses the same captured context, availability and IDs as the UI. A command proposal opens review before invocation, and completion waits for the workspace acknowledgement or a subprocess's final status. Origin changes or executor changes fail the proposal rather than retargeting it. Configuration proposals validate first, then apply a reviewed revision; they cannot change effective approvals. Recipe file changes still require their normal row review and Apply. No direct `apply`, `trash` or `delete` MCP tool is exposed.
+
+Settings → Agents can explicitly grant unattended execution to an exact custom-action definition in a canonical folder. Editing that action invalidates its grant. Terminal output reading and input writing use separate grants. Effective grants are stored outside JSONC; imported configuration cannot authorize itself. Custom executables, shell scripts and terminal input have the user's OS permissions: their working directory is not a sandbox. Arbitrary command mutations do not acquire the operation service's Undo. Disabling Agents rejects further requests and closes the server; enabling it starts the local server live. Viewer must be running to supply context and review UI.
+
+See [configuration.md](configuration.md) for declarative actions, placeholders and validation, and [terminals.md](terminals.md) for shell profiles and session behavior.
 
 Provider protocol tests use synthetic responses; no live paid model or real user credential is used by verification. The native integration test exercises the packaged MCP client with an isolated profile and disposable book files.

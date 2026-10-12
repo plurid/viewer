@@ -7,6 +7,23 @@ export const defaultShortcuts: Record<string, string> = {
   dock: 'Cmd+Enter',
   'toggle-sidebar': 'Cmd+Alt+S',
   'go-to': 'Cmd+L',
+  'open-selection': 'Cmd+O',
+  parent: 'Cmd+ArrowUp',
+  back: 'Cmd+[',
+  forward: 'Cmd+]',
+  copy: 'Cmd+C',
+  cut: 'Cmd+X',
+  paste: 'Cmd+V',
+  'select-all': 'Cmd+A',
+  info: 'Cmd+I',
+  duplicate: 'Cmd+D',
+  trash: 'Cmd+Backspace',
+  'new-folder': 'Cmd+Shift+N',
+  'view-list': 'Cmd+1',
+  'view-grid': 'Cmd+2',
+  'view-columns': 'Cmd+3',
+  'view-gallery': 'Cmd+4',
+  'toggle-hidden': 'Cmd+Shift+.',
 };
 const aliases: Record<string, string> = {
   command: 'cmd',
@@ -37,6 +54,7 @@ export function validShortcut(value: string): boolean {
       (part) =>
         ['cmd', 'ctrl', 'shift', 'alt', 'enter', 'backspace', 'delete', 'escape'].includes(part) ||
         part.length === 1 ||
+        /^arrow(up|down|left|right)$/.test(part) ||
         /^f([1-9]|1[0-9]|2[0-4])$/.test(part),
     )
   );
@@ -60,8 +78,17 @@ export function accelerator(value: string): string | undefined {
   return shortcutParts(value)
     .map(
       (part) =>
-        ({ cmd: 'Command', ctrl: 'Control', alt: 'Alt', shift: 'Shift', enter: 'Return' })[part] ||
-        part.toUpperCase(),
+        ({
+          cmd: 'Command',
+          ctrl: 'Control',
+          alt: 'Alt',
+          shift: 'Shift',
+          enter: 'Return',
+          arrowup: 'Up',
+          arrowdown: 'Down',
+          arrowleft: 'Left',
+          arrowright: 'Right',
+        })[part] || part.toUpperCase(),
     )
     .join('+');
 }

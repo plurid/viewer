@@ -88,6 +88,52 @@ describe('authoritative settings', () => {
       newPlanePath: root,
     });
   });
+  it('persists toolbar choices and list layout without changing legacy defaults or file data', async () => {
+    const settings = new SettingsService(
+      root,
+      root,
+      () => true,
+      () => {},
+    );
+    await settings.load({ look: 'dark', ui: normalizePreferences({ version: 3 }) });
+    expect(settings.snapshot().ui.space.headerControls.view).toBe(true);
+    expect(settings.snapshot().ui.list.visible).toMatchObject({
+      modified: true,
+      kind: true,
+      size: true,
+      created: false,
+    });
+    await settings.patch(
+      [
+        { path: 'ui.space.headerControls.frame', value: false },
+        { path: 'ui.list.visible.modified', value: false },
+        { path: 'ui.list.visible.created', value: true },
+        { path: 'ui.list.widths.name', value: 480 },
+        { path: 'ui.list.wrapNames', value: true },
+      ],
+      0,
+    );
+    const restored = new SettingsService(
+      root,
+      root,
+      () => true,
+      () => {},
+    );
+    await restored.load();
+    expect(restored.snapshot().ui).toMatchObject({
+      space: { headerControls: { frame: false, view: true } },
+      list: {
+        visible: { modified: false, created: true, kind: true },
+        widths: { name: 480 },
+        wrapNames: true,
+      },
+    });
+    expect(
+      normalizePreferences({
+        list: { widths: { name: Infinity, size: -500 }, visible: { name: false, kind: 'invalid' } },
+      }).list,
+    ).toMatchObject({ visible: { kind: true }, widths: { name: 0, size: 60 } });
+  });
   it('merges independent window edits and rejects stale overlapping edits', async () => {
     const settings = new SettingsService(
       root,

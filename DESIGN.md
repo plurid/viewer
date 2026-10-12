@@ -36,6 +36,12 @@ colors:
   light-syntax-string: '#386731'
   light-syntax-keyword: '#755183'
   light-syntax-number: '#805d32'
+  terminal-space: '#25282e'
+  terminal-ink: '#eeeeef'
+  terminal-cursor: '#9abfd1'
+  light-terminal-space: '#f5f6f8'
+  light-terminal-ink: '#25282e'
+  light-terminal-cursor: '#40748d'
 typography:
   body:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
@@ -77,6 +83,13 @@ typography:
     fontSize: '12px'
     fontWeight: 400
     lineHeight: '22px'
+  terminal:
+    fontFamily: 'Menlo, Monaco, monospace'
+    fontSize: '13px'
+  command-output:
+    fontFamily: 'Menlo, monospace'
+    fontSize: '12px'
+    lineHeight: 1.5
 rounded:
   control: '5px'
   tile: '6px'
@@ -218,13 +231,14 @@ The defining visual behavior is a titled file plane beside its folder, with a vi
 - Dense rows, quiet metadata, and explicit selection and active-command feedback.
 - Linked spatial planes with compact contextual controls and focused docking.
 - Searchable actions with an explicit target and truthful feedback.
-- A separate searchable Settings window with stable dimensions and live preferences.
+- A separate searchable Settings window with stable dimensions, shared JSONC configuration and live preferences.
 - Filename-first finding and proposal review with explicit scope, evidence, and Apply/Undo.
+- Declarative custom commands and real terminal planes within the same quiet desktop grammar.
 - File-content previews within the same visual system.
 
 Extracted from [renderer styles](packages/viewer-electron/app/src/renderer/styles.css), [engine looks](packages/viewer-electron/app/src/renderer/workspace/look.ts), [window chrome](packages/viewer-electron/app/src/renderer/App.tsx), [plane headers](packages/viewer-electron/app/src/renderer/workspace/PlaneHeader.tsx), [shared commands](packages/viewer-electron/app/src/renderer/commands/registry.ts), [sidebar](packages/viewer-electron/app/src/renderer/ui/Sidebar.tsx), [Settings](packages/viewer-electron/app/src/renderer/ui/Settings.tsx), and [file views](packages/viewer-electron/app/src/renderer/explorer/views.tsx). [PRODUCT.md](PRODUCT.md) is the confirmed authority for the incumbent family and desktop constraints.
 
-The current extension also follows [the first-child direction contract](packages/viewer-electron/app/index.html), [native Settings lifecycle](packages/viewer-electron/app/src/main.ts), [filename finder](packages/viewer-electron/app/src/renderer/commands/CommandPalette.tsx), [virtual search roots](packages/viewer-electron/app/src/renderer/explorer/SearchExplorer.tsx), [action review](packages/viewer-electron/app/src/renderer/actions/ActionHub.tsx), and [EPUB preview](packages/viewer-electron/app/src/renderer/previews/modules/EPUBPreview.tsx). It extends the incumbent through code; no approved visual comp supplies a replacement identity.
+The current extension also follows [linked-plane geometry](packages/viewer-electron/app/src/renderer/workspace/WorkspaceSurface.tsx), [native Settings lifecycle](packages/viewer-electron/app/src/main.ts), [filename finder](packages/viewer-electron/app/src/renderer/commands/CommandPalette.tsx), [virtual search roots](packages/viewer-electron/app/src/renderer/explorer/SearchExplorer.tsx), [action review](packages/viewer-electron/app/src/renderer/actions/ActionHub.tsx), and [EPUB preview](packages/viewer-electron/app/src/renderer/previews/modules/EPUBPreview.tsx). [Automation settings](packages/viewer-electron/app/src/renderer/ui/AutomationSettings.tsx), [agent review](packages/viewer-electron/app/src/renderer/actions/AgentReview.tsx) and [terminal planes](packages/viewer-electron/app/src/renderer/terminals/TerminalPlane.tsx) extend that incumbent through code; no approved visual comp supplies a replacement identity.
 
 ## Colors
 
@@ -243,6 +257,8 @@ The palette uses graphite neutrals in dark mode and pale neutral space with whit
 - **Dividers:** `line` defines shell boundaries and controls. Dense file/archive rows mix this source color with transparency for a quieter divider.
 
 File-family colors distinguish image files and code/data files. Syntax colors distinguish strings, keywords, and numeric values inside code/JSON previews; light mode has its own darker syntax values. `danger` identifies errors and destructive actions. These are content and state colors, not additional identity accents.
+
+Terminal contents use the recorded `terminal-space`, `terminal-ink` and `terminal-cursor` roles, with their light counterparts. Their surrounding header and search controls retain the shell's existing surface, text and accent roles.
 
 **The Shared Look Rule.** Apply the selected look to both the shell and the spatial engine; extend previews with the same surface and text roles.
 
@@ -263,6 +279,7 @@ The interface has a compact functional hierarchy. Weight distinguishes plane tit
 - **Body:** The `body` role serves controls and application text; `body-compact` serves file names and supporting preview text.
 - **Label:** The `label` role serves file metadata, column headers, status bars, and preview metadata.
 - **Code:** The `code` role serves source listings. JSON retains its observed taller line spacing (24px); CSV uses its content-specific monospace row treatment (11px/32px).
+- **Terminal:** The `terminal` role serves shell output in the xterm screen; `command-output` serves process output and agent proposal details inside their bounded surfaces.
 
 Use tabular numerals for file sizes and operation counts. File and plane names truncate to one line; error text and document content can wrap. Markdown and EPUB headings belong to the displayed document and retain their content hierarchy. EPUB reading text starts at 17px with a user-adjustable size; it does not establish a new application display face.
 
@@ -276,15 +293,17 @@ The visible sidebar starts at its saved/default width (210px), resizes within it
 
 Every plane has one contextual header (40px), with compact icon actions (28px). A plane-width container query (540px) hides forward navigation, frame/dock icons and secondary preview labels, and narrows the preview control slot from 64% to 50%; that slot can scroll horizontally. Titles retain ellipsis. Path entry, breadcrumbs/filtering, folder search, and secondary actions appear on demand. Search toggles from the header and clears/cancels its query on close. Scoped commands keep actions available when compact chrome hides them.
 
-Automatic planes follow the measured workspace: width is bounded from 380px to 960px with 32px of horizontal clearance; height is bounded from 300px to 660px with 72px of vertical clearance. Manual resizing is configurable. Framing waits for the live viewport and measured planes to settle. Opening normally faces the new plane; Settings offers linked-pair framing or docking. An existing path/type focuses its plane within the originating root while retaining its link and position; the same file opened from another root keeps a separate preview. Open another plane creates an explicit copy. Refitting preserves deliberate camera movement. Reopening keeps a usable saved view and brings a clipped active plane into view. Explicit consolidation of repeated previews keeps the active placement, protects deliberate copies and branches, and offers one-step arrangement undo.
+Automatic planes follow the measured workspace: width is bounded from 380px to 960px with 32px of horizontal clearance; height is bounded from 300px to 660px with 72px of vertical clearance. Manual resizing is configurable. Framing waits for the live viewport and measured planes to settle. Each linked child is placed at 90.1° from its parent and faces the camera when opened; Settings offers linked-pair framing or docking. An existing path/type focuses its plane within the originating root while retaining its link and position; the same file opened from another root keeps a separate preview. Terminal sessions likewise belong to their originating root. Open another plane creates an explicit copy. Refitting preserves deliberate camera movement. Reopening keeps a usable saved view and brings a clipped active plane into view. Explicit consolidation of repeated previews keeps the active placement, protects deliberate copies and branches, and offers one-step arrangement undo.
 
-File lists use virtualized rows (36px comfortable, 30px compact), with a flexible name column and fixed metadata columns. Headers and rows share grid padding and a stable scrollbar gutter. Name aligns with filename text after its icon; date and kind align left, size right. Plane-width queries remove kind at 650px and date at 470px in both folder and search headers, retaining file identity and size. Grid and gallery use contained thumbnails and truncated file names; columns retain separate scrollable folder lists. Small control gaps and the repeated frontmatter spacing steps keep chrome compact. Dialog content uses the larger panel/dialog steps.
+File lists use virtualized rows (36px comfortable, 30px compact), with a flexible name column and configurable metadata columns. Folder and search headers share their grid, insets and horizontal viewport with the rows. Name aligns with filename text after its icon; dates and kind align left, size right. Browsing Settings and header actions show or hide Modified, Created, Kind, Extension and Size; Name stays visible. Narrow planes scroll horizontally instead of hiding configured fields. Column dividers resize through projected pointer coordinates or keyboard steps; double-click restores the default width. Pointer movement updates grid variables without publishing preferences until release. Filenames retain their full-name tooltip; optional wrapping measures natural row heights. Grid and gallery use contained thumbnails and truncated file names; columns retain separate scrollable folder lists. Small control gaps and the repeated frontmatter spacing steps keep chrome compact. Dialog content uses the larger panel/dialog steps.
+
+Folder view, sort, metadata layout and browsing-column width are shared by path across roots and workspaces. Selection, history, filters and scroll remain local to each explorer. Browsing-column edges resize in projected coordinates, adjusting the element directly during drag and saving on release. The separator supports Left/Right steps (10px, or 50px with Shift), Home/End limits (160–1600px), double-click fitting to filenames and Option to apply the width to the visible trail.
 
 Transient surfaces remain bounded by the native viewport. Searchable context actions use a compact width (304px); the command palette is wider (560px). The palette anchors its top edge at 22% of the window height, bounded to 80–240px, and keeps its search field stationary as results grow downward. Its result list scrolls before reaching the bottom clearance (20px). The operations popover anchors below the upper-right control (370px wide, 64px from the top, 16px from the right) and scrolls within the window. It never consumes workspace width.
 
-An empty workspace offers New folder plane directly and Open folder… as a secondary action. Its New planes start in selector edits the same preference as Browsing settings: current folder, Home, standard locations or a custom folder. Current folder uses Home when the workspace is empty. A custom folder uses the native picker; the empty screen names that folder and Settings shows its full path beside Change folder…. Cancelling keeps the previous choice.
+An empty workspace offers New folder plane directly and Open folder… as a secondary action. Configure the starting location only in Settings → Browsing: current folder, Home, standard locations or a custom folder. Current folder uses Home when the workspace is empty. A custom folder uses the native picker and Settings shows its full path beside Change folder…. Cancelling keeps the previous choice. The empty workspace contains creation actions without preference controls.
 
-Settings occupies a separate modeless native window: default outer size 900×640px, captured macOS content size 900×612px, and minimum outer size 760×540px. Category changes keep the window size stable; user resizing and the last category persist. The content uses a navigation column (190px) and a flexible page. Navigation and page scroll independently, with the page's recorded inset (28px 32px 40px) and a stable gutter so expanded recipe editors never move fields horizontally.
+Settings occupies a separate modeless native window: default outer size 900×640px and minimum outer size 760×540px. Category changes keep the window size stable; user resizing and the last category persist. The content uses a navigation column (190px) and a flexible page. Navigation and page scroll independently, with the page's recorded inset (28px 32px 40px) and a stable gutter so expanded recipe editors never move fields horizontally.
 
 Quick Preview combines quiet module/size metadata, previous/next navigation and its two open actions in one footer. The default-open button names the OS application, such as Open in Code, and falls back to Open when no name is available. Long application names truncate visually while retaining their complete tooltip. File identity stays in the dialog title; no second metadata footer or external-open icon repeats those actions.
 
@@ -338,11 +357,13 @@ The workspace selector opens the same searchable action pattern and truncates lo
 
 ### File Rows
 
-The dense row separates file identity from muted date, kind, and size metadata; file sizes align right. Hover uses the raised surface; selection changes the row and its metadata together. Alias overlays remain visible at native file-icon size. Grid and gallery carry the same file-selection treatment.
+The dense row separates file identity from muted date, kind, and size metadata; file sizes align right. Hover uses the raised surface; selection changes the row and its metadata together. Alias overlays remain visible at native file-icon size. Grid and gallery carry the same file-selection treatment. In columns, Up/Down selection reveals a folder's next column; Right selects its first child and Left returns to its owning folder. The active column owns the operation destination, including paste into a displayed folder. Its keyboard scope, trail and operation directory survive Plurid detachment together and remap after directory moves. Drops target the hovered folder or column, with a destination highlight and Option for copy. A refreshed listing prunes missing folder branches, cached descendants and their selection together.
+
+List folders use compact disclosure controls; Left/Right collapses or expands the local folder branch. Explorer commands claim their keys before camera movement: Command-Down opens, Command-Up goes to the parent and Command-1–4 selects list, grid, columns or gallery. Text fields, active menus/dialogs, preview gestures and terminal input keep their own keys. Focused resize separators indicate ownership with a selection-colored fill, preserving the confirmed absence of focus rings.
 
 ### Contextual Plane Header
 
-Folder headers combine a direct navigation toggle, back/forward navigation, a titled drag region, view menu, search, frame/dock, more actions, and close. Preview headers replace folder navigation/view/search with the module's primary controls in the same header. There is no second permanent preview toolbar in a linked plane. The first title press selects and moves the plane; pressing an already selected plane retains the current multiselection. File selection, text selection, media, image, and model gestures keep their own functions. Duplicate floating engine controls remain disabled.
+Folder headers combine a direct navigation toggle, back/forward navigation, a titled drag region, view menu, search, frame/dock, more actions, and close. Space Settings controls each of these icons independently. The view and actions buttons toggle their own menus; pointer dismissal ignores the originating button so a second click closes the open menu. Preview headers replace folder navigation/view/search with the module's primary controls in the same header. There is no second permanent preview toolbar in a linked plane. The first title press selects and moves the plane; pressing an already selected plane retains the current multiselection. File selection, text selection, media, image, and model gestures keep their own functions. Duplicate floating engine controls remain disabled.
 
 Images, models, PDF, text, and media contribute commands scoped to their preview. Keep zoom, fit, page, search, and playback actions with the preview they affect; unavailable actions do not appear as command results. Supplemental file information stays compact within the plane body.
 
@@ -362,13 +383,17 @@ Open results creates an independent virtual root; saved searches use the same ro
 
 ### Settings
 
-Command-comma opens or focuses the separate modeless Settings window. Its searchable categories are Browsing, Navigation, Previews, Space, Search, Actions, Models, Agents, and Shortcuts. A selected category uses the selection surface; typed queries search labels, details, and category names, with discovery links for service editors. Native titlebar controls close the window. Category/page changes preserve its size. Preference changes update the main window live; text fields commit on blur, the reusable single-line text editor also accepts Enter, and native close blurs the active field and flushes queued writes.
+Command-comma opens or focuses the separate modeless Settings window. Its searchable categories are Browsing, Navigation, Previews, Space, Search, Actions, Models, Agents, Shortcuts, Terminals and Configuration. A selected category uses the selection surface; typed queries search labels, details, and category names, with discovery links for service editors. Native titlebar controls close the window. Category/page changes preserve its size. Preference changes update the main window live; text fields commit on blur, the reusable single-line text editor also accepts Enter, and native close blurs the active field and flushes queued writes. Successive custom-action, profile and tmux edits retain earlier accepted changes while saves queue.
 
-Browsing carries System, Dark, and Light appearance, default view, density, hidden-file and restore preferences. Navigation uses the shared section/shortcut language. Space keeps face-on opening, headers, title dragging, resize handles and all three native spatial aids on by default; transform origin stays off. Plane backs are always visible with no option. Search lists indexed locations with status/counts, per-location Contents grants, add/remove, pause/rebuild, saved queries and exclusions. Long paths wrap within the flexible content column.
+Browsing carries System, Dark, and Light appearance, default view, density, hidden-file and restore preferences, and a List columns section for optional fields and filename wrapping. Navigation uses the shared section/shortcut language. Space keeps face-on opening, headers, title dragging, resize handles and all three native spatial aids on by default; its Plane toolbar section controls individual icons. Transform origin stays off. Plane backs are always visible with no option. Search lists indexed locations with status/counts, per-location Contents grants, add/remove, pause/rebuild, saved queries and exclusions. Long paths wrap within the flexible content column.
 
-Actions uses expandable recipe rows and a reusable label/field editor for name, type, formats, recursion, template, instructions, provider, permitted data, and shortcut. Filename templates stay visible for naming actions. New, duplicate, import, export, and applicable removal controls use ordinary compact buttons. Recipe configuration does not bypass proposal review.
+Actions uses expandable recipe rows and a reusable label/field editor for name, type, formats, recursion, template, instructions, provider, permitted data, and shortcut. Filename templates stay visible for naming actions. New, duplicate, import, export, and applicable removal controls use ordinary compact buttons. The manual file-rename dialog adds a compact Rename actions selector beside its existing footer buttons. It shows applicable instruction, book and batch-rename recipes using the dialog's captured file target. Choosing one enters the ordinary action setup and proposal review flow. Recipe configuration does not bypass proposal review.
 
-Models names each provider, endpoint and model, with an explicit Connect and load models action and a separate document-text permission. Password fields show whether a key is stored and offer Clear stored key. No provider is enabled by default. Provider keys use protected desktop storage only through explicit credential operations. Agents is opt-in, lists authorized folders with revocation controls, and generates selectable local MCP configuration only when enabled with a folder grant. The local agent token stays in private app metadata and does not use Keychain. Agent proposals enter the same review surface; clients cannot Apply, Trash, or delete files. Keep permissions near the service they affect.
+Custom commands use the same expandable rows in Actions. Name, aliases, shortcut, pinning, order and icon precede target/extension/selection availability and the executor-specific fields. Literal argument arrays use multiline JSON fields with inline validation; shell scripts appear only for an explicit Shell executor. Keep the chosen executor and its inputs legible within the existing field column.
+
+Models names each provider, endpoint and model, with an explicit Connect and load models action and a separate document-text permission. Password fields show whether a key is stored and offer Clear stored key. No provider is enabled by default. Provider keys use protected desktop storage only through explicit credential operations. Agents is opt-in, lists authorized folders with revocation controls, and generates selectable local MCP configuration only when enabled with a folder grant. The local agent token stays in private app metadata and does not use Keychain. Execution approvals use a folder selector, individual custom-command switches and separate terminal read/write switches, with existing grants and Revoke controls. Command proposals require review by default; exact custom-action grants can permit unattended execution. Configuration proposals require review, and recipe file changes keep row review and Apply. Approval controls explain that grants live outside JSONC and a working directory does not contain command access. Keep permissions near the service they affect.
+
+Terminals follows the same labeled fields and expandable profile rows: scrollback, external application, default shell profile, shell executable, literal arguments and environment, then the shared tmux-session fields. Arguments and environment use multiline JSON fields. Its note identifies the captured folder and explains that each embedded terminal owns a shell. Configuration shows a selectable, wrapping path, a primary Open config.jsonc action, Validate, readable diagnostics and recent changes, import/export, and section reset. The copy explains that Settings edits the same JSONC and invalid external edits leave the last valid configuration active. Credentials, layouts and execution approvals remain separate from that reset.
 
 Shortcuts uses labeled editable bindings and a reset action; recipe bindings remain in Actions. Space remains Quick Preview. Model settings, agent configuration, and shortcut syntax belong in these configuration flows.
 
@@ -380,9 +405,19 @@ Run action states the captured selection, chosen recipe, recursion and relevant 
 
 Review rows show the source filename, completion/conflict/error information, an approval checkbox, and the destination Name field. The filename is editable by default; a quieter `In [directory]` line preserves destination context. Edit path explicitly switches that row to full-path input; Edit filename returns it. Filename mode rejects folder separators and directs the user to Edit path. Evidence is available per row in a bounded lower section, including an explicit absence of document evidence.
 
-Select available changes skips unresolved issues. Apply names the approved count and stays unavailable with no selected changes. Applying/busy states prevent duplicate submissions; cancellation, partial/interrupted recovery, and guarded Undo changes remain visible when applicable. Summary export first chooses a folder and name, then creates a reviewable file-change proposal. Provider or agent output never silently applies changes.
+Select available changes skips unresolved issues. Apply names the approved count and stays unavailable with no selected changes. Applying/busy states prevent duplicate submissions; cancellation, partial/interrupted recovery, and guarded Undo changes remain visible when applicable. Summary export first chooses a folder and name, then creates a reviewable file-change proposal. Provider or agent recipe output never silently applies changes.
 
 **The Proposal Review Rule.** Put filename changes, directory context, row approval and evidence together; require explicit Apply for every file-change proposal and expose guarded Undo or recovery when available.
+
+### Agent Command Review
+
+Agent command, configuration and ungranted terminal-input proposals use the existing wide modal dialog. The title names the requested action; supporting text states its agent origin, captured directory and selection. A bounded, wrapping monospace area shows the executor, configuration patch or terminal input. The footer pairs Reject with Run action or Apply changes. Keep this command review distinct from the recipe's row-by-row file proposal; separately granted custom commands and terminal writes can execute without reopening it.
+
+### Terminal Planes and Command Output
+
+Terminal planes retain the ordinary titled header and frame/dock/more/close controls. An inset content stage (8px) contains the xterm screen, with a compact search control aligned at the upper right and an on-demand field. Terminal keys and wheel input belong to the terminal; Command-K and Settings remain application commands. Quoted file drops paste paths. Local panel dimensions set rows and columns, while camera zoom and rotation preserve them. Screen state and its shell survive spatial detachment and workspace switches during the running app; restart opens a fresh shell.
+
+Custom-process output appears in a bounded lower-right panel (at most 560px wide and 55% high), using the existing neutral surface, line border and menu rounding. Output wraps within its own scroll area, with status and cancellation beside the command. Completion or failure names the captured action rather than implying the selected plane was retargeted.
 
 ### Preview Content
 
@@ -406,10 +441,12 @@ Searchable context actions render through body portals with viewport-bounded ove
 - Do keep one contextual header per plane, scoped frame/dock commands reachable, and plane dragging on the title region.
 - Do bind commands to an explicit target and show only applicable results, with an active result and useful empty states.
 - Do keep appearance and spatial aids in Settings, and show operations only when work or explicit history needs attention.
-- Do preserve the modeless Settings window's dimensions across all nine categories, live updates, and close-flush behavior.
+- Do preserve the modeless Settings window's dimensions across all eleven categories, live updates, and close-flush behavior.
 - Do show filenames before directory context in finding and proposal review, with a deliberate Edit path mode for folder changes.
 - Do require row approval and explicit Apply, show evidence, and retain guarded Undo/recovery for file-change proposals.
 - Do keep content indexing, provider text permission, recipe data limits and authorized agent folders explicit in their respective controls.
+- Do show separate command and terminal approvals beside their folder scope, and keep effective grants outside editable configuration.
+- Do preserve terminal input ownership and each root's independent sessions within the existing plane grammar.
 - Do extend reusable recipe, provider and agent editors with the existing system font and surface tokens.
 - Do state layout-only consequences for sidebar/workspace actions and the Trash consequence before replacing a file.
 - Do retain file-content conventions such as syntax coloring, contained imagery, Markdown quotation borders and EPUB chapter hierarchy.
@@ -420,7 +457,7 @@ Searchable context actions render through body portals with viewport-bounded ove
 - Don't reintroduce the wordmark/tagline, plane tabs, global arrangement toolbar, theme button, shortcut footer, or persistent operations rail.
 - Don't add focus rings or halos; preserve keyboard navigation, input carets and selected/active-result feedback.
 - Don't offer a plane-backs visibility setting or turn off backs; retain the configurable native spatial controls.
-- Don't turn model or agent output into applied file changes without the protected in-app review.
+- Don't apply model or agent recipe file proposals without row approval and protected in-app review.
 - Don't treat local agent authentication as a provider credential or make agent startup use Keychain.
 - Don't place duplicate floating engine controls over preview actions.
 - Don't make file content or model gestures drag the plane instead of performing their own task.
