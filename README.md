@@ -22,6 +22,8 @@ pnpm test:desktop  # verifies the packaged app in hidden background windows
 
 The app is built under `packages/viewer-electron/app/out/Viewer-darwin-<architecture>/Viewer.app`; ZIPs are under `out/make/zip/darwin/<architecture>/`. Bundles use ad-hoc signing for local execution. Certificate signing, notarization and public distribution need a release configuration. Windows/Linux adapters and packaging are future work.
 
+To install a local build, extract the ZIP and drag `Viewer.app` into Applications. The native Swift helpers inherit the bundled Electron runtime's minimum macOS version (currently 13.0), rather than the build machine's SDK default.
+
 `pnpm test:browser` serves the same renderer and filesystem services with an isolated synthetic workspace at `http://127.0.0.1:4173/tests/browser.html`. Its native picker, clipboard and Trash use fixture adapters. Stop the server to clean up its files. The desktop check uses the real sandboxed preload, IPC and resource protocols in hidden, GPU-backed offscreen windows. It never activates the test app or shows Settings. The isolated macOS process stays out of the Dock, and the harness checks its native activation state. Normal launches retain visible windows and background throttling.
 
 Physical frame-rate profiling is separate: `VIEWER_TEST_FOREGROUND=1 pnpm test:desktop` deliberately shows and activates the owned test app. Use it only when a foreground profiling session is explicitly wanted; hidden-window frame timings are not comparable. `VIEWER_TEST_SCENARIO=spatial pnpm test:desktop` runs the short toolbar/command/Escape regression in the background.
@@ -60,7 +62,7 @@ Command-Z undoes eligible rename/move jobs; identity and content checks protect 
 | Open folder / new folder         | ⌘⇧O / ⌘⇧N         |
 | Open selection / rename          | ⌘O / Return       |
 | Copy / cut / paste / select all  | ⌘C / ⌘X / ⌘V / ⌘A |
-| Copy file or folder path         | ⌥⌘C              |
+| Copy file or folder path         | ⌥⌘C               |
 | Quick preview / file information | Space / ⌘I        |
 | Commands / Settings              | ⌘K / ⌘,           |
 | Find file / go to folder         | ⌘F / ⌘L           |
@@ -75,16 +77,16 @@ Indexed search covers filenames and metadata in configured locations, with optio
 
 Right-click or Command-K provides **Batch rename**, **Rename as book**, **Rename with model**, **Organize** and **Summarize**. Review proposed changes, evidence and conflicts before Apply; no proposal changes a file automatically. Recipes preserve your naming template and can have shortcuts. OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter and compatible local providers are optional. Protected keys, explicit text-sharing permission, guarded Undo and proposal-only agent access are described in [actions and agents](docs/actions.md).
 
-| Module      | Initial support                                                                                      |
-| ----------- | ---------------------------------------------------------------------------------------------------- |
-| Drawings    | ASCII DXF; pan/zoom, layers, snap, distance/angle/polygon-area measurement and entity inspection |
+| Module      | Initial support                                                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Drawings    | ASCII DXF; pan/zoom, layers, snap, distance/angle/polygon-area measurement and entity inspection                                 |
 | 3D          | STEP/STP, IGES/IGS, STL, 3MF, PLY, GLB/glTF, OBJ with local MTL, FBX; orbit, wireframe, dimensions, surface distance, animations |
-| Images      | PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG; fit, zoom and pan                                         |
-| Audio/video | Chromium-supported codecs with native seeking and playback                                           |
-| PDF         | Worker rendering, pages, zoom, selectable text and document search                                   |
-| EPUB        | Local publication metadata, chapter navigation, safe text reading and search                         |
-| Text/data   | Safe Markdown, code/text, expandable JSON and virtualized CSV/TSV tables                             |
-| Archives    | ZIP, TAR, TAR.GZ/TGZ indexing and entry previews without extraction                                  |
+| Images      | PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG; fit, zoom and pan                                                                     |
+| Audio/video | Chromium-supported codecs with native seeking and playback                                                                       |
+| PDF         | Worker rendering, pages, zoom, selectable text and document search                                                               |
+| EPUB        | Local publication metadata, chapter navigation, safe text reading and search                                                     |
+| Text/data   | Safe Markdown, code/text, expandable JSON and virtualized CSV/TSV tables                                                         |
+| Archives    | ZIP, TAR, TAR.GZ/TGZ indexing and entry previews without extraction                                                              |
 
 Formats outside this set receive file information and an external-app action. Office, additional ebooks, USD, HEIC/TIFF and creative formats are proposed next in the [preview roadmap](docs/preview-roadmap.md). DXF support and limits are documented in [drawing previews](docs/drawings.md); physical units, CAD conversion limits and surface measurements are documented in [model previews](docs/model-previews.md). A registered extension does not guarantee a file’s codec, compression or external asset requirements: failures stay visible and recoverable.
 

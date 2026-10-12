@@ -814,7 +814,7 @@ async function verifyFoundations(): Promise<void> {
   await snapshot('desktop-native-custom-action.png');
   await click('dialog [aria-label="Close"]');
   const configPath = path.join(profile, 'config.jsonc');
-  const config = JSON.parse((await readFile(configPath, 'utf8')).replace(/^\/\/.*$/gm, ''));
+  const config = parse(await readFile(configPath, 'utf8'));
   config.settings.folders[fixture.files].mode = 'grid';
   await writeFile(
     configPath,
