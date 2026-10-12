@@ -429,6 +429,8 @@ Custom-process output appears in a bounded lower-right panel (at most 560px wide
 
 Images, supported audio/video, PDF, text/code/Markdown/JSON/CSV, models and archives keep their established local-content stages and scoped controls. EPUB joins the same preview family with a toggleable contents column (200px), chapter navigation/count, and adjustable reading text. Chapter content scrolls in the existing document inset (24px 32px) and line spacing (1.7). Source headings remain document hierarchy; unsupported content and extraction limits receive plain feedback. These previews derive their visual substance from local files.
 
+Model stages use neutral ambient fill and key/fill lights attached to the model camera, preserving readable reverse faces during orbiting. The hemisphere follows the stage's up axis, and CAD material colors enter the renderer as linear RGB. Dimensions and surface measurements retain the source geometry and units.
+
 ### Operations
 
 The operations control appears for pending work, conflicts, or unseen failures. Its anchored popover shows bounded progress, cancellation, paths, errors, and available undo; past jobs open through Commands or the native menu. Conflicts provide Skip, Keep both, and Replace, with an explicit remaining-conflicts checkbox. Replace explains that the existing item goes to Trash and requires its own confirmation. Idle browsing keeps the workspace open.

@@ -62,6 +62,16 @@ if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
       await readFile(process.env.VIEWER_TEST_STEP_FILE),
     );
 }
+if (process.env.VIEWER_TEST_SCENARIO === 'model-lighting') {
+  const require = createRequire(import.meta.url);
+  const model =
+    process.env.VIEWER_TEST_STEP_FILE ||
+    path.join(
+      path.dirname(require.resolve('occt-import-js/package.json')),
+      'test/testfiles/simple-basic-cube/cube.stp',
+    );
+  await writeFile(path.join(fixture.files, 'Models', 'Lighting.step'), await readFile(model));
+}
 if (process.env.VIEWER_TEST_SCENARIO === 'drawings-workspaces') {
   await writeFile(path.join(fixture.files, 'Panel.dxf'), panelDrawing);
   await writeFile(path.join(fixture.files, 'Broken.dxf'), '0\nSECTION\n');
@@ -283,7 +293,20 @@ async function settingsCommand<T>(
   }
   return new Promise<T>((resolve, reject) => {
     const id = ++settingsNext;
-    settingsPending.set(id, { resolve: (value) => resolve(value as T), reject });
+    const timeout = setTimeout(() => {
+      settingsPending.delete(id);
+      reject(new Error(`Settings CDP timeout: ${method}`));
+    }, 15000);
+    settingsPending.set(id, {
+      resolve: (value) => {
+        clearTimeout(timeout);
+        resolve(value as T);
+      },
+      reject: (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    });
     settingsSocket!.send(JSON.stringify({ id, method, params }));
   });
 }
@@ -360,7 +383,9 @@ async function reloadPage(): Promise<void> {
 }
 async function click(selector: string, count = 1): Promise<void> {
   if (settingsMode && selector === 'dialog [aria-label="Close"]') {
-    await settingsEvaluate('window.close()');
+    // Closing destroys this CDP target before it necessarily acknowledges the
+    // evaluation. Observe the actual close rather than awaiting that reply.
+    void settingsEvaluate('window.close()').catch(() => undefined);
     await until(
       async () =>
         (
@@ -1960,6 +1985,136 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   console.log(
     'Grouped menus: flyouts, keyboard return, global search, recent actions, captured targets and minimum-window bounds. Models: all five new provider presets persisted with content off and no credentials.',
   );
+}
+async function verifyModelLighting(): Promise<void> {
+  await paletteCommand('Dock plane');
+  await click(fileSelector(path.join(fixture.files, 'Models')), 2);
+  await until(text, (value) => value.includes('Lighting.step'), 'Lighting fixture folder');
+  const observations: { look: string; view: number; geometry: number; blackFraction: number }[] =
+    [];
+  for (const look of ['dark', 'light'] as const) {
+    await appearance(look);
+    await preview(path.join(fixture.files, 'Models', 'Lighting.step'), 'Wireframe');
+    const dimensions = await until(
+      () => evaluate<string>('document.querySelector(".model-dimensions").textContent'),
+      (value) => /mm$/.test(value),
+      'STEP conversion and model framing complete',
+    );
+    await click('[aria-label="Frame model"]');
+    await evaluate(
+      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
+    );
+    const worldCamera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+    for (let view = 0; view < 5; view++) {
+      if (view === 4) {
+        await command('Emulation.setDeviceMetricsOverride', {
+          width: 780,
+          height: 560,
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+        await evaluate(
+          'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
+        );
+        await click('[aria-label="Frame model"]');
+        await evaluate(
+          'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
+        );
+      }
+      const bounds = await evaluate<{
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        scale: number;
+      }>(`(() => {
+        const r=document.querySelector('.model-stage canvas').getBoundingClientRect();
+        return {x:r.x,y:r.y,width:r.width,height:r.height,scale:1};
+      })()`);
+      if (view > 0 && view < 4) {
+        const [dx, dy] = [
+          [0.5, 0],
+          [0, -0.28],
+          [0.2, 0.2],
+        ][view - 1];
+        const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+        await command('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          button: 'left',
+          buttons: 1,
+          clickCount: 1,
+          ...start,
+        });
+        for (let step = 1; step <= 8; step++) {
+          await command('Input.dispatchMouseEvent', {
+            type: 'mouseMoved',
+            button: 'left',
+            buttons: 1,
+            x: start.x + (dx * bounds.height * step) / 8,
+            y: start.y + (dy * bounds.height * step) / 8,
+          });
+          await delay(16);
+        }
+        await command('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          button: 'left',
+          buttons: 0,
+          clickCount: 1,
+          x: start.x + dx * bounds.height,
+          y: start.y + dy * bounds.height,
+        });
+        await delay(600);
+      }
+      // Cropped CDP captures temporarily resize offscreen WebGL surfaces. Capture
+      // the settled viewport, then crop its bitmap without touching the renderer.
+      const { data } = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
+      const stats = await evaluate<{ geometry: number; blackFraction: number }>(`(async () => {
+        const image=new Image();image.src='data:image/png;base64,${data}';await image.decode();
+        const bounds=${JSON.stringify(bounds)},scale=image.width/innerWidth;
+        const canvas=document.createElement('canvas');canvas.width=Math.round(bounds.width*scale);canvas.height=Math.round(bounds.height*scale);
+        const context=canvas.getContext('2d');context.drawImage(image,bounds.x*scale,bounds.y*scale,bounds.width*scale,bounds.height*scale,0,0,canvas.width,canvas.height);
+        const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
+        const background=pixels.slice(0,3);let geometry=0,black=0;
+        for(let i=0;i<pixels.length;i+=4) {
+          const rgb=pixels.slice(i,i+3);
+          if(Math.max(...rgb.map((value,index)=>Math.abs(value-background[index])))>18) {
+            geometry++;
+            if(Math.max(...rgb)<24) black++;
+          }
+        }
+        return {geometry,blackFraction:geometry ? black/geometry : 1};
+      })()`);
+      observations.push({ look, view, ...stats });
+      console.log('Model lighting:', observations.at(-1));
+      assert.ok(stats.geometry > 500, 'Lighting check contains rendered geometry');
+      assert.equal(
+        await evaluate('document.querySelector(".model-dimensions").textContent'),
+        dimensions,
+      );
+      if (view < 4)
+        assert.equal(
+          await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+          worldCamera,
+          'Model orbit does not rotate the Plurid camera',
+        );
+      if (view === 0 || view === 2 || view === 4)
+        await snapshot(`desktop-native-model-lighting-${look}-${view}.png`);
+    }
+    await command('Emulation.clearDeviceMetricsOverride');
+    await closePreview();
+  }
+  for (const observation of observations)
+    assert.ok(
+      observation.blackFraction < 0.01,
+      `CAD faces remain readable while orbiting: ${JSON.stringify(observation)}`,
+    );
+  for (const extension of ['glb', 'stl']) {
+    await preview(
+      path.join(fixture.files, 'Models', `Triangle.${extension}`),
+      '1 meshes · 1 triangles · 3 vertices',
+    );
+    await closePreview();
+  }
 }
 async function verifyRefinements(): Promise<void> {
   await paletteCommand('Dock plane');
@@ -3968,6 +4123,13 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'model-lighting') {
+    await verifyModelLighting();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
     await verifyRefinements();
     await verifyBackgroundApp();

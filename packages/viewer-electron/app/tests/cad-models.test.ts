@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cadMeshes, type ImportedCad } from '../src/renderer/previews/model/cad-data';
+import { cadMaterial } from '../src/renderer/previews/model/appearance';
 
 const require = createRequire(import.meta.url);
 describe('local CAD geometry conversion', () => {
@@ -45,5 +46,25 @@ describe('local CAD geometry conversion', () => {
     triangle.meshes[0].index.array[2] = 2;
     triangle.meshes[0].attributes.position.array[0] = Infinity;
     expect(() => cadMeshes(triangle)).toThrow('invalid geometry');
+  });
+  it('retains the original STEP color when assigning imported linear values to a material', async () => {
+    const create = require('occt-import-js') as () => Promise<{
+      ReadStepFile(data: Uint8Array, params: { linearUnit: string }): ImportedCad;
+    }>;
+    const occt = await create();
+    const fixture = path.join(
+      path.dirname(require.resolve('occt-import-js/package.json')),
+      'test/testfiles/simple-basic-cube/cube.stp',
+    );
+    // The original STEP names Orange with sRGB components (1, 0.6, 0).
+    const meshes = cadMeshes(
+      occt.ReadStepFile(new Uint8Array(await readFile(fixture)), { linearUnit: 'millimeter' }),
+    );
+    const material = cadMaterial(meshes[0].color);
+    try {
+      expect(material.color.getHexString()).toBe('ff9900');
+    } finally {
+      material.dispose();
+    }
   });
 });

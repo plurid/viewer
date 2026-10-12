@@ -11,6 +11,7 @@ import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
 import { cadFormats } from '../../../domain/model-formats';
 import { importCad } from '../model/cad';
 import { printingScale } from '../model/printing';
+import { cadMaterial, modelLighting } from '../model/appearance';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
@@ -222,13 +223,7 @@ export default function ModelPreview(context: PreviewContext) {
     };
     renderer.domElement.addEventListener('pointerdown', down);
     renderer.domElement.addEventListener('pointerup', pick);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x58616b, 2));
-    const key = new THREE.DirectionalLight(0xffffff, 3);
-    key.position.set(3, 5, 4);
-    scene.add(key);
-    const fill = new THREE.DirectionalLight(0xa7c9e5, 1.5);
-    fill.position.set(-3, 2, -4);
-    scene.add(fill);
+    modelLighting(scene, camera);
     let lastFrame = performance.now();
     function schedule() {
       if (!disposed && renderActive && !frameRequest) frameRequest = requestAnimationFrame(render);
@@ -351,20 +346,7 @@ export default function ModelPreview(context: PreviewContext) {
           if (mesh.normals)
             geometry.setAttribute('normal', new THREE.BufferAttribute(mesh.normals, 3));
           else geometry.computeVertexNormals();
-          const part = new THREE.Mesh(
-            geometry,
-            new THREE.MeshStandardMaterial({
-              color: mesh.color
-                ? new THREE.Color().setRGB(
-                    ...(mesh.color as [number, number, number]),
-                    THREE.SRGBColorSpace,
-                  )
-                : 0xb5c4cc,
-              roughness: 0.55,
-              metalness: 0.08,
-              side: THREE.DoubleSide,
-            }),
-          );
+          const part = new THREE.Mesh(geometry, cadMaterial(mesh.color));
           part.name = mesh.name;
           loaded.add(part);
         }
