@@ -159,10 +159,15 @@ export const PreviewHost = memo(function PreviewHost({
         renderFooter(resource, module)
       ) : (
         <footer className="preview-info">
-          <span title={resource.entry.path}>{resource.entry.name}</span>
-          <span>
-            {module.label} <span className="separator">·</span> {formatBytes(resource.entry.size)}
-          </span>
+          <div className="preview-file-info">
+            <span className="preview-filename" title={resource.entry.path}>
+              {resource.entry.name}
+            </span>
+            <span className="preview-file-details">
+              <span className="separator">·</span> {module.label}{' '}
+              <span className="separator">·</span> {formatBytes(resource.entry.size)}
+            </span>
+          </div>
           {!supplied && (
             <IconButton
               icon="external"

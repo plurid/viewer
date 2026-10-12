@@ -2026,6 +2026,37 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     'parsed drawing in worker',
   );
   assert.equal(await evaluate('document.querySelector(".dxf-viewer").dataset.dxfUnits'), '4');
+  const checkDrawingToolbar = async (selector: string, height: number) => {
+    const controls = await evaluate<{ height: number; center: number }[]>(
+      `Array.from(document.querySelectorAll(${JSON.stringify(selector)})).map(el=>({height:el.offsetHeight,center:el.getBoundingClientRect().top+el.getBoundingClientRect().height/2}))`,
+    );
+    assert.ok(controls.length >= 5, 'All drawing tools are present');
+    assert.ok(
+      controls.every((control) => control.height === height),
+      `Drawing buttons and selectors share a ${height}px height: ${JSON.stringify(controls)}`,
+    );
+    assert.ok(
+      Math.max(...controls.map((control) => control.center)) -
+        Math.min(...controls.map((control) => control.center)) <
+        1,
+      'Drawing controls align vertically',
+    );
+  };
+  await checkDrawingToolbar('.quick-preview .preview-toolbar > :is(button,select)', 30);
+  assert.equal(
+    await evaluate<number>('document.querySelector(".dxf-info").offsetHeight'),
+    34,
+    'Quick Preview retains the compact drawing status bar',
+  );
+  assert.equal(
+    await evaluate<boolean>(`(()=>{
+      const guide=document.querySelector('.dxf-guidance > span:first-child').getBoundingClientRect();
+      const units=document.querySelector('.dxf-units').getBoundingClientRect();
+      return units.left>=guide.right && units.left-guide.right<12;
+    })()`),
+    true,
+    'Drawing units stay beside the instructions',
+  );
   const tool = async (value: string) => {
     await evaluate(
       `(()=>{const input=document.querySelector('[aria-label="Drawing tool"]');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change',{bubbles:true}));})()`,
@@ -2158,6 +2189,25 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   );
   await evaluate('window.__qaDrawingRestore()');
   await snapshot('desktop-native-dxf-minimum.png');
+  await tool('area');
+  for (const point of compactPoints.slice(0, 3)) await pick(point);
+  assert.equal(
+    await evaluate<boolean>(`(()=>{
+      const row=document.querySelector('.dxf-info').getBoundingClientRect();
+      const finish=document.querySelector('.dxf-draft-controls button');
+      const actions=document.querySelector('.dxf-draft-controls').getBoundingClientRect();
+      const units=document.querySelector('.dxf-units').getBoundingClientRect();
+      const instructions=document.querySelector('.dxf-guidance > span:first-child');
+      return !finish.disabled && actions.right<=row.right && actions.top>=row.top &&
+        actions.bottom<=row.bottom && units.right<=actions.left &&
+        instructions.title.includes('Enter') && document.querySelector('.dxf-info').offsetHeight===34;
+    })()`),
+    true,
+    'Area instructions, units and enabled draft controls fit in the minimum window',
+  );
+  await snapshot('desktop-native-dxf-draft-minimum.png');
+  await click('[aria-label="Cancel measurement"]');
+  await tool('distance');
   await command('Emulation.clearDeviceMetricsOverride');
   const setLook = async (look: 'dark' | 'light') => {
     await evaluate(
@@ -2213,11 +2263,25 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     Boolean,
     'drawing tools in plane header',
   );
+  await checkDrawingToolbar('.plane-module-controls .preview-toolbar > :is(button,select)', 28);
   await paletteCommand('Measure distance');
   await until(
     () => evaluate<string>(`document.querySelector('[aria-label="Drawing tool"]')?.value || ''`),
     (value) => value === 'distance',
     'searchable preview measurement command',
+  );
+  assert.equal(
+    await evaluate<boolean>(`(()=>{
+      const host=document.querySelector('.preview-host[data-preview-module="dxf"]');
+      const name=host.querySelector('.preview-filename').getBoundingClientRect();
+      const details=host.querySelector('.preview-file-details').getBoundingClientRect();
+      const guide=host.querySelector('.dxf-guidance').getBoundingClientRect();
+      const open=host.querySelector('.preview-info button').getBoundingClientRect();
+      return Math.abs(name.left-guide.left)<1 && details.left>=name.right &&
+        details.left-name.right<12 && details.right<open.left;
+    })()`),
+    true,
+    'Linked drawing filename, type and size form one aligned group before the external-open action',
   );
   await snapshot('desktop-native-dxf-plane.png');
   if (process.env.VIEWER_TEST_DXF_FILE) {

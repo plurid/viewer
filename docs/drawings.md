@@ -2,7 +2,7 @@
 
 Open an ASCII `.dxf` as a linked Plurid plane, use Space for Quick Preview, or select it in Gallery. The same lazy module and drawing tools serve all three hosts. Primary controls join the existing plane header; secondary actions are searchable in Commands. Files are read locally and are not edited by the preview.
 
-The canvas leads the preview and inherits [the current design system](../DESIGN.md). Drawing details starts hidden and scrolls independently at 208px wide, capped at 42% of the preview width. The fixed 34px status bar keeps tool instructions, draft controls and displayed units visible while the panel scrolls.
+The canvas leads the preview and inherits [the current design system](../DESIGN.md). Drawing details starts hidden and scrolls independently at 208px wide, capped at 42% of the preview width. Toolbar buttons and selectors share a 28px height in plane headers and 30px in standalone previews. The fixed 34px status bar groups instructions and units on the left, with draft controls and limitations on the right. Long instructions retain their full text on hover. In linked planes, the file footer groups filename, type and size on the same left edge, with the external-open action on the right.
 
 Choose **Inspect**, **Distance**, **Angle** or **Area** in the tool selector. Inspect reports entity type, layer, length and, where applicable, radius, ellipse axes and closed-entity area. Circle/arc and bulged-polyline lengths are analytic. Ellipse length is tessellated and shown with `≈`. The manually picked Area tool measures a polygon through the points you choose; it does not integrate a curved outline.
 

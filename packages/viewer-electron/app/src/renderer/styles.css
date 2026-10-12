@@ -383,6 +383,7 @@ select {
   scrollbar-width: none;
 }
 .plane-module-controls .preview-toolbar {
+  --preview-control-height: 28px;
   padding: 0;
   gap: 4px;
   border: none;
@@ -1168,7 +1169,6 @@ select {
   height: 31px;
   flex-shrink: 0;
   display: flex;
-  justify-content: space-between;
   gap: 10px;
   align-items: center;
   padding: 0 14px;
@@ -1176,16 +1176,25 @@ select {
   color: var(--muted);
   font-size: 11px;
 }
-.preview-info > span:first-child {
+.preview-file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.preview-filename {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.preview-info > span:last-child {
+.preview-file-details {
   flex-shrink: 0;
+  white-space: nowrap;
 }
 .preview-toolbar {
+  --preview-control-height: 30px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1201,7 +1210,18 @@ select {
 }
 .preview-toolbar button,
 .preview-toolbar select {
+  height: var(--preview-control-height);
+  min-height: var(--preview-control-height);
+  padding-block: 0;
   font-size: 12px;
+}
+.preview-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-toolbar input:not([type='checkbox']):not([type='range']) {
+  height: var(--preview-control-height);
 }
 .image-viewer,
 .model-viewer,
@@ -1399,26 +1419,40 @@ select {
   gap: 5px;
   flex-wrap: wrap;
 }
-.dxf-info {
+.preview-host .dxf-info {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 0 14px;
   height: 34px;
   flex-shrink: 0;
   border-top: 1px solid var(--line);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
 }
-.dxf-info > span:first-child {
+.dxf-guidance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.dxf-guidance > span:first-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dxf-info > span:last-child {
+.dxf-units {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+.dxf-units::before {
+  content: '·';
 }
 .dxf-info button {
   padding: 2px 5px;

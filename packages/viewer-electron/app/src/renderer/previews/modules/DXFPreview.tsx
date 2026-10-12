@@ -428,7 +428,15 @@ export default function DXFPreview(context: PreviewContext) {
       </div>
       {ready && (
         <footer className="dxf-info">
-          <span>{instructions}</span>
+          <div className="dxf-guidance">
+            <span title={instructions}>{instructions}</span>
+            <span className="dxf-units">
+              {unitInfo(displayUnit).symbol}
+              {displayUnit !== sourceUnit &&
+                sourceUnit !== 0 &&
+                ` · file ${unitInfo(sourceUnit).symbol}`}
+            </span>
+          </div>
           {draft > 0 && (
             <span className="dxf-draft-controls">
               {tool === 'area' && (
@@ -443,18 +451,12 @@ export default function DXFPreview(context: PreviewContext) {
               />
             </span>
           )}
-          <span>
-            {unitInfo(displayUnit).symbol}
-            {displayUnit !== sourceUnit &&
-              sourceUnit !== 0 &&
-              ` · file ${unitInfo(sourceUnit).symbol}`}
-            {drawing.warnings.length > 0 && (
-              <button onClick={() => setPanel(true)}>
-                {drawing.warnings.length}{' '}
-                {drawing.warnings.length === 1 ? 'limitation' : 'limitations'}
-              </button>
-            )}
-          </span>
+          {drawing.warnings.length > 0 && (
+            <button onClick={() => setPanel(true)}>
+              {drawing.warnings.length}{' '}
+              {drawing.warnings.length === 1 ? 'limitation' : 'limitations'}
+            </button>
+          )}
         </footer>
       )}
     </div>
