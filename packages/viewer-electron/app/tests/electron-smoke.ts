@@ -1670,6 +1670,239 @@ async function contextMenu(selector: string): Promise<void> {
     'autofocused contextual search',
   );
 }
+async function verifyGroupedMenuAndModels(): Promise<void> {
+  await paletteCommand('Dock plane');
+  const readme = fileSelector(path.join(fixture.files, 'README.md'));
+  await contextMenu(readme);
+  assert.equal(
+    await evaluate('document.querySelectorAll(".context-menu [data-menu-id^=view-]").length'),
+    0,
+  );
+  assert.equal(
+    await evaluate(`document.querySelectorAll('.context-menu [data-menu-id^="column."]').length`),
+    0,
+  );
+  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 0);
+  await snapshot('desktop-native-context-grouped.png');
+  await click('.context-menu [data-menu-id="menu.View"]');
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".context-submenu").length'),
+    (count) => count === 1,
+    'View submenu',
+  );
+  assert.equal(
+    await evaluate('document.querySelectorAll(".context-submenu [data-menu-id^=view-]").length'),
+    4,
+  );
+  assert.equal(
+    await evaluate(
+      `Array.from(document.querySelectorAll('.context-menu-content [id]')).every(element=>!/[\\t\\n\\r ]/.test(element.id))`,
+    ),
+    true,
+    'submenu accessible IDs contain no whitespace',
+  );
+  await click('.context-submenu [data-menu-id="menu.Columns"]');
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".context-submenu").length'),
+    (count) => count === 2,
+    'Columns submenu',
+  );
+  await snapshot('desktop-native-context-columns.png');
+  const flyoutBounds = await evaluate<{ left: number; right: number }[]>(
+    `Array.from(document.querySelectorAll('.context-menu, .context-submenu')).map(menu=>{const r=menu.getBoundingClientRect();return {left:r.left,right:r.right};})`,
+  );
+  assert.ok(flyoutBounds[1].right <= flyoutBounds[0].left + 2);
+  assert.ok(flyoutBounds[2].right <= flyoutBounds[1].left + 2);
+  assert.equal(
+    await evaluate('document.activeElement.getAttribute("aria-label")'),
+    'Search actions',
+  );
+  await key('Escape', 'Escape');
+  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 1);
+  await key('ArrowLeft', 'ArrowLeft');
+  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 0);
+  await key('ArrowRight', 'ArrowRight');
+  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 1);
+  // Typing traverses the full catalog immediately, including a third-level command.
+  await command('Input.insertText', { text: 'date created' });
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".context-menu .command-result[aria-selected=true]")?.dataset.menuId || ""',
+      ),
+    (id) => id === 'column.created',
+    'search through hidden column commands',
+  );
+  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 0);
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".file-head [data-column=created]")'),
+    Boolean,
+    'searched column command executes',
+  );
+  await contextMenu(readme);
+  await command('Input.insertText', { text: 'rn' });
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    (value) => value === 'README.md',
+    'grouped menu retains rename target',
+  );
+  await click('dialog [aria-label="Close"]');
+  await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".context-menu .command-result")?.textContent || ""',
+      ),
+    (label) => /^Rename/.test(label),
+    'recent rename is promoted',
+  );
+  assert.equal(
+    await evaluate('document.querySelectorAll(".context-menu [data-menu-id=rename]").length'),
+    1,
+  );
+  await key('Escape', 'Escape');
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".context-menu").length'),
+    (count) => count === 0,
+    'closed recent context menu',
+  );
+
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 780,
+    height: 560,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  // The list is docked: use a blank-space invocation near the lower-right viewport edge.
+  await evaluate(
+    `document.querySelector('.folder-explorer .file-scroll').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:765,clientY:545}));`,
+  );
+  await until(
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search actions"'),
+    Boolean,
+    'autofocused edge context menu',
+  );
+  await click('.context-menu [data-menu-id="menu.View"]');
+  await click('.context-submenu [data-menu-id="menu.Columns"]');
+  const bounds = await evaluate<{ left: number; top: number; right: number; bottom: number }[]>(
+    `Array.from(document.querySelectorAll('.context-menu, .context-submenu')).map(menu=>{const r=menu.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};})`,
+  );
+  assert.equal(bounds.length, 3);
+  for (const rect of bounds) {
+    assert.ok(
+      rect.left >= 8 && rect.top >= 8 && rect.right <= 772 && rect.bottom <= 552,
+      JSON.stringify(rect),
+    );
+  }
+  await snapshot('desktop-native-context-minimum.png');
+  // Reproduce the delayed docking focus even if the viewport's own effect has settled.
+  await evaluate(
+    `document.querySelector('[data-plurid-entity="PluridPlaneContent"]').focus({preventScroll:true})`,
+  );
+  assert.equal(
+    await evaluate('document.activeElement?.getAttribute("aria-label")'),
+    'Search actions',
+    'flyouts retain the search input at minimum size',
+  );
+  // All flyouts are one dismissal boundary; clicking inside keeps the menu open.
+  for (const count of [1, 0]) {
+    await key('Escape', 'Escape');
+    await until(
+      () => evaluate<number>('document.querySelectorAll(".context-submenu").length'),
+      (value) => value === count,
+      `edge submenu dismissal: ${count} remaining`,
+    );
+  }
+  await key('Escape', 'Escape');
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".context-menu").length'),
+    (count) => count === 0,
+    'edge menu dismissal',
+  );
+  assert.equal(await evaluate('document.querySelectorAll(".context-menu").length'), 0);
+  await command('Emulation.clearDeviceMetricsOverride');
+
+  await tab('Models');
+  await until(
+    () =>
+      settingsEvaluate<number>(
+        `document.querySelectorAll('[aria-label="New model provider"] option').length`,
+      ),
+    (count) => count === 8,
+    'complete provider picker',
+  );
+  await snapshot('desktop-native-models-empty.png');
+  for (const kind of ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter']) {
+    await settingsEvaluate(
+      `(() => { const picker=document.querySelector('[aria-label="New model provider"]');picker.value=${JSON.stringify(kind)};picker.dispatchEvent(new Event('change',{bubbles:true})); })()`,
+    );
+    await settingsEvaluate(
+      `Array.from(document.querySelectorAll('.settings-provider-add button')).find(button=>button.textContent.trim()==='Add provider').click()`,
+    );
+  }
+  await until(
+    () =>
+      settingsEvaluate<string[]>(
+        'window.viewer.settingsGet().then(value=>value.settings.providers.map(provider=>provider.kind))',
+      ),
+    (kinds) => kinds.length === 5,
+    'all five provider profiles persisted',
+  );
+  assert.deepEqual(
+    await settingsEvaluate(
+      'window.viewer.settingsGet().then(value=>value.settings.providers.map(provider=>provider.kind))',
+    ),
+    ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter'],
+  );
+  assert.equal(
+    await settingsEvaluate(
+      `document.querySelector('[data-provider-kind=zai] [aria-label="Provider endpoint"]').value`,
+    ),
+    'https://api.z.ai/api/paas/v4',
+  );
+  assert.equal(
+    await settingsEvaluate(
+      `document.querySelector('[data-provider-kind=gemini] [aria-label="Provider endpoint"]').readOnly`,
+    ),
+    true,
+  );
+  assert.equal(
+    await settingsEvaluate(
+      `document.querySelector('[data-provider-kind=qwen] [aria-label="Provider endpoint"]').readOnly`,
+    ),
+    false,
+  );
+  assert.deepEqual(
+    await settingsEvaluate('window.viewer.settingsGet().then(value=>value.credentials)'),
+    [],
+  );
+  assert.equal(
+    await settingsEvaluate(
+      'Array.from(document.querySelectorAll(".settings-provider [type=checkbox]")).every(input=>!input.checked)',
+    ),
+    true,
+  );
+  await snapshot('desktop-native-models-providers.png');
+  await settingsEvaluate(
+    'document.querySelector("[data-provider-kind=deepseek] .settings-actions button").click()',
+  );
+  await until(
+    () => settingsEvaluate<string>('document.querySelector(".settings-error")?.textContent || ""'),
+    (value) => value.includes('API key'),
+    'missing provider key is actionable',
+  );
+  await settingsEvaluate(
+    'document.querySelector("[data-provider-kind=qwen]").scrollIntoView({block:"start"})',
+  );
+  await snapshot('desktop-native-models-qwen.png');
+  await click('dialog [aria-label="Close"]');
+  console.log(
+    'Grouped menus: flyouts, keyboard return, global search, recent actions, captured targets and minimum-window bounds. Models: all five new provider presets persisted with content off and no credentials.',
+  );
+}
 async function inventory(): Promise<string[]> {
   const entries = await readdir(fixture.files, { recursive: true, withFileTypes: true });
   return Promise.all(
@@ -2954,6 +3187,13 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'menus-models') {
+    await verifyGroupedMenuAndModels();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'foundations') {
     await verifyFoundations();
     return;

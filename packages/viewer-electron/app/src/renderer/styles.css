@@ -1575,6 +1575,8 @@ select {
 
 .context-menu {
   position: fixed;
+  left: var(--menu-left);
+  top: var(--menu-top);
   z-index: 1000;
   width: 304px;
   max-width: calc(100vw - 16px);
@@ -1585,6 +1587,24 @@ select {
   border-radius: 8px;
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+.context-menu-content {
+  position: relative;
+  z-index: 1000;
+}
+.context-menu.command-search {
+  width: 304px;
+}
+.context-submenu {
+  position: fixed;
+  z-index: 1001;
+  width: 304px;
+  max-width: calc(100vw - 16px);
+  max-height: min(520px, calc(100vh - 16px));
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
 }
 .command-search {
   display: flex;
@@ -1629,7 +1649,8 @@ select {
   text-align: left;
   min-height: 34px;
 }
-.command-result[aria-selected='true'] {
+.command-result[aria-selected='true'],
+.command-result[data-active='true'] {
   background: var(--selection);
   --muted: var(--selection-muted);
 }
@@ -1957,6 +1978,17 @@ select {
 }
 .settings-editor {
   padding: 8px 0 20px;
+}
+.settings-provider-add {
+  align-items: center;
+  margin: 0 0 20px;
+}
+.settings-provider-add select {
+  width: 220px;
+  max-width: 100%;
+}
+.settings-provider {
+  border-bottom: 1px solid var(--line);
 }
 .settings-editor > label:not(.settings-row) {
   display: grid;

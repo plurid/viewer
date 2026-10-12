@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommands, useCommandRevision } from '../commands/context';
-import { CommandResults } from '../commands/CommandResults';
-import { rankCommands, type CommandRequest, type ResolvedCommand } from '../commands/registry';
+import { ContextMenuResults } from './ContextMenuResults';
+import { type CommandRequest, type ResolvedCommand } from '../commands/registry';
 import { report, useViewer } from '../state/store';
 
 /** Outside transformed planes, with a fixed target and keyboard-first search. */
@@ -22,19 +22,21 @@ export function ContextMenu({
   const registry = useCommands();
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
-  const [query, setQuery] = useState('');
   const menu = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef(document.activeElement as HTMLElement | null);
   const close = useRef(onClose);
   const trigger = useRef(anchor);
   close.current = onClose;
   trigger.current = anchor;
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const element = menu.current;
+    const previous = previousFocus.current;
+    const element = menu.current?.querySelector<HTMLElement>('.context-menu');
     if (element) {
       const rect = element.getBoundingClientRect();
       element.style.left = `${Math.max(8, Math.min(position.x, innerWidth - rect.width - 8))}px`;
-      element.style.top = `${Math.max(8, Math.min(position.y, innerHeight - rect.height - 8))}px`;
+      const top = Math.max(8, Math.min(position.y, innerHeight - rect.height - 8));
+      element.style.top = `${top}px`;
+      element.style.maxHeight = `min(540px, calc(100vh - ${top + 8}px))`;
     }
     const dismiss = (event: PointerEvent) => {
       const target = event.target as Node;
@@ -55,28 +57,27 @@ export function ContextMenu({
     });
   };
   const available = registry.list(request);
-  const applicableRecent = recent
-    .filter((id) => available.some((command) => command.id === id))
-    .slice(0, 2);
   return createPortal(
     <div
-      className="context-menu"
+      className="context-menu-layer"
       ref={menu}
-      style={{ left: position.x, top: position.y }}
+      style={
+        { '--menu-left': `${position.x}px`, '--menu-top': `${position.y}px` } as React.CSSProperties
+      }
       role="dialog"
       aria-label={label}
+      data-plurid-overlay="context-menu"
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         if (event.key === 'Tab') onClose();
       }}
     >
-      <CommandResults
-        query={query}
-        onQuery={setQuery}
-        rows={rankCommands(available, query, recent)}
+      <ContextMenuResults
+        commands={available}
         onSelect={select}
         onClose={onClose}
-        recent={applicableRecent}
+        recent={recent}
+        focused={!!request.ids}
       />
     </div>,
     document.body,

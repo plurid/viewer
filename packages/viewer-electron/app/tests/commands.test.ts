@@ -7,6 +7,7 @@ import {
   type CommandDefinition,
 } from '../src/renderer/commands/registry';
 import { folderCommands, type FolderActions } from '../src/renderer/commands/folder';
+import { contextMenuSections, type MenuSection } from '../src/renderer/commands/menu';
 import { textEditFor } from '../src/renderer/commands/editing';
 import {
   activeWorkspace,
@@ -81,6 +82,65 @@ afterEach(async () => {
 });
 
 describe('contextual commands', () => {
+  const commandsIn = (sections: MenuSection[]): string[] =>
+    sections.flatMap((section) =>
+      section.entries.flatMap((entry) =>
+        entry.kind === 'command' ? [entry.command.id] : commandsIn(entry.sections),
+      ),
+    );
+  it('groups every contextual command exactly once while promoting recent and pinned actions', () => {
+    const commands = registry.list({ paneID: context.paneID });
+    const pinned = { ...commands[0], id: 'custom.fixture', group: 'Actions', primary: true };
+    commands.push(pinned);
+    const sections = contextMenuSections(commands, ['missing', 'rename', 'copy', 'info']);
+    expect(sections[0].label).toBe('Recent');
+    expect(commandsIn([sections[0]])).toEqual(['rename', 'copy']);
+    expect(sections[1].label).toBe('Pinned');
+    expect(commandsIn([sections[1]])).toEqual(['custom.fixture']);
+    expect(commandsIn(sections).sort()).toEqual(commands.map((command) => command.id).sort());
+    const view = sections
+      .flatMap((section) => section.entries)
+      .find((entry) => entry.id === 'menu.View');
+    expect(view?.kind).toBe('submenu');
+    if (view?.kind === 'submenu') {
+      expect(
+        view.sections.flatMap((section) => section.entries).map((entry) => entry.id),
+      ).toContain('menu.Columns');
+      expect(
+        view.sections.flatMap((section) => section.entries).map((entry) => entry.id),
+      ).toContain('menu.Group by');
+    }
+    expect(rankCommands(commands, 'date created', [])[0].id).toBe('column.created');
+  });
+  it('keeps a scoped view picker immediate and background menus free of selected-file actions', () => {
+    const scoped = registry.list({
+      paneID: context.paneID,
+      ids: ['view-list', 'view-grid', 'view-columns', 'view-gallery'],
+    });
+    const sections = contextMenuSections(scoped, [], true);
+    expect(
+      sections.flatMap((section) => section.entries).every((entry) => entry.kind === 'command'),
+    ).toBe(true);
+    expect(commandsIn(sections)).toEqual(scoped.map((command) => command.id));
+    const columnPicker = registry.list({
+      paneID: context.paneID,
+      ids: ['column.modified', 'column.created', 'column.kind', 'column.size', 'wrap-file-names'],
+    });
+    expect(
+      contextMenuSections(columnPicker, [], true)
+        .flatMap((section) => section.entries)
+        .every((entry) => entry.kind === 'command'),
+    ).toBe(true);
+    const background = registry.list({
+      paneID: context.paneID,
+      scope: 'folder',
+      context: { selection: [] },
+    });
+    const ids = commandsIn(contextMenuSections(background, ['rename', 'copy']));
+    expect(ids).not.toContain('rename');
+    expect(ids).not.toContain('copy');
+    expect(ids).toContain('new-folder');
+  });
   it('searches short aliases and label prefixes before loose matches', () => {
     const rows = registry.list({ paneID: context.paneID });
     expect(rankCommands(rows, 'rn', [])[0].id).toBe('rename');

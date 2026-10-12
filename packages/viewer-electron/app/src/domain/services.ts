@@ -1,7 +1,8 @@
 import type { FileEntry, UIPreferences, ViewMode, SortKey } from './contracts';
 import type { FolderOverride } from './folder-presentation';
 import type { CustomAction, TerminalProfile } from './automation';
-export type ProviderKind = 'openai' | 'anthropic' | 'local';
+import type { ProviderKind } from './model-providers';
+export type { ProviderKind } from './model-providers';
 export interface ModelProvider {
   id: string;
   name: string;

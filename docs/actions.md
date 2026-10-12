@@ -27,7 +27,17 @@ Templates and instructions belong to the recipe, so repeat tasks do not require 
 
 ## Models and permissions
 
-Settings → Models supports OpenAI Responses, Anthropic structured tool output and compatible local chat endpoints. Choose a provider/model for a recipe. Provider keys are encrypted through Electron's platform secure storage and written in mode-0600 metadata; renderers receive credential IDs rather than saved key values. A local endpoint needs compatible structured JSON output. Discovery alone does not prove a model supports it.
+Settings → Models has a provider picker for OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter and local endpoints. Choose a provider, add its profile, save its API key and choose a model ID, then select that profile in a recipe. Model fields remain editable; Connect and load models offers discovered IDs where supported. OpenAI uses Responses, Anthropic uses structured tool output, and local servers need compatible structured JSON output. Discovery alone does not prove a model supports the required output.
+
+| Provider | Setup and output |
+| --- | --- |
+| z.ai | Uses the [Z.ai Model API](https://docs.z.ai/guides/overview/quick-start), with published GLM suggestions or an entered model ID. It does not advertise a model-list connection. [JSON-object output](https://docs.z.ai/api-reference/llm/chat-completion) receives the proposal schema in its instructions. |
+| DeepSeek | Uses the [DeepSeek API](https://api-docs.deepseek.com/), with model discovery and [JSON-object output](https://api-docs.deepseek.com/api/create-chat-completion/). |
+| Qwen | Uses the [Alibaba Model Studio compatible API](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope). Match the endpoint to the API key's region; regional and workspace-specific endpoints are supported. Choose a model that supports [structured output in non-thinking mode](https://www.alibabacloud.com/help/en/model-studio/qwen-structured-output). |
+| Gemini | Uses Google's [OpenAI-compatible Gemini API](https://ai.google.dev/gemini-api/docs/openai), model discovery and structured JSON output. |
+| OpenRouter | Uses [structured output](https://openrouter.ai/docs/guides/features/structured-outputs). Discovery filters models whose advertised parameters exclude structured outputs; routing requires providers that honor the requested parameters. |
+
+All returned proposals pass the same local shape, evidence and scope validation before review, including providers that cannot enforce the schema themselves. Refused or truncated responses are rejected. Named cloud profiles use supported API hosts and do not forward credentials through redirects. Provider keys are encrypted through Electron's platform secure storage and written in mode-0600 metadata; renderers receive credential IDs rather than saved key values.
 
 Document text may leave the device only when the selected provider permits document content and the recipe asks for it. Filename-only recipes do not extract content. Document-content indexing and model text sharing are separate permissions. OpenAI requests specify `store: false`; the app does not control the provider's wider data policy. No cloud provider or model is enabled by default.
 

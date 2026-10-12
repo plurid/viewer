@@ -1,5 +1,7 @@
 import { AgentGrants } from './AgentGrants';
 import { Field } from './SettingField';
+import { ModelSettings } from './ModelSettings';
+import { providerKinds, providerPresets } from '../../domain/model-providers';
 import { saveSettingsChange, type SettingsChange } from './settings-edits';
 import { defaultShortcuts } from '../../domain/shortcuts';
 import {
@@ -11,7 +13,6 @@ import {
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type {
   ActionRecipe,
-  ModelProvider,
   SettingsSnapshot,
   IndexStatus,
   SettingsPatch,
@@ -28,7 +29,6 @@ export function SettingsWindow() {
   const [error, setError] = useState('');
   const [index, setIndex] = useState<IndexStatus>();
   const [agentConfig, setAgentConfig] = useState('');
-  const [models, setModels] = useState<Record<string, string[]>>({});
   const latest = useRef<SettingsSnapshot | undefined>(undefined);
   const writes = useRef<Promise<void>>(Promise.resolve());
   const accept = (value: SettingsSnapshot) => {
@@ -117,15 +117,6 @@ export function SettingsWindow() {
           .includes(query.toLowerCase())
       : item.category === category,
   );
-  const providerPatch = (id: string, values: Partial<ModelProvider>) =>
-    enqueue((current) => [
-      {
-        path: 'settings.providers',
-        value: current.settings.providers.map((provider) =>
-          provider.id === id ? { ...provider, ...values } : provider,
-        ),
-      },
-    ]);
   const discover = [
     {
       category: 'Search',
@@ -140,7 +131,9 @@ export function SettingsWindow() {
     {
       category: 'Models',
       terms:
-        'api key credentials provider endpoint openai anthropic local model ' +
+        'api key credentials provider endpoint local model ' +
+        providerKinds.map((kind) => providerPresets[kind].name).join(' ') +
+        ' ' +
         settings.providers.map((provider) => provider.name + ' ' + provider.model).join(' '),
     },
     {
@@ -421,159 +414,7 @@ export function SettingsWindow() {
           </>
         )}
         {!query && category === 'Models' && (
-          <>
-            <p className="settings-note">
-              Choose a provider and model for each recipe. Requests run only when you invoke an
-              action.
-            </p>
-            {settings.providers.map((provider) => (
-              <section className="settings-editor" key={provider.id}>
-                <div className="settings-editor-heading">
-                  <h2>{provider.name}</h2>
-                  <IconButton
-                    icon="close"
-                    label="Remove provider"
-                    onClick={() =>
-                      patch(
-                        'settings.providers',
-                        settings.providers.filter((item) => item.id !== provider.id),
-                      )
-                    }
-                  />
-                </div>
-                <label>
-                  Name
-                  <Field
-                    label="Provider name"
-                    value={provider.name}
-                    save={(name) => providerPatch(provider.id, { name })}
-                  />
-                </label>
-                <label>
-                  Endpoint
-                  <Field
-                    label="Provider endpoint"
-                    value={provider.endpoint}
-                    save={(endpoint) => providerPatch(provider.id, { endpoint })}
-                  />
-                </label>
-                <label>
-                  Model
-                  <input
-                    list={'models-' + provider.id}
-                    aria-label="Model"
-                    defaultValue={provider.model}
-                    onBlur={(event) => providerPatch(provider.id, { model: event.target.value })}
-                  />
-                  <datalist id={'models-' + provider.id}>
-                    {models[provider.id]?.map((model) => (
-                      <option key={model} value={model} />
-                    ))}
-                  </datalist>
-                </label>
-                <label>
-                  API key
-                  <input
-                    type="password"
-                    aria-label="API key"
-                    autoComplete="off"
-                    placeholder={
-                      snapshot.credentials.includes(provider.id)
-                        ? 'Stored securely'
-                        : 'Optional for local servers'
-                    }
-                    onBlur={(event) => {
-                      const key = event.target.value;
-                      if (key) {
-                        event.target.value = '';
-                        void window.viewer
-                          .providerCredential(provider.id, key)
-                          .catch((error) => setError(error.message));
-                      }
-                    }}
-                  />
-                </label>
-                <label className="settings-row">
-                  <span>
-                    Allow document excerpts and text
-                    <small>Each recipe also controls what it sends.</small>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={provider.allowContent}
-                    onChange={(event) =>
-                      providerPatch(provider.id, { allowContent: event.target.checked })
-                    }
-                  />
-                </label>
-                {snapshot.credentials.includes(provider.id) && (
-                  <button
-                    onClick={() => {
-                      void window.viewer
-                        .providerCredential(provider.id, '')
-                        .catch((error) => setError(error.message));
-                    }}
-                  >
-                    Clear stored key
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    setError('');
-                    void window.viewer
-                      .providerModels(provider.id)
-                      .then((values) => {
-                        setModels((old) => ({ ...old, [provider.id]: values }));
-                        if (!values.length)
-                          setError(
-                            'Connected, but the server returned no model IDs. Enter its model name manually.',
-                          );
-                      })
-                      .catch((error) => setError(error.message));
-                  }}
-                >
-                  Connect and load models
-                </button>
-              </section>
-            ))}
-            <div className="settings-actions">
-              {(['openai', 'anthropic', 'local'] as const).map((kind) => (
-                <button
-                  key={kind}
-                  onClick={() =>
-                    patch('settings.providers', [
-                      ...settings.providers,
-                      {
-                        id: crypto.randomUUID(),
-                        name:
-                          kind === 'openai'
-                            ? 'OpenAI'
-                            : kind === 'anthropic'
-                              ? 'Anthropic'
-                              : 'Local endpoint',
-                        kind,
-                        endpoint:
-                          kind === 'openai'
-                            ? 'https://api.openai.com/v1'
-                            : kind === 'anthropic'
-                              ? 'https://api.anthropic.com/v1'
-                              : 'http://localhost:11434/v1',
-                        model: '',
-                        allowContent: false,
-                      },
-                    ])
-                  }
-                >
-                  Add{' '}
-                  {kind === 'openai'
-                    ? 'OpenAI'
-                    : kind === 'anthropic'
-                      ? 'Anthropic'
-                      : 'local endpoint'}
-                </button>
-              ))}
-            </div>
-          </>
+          <ModelSettings snapshot={snapshot} save={enqueue} error={setError} />
         )}
         {!query && category === 'Browsing' && (
           <FolderOverrideSettings snapshot={snapshot} save={patches} />

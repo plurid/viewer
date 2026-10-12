@@ -5,6 +5,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { ApplicationSettings, SettingsPatch, SettingsSnapshot } from '../domain/services';
 import { defaultSettings } from '../domain/services';
+import { providerKinds } from '../domain/model-providers';
 import type { UIPreferences } from '../domain/contracts';
 import { normalizePreferences } from '../domain/preferences';
 import { defaultShortcuts, shortcutKey, validShortcut } from '../domain/shortcuts';
@@ -130,7 +131,7 @@ export const settingsSchema = z
           .object({
             id,
             name: z.string().min(1).max(100),
-            kind: z.enum(['openai', 'anthropic', 'local']),
+            kind: z.enum(providerKinds),
             endpoint: z
               .string()
               .url()

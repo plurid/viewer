@@ -5,12 +5,16 @@ export function Field({
   multiline = false,
   label,
   placeholder,
+  list,
+  readOnly,
 }: {
   value: string;
   save(value: string): void;
   multiline?: boolean;
   label: string;
   placeholder?: string;
+  list?: string;
+  readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
@@ -29,6 +33,8 @@ export function Field({
   ) : (
     <input
       {...props}
+      list={list}
+      readOnly={readOnly}
       onKeyDown={(event) => {
         if (event.key === 'Enter') event.currentTarget.blur();
       }}
