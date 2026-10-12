@@ -14,6 +14,7 @@ import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import { repeatedPreviewFixture } from './workspace-fixtures';
 import { formatBytes } from '../src/domain/files';
+import { panelDrawing } from './dxf-fixtures';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -26,6 +27,22 @@ const binary = path.join(
   `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`,
 );
 const fixture = await createFixtures();
+if (process.env.VIEWER_TEST_SCENARIO === 'drawings-workspaces') {
+  await writeFile(path.join(fixture.files, 'Panel.dxf'), panelDrawing);
+  await writeFile(path.join(fixture.files, 'Broken.dxf'), '0\nSECTION\n');
+  if (process.env.VIEWER_TEST_DXF_FILE)
+    await writeFile(
+      path.join(fixture.files, 'User panel.dxf'),
+      await readFile(process.env.VIEWER_TEST_DXF_FILE),
+    );
+  fixture.state.workspaces.push({
+    id: 'engineering-fixture',
+    name: 'Engineering',
+    panes: [],
+    roots: [],
+    arrangement: {},
+  });
+}
 const longFilename =
   '2000, J. E. Rehder, The mastery and uses of fire in antiquity, McGill-Queen’s University Press, notes and references for the publication naming workflow.txt';
 if (process.env.VIEWER_TEST_SCENARIO === 'chrome')
@@ -2001,6 +2018,283 @@ async function preview(file: string, expected: string): Promise<void> {
   await until(text, (value) => value.includes(expected), `preview ${path.basename(file)}`);
   console.log(`Preview: ${path.basename(file)}`);
 }
+async function verifyDrawingsAndWorkspaces(): Promise<void> {
+  await preview(path.join(fixture.files, 'Panel.dxf'), 'Click geometry');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector('.dxf-viewer[data-dxf-entities="6"]')`),
+    Boolean,
+    'parsed drawing in worker',
+  );
+  assert.equal(await evaluate('document.querySelector(".dxf-viewer").dataset.dxfUnits'), '4');
+  const tool = async (value: string) => {
+    await evaluate(
+      `(()=>{const input=document.querySelector('[aria-label="Drawing tool"]');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+    );
+    await evaluate(
+      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
+    );
+  };
+  const corners = () =>
+    evaluate<{ x: number; y: number }[]>(
+      `(()=>{const s=document.querySelector('.dxf-stage').getBoundingClientRect(),scale=Math.min((s.width-80)/200,(s.height-80)/100);return [[0,0],[200,0],[200,100],[0,100]].map(([x,y])=>({x:s.left+s.width/2+(x-100)*scale,y:s.top+s.height/2-(y-50)*scale}));})()`,
+    );
+  const pick = async (point: { x: number; y: number }) => {
+    assert.equal(
+      await evaluate(`document.elementFromPoint(${point.x},${point.y})?.tagName`),
+      'CANVAS',
+      'Every measured vertex remains hit-testable, including while an area draft is open',
+    );
+    await command('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+    await command('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      button: 'left',
+      buttons: 1,
+      clickCount: 1,
+      ...point,
+    });
+    await command('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      button: 'left',
+      buttons: 0,
+      clickCount: 1,
+      ...point,
+    });
+  };
+  await tool('distance');
+  const points = await corners();
+  await pick(points[0]);
+  await pick(points[1]);
+  await until(
+    () =>
+      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    (value) => value.includes('200 mm'),
+    'snapped model-space distance',
+  );
+  await tool('angle');
+  await pick(points[1]);
+  await pick(points[0]);
+  await pick(points[3]);
+  await until(
+    () =>
+      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    (value) => value.includes('90.00°'),
+    'three-point angle',
+  );
+  await tool('area');
+  for (const point of points) await pick(point);
+  await key('Enter', 'Enter');
+  await until(
+    () =>
+      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    (value) => value.includes('20,000 mm²'),
+    'closed polygon area',
+  );
+  await click('[aria-label="Show drawing details"]');
+  assert.equal(await evaluate('document.querySelectorAll(".dxf-measurement").length'), 3);
+  await evaluate(
+    `(()=>{const field=document.querySelector('[aria-label="Drawing measurement units"]');field.value='1';field.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+  );
+  await until(
+    () =>
+      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    (value) => value.includes('31 in²'),
+    'square unit conversion',
+  );
+  // Opening details changes the drawing viewport: fit mode must reframe, not clip geometry.
+  await tool('distance');
+  const detailPoints = await corners();
+  await pick(detailPoints[0]);
+  await pick(detailPoints[1]);
+  await until(
+    () =>
+      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    (value) => value.includes('7.874 in'),
+    'fitted drawing retains true coordinates after opening details',
+  );
+  await snapshot('desktop-native-dxf-measurements.png');
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 780,
+    height: 560,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  const compactPoints = await corners();
+  await pick(compactPoints[0]);
+  await pick(compactPoints[1]);
+  await until(
+    () => evaluate<number>('document.querySelectorAll(".dxf-measurement").length'),
+    (count) => count === 5,
+    'fitted drawing remains measurable after window resize',
+  );
+  const compactBounds = await evaluate<{ overflow: boolean; bottom: number }>(
+    `(()=>{const viewer=document.querySelector('.dxf-viewer');return {overflow:viewer.scrollWidth>viewer.clientWidth,bottom:viewer.getBoundingClientRect().bottom};})()`,
+  );
+  assert.equal(compactBounds.overflow, false);
+  assert.ok(compactBounds.bottom <= 560);
+  // Observe actual canvas text placements rather than duplicating its placement calculation.
+  await evaluate(`(()=>{
+    const ctx=document.querySelector('.dxf-stage canvas').getContext('2d');
+    const original=ctx.fillText.bind(ctx);
+    window.__qaDrawingLabels=[];
+    ctx.fillText=(value,x,y,...args)=>{
+      window.__qaDrawingLabels.push({value,x,y,width:ctx.measureText(value).width});
+      original(value,x,y,...args);
+    };
+    window.__qaDrawingRestore=()=>{ctx.fillText=original;};
+  })()`);
+  await click('[aria-label="Fit drawing"]');
+  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  assert.equal(
+    await evaluate<boolean>(`(()=>{
+      const readout=document.querySelector('.dxf-readout');
+      const label=window.__qaDrawingLabels.find(row=>row.value==='31 in²');
+      return !!label && (label.x>=readout.offsetLeft+readout.offsetWidth ||
+        label.x+label.width<=readout.offsetLeft ||
+        label.y-14>=readout.offsetTop+readout.offsetHeight || label.y<=readout.offsetTop);
+    })()`),
+    true,
+    'The complete area annotation stays outside the floating readout in the minimum window',
+  );
+  await evaluate('window.__qaDrawingRestore()');
+  await snapshot('desktop-native-dxf-minimum.png');
+  await command('Emulation.clearDeviceMetricsOverride');
+  const setLook = async (look: 'dark' | 'light') => {
+    await evaluate(
+      `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(look)}}],s.revision))`,
+    );
+    await until(
+      () => evaluate<string>('document.documentElement.dataset.look'),
+      (value) => value === look,
+      'drawing appearance update',
+    );
+    await until(
+      () =>
+        evaluate<boolean>(`(()=>{
+        const canvas=document.querySelector('.dxf-stage canvas');
+        const probe=document.createElement('canvas').getContext('2d');
+        probe.fillStyle=getComputedStyle(canvas).getPropertyValue('--field').trim();
+        probe.fillRect(0,0,1,1);
+        const expected=probe.getImageData(0,0,1,1).data;
+        const pixels=canvas.getContext('2d').getImageData(0,0,8,8).data;
+        for(let i=0;i<pixels.length;i+=4)
+          if(pixels[i]===expected[0] && pixels[i+1]===expected[1] && pixels[i+2]===expected[2]) return true;
+        return false;
+      })()`),
+      Boolean,
+      `canvas painted the live ${look} palette`,
+    );
+  };
+  await setLook('light');
+  await snapshot('desktop-native-dxf-light.png');
+  await setLook('dark');
+  const camera = await evaluate('JSON.stringify(window.__qaEngine.camera.get())');
+  await click('.dxf-stage canvas');
+  await key('ArrowRight', 'ArrowRight', 8);
+  assert.equal(
+    await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+    camera,
+    'Drawing keys do not rotate the Plurid camera',
+  );
+  await evaluate('document.querySelector(".dxf-layer input").click()');
+  await click('[aria-label="Fit drawing"]');
+  await evaluate('document.querySelector(".dxf-layer input").click()');
+  await closePreview();
+  await preview(path.join(fixture.files, 'Broken.dxf'), 'Drawing could not be loaded');
+  await closePreview();
+  // Exercise the same module in an actual linked Plurid plane with header controls.
+  await click(fileSelector(path.join(fixture.files, 'Panel.dxf')), 2);
+  await settleCamera();
+  await until(
+    () =>
+      evaluate<boolean>(
+        `!!document.querySelector('.plane-module-controls [aria-label="Drawing tool"]')`,
+      ),
+    Boolean,
+    'drawing tools in plane header',
+  );
+  await paletteCommand('Measure distance');
+  await until(
+    () => evaluate<string>(`document.querySelector('[aria-label="Drawing tool"]')?.value || ''`),
+    (value) => value === 'distance',
+    'searchable preview measurement command',
+  );
+  await snapshot('desktop-native-dxf-plane.png');
+  if (process.env.VIEWER_TEST_DXF_FILE) {
+    await paletteCommand('Close plane');
+    await preview(path.join(fixture.files, 'User panel.dxf'), 'Click geometry');
+    await until(
+      () => evaluate<boolean>(`!!document.querySelector('.dxf-viewer[data-dxf-entities="5"]')`),
+      Boolean,
+      'user drawing geometry',
+    );
+    await click('[aria-label="Show drawing details"]');
+    await snapshot('desktop-native-dxf-user-panel.png');
+    await closePreview();
+  }
+  await paletteCommand('Change workspace');
+  await until(
+    () => evaluate<string>('document.activeElement?.getAttribute("aria-label") || ""'),
+    (value) => value === 'Search workspaces',
+    'workspace picker focus',
+  );
+  assert.deepEqual(
+    await evaluate(
+      'Array.from(document.querySelectorAll(".command-result")).map(row=>row.textContent.trim())',
+    ).then((value) =>
+      (value as string[]).map((row) =>
+        row.includes('Engineering') ? 'Engineering' : row.includes('Studio') ? 'Studio' : row,
+      ),
+    ),
+    ['Studio', 'Engineering'],
+  );
+  await snapshot('desktop-native-workspace-picker.png');
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 780,
+    height: 560,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  const pickerBounds = await evaluate<{ bottom: number; overflow: boolean }>(
+    `(()=>{const picker=document.querySelector('.command-palette');return {bottom:picker.getBoundingClientRect().bottom,overflow:picker.scrollWidth>picker.clientWidth};})()`,
+  );
+  assert.ok(pickerBounds.bottom <= 560);
+  assert.equal(pickerBounds.overflow, false);
+  await snapshot('desktop-native-workspace-picker-minimum.png');
+  await command('Emulation.clearDeviceMetricsOverride');
+  await key('Escape', 'Escape');
+  await until(
+    () => evaluate<string>('document.activeElement?.getAttribute("aria-label") || ""'),
+    (value) => value === 'Search commands',
+    'workspace picker Escape returns to commands',
+  );
+  await command('Input.insertText', { text: 'Engineering' });
+  await key('Enter', 'Enter');
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".workspace-menu-button")?.textContent || document.body.innerText',
+      ),
+    (value) => value.includes('Engineering'),
+    'direct name switches workspace',
+  );
+  await paletteCommand('Change workspace');
+  await until(
+    () => evaluate<string>('document.activeElement?.getAttribute("aria-label") || ""'),
+    (value) => value === 'Search workspaces',
+    'workspace picker after switch',
+  );
+  await command('Input.insertText', { text: 'Studio' });
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<string>('document.body.innerText'),
+    (value) => value.includes('Studio'),
+    'filtered workspace restores original planes',
+  );
+  console.log(
+    'Drawing and workspace checks: worker parsing, snapped distance/angle/area, units, layers, gesture isolation, linked header commands, invalid files, and workspace picker/direct name switching.',
+  );
+}
 async function closePreview(): Promise<void> {
   await click('dialog [aria-label="Close"]');
 }
@@ -3187,6 +3481,13 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'drawings-workspaces') {
+    await verifyDrawingsAndWorkspaces();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'menus-models') {
     await verifyGroupedMenuAndModels();
     await verifyBackgroundApp();

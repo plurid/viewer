@@ -37,6 +37,12 @@ export function projectedLocalX(
 
 /** Measure once per drag, never during pointer movement or ordinary sidebar rendering. */
 export function measureLocalX(element: HTMLElement): (point: Point) => number | undefined {
+  const local = measureLocalPoint(element);
+  return (point) => local(point)?.x;
+}
+
+/** Canvas tools use both coordinates; measure at gesture start, not each move. */
+export function measureLocalPoint(element: HTMLElement): (point: Point) => Point | undefined {
   const probes = ['0,0', '100,0', '100,100', '0,100'].map((corner) => {
     const [left, top] = corner.split(',');
     const probe = document.createElement('span');
@@ -50,6 +56,13 @@ export function measureLocalX(element: HTMLElement): (point: Point) => number | 
     return { x, y };
   }) as [Point, Point, Point, Point];
   const width = element.clientWidth;
+  const height = element.clientHeight;
   for (const probe of probes) probe.remove();
-  return projectedLocalX(points, width);
+  const x = projectedLocalX(points, width);
+  const y = projectedLocalX([points[0], points[3], points[2], points[1]], height);
+  return (point) => {
+    const localX = x(point),
+      localY = y(point);
+    return localX === undefined || localY === undefined ? undefined : { x: localX, y: localY };
+  };
 }

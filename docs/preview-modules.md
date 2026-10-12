@@ -89,3 +89,5 @@ Use `services.read()` for bounded UTF-8 data. Use `fetch(resource.url, { signal 
 The host owns the top-level grant and releases it when closed. Release child grants a module creates. Abort in-flight work, remove observers/listeners, dispose workers, textures, geometry and graphics contexts, and stop media/animation when inactive. `interactive: false` yields gestures to the spatial engine. Virtualize large datasets and expose bounded-read and unsupported-feature messages clearly.
 
 Do not import Electron, Node, explorer state or engine state into a viewer. Do not execute document HTML, scripts, macros or embedded URLs. A format needing conversion should introduce a narrow, validated desktop service and a worker boundary rather than expanding renderer privileges.
+
+DXF is a worker-based example: `dxf/geometry.ts` owns parsing/normalization, `dxf/math.ts` and `units.ts` expose geometry and measurement contracts without the parser, `dxf/canvas.ts` owns dirty rendering and projected input, and `modules/DXFPreview.tsx` owns controls/readouts. See [drawing support](drawings.md) and the [format priorities](preview-roadmap.md).

@@ -21,8 +21,8 @@ export function CommandPalette({
   onMode,
   onClose,
 }: {
-  mode: 'commands' | 'files';
-  onMode(mode: 'commands' | 'files'): void;
+  mode: 'commands' | 'files' | 'workspaces';
+  onMode(mode: 'commands' | 'files' | 'workspaces'): void;
   onClose(): void;
 }) {
   const registry = useCommands();
@@ -33,7 +33,9 @@ export function CommandPalette({
     context.directory || (context.path ? parentPath(context.path) : getState().bootstrap.home);
   return (
     <Dialog
-      title={mode === 'files' ? 'Find file' : 'Commands'}
+      title={
+        mode === 'files' ? 'Find file' : mode === 'workspaces' ? 'Change workspace' : 'Commands'
+      }
       onClose={onClose}
       className="command-palette"
     >
@@ -46,7 +48,15 @@ export function CommandPalette({
           onClose={onClose}
         />
       ) : (
-        <CommandFinder context={context} active={active} directory={directory} onClose={onClose} />
+        <CommandFinder
+          key={mode}
+          context={context}
+          active={active}
+          directory={directory}
+          onClose={onClose}
+          workspaces={mode === 'workspaces'}
+          onCommands={() => onMode('commands')}
+        />
       )}
     </Dialog>
   );
@@ -57,21 +67,26 @@ function CommandFinder({
   active,
   directory,
   onClose,
+  workspaces,
+  onCommands,
 }: {
   context: CommandContext;
   active: string;
   directory: string;
   onClose(): void;
+  workspaces: boolean;
+  onCommands(): void;
 }) {
   const registry = useCommands();
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
   const [query, setQuery] = useState('');
+  const commands = registry.list({ paneID: active, scope: 'window', context });
   const rows = rankCommands(
-    registry.list({ paneID: active, scope: 'window', context }),
+    workspaces ? commands.filter((command) => command.id.startsWith('workspace:')) : commands,
     query,
     recent,
-    'palette',
+    workspaces ? 'menu' : 'palette',
   );
   return (
     <>
@@ -79,9 +94,16 @@ function CommandFinder({
         query={query}
         onQuery={setQuery}
         rows={rows}
-        onClose={onClose}
-        label="Search commands"
-        placeholder="Search commands and places…"
+        onClose={workspaces ? onCommands : onClose}
+        label={workspaces ? 'Search workspaces' : 'Search commands'}
+        placeholder={
+          workspaces ? 'Type a workspace name…' : 'Search commands, workspaces and places…'
+        }
+        leading={
+          workspaces ? (
+            <IconButton icon="left" label="Back to commands" onClick={onCommands} />
+          ) : undefined
+        }
         recent={recent.filter((id) => rows.some((row) => row.id === id)).slice(0, 2)}
         onSelect={(command) => {
           onClose();
@@ -91,10 +113,14 @@ function CommandFinder({
         }}
       />
       <div className="palette-context">
-        <span title={directory}>
-          {context.selection.length ? `${context.selection.length} selected · ` : ''}
-          {directory}
-        </span>
+        {workspaces ? (
+          <span>Current workspace: {activeWorkspace().name}</span>
+        ) : (
+          <span title={directory}>
+            {context.selection.length ? `${context.selection.length} selected · ` : ''}
+            {directory}
+          </span>
+        )}
       </div>
     </>
   );

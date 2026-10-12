@@ -63,6 +63,7 @@ export function formatBytes(value: number): string {
 }
 export function fileFamily(entry: Pick<FileEntry, 'extension' | 'directory' | 'mime'>): string {
   if (entry.directory) return 'folder';
+  if (entry.extension === 'dxf') return 'drawing';
   if (['glb', 'gltf', 'obj', 'stl', 'fbx'].includes(entry.extension)) return 'model';
   if (['zip', 'tar', 'gz', 'tgz'].includes(entry.extension)) return 'archive';
   if (entry.extension === 'pdf') return 'pdf';

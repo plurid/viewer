@@ -19,6 +19,13 @@ const file = (name: string): FileEntry => ({
   hidden: false,
 });
 describe('preview extension contract', () => {
+  it('routes DXF drawings ahead of ambiguous text or image MIME and gives them a drawing icon', () => {
+    for (const mime of ['application/octet-stream', 'image/vnd.dxf', 'text/plain']) {
+      const drawing = { ...file('cut.dxf'), mime };
+      expect(choosePreview(drawing).id).toBe('dxf');
+      expect(fileFamily(drawing)).toBe('drawing');
+    }
+  });
   it('prefers a source-code extension over ambiguous system MIME mappings', () => {
     const typescript = { ...file('workspace.ts'), mime: lookup('workspace.ts') || '' };
     expect(choosePreview(typescript).id).toBe('text');

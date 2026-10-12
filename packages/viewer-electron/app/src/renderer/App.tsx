@@ -81,7 +81,7 @@ function AppWindow() {
   const [shortcutDialog, setShortcutDialog] = useState<{ path: string; name: string } | null>(null);
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const [palette, setPalette] = useState<'commands' | 'files' | null>(null);
+  const [palette, setPalette] = useState<'commands' | 'files' | 'workspaces' | null>(null);
   const [goTo, setGoTo] = useState(false);
   const [terminalName, setTerminalName] = useState<string>();
   const terminalConfig = useViewer((state) => state.settings.settings.terminals);

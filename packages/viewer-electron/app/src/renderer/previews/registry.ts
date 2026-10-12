@@ -55,6 +55,13 @@ const textFormats = [
 ];
 export const previewModules: PreviewModule[] = [
   {
+    id: 'dxf',
+    label: 'DXF drawing',
+    formats: ['dxf'],
+    detect: extension(['dxf']),
+    load: () => import('./modules/DXFPreview'),
+  },
+  {
     id: 'model',
     label: '3D model',
     formats: ['glb', 'gltf', 'obj', 'stl', 'fbx'],

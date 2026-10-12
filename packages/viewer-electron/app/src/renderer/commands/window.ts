@@ -19,7 +19,7 @@ export interface WindowActions {
   workspace: WorkspaceController;
   engine: RefObject<PluridApplicationHandle | null>;
   ready: boolean;
-  palette(mode: 'commands' | 'files'): void;
+  palette(mode: 'commands' | 'files' | 'workspaces'): void;
   settings(): void;
   workspaceDialog(kind: 'new' | 'rename' | 'delete'): void;
   renameShortcut(path: string, name: string): void;
@@ -140,6 +140,16 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
             },
           });
       },
+    },
+    {
+      id: 'change-workspace',
+      label: 'Change workspace…',
+      group: 'Workspaces',
+      icon: 'dock',
+      aliases: ['cw', 'switch workspace', 'workspaces'],
+      primary: true,
+      when: workspaceScope,
+      run: () => actions.palette('workspaces'),
     },
     {
       id: 'new-workspace',
@@ -501,7 +511,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       group: 'Workspaces',
       detail: `${entry.panes.length} open ${entry.panes.length === 1 ? 'plane' : 'planes'}`,
       icon: entry.id === space.id ? 'check' : 'dock',
-      aliases: ['workspace'],
+      aliases: ['workspace', `switch to ${entry.name}`],
       remember: false,
       when: workspaceScope,
       run: () => actions.switchWorkspace(entry.id),
