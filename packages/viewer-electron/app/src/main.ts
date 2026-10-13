@@ -230,6 +230,13 @@ function menu(): void {
             click: command('paste'),
           },
           {
+            label: 'Move Copied Items Here',
+            accelerator: accelerator(
+              settings?.shortcuts['paste-move'] ?? defaultShortcuts['paste-move'],
+            ),
+            click: command('paste-move'),
+          },
+          {
             label: 'Select All',
             accelerator: accelerator(
               settings?.shortcuts['select-all'] ?? defaultShortcuts['select-all'] ?? 'Cmd+A',

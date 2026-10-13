@@ -10,6 +10,8 @@ Generated files include an agent editing guide and comments beside browsing, fol
 
 Credentials, authentication tokens, effective execution grants, workspace arrangement, navigation sessions and caches are separate metadata. Adding an approval field to JSONC is invalid and cannot authorize an agent.
 
+Native folder/file bookmarks, clipboard/drag session permissions and endpoint/data consent for models are also effective capabilities outside JSONC. Changing a provider endpoint or clearing its credential invalidates model consent; editing preferences cannot approve a new recipient. Use Settings → Permissions for native file access and Models for data sharing. A configuration backup is not an authorization backup.
+
 ## Folder presentation
 
 Defaults live in `settings.browsing` and `ui.list`. A folder's overrides live in `settings.folders`, keyed by its absolute path:

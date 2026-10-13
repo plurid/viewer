@@ -1,0 +1,47 @@
+# Viewer release qualification
+
+The release target is Apple Silicon, macOS 13 or later, with the same core capabilities in direct-download and Mac App Store editions. Existing spatial, preview, model, terminal and agent features remain requirements. Native Finder exchange, operation recovery, volume lifecycle and archive jobs complete the everyday baseline. Wider roadmap capabilities and Intel are deferred.
+
+## Evidence rules
+
+Each check records the artifact hash, runtime/channel, OS, fixtures, result and limitation. A mock, ordinary Electron runtime or source review does not establish native App Sandbox behavior. Missing signing assets, test machines or service credentials remain explicit gates. No public submission or publishing occurs during qualification.
+
+## Work and acceptance ledger
+
+| Area | Required evidence | Status |
+| --- | --- | --- |
+| Resource lifetime | 512-descriptor signed regression; repeated watcher/preview/worker/terminal disposal; two-hour soak | Final build 2026101316 passed the signed 512-descriptor regression and 120 awake minutes: 239 watch/read/save cycles, 48 rendered STL cycles, 61–62 handles and four owned processes throughout; final immutable candidates and cleanup verified |
+| Native Finder exchange | Multiple files/folders in both directions; native drag; copy/move intent; denied access | Native URL exchange, drag and bounded session grants implemented; real Finder acceptance pending |
+| Transfers and recovery | Metadata fidelity; durable receipts; source changes; collisions; safe Undo/restart; low disk space | Journal/guarded Undo/private staging implemented; signed metadata/Trash/cold-relaunch checks and four direct native low-space/relaunch checks passed; terminal failures preserve their history and partial-success Undo; signed/physical/provider adverse I/O pending |
+| Volumes and archives | Capacity/availability/eject/reconnect; ZIP creation; bounded safe ZIP/TAR extraction | Five permanent direct native disk-image checks cover inventory, busy failure, cleanup and read-only reconnect; signed inventory and archive regressions passed; genuine signed mount grants/physical/provider lifecycle pending |
+| File permissions | Grant/cancel/cold restore/stale/revoke; two independently granted roots; index/cache revocation | Private saved/session permissions, diagnostics, repair/revoke and purge implemented; genuine PowerBox/cold ordinary grants/two-root acceptance pending |
+| Model consent | No data request before approval; endpoint/data changes; revocation during requests; private storage | Private consent implemented; contract regressions and nine signed local-endpoint checks passed, including actual connection abort; genuine consent interaction/live dedicated-provider acceptance pending |
+| Terminals and agents | Actual MAS PTY and external handoff; private tmux sessions; independent authenticated client | Signed PTY/output/exit/owned-child disposal and separate signed authenticated/denied MCP clients passed; external handoff/tmux pending |
+| Previews | Corpus for every registered module; malformed/oversized inputs; measurements; cancellation; GPU lifecycle | Final candidate passed the 94-case representative corpus, ten packaged limit/recovery checks and rendered STL disposal during the completed two-hour signed soak; remaining codec/adverse/provider corpus pending |
+| Interface | All surfaces, both themes, minimum window and narrow plane; keyboard/VoiceOver/contrast/reduced motion | Established UI preserved; 13-category/two-theme normal/minimum-size checks and batched visual review passed; real accessibility acceptance pending |
+| Distribution | Binary dependency/license/privacy inventory; distribution signing; installation; listing | 151 production dependency notices plus Electron/Chromium/CAD generated; both advisory audits passed; reviewable drafts and fail-closed release tooling prepared; distribution/notarization/publication pending |
+| Supported OS | Native acceptance on macOS 13 and current stable macOS | Other test environments needed |
+
+## Release gate
+
+No unresolved critical/major defect or unverified mandatory native scenario may be marked ready. Every regression from the user reports must pass. Record live-provider versus mocked-provider coverage separately. Keep all test files, application profiles and tmux sessions disposable and independent of normal user data. Routine tests stay hidden; the owner has authorized a coordinated visible native acceptance session.
+
+## Reproduce qualification
+
+From `packages/viewer-electron/app`, run `pnpm qualify --mas` with `VIEWER_MAS_IDENTITY`, `VIEWER_MAS_PROFILE` and a unique `VIEWER_MAS_BUILD`. Keys remain in Keychain; the profile stays outside source control. See [Store builds](mac-app-store-build.md) for the identity/profile preflight.
+
+The default signed soak is **120 real awake minutes**, measured with the native macOS `mach_absolute_time` clock. Its runner holds a temporary idle-sleep assertion for the run, allows display sleep and releases it on exit; system power preferences are unchanged. Keep the Mac's lid open: clamshell sleep overrides that assertion. Awake/wall time discontinuities abort the check, including during its final delay; an interrupted or sleeping-host run cannot establish acceptance. `--soak-minutes=1` checks the harness without claiming two-hour acceptance. `--no-build` can inspect an existing candidate but explicitly leaves its source-to-artifact provenance unverified. A public candidate must be rebuilt and qualified; any source/bundle change invalidates that run.
+
+Required packaged checks, native window placement, disposable-volume checks, preview-limit checks and native low-space/relaunch checks run before Store packaging. Signed loopback model-consent checks run sequentially before the signed soak. A known failed check blocks that long phase; fix the recorded failure and qualify a fresh candidate. Partial or deliberately interrupted runs retain their evidence but cannot satisfy final acceptance. The volume and low-space harnesses own generated images and verify their devices before any detach; they never force-eject or fill an ordinary volume. The model harness sends only generated fixture data to its loopback server.
+
+Each ignored `out/qualification/<UTC timestamp>/report.json` records environment, source hash, immutable copied `.app` candidates, bundle hashes, native Mach-O signatures/hashes, checks, durations, logs and explicit gates. `mas-lifecycle.json` records descriptor/process/memory/latency samples, including owned renderer/GPU/helper memory, during actual resource/watch/save and rendered STL open/close cycles. Failure returns exit 1; completed automated checks with remaining gates return exit 2. `releaseReady` remains false until mandatory independent/native/distribution evidence is reviewed; do not turn exit 2 into a false test failure or false ready status.
+
+Build `2026101316` completed all automated steps on October 13, 2026. Its final immutable source/candidate hashes, 321 tests across 45 files, 11 packaged workflow groups, 94-case supplemental preview corpus, resource statistics and cleanup are recorded in [verification](verification.md) and `out/qualification/2026-10-13T08-52-30-200Z/final-summary.json`. The preserved incomplete runs remain historical evidence. Native/provider/distribution acceptance is still pending.
+
+`pnpm direct:release` requires `VIEWER_DIRECT_IDENTITY` and `VIEWER_NOTARY_PROFILE` (a notarytool Keychain profile). It produces a local Developer ID signed/notarized/stapled DMG, checks Gatekeeper, and records its hash and accepted notarization receipt. It fails before release packaging when credentials are absent. It does not publish a download or upload a Store listing.
+
+Build prerequisites are the pinned package lock/runtime, Xcode command-line tools and matching Electron headers used by native helpers. This machine's header cache is available; clean-machine build reproducibility remains part of supported-environment validation. Store distribution packaging additionally needs the application and installer identities/profile; development signing cannot substitute.
+
+## Reviewable release records
+
+Use [native acceptance](release/native-acceptance.md), [current readiness](mac-app-store-readiness.md), [privacy policy draft](release/privacy-policy.md), [support draft](release/support.md) and [Store metadata/review notes](release/app-store-metadata.md). Draft policy/support records are prepared for owner review and stable HTTPS publication; they are not published URLs. Distribution upload, policy publication and Store submission require approval after concrete artifacts and listing are ready.

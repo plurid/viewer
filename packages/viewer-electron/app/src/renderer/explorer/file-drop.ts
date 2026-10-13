@@ -2,6 +2,8 @@ import { useEffect, useRef, type DragEvent } from 'react';
 import { report } from '../state/store';
 
 export const FILE_DRAG = 'application/x-viewer-files';
+const accepts = (event: DragEvent<HTMLElement>) =>
+  event.dataTransfer.types.includes(FILE_DRAG) || event.dataTransfer.types.includes('Files');
 export function useFileDrop(directory: () => string | undefined) {
   const highlighted = useRef<HTMLElement | null>(null);
   const clear = () => {
@@ -20,12 +22,13 @@ export function useFileDrop(directory: () => string | undefined) {
   };
   return {
     onDragOver(event: DragEvent<HTMLElement>) {
-      if (!event.dataTransfer.types.includes(FILE_DRAG)) return;
+      if (!accepts(event)) return;
       const destination = target(event);
       if (!destination.path) return;
       event.preventDefault();
       event.stopPropagation();
-      event.dataTransfer.dropEffect = event.altKey ? 'copy' : 'move';
+      event.dataTransfer.dropEffect =
+        event.altKey || !event.dataTransfer.types.includes(FILE_DRAG) ? 'copy' : 'move';
       if (highlighted.current !== destination.element) {
         clear();
         highlighted.current = destination.element || null;
@@ -36,15 +39,18 @@ export function useFileDrop(directory: () => string | undefined) {
       if (!event.currentTarget.contains(event.relatedTarget as Node)) clear();
     },
     onDragEnd: clear,
-    onDrop(event: DragEvent<HTMLElement>) {
-      if (!event.dataTransfer.types.includes(FILE_DRAG)) return;
+    async onDrop(event: DragEvent<HTMLElement>) {
+      if (!accepts(event)) return;
       event.preventDefault();
       event.stopPropagation();
       clear();
       const destination = target(event).path;
       if (!destination) return;
+      const kind = event.altKey ? 'copy' : event.metaKey ? 'move' : 'transfer';
       try {
-        const sources: unknown = JSON.parse(event.dataTransfer.getData(FILE_DRAG));
+        const sources: unknown = event.dataTransfer.types.includes(FILE_DRAG)
+          ? JSON.parse(event.dataTransfer.getData(FILE_DRAG))
+          : await window.viewer.fileDropPaths(Array.from(event.dataTransfer.files));
         if (
           !Array.isArray(sources) ||
           !sources.length ||
@@ -53,9 +59,7 @@ export function useFileDrop(directory: () => string | undefined) {
         )
           throw new Error('The dragged file selection could not be read.');
         if (sources.includes(destination)) throw new Error('A folder cannot be moved into itself.');
-        void window.viewer
-          .operate({ kind: event.altKey ? 'copy' : 'move', sources, destination })
-          .catch(report);
+        void window.viewer.operate({ kind, sources, destination }).catch(report);
       } catch (error) {
         report(error);
       }

@@ -17,12 +17,14 @@ export const categories = [
   'Previews',
   'Space',
   'Search',
+  'Permissions',
   'Actions',
   'Models',
   'Agents',
   'Shortcuts',
   'Terminals',
   'Configuration',
+  'Privacy',
 ];
 export const settingCatalog: SettingDefinition[] = [
   {

@@ -17,6 +17,10 @@ export class FileServices {
   private unavailable: string[] = [];
   private sizes = new Map<string, FolderSizeTask>();
   private closing?: Promise<void>;
+  private lifecycle: Promise<void> = Promise.resolve();
+  private revision = 0;
+  private createIndex: () => UtilityClient;
+  private createMeasurement: () => UtilityClient;
   constructor(
     dataPath: string,
     worker: string,
@@ -28,20 +32,21 @@ export class FileServices {
       access?(paths: readonly string[]): Promise<void>;
     } = {},
   ) {
-    this.index = new UtilityClient(worker, {
-      name: 'Viewer file services',
-      backend: options.backend,
-      initialize: async (client) => {
-        await client.post('init', [path.join(dataPath, 'files-v1.sqlite'), ocr]);
-        if (this.configuration) await client.post('configure', [this.configuration]);
-      },
-      event: (reply) => {
-        if (reply.event === 'index') emit(this.withUnavailable(reply.value as IndexStatus));
-      },
-    });
-    this.measurement = new UtilityClient(
-      path.join(path.dirname(worker), 'folder-size-worker.cjs'),
-      {
+    this.createIndex = () =>
+      new UtilityClient(worker, {
+        name: 'Viewer file services',
+        backend: options.backend,
+        initialize: async (client) => {
+          await client.post('init', [path.join(dataPath, 'files-v1.sqlite'), ocr]);
+          if (this.configuration) await client.post('configure', [this.configuration]);
+        },
+        event: (reply) => {
+          if (reply.event === 'index') emit(this.withUnavailable(reply.value as IndexStatus));
+        },
+      });
+    this.index = this.createIndex();
+    this.createMeasurement = () =>
+      new UtilityClient(path.join(path.dirname(worker), 'folder-size-worker.cjs'), {
         name: 'Viewer folder sizes',
         backend: options.backend,
         timeout: 10000,
@@ -61,10 +66,11 @@ export class FileServices {
             });
           this.sizes.clear();
         },
-      },
-    );
+      });
+    this.measurement = this.createMeasurement();
   }
   configure(value: ApplicationSettings['search']): Promise<void> {
+    this.revision++;
     const work = this.configurations
       .catch(() => {})
       .then(async () => {
@@ -113,8 +119,12 @@ export class FileServices {
       : value;
   }
   async query(value: IndexedQuery) {
+    const revision = this.revision;
     if (value.root) await this.options.access?.([value.root]);
     const result = await this.index.call<IndexedResult>('query', [value]);
+    if (revision !== this.revision) throw new Error('Search configuration changed. Search again.');
+    if (value.root) await this.options.access?.([value.root]);
+    await this.options.access?.(result.entries.map((entry) => entry.path));
     return { ...result, status: this.withUnavailable(result.status) };
   }
   async sizeStart(paths: string[]) {
@@ -136,17 +146,38 @@ export class FileServices {
   }
   async extract(file: string, signal?: AbortSignal, chapters = false): Promise<DocumentData> {
     await this.options.access?.([file]);
-    return this.index.call<DocumentData>('extract', [file, undefined, chapters], signal);
+    const result = await this.index.call<DocumentData>(
+      'extract',
+      [file, undefined, chapters],
+      signal,
+    );
+    await this.options.access?.([file]);
+    return result;
+  }
+  reset(): Promise<void> {
+    this.revision++;
+    const work = this.lifecycle
+      .catch(() => {})
+      .then(async () => {
+        if (this.closing) throw new Error('File services have closed.');
+        await this.configurations.catch(() => {});
+        await Promise.all([this.index.close(), this.measurement.close()]);
+        this.configuration = undefined;
+        this.index = this.createIndex();
+        this.measurement = this.createMeasurement();
+      });
+    this.lifecycle = work;
+    return work;
   }
   close(): Promise<void> {
-    return (this.closing ??= Promise.allSettled([
-      this.index.close(),
-      this.measurement.close(),
-    ]).then((results) => {
-      const errors = results.flatMap((result) =>
-        result.status === 'rejected' ? [result.reason] : [],
-      );
-      if (errors.length) throw new AggregateError(errors, 'Read-only workers failed to stop.');
-    }));
+    return (this.closing ??= this.lifecycle
+      .catch(() => {})
+      .then(() => Promise.allSettled([this.index.close(), this.measurement.close()]))
+      .then((results) => {
+        const errors = results.flatMap((result) =>
+          result.status === 'rejected' ? [result.reason] : [],
+        );
+        if (errors.length) throw new AggregateError(errors, 'Read-only workers failed to stop.');
+      }));
   }
 }

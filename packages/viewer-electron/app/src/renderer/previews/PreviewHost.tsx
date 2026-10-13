@@ -59,6 +59,27 @@ export const PreviewHost = memo(function PreviewHost({
   const limits = useViewer((state) => state.settings.settings.previews);
   const look = useViewer((state) => state.saved.look);
   const abort = useMemo(() => new AbortController(), [path, supplied?.id, retry]);
+  useEffect(
+    () =>
+      window.viewer.onEvent((event) => {
+        if (event.type !== 'file-access') return;
+        const file = path || supplied?.entry.path;
+        const within =
+          file &&
+          (file === event.path ||
+            file.startsWith(event.path.endsWith('/') ? event.path : event.path + '/'));
+        if (!within && !event.resources?.includes(resource?.id || supplied?.id || '')) return;
+        // Dispose decoded bytes, media and GPU state as soon as access stops. The
+        // completion event can retry the owned path after an unsuccessful eject.
+        abort.abort();
+        setResource(null);
+        if (supplied) {
+          setError('This preview is no longer available.');
+          setErrorCode('');
+        } else setRetry((value) => value + 1);
+      }),
+    [path, supplied, resource?.id, abort],
+  );
   const commands = useMemo<PreviewContext['commands']>(
     () =>
       !paneID || !resource

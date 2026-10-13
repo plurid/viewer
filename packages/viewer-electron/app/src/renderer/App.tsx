@@ -53,6 +53,8 @@ import { Sidebar } from './ui/Sidebar';
 
 import { ContextMenu } from './ui/ContextMenu';
 import { OpenWithDialog } from './ui/OpenWithDialog';
+import { Volumes } from './ui/Volumes';
+import { openWorkspacePath } from './workspace/open-path';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 
 export function App() {
@@ -68,6 +70,12 @@ export function App() {
 }
 function AppWindow() {
   const registry = useCommands();
+  const [volumesOpen, setVolumesOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setVolumesOpen(true);
+    window.addEventListener('viewer:volumes', open);
+    return () => window.removeEventListener('viewer:volumes', open);
+  }, []);
   const [openWithPaths, setOpenWithPaths] = useState<string[]>();
   const engine = useRef<PluridApplicationHandle>(null);
   const surface = useRef<HTMLDivElement>(null);
@@ -313,7 +321,7 @@ function AppWindow() {
     )
       return;
     const context = registry.context(getState().activePane) || windowContext();
-    await refreshClipboard();
+    if (id === 'paste' || id === 'paste-move') await refreshClipboard();
     await registry.invoke(id, {
       paneID: context.paneID,
       scope: 'window',
@@ -346,7 +354,10 @@ function AppWindow() {
       if (event.type === 'service-error') report(event.message);
       else if (event.type === 'folder-size') receiveFolderSize(event.task);
       else if (event.type === 'folder-changed') invalidateFolderSizes(event.path);
-      else if (event.type === 'settings') receiveSettings(event.snapshot);
+      else if (event.type === 'file-access') {
+        invalidateFolderSizes(event.path);
+        window.dispatchEvent(new Event('viewer:refresh'));
+      } else if (event.type === 'settings') receiveSettings(event.snapshot);
       else if (event.type === 'file-changes') {
         receiveFileChanges(event.changes);
         for (const change of event.changes) {
@@ -415,7 +426,7 @@ function AppWindow() {
     });
     resync();
     const focus = () => {
-      void refreshClipboard().catch(report);
+      void refreshClipboard(true);
     };
     window.addEventListener('focus', focus);
     focus();
@@ -610,6 +621,21 @@ function AppWindow() {
           </div>
         )}
         {quick && <QuickPreview session={quick} />}
+        {volumesOpen && (
+          <Volumes
+            onClose={() => setVolumesOpen(false)}
+            open={(path) =>
+              openWorkspacePath(
+                path,
+                {
+                  paneID: getState().activePane || undefined,
+                  directory: true,
+                },
+                controller,
+              )
+            }
+          />
+        )}
         {workspaceDialog && workspaceDialog.kind !== 'delete' && (
           <NameDialog
             title={workspaceDialog.kind === 'new' ? 'New workspace' : 'Rename workspace'}

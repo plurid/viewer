@@ -10,6 +10,15 @@ import { executablePath } from './terminal-launch';
 export class Executions {
   private tasks = new Map<string, ExecutionTask>();
   private children = new Map<string, ChildProcess>();
+  private work = new Map<string, Promise<void>>();
+  private targets = new Map<string, CapturedTarget>();
+  private killTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private closed = false;
+  private preparing = new Set<{
+    target: CapturedTarget;
+    cancelled: boolean;
+    promise: Promise<string>;
+  }>();
   constructor(
     private settings: () => ApplicationSettings,
     private emit: (task: ExecutionTask) => void,
@@ -18,9 +27,27 @@ export class Executions {
   list(): ExecutionTask[] {
     return [...this.tasks.values()];
   }
-  async start(actionID: string, target: CapturedTarget): Promise<string> {
+  start(actionID: string, target: CapturedTarget): Promise<string> {
+    if (this.closed) return Promise.reject(new Error('Custom commands have closed.'));
+    const ticket = { target, cancelled: false, promise: Promise.resolve('') };
+    this.preparing.add(ticket);
+    ticket.promise = this.prepare(actionID, target, () => ticket.cancelled).finally(() =>
+      this.preparing.delete(ticket),
+    );
+    return ticket.promise;
+  }
+  private async prepare(
+    actionID: string,
+    target: CapturedTarget,
+    cancelled: () => boolean,
+  ): Promise<string> {
+    if (this.closed) throw new Error('Custom commands have closed.');
     await this.access([target.directory, ...target.selection.map((file) => file.path)]);
-    if ([...this.tasks.values()].filter((task) => task.status === 'running').length >= 20)
+    if (
+      this.preparing.size +
+        [...this.tasks.values()].filter((task) => task.status === 'running').length >
+      20
+    )
       throw new Error('Wait for an action to finish or cancel one before starting another.');
     const action = this.settings().customActions.find((action) => action.id === actionID);
     if (!action || !actionAvailable(action, target))
@@ -34,6 +61,9 @@ export class Executions {
       if ((await entry(file.path)).identity !== file.identity)
         throw new Error(`Selection changed: ${file.name}. Review the action again.`);
     const executable = await executablePath(executor.executable);
+    await this.access([target.directory, cwd, ...target.selection.map((file) => file.path)]);
+    if (this.closed || cancelled())
+      throw new Error('Command cancelled before launch because folder access changed.');
     const items = executor.perItem ? target.selection : [undefined];
     if (executor.perItem && !items.length) throw new Error('Select files for per-item execution.');
     const task: ExecutionTask = {
@@ -49,10 +79,18 @@ export class Executions {
       this.tasks.delete(removable[0]);
     }
     this.emit(task);
-    void (async () => {
+    this.targets.set(task.id, target);
+    const isCancelled = () => this.closed || cancelled() || task.status === 'cancelled';
+    const work = (async () => {
       try {
         for (const item of items) {
-          if (task.status === 'cancelled') break;
+          if (isCancelled()) break;
+          await this.access([
+            target.directory,
+            cwd,
+            ...(item ? [item.path] : target.selection.map((file) => file.path)),
+          ]);
+          if (isCancelled()) break;
           const args =
             executor.kind === 'executable'
               ? actionArguments(executor.args, target, item)
@@ -83,6 +121,8 @@ export class Executions {
             child.on('error', reject);
             child.on('close', (code) => {
               clearTimeout(timer);
+              clearTimeout(this.killTimers.get(task.id));
+              this.killTimers.delete(task.id);
               this.children.delete(task.id);
               task.exitCode = code ?? undefined;
               if (code && task.status !== 'cancelled')
@@ -99,7 +139,11 @@ export class Executions {
         }
       }
       this.emit({ ...task });
-    })();
+    })().finally(() => {
+      this.work.delete(task.id);
+      this.targets.delete(task.id);
+    });
+    this.work.set(task.id, work);
     return task.id;
   }
   cancel(id: string): void {
@@ -121,22 +165,47 @@ export class Executions {
     }
     const timer = setTimeout(() => {
       try {
-        if (
-          child?.pid &&
-          child.exitCode === null &&
-          child.signalCode === null &&
-          process.platform !== 'win32'
-        )
+        if (child?.pid && this.children.get(id) === child && process.platform !== 'win32')
           process.kill(-child.pid, 'SIGKILL');
         else child?.kill('SIGKILL');
       } catch {
         /* already stopped */
       }
     }, 1500);
+    this.killTimers.set(id, timer);
     timer.unref();
     this.emit({ ...task });
   }
-  close(): void {
+  async quiesce(root: string): Promise<void> {
+    const related = (file: string) =>
+      file === root || file.startsWith(root.replace(/\/$/, '') + '/');
+    const work: Promise<void>[] = [];
+    for (const ticket of this.preparing)
+      if (
+        related(ticket.target.directory) ||
+        ticket.target.selection.some((file) => related(file.path))
+      ) {
+        ticket.cancelled = true;
+        work.push(
+          ticket.promise.then(
+            () => {},
+            () => {},
+          ),
+        );
+      }
+    for (const [id, target] of this.targets)
+      if (related(target.directory) || target.selection.some((file) => related(file.path))) {
+        this.cancel(id);
+        const pending = this.work.get(id);
+        if (pending) work.push(pending);
+      }
+    await Promise.allSettled(work);
+  }
+  async close(): Promise<void> {
+    this.closed = true;
+    for (const ticket of this.preparing) ticket.cancelled = true;
     for (const task of this.tasks.values()) this.cancel(task.id);
+    await Promise.allSettled(this.work.values());
+    await Promise.allSettled([...this.preparing].map((ticket) => ticket.promise));
   }
 }

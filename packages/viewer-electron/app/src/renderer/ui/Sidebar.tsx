@@ -130,6 +130,14 @@ export function Sidebar({ paneID }: { paneID?: string }) {
       return;
     }
     try {
+      if (event.dataTransfer.types.includes('Files')) {
+        const paths = await window.viewer.fileDropPaths(Array.from(event.dataTransfer.files));
+        for (const path of paths) {
+          const entry = await window.viewer.stat(path);
+          if (entry.directory) addFavorite(entry.path, entry.name, before);
+        }
+        return;
+      }
       const shortcuts: unknown = JSON.parse(event.dataTransfer.getData(SHORTCUT_DRAG));
       if (!Array.isArray(shortcuts) || shortcuts.length > 200) return;
       for (const shortcut of shortcuts) {
@@ -164,7 +172,9 @@ export function Sidebar({ paneID }: { paneID?: string }) {
             onDragOver={(event) => {
               const supported =
                 event.dataTransfer.types.includes(SIDEBAR_DRAG) ||
-                (section === 'favorites' && event.dataTransfer.types.includes(SHORTCUT_DRAG));
+                (section === 'favorites' &&
+                  (event.dataTransfer.types.includes(SHORTCUT_DRAG) ||
+                    event.dataTransfer.types.includes('Files')));
               if (!supported) return;
               event.preventDefault();
               event.stopPropagation();
@@ -220,7 +230,8 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                         !event.dataTransfer.types.includes(SIDEBAR_DRAG) &&
                         !(
                           section === 'favorites' &&
-                          event.dataTransfer.types.includes(SHORTCUT_DRAG)
+                          (event.dataTransfer.types.includes(SHORTCUT_DRAG) ||
+                            event.dataTransfer.types.includes('Files'))
                         )
                       )
                         return;
@@ -232,6 +243,10 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                       void finishDrop(event, section, item.path).catch(report);
                     }}
                     onClick={(event) => {
+                      if (item.path === '/Volumes' && bootstrap.platform === 'darwin') {
+                        window.dispatchEvent(new Event('viewer:volumes'));
+                        return;
+                      }
                       void workspace
                         .openPath(item.path, { ...target, linked: event.altKey, directory: true })
                         .catch(report);

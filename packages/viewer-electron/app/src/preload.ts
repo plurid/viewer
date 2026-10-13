@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { ApiMethod, ApiResult, DesktopEvent, ViewerAPI } from './domain/contracts';
 async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   const result = (await ipcRenderer.invoke('viewer:request', method, args)) as ApiResult<T>;
@@ -33,6 +33,9 @@ const api: ViewerAPI = {
   settingsPatch: (patches, revision) => invoke('settingsPatch', patches, revision),
   providerCredential: (id, key) => invoke('providerCredential', id, key),
   providerModels: (id) => invoke('providerModels', id),
+  providerPermissionGet: (id) => invoke('providerPermissionGet', id),
+  providerPermissionSet: (id, endpoint, level) =>
+    invoke('providerPermissionSet', id, endpoint, level),
   indexStatus: () => invoke('indexStatus'),
   indexedQuery: (query) => invoke('indexedQuery', query),
   indexRebuild: () => invoke('indexRebuild'),
@@ -79,6 +82,13 @@ const api: ViewerAPI = {
   clipboardWrite: (files, cut) => invoke('clipboardWrite', files, cut),
   copyPaths: (files) => invoke('copyPaths', files),
   clipboardRead: () => invoke('clipboardRead'),
+  fileDropPaths: (files) =>
+    invoke('fileDropPaths', files.map((file) => webUtils.getPathForFile(file)).filter(Boolean)),
+  fileDragStart: (paths) => invoke('fileDragStart', paths),
+  volumesList: () => invoke('volumesList'),
+  volumeEject: (path) => invoke('volumeEject', path),
+  fileAccessList: () => invoke('fileAccessList'),
+  fileAccessRevoke: (path) => invoke('fileAccessRevoke', path),
   textEdit: (command) => invoke('textEdit', command),
   onEvent: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, event: DesktopEvent) => listener(event);

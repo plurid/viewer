@@ -12,6 +12,7 @@ import { cadFormats } from '../../../domain/model-formats';
 import { importCad } from '../model/cad';
 import { printingScale } from '../model/printing';
 import { cadMaterial, modelLighting } from '../model/appearance';
+import { pickModelSurface } from '../model/pick-surface';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
@@ -188,25 +189,21 @@ export default function ModelPreview(context: PreviewContext) {
         Math.hypot(start.x - event.clientX, start.y - event.clientY) > 4
       )
         return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      const ray = new THREE.Raycaster();
-      ray.setFromCamera(
-        new THREE.Vector2(
-          ((event.clientX - rect.left) / rect.width) * 2 - 1,
-          (-(event.clientY - rect.top) / rect.height) * 2 + 1,
-        ),
+      const point = pickModelSurface(
+        object,
         camera,
+        event,
+        renderer.domElement.getBoundingClientRect(),
       );
-      const hit = ray.intersectObject(object, true).find((hit) => hit.object instanceof THREE.Mesh);
-      if (!hit) return;
+      if (!point) return;
       if (points.length === 2) clearMeasure();
-      points.push(hit.point.clone());
+      points.push(point.clone());
       const extent = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3()).length();
       const marker = new THREE.Mesh(
         new THREE.SphereGeometry(Math.max(extent / 250, 0.0001), 12, 8),
         new THREE.MeshBasicMaterial({ color: 0xffc56a, depthTest: false }),
       );
-      marker.position.copy(hit.point);
+      marker.position.copy(point);
       marker.renderOrder = 10;
       markings.add(marker);
       if (points.length === 2) {

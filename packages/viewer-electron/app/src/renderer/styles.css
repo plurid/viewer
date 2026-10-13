@@ -1,3 +1,20 @@
+.privacy-information {
+  max-width: 72ch;
+  line-height: 1.6;
+}
+.privacy-information h3 {
+  margin: 24px 0 8px;
+}
+.privacy-information p {
+  margin: 0 0 16px;
+}
+.operation-recovery {
+  margin-top: 12px;
+}
+.operation-recovery p {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 :root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
@@ -85,11 +102,47 @@ button[aria-pressed='true'] {
 .context-menu :focus-visible {
   outline: none;
 }
-/* Plurid supplies its own focus halo. Viewer uses selection and the caret instead. */
+/* Plane focus uses Plurid's halo; text editors retain their caret. */
 #viewer :focus-visible,
 #viewer [data-plurid-focus='true'] {
   outline: none;
   box-shadow: none;
+}
+/* Keyboard focus uses surface/text feedback, preserving the ring-free design. */
+#viewer
+  :is(
+    button,
+    select,
+    summary,
+    a[href],
+    [role='button'],
+    input[type='checkbox'],
+    input[type='radio'],
+    input[type='range']
+  ):focus-visible,
+.context-menu
+  :is(
+    button,
+    select,
+    summary,
+    a[href],
+    [role='button'],
+    input[type='checkbox'],
+    input[type='radio'],
+    input[type='range']
+  ):focus-visible {
+  color: var(--accent);
+  background: var(--raised);
+}
+#viewer
+  label:has(
+    input[type='checkbox']:focus-visible,
+    input[type='radio']:focus-visible,
+    input[type='range']:focus-visible
+  ) {
+  color: var(--accent);
+  background: var(--raised);
+  border-radius: 5px;
 }
 input,
 select {
@@ -2240,6 +2293,66 @@ select {
 }
 .settings-provider {
   border-bottom: 1px solid var(--line);
+}
+.model-data-permission {
+  min-inline-size: 0;
+  margin: 20px 0 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+}
+.model-data-permission legend {
+  padding-inline-end: 8px;
+  font-weight: 600;
+}
+.model-data-permission p,
+.model-data-permission .settings-actions {
+  margin: 0;
+}
+.model-data-permission .settings-actions select {
+  flex: 1 1 240px;
+  min-width: 0;
+  width: auto;
+}
+.model-endpoint {
+  overflow-wrap: anywhere;
+}
+.file-permission,
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.file-permission {
+  flex-wrap: wrap;
+}
+.file-permission > div:first-of-type {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.file-permission small,
+.volume-open small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.file-permission .settings-actions {
+  margin: 0;
+}
+.volume-open {
+  flex: 1;
+  min-width: 0;
+  text-align: start;
+  white-space: normal;
+}
+.volume-open strong {
+  overflow-wrap: anywhere;
 }
 .settings-editor > label:not(.settings-row) {
   display: grid;

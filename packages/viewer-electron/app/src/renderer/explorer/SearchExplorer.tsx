@@ -125,12 +125,15 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       settings: getState().settings.settings,
       command: (name) => {
         void (async () => {
-          if (name === 'paste') await refreshClipboard();
+          if (name === 'paste' || name === 'paste-move') await refreshClipboard();
           await registry.invoke(name, { paneID: id });
         })().catch(report);
       },
       move: (key, range) => selecting.move(entries, key, range),
       clear: () => selecting.clear(),
+      type: (text) => {
+        selecting.type(entries, text);
+      },
     }),
   );
   if (!pane) return <Empty title="Search is unavailable" />;
@@ -148,7 +151,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
     open: (entry) => openEntry(entry),
     context: (entry, event) => {
       event.preventDefault();
-      void refreshClipboard().catch(report);
+      void refreshClipboard(true);
       selecting.target(entry);
       setActivePane(id);
       setMenu({
@@ -163,6 +166,11 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
     },
     drag: (entry: FileEntry, event) => {
       const files = set.has(entry.path) ? selection : [entry.path];
+      if (event.isTrusted) {
+        event.preventDefault();
+        void window.viewer.fileDragStart(files).catch(report);
+        return;
+      }
       event.dataTransfer.setData(FILE_DRAG, JSON.stringify(files));
       event.dataTransfer.setData('text/plain', files.join('\n'));
       event.dataTransfer.effectAllowed = 'copyMove';
@@ -195,7 +203,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         if (!blankFileSpace(event.target)) return;
         event.preventDefault();
         setActivePane(id);
-        void refreshClipboard().catch(report);
+        void refreshClipboard(true);
         setMenu({
           x: event.clientX,
           y: event.clientY,

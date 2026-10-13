@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type { Stats } from 'node:fs';
+import { constants, type Stats } from 'node:fs';
 import {
   link,
+  chmod,
   lstat,
   mkdir,
   open,
   readdir,
   readlink,
   rename,
-  rm,
   rmdir,
   symlink,
   unlink,
@@ -22,7 +22,10 @@ import type {
   OperationRequest,
 } from '../domain/contracts';
 import { absolute, exists, message, validName } from './filesystem';
-import { guardMoveMetadata } from './metadata';
+import { macFiles, type TrashReceipt, type ReceiptAccess } from './macos-files';
+import { createArchive, extractArchive } from './archive-jobs';
+import { operationJournal, outputProof, type OperationReceipt } from './operation-journal';
+import { privateStage } from './staging';
 
 interface UndoStep {
   from: string;
@@ -31,7 +34,18 @@ interface UndoStep {
   modified: number;
   size: number;
   caseOnly?: boolean;
+  remove?: boolean;
+  proof?: string;
+  trash?: boolean;
+  bookmark?: string;
+  directory?: boolean;
 }
+interface CopyFingerprint {
+  file: string;
+  info: Stats;
+  children?: string[];
+}
+class ReceiptFailure extends Error {}
 interface Task {
   job: OperationJob;
   request: OperationRequest;
@@ -40,6 +54,7 @@ interface Task {
   policy?: CollisionDecision;
   undo: UndoStep[];
   lastProgress: number;
+  intent?: OperationReceipt['intent'];
 }
 
 /** Selected ancestors carry their descendants; membership checks preserve source order. */
@@ -63,13 +78,66 @@ export class Operations {
   private exclusiveQueue: Promise<void> = Promise.resolve();
   private stopped = false;
   private idle: (() => void)[] = [];
+  private journal?: ReturnType<typeof operationJournal>;
+  private loaded?: Promise<void>;
   constructor(
-    private trash: (file: string) => Promise<void>,
+    private trash: (file: string) => Promise<void | TrashReceipt>,
     private changed: (job: OperationJob) => void,
     private progressed: (progress: OperationProgress) => void = () => {},
     private filesChanged: (changes: import('../domain/changes').FileChange[]) => void = () => {},
     private access: (files: readonly string[]) => Promise<void> = async () => {},
-  ) {}
+    dataPath?: string,
+    private receiptAccess: ReceiptAccess = async (_receipt, work) => work(),
+  ) {
+    if (dataPath) this.journal = operationJournal(dataPath);
+  }
+  load(): Promise<void> {
+    return (this.loaded ??= (async () => {
+      const document = await this.journal?.load();
+      for (const receipt of document?.records ?? []) {
+        if (this.tasks.has(receipt.job.id)) continue;
+        const job = receipt.job;
+        const interruptedUndo = !!receipt.intent && job.status === 'completed';
+        if (receipt.intent || ['queued', 'running', 'collision'].includes(job.status)) {
+          job.status = 'failed';
+          job.collision = undefined;
+          job.current = undefined;
+          job.recovery = receipt.intent;
+          job.errors.push({
+            path: receipt.intent?.source || job.sources[0] || job.destination || '',
+            message:
+              'Interrupted operation. Completed items were kept. Review the recorded source, destination and any temporary transfer before retrying.',
+          });
+          job.errorCount = job.errors.length;
+          // An interrupted Undo may already have moved or removed its current
+          // item. Never replay that ambiguous receipt automatically.
+          job.undoable = !interruptedUndo && !!receipt.undo.length;
+        }
+        this.tasks.set(job.id, {
+          job,
+          request: receipt.request,
+          undo: receipt.undo,
+          abort: new AbortController(),
+          lastProgress: 0,
+          intent: receipt.intent,
+        });
+      }
+    })());
+  }
+  private checkpoint(): Promise<void> {
+    return Promise.resolve()
+      .then(() =>
+        this.journal?.save({
+          version: 1,
+          records: [...this.tasks.values()]
+            .slice(-100)
+            .map(({ job, request, undo, intent }) => ({ job, request, undo, intent })),
+        }),
+      )
+      .catch((error) => {
+        throw new ReceiptFailure(message(error));
+      });
+  }
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
   }
@@ -80,12 +148,20 @@ export class Operations {
     const roots = operationRoots(sources);
     if (request.destination) request = { ...request, destination: absolute(request.destination) };
     if (request.name !== undefined) validName(request.name);
-    if (['copy', 'move', 'mkdir'].includes(request.kind) && !request.destination)
+    if (
+      ['copy', 'move', 'transfer', 'mkdir', 'compress', 'extract'].includes(request.kind) &&
+      !request.destination
+    )
       throw new Error('Choose a destination folder.');
     if (request.kind !== 'mkdir' && !roots.length) throw new Error('Select at least one file.');
     if (request.kind === 'rename' && (roots.length !== 1 || !request.name))
       throw new Error('Rename one file at a time.');
     if (request.kind === 'mkdir' && !request.name) throw new Error('Enter a folder name.');
+    if (
+      request.kind === 'compress' &&
+      (!request.name || !request.name.toLowerCase().endsWith('.zip'))
+    )
+      throw new Error('Enter a ZIP archive name.');
     const job: OperationJob = {
       id: randomUUID(),
       revision: 0,
@@ -96,7 +172,7 @@ export class Operations {
       bytesDone: 0,
       bytesTotal: 0,
       itemsDone: 0,
-      itemsTotal: request.kind === 'mkdir' ? 1 : roots.length,
+      itemsTotal: ['mkdir', 'compress'].includes(request.kind) ? 1 : roots.length,
       completed: [],
       errors: [],
       errorCount: 0,
@@ -127,6 +203,17 @@ export class Operations {
     task.abort.abort();
     task.decision?.('cancel');
   }
+  async quiesce(root: string): Promise<void> {
+    const related = (file: string) =>
+      file === root || file.startsWith(root.replace(/[\\/]$/, '') + path.sep);
+    for (const task of this.tasks.values())
+      if (
+        task.request.sources.some(related) ||
+        (task.request.destination && related(task.request.destination))
+      )
+        this.cancel(task.job.id);
+    await this.exclusive(async () => {});
+  }
   resolve(id: string, decision: CollisionDecision, applyAll: boolean): void {
     const task = this.tasks.get(id);
     if (!task?.decision) throw new Error('This collision has already been resolved.');
@@ -137,40 +224,106 @@ export class Operations {
     this.stopped = true;
     for (const task of this.tasks.values()) this.cancel(task.job.id);
     if (this.running) await new Promise<void>((resolve) => this.idle.push(resolve));
+    await this.journal?.flush();
   }
   async undo(id: string): Promise<void> {
+    await this.load();
+    return this.exclusive(async () => this.undoTask(id));
+  }
+  private async undoTask(id: string): Promise<void> {
     const task = this.tasks.get(id);
     if (!task?.job.undoable) throw new Error('This operation cannot be undone.');
-    if (this.running) throw new Error('Wait for the current file operation before undoing.');
-    await this.access(task.undo.flatMap((step) => [step.from, step.to]));
+    await this.access(
+      task.undo.flatMap((step) =>
+        step.trash ? [step.to] : step.remove ? [step.from] : [step.from, step.to],
+      ),
+    );
     // Validate the entire undo first, so a known conflict never produces a partial undo.
     for (const step of task.undo) {
-      const info = await lstat(step.from);
-      if (
-        `${info.dev}:${info.ino}` !== step.identity ||
-        (!info.isDirectory() && (info.mtimeMs !== step.modified || info.size !== step.size))
-      )
-        throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
-      if (await exists(step.to)) {
-        const destination = await lstat(step.to);
-        if (!step.caseOnly || `${destination.dev}:${destination.ino}` !== step.identity)
-          throw new Error(`Cannot undo: ${step.to} already exists.`);
-      }
+      await this.withStep(step, async () => {
+        const info = await lstat(step.from);
+        if (
+          `${info.dev}:${info.ino}` !== step.identity ||
+          (!info.isDirectory() && (info.mtimeMs !== step.modified || info.size !== step.size))
+        )
+          throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
+        if (step.proof && (await outputProof(step.from)) !== step.proof)
+          throw new Error(`Cannot undo: ${step.from} or its contents changed since the operation.`);
+        if (!step.remove && (await exists(step.to))) {
+          const destination = await lstat(step.to);
+          const willVacate = task.undo
+            .slice(task.undo.indexOf(step) + 1)
+            .some((other) => other.from === step.to);
+          if (
+            !willVacate &&
+            (!step.caseOnly || `${destination.dev}:${destination.ino}` !== step.identity)
+          )
+            throw new Error(`Cannot undo: ${step.to} already exists.`);
+        }
+      });
     }
-    this.running = true;
-    try {
-      for (const step of [...task.undo].reverse()) {
-        if (step.caseOnly && (await exists(step.to))) await this.changeCase(step.from, step.to);
+    for (const step of [...task.undo].reverse()) {
+      task.intent = { source: step.from, destination: step.remove ? undefined : step.to };
+      await this.checkpoint();
+      await this.withStep(step, async () => {
+        await this.access(step.remove ? [step.from] : [step.from, step.to]);
+        const current = await lstat(step.from);
+        if (
+          `${current.dev}:${current.ino}` !== step.identity ||
+          (!current.isDirectory() &&
+            (current.size !== step.size || current.mtimeMs !== step.modified))
+        )
+          throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
+        if (step.proof && (await outputProof(step.from)) !== step.proof)
+          throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
+        if (step.remove) await this.trash(step.from);
+        else if (step.caseOnly && (await exists(step.to)))
+          await this.changeCase(step.from, step.to);
+        // A Trash bookmark authorizes its item, rather than browsing the Trash
+        // directory. Restore it with one exclusive native rename; hard-link
+        // publication requires different sandbox rights and can fall back to
+        // streaming a resource fork unnecessarily.
+        else if (step.trash && process.platform === 'darwin')
+          await macFiles().renameExclusive(step.from, step.to);
         else await this.publish(step.from, step.to);
-        this.filesChanged([{ source: step.from, destination: step.to }]);
-        task.undo.splice(task.undo.indexOf(step), 1);
-      }
-      task.job.undoable = false;
-      this.emit(task);
-    } finally {
-      this.running = false;
-      void this.run();
+      });
+      if (!step.remove) this.filesChanged([{ source: step.from, destination: step.to }]);
+      task.undo.splice(task.undo.indexOf(step), 1);
+      task.intent = undefined;
+      await this.checkpoint();
     }
+    task.job.undoable = false;
+    this.emit(task);
+    await this.checkpoint();
+  }
+  private withStep<T>(step: UndoStep, work: () => Promise<T>): Promise<T> {
+    return step.trash
+      ? this.receiptAccess(
+          { path: step.from, directory: !!step.directory, bookmark: step.bookmark },
+          work,
+        )
+      : work();
+  }
+  private async trashItem(task: Task, file: string): Promise<void> {
+    const receipt = await this.trash(file);
+    if (!receipt) return;
+    await this.receiptAccess(receipt, async () => {
+      const proof = await outputProof(receipt.path);
+      if (!proof) return;
+      const info = await lstat(receipt.path);
+      task.undo.push({
+        from: receipt.path,
+        to: file,
+        trash: true,
+        bookmark: receipt.bookmark,
+        directory: receipt.directory,
+        proof,
+        identity: `${info.dev}:${info.ino}`,
+        modified: info.mtimeMs,
+        size: info.size,
+      });
+    });
+    await this.checkpoint();
   }
   exclusive<T>(
     work: (publish: (source: string, destination: string) => Promise<void>) => Promise<T>,
@@ -231,8 +384,17 @@ export class Operations {
       if (!info.isFile() && !info.isSymbolicLink())
         throw new Error('Special devices and sockets cannot be transferred.');
       // macOS hard-link creation follows symbolic links, so recreate the link itself.
-      if (info.isSymbolicLink()) await symlink(await readlink(source), destination);
-      else {
+      if (info.isSymbolicLink()) {
+        await symlink(await readlink(source), destination);
+        const owned = await lstat(destination);
+        try {
+          if (process.platform === 'darwin') await macFiles().copyLinkMetadata(source, destination);
+        } catch (error) {
+          const current = await lstat(destination).catch(() => null);
+          if (current?.dev === owned.dev && current.ino === owned.ino) await unlink(destination);
+          throw error;
+        }
+      } else {
         try {
           await link(source, destination);
         } catch (error) {
@@ -244,7 +406,6 @@ export class Operations {
             )
           )
             throw error;
-          await guardMoveMetadata(source, task?.abort.signal ?? new AbortController().signal);
           await this.copyFile(source, destination, info, task);
         }
       }
@@ -257,6 +418,7 @@ export class Operations {
       }
       return;
     }
+    if (process.platform === 'darwin') return macFiles().renameExclusive(source, destination);
     await mkdir(destination, { mode: info.mode });
     const reserved = await lstat(destination);
     try {
@@ -310,57 +472,96 @@ export class Operations {
     }
     if (decision === 'skip') return null;
     if (decision === 'keep-both') return this.unique(destination);
-    await this.trash(destination);
+    await this.trashItem(task, destination);
     return destination;
   }
   private async copy(
     task: Task,
     source: string,
     target: string,
-    fingerprints: UndoStep[],
+    fingerprints: CopyFingerprint[],
   ): Promise<void> {
     this.check(task);
     const info = await lstat(source);
-    fingerprints.push({
-      from: source,
-      to: target,
-      identity: `${info.dev}:${info.ino}`,
-      modified: info.mtimeMs,
-      size: info.size,
-    });
+    const children = info.isDirectory() ? (await readdir(source)).sort() : undefined;
+    fingerprints.push({ file: source, info, children });
     if (info.isSymbolicLink()) {
       await symlink(await readlink(source), target);
+      if (process.platform === 'darwin') await macFiles().copyLinkMetadata(source, target);
       return;
     }
     if (info.isDirectory()) {
-      await mkdir(target, { mode: info.mode });
-      for (const name of await readdir(source))
+      await mkdir(target, { mode: info.mode | 0o700 });
+      for (const name of children!)
         await this.copy(task, path.join(source, name), path.join(target, name), fingerprints);
+      if (process.platform === 'darwin') {
+        const input = await open(
+          source,
+          constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+        );
+        let output: Awaited<ReturnType<typeof open>> | undefined;
+        try {
+          const opened = await input.stat();
+          if (opened.dev !== info.dev || opened.ino !== info.ino)
+            throw new Error('Source folder changed during the copy.');
+          output = await open(
+            target,
+            constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+          );
+          await macFiles().copyMetadata(input.fd, output.fd);
+          this.check(task);
+        } finally {
+          await input.close();
+          await output?.close();
+        }
+      } else await chmod(target, info.mode);
     } else if (info.isFile()) {
       await this.copyFile(source, target, info, task);
     } else {
       throw new Error('Special devices and sockets cannot be transferred.');
     }
-    await utimes(target, info.atime, info.mtime);
+    if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
   }
   private async copyFile(source: string, target: string, info: Stats, task?: Task): Promise<void> {
     if (task) {
       task.job.current = source;
       task.job.bytesTotal += info.size;
     }
-    const input = await open(source, 'r');
+    const input = await open(
+      source,
+      constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
+    );
     let output: Awaited<ReturnType<typeof open>> | undefined, owned: Stats | undefined;
     try {
+      const opened = await input.stat();
+      if (
+        !opened.isFile() ||
+        opened.dev !== info.dev ||
+        opened.ino !== info.ino ||
+        opened.size !== info.size ||
+        opened.mtimeMs !== info.mtimeMs ||
+        opened.ctimeMs !== info.ctimeMs
+      )
+        throw new Error('Source changed before copying; it has been left untouched.');
       output = await open(target, 'wx', info.mode);
       owned = await output.stat();
       const buffer = Buffer.allocUnsafe(256 * 1024);
-      for (;;) {
+      let total = 0;
+      while (total < info.size) {
         if (task) this.check(task);
-        const { bytesRead } = await input.read(buffer, 0, buffer.length, null);
-        if (!bytesRead) break;
+        const { bytesRead } = await input.read(
+          buffer,
+          0,
+          Math.min(buffer.length, info.size - total),
+          null,
+        );
+        if (!bytesRead)
+          throw new Error('Source became shorter while copying; it has been left untouched.');
+        total += bytesRead;
         let written = 0;
         while (written < bytesRead) {
           const result = await output.write(buffer, written, bytesRead - written, null);
+          if (!result.bytesWritten) throw new Error('The destination stopped accepting data.');
           written += result.bytesWritten;
         }
         if (task) {
@@ -368,17 +569,19 @@ export class Operations {
           this.progress(task);
         }
       }
+      if (process.platform === 'darwin') await macFiles().copyMetadata(input.fd, output.fd);
       await output.sync();
       const after = await lstat(source);
       if (
         after.dev !== info.dev ||
         after.ino !== info.ino ||
         after.mtimeMs !== info.mtimeMs ||
+        after.ctimeMs !== info.ctimeMs ||
         after.size !== info.size
       )
         throw new Error('Source changed while copying; it has been left untouched.');
       if (task) this.check(task);
-      await utimes(target, info.atime, info.mtime);
+      if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
     } catch (error) {
       const current = owned && (await lstat(target).catch(() => null));
       if (current && owned && current.dev === owned.dev && current.ino === owned.ino)
@@ -403,17 +606,14 @@ export class Operations {
         if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
       }
     }
-    const staging = path.join(path.dirname(destination), `.viewer-transfer-${randomUUID()}`);
-    const fingerprints: UndoStep[] = [];
+    const stage = await privateStage(path.dirname(destination), '.viewer-transfer-');
+    const staging = stage.file;
+    task.intent = { source, destination, staging };
+    const fingerprints: CopyFingerprint[] = [];
     try {
+      await this.checkpoint();
       await this.copy(task, source, staging, fingerprints);
       this.check(task);
-      if (move) {
-        for (const fingerprint of fingerprints) {
-          this.check(task);
-          await guardMoveMetadata(fingerprint.from, task.abort.signal);
-        }
-      }
       // Do not clobber a file created while the transfer was in flight.
       if (await exists(destination))
         throw new Error(
@@ -422,33 +622,58 @@ export class Operations {
       await this.publish(staging, destination, task);
       if (move) {
         for (const fingerprint of fingerprints) {
-          const info = await lstat(fingerprint.from);
+          const info = await lstat(fingerprint.file);
           if (
-            `${info.dev}:${info.ino}` !== fingerprint.identity ||
-            info.mtimeMs !== fingerprint.modified ||
-            info.size !== fingerprint.size
+            info.dev !== fingerprint.info.dev ||
+            info.ino !== fingerprint.info.ino ||
+            info.mtimeMs !== fingerprint.info.mtimeMs ||
+            info.ctimeMs !== fingerprint.info.ctimeMs ||
+            info.size !== fingerprint.info.size ||
+            (fingerprint.children &&
+              JSON.stringify((await readdir(fingerprint.file)).sort()) !==
+                JSON.stringify(fingerprint.children))
           )
             throw new Error(
               'Source changed during the move. The completed copy and the original have both been kept.',
             );
         }
-        await rm(source, { recursive: true });
+        // Remove only the copied entries. A newly created child keeps its directory
+        // nonempty, so it survives even if it appears after validation.
+        for (const fingerprint of [...fingerprints].reverse()) {
+          this.check(task);
+          const current = await lstat(fingerprint.file);
+          if (
+            current.dev !== fingerprint.info.dev ||
+            current.ino !== fingerprint.info.ino ||
+            (!current.isDirectory() &&
+              (current.ctimeMs !== fingerprint.info.ctimeMs ||
+                current.size !== fingerprint.info.size))
+          )
+            throw new Error(
+              'Source changed during the move. The completed copy and remaining original items have been kept.',
+            );
+          if (current.isDirectory()) await rmdir(fingerprint.file);
+          else await unlink(fingerprint.file);
+        }
       }
       return false;
     } finally {
-      await rm(staging, { recursive: true, force: true });
+      await stage.dispose();
     }
   }
   private async run(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    let currentTask: Task | undefined;
     try {
+      await this.load();
       while (this.queue.length) {
         const task = this.queue.shift()!;
+        currentTask = task;
         const { job, request } = task;
         job.status = 'running';
         this.emit(task);
-        const items = request.kind === 'mkdir' ? [''] : request.sources;
+        const items = ['mkdir', 'compress'].includes(request.kind) ? [''] : request.sources;
         for (const source of items) {
           try {
             this.check(task);
@@ -456,15 +681,29 @@ export class Operations {
               [source, request.destination].filter((file): file is string => !!file),
             );
             job.current = source || request.destination;
+            task.intent = { source, destination: request.destination };
+            await this.checkpoint();
             this.progress(task);
             let destination: string | undefined;
+            const move =
+              request.kind === 'move' ||
+              request.kind === 'rename' ||
+              (request.kind === 'transfer' &&
+                (await lstat(source)).dev === (await lstat(request.destination!)).dev);
             let undoable = false,
               caseOnly = false;
-            if (request.kind === 'trash') await this.trash(source);
+            if (request.kind === 'trash') await this.trashItem(task, source);
             else {
-              destination =
-                request.kind === 'mkdir'
-                  ? path.join(request.destination!, validName(request.name!))
+              destination = ['mkdir', 'compress'].includes(request.kind)
+                ? path.join(request.destination!, validName(request.name!))
+                : request.kind === 'extract'
+                  ? path.join(
+                      request.destination!,
+                      validName(
+                        path.basename(source).replace(/\.(?:tar\.gz|tgz|zip|tar)$/i, '') ||
+                          'Extracted archive',
+                      ),
+                    )
                   : request.kind === 'rename'
                     ? path.join(path.dirname(source), validName(request.name!))
                     : request.kind === 'duplicate'
@@ -472,8 +711,17 @@ export class Operations {
                       : path.join(request.destination!, path.basename(source));
               if (source === destination) throw new Error('Source and destination are the same.');
               await this.access([destination]);
+              task.intent = { source, destination };
+              await this.checkpoint();
               if (source && destination.startsWith(source + path.sep))
                 throw new Error('A folder cannot be placed inside itself.');
+              if (
+                request.kind === 'compress' &&
+                request.sources.some(
+                  (file) => destination === file || destination!.startsWith(file + path.sep),
+                )
+              )
+                throw new Error('Save the archive outside the selected folders.');
               // Resolve symlinks in the destination's ancestry as well.
               if (source && (await lstat(source)).isDirectory()) {
                 const { realpath } = await import('node:fs/promises');
@@ -516,16 +764,36 @@ export class Operations {
                 destination = resolved;
                 this.check(task);
                 await this.access([destination]);
+                task.intent = { source, destination };
+                await this.checkpoint();
                 if (request.kind === 'mkdir') await mkdir(destination);
-                else
-                  undoable = await this.transfer(
-                    task,
-                    source,
-                    destination,
-                    request.kind === 'move' || request.kind === 'rename',
-                  );
+                else if (request.kind === 'compress' || request.kind === 'extract') {
+                  const stage = await privateStage(path.dirname(destination), '.viewer-archive-');
+                  const staging = stage.file;
+                  task.intent = { source, destination, staging };
+                  try {
+                    await this.checkpoint();
+                    const work = {
+                      signal: task.abort.signal,
+                      access: this.access,
+                      progress: (file: string, done: number, total: number) => {
+                        job.current = file;
+                        job.bytesDone = done;
+                        job.bytesTotal = total;
+                        this.progress(task);
+                      },
+                    };
+                    if (request.kind === 'compress')
+                      await createArchive(request.sources, staging, work);
+                    else await extractArchive(source, staging, work);
+                    this.check(task);
+                    await this.publish(staging, destination, task);
+                  } finally {
+                    await stage.dispose();
+                  }
+                } else undoable = await this.transfer(task, source, destination, move);
               }
-              if (undoable && (request.kind === 'move' || request.kind === 'rename')) {
+              if (undoable && move) {
                 const info = await lstat(destination);
                 task.undo.push({
                   from: destination,
@@ -536,17 +804,43 @@ export class Operations {
                   caseOnly,
                 });
               }
+              if (
+                !move &&
+                destination &&
+                ['copy', 'transfer', 'duplicate', 'mkdir', 'compress', 'extract'].includes(
+                  request.kind,
+                )
+              ) {
+                const proof = await outputProof(destination);
+                if (proof) {
+                  const info = await lstat(destination);
+                  task.undo.push({
+                    from: destination,
+                    to: '',
+                    remove: true,
+                    proof,
+                    identity: `${info.dev}:${info.ino}`,
+                    modified: info.mtimeMs,
+                    size: info.size,
+                  });
+                }
+              }
             }
             job.completed.push({ source, destination });
-            if (destination && ['rename', 'move'].includes(request.kind))
-              this.filesChanged([{ source, destination }]);
+            if (destination && move) this.filesChanged([{ source, destination }]);
             job.itemsDone++;
+            task.intent = undefined;
           } catch (error) {
+            if (error instanceof ReceiptFailure) throw error;
             if (task.abort.signal.aborted) break;
-            job.errors.push({ path: source || request.destination!, message: message(error) });
+            job.errors.push({
+              path: source || request.destination!,
+              message: message(error).slice(0, 4000),
+            });
             job.itemsDone++;
           }
           this.progress(task);
+          await this.checkpoint();
         }
         job.status = task.abort.signal.aborted
           ? 'cancelled'
@@ -555,8 +849,29 @@ export class Operations {
             : 'completed';
         job.undoable = !!task.undo.length;
         job.current = undefined;
+        // Terminal failures have a known outcome. Keep their recovery paths,
+        // but reserve an in-flight intent for an actually interrupted mutation.
+        if (task.intent) job.recovery = task.intent;
+        task.intent = undefined;
         this.emit(task);
+        await this.checkpoint();
+        currentTask = undefined;
       }
+    } catch (error) {
+      for (const task of this.tasks.values())
+        if (task === currentTask || ['queued', 'running', 'collision'].includes(task.job.status)) {
+          task.job.status = 'failed';
+          task.job.errors.push({
+            path: task.job.current || task.job.destination || task.job.sources[0] || '',
+            message:
+              'Operation receipts could not be saved. Further file changes were stopped. ' +
+              message(error),
+          });
+          task.job.recovery = task.intent ?? task.job.recovery;
+          task.job.undoable = !!task.undo.length;
+          this.emit(task);
+        }
+      this.queue.length = 0;
     } finally {
       this.running = false;
       for (const resolve of this.idle.splice(0)) resolve();

@@ -47,6 +47,8 @@ export interface ExternalTerminalAdapter {
 }
 export class ExternalTerminals {
   private queue: Promise<unknown> = Promise.resolve();
+  private closed = false;
+  private pending = 0;
   constructor(
     private directory: string,
     private settings: () => ApplicationSettings,
@@ -74,9 +76,13 @@ export class ExternalTerminals {
         }
       },
       open: async (app, file) => {
-        await exec('/usr/bin/open', ['-a', app, '--', file]);
+        await exec('/usr/bin/open', ['-a', app, '--', file], {
+          timeout: 15000,
+          maxBuffer: 1024 * 1024,
+        });
       },
     },
+    private access: (files: readonly string[]) => Promise<void> = async () => {},
   ) {}
   async application(): Promise<TerminalApplication> {
     if (process.platform !== 'darwin')
@@ -113,14 +119,31 @@ export class ExternalTerminals {
     return app;
   }
   open(cwd: string, tmux = false): Promise<void> {
-    const task = this.queue.catch(() => {}).then(() => this.launch(cwd, tmux));
+    if (this.closed) return Promise.reject(new Error('External terminal handoff has closed.'));
+    if (this.pending >= 20)
+      return Promise.reject(
+        new Error('Wait for a terminal handoff to finish before opening more.'),
+      );
+    this.pending++;
+    const task = this.queue
+      .catch(() => {})
+      .then(() => {
+        if (this.closed) throw new Error('External terminal handoff has closed.');
+        return this.launch(cwd, tmux);
+      })
+      .finally(() => {
+        this.pending--;
+      });
     this.queue = task;
     return task;
   }
   private async launch(cwd: string, tmux: boolean): Promise<void> {
+    await this.access([cwd]);
     cwd = await fs.realpath(absolute(cwd));
     if (!(await fs.stat(cwd)).isDirectory()) throw new Error('Choose a folder to open a terminal.');
     const application = await this.application();
+    await this.access([cwd]);
+    if (this.closed) throw new Error('External terminal handoff has closed.');
     const settings = this.settings().terminals;
     const profile = settings.profiles.find((profile) => profile.id === settings.profileID)!;
     let executable = await executablePath(profile.executable || process.env.SHELL || '/bin/zsh');
@@ -144,6 +167,8 @@ export class ExternalTerminals {
           throw error;
         existing = false;
       }
+      await this.access([cwd]);
+      if (this.closed) throw new Error('External terminal handoff has closed.');
       await this.adapter.run(executable, [
         ...prefix,
         ...(existing
@@ -190,6 +215,8 @@ export class ExternalTerminals {
     await fs.writeFile(file, script, { mode: 0o700, flag: 'wx' });
     try {
       const cli = await this.adapter.bundledCLI?.(application);
+      await this.access([cwd]);
+      if (this.closed) throw new Error('External terminal handoff has closed.');
       if (cli && application.running) {
         const help = await this.adapter.run(cli, ['window', 'new', '--help']).catch(() => '');
         if (help.includes('--command')) {
@@ -207,5 +234,12 @@ export class ExternalTerminals {
       await fs.rm(file, { force: true });
       throw error;
     }
+  }
+  async close(): Promise<void> {
+    this.closed = true;
+    await this.queue.catch(() => {});
+  }
+  async quiesce(): Promise<void> {
+    await this.queue.catch(() => {});
   }
 }

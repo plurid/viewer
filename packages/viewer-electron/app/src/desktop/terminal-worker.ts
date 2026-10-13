@@ -1,5 +1,6 @@
 import * as pty from 'node-pty';
 import type { TerminalEvent } from '../domain/automation';
+import { workerPort } from './worker-port';
 interface Session {
   process: pty.IPty;
   pending: number;
@@ -7,7 +8,7 @@ interface Session {
   timer?: ReturnType<typeof setTimeout>;
 }
 const sessions = new Map<string, Session>();
-const port = process.parentPort;
+const port = workerPort;
 const emit = (event: TerminalEvent) => port.postMessage(event);
 function drain(id: string, value: Session): void {
   clearTimeout(value.timer);
@@ -43,6 +44,7 @@ port.on('message', (message) => {
       });
       const value: Session = { process, pending: 0, chunks: [] };
       sessions.set(request.id, value);
+      port.postMessage({ type: 'started', id: request.id, pid: process.pid });
       process.onData((data) => {
         value.pending += data.length;
         value.chunks.push(data);
@@ -58,7 +60,11 @@ port.on('message', (message) => {
       });
     } else {
       const value = sessions.get(request.id);
-      if (!value) return;
+      if (!value) {
+        if (request.kind === 'close' || request.kind === 'kill')
+          emit({ type: 'exit', id: request.id, code: 0 });
+        return;
+      }
       if (request.kind === 'write') value.process.write(request.data);
       else if (request.kind === 'resize') value.process.resize(request.cols, request.rows);
       else if (request.kind === 'ack') {
@@ -66,14 +72,18 @@ port.on('message', (message) => {
         if (value.pending < 128 * 1024) value.process.resume();
       } else if (request.kind === 'close') {
         clearTimeout(value.timer);
+        value.process.resume();
         value.process.kill();
+      } else if (request.kind === 'kill') {
+        clearTimeout(value.timer);
+        value.process.resume();
+        value.process.kill('SIGKILL');
       }
     }
   } catch (error) {
     const session = sessions.get(request.id);
     if (session) {
       clearTimeout(session.timer);
-      sessions.delete(request.id);
       try {
         session.process.kill();
       } catch {
@@ -85,6 +95,7 @@ port.on('message', (message) => {
       id: request.id,
       message: error instanceof Error ? error.message : String(error),
     });
+    if (!session) emit({ type: 'exit', id: request.id, code: 1 });
   }
 });
 process.on('exit', () => {

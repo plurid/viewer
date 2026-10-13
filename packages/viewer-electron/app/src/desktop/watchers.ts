@@ -86,6 +86,25 @@ export class Watchers {
       }),
     );
   }
+  async revoke(root: string): Promise<void> {
+    const prefix = root.replace(/[\\/]$/, '') + '/';
+    const paths = [...this.watches.keys()].filter(
+      (folder) => folder === root || folder.startsWith(prefix),
+    );
+    await Promise.all(
+      paths.map(async (folder) => {
+        const watch = this.watches.get(folder);
+        if (!watch) return;
+        for (const subscriber of [...watch.subscribers]) await this.remove(subscriber);
+        this.emit({
+          type: 'watch-error',
+          path: folder,
+          code: 'FILE_ACCESS_REQUIRED',
+          message: 'Folder access was revoked. Choose the folder again to allow access.',
+        });
+      }),
+    );
+  }
   get count(): number {
     return this.watches.size;
   }

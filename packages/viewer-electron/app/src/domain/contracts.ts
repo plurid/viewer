@@ -141,7 +141,16 @@ export interface Bootstrap {
   recovery?: string;
   settings?: import('./services').SettingsSnapshot;
 }
-export type OperationKind = 'copy' | 'move' | 'duplicate' | 'rename' | 'mkdir' | 'trash';
+export type OperationKind =
+  | 'copy'
+  | 'move'
+  | 'transfer'
+  | 'duplicate'
+  | 'rename'
+  | 'mkdir'
+  | 'trash'
+  | 'compress'
+  | 'extract';
 export interface OperationRequest {
   kind: OperationKind;
   sources: string[];
@@ -170,6 +179,7 @@ export interface OperationJob {
   errorCount: number;
   collision?: Collision;
   undoable: boolean;
+  recovery?: { source: string; destination?: string; staging?: string };
 }
 export interface OperationProgress {
   id: string;
@@ -229,6 +239,8 @@ export type DesktopEvent =
   | { type: 'execution'; task: import('./automation').ExecutionTask }
   | { type: 'folder-size'; task: import('./metadata').FolderSizeTask }
   | { type: 'settings'; snapshot: import('./services').SettingsSnapshot }
+  | { type: 'model-permission'; providerID: string }
+  | { type: 'file-access'; path: string; resources?: string[] }
   | { type: 'index'; status: import('./services').IndexStatus }
   | { type: 'action'; plan: import('./services').ActionPlan }
   | { type: 'file-changes'; changes: import('./changes').FileChange[] }
@@ -278,6 +290,14 @@ export interface ViewerAPI {
   ): Promise<import('./services').SettingsSnapshot>;
   providerCredential(id: string, key: string): Promise<void>;
   providerModels(id: string): Promise<string[]>;
+  providerPermissionGet(
+    id: string,
+  ): Promise<import('./model-permissions').ModelDataPermission | null>;
+  providerPermissionSet(
+    id: string,
+    endpoint: string,
+    level: import('./model-permissions').ModelDataLevel | null,
+  ): Promise<void>;
   indexStatus(): Promise<import('./services').IndexStatus>;
   indexedQuery(
     query: import('./services').IndexedQuery,
@@ -325,6 +345,19 @@ export interface ViewerAPI {
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
   copyPaths(paths: string[]): Promise<void>;
   clipboardRead(): Promise<{ paths: string[]; cut: boolean } | null>;
+  fileDropPaths(files: File[]): Promise<string[]>;
+  fileDragStart(paths: string[]): Promise<void>;
+  volumesList(): Promise<import('./volumes').Volume[]>;
+  volumeEject(path: string): Promise<void>;
+  fileAccessList(): Promise<
+    {
+      path: string;
+      directory: boolean;
+      status: 'active' | 'saved' | 'revoking' | 'unavailable';
+      session?: boolean;
+    }[]
+  >;
+  fileAccessRevoke(path: string): Promise<void>;
   textEdit(command: TextEditCommand): Promise<void>;
   onEvent(listener: (event: DesktopEvent) => void): () => void;
 }

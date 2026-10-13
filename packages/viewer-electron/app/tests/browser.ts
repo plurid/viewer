@@ -53,6 +53,9 @@ const api: ViewerAPI = {
   settingsPatch: (patches, revision) => invoke('settingsPatch', patches, revision),
   providerCredential: (id, key) => invoke('providerCredential', id, key),
   providerModels: (id) => invoke('providerModels', id),
+  providerPermissionGet: (id) => invoke('providerPermissionGet', id),
+  providerPermissionSet: (id, endpoint, level) =>
+    invoke('providerPermissionSet', id, endpoint, level),
   indexStatus: () => invoke('indexStatus'),
   indexedQuery: (query) => invoke('indexedQuery', query),
   indexRebuild: () => invoke('indexRebuild'),
@@ -99,6 +102,14 @@ const api: ViewerAPI = {
   clipboardWrite: (paths, cut) => invoke('clipboardWrite', paths, cut),
   copyPaths: (paths) => invoke('copyPaths', paths),
   clipboardRead: () => invoke('clipboardRead'),
+  fileDropPaths: async () => [],
+  volumesList: () => invoke('volumesList'),
+  volumeEject: (path) => invoke('volumeEject', path),
+  fileAccessList: () => invoke('fileAccessList'),
+  fileAccessRevoke: (path) => invoke('fileAccessRevoke', path),
+  fileDragStart: async () => {
+    throw new Error('Native file dragging is only available in the installed app.');
+  },
   textEdit: (command) => {
     document.execCommand(command);
     return Promise.resolve();

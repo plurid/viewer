@@ -17,7 +17,12 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | Configuration       | Versioned JSONC preferences with validation, comments, recovery and conflict handling; `desktop/configuration.ts`, `desktop/settings.ts`.        |
 | Execution grant     | A separately stored user approval for an exact custom action or terminal capability in a canonical folder; `desktop/agent-requests.ts`.          |
 | Terminal session    | A main-process-owned PTY plus a renderer-owned xterm screen, retained through culling; `desktop/terminals.ts`, `renderer/terminals/sessions.ts`. |
+| Native file permission | A private picker bookmark or native clipboard/drag session capability, canonicalized and released after dependent work drains; `desktop/file-access.ts`. |
+| Model data permission | Private user consent for an exact provider endpoint and data level, independently revocable; `desktop/model-permissions.ts`, `domain/model-permissions.ts`. |
+| Operation receipt | A validated durable record of mutation intent, output identity and eligible guarded Undo; `desktop/operation-journal.ts`. It never authorizes blindly replaying interrupted mutations. |
 
 Keep file selection/input independent of camera input. Keep shared presentation independent of local navigation. Keep engine IDs inside `renderer/workspace/controller.ts`. Keep credentials and effective grants out of editable configuration. A working directory is not a sandbox.
 
 See [architecture](docs/architecture.md), [configuration](docs/configuration.md), [terminals](docs/terminals.md), [actions](docs/actions.md), [verification](docs/verification.md) and [remaining product work](docs/roadmap.md). Routine app verification stays hidden and never activates Viewer.
+
+Release checks and mandatory native gates live in [qualification](docs/release-qualification.md). The owner separately authorized a coordinated visible native acceptance session using disposable profiles and generated data; routine checks remain hidden. A passing source/mock/browser check is not proof of genuine native picker, Finder, accessibility or distribution behavior.

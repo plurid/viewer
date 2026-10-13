@@ -3,6 +3,8 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createRequire } from 'node:module';
+import { licenseInventory } from './licenses';
+await licenseInventory();
 if (process.platform === 'darwin') {
   mkdirSync('assets', { recursive: true });
   const cache = path.join(os.tmpdir(), `viewer-swift-cache-${process.getuid?.() || 'build'}`);
@@ -25,6 +27,35 @@ if (process.platform === 'darwin') {
   if (arch !== 'arm64' && arch !== 'x64')
     throw new Error('Native helpers support arm64 and x64 builds.');
   const target = `${arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${minimum}`;
+  const headers = path.join(
+    os.homedir(),
+    '.electron-gyp',
+    require('electron/package.json').version,
+    'include/node',
+  );
+  execFileSync(
+    'xcrun',
+    [
+      'clang++',
+      '-std=c++17',
+      '-fobjc-arc',
+      '-bundle',
+      '-undefined',
+      'dynamic_lookup',
+      '-target',
+      target,
+      '-I',
+      headers,
+      '-framework',
+      'Foundation',
+      '-framework',
+      'AppKit',
+      'tools/macos-files.mm',
+      '-o',
+      'assets/viewer-macos-files.node',
+    ],
+    { stdio: 'inherit' },
+  );
   execFileSync(
     'xcrun',
     [

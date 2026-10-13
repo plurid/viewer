@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { ModelProvider } from '../domain/services';
 import { providerPresets, validProviderEndpoint } from '../domain/model-providers';
 import { DocumentStore } from './document-store';
+import { ModelPermissionRequired, type ModelPermissions } from './model-permissions';
+import type { ModelDataLevel } from '../domain/model-permissions';
 const secretSchema = z.record(z.string(), z.string().max(20000));
 export class Credentials {
   private values: Record<string, string> = {};
@@ -75,6 +77,7 @@ export class Providers {
   constructor(
     private credentials: Credentials,
     private request: typeof fetch = fetch,
+    private permissions?: Pick<ModelPermissions, 'run'>,
   ) {}
   private headers(provider: ModelProvider, secret: string): Record<string, string> {
     return provider.kind === 'anthropic'
@@ -139,11 +142,26 @@ export class Providers {
     input: unknown,
     schema: Record<string, unknown>,
     signal: AbortSignal,
+    level: ModelDataLevel = 'full-text',
+  ): Promise<unknown> {
+    this.endpoint(provider, providerPresets[provider.kind].protocol);
+    if (!this.permissions) throw new ModelPermissionRequired();
+    return this.permissions.run(provider, level, signal, (authorized) =>
+      this.generateAuthorized(provider, instructions, input, schema, authorized),
+    );
+  }
+  private async generateAuthorized(
+    provider: ModelProvider,
+    instructions: string,
+    input: unknown,
+    schema: Record<string, unknown>,
+    signal: AbortSignal,
   ): Promise<unknown> {
     if (!provider.model.trim()) throw new Error('Select a model in Settings.');
     const preset = providerPresets[provider.kind];
     const url = this.endpoint(provider, preset.protocol);
     const secret = await this.credentials.get(provider.id);
+    signal.throwIfAborted();
     if (provider.kind !== 'local' && !secret)
       throw new Error('Add this provider’s API key in Settings.');
     const policy =
@@ -213,6 +231,7 @@ export class Providers {
       content?: { type: string; name?: string; input?: unknown }[];
       choices?: { finish_reason?: string; message: { content?: string; refusal?: string } }[];
     };
+    signal.throwIfAborted();
     if (provider.kind === 'anthropic') {
       if (['max_tokens', 'refusal'].includes(data.stop_reason ?? ''))
         throw new Error('The model response was refused or incomplete. Retry or edit the recipe.');

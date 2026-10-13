@@ -183,6 +183,29 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return;
     case 'providerModels':
       return [];
+    case 'providerPermissionGet':
+      return null;
+    case 'volumesList':
+      return [
+        {
+          path: fixture.files,
+          name: 'Test volume',
+          total: 1000000000,
+          available: 750000000,
+          removable: false,
+          ejectable: false,
+          readOnly: false,
+        },
+      ];
+    case 'fileAccessList':
+      return [];
+    case 'fileAccessRevoke':
+    case 'volumeEject':
+      throw new Error(
+        'Native volume and permission changes are only available in the installed app.',
+      );
+    case 'providerPermissionSet':
+      throw new Error('Model data permissions are only available in the native app.');
     case 'providerCredential':
     case 'agentToken':
       throw new Error('Credentials and agents are only available in the native app.');

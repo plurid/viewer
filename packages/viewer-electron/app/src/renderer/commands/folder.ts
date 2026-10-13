@@ -37,6 +37,41 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
   const paths = (context: CommandContext) => context.selection.map((entry) => entry.path);
   const commands: CommandDefinition[] = [
     {
+      id: 'compress',
+      label: 'Compress to ZIP',
+      group: 'Files',
+      icon: 'archive',
+      aliases: ['zip', 'archive', 'compress'],
+      when: selected,
+      run: async (context) => {
+        await window.viewer.operate({
+          kind: 'compress',
+          sources: paths(context),
+          destination: context.directory,
+          name: context.selection.length === 1 ? context.selection[0].name + '.zip' : 'Archive.zip',
+        });
+      },
+    },
+    {
+      id: 'extract',
+      label: 'Extract archive',
+      group: 'Files',
+      icon: 'archive',
+      aliases: ['unzip', 'untar', 'extract'],
+      when: (context) =>
+        selected(context) &&
+        context.selection.every(
+          (entry) => !entry.directory && /\.(?:zip|tar|tar\.gz|tgz)$/i.test(entry.name),
+        ),
+      run: async (context) => {
+        await window.viewer.operate({
+          kind: 'extract',
+          sources: paths(context),
+          destination: context.directory,
+        });
+      },
+    },
+    {
       id: 'open-default',
       label: 'Open in Default App',
       group: 'Files',
@@ -167,6 +202,24 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
         if (clipboard)
           await window.viewer.operate({
             kind: clipboard.cut ? 'move' : 'copy',
+            sources: clipboard.paths,
+            destination: context.directory,
+          });
+      },
+    },
+    {
+      id: 'paste-move',
+      label: 'Move copied items here',
+      group: 'Files',
+      icon: 'move',
+      shortcut: '⌥⌘V',
+      when: (context) => folder(context) && !!context.clipboard?.paths.length,
+      run: async (context) => {
+        await refreshClipboard();
+        const clipboard = getState().clipboard;
+        if (clipboard)
+          await window.viewer.operate({
+            kind: 'move',
             sources: clipboard.paths,
             destination: context.directory,
           });

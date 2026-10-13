@@ -12,6 +12,7 @@ export const explorerCommandIDs = new Set([
   'copy',
   'cut',
   'paste',
+  'paste-move',
   'select-all',
   'info',
   'duplicate',
@@ -75,6 +76,7 @@ export interface ExplorerInput {
   move(key: string, range: boolean): void;
   clear(): void;
   horizontal?(direction: 'left' | 'right'): void;
+  type?(text: string): void;
 }
 /** Views supply selection geometry, not independent shortcut tables. */
 export function routeExplorerInput(event: RoutedKey, input: ExplorerInput): void {
@@ -97,6 +99,11 @@ export function routeExplorerInput(event: RoutedKey, input: ExplorerInput): void
     return;
   }
   if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+  if (input.type && Array.from(event.key).length === 1 && event.key !== ' ') {
+    stop();
+    input.type(event.key);
+    return;
+  }
   if (event.key === 'Escape') {
     stop();
     input.clear();

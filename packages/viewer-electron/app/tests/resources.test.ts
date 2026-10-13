@@ -10,10 +10,111 @@ beforeEach(async () => {
   resources = new Resources();
 });
 afterEach(async () => {
-  resources.clear();
+  await resources.quiesce();
   await rm(root, { recursive: true, force: true });
 });
 describe('scoped preview resources', () => {
+  it('revokes only the chosen root while independent text and media previews stay usable', async () => {
+    const first = path.join(root, 'first'),
+      second = path.join(root, 'second');
+    await Promise.all([mkdir(first), mkdir(second)]);
+    await writeFile(path.join(first, 'notes.txt'), 'independent');
+    await writeFile(path.join(first, 'media.wav'), Buffer.alloc(1024 * 1024, 1));
+    await writeFile(path.join(second, 'media.wav'), Buffer.alloc(1024 * 1024, 2));
+    const text = await resources.grant(path.join(first, 'notes.txt'));
+    const independent = await resources.grant(path.join(first, 'media.wav'));
+    const revoked = await resources.grant(path.join(second, 'media.wav'));
+    const playing = await resources.response(new Request(independent.url));
+    const stopped = await resources.response(new Request(revoked.url));
+    await resources.quiesce(second);
+    expect((await resources.read(text.id)).text).toBe('independent');
+    expect((await playing.arrayBuffer()).byteLength).toBe(1024 * 1024);
+    await expect(stopped.arrayBuffer()).rejects.toThrow();
+    expect((await resources.response(new Request(revoked.url))).status).toBe(404);
+  });
+  it('invalidates pending canonical aliases without cancelling an independent request', async () => {
+    const first = path.join(root, 'first'),
+      second = path.join(root, 'second');
+    await Promise.all([mkdir(first), mkdir(second)]);
+    await writeFile(path.join(first, 'notes.txt'), 'independent');
+    await writeFile(path.join(second, 'notes.txt'), 'revoked');
+    const alias = path.join(root, 'alias');
+    await symlink(second, alias);
+    let resume!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    resources = new Resources(async () => {
+      await gate;
+    });
+    const independent = resources.grant(path.join(first, 'notes.txt'));
+    const denied = resources.grant(path.join(alias, 'notes.txt'));
+    const rejected = expect(denied).rejects.toThrow('expired');
+    const drained = resources.quiesce(second);
+    resume();
+    expect((await independent).entry.path).toBe(path.join(first, 'notes.txt'));
+    await rejected;
+    await drained;
+    expect(
+      (await resources.read((await resources.grant(path.join(first, 'notes.txt'))).id)).text,
+    ).toBe('independent');
+  });
+  it('cannot resurrect a preview that was still acquiring access when resources were cleared', async () => {
+    const file = path.join(root, 'private.txt');
+    await writeFile(file, 'private');
+    let resume!: () => void,
+      calls = 0;
+    resources = new Resources(async () => {
+      if (calls++ === 0)
+        await new Promise<void>((resolve) => {
+          resume = resolve;
+        });
+    });
+    const pending = resources.grant(file);
+    resources.clear();
+    resume();
+    await expect(pending).rejects.toThrow('expired');
+  });
+  it('cancels unconsumed media streams and drains their descriptors when previews close', async () => {
+    const file = path.join(root, 'large.wav');
+    await writeFile(file, Buffer.alloc(8 * 1024 * 1024));
+    const grant = await resources.grant(file);
+    const response = await resources.response(new Request(grant.url));
+    expect(response.status).toBe(200);
+    await resources.quiesce();
+    expect((await resources.response(new Request(grant.url))).status).toBe(404);
+    await expect(response.arrayBuffer()).rejects.toThrow();
+  });
+  it('rechecks private access before reading cached archive bytes', async () => {
+    let denied = false;
+    resources = new Resources(async () => {
+      if (denied) throw new Error('revoked');
+    });
+    const file = path.join(root, 'fixture.zip');
+    await writeFile(file, zipSync({ 'hello.txt': strToU8('private') }));
+    const grant = await resources.grant(file);
+    const child = await resources.archiveEntry(grant.id, 'hello.txt');
+    denied = true;
+    await expect(resources.read(child.id)).rejects.toThrow('revoked');
+    expect((await resources.response(new Request(child.url))).status).toBe(404);
+  });
+  it('purges decoded archive children reached through a canonical alias', async () => {
+    const folder = path.join(root, 'private'),
+      alias = path.join(root, 'alias');
+    await mkdir(folder);
+    await symlink(folder, alias);
+    await writeFile(
+      path.join(folder, 'fixture.zip'),
+      zipSync({ 'private.txt': strToU8('private bytes') }),
+    );
+    const grant = await resources.grant(path.join(alias, 'fixture.zip'));
+    const child = await resources.archiveEntry(grant.id, 'private.txt');
+    const affected = await resources.affected(folder);
+    expect(affected).toContain(grant.id);
+    expect(affected).toContain(child.id);
+    await resources.quiesce(folder);
+    await expect(resources.read(child.id)).rejects.toThrow('expired');
+  });
   it('streams explicit and suffix ranges for media seeking', async () => {
     const file = path.join(root, 'sound.wav');
     await writeFile(file, '0123456789');

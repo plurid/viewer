@@ -12,6 +12,18 @@ const require = createRequire(import.meta.url);
 const channel = macChannel(process.env.VIEWER_MAC_CHANNEL);
 const storeConfig = storeConfiguration.parse(store);
 const inputs = channel === 'direct' ? undefined : storeInputs(process.env, channel);
+const directIdentity =
+  channel === 'direct' ? process.env.VIEWER_DIRECT_IDENTITY?.trim() : undefined;
+const notaryProfile = channel === 'direct' ? process.env.VIEWER_NOTARY_PROFILE?.trim() : undefined;
+if (notaryProfile && !directIdentity)
+  throw new Error('Notarization requires VIEWER_DIRECT_IDENTITY (Developer ID Application).');
+if (
+  directIdentity &&
+  (directIdentity === '-' ||
+    (!/^[A-Fa-f0-9]{40}$/.test(directIdentity) &&
+      !directIdentity.startsWith('Developer ID Application:')))
+)
+  throw new Error('VIEWER_DIRECT_IDENTITY must identify a Developer ID Application certificate.');
 const storeSigning = inputs
   ? {
       identity: inputs.identity,
@@ -36,30 +48,38 @@ const config: ForgeConfig = {
     asar: { unpack: '**/node-pty/**' },
     extraResource: [
       'assets/licenses',
-      ...(process.platform === 'darwin' ? ['assets/viewer-ocr', 'assets/viewer-applications'] : []),
+      ...(process.platform === 'darwin'
+        ? ['assets/viewer-ocr', 'assets/viewer-applications', 'assets/viewer-macos-files.node']
+        : []),
     ],
     appBundleId: channel === 'direct' ? 'com.plurid.viewer' : storeConfig.bundleID,
-    ...(inputs
-      ? { buildVersion: inputs.build, extendInfo: { ElectronTeamID: storeConfig.teamID } }
-      : {}),
+    extendInfo: {
+      // Local profiles permit configured HTTPS LAN endpoints. macOS 15+ needs
+      // this purpose text for its separate local-network authorization.
+      NSLocalNetworkUsageDescription:
+        'Viewer connects to model endpoints you configure on your local network for model discovery and AI actions.',
+      ...(inputs ? { ElectronTeamID: storeConfig.teamID } : {}),
+    },
+    ...(inputs ? { buildVersion: inputs.build } : {}),
     appCategoryType: 'public.app-category.utilities',
     name: 'Viewer',
     icon: 'assets/icon.icns',
     // Local ad-hoc signing keeps Apple Silicon bundles runnable after packaging.
     // Distribution identities and notarization belong to the release configuration.
     osxSign: storeSigning ?? {
-      identity: '-',
-      identityValidation: false,
+      identity: directIdentity || '-',
+      identityValidation: !!directIdentity,
       preAutoEntitlements: false,
       // Do not inherit the signer's broad camera/microphone/device defaults.
       // The MAS build will need its own sandbox and helper-inheritance entitlements.
       optionsForFile: () => ({
-        hardenedRuntime: false,
+        hardenedRuntime: !!directIdentity,
         entitlements: 'assets/entitlements.mac.plist',
       }),
     },
+    ...(notaryProfile ? { osxNotarize: { keychainProfile: notaryProfile } } : {}),
   },
-  rebuildConfig: { onlyModules: ['node-pty'] },
+  rebuildConfig: { onlyModules: ['node-pty'], force: true },
   hooks: {
     packageAfterExtract: async (_config, _buildPath, _electronVersion, platform) => {
       if ((platform === 'mas') !== (channel !== 'direct'))
@@ -74,6 +94,23 @@ const config: ForgeConfig = {
         const source = path.dirname(require.resolve(dependency + '/package.json'));
         await fs.cp(source, path.join(buildPath, 'node_modules', dependency), { recursive: true });
       }
+      // macOS App Sandbox permits termios/resize ioctls on the owned PTY
+      // master, but not on its slave device. Both endpoints share termios and
+      // window size. Keep this small compatibility patch in the packaged copy;
+      // Forge then rebuilds it for Electron. Never edit the installed package.
+      const source = path.join(buildPath, 'node_modules/node-pty/src/unix/pty.cc');
+      let code = await fs.readFile(source, 'utf8');
+      for (const [before, after] of [
+        ['tcsetattr(slave, TCSANOW, termp)', 'tcsetattr(*master, TCSANOW, termp)'],
+        ['ioctl(slave, TIOCSWINSZ, winp)', 'ioctl(*master, TIOCSWINSZ, winp)'],
+      ]) {
+        if (!code.includes(before))
+          throw new Error(
+            'Review the node-pty sandbox compatibility patch after updating node-pty.',
+          );
+        code = code.replace(before, after);
+      }
+      await fs.writeFile(source, code);
     },
   },
   makers: channel === 'direct' ? [new MakerZIP({}, ['darwin'])] : [],

@@ -46,6 +46,17 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
   const shortcut = (context: CommandContext) => sidebar(context) && !!context.sidebar?.path;
   const commands: CommandDefinition[] = [
     {
+      id: 'volumes',
+      label: 'Volumes…',
+      group: 'Navigation',
+      icon: 'drive',
+      aliases: ['disks', 'drives', 'eject', 'mounts'],
+      when: () => state.bootstrap.platform === 'darwin',
+      run: () => {
+        window.dispatchEvent(new Event('viewer:volumes'));
+      },
+    },
+    {
       ...copyPathCommand,
       when: (context) =>
         ['preview', 'sidebar'].includes(context.scope) && copyPathCommand.when(context),

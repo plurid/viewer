@@ -18,6 +18,9 @@ import { FileServices } from './file-services';
 import { Applications } from './applications';
 import { SettingsService } from './settings';
 import { Credentials, Providers } from './providers';
+import { ModelPermissions } from './model-permissions';
+import { modelDataLevels, modelEndpoint } from '../domain/model-permissions';
+import { macFiles } from './macos-files';
 import { Thumbnails } from './thumbnails';
 import { ActionPlanner } from './actions/planner';
 import { AgentBroker } from './agent-broker';
@@ -40,6 +43,7 @@ import { Search } from './search';
 import { Storage, stateSchema } from './storage';
 import { Watchers } from './watchers';
 import { FileAccess } from './file-access';
+import { NativeSelections } from './native-selections';
 
 const localPath = z
   .string()
@@ -185,6 +189,8 @@ const schemas = {
   ]),
   providerCredential: z.tuple([id, z.string().max(10000)]),
   providerModels: z.tuple([id]),
+  providerPermissionGet: z.tuple([id]),
+  providerPermissionSet: z.tuple([id, z.url().max(4000), z.enum(modelDataLevels).nullable()]),
   indexStatus: z.tuple([]),
   indexedQuery: z.tuple([
     z.object({
@@ -252,7 +258,17 @@ const schemas = {
   cancelSearch: z.tuple([id]),
   operate: z.tuple([
     z.object({
-      kind: z.enum(['copy', 'move', 'duplicate', 'rename', 'mkdir', 'trash']),
+      kind: z.enum([
+        'copy',
+        'move',
+        'transfer',
+        'duplicate',
+        'rename',
+        'mkdir',
+        'trash',
+        'compress',
+        'extract',
+      ]),
       sources: z.array(localPath).max(10000),
       destination: localPath.optional(),
       name: z.string().max(255).optional(),
@@ -272,9 +288,18 @@ const schemas = {
   clipboardWrite: z.tuple([z.array(localPath).max(10000), z.boolean()]),
   copyPaths: z.tuple([z.array(localPath).min(1).max(10000)]),
   clipboardRead: z.tuple([]),
+  fileDropPaths: z.tuple([z.array(localPath).max(10000)]),
+  fileDragStart: z.tuple([z.array(localPath).min(1).max(10000)]),
+  volumesList: z.tuple([]),
+  volumeEject: z.tuple([localPath]),
+  fileAccessList: z.tuple([]),
+  fileAccessRevoke: z.tuple([localPath]),
   textEdit: z.tuple([z.enum(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])]),
 } satisfies Record<ApiMethod, z.ZodType>;
 export class Desktop {
+  private nativeSelections = new NativeSelections((source) =>
+    macFiles().clipboardVersion(source === 'drag'),
+  );
   readonly agentRequests: AgentRequests;
   private commandCatalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
   readonly terminals: Terminals;
@@ -295,6 +320,7 @@ export class Desktop {
   readonly applications: Applications;
   readonly credentials: Credentials;
   readonly providers: Providers;
+  readonly modelPermissions: ModelPermissions;
   readonly actions: ActionPlanner;
   readonly agents: AgentBroker;
   readonly thumbnails = new Thumbnails();
@@ -310,7 +336,12 @@ export class Desktop {
   private flushes = new Map<string, () => void>();
   private flushing?: Promise<void>;
   private disposal?: Promise<void>;
-  private fileClipboard: { paths: string[]; cut: boolean; text: string } | null = null;
+  private fileClipboard: {
+    paths: string[];
+    cut: boolean;
+    text: string;
+    changeCount?: number;
+  } | null = null;
   constructor(
     dataPath: string,
     private allowedURL: (url: string) => boolean,
@@ -345,6 +376,14 @@ export class Desktop {
       () => nativeTheme.shouldUseDarkColors,
       (snapshot) => {
         this.options.settingsChanged?.();
+        void this.modelPermissions.reconcile().catch(() =>
+          emit({
+            type: 'service-error',
+            service: 'models',
+            message:
+              'Model data access was stopped, but the permission change could not be saved. Try again in Settings → Models.',
+          }),
+        );
         emit({ type: 'settings', snapshot: { ...snapshot, credentials: this.credentials.ids() } });
         void this.configureAgents(snapshot.settings.agents.enabled).catch(() =>
           emit({
@@ -384,6 +423,8 @@ export class Desktop {
       path.join(dataPath, 'terminal-launches'),
       () => this.settings.snapshot().settings,
       options.applications,
+      undefined,
+      access,
     );
     this.executions = new Executions(
       () => this.settings.snapshot().settings,
@@ -398,7 +439,11 @@ export class Desktop {
       (value) => safeStorage.encryptStringAsync(value),
       async (value) => (await safeStorage.decryptStringAsync(value)).result,
     );
-    this.providers = new Providers(this.credentials);
+    this.modelPermissions = new ModelPermissions(
+      dataPath,
+      () => this.settings.snapshot().settings.providers,
+    );
+    this.providers = new Providers(this.credentials, fetch, this.modelPermissions);
     this.files = new FileServices(
       dataPath,
       options.worker,
@@ -417,11 +462,13 @@ export class Desktop {
       this.thumbnails.clear();
     };
     this.operations = new Operations(
-      (file) => shell.trashItem(file),
+      (file) => (process.platform === 'darwin' ? macFiles().trash(file) : shell.trashItem(file)),
       (job) => emit({ type: 'job', job }),
       (progress) => emit({ type: 'job-progress', progress }),
       changed,
       access,
+      dataPath,
+      (receipt, work) => this.fileAccess.withReceipt(receipt, work),
     );
     this.actions = new ActionPlanner(dataPath, {
       access,
@@ -515,6 +562,10 @@ export class Desktop {
             'settingsPatch',
             'providerCredential',
             'providerModels',
+            'providerPermissionGet',
+            'providerPermissionSet',
+            'fileAccessList',
+            'fileAccessRevoke',
             'indexStatus',
             'indexRebuild',
             'chooseFolder',
@@ -526,7 +577,7 @@ export class Desktop {
             throw new Error('This API is unavailable in Settings.');
           if (
             role !== 'settings' &&
-            ['providerCredential', 'agentToken', 'agentGrant'].includes(name)
+            ['providerCredential', 'agentToken', 'agentGrant', 'fileAccessRevoke'].includes(name)
           )
             throw new Error('Manage credentials in Settings.');
           return {
@@ -652,19 +703,23 @@ export class Desktop {
   }
   private async disposeServices(): Promise<void> {
     this.ready = false;
-    this.search.close();
     this.settings.close();
-    this.executions.close();
     this.resources.clear();
     // Cancel the read-only worker before waiting for planners that may be
     // awaiting extraction. File mutations still drain through their journal.
     const results = await Promise.allSettled([
       this.terminals.close(),
+      this.externalTerminals.close(),
       this.files.close(),
       this.actions.close(),
       this.agentsConfiguration.catch(() => {}).then(() => this.agents.close()),
       this.watchers.close(),
       this.operations.close(),
+      this.modelPermissions.close(),
+      this.search.close(),
+      this.executions.close(),
+      this.resources.close(),
+      this.thumbnails.close(),
     ]);
     await this.fileAccess.close();
     for (const request of this.agentCommands.values())
@@ -776,12 +831,79 @@ export class Desktop {
         await this.settings.load();
         await this.credentials.load();
         return this.settings.snapshot(this.credentials.ids());
+      case 'fileAccessList':
+        return this.fileAccess.list();
+      case 'fileAccessRevoke': {
+        const root = args[0] as string;
+        if (this.fileAccess.scoped) this.nativeSelections.revoke(root);
+        let resources: string[] = [];
+        this.emit({ type: 'file-access', path: root });
+        await this.fileAccess.revoke(root, async () => {
+          resources = await this.resources.affected(root);
+          this.emit({ type: 'file-access', path: root, resources });
+          await Promise.all([
+            this.resources.quiesce(root),
+            this.thumbnails.quiesce(root),
+            this.watchers.revoke(root),
+            this.search.quiesce(),
+            this.actions.quiesce(root),
+            this.operations.quiesce(root),
+            this.executions.quiesce(root),
+            this.terminals.quiesce(root),
+            this.externalTerminals.quiesce(),
+          ]);
+          await this.files.reset();
+          this.indexConfiguration = '';
+          await this.configureIndex(this.settings.snapshot().settings.search);
+        });
+        this.emit({ type: 'file-access', path: root, resources });
+        return;
+      }
+      case 'volumesList':
+        return process.platform === 'darwin' ? macFiles().volumes() : [];
+      case 'volumeEject': {
+        const root = args[0] as string;
+        const volume = (await macFiles().volumes()).find((volume) => volume.path === root);
+        if (!volume?.ejectable || root === '/') throw new Error('Choose an ejectable volume.');
+        let resources: string[] = [];
+        try {
+          await this.fileAccess.withBlocked(root, async () => {
+            this.emit({ type: 'file-access', path: root });
+            resources = await this.resources.affected(root);
+            this.emit({ type: 'file-access', path: root, resources });
+            const previews = this.resources.quiesce(root);
+            const thumbnails = this.thumbnails.quiesce(root);
+            await this.actions.quiesce(root);
+            await this.operations.quiesce(root);
+            await this.executions.quiesce(root);
+            await this.terminals.quiesce(root);
+            await this.externalTerminals.quiesce();
+            await this.watchers.revoke(root);
+            await this.search.quiesce();
+            await this.files.reset();
+            await Promise.all([previews, thumbnails]);
+            await macFiles().eject(root);
+          });
+        } finally {
+          this.indexConfiguration = '';
+          await this.configureIndex(this.settings.snapshot().settings.search);
+          this.emit({ type: 'file-access', path: root, resources });
+        }
+        return;
+      }
       case 'settingsPatch':
         return {
           ...(await this.settings.patch(args[0] as SettingsPatch[], args[1] as number)),
           credentials: this.credentials.ids(),
         };
       case 'providerCredential':
+        if (!args[1]) {
+          const provider = this.settings
+            .snapshot()
+            .settings.providers.find((item) => item.id === args[0]);
+          if (provider) await this.modelPermissions.set(provider, null);
+          this.emit({ type: 'model-permission', providerID: args[0] as string });
+        }
         await this.credentials.set(args[0] as string, args[1] as string);
         this.settings.announce();
         return;
@@ -791,6 +913,24 @@ export class Desktop {
           .settings.providers.find((provider) => provider.id === args[0]);
         if (!provider) throw new Error('Provider is unavailable.');
         return this.providers.models(provider);
+      }
+      case 'providerPermissionGet':
+      case 'providerPermissionSet': {
+        const provider = this.settings
+          .snapshot()
+          .settings.providers.find((item) => item.id === args[0]);
+        if (!provider) throw new Error('Provider is unavailable.');
+        if (method === 'providerPermissionGet') return this.modelPermissions.get(provider);
+        if (modelEndpoint(provider) !== modelEndpoint({ endpoint: args[1] as string }))
+          throw new Error(
+            'The provider endpoint changed. Review its new address before allowing data access.',
+          );
+        await this.modelPermissions.set(
+          provider,
+          args[2] as import('../domain/model-permissions').ModelDataLevel | null,
+        );
+        this.emit({ type: 'model-permission', providerID: provider.id });
+        return;
       }
       case 'indexedQuery':
         return this.files.query(args[0] as IndexedQuery);
@@ -842,9 +982,12 @@ export class Desktop {
       case 'contextPublish':
         this.context = { ...(args[0] as ActionContext), actor: 'user' };
         return;
-      case 'thumbnail':
+      case 'thumbnail': {
         await this.fileAccess.require([args[0] as string]);
-        return this.thumbnails.get(args[0] as string, args[1] as number);
+        const thumbnail = await this.thumbnails.get(args[0] as string, args[1] as number);
+        await this.fileAccess.require([args[0] as string]);
+        return thumbnail;
+      }
       case 'document': {
         const file = this.resources.documentSource(args[0] as string);
         const document = await this.files.extract(file, undefined, true);
@@ -965,9 +1108,17 @@ export class Desktop {
         await this.fileAccess.require([result.filePaths[0]]);
         return this.applications.register(result.filePaths[0]);
       }
-      case 'watch':
+      case 'watch': {
         await this.fileAccess.require([args[0] as string]);
-        return this.watchers.add(args[0] as string, args[1] as string);
+        await this.watchers.add(args[0] as string, args[1] as string);
+        try {
+          await this.fileAccess.require([args[0] as string]);
+        } catch (error) {
+          await this.watchers.remove(args[1] as string);
+          throw error;
+        }
+        return;
+      }
       case 'unwatch':
         return this.watchers.remove(args[0] as string);
       case 'search':
@@ -980,6 +1131,7 @@ export class Desktop {
       case 'operate':
         return this.operations.start(args[0] as Parameters<Operations['start']>[0]);
       case 'jobs':
+        await this.operations.load();
         return this.operations.all();
       case 'cancelJob':
         return this.operations.cancel(args[0] as string);
@@ -1012,16 +1164,95 @@ export class Desktop {
         return this.flushes.get(args[0] as string)?.();
       case 'clipboardWrite': {
         const paths = args[0] as string[];
+        await this.fileAccess.require(paths);
         const text = paths.join('\n');
-        await clipboard.writeText(text);
-        this.fileClipboard = { paths, cut: args[1] as boolean, text };
+        if (process.platform === 'darwin') {
+          const changeCount = macFiles().clipboardWrite(paths);
+          this.fileClipboard = { paths, cut: args[1] as boolean, text, changeCount };
+        } else {
+          await clipboard.writeText(text);
+          this.fileClipboard = { paths, cut: args[1] as boolean, text };
+        }
         return;
       }
       case 'clipboardRead': {
         const value = this.fileClipboard;
+        if (process.platform === 'darwin') {
+          const native = macFiles().clipboardRead();
+          const selection = this.nativeSelections.capture('clipboard', native.changeCount);
+          if (!native.files.length) return null;
+          // Only bookmarks obtained from the native pasteboard can confer access.
+          const incoming: { path: string; directory: boolean; bookmark: string }[] = [];
+          for (const file of native.files) {
+            try {
+              await this.fileAccess.require([file.path]);
+            } catch (error) {
+              if (
+                (error as NodeJS.ErrnoException).code !== 'FILE_ACCESS_REQUIRED' ||
+                !file.bookmark
+              )
+                throw error;
+              incoming.push({
+                path: file.path,
+                directory: file.directory,
+                bookmark: file.bookmark,
+              });
+            }
+          }
+          this.nativeSelections.assertImport(
+            incoming.map((file) => file.path),
+            selection,
+          );
+          await this.fileAccess.receiveNative(incoming);
+          await this.fileAccess.require(native.files.map((file) => file.path));
+          return {
+            paths: native.files.map((file) => file.path),
+            cut: value?.changeCount === native.changeCount && !!value.cut,
+          };
+        }
         return value && (await clipboard.readText()) === value.text
           ? { paths: value.paths, cut: value.cut }
           : null;
+      }
+      case 'fileDropPaths': {
+        const paths = args[0] as string[];
+        if (process.platform === 'darwin' && this.fileAccess.scoped) {
+          const native = macFiles().clipboardRead(true);
+          const files = native.files;
+          const selection = this.nativeSelections.capture('drag', native.changeCount);
+          const requested = new Set(paths);
+          const incoming: { path: string; directory: boolean; bookmark: string }[] = [];
+          for (const file of files)
+            if (requested.has(file.path) && file.bookmark) {
+              try {
+                await this.fileAccess.require([file.path]);
+              } catch (error) {
+                if ((error as { code?: string }).code !== 'FILE_ACCESS_REQUIRED') throw error;
+                incoming.push({
+                  path: file.path,
+                  directory: file.directory,
+                  bookmark: file.bookmark,
+                });
+              }
+            }
+          this.nativeSelections.assertImport(
+            incoming.map((file) => file.path),
+            selection,
+          );
+          await this.fileAccess.receiveNative(incoming);
+        }
+        await this.fileAccess.require(paths);
+        return paths;
+      }
+      case 'fileDragStart': {
+        const paths = args[0] as string[];
+        await this.fileAccess.require(paths);
+        const window = this.windows.get(senderID!)?.window;
+        if (!window || window.isDestroyed()) throw new Error('The file view has closed.');
+        // Native file objects carry all selected paths to Finder and other apps.
+        const icon = await app.getFileIcon(paths[0], { size: 'normal' });
+        window.webContents.startDrag({ file: paths[0], files: paths, icon });
+        return;
       }
       case 'copyPaths': {
         await clipboard.writeText((args[0] as string[]).join('\n'));

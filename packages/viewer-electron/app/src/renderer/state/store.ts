@@ -342,9 +342,16 @@ export function setLook(look: 'dark' | 'light'): void {
       .then(receiveSettings)
       .catch(report);
 }
-export async function refreshClipboard(): Promise<void> {
-  const clipboard = await window.viewer.clipboardRead();
-  update({ ...current, clipboard });
+/** Background discovery must not block navigation or retain stale copied items.
+ * An actual Paste uses strict refresh and reports the native access failure. */
+export async function refreshClipboard(quiet = false): Promise<void> {
+  try {
+    const clipboard = await window.viewer.clipboardRead();
+    update({ ...current, clipboard });
+  } catch (error) {
+    update({ ...current, clipboard: null });
+    if (!quiet) throw error;
+  }
 }
 export async function writeFileClipboard(paths: string[], cut: boolean): Promise<void> {
   await window.viewer.clipboardWrite(paths, cut);

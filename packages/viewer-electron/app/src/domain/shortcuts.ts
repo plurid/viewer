@@ -15,6 +15,7 @@ export const defaultShortcuts: Record<string, string> = {
   'copy-path': 'Cmd+Alt+C',
   cut: 'Cmd+X',
   paste: 'Cmd+V',
+  'paste-move': 'Cmd+Alt+V',
   'select-all': 'Cmd+A',
   info: 'Cmd+I',
   duplicate: 'Cmd+D',

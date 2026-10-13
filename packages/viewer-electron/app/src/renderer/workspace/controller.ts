@@ -146,7 +146,8 @@ export function useWorkspaceController({
             dock: getState().saved.ui.space.opening === 'dock',
           });
       },
-      openPath: (path, target): Promise<void> => openWorkspacePath(path, target, controller),
+      openPath: (path, target): Promise<void> =>
+        openWorkspacePath(path, target, controller).then(() => {}),
       focusPane(id) {
         if (!activeWorkspace().panes.some((pane) => pane.id === id)) return;
         const node =

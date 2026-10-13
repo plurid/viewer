@@ -60,6 +60,8 @@ export function fileControlOwnsKey(event: FileKey): boolean {
 
 /** The moving cursor is independent of the fixed range anchor and the ordered selected paths. */
 export class FileSelection {
+  private prefix = '';
+  private typedAt = 0;
   constructor(
     private session: BrowseSession,
     private commit: (paths: string[]) => void,
@@ -114,6 +116,23 @@ export class FileSelection {
     if (shift && !scope.some((entry) => entry.path === session.anchor))
       session.anchor = scope[current >= 0 ? current : index].path;
     this.click(scope[index], { shiftKey: shift, metaKey: false, ctrlKey: false }, scope);
+  }
+  type(scope: readonly FileEntry[], text: string, now = performance.now()): FileEntry | undefined {
+    const fold = (value: string) =>
+      value.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+    const character = fold(text);
+    if (now - this.typedAt > 900) this.prefix = '';
+    const cycle = this.prefix === character;
+    this.prefix = cycle ? character : this.prefix + character;
+    this.typedAt = now;
+    const current = scope.findIndex((entry) => entry.path === this.session.cursor);
+    const ordered =
+      cycle || this.prefix.length === character.length
+        ? [...scope.slice(current + 1), ...scope.slice(0, current + 1)]
+        : [...scope];
+    const entry = ordered.find((entry) => fold(entry.name).startsWith(this.prefix));
+    if (entry) this.click(entry, { shiftKey: false, metaKey: false, ctrlKey: false }, scope);
+    return entry;
   }
   target(entry: FileEntry) {
     this.session.cache.set(entry.path, entry);

@@ -28,6 +28,31 @@ function selection() {
   };
 }
 describe('file input selection', () => {
+  it('jumps by typed prefixes, cycles repeated initials and handles accented names', () => {
+    const { session, controller } = selection();
+    const files = ['Alpha', 'Alpine', 'Éclair', 'Emoji 📁'].map((name, index) => ({
+      ...entries[index],
+      name,
+    }));
+    controller.type(files, 'a', 1000);
+    expect(session.selection).toEqual([files[0].path]);
+    controller.type(files, 'a', 1200);
+    expect(session.selection).toEqual([files[1].path]);
+    controller.type(files, 'l', 1300);
+    controller.type(files, 'p', 1400);
+    expect(session.selection).toEqual([files[0].path]);
+    controller.type(files, 'e', 2600);
+    expect(session.selection).toEqual([files[2].path]);
+  });
+  it('extends selection across virtual pages with a fixed anchor', () => {
+    const { session, controller } = selection();
+    controller.click(entries[1], plain, entries);
+    controller.move(entries, 'PageDown', true, 1, 4);
+    controller.move(entries, 'PageDown', true, 1, 4);
+    expect(session.selection).toEqual(entries.slice(1).map((file) => file.path));
+    controller.move(entries, 'PageUp', true, 1, 4);
+    expect(session.selection).toEqual(entries.slice(1, 5).map((file) => file.path));
+  });
   it('clears only the removed column branch, including its cursor and cached descendants', () => {
     const { session, controller } = selection();
     const nested = { ...entries[0], path: '/files/folder/note.txt', parent: '/files/folder' };

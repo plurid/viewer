@@ -9,14 +9,18 @@ interface Reply {
   code?: string;
   event?: string;
 }
-interface OwnedWorker {
+export interface OwnedWorker {
   process?: UtilityProcess;
   thread?: Worker;
   postMessage(value: unknown): void;
   message(listener: (reply: Reply) => void): void;
   exit(listener: () => void, once?: boolean): void;
 }
-function launch(worker: string, name: string, backend?: 'process' | 'thread'): OwnedWorker {
+export function launchWorker(
+  worker: string,
+  name: string,
+  backend?: 'process' | 'thread',
+): OwnedWorker {
   if (backend === 'thread') {
     const child = new Worker(worker, { name, stdout: true, stderr: true });
     if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
@@ -75,7 +79,7 @@ export class UtilityClient {
     if (this.closed)
       return Promise.reject(new Error('Background file services are shutting down.'));
     if (this.ready) return this.ready;
-    const child = launch(this.worker, this.options.name, this.options.backend);
+    const child = launchWorker(this.worker, this.options.name, this.options.backend);
     this.child = child;
     child.message((reply: Reply) => {
       if (reply.event) {

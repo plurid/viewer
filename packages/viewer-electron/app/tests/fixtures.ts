@@ -31,18 +31,21 @@ function pdf(): Buffer {
 }
 export function epubFixture(): Buffer {
   return Buffer.from(
-    zipSync({
-      mimetype: strToU8('application/epub+zip'),
-      'META-INF/container.xml': strToU8(
-        '<container><rootfiles><rootfile full-path="Book/package.opf"/></rootfiles></container>',
-      ),
-      'Book/package.opf': strToU8(
-        '<package><metadata><dc:title>Fire in antiquity</dc:title><dc:creator>John E. Rehder</dc:creator><dc:publisher>Fixture Press</dc:publisher><dc:date>2000</dc:date></metadata><manifest><item id="first" href="first.xhtml"/></manifest><spine><itemref idref="first"/></spine></package>',
-      ),
-      'Book/first.xhtml': strToU8(
-        '<html><body><h1>Fire in antiquity</h1><p>A local chapter fixture.</p><script>window.__epubUnsafe = true</script></body></html>',
-      ),
-    }),
+    zipSync(
+      {
+        mimetype: strToU8('application/epub+zip'),
+        'META-INF/container.xml': strToU8(
+          '<container><rootfiles><rootfile full-path="Book/package.opf"/></rootfiles></container>',
+        ),
+        'Book/package.opf': strToU8(
+          '<package><metadata><dc:title>Fire in antiquity</dc:title><dc:creator>John E. Rehder</dc:creator><dc:publisher>Fixture Press</dc:publisher><dc:date>2000</dc:date></metadata><manifest><item id="first" href="first.xhtml"/></manifest><spine><itemref idref="first"/></spine></package>',
+        ),
+        'Book/first.xhtml': strToU8(
+          '<html><body><h1>Fire in antiquity</h1><p>A local chapter fixture.</p><script>window.__epubUnsafe = true</script></body></html>',
+        ),
+      },
+      { mtime: new Date('2000-01-01T00:00:00Z') },
+    ),
   );
 }
 function tar(): Buffer {

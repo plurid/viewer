@@ -6,6 +6,8 @@ import type { CommandContext } from '../commands/registry';
 import { activeWorkspace, report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { Dialog, Empty, IconButton, Loading, NameDialog } from '../ui/primitives';
+import { useModelPermission } from '../ui/ModelDataPermission';
+import { modelDataLabels, modelPermissionCovers } from '../../domain/model-permissions';
 const busy = (plan: ActionPlan) => ['planning', 'applying'].includes(plan.status);
 const name = (path: string) => path.split(/[\\/]/).pop() || path;
 function destinationParts(path: string) {
@@ -176,14 +178,22 @@ function ConfigureTask({
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const provider = settings.providers.find((provider) => provider.id === recipe?.providerID);
+  const remote = recipe?.kind !== 'batch-rename' ? provider : undefined;
+  const permission = useModelPermission(remote);
+  const [approval, setApproval] = useState('');
+  const approvalKey = remote && recipe ? `${remote.id}:${remote.endpoint}:${recipe.data}` : '';
+  const approved =
+    remote && recipe && modelPermissionCovers(permission.permission, remote, recipe.data);
   return (
     <Dialog title="Run action" onClose={onClose} className="action-config">
       <form
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!recipe) return;
+          if (!recipe || starting || (remote && !approved && approval !== approvalKey)) return;
           setStarting(true);
           try {
+            if (remote && !approved)
+              await window.viewer.providerPermissionSet(remote.id, remote.endpoint, recipe.data);
             const id = await window.viewer.actionStart({
               recipeID: recipe.id,
               context: { ...context, recursive },
@@ -271,6 +281,38 @@ function ConfigureTask({
             </p>
           </>
         )}
+        {remote && recipe && (
+          <div className="model-data-permission">
+            <p className="muted">
+              This action sends your instructions and {modelDataLabels[recipe.data]} to{' '}
+              <span className="model-endpoint">{remote.endpoint}</span>.
+            </p>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={!!approved || approval === approvalKey}
+                disabled={starting || permission.loading || !!approved || !!permission.error}
+                onChange={(event) => setApproval(event.target.checked ? approvalKey : '')}
+              />
+              {approved
+                ? 'Data access approved'
+                : 'Allow this data for actions using this provider'}
+            </label>
+            <p className="muted">
+              You can revoke access in Settings → Models. Revoking stops running requests.
+            </p>
+            {permission.loading && (
+              <p role="status" className="muted">
+                Checking permission…
+              </p>
+            )}
+            {permission.error && (
+              <p role="alert" className="error">
+                {permission.error}
+              </p>
+            )}
+          </div>
+        )}
         <label className="check-row">
           <input
             type="checkbox"
@@ -288,7 +330,17 @@ function ConfigureTask({
           <button type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="primary" disabled={starting || !recipe}>
+          <button
+            className="primary"
+            disabled={
+              starting ||
+              !recipe ||
+              (!!remote &&
+                (permission.loading ||
+                  !!permission.error ||
+                  (!approved && approval !== approvalKey)))
+            }
+          >
             {starting ? 'Preparing…' : 'Create proposal'}
           </button>
         </footer>

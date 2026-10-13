@@ -1,6 +1,8 @@
 import { AgentGrants } from './AgentGrants';
 import { Field } from './SettingField';
 import { ModelSettings } from './ModelSettings';
+import { FilePermissions } from './FilePermissions';
+import { PrivacyInformation } from './PrivacyInformation';
 import { providerKinds, providerPresets } from '../../domain/model-providers';
 import { saveSettingsChange, type SettingsChange } from './settings-edits';
 import { defaultShortcuts } from '../../domain/shortcuts';
@@ -158,6 +160,11 @@ export function SettingsWindow() {
     },
     { category: 'Terminals', terms: 'shell profiles environment tmux iterm external terminal' },
     { category: 'Configuration', terms: 'jsonc config file validate changes import export reset' },
+    { category: 'Privacy', terms: 'privacy policy sharing data retention support email tracking' },
+    {
+      category: 'Permissions',
+      terms: 'folder files access grant revoke sandbox privacy disk volume',
+    },
     { category: 'Shortcuts', terms: 'keyboard hotkeys commands bindings' },
   ].filter((item) => query && item.terms.toLowerCase().includes(query.toLowerCase()));
   const recipePatch = (id: string, values: Partial<ActionRecipe>) =>
@@ -217,6 +224,8 @@ export function SettingsWindow() {
               Open {item.category.toLowerCase()} settings <Icon name="right" size={16} />
             </button>
           ))}
+        {!query && category === 'Permissions' && <FilePermissions error={setError} />}
+        {!query && category === 'Privacy' && <PrivacyInformation />}
         <div className="settings-group">
           {definitions.map((definition, index) => {
             const locationField =

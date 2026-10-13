@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
 const paths = {
+  drive: 'M5 4h14l3 11v5H2v-5L5 4Zm-3 11h20M6 18h.01M10 18h.01',
+  eject: 'm12 3 8 11H4L12 3ZM4 18h16v3H4v-3Z',
   drawing: 'M3 3h18v18H3V3Zm3 14 4-10 8 10H6Zm1-4h10M6 5h.01',
   terminal: 'M3 4h18v16H3V4Zm4 5 3 3-3 3m6 0h4',
   folder: 'M3 7V5a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z',

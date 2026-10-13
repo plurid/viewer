@@ -5,21 +5,31 @@ import { absolute, entry } from './filesystem';
 
 export class Search {
   private requests = new Map<string, AbortController>();
+  private work = new Set<Promise<void>>();
+  private closed = false;
   constructor(private emit: (batch: SearchBatch) => void) {}
   cancel(id: string): void {
     this.requests.get(id)?.abort();
   }
-  close(): void {
+  async quiesce(): Promise<void> {
     for (const controller of this.requests.values()) controller.abort();
-    this.requests.clear();
+    await Promise.allSettled(this.work);
+  }
+  close(): Promise<void> {
+    this.closed = true;
+    return this.quiesce();
   }
   start(request: SearchRequest): void {
+    if (this.closed) throw new Error('Folder search has closed.');
     this.cancel(request.id);
     const abort = new AbortController();
     this.requests.set(request.id, abort);
-    void this.walk({ ...request, root: absolute(request.root) }, abort).finally(() => {
+    const work = this.walk({ ...request, root: absolute(request.root) }, abort).finally(() => {
       if (this.requests.get(request.id) === abort) this.requests.delete(request.id);
+      this.work.delete(work);
     });
+    this.work.add(work);
+    void work.catch(() => {});
   }
   private async walk(request: SearchRequest, abort: AbortController): Promise<void> {
     const queue = [request.root];

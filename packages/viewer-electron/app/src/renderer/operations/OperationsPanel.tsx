@@ -143,6 +143,38 @@ export function OperationsPanel() {
               {error.path.split(/[\\/]/).pop()}: {error.message}
             </p>
           ))}
+          {job.recovery && (
+            <div className="operation-recovery">
+              <strong>Recovery paths</strong>
+              {[
+                ['Source', job.recovery.source],
+                ['Destination', job.recovery.destination],
+                ['Temporary copy', job.recovery.staging],
+              ]
+                .filter(([, file]) => file)
+                .map(([label, file]) => (
+                  <p key={label}>
+                    <span className="muted">{label}: </span>
+                    <span>{file}</span>
+                  </p>
+                ))}
+              <button
+                onClick={() => {
+                  void window.viewer
+                    .copyPaths(
+                      [
+                        job.recovery!.source,
+                        job.recovery!.destination,
+                        job.recovery!.staging,
+                      ].filter((file): file is string => !!file),
+                    )
+                    .catch(report);
+                }}
+              >
+                Copy recovery paths
+              </button>
+            </div>
+          )}
           {job.undoable && (
             <button
               onClick={() => {

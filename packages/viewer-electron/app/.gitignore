@@ -95,3 +95,8 @@ typings/
 
 # Electron-Forge
 out/
+assets/viewer-macos-files.node
+assets/licenses/dependencies.json
+assets/licenses/third-party-notices.txt
+assets/licenses/electron.txt
+assets/licenses/LICENSES.chromium.html

@@ -2,30 +2,42 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
-import { Empty, IconButton } from '../../ui/primitives';
+import { Empty, IconButton, Loading } from '../../ui/primitives';
 
 export default function ImagePreview(context: PreviewContext) {
   const { resource, active, interactive } = context;
   const [zoom, setZoom] = usePreviewState(context, 'image.zoom', 1);
   const [pan, setPan] = usePreviewState(context, 'image.pan', { x: 0, y: 0 });
   const [dimensions, setDimensions] = useState('');
+  const byteLimited = resource.entry.size > 64000000;
   const large =
     (!!resource.dimensions &&
       resource.dimensions.width * resource.dimensions.height >
         (context.limits?.maxImagePixels ?? 64000000)) ||
-    resource.entry.size > 64000000;
+    byteLimited;
   const [thumbnail, setThumbnail] = useState('');
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   useEffect(() => {
-    if (!large) return;
+    if (!large || byteLimited) return;
     let live = true;
-    void context.services.thumbnail(resource.entry.path, 512).then((value) => {
-      if (live) setThumbnail(value);
-    });
+    setThumbnail('');
+    setThumbnailFailed(false);
+    void context.services
+      .thumbnail(resource.entry.path, 512)
+      .then((value) => {
+        if (!live) return;
+        if (value) setThumbnail(value);
+        else setThumbnailFailed(true);
+      })
+      .catch(() => {
+        if (live) setThumbnailFailed(true);
+      });
     return () => {
       live = false;
     };
-  }, [large, resource.entry.path]);
+  }, [large, byteLimited, resource.entry.path, context.services]);
   const [error, setError] = useState(false);
+  const available = !error && !byteLimited && !thumbnailFailed && (!large || !!thumbnail);
   const stage = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   useEffect(() => {
@@ -37,18 +49,11 @@ export default function ImagePreview(context: PreviewContext) {
       event.stopPropagation();
       setZoom((value) => Math.max(0.1, Math.min(20, value * Math.exp(-event.deltaY * 0.003))));
     };
-    const stop = (event: Event) => {
-      if (active && interactive) event.stopPropagation();
-    };
     element.addEventListener('wheel', wheel, { passive: false });
-    element.addEventListener('pointerdown', stop);
-    element.addEventListener('contextmenu', stop);
     return () => {
       element.removeEventListener('wheel', wheel);
-      element.removeEventListener('pointerdown', stop);
-      element.removeEventListener('contextmenu', stop);
     };
-  }, [active, interactive]);
+  }, [active, interactive, available]);
   usePreviewCommands(
     context,
     useMemo(
@@ -58,7 +63,7 @@ export default function ImagePreview(context: PreviewContext) {
           label: 'Fit image',
           aliases: ['fi'],
           primary: true,
-          available: !error,
+          available,
           run: () => {
             setZoom(1);
             setPan({ x: 0, y: 0 });
@@ -67,19 +72,31 @@ export default function ImagePreview(context: PreviewContext) {
         {
           id: 'zoom-in',
           label: 'Zoom in',
-          available: !error && zoom < 20,
+          available: available && zoom < 20,
           run: () => setZoom((value) => Math.min(20, value * 1.25)),
         },
         {
           id: 'zoom-out',
           label: 'Zoom out',
-          available: !error && zoom > 0.1,
+          available: available && zoom > 0.1,
           run: () => setZoom((value) => Math.max(0.1, value / 1.25)),
         },
       ],
-      [error, zoom],
+      [available, zoom],
     ),
   );
+  if (byteLimited || thumbnailFailed)
+    return (
+      <Empty
+        icon="image"
+        title="Image preview unavailable"
+        detail={
+          byteLimited
+            ? 'This image exceeds the preview file limit (64 MB). Open it in another app to view it.'
+            : 'A bounded preview could not be created. Open the image in another app to view it.'
+        }
+      />
+    );
   if (error)
     return (
       <Empty
@@ -88,12 +105,13 @@ export default function ImagePreview(context: PreviewContext) {
         detail="The image may be damaged or use an unsupported encoding."
       />
     );
+  if (large && !thumbnail) return <Loading label="Creating image preview…" />;
   return (
     <div className="image-viewer">
       {large && (
         <p className="inline-warning">
-          Large image · showing a bounded preview. Adjust the limit in Settings to load the full
-          image.
+          Large image · showing a bounded preview. Increase the image pixel limit in Settings to
+          load the full image.
         </p>
       )}
       <PreviewToolbar context={context}>
@@ -121,7 +139,11 @@ export default function ImagePreview(context: PreviewContext) {
       <div
         className="image-stage"
         ref={stage}
+        onContextMenu={(event) => {
+          if (active && interactive) event.stopPropagation();
+        }}
         onPointerDown={(event) => {
+          if (active && interactive) event.stopPropagation();
           if (event.button !== 0 || !active || !interactive) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           drag.current = { x: event.clientX, y: event.clientY, px: pan.x, py: pan.y };

@@ -12,10 +12,9 @@ import type { WindowFrame } from '../src/desktop/window-state';
 import { createFixtures } from './fixtures';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const binary = path.join(
-  appRoot,
-  `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`,
-);
+const binary =
+  process.env.VIEWER_TEST_BINARY ||
+  path.join(appRoot, `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`);
 const fixture = await createFixtures();
 const profile = path.join(fixture.root, 'profile');
 const stateFile = path.join(profile, 'window-state-v1.json');

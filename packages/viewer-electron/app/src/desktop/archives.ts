@@ -18,6 +18,7 @@ interface Index {
   data?: Buffer;
   file: string;
   truncated: boolean;
+  unsafe: boolean;
 }
 interface CachedIndex {
   fingerprint: string;
@@ -97,6 +98,28 @@ export class Archives {
     };
   }
   async read(file: string, name: string): Promise<Buffer> {
+    const before = await archiveFingerprint(file);
+    const data = await this.readIndexed(file, name);
+    if ((await archiveFingerprint(file)) !== before)
+      throw new Error('The archive changed while reading. Retry with the current file.');
+    return data;
+  }
+  async extractionEntries(file: string): Promise<ArchiveEntry[]> {
+    const index = await this.index(file);
+    if (index.truncated) throw new Error('Extraction is limited to 20,000 archive entries.');
+    if (index.unsafe)
+      throw new Error(
+        'This archive contains unsafe paths, links or special files. Nothing was extracted.',
+      );
+    if (index.entries.some((entry) => !entry.directory && !entry.previewable))
+      throw new Error(
+        'Extraction supports unencrypted ZIP and regular TAR files up to 32 MB per entry. Nothing was extracted.',
+      );
+    if (index.entries.reduce((bytes, entry) => bytes + entry.size, 0) > 256 * 1024 * 1024)
+      throw new Error('Extraction is limited to 256 MB of expanded data. Nothing was extracted.');
+    return index.entries;
+  }
+  private async readIndexed(file: string, name: string): Promise<Buffer> {
     const index = await this.index(file);
     const entry = index.entries.find((item) => item.name === name);
     if (!entry || !entry.previewable)
@@ -163,6 +186,7 @@ export class Archives {
         const directory = Buffer.alloc(length);
         await handle.read(directory, 0, length, offset);
         const entries: IndexedEntry[] = [];
+        let unsafe = false;
         let cursor = 0,
           scanned = 0;
         while (cursor + 46 <= directory.length && scanned < INDEX_LIMIT) {
@@ -176,6 +200,14 @@ export class Archives {
             extra = directory.readUInt16LE(cursor + 30),
             comment = directory.readUInt16LE(cursor + 32);
           const name = directory.subarray(cursor + 46, cursor + 46 + nameLength).toString('utf8');
+          const fileType = (directory.readUInt32LE(cursor + 38) >>> 16) & 0xf000;
+          if (
+            !safeName(name) ||
+            name.includes('\\') ||
+            (fileType && ![0x8000, 0x4000].includes(fileType)) ||
+            directory.readUInt16LE(cursor + 34) !== 0
+          )
+            unsafe = true;
           if (cursor + 46 + nameLength + extra + comment > directory.length)
             throw new Error('Truncated ZIP directory.');
           if (safeName(name))
@@ -199,7 +231,7 @@ export class Archives {
         }
         if (scanned < INDEX_LIMIT && (scanned !== count || cursor !== directory.length))
           throw new Error('ZIP directory count is invalid.');
-        return { file, entries, truncated: count > scanned };
+        return { file, entries, unsafe, truncated: count > scanned };
       }
       let data: Buffer | undefined;
       if (signature[0] === 0x1f && signature[1] === 0x8b) {
@@ -212,6 +244,7 @@ export class Archives {
       }
       const total = data?.length ?? info.size;
       const entries: IndexedEntry[] = [];
+      let unsafe = false;
       let cursor = 0;
       let longName: string | undefined;
       let localFields: Record<string, string> = {},
@@ -253,6 +286,8 @@ export class Archives {
         } else {
           longName = undefined;
           localFields = {};
+          if (!safeName(name) || name.includes('\\') || !['0', '', '5'].includes(type))
+            unsafe = true;
           if (safeName(name))
             entries.push({
               name,
@@ -269,7 +304,13 @@ export class Archives {
       }
       if (!entries.length && total && !data && !file.toLowerCase().endsWith('.tar'))
         throw new Error('This is not a supported ZIP or TAR archive.');
-      return { file, entries, data, truncated: scanned >= INDEX_LIMIT && cursor + 512 < total };
+      return {
+        file,
+        entries,
+        data,
+        unsafe,
+        truncated: scanned >= INDEX_LIMIT && cursor + 512 < total,
+      };
     } finally {
       await handle.close();
     }
@@ -278,5 +319,5 @@ export class Archives {
 
 export async function archiveFingerprint(file: string): Promise<string> {
   const info = await stat(file);
-  return `${file}:${info.mtimeMs}:${info.size}`;
+  return `${file}:${info.dev}:${info.ino}:${info.ctimeMs}:${info.mtimeMs}:${info.size}`;
 }

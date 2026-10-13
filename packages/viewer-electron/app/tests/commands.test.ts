@@ -279,4 +279,34 @@ describe('contextual commands', () => {
     expect(textEditFor('rename', true)).toBeUndefined();
     expect(textEditFor('copy', false)).toBeUndefined();
   });
+  it('clears inaccessible clipboard items during background discovery without blocking navigation', async () => {
+    vi.mocked(window.viewer.clipboardRead).mockResolvedValueOnce({
+      paths: ['/fixtures/source'],
+      cut: true,
+    });
+    await refreshClipboard();
+    expect(getState().clipboard?.cut).toBe(true);
+    vi.mocked(window.viewer.clipboardRead).mockRejectedValueOnce(new Error('Allow folder access.'));
+    await expect(refreshClipboard(true)).resolves.toBeUndefined();
+    expect(getState().clipboard).toBeNull();
+    await registry.invoke('go-to', { paneID: context.paneID });
+    expect(actions.dialog).toHaveBeenCalledWith(
+      'go-to',
+      expect.objectContaining({ directory: '/fixtures' }),
+    );
+  });
+  it('reports a denied Paste and clears an earlier cut clipboard', async () => {
+    vi.mocked(window.viewer.clipboardRead).mockResolvedValueOnce({
+      paths: ['/fixtures/source'],
+      cut: true,
+    });
+    await refreshClipboard();
+    context = { ...context, clipboard: getState().clipboard };
+    vi.mocked(window.viewer.clipboardRead).mockRejectedValueOnce(new Error('Allow folder access.'));
+    await expect(registry.invoke('paste', { paneID: context.paneID })).rejects.toThrow(
+      'Allow folder access.',
+    );
+    expect(getState().clipboard).toBeNull();
+    expect(operate).not.toHaveBeenCalled();
+  });
 });

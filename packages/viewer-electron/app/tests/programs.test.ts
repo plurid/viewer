@@ -53,6 +53,42 @@ afterEach(async () => {
 });
 
 describe('literal command execution', () => {
+  it('drains an in-flight preparation without launching after folder access is revoked', async () => {
+    config.customActions = [
+      command({
+        kind: 'executable',
+        executable: '/bin/echo',
+        args: ['must not launch'],
+        perItem: false,
+      }),
+    ];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const access = vi.fn(async () => {
+      await gate;
+    });
+    const executions = new Executions(
+      () => config,
+      () => {},
+      access,
+    );
+    cleanup.push(() => executions.close());
+    const starting = executions.start('fixture', target());
+    const rejected = expect(starting).rejects.toThrow('cancelled before launch');
+    let drained = false;
+    const revoking = executions.quiesce(root).then(() => {
+      drained = true;
+    });
+    await Promise.resolve();
+    expect(drained).toBe(false);
+    release();
+    await rejected;
+    await revoking;
+    expect(drained).toBe(true);
+    expect(executions.list()).toEqual([]);
+  });
   it('keeps spaces, quotes, dollar substitutions, and multiple paths as literal argv', async () => {
     const file = path.join(root, "Notes ' $(touch injected).txt");
     await fs.writeFile(file, 'fixture');

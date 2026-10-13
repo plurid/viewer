@@ -43,6 +43,8 @@ vi.mock('node:fs/promises', async (original) => {
   };
 });
 import { Operations } from '../src/desktop/operations';
+import { operationJournal } from '../src/desktop/operation-journal';
+import { DocumentStore } from '../src/desktop/document-store';
 let root: string, destination: string, trash: string, operations: Operations;
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'viewer-ops-'));
@@ -83,6 +85,284 @@ async function run(request: OperationRequest) {
   return waitFor(operations.start(request));
 }
 describe('file operation queue', () => {
+  it('reports a failed final receipt save while preserving the completed copy', async () => {
+    const dataPath = path.join(root, 'private');
+    const source = path.join(root, 'original.txt');
+    await writeFile(source, 'original');
+    const save = DocumentStore.prototype.save;
+    vi.spyOn(DocumentStore.prototype, 'save').mockImplementation(function (
+      this: DocumentStore<unknown>,
+      value,
+    ) {
+      const document = value as { records?: { job: OperationJob }[] };
+      if (document.records?.some(({ job }) => job.status === 'completed'))
+        return Promise.reject(new Error('Generated final receipt write failure'));
+      return save.call(this, value);
+    });
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      dataPath,
+    );
+    const id = operations.start({ kind: 'copy', sources: [source], destination });
+    await waitFor(id);
+    await operations.close();
+    const job = operations.all().find((item) => item.id === id)!;
+    expect(job.status).toBe('failed');
+    expect(job.errors.at(-1)?.message).toContain('receipts could not be saved');
+    expect(job.completed).toEqual([
+      { source, destination: path.join(destination, 'original.txt') },
+    ]);
+    expect(await readFile(source, 'utf8')).toBe('original');
+    expect(await readFile(path.join(destination, 'original.txt'), 'utf8')).toBe('original');
+  });
+  it.each([false, true])(
+    'preserves known failure history and eligible Undo across restart (partial: %s)',
+    async (partial) => {
+      const dataPath = path.join(root, 'private');
+      const source = path.join(root, 'original.txt');
+      const missing = path.join(root, 'removed-before-copy.txt');
+      await writeFile(source, 'original');
+      const restore = () =>
+        new Operations(
+          async (file) => rename(file, path.join(trash, crypto.randomUUID())),
+          () => {},
+          undefined,
+          undefined,
+          undefined,
+          dataPath,
+        );
+      operations = restore();
+      const job = await run({
+        kind: 'copy',
+        sources: partial ? [source, missing] : [missing],
+        destination,
+      });
+      expect(job.status).toBe(partial ? 'completed' : 'failed');
+      expect(job.errorCount).toBe(1);
+      expect(job.undoable).toBe(partial);
+      await operations.close();
+      operations = restore();
+      await operations.load();
+      const restored = operations.all().find((item) => item.id === job.id)!;
+      expect(restored.status).toBe(job.status);
+      expect(restored.errors).toEqual(job.errors);
+      expect(restored.errorCount).toBe(job.errorCount);
+      expect(restored.undoable).toBe(partial);
+      if (partial) {
+        await operations.undo(job.id);
+        await expect(lstat(path.join(destination, 'original.txt'))).rejects.toMatchObject({
+          code: 'ENOENT',
+        });
+      }
+      expect(await readFile(source, 'utf8')).toBe('original');
+    },
+  );
+  it('reports an interrupted Undo as recovery instead of replaying an ambiguous receipt', async () => {
+    const dataPath = path.join(root, 'private'),
+      source = path.join(root, 'original.txt');
+    await writeFile(source, 'original');
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      dataPath,
+    );
+    const copied = await run({ kind: 'copy', sources: [source], destination });
+    await operations.close();
+    const journal = operationJournal(dataPath),
+      document = (await journal.load())!;
+    document.records[0].intent = { source: path.join(destination, 'original.txt') };
+    await journal.save(document);
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      dataPath,
+    );
+    await operations.load();
+    expect(operations.all()[0]).toMatchObject({
+      status: 'failed',
+      undoable: false,
+      recovery: { source: path.join(destination, 'original.txt') },
+    });
+    await expect(operations.undo(copied.id)).rejects.toThrow('cannot be undone');
+    expect(await readFile(source, 'utf8')).toBe('original');
+    expect(await readFile(path.join(destination, 'original.txt'), 'utf8')).toBe('original');
+  });
+  it('restores only Viewer-owned Trash receipts after restart and refuses a new original at the same path', async () => {
+    const dataPath = path.join(root, 'private');
+    const nativeTrash = async (file: string) => {
+      const directory = (await lstat(file)).isDirectory(),
+        target = path.join(trash, crypto.randomUUID());
+      await rename(file, target);
+      return { path: target, directory, bookmark: 'private-fixture-bookmark' };
+    };
+    operations = new Operations(nativeTrash, () => {}, undefined, undefined, undefined, dataPath);
+    const source = path.join(root, 'important.txt');
+    await writeFile(source, 'original');
+    const job = await run({ kind: 'trash', sources: [source] });
+    expect(job.undoable).toBe(true);
+    expect(JSON.stringify(operations.all())).not.toContain('private-fixture-bookmark');
+    await operations.close();
+    operations = new Operations(nativeTrash, () => {}, undefined, undefined, undefined, dataPath);
+    await operations.load();
+    await writeFile(source, 'new work');
+    await expect(operations.undo(job.id)).rejects.toThrow('already exists');
+    expect(await readFile(source, 'utf8')).toBe('new work');
+    await rm(source);
+    await operations.undo(job.id);
+    expect(await readFile(source, 'utf8')).toBe('original');
+  });
+  it('Undo replacement removes the new copy before restoring the existing item from its private receipt', async () => {
+    operations = new Operations(
+      async (file) => {
+        const target = path.join(trash, crypto.randomUUID()),
+          directory = (await lstat(file)).isDirectory();
+        await rename(file, target);
+        return { path: target, directory };
+      },
+      () => {},
+    );
+    const source = path.join(root, 'one.txt'),
+      target = path.join(destination, 'one.txt');
+    await writeFile(source, 'new');
+    await writeFile(target, 'old');
+    const id = operations.start({ kind: 'copy', sources: [source], destination });
+    await waitFor(id, (job) => job.status === 'collision');
+    operations.resolve(id, 'replace', false);
+    await waitFor(id);
+    await operations.undo(id);
+    expect(await readFile(target, 'utf8')).toBe('old');
+    expect(await readFile(source, 'utf8')).toBe('new');
+  });
+  it('creates and extracts archives through durable, undoable jobs', async () => {
+    const source = path.join(root, 'notes.txt');
+    await writeFile(source, 'notes');
+    const compressed = await run({
+      kind: 'compress',
+      sources: [source],
+      destination,
+      name: 'notes.zip',
+    });
+    expect(compressed.status).toBe('completed');
+    const extracted = await run({
+      kind: 'extract',
+      sources: [path.join(destination, 'notes.zip')],
+      destination,
+    });
+    expect(extracted.undoable).toBe(true);
+    expect(await readFile(path.join(destination, 'notes', 'notes.txt'), 'utf8')).toBe('notes');
+    await operations.undo(extracted.id);
+    await expect(lstat(path.join(destination, 'notes'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(source, 'utf8')).toBe('notes');
+  });
+  it('keeps private receipts across restart and undoes only an unchanged copy', async () => {
+    const dataPath = path.join(root, 'private');
+    const remove = async (file: string) => {
+      await rename(file, path.join(trash, crypto.randomUUID()));
+    };
+    operations = new Operations(remove, () => {}, undefined, undefined, undefined, dataPath);
+    const source = path.join(root, 'original.txt');
+    await writeFile(source, 'original');
+    const copied = await run({ kind: 'copy', sources: [source], destination });
+    expect(copied.undoable).toBe(true);
+    await operations.close();
+    expect((await lstat(path.join(dataPath, 'operation-journal-v1.json'))).mode & 0o777).toBe(
+      0o600,
+    );
+    operations = new Operations(remove, () => {}, undefined, undefined, undefined, dataPath);
+    await operations.load();
+    expect(operations.all().find((job) => job.id === copied.id)?.undoable).toBe(true);
+    await operations.undo(copied.id);
+    await expect(lstat(path.join(destination, 'original.txt'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect(await readFile(source, 'utf8')).toBe('original');
+  });
+  it('refuses removal Undo when a copied folder gains a new child', async () => {
+    const source = path.join(root, 'folder');
+    await mkdir(source);
+    await writeFile(path.join(source, 'one'), 'original');
+    const job = await run({ kind: 'copy', sources: [source], destination });
+    await writeFile(path.join(destination, 'folder', 'new'), 'user work');
+    await expect(operations.undo(job.id)).rejects.toThrow('changed');
+    expect(await readFile(path.join(destination, 'folder', 'new'), 'utf8')).toBe('user work');
+  });
+  it('restores interrupted receipts without retrying or deleting temporary files', async () => {
+    const dataPath = path.join(root, 'private');
+    const source = path.join(root, 'source'),
+      staging = path.join(destination, '.viewer-transfer-owned');
+    await writeFile(source, 'original');
+    await writeFile(staging, 'partial');
+    const id = crypto.randomUUID();
+    await operationJournal(dataPath).save({
+      version: 1,
+      records: [
+        {
+          job: {
+            id,
+            revision: 1,
+            kind: 'copy',
+            status: 'running',
+            sources: [source],
+            destination,
+            bytesDone: 3,
+            bytesTotal: 8,
+            itemsDone: 0,
+            itemsTotal: 1,
+            completed: [],
+            errors: [],
+            errorCount: 0,
+            undoable: false,
+          },
+          request: { kind: 'copy', sources: [source], destination },
+          undo: [],
+          intent: { source, destination: path.join(destination, 'source'), staging },
+        },
+      ],
+    });
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      dataPath,
+    );
+    await operations.load();
+    expect(operations.all()[0]).toMatchObject({ status: 'failed', recovery: { source, staging } });
+    expect(await readFile(source, 'utf8')).toBe('original');
+    expect(await readFile(staging, 'utf8')).toBe('partial');
+    await expect(lstat(path.join(destination, 'source'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('stops before changing files when the operation receipt cannot be saved', async () => {
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      path.join(root, 'private'),
+    );
+    const source = path.join(root, 'source');
+    await writeFile(source, 'must stay');
+    vi.spyOn(DocumentStore.prototype, 'save').mockRejectedValue(
+      Object.assign(new Error('Disk is full'), { code: 'ENOSPC' }),
+    );
+    const job = await run({ kind: 'rename', sources: [source], name: 'renamed' });
+    expect(job.status).toBe('failed');
+    expect(job.errors[0].message).toContain('receipts could not be saved');
+    expect(await readFile(source, 'utf8')).toBe('must stay');
+    await expect(lstat(path.join(root, 'renamed'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
   it('streams exclusive copies and safe moves on volumes without hard-link support', async () => {
     exdev.noLinks = true;
     const source = path.join(root, 'external.txt');
@@ -163,7 +443,7 @@ describe('file operation queue', () => {
     expect(await readFile(path.join(destination, 'file'), 'utf8')).toBe('cross volume');
   });
   it.skipIf(process.platform !== 'darwin')(
-    'keeps cross-volume originals with unsupported macOS metadata',
+    'preserves macOS metadata during cross-volume transfers before removing the original',
     async () => {
       const source = path.join(root, 'tagged.txt');
       await writeFile(source, 'important');
@@ -175,10 +455,15 @@ describe('file operation queue', () => {
       ]);
       exdev.source = source;
       const job = await run({ kind: 'move', sources: [source], destination });
-      expect(job.status).toBe('failed');
-      expect(job.errors[0].message).toContain('metadata');
-      expect(await readFile(source, 'utf8')).toBe('important');
-      await expect(lstat(path.join(destination, 'tagged.txt'))).rejects.toMatchObject({
+      expect(job.status).toBe('completed');
+      const copied = path.join(destination, 'tagged.txt');
+      expect(await readFile(copied, 'utf8')).toBe('important');
+      expect(
+        (
+          await promisify(execFile)('/usr/bin/xattr', ['-p', 'com.plurid.viewer.fixture', copied])
+        ).stdout.trim(),
+      ).toBe('synthetic');
+      await expect(lstat(source)).rejects.toMatchObject({
         code: 'ENOENT',
       });
     },

@@ -68,6 +68,7 @@ interface Dependencies {
     input: unknown,
     schema: Record<string, unknown>,
     signal: AbortSignal,
+    level: ActionRecipe['data'],
   ): Promise<unknown>;
   operations: Pick<Operations, 'exclusive'>;
   emit(plan: ActionPlan): void;
@@ -141,6 +142,8 @@ const planSchema = z.object({
   undoable: z.boolean(),
 });
 export class ActionPlanner {
+  private closed = false;
+  private starting = new Set<Promise<string>>();
   private plans = new Map<string, ActionPlan>();
   private aborts = new Map<string, AbortController>();
   private work = new Map<string, Promise<unknown>>();
@@ -228,9 +231,16 @@ export class ActionPlanner {
     this.dependencies.emit(structuredClone(plan));
     if (durable) await this.store.save([...this.plans.values()].slice(-100));
   }
-  async start(request: ActionRequest): Promise<string> {
+  start(request: ActionRequest): Promise<string> {
+    if (this.closed) return Promise.reject(new Error('Actions have closed.'));
+    const work = this.create(request).finally(() => this.starting.delete(work));
+    this.starting.add(work);
+    return work;
+  }
+  private async create(request: ActionRequest): Promise<string> {
     await this.load();
     await this.dependencies.access?.(request.context.sources);
+    if (this.closed) throw new Error('Actions have closed.');
     const recipe = this.dependencies.recipes().find((recipe) => recipe.id === request.recipeID);
     if (!recipe) throw new Error('This action recipe is unavailable.');
     if (!request.context.sources.length) throw new Error('Select files or a folder first.');
@@ -280,6 +290,23 @@ export class ActionPlanner {
   }
   cancel(id: string): void {
     this.aborts.get(id)?.abort();
+  }
+  async quiesce(root: string): Promise<void> {
+    const related = (file: string) =>
+      file === root || file.startsWith(root.replace(/\/$/, '') + '/');
+    const work: Promise<unknown>[] = [];
+    for (const [id, plan] of this.plans)
+      if (
+        plan.context.sources.some(related) ||
+        plan.rows.some(
+          (row) => (row.source && related(row.source.path)) || related(row.destination),
+        )
+      ) {
+        this.cancel(id);
+        const pending = this.work.get(id);
+        if (pending) work.push(pending);
+      }
+    await Promise.allSettled(work);
   }
   private async collect(
     request: ActionRequest,
@@ -360,10 +387,6 @@ export class ActionPlanner {
         .find((provider) => provider.id === recipe.providerID);
       if (recipe.kind !== 'book-name' && !provider)
         throw new Error('Choose a model provider for this recipe in Settings.');
-      if (provider && recipe.data !== 'names' && !provider.allowContent)
-        throw new Error(
-          'Enable document-content access for this provider in Settings, or choose a names-only recipe.',
-        );
       const documents = new Map<string, DocumentData>();
       for (const file of files) {
         signal.throwIfAborted();
@@ -432,6 +455,7 @@ export class ActionPlanner {
             input,
             z.toJSONSchema(output) as Record<string, unknown>,
             signal,
+            recipe.data,
           ),
         );
         const ids = new Set<string>();
@@ -549,6 +573,7 @@ export class ActionPlanner {
   }
   async apply(approval: ActionApproval): Promise<void> {
     await this.load();
+    if (this.closed) throw new Error('Actions have closed.');
     const plan = this.plans.get(approval.id);
     if (!plan || plan.revision !== approval.revision || plan.status !== 'review')
       throw new Error('This proposal changed. Review its current version.');
@@ -683,6 +708,7 @@ export class ActionPlanner {
     await work;
   }
   async undo(id: string): Promise<void> {
+    if (this.closed) throw new Error('Actions have closed.');
     const plan = this.plans.get(id);
     if (!plan?.undoable || plan.status !== 'completed')
       throw new Error('This task cannot be undone.');
@@ -752,6 +778,7 @@ export class ActionPlanner {
     await this.publish(plan);
   }
   async recovery(id: string): Promise<void> {
+    if (this.closed) throw new Error('Actions have closed.');
     const plan = this.plans.get(id);
     if (!plan || !['partial', 'recovery'].includes(plan.status))
       throw new Error('This task does not need recovery.');
@@ -795,6 +822,9 @@ export class ActionPlanner {
     await this.publish(review);
   }
   async close(): Promise<void> {
+    this.closed = true;
+    for (const abort of this.aborts.values()) abort.abort();
+    await Promise.allSettled(this.starting);
     for (const abort of this.aborts.values()) abort.abort();
     await Promise.allSettled(this.work.values());
     await this.store.flush();

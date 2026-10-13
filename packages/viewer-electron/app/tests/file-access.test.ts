@@ -29,6 +29,164 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 describe('native folder access', () => {
+  it('allows a large native selection without persisting each item and releases it at Quit', async () => {
+    const files = await Promise.all(
+      Array.from({ length: 256 }, async (_, index) => {
+        const file = path.join(other, `Generated-${index}.txt`);
+        await writeFile(file, 'native incoming fixture');
+        return { path: file, directory: false, bookmark: 'native-' + index };
+      }),
+    );
+    await access.receiveNative(files);
+    await access.require(files.map((file) => file.path));
+    expect(
+      await stat(path.join(data, 'file-access-v1.json')).catch(() => undefined),
+    ).toBeUndefined();
+    expect((await access.list()).every((grant) => grant.session)).toBe(true);
+    await access.close();
+    expect(stops).toHaveLength(256);
+    expect(stops.every((stop) => stop.mock.calls.length === 1)).toBe(true);
+    access = new FileAccess(data, { start });
+    await expect(access.require([files[0].path])).rejects.toMatchObject({
+      code: 'FILE_ACCESS_REQUIRED',
+    });
+  });
+  it('revokes native session selections under a root and denies overlapping late imports', async () => {
+    const file = path.join(other, 'Generated.txt');
+    await writeFile(file, 'fixture');
+    await access.receiveNative([{ path: file, directory: false, bookmark: 'native' }]);
+    await access.require([file]);
+    let finish!: () => void;
+    const revoking = access.revoke(
+      other,
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const late = expect(
+      access.receiveNative([{ path: file, directory: false, bookmark: 'late' }]),
+    ).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    finish();
+    await revoking;
+    await late;
+    expect(stops[0]).toHaveBeenCalledExactlyOnceWith();
+    expect(await access.list()).toEqual([]);
+    await expect(access.require([file])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+  });
+  it('shows a removed saved location as unavailable and releases its diagnostic scope', async () => {
+    await access.remember(folder, true, 'folder');
+    await rm(folder, { recursive: true });
+    expect(await access.list()).toEqual([{ path: folder, directory: true, status: 'unavailable' }]);
+    expect(stops[0]).toHaveBeenCalledExactlyOnceWith();
+    await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+  });
+  it('rejects a pending native import after revocation has already completed', async () => {
+    await access.load();
+    let release!: () => void;
+    vi.spyOn(access, 'load').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const pending = access.receiveNative([
+      { path: other, directory: true, bookmark: 'old-selection' },
+    ]);
+    const denied = expect(pending).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    await access.revoke(other, async () => {});
+    release();
+    await denied;
+    await expect(access.require([other])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    expect(await access.list()).toEqual([]);
+  });
+  it('keeps a root blocked until the last overlapping revoke finishes', async () => {
+    await access.remember(folder, true, 'folder');
+    let finish!: () => void;
+    const first = access.revoke(folder, async () => {});
+    const second = access.revoke(
+      folder,
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await first;
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    const incoming = access.remember(folder, true, 'late-clipboard');
+    finish();
+    await second;
+    await expect(incoming).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    await access.remember(folder, true, 'new-picker');
+    await expect(access.require([folder])).resolves.toBeUndefined();
+  });
+  it('does not save or retain a private Trash Undo lease as a general folder permission', async () => {
+    await access.withReceipt(
+      { path: other, directory: true, bookmark: 'private-receipt' },
+      async () => {
+        await access.require([other]);
+        expect(await access.list()).toEqual([]);
+      },
+    );
+    expect(stops[0]).toHaveBeenCalledExactlyOnceWith();
+    await expect(access.require([other])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    expect(await access.list()).toEqual([]);
+  });
+  it('prevents clipboard or drop grants from resurrecting a permission while it is being revoked', async () => {
+    await access.remember(folder, true, 'folder');
+    let release!: () => void;
+    const revoking = access.revoke(
+      folder,
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const incoming = access.remember(folder, true, 'clipboard');
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    release();
+    await revoking;
+    await expect(incoming).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    expect(await access.list()).toEqual([]);
+    await access.remember(folder, true, 'explicit-picker');
+    await expect(access.require([folder])).resolves.toBeUndefined();
+  });
+  it('blocks new reads immediately, drains dependent work, then releases the revoked scope', async () => {
+    await access.remember(folder, true, 'folder');
+    await access.require([folder]);
+    let finish!: () => void;
+    let quiescing = false;
+    const revoke = access.revoke(folder, async () => {
+      quiescing = true;
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+    await vi.waitFor(() => expect(quiescing).toBe(true));
+    await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    expect(stops[0]).not.toHaveBeenCalled();
+    finish();
+    await revoke;
+    expect(stops[0]).toHaveBeenCalledExactlyOnceWith();
+    expect(await access.list()).toEqual([]);
+    await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+  });
+  it('keeps authority blocked and the scope alive when dependent work cannot stop', async () => {
+    await access.remember(folder, true, 'folder');
+    await access.require([folder]);
+    await expect(
+      access.revoke(folder, async () => {
+        throw new Error('still running');
+      }),
+    ).rejects.toThrow('still running');
+    expect(stops[0]).not.toHaveBeenCalled();
+    expect((await access.list())[0].status).toBe('revoking');
+    await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    await access.revoke(folder, async () => {});
+    expect(stops[0]).toHaveBeenCalledExactlyOnceWith();
+  });
   it('prevents an ungranted transfer from writing and rechecks both roots during Undo', async () => {
     const source = path.join(folder, 'note.txt'),
       destination = path.join(other, 'note.txt');

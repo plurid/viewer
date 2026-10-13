@@ -63,7 +63,7 @@ export function PlaneHeader({
       return;
     }
     setActivePane(id);
-    void refreshClipboard().catch(report);
+    void refreshClipboard(true);
     const rect = event.currentTarget.getBoundingClientRect();
     const target = registry.context(id);
     setMenu({

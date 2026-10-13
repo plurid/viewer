@@ -261,6 +261,19 @@ export class FileIndex {
   }
   configure(config: ApplicationSettings['search']): void {
     this.config = config;
+    // Revoked folder authority must remove names and metadata as well as body text.
+    const deniedPaths: string[] = [],
+      deniedArgs: (string | number)[] = [];
+    for (const root of config.roots) {
+      const prefix = root.replace(/\/$/, '') + '/';
+      deniedPaths.push('NOT (path=? OR substr(path,1,?)=?)');
+      deniedArgs.push(root, prefix.length, prefix);
+    }
+    const where = deniedPaths.length ? deniedPaths.join(' AND ') : '1';
+    this.db
+      .prepare('DELETE FROM names WHERE path IN (SELECT path FROM files WHERE ' + where + ')')
+      .run(...deniedArgs);
+    this.db.prepare('DELETE FROM files WHERE ' + where).run(...deniedArgs);
     // Revoking text-index permission removes stored body text, even while paused.
     const denied = ["content<>''"],
       args: (string | number)[] = [];

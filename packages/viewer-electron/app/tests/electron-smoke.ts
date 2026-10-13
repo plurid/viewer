@@ -17,6 +17,7 @@ import { normalizePreferences } from '../src/domain/preferences';
 import { repeatedPreviewFixture } from './workspace-fixtures';
 import { formatBytes } from '../src/domain/files';
 import { panelDrawing } from './dxf-fixtures';
+import { reactCommitProbe } from './react-commits';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,10 +25,9 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // compositor profiling requires a separately requested foreground run.
 const foreground = process.env.VIEWER_TEST_FOREGROUND === '1';
 const execNative = promisify(execFile);
-const binary = path.join(
-  appRoot,
-  `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`,
-);
+const binary =
+  process.env.VIEWER_TEST_BINARY ||
+  path.join(appRoot, `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`);
 const fixture = await createFixtures();
 if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
   const require = createRequire(import.meta.url);
@@ -403,6 +403,12 @@ async function click(selector: string, count = 1): Promise<void> {
     await activateTestWindow();
     await verifyBackgroundApp();
     return;
+  }
+  if (selector.startsWith('.context-menu') || selector.startsWith('.context-submenu')) {
+    await evaluate(
+      `document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({block:'nearest',inline:'nearest'})`,
+    );
+    await evaluate('new Promise(resolve=>requestAnimationFrame(resolve))');
   }
   const point = await evaluate<{ x: number; y: number; hit: boolean }>(
     `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) throw new Error('Missing control: ' + ${JSON.stringify(selector)}); const rect = element.getBoundingClientRect(); const x=rect.x+rect.width/2,y=rect.y+rect.height/2; return { x, y, hit:element.contains(document.elementFromPoint(x,y)) }; })()`,
@@ -1014,6 +1020,14 @@ async function verifyConfiguredChrome(): Promise<void> {
   );
   for (const column of ['Date created', 'Extension']) await setting(column);
   await click('dialog [aria-label="Close"]');
+  await evaluate(`(() => {
+    const table=document.querySelector('.file-table');
+    const key=Object.getOwnPropertyNames(table).find(key=>key.startsWith('__reactFiber$'));
+    const owner=key && table[key]?.return;
+    if(typeof owner?.type !== 'function') throw new Error('Production file-table owner unavailable');
+    window.__qaFileTableType=owner.type;
+    window.__qaFileTableCommits=0;
+  })()`);
   const widths = () =>
     evaluate<number[]>(
       `Array.from(document.querySelectorAll('.file-head [data-column]')).map(cell=>cell.offsetWidth)`,
@@ -1035,19 +1049,31 @@ async function verifyConfiguredChrome(): Promise<void> {
     clickCount: 1,
     ...edge,
   });
-  // Settings-close publication and the pointer's focus change are separate from
-  // resizing. Let those commits settle before measuring pointer-movement work.
+  // The first expansion can introduce a horizontal scrollbar and change the
+  // virtual list's viewport height. Settle that required layout work before
+  // measuring whether subsequent pointer moves trigger React renders.
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    button: 'left',
+    buttons: 1,
+    x: edge.x + 25,
+    y: edge.y,
+  });
+  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
   await until(
     async () => {
-      const before = await evaluate<number>('window.__qaCommits');
+      const before = await evaluate<number>('window.__qaFileTableCommits');
       await delay(100);
-      return (await evaluate<number>('window.__qaCommits')) === before;
+      return (await evaluate<number>('window.__qaFileTableCommits')) === before;
     },
     Boolean,
     'renderer settled before measuring column resize',
   );
-  const commits = await evaluate<number>('window.__qaCommits');
-  for (let index = 1; index <= 5; index++)
+  const resizeViewportHeight = await evaluate<number>(
+    'document.querySelector(".file-scroll").clientHeight',
+  );
+  const commits = await evaluate<number>('window.__qaFileTableCommits');
+  for (let index = 2; index <= 5; index++) {
     await command('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       button: 'left',
@@ -1055,8 +1081,17 @@ async function verifyConfiguredChrome(): Promise<void> {
       x: edge.x + index * 25,
       y: edge.y,
     });
+    // Separate rendered frames prevent batching from concealing a per-move
+    // state update. These moves retain the same vertical viewport.
+    await evaluate('new Promise(requestAnimationFrame)');
+  }
   assert.equal(
-    await evaluate('window.__qaCommits'),
+    await evaluate('document.querySelector(".file-scroll").clientHeight'),
+    resizeViewportHeight,
+    'The measured resize moves retain the virtual list viewport height',
+  );
+  assert.equal(
+    await evaluate('window.__qaFileTableCommits'),
     commits,
     'Resizing should not rerender the file list on every pointer movement',
   );
@@ -1079,6 +1114,12 @@ async function verifyConfiguredChrome(): Promise<void> {
     (value) => value === after[0],
     'resized width persisted to settings',
   );
+  await until(
+    () => evaluate<number>('window.__qaFileTableCommits'),
+    (value) => value > commits,
+    'the scoped React probe observes the actual width commit on release',
+  );
+  await evaluate('window.__qaFileTableType=undefined');
   await click('[aria-label="Resize Name column"]', 2);
   await until(
     () =>
@@ -1444,6 +1485,62 @@ async function verifySettingsScroll(): Promise<void> {
   await settingsEvaluate('document.querySelector(".settings-recipe summary").click()');
   assert.deepEqual(await rectangles(), collapsed);
   await snapshot('desktop-native-settings-actions-collapsed.png');
+  const initialAppearance = await settingsEvaluate<string>(
+    'window.viewer.settingsGet().then(snapshot => snapshot.settings.appearance)',
+  );
+  await settingsCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
+  for (const appearance of ['dark', 'light']) {
+    await settingsEvaluate(`(async () => {
+      const snapshot = await window.viewer.settingsGet();
+      await window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(appearance)}}], snapshot.revision);
+    })()`);
+    await until(
+      () => settingsEvaluate<string>('document.documentElement.dataset.look'),
+      (look) => look === appearance,
+      'Settings focus appearance',
+    );
+    await settingsEvaluate('document.querySelector(".settings-navigation button").focus()');
+    await settingsCommand('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Tab',
+      code: 'Tab',
+      windowsVirtualKeyCode: 9,
+    });
+    await settingsCommand('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: 'Tab',
+      code: 'Tab',
+      windowsVirtualKeyCode: 9,
+    });
+    const focus = await settingsEvaluate<{
+      label: string;
+      keyboard: boolean;
+      outline: string;
+      color: string;
+      accent: string;
+      background: string;
+      raised: string;
+    }>(`(() => {
+      const button = document.activeElement, style = getComputedStyle(button);
+      const swatch = document.createElement('span');
+      swatch.style.color = 'var(--accent)'; swatch.style.background = 'var(--raised)';
+      document.body.append(swatch);
+      const accent = getComputedStyle(swatch).color, raised = getComputedStyle(swatch).backgroundColor;
+      swatch.remove();
+      return {label:button.textContent.trim(), keyboard:button.matches(':focus-visible'),
+        outline:style.outlineStyle, color:style.color, accent, background:style.backgroundColor, raised};
+    })()`);
+    assert.equal(focus.label, 'Navigation', 'Tab must move to the next Settings control');
+    assert.equal(focus.keyboard, true);
+    assert.equal(focus.outline, 'none', 'Keyboard feedback must preserve the ring-free design');
+    assert.equal(focus.background, focus.raised, 'Keyboard focus must visibly fill its control');
+    assert.equal(focus.color, focus.accent);
+    await snapshot(`desktop-native-settings-keyboard-focus-${appearance}.png`);
+  }
+  await settingsEvaluate(`(async () => {
+    const snapshot = await window.viewer.settingsGet();
+    await window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(initialAppearance)}}], snapshot.revision);
+  })()`);
   await click('dialog [aria-label="Close"]');
 }
 
@@ -1973,7 +2070,7 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   );
   await snapshot('desktop-native-models-providers.png');
   await settingsEvaluate(
-    'document.querySelector("[data-provider-kind=deepseek] .settings-actions button").click()',
+    'Array.from(document.querySelectorAll("[data-provider-kind=deepseek] button")).find(button => button.textContent.trim() === "Connect and load models").click()',
   );
   await until(
     () => settingsEvaluate<string>('document.querySelector(".settings-error")?.textContent || ""'),
@@ -2250,6 +2347,14 @@ async function verifyRefinements(): Promise<void> {
     60000,
   );
   await click('.model-viewer button[aria-pressed=false]');
+  await until(
+    () =>
+      evaluate<boolean>(
+        'Array.from(document.querySelectorAll(".model-viewer button")).some(button => button.textContent === "Measure" && button.getAttribute("aria-pressed") === "true")',
+      ),
+    Boolean,
+    'enabled surface measurement',
+  );
   const center = await evaluate<{ x: number; y: number }>(
     `(() => { const r=document.querySelector('.model-stage canvas').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`,
   );
@@ -2357,64 +2462,78 @@ async function verifyRefinements(): Promise<void> {
   );
 
   await tab('Models');
-  for (const width of [900, 760]) {
-    await settingsCommand('Emulation.setDeviceMetricsOverride', {
-      width,
-      height: width === 760 ? 540 : 640,
-      deviceScaleFactor: 1,
-      mobile: false,
-    });
-    for (const category of [
-      'Models',
-      'Actions',
-      'Agents',
-      'Navigation',
-      'Space',
-      'Browsing',
-      'Terminals',
-      'Configuration',
-      'Shortcuts',
-      'Previews',
-      'Search',
-    ]) {
-      await tab(category);
-      assert.equal(
-        await settingsEvaluate(
-          'document.querySelector(".settings-page").scrollWidth > document.querySelector(".settings-page").clientWidth',
-        ),
-        false,
-        `${width}px ${category} has no horizontal overflow`,
-      );
-      const gaps = await settingsEvaluate<number[]>(
-        `Array.from(document.querySelectorAll('.settings-actions')).flatMap(actions=>{const before=actions.previousElementSibling;if(before?.matches('p'))return [actions.getBoundingClientRect().top-before.getBoundingClientRect().bottom];return [];})`,
-      );
-      assert.ok(
-        gaps.every((gap) => gap >= 15),
-        `${width}px ${category} separates descriptions from actions`,
-      );
-      if (['Models', 'Actions', 'Agents', 'Navigation', 'Browsing'].includes(category))
-        await snapshot(`desktop-native-settings-${category.toLowerCase()}-${width}.png`);
-      if (category === 'Agents')
-        assert.ok(
-          (await settingsEvaluate<number>(
-            'document.querySelector(".settings-wide-field select").clientWidth',
-          )) >= 240,
-          'Authorized-folder choice fits its placeholder',
-        );
-      if (category === 'Space') {
+  for (const look of ['dark', 'light']) {
+    await settingsEvaluate(
+      `window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(look)}}],snapshot.revision))`,
+    );
+    await until(
+      () => settingsEvaluate<string>('document.documentElement.dataset.look'),
+      (value) => value === look,
+      'settings appearance ' + look,
+    );
+    for (const width of [900, 760]) {
+      await settingsCommand('Emulation.setDeviceMetricsOverride', {
+        width,
+        height: width === 760 ? 540 : 640,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      for (const category of [
+        'Models',
+        'Actions',
+        'Agents',
+        'Navigation',
+        'Space',
+        'Browsing',
+        'Terminals',
+        'Configuration',
+        'Shortcuts',
+        'Previews',
+        'Search',
+        'Permissions',
+        'Privacy',
+      ]) {
+        await tab(category);
         assert.equal(
           await settingsEvaluate(
-            'document.querySelectorAll(".settings-toolbar-preview svg").length',
+            'document.querySelector(".settings-page").scrollWidth > document.querySelector(".settings-page").clientWidth',
           ),
-          10,
+          false,
+          `${width}px ${category} has no horizontal overflow`,
         );
-        await settingsEvaluate(
-          'document.querySelector(".settings-toolbar-preview").scrollIntoView({block:"start"})',
+        const gaps = await settingsEvaluate<number[]>(
+          `Array.from(document.querySelectorAll('.settings-actions')).flatMap(actions=>{const before=actions.previousElementSibling;if(before?.matches('p'))return [actions.getBoundingClientRect().top-before.getBoundingClientRect().bottom];return [];})`,
         );
-        await snapshot(`desktop-native-settings-toolbar-${width}.png`);
+        assert.ok(
+          gaps.every((gap) => gap >= 15),
+          `${width}px ${category} separates descriptions from actions`,
+        );
+        await snapshot(`desktop-native-settings-${category.toLowerCase()}-${width}-${look}.png`);
+        if (category === 'Agents')
+          assert.ok(
+            (await settingsEvaluate<number>(
+              'document.querySelector(".settings-wide-field select").clientWidth',
+            )) >= 240,
+            'Authorized-folder choice fits its placeholder',
+          );
+        if (category === 'Space') {
+          assert.equal(
+            await settingsEvaluate(
+              'document.querySelectorAll(".settings-toolbar-preview svg").length',
+            ),
+            10,
+          );
+          await settingsEvaluate(
+            'document.querySelector(".settings-toolbar-preview").scrollIntoView({block:"start"})',
+          );
+          await snapshot(`desktop-native-settings-toolbar-${width}-${look}.png`);
+        }
       }
     }
   }
+  await settingsEvaluate(
+    'window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([{path:"settings.appearance",value:"dark"}],snapshot.revision))',
+  );
   await tab('Agents');
   await settingsEvaluate(
     `window.viewer.settingsGet().then(value=>window.viewer.settingsPatch([{path:'settings.agents.roots',value:[${JSON.stringify(path.join(fixture.files, 'Folder with a deliberately long descriptive name for permissions and display'))}]}],value.revision))`,
@@ -3390,7 +3509,60 @@ async function verifyServiceWorkflows(): Promise<void> {
     'Services: packaged PDF extraction and OCR, Space after Frame, book proposal/review/apply/Undo, indexed virtual search, shared result commands and modeless Settings.',
   );
 }
+async function verifyIndependentPreviewRevocation(): Promise<void> {
+  const documents = path.join(fixture.files, 'Documents');
+  const images = path.join(fixture.files, 'Images');
+  const file = path.join(documents, 'Project notes.md');
+  const resource = await evaluate<import('../src/domain/contracts').Resource>(
+    `window.viewer.resource(${JSON.stringify(file)})`,
+  );
+  const original = await evaluate(`window.viewer.read(${JSON.stringify(resource.id)})`);
+  await click(fileSelector(documents), 2);
+  await preview(file, 'A wider view');
+  await evaluate('window.viewer.openSettings()');
+  await openSettingsProbe();
+  try {
+    await settingsEvaluate(`window.viewer.fileAccessRevoke(${JSON.stringify(images)})`);
+    assert.deepEqual(
+      await evaluate(`window.viewer.read(${JSON.stringify(resource.id)})`),
+      original,
+      'Revoking Images must preserve an existing Documents resource',
+    );
+    assert.ok(
+      await evaluate(
+        'document.querySelector(".quick-preview")?.textContent.includes("A wider view")',
+      ),
+    );
+    // Ordinary-runtime permission denial is sufficient to detect stale decoded
+    // UI bytes. Genuine PowerBox authorization is a separate signed scenario.
+    await chmod(documents, 0o000);
+    assert.ok(
+      await evaluate(
+        'document.querySelector(".quick-preview")?.textContent.includes("A wider view")',
+      ),
+    );
+    await settingsEvaluate(`window.viewer.fileAccessRevoke(${JSON.stringify(documents)})`);
+    await until(
+      () => evaluate<string>('document.querySelector(".quick-preview")?.textContent || ""'),
+      (value) => value.includes('File unavailable') && !value.includes('A wider view'),
+      'revoked preview disposes its decoded text and shows the access error',
+    );
+    await click('dialog [aria-label="Close"]');
+    await snapshot('desktop-native-preview-access-revoked.png');
+  } finally {
+    await chmod(documents, 0o700);
+    if (settingsMode) await click('dialog [aria-label="Close"]');
+    await evaluate(`window.viewer.release(${JSON.stringify(resource.id)})`);
+    await closePreview();
+    await paletteCommand('Parent folder');
+  }
+  console.log(
+    'Preview permissions: unrelated resources/decoded UI remain usable; revoked text is disposed through the real Settings API.',
+  );
+}
+
 async function verifyStoreFileServices(): Promise<void> {
+  await verifyIndependentPreviewRevocation();
   const task = await evaluate<import('../src/domain/metadata').FolderSizeTask>(
     `window.viewer.folderSizeStart([${JSON.stringify(path.join(fixture.files, 'Models'))}])`,
   );
@@ -4181,7 +4353,7 @@ async function verify(): Promise<void> {
   );
   // Count production React commits only in this disposable diagnostic renderer.
   await command('Page.addScriptToEvaluateOnNewDocument', {
-    source: `window.__qaCommits=0;window.__REACT_DEVTOOLS_GLOBAL_HOOK__={supportsFiber:true,renderers:new Map(),inject(renderer){const id=this.renderers.size+1;this.renderers.set(id,renderer);return id;},onCommitFiberRoot(){window.__qaCommits++;},onCommitFiberUnmount(){},checkDCE(){}};`,
+    source: reactCommitProbe,
   });
   await reloadPage();
   // The user's other windows can legitimately take native focus during this

@@ -10,6 +10,7 @@ import { defaultSettings, newPlaneFolder } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import { extractDocument, localBookFields } from '../src/desktop/formats';
 import { Credentials, Providers } from '../src/desktop/providers';
+import { ModelPermissions } from '../src/desktop/model-permissions';
 import { imageDimensions } from '../src/desktop/image-dimensions';
 import { imageFixture } from './media-fixtures';
 import { entry } from '../src/desktop/filesystem';
@@ -562,7 +563,6 @@ describe('protected credentials and structured providers', () => {
               }
             : { choices: [{ message: { content: '{"rows":[]}' } }] };
       const request = vi.fn(async () => new Response(JSON.stringify(json)));
-      const providers = new Providers(credentials, request as typeof fetch);
       const provider = {
         id: 'p',
         name: 'P',
@@ -576,6 +576,9 @@ describe('protected credentials and structured providers', () => {
         model: 'fixture',
         allowContent: true,
       };
+      const permissions = new ModelPermissions(root, () => [provider]);
+      await permissions.set(provider, 'full-text');
+      const providers = new Providers(credentials, request as typeof fetch, permissions);
       expect(
         await providers.generate(
           provider,

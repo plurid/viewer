@@ -10,6 +10,8 @@ import {
   validProviderEndpoint,
 } from '../src/domain/model-providers';
 import { SettingsService } from '../src/desktop/settings';
+import { ModelPermissions } from '../src/desktop/model-permissions';
+import type { ModelProvider } from '../src/domain/services';
 
 let root: string;
 let credentials: Credentials;
@@ -32,6 +34,11 @@ const schema = {
   required: ['rows'],
   additionalProperties: false,
 };
+async function approved(provider: ModelProvider, request: typeof fetch) {
+  const permissions = new ModelPermissions(root, () => [provider]);
+  await permissions.set(provider, 'full-text');
+  return new Providers(credentials, request, permissions);
+}
 describe('model provider presets and adapters', () => {
   it.each(newKinds)(
     'uses the documented %s transport, output mode and stored-key authentication',
@@ -46,13 +53,9 @@ describe('model provider presets and adapters', () => {
             }),
           ),
       );
-      const output = await new Providers(credentials, request as typeof fetch).generate(
-        provider,
-        'Review names.',
-        [],
-        schema,
-        new AbortController().signal,
-      );
+      const output = await (
+        await approved(provider, request as typeof fetch)
+      ).generate(provider, 'Review names.', [], schema, new AbortController().signal);
       expect(output).toEqual({ rows: [] });
       const [url, options] = request.mock.calls[0] as unknown as [string, RequestInit];
       expect(url).toBe(provider.endpoint + '/chat/completions');
@@ -127,9 +130,10 @@ describe('model provider presets and adapters', () => {
   });
   it.each(newKinds)('requires a %s key before requesting a proposal', async (kind) => {
     const request = vi.fn();
+    const provider = { ...newModelProvider(kind, 'missing'), model: 'fixture' };
     await expect(
-      new Providers(credentials, request).generate(
-        { ...newModelProvider(kind, 'missing'), model: 'fixture' },
+      (await approved(provider, request)).generate(
+        provider,
         '',
         [],
         schema,
@@ -188,9 +192,10 @@ describe('model provider presets and adapters', () => {
             JSON.stringify({ choices: [{ finish_reason, message: { content: '{"rows":[]}' } }] }),
           ),
       );
+      const provider = { ...newModelProvider('deepseek', 'fixture'), model: 'fixture' };
       await expect(
-        new Providers(credentials, request as typeof fetch).generate(
-          { ...newModelProvider('deepseek', 'fixture'), model: 'fixture' },
+        (await approved(provider, request as typeof fetch)).generate(
+          provider,
           '',
           [],
           schema,

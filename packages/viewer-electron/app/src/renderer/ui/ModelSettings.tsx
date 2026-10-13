@@ -10,6 +10,7 @@ import {
 import type { SettingsChange } from './settings-edits';
 import { Field } from './SettingField';
 import { IconButton } from './primitives';
+import { ProviderDataPermission } from './ModelDataPermission';
 
 export function ModelSettings({
   snapshot,
@@ -157,17 +158,11 @@ export function ModelSettings({
                 }}
               />
             </label>
-            <label className="settings-row">
-              <span>
-                Allow document excerpts and text
-                <small>Each recipe also controls what it sends.</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={provider.allowContent}
-                onChange={(event) => patch(provider.id, { allowContent: event.target.checked })}
-              />
-            </label>
+            <ProviderDataPermission
+              key={provider.id + provider.endpoint}
+              provider={provider}
+              error={error}
+            />
             <div className="settings-actions">
               {!preset.suggestedModels && (
                 <button
