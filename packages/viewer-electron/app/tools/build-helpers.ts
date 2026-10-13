@@ -51,6 +51,8 @@ if (process.platform === 'darwin') {
       '-framework',
       'AppKit',
       '-framework',
+      'Quartz',
+      '-framework',
       'Security',
       'tools/macos-files.mm',
       '-o',

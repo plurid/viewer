@@ -14,6 +14,7 @@ const kind = z.enum([
   'move',
   'transfer',
   'duplicate',
+  'alias',
   'rename',
   'mkdir',
   'trash',

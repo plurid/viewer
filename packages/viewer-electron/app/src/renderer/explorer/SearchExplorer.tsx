@@ -101,6 +101,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
           selectAll: () => {
             selecting.all(entries);
           },
+          invertSelection: () => selecting.invert(entries),
         }),
       valid: (context) => context.workspaceID === activeWorkspace().id,
     },

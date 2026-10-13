@@ -144,6 +144,8 @@ export class Operations {
   }
   start(request: OperationRequest): string {
     if (this.stopped) throw new Error('The file operation queue has closed.');
+    if (request.kind === 'alias' && process.platform !== 'darwin')
+      throw new Error('Finder aliases require macOS.');
     const sources = [...new Set(request.sources.map(absolute))];
     // A selected descendant is already carried by its selected parent.
     const roots = operationRoots(sources);
@@ -836,7 +838,9 @@ export class Operations {
                     ? path.join(path.dirname(source), validName(request.name!))
                     : request.kind === 'duplicate'
                       ? await this.unique(source)
-                      : path.join(request.destination!, path.basename(source));
+                      : request.kind === 'alias'
+                        ? await this.unique(source + ' alias')
+                        : path.join(request.destination!, path.basename(source));
               if (source === destination) throw new Error('Source and destination are the same.');
               await this.access([destination]);
               task.intent = { source, destination };
@@ -905,7 +909,36 @@ export class Operations {
                     },
                     task.abort.signal,
                   );
-                else if (request.kind === 'compress' || request.kind === 'extract') {
+                else if (request.kind === 'alias') {
+                  const stage = await privateStage(path.dirname(destination), '.viewer-alias-');
+                  task.intent = { source, destination, staging: stage.file };
+                  try {
+                    await this.checkpoint();
+                    await fileCoordination.run(
+                      [
+                        { path: source, mode: 'metadata' },
+                        { path: stage.file, mode: 'write' },
+                      ],
+                      async (signal) => {
+                        signal?.throwIfAborted();
+                        await this.access([
+                          fileCoordination.path(source),
+                          fileCoordination.path(stage.file),
+                        ]);
+                        signal?.throwIfAborted();
+                        await macFiles().alias(
+                          fileCoordination.path(source),
+                          fileCoordination.path(stage.file),
+                        );
+                      },
+                      task.abort.signal,
+                    );
+                    this.check(task);
+                    await this.publish(stage.file, destination, task);
+                  } finally {
+                    await stage.dispose();
+                  }
+                } else if (request.kind === 'compress' || request.kind === 'extract') {
                   const stage = await privateStage(path.dirname(destination), '.viewer-archive-');
                   const staging = stage.file;
                   task.intent = { source, destination, staging };
@@ -945,7 +978,7 @@ export class Operations {
               if (
                 !move &&
                 destination &&
-                ['copy', 'transfer', 'duplicate', 'mkdir', 'compress', 'extract'].includes(
+                ['copy', 'transfer', 'duplicate', 'alias', 'mkdir', 'compress', 'extract'].includes(
                   request.kind,
                 )
               ) {

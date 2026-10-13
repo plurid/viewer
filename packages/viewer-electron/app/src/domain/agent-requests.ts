@@ -1,5 +1,28 @@
 import type { CapturedTarget } from './automation';
 import type { SettingsPatch } from './services';
+import type { Pane, ViewMode } from './contracts';
+/** Live navigation discovery excludes history, camera/layout and unrelated preferences. */
+export interface AgentPlane {
+  id: string;
+  type: Pane['type'];
+  path: string;
+  mode?: ViewMode;
+  allLocations?: boolean;
+}
+export interface AgentWorkspace {
+  id: string;
+  name: string;
+  panes: AgentPlane[];
+  roots: string[];
+}
+export interface AgentWorkspaceSnapshot {
+  activeWorkspace: string;
+  workspaces: AgentWorkspace[];
+}
+export type AgentNavigation =
+  | { kind: 'open-path'; path: string; placement: 'current' | 'root' | 'linked' }
+  | { kind: 'select-files'; files: import('./contracts').FileEntry[] }
+  | { kind: 'switch-workspace'; workspace: AgentWorkspace };
 export interface CommandDescriptor {
   id: string;
   label: string;
@@ -9,10 +32,11 @@ export interface CommandDescriptor {
 }
 export interface AgentProposal {
   id: string;
-  kind: 'command' | 'configuration' | 'terminal-write';
+  kind: 'command' | 'configuration' | 'terminal-write' | 'navigation';
   title: string;
   target?: CapturedTarget;
   commandID?: string;
+  navigation?: AgentNavigation;
   patches?: SettingsPatch[];
   revision?: number;
   terminalID?: string;

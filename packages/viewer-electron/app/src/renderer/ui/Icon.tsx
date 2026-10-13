@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
 const paths = {
+  tag: 'M3 3h7l11 11-7 7L3 10V3Zm4 4h.01',
+  share: 'M12 16V3m-4 4 4-4 4 4M7 11H3v10h18V11h-4',
   drive: 'M5 4h14l3 11v5H2v-5L5 4Zm-3 11h20M6 18h.01M10 18h.01',
   eject: 'm12 3 8 11H4L12 3ZM4 18h16v3H4v-3Z',
   drawing: 'M3 3h18v18H3V3Zm3 14 4-10 8 10H6Zm1-4h10M6 5h.01',

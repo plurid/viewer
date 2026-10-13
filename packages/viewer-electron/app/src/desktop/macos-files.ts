@@ -14,6 +14,11 @@ export interface FileAccessIntent {
   mode: 'read' | 'metadata' | 'write' | 'move' | 'delete';
 }
 export interface MacFiles {
+  information(file: string): Promise<string>;
+  updateInformation(file: string, revision: string, json: string): Promise<string>;
+  alias(source: string, destination: string): Promise<void>;
+  filePanel(kind: string, files: string[]): void;
+  dismissFilePanels(): void;
   coordinateStart(
     id: string,
     intents: FileAccessIntent[],

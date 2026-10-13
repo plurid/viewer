@@ -146,6 +146,13 @@ export class FileSelection {
     }
     this.apply(scope);
   }
+  invert(scope: readonly FileEntry[]) {
+    const selected = new Set(this.session.selection);
+    const next = scope.filter((entry) => !selected.has(entry.path));
+    this.session.cursor = next[0]?.path || '';
+    this.session.anchor = this.session.cursor;
+    this.apply(next);
+  }
   clear() {
     this.session.cursor = '';
     this.session.anchor = '';

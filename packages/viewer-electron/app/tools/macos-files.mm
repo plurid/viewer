@@ -128,7 +128,7 @@ static napi_value clipboardWrite(napi_env env, napi_callback_info info) {
   }
 }
 
-enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject };
+enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias };
 struct Work {
   napi_async_work work; napi_deferred deferred; Kind kind;
   int source = -1, target = -1;
@@ -146,7 +146,17 @@ static void execute(napi_env, void *data) {
   Work *task = static_cast<Work *>(data);
   @autoreleasepool { @try {
     NSError *error = nil;
-    if (task->kind == Kind::Metadata) {
+    if (task->kind == Kind::Alias) {
+      NSURL *source = [NSURL fileURLWithPath:task->file], *destination = [NSURL fileURLWithPath:task->targetFile];
+      NSData *bookmark = [source bookmarkDataWithOptions:NSURLBookmarkCreationSuitableForBookmarkFile includingResourceValuesForKeys:nil relativeToURL:nil error:&error];
+      // The operation owns a mode-0700 staging directory and exclusively
+      // publishes its output afterward. Never write directly over user files.
+      struct stat existing{};
+      if (lstat(task->targetFile.fileSystemRepresentation, &existing) == 0) {
+        task->error = @"The alias staging file already exists."; task->errorNumber = EEXIST;
+      } else if (errno != ENOENT || !bookmark || ![NSURL writeBookmarkData:bookmark toURL:destination options:0 error:&error])
+        task->error = error.localizedDescription ?: @"Could not create the Finder alias.";
+    } else if (task->kind == Kind::Metadata) {
       if (fcopyfile(task->source, task->target, nullptr, COPYFILE_METADATA) != 0)
         task->error = [NSString stringWithFormat:@"Could not preserve macOS file metadata: %s", std::strerror(errno)];
     } else if (task->kind == Kind::LinkMetadata) {
@@ -285,10 +295,15 @@ static napi_value pairWork(napi_env env, napi_callback_info info, Kind kind) {
 }
 static napi_value linkMetadata(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::LinkMetadata); }
 static napi_value renameExclusive(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::Rename); }
+static napi_value alias(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::Alias); }
 static napi_value eject(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::Eject); }
 static napi_value volumes(napi_env env, napi_callback_info) { Work *task = new Work{}; task->kind = Kind::Volumes; return queue(env, task); }
+#include "file-information.h"
+#include "file-panels.h"
 static napi_value init(napi_env env, napi_value exports) {
   registerFileCoordination(env, exports);
+  registerFileInformation(env, exports);
+  registerFilePanels(env, exports);
   napi_property_descriptor methods[] = {
     {"clipboardVersion", nullptr, clipboardVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardRead", nullptr, clipboardRead, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -296,6 +311,7 @@ static napi_value init(napi_env env, napi_value exports) {
     {"copyMetadata", nullptr, metadata, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"copyLinkMetadata", nullptr, linkMetadata, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"renameExclusive", nullptr, renameExclusive, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"alias", nullptr, alias, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"trash", nullptr, trash, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"volumes", nullptr, volumes, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"eject", nullptr, eject, nullptr, nullptr, nullptr, napi_default, nullptr},

@@ -1,6 +1,10 @@
 import { AgentRequests } from './agent-requests';
 import type { CapturedTarget } from '../domain/automation';
-import type { CommandDescriptor } from '../domain/agent-requests';
+import type {
+  AgentNavigation,
+  AgentWorkspaceSnapshot,
+  CommandDescriptor,
+} from '../domain/agent-requests';
 import { Executions } from './executions';
 import { Terminals } from './terminals';
 import { ExternalTerminals } from './terminal-launch';
@@ -45,6 +49,7 @@ import { Watchers } from './watchers';
 import { FileAccess } from './file-access';
 import { NativeSelections } from './native-selections';
 import { fileCoordination } from './file-coordination';
+import { FileInformationService, informationPatchSchema } from './file-information';
 
 const localPath = z
   .string()
@@ -52,6 +57,30 @@ const localPath = z
   .max(32768)
   .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
 const id = z.string().min(1).max(200);
+const workspaceSnapshotSchema = z.object({
+  activeWorkspace: id,
+  workspaces: z
+    .array(
+      z.object({
+        id,
+        name: z.string().min(1).max(100),
+        roots: z.array(id).max(200),
+        panes: z
+          .array(
+            z.object({
+              id,
+              type: z.enum(['folder', 'preview', 'search', 'terminal']),
+              path: localPath,
+              mode: z.enum(['list', 'grid', 'columns', 'gallery']).optional(),
+              allLocations: z.boolean().optional(),
+            }),
+          )
+          .max(200),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
 const contextSchema = z.object({
   workspaceID: id,
   rootID: id,
@@ -101,6 +130,7 @@ const schemas = {
         }),
       )
       .max(1000),
+    workspaceSnapshotSchema.optional(),
   ]),
   agentCommandResult: z.tuple([id, z.string().max(2000).optional()]),
   agentReviewList: z.tuple([]),
@@ -242,9 +272,12 @@ const schemas = {
   bootstrap: z.tuple([]),
   list: z.tuple([localPath]),
   stat: z.tuple([localPath]),
+  fileInformation: z.tuple([localPath]),
+  fileInformationUpdate: z.tuple([localPath, z.string().min(1).max(200), informationPatchSchema]),
   chooseFolder: z.tuple([localPath.optional()]),
   reveal: z.tuple([localPath]),
   openExternal: z.tuple([localPath]),
+  nativeFilePanel: z.tuple([z.enum(['preview', 'share']), z.array(localPath).min(1).max(100)]),
   applications: z.tuple([z.array(localPath).min(1).max(2000)]),
   chooseApplication: z.tuple([]),
   openWith: z.tuple([z.array(localPath).min(1).max(2000), id]),
@@ -264,6 +297,7 @@ const schemas = {
         'move',
         'transfer',
         'duplicate',
+        'alias',
         'rename',
         'mkdir',
         'trash',
@@ -303,11 +337,13 @@ export class Desktop {
   );
   readonly agentRequests: AgentRequests;
   private commandCatalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
+  private workspaceCatalog?: AgentWorkspaceSnapshot;
   readonly terminals: Terminals;
   readonly externalTerminals: ExternalTerminals;
   readonly executions: Executions;
   readonly resources: Resources;
   readonly fileAccess: FileAccess;
+  readonly information: FileInformationService;
   readonly operations: Operations;
   readonly watchers: Watchers;
   readonly search: Search;
@@ -369,6 +405,10 @@ export class Desktop {
         : undefined,
     );
     const access = (files: readonly string[]) => this.fileAccess.require(files);
+    this.information = new FileInformationService(access, (file) => {
+      emit({ type: 'folder-changed', path: path.dirname(file) });
+      void this.files.update(file).catch(() => {});
+    });
     this.resources = new Resources(access);
     this.applications = new Applications(options.applications);
     this.settings = new SettingsService(
@@ -494,35 +534,15 @@ export class Desktop {
           .settings.customActions.find((action) => 'custom.' + action.id === command);
         if (action && (action.executor.kind === 'executable' || action.executor.kind === 'shell'))
           return { taskID: await this.executions.start(action.id, target) };
-        else {
-          const window = this.window;
-          if (!window || window.isDestroyed())
-            throw new Error('Open the workspace before running this action.');
-          await new Promise<void>((resolve, reject) => {
-            const id = randomUUID();
-            const timer = setTimeout(() => {
-              this.agentCommands.delete(id);
-              reject(
-                new Error('The workspace did not finish this action. Request a fresh proposal.'),
-              );
-            }, 25000);
-            timer.unref();
-            this.agentCommands.set(id, {
-              owner: window.webContents.id,
-              finish: (error) => {
-                clearTimeout(timer);
-                this.agentCommands.delete(id);
-                if (error) reject(new Error(error));
-                else resolve();
-              },
-            });
-            emit({ type: 'agent-command', id, command, target });
-          });
-        }
+        else await this.sendAgentCommand(command, target);
       },
       {
         read: (id) => this.terminals.agentRead(id),
         write: (id, data) => this.terminals.agentWrite(id, data),
+      },
+      async (request, target) => {
+        await this.agents.authorizeNavigation(request, target);
+        await this.sendAgentCommand('workspace-navigation', target, request);
       },
     );
     this.agents = new AgentBroker(
@@ -536,6 +556,7 @@ export class Desktop {
         requests: this.agentRequests,
         config: this.settings,
         access,
+        workspaceState: async () => this.workspaceCatalog,
       },
     );
     this.watchers = new Watchers(emit);
@@ -638,6 +659,7 @@ export class Desktop {
         this.ready = false;
         this.context = undefined;
         this.commandCatalog = undefined;
+        this.workspaceCatalog = undefined;
         this.resources.clear();
       }
     });
@@ -707,6 +729,7 @@ export class Desktop {
   }
   private async disposeServices(): Promise<void> {
     this.ready = false;
+    if (process.platform === 'darwin') macFiles().dismissFilePanels();
     this.settings.close();
     this.resources.clear();
     // Cancel the read-only worker before waiting for planners that may be
@@ -724,6 +747,7 @@ export class Desktop {
       this.executions.close(),
       this.resources.close(),
       this.thumbnails.close(),
+      this.information.close(),
       fileCoordination.quiesce(),
     ]);
     await this.fileAccess.close();
@@ -735,6 +759,33 @@ export class Desktop {
     );
     if (errors.length) throw new AggregateError(errors, 'Desktop services failed to stop.');
   }
+  private async sendAgentCommand(
+    command: string,
+    target: CapturedTarget,
+    navigation?: AgentNavigation,
+  ): Promise<void> {
+    const window = this.window;
+    if (!window || window.isDestroyed())
+      throw new Error('Open the workspace before running this action.');
+    await new Promise<void>((resolve, reject) => {
+      const id = randomUUID();
+      const timer = setTimeout(() => {
+        this.agentCommands.delete(id);
+        reject(new Error('The workspace did not finish this action. Request a fresh proposal.'));
+      }, 25000);
+      timer.unref();
+      this.agentCommands.set(id, {
+        owner: window.webContents.id,
+        finish: (error) => {
+          clearTimeout(timer);
+          this.agentCommands.delete(id);
+          if (error) reject(new Error(error));
+          else resolve();
+        },
+      });
+      this.emit({ type: 'agent-command', id, command, target, navigation });
+    });
+  }
   private async invoke(method: ApiMethod, args: unknown[], senderID?: number): Promise<unknown> {
     switch (method) {
       case 'commandsPublish':
@@ -742,6 +793,7 @@ export class Desktop {
           target: args[0] as CapturedTarget,
           commands: args[1] as CommandDescriptor[],
         };
+        this.workspaceCatalog = args[2] as AgentWorkspaceSnapshot | undefined;
         return;
       case 'agentCommandResult': {
         const request = this.agentCommands.get(args[0] as string);
@@ -840,6 +892,7 @@ export class Desktop {
         return this.fileAccess.list();
       case 'fileAccessRevoke': {
         const root = args[0] as string;
+        if (process.platform === 'darwin') macFiles().dismissFilePanels();
         if (this.fileAccess.scoped) this.nativeSelections.revoke(root);
         let resources: string[] = [];
         this.emit({ type: 'file-access', path: root });
@@ -1063,6 +1116,14 @@ export class Desktop {
       case 'stat':
         await this.fileAccess.require([args[0] as string]);
         return entry(args[0] as string);
+      case 'fileInformation':
+        return this.information.get(args[0] as string);
+      case 'fileInformationUpdate':
+        return this.information.update(
+          args[0] as string,
+          args[1] as string,
+          args[2] as import('../domain/file-information').FileInformationPatch,
+        );
       case 'chooseFolder': {
         const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
           properties: ['openDirectory'],
@@ -1086,6 +1147,12 @@ export class Desktop {
         await this.fileAccess.require([args[0] as string]);
         const error = await shell.openPath(args[0] as string);
         if (error) throw new Error(error);
+        return;
+      }
+      case 'nativeFilePanel': {
+        const files = args[1] as string[];
+        await this.fileAccess.require(files);
+        macFiles().filePanel(args[0] as string, files);
         return;
       }
       case 'folderSizeStart':

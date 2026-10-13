@@ -13,6 +13,7 @@ import { Search } from '../src/desktop/search';
 import { Storage } from '../src/desktop/storage';
 import { entry, list } from '../src/desktop/filesystem';
 import { SettingsService } from '../src/desktop/settings';
+import { FileInformationService } from '../src/desktop/file-information';
 import { FileIndex } from '../src/desktop/index-core';
 import { ActionPlanner } from '../src/desktop/actions/planner';
 import { extractDocument } from '../src/desktop/formats';
@@ -31,6 +32,10 @@ import type {
   Resource,
 } from '../src/domain/contracts';
 
+const fixturePort = Number(process.env.VIEWER_TEST_PORT ?? 4173);
+if (!Number.isInteger(fixturePort) || fixturePort < 1024 || fixturePort > 65535)
+  throw new Error('Choose a valid fixture port.');
+const fixtureOrigin = 'http://127.0.0.1:' + fixturePort;
 const fixture = await createFixtures();
 const permissionScenario = process.env.VIEWER_TEST_SCENARIO === 'folder-access';
 const restrictedFolder = path.join(fixture.files, 'Models');
@@ -41,6 +46,12 @@ const emit = (event: DesktopEvent) => {
   for (const client of clients) client.write(`data: ${JSON.stringify(event)}\n\n`);
 };
 const resources = new Resources();
+const information = new FileInformationService(
+  async (paths) => {
+    paths.forEach(scoped);
+  },
+  (file) => emit({ type: 'folder-changed', path: path.dirname(file) }),
+);
 const sizes = new FolderSizes((task) => emit({ type: 'folder-size', task }));
 const watchers = new Watchers(emit);
 const search = new Search((batch) => emit({ type: 'search', batch }));
@@ -94,7 +105,7 @@ const actions = new ActionPlanner(fixture.root, {
 let clipboard: { paths: string[]; cut: boolean } | null = null;
 const resourceURL = (value: Resource) => ({
   ...value,
-  url: value.url.replace('viewer-resource://', 'http://127.0.0.1:4173/__test/resource/'),
+  url: value.url.replace('viewer-resource://', fixtureOrigin + '/__test/resource/'),
 });
 function scoped(file: string): string {
   const resolved = path.resolve(file);
@@ -119,6 +130,14 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
         settings: settings.snapshot(),
         openPaths: [],
       };
+    case 'fileInformation':
+      return information.get(scoped(args[0] as string));
+    case 'fileInformationUpdate':
+      return information.update(
+        scoped(args[0] as string),
+        args[1] as string,
+        args[2] as import('../src/domain/file-information').FileInformationPatch,
+      );
     case 'openSettings':
       return;
     case 'agentReviewList':
@@ -286,6 +305,12 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return;
     case 'clipboardRead':
       return clipboard;
+    case 'copyPaths':
+      (args[0] as string[]).forEach(scoped);
+      clipboard = null;
+      return;
+    case 'nativeFilePanel':
+      throw new Error('macOS Quick Look and sharing are available in the installed Viewer app.');
     case 'reveal':
     case 'openExternal':
       return;
@@ -294,14 +319,14 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
 const server = await createServer({
   ...rendererConfig,
   configFile: false,
-  server: { ...rendererConfig.server, host: '127.0.0.1', port: 4173, strictPort: true },
+  server: { ...rendererConfig.server, host: '127.0.0.1', port: fixturePort, strictPort: true },
   plugins: [
     ...(rendererConfig.plugins || []),
     {
       name: 'viewer-fixture-bridge',
       configureServer(server) {
         server.middlewares.use(async (request, response, next) => {
-          const url = new URL(request.url || '/', 'http://127.0.0.1:4173');
+          const url = new URL(request.url || '/', fixtureOrigin);
           if (url.pathname === '/__test/events') {
             response.writeHead(200, {
               'Content-Type': 'text/event-stream',
@@ -360,7 +385,7 @@ const server = await createServer({
 });
 await server.listen();
 console.log(
-  `Viewer synthetic workspace: http://127.0.0.1:4173/tests/browser.html\nFixtures: ${fixture.files}`,
+  `Viewer synthetic workspace: ${fixtureOrigin}/tests/browser.html\nFixtures: ${fixture.files}`,
 );
 async function close() {
   sizes.close();

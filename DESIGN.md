@@ -307,6 +307,8 @@ Settings occupies a separate modeless native window: default outer size 900×640
 
 Quick Preview combines quiet module/size metadata, previous/next navigation and its two open actions in one footer. The default-open button names the OS application, such as Open in Code, and falls back to Open when no name is available. Long application names truncate visually while retaining their complete tooltip. File identity stays in the dialog title; no second metadata footer or external-open icon repeats those actions.
 
+Get Info uses the existing 440px dialog, with a maximum width of `calc(100vw - 60px)`. Its content scrolls within `min(550px, calc(100vh - 200px))` and retains the 18px dialog inset. The filename and wrapping path span the full width above a 90px label column and flexible value column, separated by 12px. Native allocation, owner and group values form a wrapping strip. Save/Reload stays sticky within the content area; Done remains in the separate dialog footer.
+
 Proposal review is a bounded modal surface, with width `min(920px, calc(100vw - 80px))` and height `min(700px, calc(100vh - 90px))`. Context, selection, evidence, and footer surround a scrollable virtual row area. Each row gives the editable filename the available width; the directory is quieter context below it. Virtual search roots use the folder list layout and a local result status/paging strip within their own plane.
 
 **The Reachable Chrome Rule.** Keep contextual plane headers and linked relationships within the framed viewport; expose frame and dock through scoped commands, and use docking for focused reading. Preserve usable saved camera views on reopen, recover a clipped active plane, and keep preview consolidation explicit and undoable.
@@ -360,6 +362,14 @@ The workspace selector opens the same searchable action pattern and truncates lo
 The dense row separates file identity from muted date, kind, and size metadata; file sizes align right. Hover uses the raised surface; selection changes the row and its metadata together. Alias overlays remain visible at native file-icon size. Grid and gallery carry the same file-selection treatment. In columns, Up/Down selection reveals a folder's next column; Right selects its first child and Left returns to its owning folder. The active column owns the operation destination, including paste into a displayed folder. Its keyboard scope, trail and operation directory survive Plurid detachment together and remap after directory moves. Drops target the hovered folder or column, with a destination highlight and Option for copy. A refreshed listing prunes missing folder branches, cached descendants and their selection together.
 
 List folders use compact disclosure controls; Left/Right collapses or expands the local folder branch. Explorer commands claim their keys before camera movement: Command-Down opens, Command-Up goes to the parent and Command-1–4 selects list, grid, columns or gallery. Text fields, active menus/dialogs, preview gestures and terminal input keep their own keys. Focused resize separators indicate ownership with a selection-colored fill, preserving the confirmed absence of focus rings.
+
+### Get Info
+
+The local File information dialog keeps file identity and metadata compact within the established dialog family. A 14px semibold filename precedes its complete wrapped path; Kind, Size, Modified, Created and an available link Target use muted 11px labels and 12px values. Multiple selected entries retain separate sections with line dividers. Folder size calculation remains an explicit footer action.
+
+On macOS, regular files and folders extend that information with allocation, owner and group, then Locked, Tags and Comments. Tags pair a 9px color dot with the textual tag name, a 112px selector that names the native color, and an accessible remove action. Add a tag uses an ordinary field/button row. Comments use the shared field surface, border and control radius in a vertically resizable textarea. Permissions stays behind a disclosure: Owner, Group and Everyone rows expose Read, Write and Execute, or Traverse for folders. Multi-item selection defers each editor behind Tags, comments and permissions.
+
+Edits remain drafts until Save changes; Reload and Saved/Unsaved changes feedback share the sticky action row. Done closes the dialog from its own footer. Loading, saving, read-only volume, ownership, unsupported metadata and unreadable metadata states use the established status/error text and disabled controls. Locked disables tag, comment and permission edits. Preserve the existing keyboard focus surface/text feedback and suppression of rings and halos.
 
 ### Contextual Plane Header
 

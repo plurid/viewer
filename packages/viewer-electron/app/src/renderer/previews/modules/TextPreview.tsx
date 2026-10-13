@@ -14,6 +14,7 @@ import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty, Loading } from '../../ui/primitives';
 import { parseDelimited } from '../parse';
+import { getState, report } from '../../state/store';
 
 function JSONNode({ name, value, depth = 0 }: { name: string; value: unknown; depth?: number }) {
   const [open, setOpen] = useState(depth < 1);
@@ -257,7 +258,24 @@ export default function TextPreview(context: PreviewContext) {
   if (!data) return <Loading />;
   if (data.binary)
     return (
-      <Empty icon="file" title="Preview unavailable" detail="Open this file in its default app." />
+      <Empty icon="file" title="Preview unavailable">
+        {getState().bootstrap.platform === 'darwin' && (
+          <button
+            onClick={() => {
+              void window.viewer.nativeFilePanel('preview', [resource.entry.path]).catch(report);
+            }}
+          >
+            Quick Look in macOS
+          </button>
+        )}
+        <button
+          onClick={() => {
+            void window.viewer.openExternal(resource.entry.path).catch(report);
+          }}
+        >
+          Open in Default App
+        </button>
+      </Empty>
     );
   const ext = resource.entry.extension;
   const markdown = ['md', 'markdown', 'mdx'].includes(ext);

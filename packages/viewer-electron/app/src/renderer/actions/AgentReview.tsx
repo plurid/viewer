@@ -74,7 +74,9 @@ export function AgentReview() {
               ? 'Applying…'
               : proposal.kind === 'configuration'
                 ? 'Apply changes'
-                : 'Run action'}
+                : proposal.kind === 'navigation'
+                  ? proposal.title
+                  : 'Run action'}
           </button>
         </footer>
       </form>

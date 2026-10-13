@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { AgentProposal, ExecutionGrant } from '../domain/agent-requests';
+import type { AgentNavigation, AgentProposal, ExecutionGrant } from '../domain/agent-requests';
 import type { CapturedTarget } from '../domain/automation';
 import type { SettingsPatch } from '../domain/services';
 import { DocumentStore } from './document-store';
@@ -30,6 +30,7 @@ export class AgentRequests {
       read(id: string): { cwd: string; output: string };
       write(id: string, data: string): void;
     },
+    private navigate?: (request: AgentNavigation, target: CapturedTarget) => Promise<void>,
   ) {
     this.store = new DocumentStore(path.join(directory, 'execution-approvals-v1.json'), (value) =>
       z
@@ -197,6 +198,33 @@ export class AgentRequests {
     });
     return { id: proposal.id, requiresUserReview: true };
   }
+  navigation(
+    request: AgentNavigation,
+    target: CapturedTarget,
+  ): { id: string; requiresUserReview: true } {
+    if (!this.navigate) throw new Error('Workspace navigation is unavailable.');
+    const title =
+      request.kind === 'open-path'
+        ? 'Open path'
+        : request.kind === 'select-files'
+          ? 'Select files'
+          : 'Change workspace';
+    const proposal = this.add({
+      kind: 'navigation',
+      title,
+      target: structuredClone(target),
+      navigation: structuredClone(request),
+      detail:
+        request.kind === 'open-path'
+          ? `${request.path}\n\n${{ current: 'Use the current folder plane; files open in a linked preview.', root: 'Open an independent root plane.', linked: 'Open a linked plane.' }[request.placement]}`
+          : request.kind === 'select-files'
+            ? request.files.length
+              ? request.files.map((file) => file.path).join('\n')
+              : 'Clear selection in the captured folder.'
+            : `${request.workspace.name}\n\n${request.workspace.panes.map((pane) => pane.path).join('\n') || 'Empty workspace'}`,
+    });
+    return { id: proposal.id, requiresUserReview: true };
+  }
   terminalDirectory(id: string): string {
     return this.terminal.read(id).cwd;
   }
@@ -257,7 +285,10 @@ export class AgentRequests {
         await this.settings.patch(proposal.patches!, proposal.revision!);
       else if (proposal.kind === 'terminal-write')
         this.terminal.write(proposal.terminalID!, proposal.data!);
-      else {
+      else if (proposal.kind === 'navigation') {
+        if (!this.navigate) throw new Error('Workspace navigation is unavailable.');
+        await this.navigate(proposal.navigation!, proposal.target!);
+      } else {
         if (
           proposal.fingerprint &&
           proposal.fingerprint !== this.actionFingerprint(proposal.commandID!)

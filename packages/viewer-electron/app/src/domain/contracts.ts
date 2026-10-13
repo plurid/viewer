@@ -146,6 +146,7 @@ export type OperationKind =
   | 'move'
   | 'transfer'
   | 'duplicate'
+  | 'alias'
   | 'rename'
   | 'mkdir'
   | 'trash'
@@ -234,6 +235,7 @@ export type DesktopEvent =
       id: string;
       command: string;
       target: import('./automation').CapturedTarget;
+      navigation?: import('./agent-requests').AgentNavigation;
     }
   | { type: 'terminal'; event: import('./automation').TerminalEvent }
   | { type: 'execution'; task: import('./automation').ExecutionTask }
@@ -257,6 +259,7 @@ export interface ViewerAPI {
   commandsPublish(
     target: import('./automation').CapturedTarget,
     commands: import('./agent-requests').CommandDescriptor[],
+    workspaces?: import('./agent-requests').AgentWorkspaceSnapshot,
   ): Promise<void>;
   agentCommandResult(id: string, error?: string): Promise<void>;
   agentReviewList(): Promise<import('./agent-requests').AgentProposal[]>;
@@ -317,9 +320,16 @@ export interface ViewerAPI {
   document(id: string): Promise<import('./services').DocumentData>;
   list(path: string): Promise<FolderListing>;
   stat(path: string): Promise<FileEntry>;
+  fileInformation(path: string): Promise<import('./file-information').FileInformation>;
+  fileInformationUpdate(
+    path: string,
+    revision: string,
+    patch: import('./file-information').FileInformationPatch,
+  ): Promise<import('./file-information').FileInformation>;
   chooseFolder(defaultPath?: string): Promise<string | null>;
   reveal(path: string): Promise<void>;
   openExternal(path: string): Promise<void>;
+  nativeFilePanel(kind: 'preview' | 'share', paths: string[]): Promise<void>;
   applications(paths: string[]): Promise<import('./metadata').ApplicationChoices>;
   chooseApplication(): Promise<import('./metadata').NativeApplication | null>;
   openWith(paths: string[], applicationID: string): Promise<void>;

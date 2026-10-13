@@ -34,6 +34,7 @@ import { useFileDialogs } from './FileDialogs';
 import { FileTable } from './FileTable';
 import { useColumnNavigation } from './column-navigation';
 import { FILE_DRAG, useFileDrop } from './file-drop';
+import { folderDragNavigation } from './folder-drag';
 import { blankFileSpace, useFileKeyboard, useFileSelection, type FileModifiers } from './selection';
 
 export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string }) {
@@ -106,7 +107,11 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     pane?.mode === 'columns' && !listing.loading && !listing.error,
     selecting,
   );
-  const drops = useFileDrop(() => (pane?.mode === 'columns' ? columns.directory() : path));
+  const dragNavigation = useMemo(() => folderDragNavigation(id), [id]);
+  const drops = useFileDrop(
+    () => (pane?.mode === 'columns' ? columns.directory() : path),
+    dragNavigation,
+  );
   useEffect(() => {
     if (listing.loading || listing.error) return;
     setSelection((value) => {
@@ -191,6 +196,8 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             const scope = pane?.mode === 'columns' ? columns.scope() : entries;
             selecting.all(scope);
           },
+          invertSelection: () =>
+            selecting.invert(pane?.mode === 'columns' ? columns.scope() : entries),
         }),
       valid: (invocation, live) =>
         invocation.workspaceID === live.workspaceID &&

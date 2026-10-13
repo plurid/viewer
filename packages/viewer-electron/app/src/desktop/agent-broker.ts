@@ -1,5 +1,10 @@
 import type { CapturedTarget } from '../domain/automation';
-import type { CommandDescriptor } from '../domain/agent-requests';
+import type {
+  AgentNavigation,
+  AgentPlane,
+  AgentWorkspaceSnapshot,
+  CommandDescriptor,
+} from '../domain/agent-requests';
 import type { AgentRequests } from './agent-requests';
 import type { SettingsService } from './settings';
 import { createServer, type Server, type Socket } from 'node:net';
@@ -22,6 +27,57 @@ import { DocumentStore } from './document-store';
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 const tools = [
+  {
+    name: 'list_workspaces',
+    description: 'List Viewer workspaces and planes visible within the agent folder grants.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'list_planes',
+    description:
+      'List granted planes in a specific workspace. Omitted workspaceID uses the active workspace.',
+    inputSchema: {
+      type: 'object',
+      properties: { workspaceID: { type: 'string' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'propose_open_path',
+    description:
+      'Open a granted path in the captured folder, an independent root plane or a linked plane, after user review. Does not grant OS permission.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        placement: { type: 'string', enum: ['current', 'root', 'linked'] },
+      },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'propose_selection',
+    description:
+      'Select specific granted files in the captured folder after user review. Empty paths clears selection.',
+    inputSchema: {
+      type: 'object',
+      properties: { paths: { type: 'array', items: { type: 'string' }, maxItems: 2000 } },
+      required: ['paths'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'propose_workspace_switch',
+    description:
+      'Switch to a workspace by ID or exact unique name after user review; all destination paths must be granted.',
+    inputSchema: {
+      type: 'object',
+      properties: { workspaceID: { type: 'string' }, name: { type: 'string' } },
+      oneOf: [{ required: ['workspaceID'] }, { required: ['name'] }],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'list_commands',
     description: 'List available commands for the captured active folder and selection.',
@@ -194,6 +250,7 @@ export class AgentBroker {
       requests: AgentRequests;
       config: SettingsService;
       access?(files: readonly string[]): Promise<void>;
+      workspaceState?(): Promise<AgentWorkspaceSnapshot | undefined>;
     },
   ) {
     this.connection = new DocumentStore(path.join(dataPath, 'agent-connection-v1.json'), (value) =>
@@ -294,14 +351,36 @@ export class AgentBroker {
     return token;
   }
   async authorize(file: string): Promise<string> {
+    if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
     await this.extension?.access?.([file]);
     const actual = await realpath(absolute(file));
     const roots = await Promise.all(
       this.settings().agents.roots.map((root) => realpath(root).catch(() => '')),
     );
+    if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
     if (!roots.some((root) => root && within(actual, root)))
       throw new Error('This file is outside the agent’s authorized folders.');
     return actual;
+  }
+  /** Rechecked by the desktop executor after review; neither review nor layout prefs grant paths. */
+  async authorizeNavigation(request: AgentNavigation, target: CapturedTarget): Promise<void> {
+    await this.authorize(target.directory);
+    if (request.kind === 'open-path') await this.authorize(request.path);
+    else if (request.kind === 'select-files') {
+      const directory = await this.authorize(target.directory);
+      for (const file of request.files) {
+        await this.authorize(file.path);
+        const actual = await entry(file.path);
+        if (actual.identity !== file.identity || (await realpath(actual.parent)) !== directory)
+          throw new Error('Selection changed. Ask the agent for a new proposal.');
+      }
+    } else {
+      for (const pane of request.workspace.panes) {
+        if (pane.type === 'search' && pane.allLocations)
+          throw new Error('This workspace searches outside the agent folder scope.');
+        await this.authorize(pane.path);
+      }
+    }
   }
   async handle(token: unknown, request: unknown): Promise<unknown> {
     if (
@@ -331,7 +410,115 @@ export class AgentBroker {
       .parse(message.params);
     const args = call.arguments || {};
     let value: unknown;
-    if (['list_commands', 'explain_command', 'propose_command'].includes(call.name)) {
+    if (['list_workspaces', 'list_planes'].includes(call.name)) {
+      const input =
+        call.name === 'list_planes'
+          ? z
+              .object({ workspaceID: z.string().min(1).max(200).optional() })
+              .strict()
+              .parse(args)
+          : (z.object({}).strict().parse(args), { workspaceID: undefined });
+      const state = await this.extension?.workspaceState?.();
+      if (!state) throw new Error('Workspace state is unavailable.');
+      const workspaces = [];
+      for (const workspace of state.workspaces) {
+        if (
+          call.name === 'list_planes' &&
+          workspace.id !== (input.workspaceID || state.activeWorkspace)
+        )
+          continue;
+        const panes: AgentPlane[] = [];
+        for (const pane of workspace.panes) {
+          if (pane.type === 'search' && pane.allLocations) continue;
+          try {
+            await this.authorize(pane.path);
+            panes.push({
+              id: pane.id,
+              type: pane.type,
+              path: pane.path,
+              ...(pane.type === 'folder' ? { mode: pane.mode } : {}),
+            });
+          } catch {
+            /* Omit inaccessible plane paths and their history/layout. */
+          }
+        }
+        if (panes.length || !workspace.panes.length)
+          workspaces.push({
+            id: workspace.id,
+            name: workspace.name,
+            active: workspace.id === state.activeWorkspace,
+            panes,
+            roots: workspace.roots.filter((id) => panes.some((pane) => pane.id === id)),
+          });
+      }
+      value = call.name === 'list_workspaces' ? workspaces : workspaces[0]?.panes || [];
+    } else if (
+      ['propose_open_path', 'propose_selection', 'propose_workspace_switch'].includes(call.name)
+    ) {
+      const extension = this.extension,
+        catalog = extension?.catalog();
+      if (!extension || !catalog) throw new Error('Focus a granted folder plane in Viewer first.');
+      await this.authorize(catalog.target.directory);
+      let request: AgentNavigation;
+      let target: CapturedTarget = structuredClone({ ...catalog.target, selection: [] });
+      if (call.name === 'propose_open_path') {
+        const input = z
+          .object({
+            path: z.string().min(1).max(32768),
+            placement: z.enum(['current', 'root', 'linked']).default('current'),
+          })
+          .strict()
+          .parse(args);
+        await this.authorize(input.path);
+        request = { kind: 'open-path', ...input };
+      } else if (call.name === 'propose_selection') {
+        const input = z
+          .object({ paths: z.array(z.string().min(1).max(32768)).max(2000) })
+          .strict()
+          .parse(args);
+        const files = [];
+        const directory = await this.authorize(target.directory);
+        for (const file of new Set(input.paths)) {
+          await this.authorize(file);
+          const selected = await entry(file);
+          if ((await realpath(selected.parent)) !== directory)
+            throw new Error('Select files from the captured folder. Open their folder first.');
+          files.push(selected);
+        }
+        request = { kind: 'select-files', files };
+        target = { ...target, selection: files };
+      } else {
+        const input = z
+          .object({
+            workspaceID: z.string().min(1).max(200).optional(),
+            name: z.string().min(1).max(200).optional(),
+          })
+          .strict()
+          .refine(
+            (input) => !!input.workspaceID !== !!input.name,
+            'Provide one workspace ID or name.',
+          )
+          .parse(args);
+        const state = await extension.workspaceState?.();
+        const matches =
+          state?.workspaces.filter((space) =>
+            input.workspaceID
+              ? space.id === input.workspaceID
+              : space.name.normalize('NFC') === input.name!.normalize('NFC'),
+          ) || [];
+        if (matches.length !== 1)
+          throw new Error('Choose a unique workspace ID from list_workspaces.');
+        for (const pane of matches[0].panes) {
+          if (pane.type === 'search' && pane.allLocations)
+            throw new Error('This workspace searches outside the agent folder scope.');
+          await this.authorize(pane.path);
+        }
+        request = { kind: 'switch-workspace', workspace: structuredClone(matches[0]) };
+      }
+      await this.authorizeNavigation(request, target);
+      value = extension.requests.navigation(request, target);
+      this.owned.add((value as { id: string }).id);
+    } else if (['list_commands', 'explain_command', 'propose_command'].includes(call.name)) {
       const extension = this.extension;
       const catalog = extension?.catalog();
       if (!extension || !catalog) throw new Error('Focus a folder plane in Viewer first.');

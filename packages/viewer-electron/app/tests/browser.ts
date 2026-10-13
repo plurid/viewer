@@ -1,5 +1,6 @@
 /** Test-only bridge. This entry is never imported or included in production. */
 import type { ApiMethod, DesktopEvent, ViewerAPI } from '../src/domain/contracts';
+import { copyBrowserPaths } from './browser-clipboard';
 const listeners = new Set<(event: DesktopEvent) => void>();
 const events = new EventSource('/__test/events');
 events.onmessage = (event) => {
@@ -19,7 +20,8 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
-  commandsPublish: (target, commands) => invoke('commandsPublish', target, commands),
+  commandsPublish: (target, commands, workspaces) =>
+    invoke('commandsPublish', target, commands, workspaces),
   agentCommandResult: (id, error) => invoke('agentCommandResult', id, error),
   agentReviewList: () => invoke('agentReviewList'),
   agentReview: (id, approve) => invoke('agentReview', id, approve),
@@ -74,9 +76,13 @@ const api: ViewerAPI = {
   bootstrap: () => invoke('bootstrap'),
   list: (path) => invoke('list', path),
   stat: (path) => invoke('stat', path),
+  fileInformation: (path) => invoke('fileInformation', path),
+  fileInformationUpdate: (path, revision, patch) =>
+    invoke('fileInformationUpdate', path, revision, patch),
   chooseFolder: (defaultPath) => invoke('chooseFolder', defaultPath),
   reveal: (path) => invoke('reveal', path),
   openExternal: (path) => invoke('openExternal', path),
+  nativeFilePanel: (kind, files) => invoke('nativeFilePanel', kind, files),
   applications: (paths) => invoke('applications', paths),
   chooseApplication: () => invoke('chooseApplication'),
   openWith: (paths, id) => invoke('openWith', paths, id),
@@ -100,7 +106,8 @@ const api: ViewerAPI = {
   save: (state) => invoke('save', state),
   flushed: (token) => invoke('flushed', token),
   clipboardWrite: (paths, cut) => invoke('clipboardWrite', paths, cut),
-  copyPaths: (paths) => invoke('copyPaths', paths),
+  copyPaths: (paths) =>
+    copyBrowserPaths(paths, () => invoke('copyPaths', paths), navigator.clipboard),
   clipboardRead: () => invoke('clipboardRead'),
   fileDropPaths: async () => [],
   volumesList: () => invoke('volumesList'),

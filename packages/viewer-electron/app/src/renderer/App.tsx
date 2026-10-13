@@ -2,6 +2,7 @@ import { routeFileKeyboard } from './explorer/selection';
 import { AgentReview } from './actions/AgentReview';
 import { captureTarget } from './commands/programs';
 import { useWorkspaceController } from './workspace/controller';
+import { executeAgentNavigation } from './workspace/agent-navigation';
 import { programCommands } from './commands/programs';
 import { ExecutionPanel } from './terminals/ExecutionPanel';
 import { trimTerminals, terminalEditing } from './terminals/sessions';
@@ -236,6 +237,21 @@ function AppWindow() {
     const publish = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
+        const workspaces = {
+          activeWorkspace: getState().saved.activeWorkspace,
+          workspaces: getState().saved.workspaces.map((space) => ({
+            id: space.id,
+            name: space.name,
+            roots: space.roots,
+            panes: space.panes.map((pane) => ({
+              id: pane.id,
+              type: pane.type,
+              path: pane.path,
+              ...(pane.type === 'folder' ? { mode: pane.mode } : {}),
+              ...(pane.type === 'search' ? { allLocations: pane.allLocations } : {}),
+            })),
+          })),
+        };
         const context = registry.context(getState().activePane) || windowContext();
         if (!context.directory && !context.folder) {
           const space = activeWorkspace();
@@ -249,6 +265,7 @@ function AppWindow() {
                 selection: [],
               },
               [],
+              workspaces,
             )
             .catch(report);
           return;
@@ -271,7 +288,7 @@ function AppWindow() {
                   shortcut,
                 }));
         if (target.selection.length > 2000) target.selection = [];
-        void window.viewer.commandsPublish(target, commands).catch(report);
+        void window.viewer.commandsPublish(target, commands, workspaces).catch(report);
       }, 80);
     };
     const off = registry.subscribe(publish);
@@ -397,6 +414,15 @@ function AppWindow() {
           ) {
             report('The originating plane is no longer available. Request a new proposal.');
             finish('The originating plane or folder changed.');
+            return;
+          }
+          if (event.navigation) {
+            void executeAgentNavigation(event.navigation, target, controller, switchTo)
+              .then(() => finish())
+              .catch((error: Error) => {
+                report(error);
+                finish(error.message);
+              });
             return;
           }
           void registry

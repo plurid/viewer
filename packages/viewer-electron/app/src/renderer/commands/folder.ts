@@ -28,6 +28,7 @@ export interface FolderActions {
   path(): void;
   refresh(): void;
   selectAll(): void;
+  invertSelection(): void;
 }
 export function folderCommands(actions: FolderActions): CommandDefinition[] {
   const folder = (context: CommandContext) =>
@@ -36,6 +37,77 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     ['window', 'files', 'folder'].includes(context.scope) && context.selection.length > 0;
   const paths = (context: CommandContext) => context.selection.map((entry) => entry.path);
   const commands: CommandDefinition[] = [
+    {
+      id: 'invert-selection',
+      label: 'Invert selection',
+      group: 'Files',
+      icon: 'check',
+      aliases: ['invert', 'reverse selection', 'unselected'],
+      when: (context) => !!context.paneID && ['window', 'folder', 'files'].includes(context.scope),
+      run: actions.invertSelection,
+    },
+    {
+      id: 'tags',
+      label: 'Tags and comments…',
+      group: 'Files',
+      icon: 'tag',
+      aliases: ['tags', 'labels', 'color', 'comments'],
+      when: (context) => selected(context) && getState().bootstrap.platform === 'darwin',
+      run: actions.info,
+    },
+    {
+      id: 'make-alias',
+      label: 'Make alias',
+      group: 'Files',
+      icon: 'alias',
+      aliases: ['alias', 'shortcut', 'link'],
+      when: (context) => selected(context) && getState().bootstrap.platform === 'darwin',
+      run: (context) =>
+        window.viewer.operate({ kind: 'alias', sources: paths(context) }).then(() => {}),
+    },
+    {
+      id: 'native-quick-look',
+      label: 'Quick Look in macOS',
+      group: 'Files',
+      icon: 'eye',
+      aliases: ['quick look', 'native preview', 'office preview'],
+      when: (context) =>
+        selected(context) &&
+        context.selection.length <= 100 &&
+        getState().bootstrap.platform === 'darwin',
+      run: (context) => window.viewer.nativeFilePanel('preview', paths(context)),
+    },
+    {
+      id: 'share',
+      label: 'Share…',
+      group: 'Files',
+      icon: 'share',
+      aliases: ['share', 'airdrop', 'send'],
+      when: (context) =>
+        selected(context) &&
+        context.selection.length <= 100 &&
+        getState().bootstrap.platform === 'darwin',
+      run: (context) => window.viewer.nativeFilePanel('share', paths(context)),
+    },
+    {
+      id: 'show-package-contents',
+      label: 'Show Package Contents',
+      group: 'Files',
+      icon: 'folder',
+      aliases: ['package', 'bundle', 'application contents'],
+      when: (context) =>
+        selected(context) &&
+        context.selection.length === 1 &&
+        context.selection[0].directory &&
+        context.selection[0].name.includes('.') &&
+        getState().bootstrap.platform === 'darwin',
+      run: async (context) => {
+        const entry = context.selection[0];
+        const info = await window.viewer.fileInformation(entry.path);
+        if (!info.package) throw new Error('This folder is not a macOS package.');
+        actions.open([entry], false);
+      },
+    },
     {
       id: 'compress',
       label: 'Compress to ZIP',

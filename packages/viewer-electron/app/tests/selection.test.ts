@@ -28,6 +28,18 @@ function selection() {
   };
 }
 describe('file input selection', () => {
+  it('inverts only the active view scope, retaining its order and resetting the range anchor', () => {
+    const { session, controller } = selection();
+    controller.click(entries[1], plain, entries);
+    controller.click(entries[3], { ...plain, metaKey: true }, entries);
+    controller.invert(entries.slice(0, 5));
+    expect(session.selection).toEqual([entries[0].path, entries[2].path, entries[4].path]);
+    expect(session.cursor).toBe(entries[0].path);
+    expect(session.anchor).toBe(entries[0].path);
+    controller.invert([]);
+    expect(session.selection).toEqual([]);
+    expect(session.cursor).toBe('');
+  });
   it('jumps by typed prefixes, cycles repeated initials and handles accented names', () => {
     const { session, controller } = selection();
     const files = ['Alpha', 'Alpine', 'Éclair', 'Emoji 📁'].map((name, index) => ({

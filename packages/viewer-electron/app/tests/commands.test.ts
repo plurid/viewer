@@ -44,6 +44,7 @@ const actions: FolderActions = {
   path: vi.fn(),
   refresh: vi.fn(),
   selectAll: vi.fn(),
+  invertSelection: vi.fn(),
 };
 const operate = vi.fn();
 const save = vi.fn();
@@ -88,6 +89,22 @@ afterEach(async () => {
 });
 
 describe('contextual commands', () => {
+  it('offers native actions through captured selection and hides them on other platforms', async () => {
+    const definitions = folderCommands(actions);
+    for (const id of ['tags', 'make-alias', 'native-quick-look', 'share']) {
+      expect(definitions.find((command) => command.id === id)!.when(context)).toBe(true);
+      expect(
+        definitions.find((command) => command.id === id)!.when({ ...context, selection: [] }),
+      ).toBe(false);
+    }
+    await registry.invoke('tags', { paneID: context.paneID });
+    expect(actions.info).toHaveBeenCalledWith(
+      expect.objectContaining({ selection: context.selection }),
+    );
+    initialize({ home: '/fixtures', platform: 'linux', state: null, locations: [], openPaths: [] });
+    for (const id of ['tags', 'make-alias', 'native-quick-look', 'share'])
+      expect(definitions.find((command) => command.id === id)!.when(context)).toBe(false);
+  });
   const commandsIn = (sections: MenuSection[]): string[] =>
     sections.flatMap((section) =>
       section.entries.flatMap((entry) =>

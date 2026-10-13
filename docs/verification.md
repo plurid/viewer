@@ -1,5 +1,17 @@
 # Verification
 
+## October 13 Finder integration and Chrome Copy Path
+
+The first native integration increment adds editable Get Info (Finder tags/colors, comments, Locked and POSIX permissions), owner/group/allocation details, journaled aliases with guarded cold Undo, native Quick Look/Share commands, checked package inspection and Invert Selection. The locally signed ordinary package was rebuilt. This does not change the signed Store candidate's qualification evidence.
+
+**366 tests across 49 files pass.** All four TypeScript targets, ESLint, formatting and the production package build pass. The new native regressions verify exact tag/comment plist data, Foundation tag names and alias recognition, Unicode spelling equivalence, stale/replaced-item rejection, denied grants, preserved contents/unrelated attributes, lock/unlock and permission recovery after mode zero. The browser clipboard regression was reproduced before the fix; three cases now verify exact multi-path text, denied permission and an unavailable clipboard. Chrome command invocation followed by a real Meta-V paste returned the exact generated selected path.
+
+The hidden packaged test, node --import tsx tests/native-file-information.ts, passes the real preload/main/native bridge, stale-edit rejection, tags/aliases, graceful relaunch and cold alias Undo. It enters Get Info with Command-I and saves a permission edit through the rendered controls. Desktop 1440×900 and narrow 760×640 captures show both the top and scrolled details without horizontal overflow. Fixtures/profile are generated and cleaned; this test leaves the system clipboard untouched.
+
+The first layout capture exposed excessive nested form padding and hidden actions. The compact label/value layout and sticky Save/Reload were confirmed in a second batched capture. Static detection reports only the pre-existing Markdown blockquote border outside this change. Native Quick Look/Share physical interaction and signed sandbox acceptance remain unverified. Tag filtering/sidebar organization, general Trash browsing and the rest of [the parity sequence](finder-integration.md) remain feature work.
+
+Spring-loaded drag/controller regressions cover nested traversal, cancelled selection/history restoration, one final history entry on drop, column-root retention, denied/link/non-folder hover without a picker, workspace/closed/navigation/cancellation races, bounded inspections, hover invalidation and two-axis scale-normalized edge scrolling. The native-renderer probe reproduced a browser `Illegal invocation` from using animation functions as controller methods; a new regression failed before the global-receiver wrappers and passes afterward. Persistence during hover also exposed the existing saved-state invariant requiring `history[historyIndex] === path`; temporary slots now match the folder and cancel restores the original array.
+
 ## October 13 guided native acceptance
 
 **All eight guided permissions/Finder checks now pass on signed `2026101318`, macOS 15.1 / 24B2083**, across three sessions with matching candidate identifiers and executable/archive/Info.plist hashes. The aggregate is `out/native-acceptance/summary-2026101318.json`; individual reports retain their original scope and completion/failure status. This completes this guided batch, not all native release acceptance or final qualification.

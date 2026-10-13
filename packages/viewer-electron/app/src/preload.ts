@@ -8,7 +8,8 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
-  commandsPublish: (target, commands) => invoke('commandsPublish', target, commands),
+  commandsPublish: (target, commands, workspaces) =>
+    invoke('commandsPublish', target, commands, workspaces),
   agentCommandResult: (id, error) => invoke('agentCommandResult', id, error),
   agentReviewList: () => invoke('agentReviewList'),
   agentReview: (id, approve) => invoke('agentReview', id, approve),
@@ -54,9 +55,13 @@ const api: ViewerAPI = {
   bootstrap: () => invoke('bootstrap'),
   list: (file) => invoke('list', file),
   stat: (file) => invoke('stat', file),
+  fileInformation: (file) => invoke('fileInformation', file),
+  fileInformationUpdate: (file, revision, patch) =>
+    invoke('fileInformationUpdate', file, revision, patch),
   chooseFolder: (defaultPath) => invoke('chooseFolder', defaultPath),
   reveal: (file) => invoke('reveal', file),
   openExternal: (file) => invoke('openExternal', file),
+  nativeFilePanel: (kind, files) => invoke('nativeFilePanel', kind, files),
   applications: (paths) => invoke('applications', paths),
   chooseApplication: () => invoke('chooseApplication'),
   openWith: (paths, applicationID) => invoke('openWith', paths, applicationID),

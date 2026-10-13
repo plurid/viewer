@@ -93,6 +93,17 @@ export function clearSessions(): void {
   sessions.clear();
   historySessions.clear();
 }
+/** Captured path ownership is required for non-component session transitions. */
+export function updateBrowseSession(
+  id: string,
+  path: string,
+  patch: Partial<Omit<BrowseSession, 'path'>>,
+): void {
+  const session = sessions.get(id);
+  if (!session || session.path !== path) return;
+  Object.assign(session, patch);
+  listeners.get(id)?.forEach((listener) => listener());
+}
 export function trimSessions(ids: ReadonlySet<string>): void {
   for (const id of sessions.keys())
     if (!ids.has(id)) {
