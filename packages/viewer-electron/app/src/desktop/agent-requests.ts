@@ -208,7 +208,9 @@ export class AgentRequests {
         ? 'Open path'
         : request.kind === 'select-files'
           ? 'Select files'
-          : 'Change workspace';
+          : request.kind === 'focus-plane'
+            ? 'Focus plane'
+            : 'Change workspace';
     const proposal = this.add({
       kind: 'navigation',
       title,
@@ -221,7 +223,9 @@ export class AgentRequests {
             ? request.files.length
               ? request.files.map((file) => file.path).join('\n')
               : 'Clear selection in the captured folder.'
-            : `${request.workspace.name}\n\n${request.workspace.panes.map((pane) => pane.path).join('\n') || 'Empty workspace'}`,
+            : request.kind === 'focus-plane'
+              ? request.pane.path
+              : `${request.workspace.name}\n\n${request.workspace.panes.map((pane) => pane.path).join('\n') || 'Empty workspace'}`,
     });
     return { id: proposal.id, requiresUserReview: true };
   }

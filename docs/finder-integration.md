@@ -38,6 +38,6 @@ Copy Path in the Chrome fixture uses the browser clipboard API, writes exact new
 
 Continue the everyday Finder work with tag filtering/sidebar integration, selection rectangles, Trash browsing, native window/tab restoration, richer search filters and native Services. Metadata ownership/admin workflows, bulk tagging and explicit default-app association changes remain gaps.
 
-Then extend scoped MCP with parameterized workspace/plane/path navigation, implement portable project workspaces and evidence-backed content search, and follow with comparison, workflows and dependency tracking. Saved searches, basic batch rename, terminals, CAD inspection and global JSONC already exist.
+Scoped MCP now supports reviewed workspace switching, plane focus, parameterized path opening and exact selection; see [agent-navigation.md](agent-navigation.md). The next five major feature groups are portable project workspaces, evidence-backed content search, comparison, workflows and dependency tracking. Saved searches, basic batch rename, terminals, CAD inspection and global JSONC already exist. Finder gaps listed above and native release qualification remain separate work.
 
 The [roadmap](roadmap.md) tracks features. The [Store readiness ledger](mac-app-store-readiness.md) separately tracks native/provider/OS/distribution qualification. No parity increment grants itself release readiness.

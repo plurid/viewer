@@ -255,13 +255,19 @@ function AppWindow() {
         const context = registry.context(getState().activePane) || windowContext();
         if (!context.directory && !context.folder) {
           const space = activeWorkspace();
+          const pane = space.panes.find((pane) => pane.id === getState().activePane);
           void window.viewer
             .commandsPublish(
               {
                 workspaceID: space.id,
-                rootID: space.roots[0] || 'none',
-                paneID: space.activePane || 'none',
-                directory: getState().bootstrap.home,
+                rootID: (pane && controller.rootID(pane.id)) || 'none',
+                paneID: pane?.id || 'none',
+                panePath: pane?.path,
+                directory: pane
+                  ? pane.type === 'preview'
+                    ? pane.path.slice(0, pane.path.lastIndexOf('/')) || '/'
+                    : pane.path
+                  : getState().bootstrap.home,
                 selection: [],
               },
               [],
@@ -406,11 +412,17 @@ function AppWindow() {
           const { target } = event;
           const space = activeWorkspace();
           const pane = space.panes.find((pane) => pane.id === target.paneID);
+          const emptyOrigin =
+            event.navigation &&
+            !space.panes.length &&
+            target.paneID === 'none' &&
+            target.rootID === 'none';
           if (
             space.id !== target.workspaceID ||
-            !pane ||
-            (target.panePath && pane.path !== target.panePath) ||
-            controller.rootID(pane.id) !== target.rootID
+            (!emptyOrigin &&
+              (!pane ||
+                (target.panePath && pane.path !== target.panePath) ||
+                controller.rootID(pane.id) !== target.rootID))
           ) {
             report('The originating plane is no longer available. Request a new proposal.');
             finish('The originating plane or folder changed.');
@@ -423,6 +435,10 @@ function AppWindow() {
                 report(error);
                 finish(error.message);
               });
+            return;
+          }
+          if (!pane) {
+            finish('The originating plane is unavailable.');
             return;
           }
           void registry

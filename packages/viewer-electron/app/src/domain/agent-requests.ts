@@ -22,6 +22,7 @@ export interface AgentWorkspaceSnapshot {
 export type AgentNavigation =
   | { kind: 'open-path'; path: string; placement: 'current' | 'root' | 'linked' }
   | { kind: 'select-files'; files: import('./contracts').FileEntry[] }
+  | { kind: 'focus-plane'; pane: AgentPlane }
   | { kind: 'switch-workspace'; workspace: AgentWorkspace };
 export interface CommandDescriptor {
   id: string;

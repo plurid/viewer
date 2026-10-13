@@ -1,5 +1,13 @@
 # Verification
 
+## October 13 parameterized MCP navigation
+
+**391 tests across 51 files pass.** `pnpm check`, `pnpm lint`, `pnpm format:check` and `pnpm package` pass. The 25 new MCP/navigation regressions cover authentication, strict arguments, redacted live discovery, reviewed/rejected execution, literal Unicode selection, canonical scopes/symlink escape, stale or replaced sources, revoked native/agent access, disabled Agents, token rotation, unique workspace names, changed destinations, active columns, root versus linked placement, plane focus and empty-workspace continuation. Native filesystem/coordination tests require ordinary macOS execution; the restricted command sandbox produced native file-open failures, while the final suite with normal OS access passes.
+
+`node --import tsx tests/native-agent-navigation.ts` passes against the rebuilt ordinary package. A real separate `--mcp` process connects to the hidden owned app's private socket. Rendered Reject/Open path/Select files/Focus plane/Change workspace controls drive the shared host state; requests complete only after renderer acknowledgement. The test verifies the actual two-file explorer selection, independent and linked previews, continuation from previews, name/ID switching and root creation from an empty workspace. Generated source contents are unchanged, the private token is absent from client output, both owned processes quit and the temporary profile/files are removed. Evidence: `out/agent-navigation/result.json`. The test does not activate a foreground app or alter the clipboard. Signed Store and physical third-party-client acceptance remain separate.
+
+`node --import tsx tests/native-drag-navigation.ts` also passed the packaged nested list/column hover, retained docking, cancellation/history, nested transfer/Undo and two-axis edge scrolling checks. Trusted injected drag events include a continuing dragover pulse and actual leave delivery before cancellation; this covers Chromium/controller behavior, not physical Finder Escape/drag acceptance. The earlier Finder increment below retains its own test counts and evidence.
+
 ## October 13 Finder integration and Chrome Copy Path
 
 The first native integration increment adds editable Get Info (Finder tags/colors, comments, Locked and POSIX permissions), owner/group/allocation details, journaled aliases with guarded cold Undo, native Quick Look/Share commands, checked package inspection and Invert Selection. The locally signed ordinary package was rebuilt. This does not change the signed Store candidate's qualification evidence.

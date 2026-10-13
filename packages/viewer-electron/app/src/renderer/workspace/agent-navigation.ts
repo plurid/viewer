@@ -15,6 +15,13 @@ export async function executeAgentNavigation(
     const space = activeWorkspace();
     const pane = space.panes.find((pane) => pane.id === target.paneID);
     if (
+      space.id === target.workspaceID &&
+      !space.panes.length &&
+      target.paneID === 'none' &&
+      target.rootID === 'none'
+    )
+      return undefined;
+    if (
       space.id !== target.workspaceID ||
       !pane ||
       (target.panePath && pane.path !== target.panePath) ||
@@ -30,6 +37,18 @@ export async function executeAgentNavigation(
     return pane;
   };
   const pane = origin();
+  if (request.kind === 'focus-plane') {
+    const destination = activeWorkspace().panes.find((pane) => pane.id === request.pane.id);
+    if (
+      !destination ||
+      destination.path !== request.pane.path ||
+      destination.type !== request.pane.type ||
+      (destination.type === 'search' && destination.allLocations !== request.pane.allLocations)
+    )
+      throw new Error('The destination plane changed. Request a new proposal.');
+    controller.focusPane(destination.id);
+    return;
+  }
   if (request.kind === 'switch-workspace') {
     const destination = getState().saved.workspaces.find(
       (space) => space.id === request.workspace.id,
@@ -55,13 +74,14 @@ export async function executeAgentNavigation(
   if (request.kind === 'open-path') {
     const entry = await window.viewer.stat(request.path);
     origin();
-    if (request.placement === 'current' && entry.directory && pane.type === 'folder') {
+    if (!pane && request.placement === 'linked') throw new Error('Focus a folder plane first.');
+    if (request.placement === 'current' && entry.directory && pane?.type === 'folder') {
       navigate(pane.id, entry.path);
       controller.focusPane(pane.id);
-    } else controller.open(entry, pane.id, { another: request.placement === 'root' });
+    } else controller.open(entry, pane?.id, { another: !pane || request.placement === 'root' });
     return;
   }
-  if (pane.type !== 'folder') throw new Error('Focus a folder plane before selecting files.');
+  if (pane?.type !== 'folder') throw new Error('Focus a folder plane before selecting files.');
   const entries = [];
   for (const expected of request.files) {
     const actual = await window.viewer.stat(expected.path);
