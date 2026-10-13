@@ -53,7 +53,12 @@ export const QuickPreview = memo(function QuickPreview({
     [session, workspace],
   );
   return (
-    <Dialog title={path.split(/[\\/]/).pop() || path} wide onClose={() => quickPreview(null)}>
+    <Dialog
+      title={path.split(/[\\/]/).pop() || path}
+      wide
+      className="quick-preview-dialog"
+      onClose={() => quickPreview(null)}
+    >
       <div className="quick-preview">
         <PreviewHost path={path} renderFooter={footer} />
       </div>

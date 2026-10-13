@@ -20,7 +20,7 @@ import type { CommandContext, CommandDefinition } from './registry';
 export interface FolderActions {
   open(entries: readonly FileEntry[], linked: boolean, another?: boolean): void;
   dialog(kind: 'rename' | 'mkdir' | 'go-to', context: CommandContext): void;
-  trash(context: CommandContext): void;
+  trash(context: CommandContext): void | Promise<void>;
   info(context: CommandContext): void;
   openWith(context: CommandContext): void;
   destination(kind: 'copy' | 'move', context: CommandContext): void;
@@ -302,7 +302,8 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'trash',
-      label: 'Move to Trash…',
+      label: () =>
+        getState().settings.settings.browsing.confirmTrash ? 'Move to Trash…' : 'Move to Trash',
       group: 'Files',
       icon: 'trash',
       aliases: ['tr'],

@@ -5,6 +5,7 @@ import {
   useState,
   type ButtonHTMLAttributes,
   type ReactNode,
+  type KeyboardEventHandler,
 } from 'react';
 import { Icon, type IconName } from './Icon';
 
@@ -60,12 +61,14 @@ export function Dialog({
   onClose,
   wide = false,
   className = '',
+  onKeyDown,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
   className?: string;
+  onKeyDown?: KeyboardEventHandler<HTMLDialogElement>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -94,6 +97,7 @@ export function Dialog({
           onClose();
       }}
       aria-label={title}
+      onKeyDown={onKeyDown}
     >
       <header>
         <strong>{title}</strong>

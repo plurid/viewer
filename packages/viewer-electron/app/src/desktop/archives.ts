@@ -2,6 +2,7 @@ import { open, readFile, stat } from 'node:fs/promises';
 import { crc32, gunzip, inflateRaw } from 'node:zlib';
 import { promisify } from 'node:util';
 import type { ArchiveEntry, ArchiveListing } from '../domain/contracts';
+import { fileCoordination } from './file-coordination';
 
 const ENTRY_LIMIT = 32 * 1024 * 1024;
 const INDEX_LIMIT = 20000;
@@ -85,7 +86,18 @@ export class Archives {
   release(file: string): void {
     this.cache.delete(file);
   }
+  private coordinated<T>(file: string, read: () => Promise<T>): Promise<T> {
+    return fileCoordination.run([{ path: file, mode: 'read' }], async (signal) => {
+      signal?.throwIfAborted();
+      const result = await read();
+      signal?.throwIfAborted();
+      return result;
+    });
+  }
   async list(file: string): Promise<ArchiveListing> {
+    return this.coordinated(file, () => this.listCoordinated(file));
+  }
+  private async listCoordinated(file: string): Promise<ArchiveListing> {
     const index = await this.index(file);
     return {
       entries: index.entries.map(({ name, size, directory, previewable }) => ({
@@ -98,6 +110,9 @@ export class Archives {
     };
   }
   async read(file: string, name: string): Promise<Buffer> {
+    return this.coordinated(file, () => this.readCoordinated(file, name));
+  }
+  private async readCoordinated(file: string, name: string): Promise<Buffer> {
     const before = await archiveFingerprint(file);
     const data = await this.readIndexed(file, name);
     if ((await archiveFingerprint(file)) !== before)
@@ -105,6 +120,9 @@ export class Archives {
     return data;
   }
   async extractionEntries(file: string): Promise<ArchiveEntry[]> {
+    return this.coordinated(file, () => this.extractionEntriesCoordinated(file));
+  }
+  private async extractionEntriesCoordinated(file: string): Promise<ArchiveEntry[]> {
     const index = await this.index(file);
     if (index.truncated) throw new Error('Extraction is limited to 20,000 archive entries.');
     if (index.unsafe)
@@ -127,7 +145,7 @@ export class Archives {
         'This archive entry cannot be previewed (unsupported compression, encryption, or size).',
       );
     if (index.data) return index.data.subarray(entry.offset, entry.offset + entry.size);
-    const handle = await open(file, 'r');
+    const handle = await open(fileCoordination.path(file), 'r');
     try {
       if (entry.method === -1) {
         const data = Buffer.alloc(entry.size);
@@ -157,7 +175,7 @@ export class Archives {
     }
   }
   private async load(file: string): Promise<Index> {
-    const handle = await open(file, 'r');
+    const handle = await open(fileCoordination.path(file), 'r');
     try {
       const info = await handle.stat();
       const signature = Buffer.alloc(4);
@@ -239,7 +257,9 @@ export class Archives {
           throw new Error('Compressed TAR preview is limited to 64 MB.');
         // Native zlib runs in the worker pool; one decompression at a time bounds memory.
         data = await this.background(async () =>
-          untar(await readFile(file), { maxOutputLength: 128 * 1024 * 1024 }),
+          untar(await readFile(fileCoordination.path(file)), {
+            maxOutputLength: 128 * 1024 * 1024,
+          }),
         );
       }
       const total = data?.length ?? info.size;

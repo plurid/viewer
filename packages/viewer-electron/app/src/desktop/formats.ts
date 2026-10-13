@@ -7,6 +7,7 @@ import { Archives } from './archives';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { DocumentData } from '../domain/services';
+import { fileCoordination } from './file-coordination';
 const run = promisify(execFile);
 const decode = (value: string) =>
   value
@@ -28,7 +29,7 @@ export const plainText = (html: string) =>
     .trim();
 async function bytes(file: string, limit: number): Promise<Uint8Array> {
   const handle = await open(
-    file,
+    fileCoordination.path(file),
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
   );
   try {
@@ -50,6 +51,21 @@ async function bytes(file: string, limit: number): Promise<Uint8Array> {
 export async function extractDocument(
   file: string,
   options: { ocr?: string; pages?: number; signal?: AbortSignal } = {},
+): Promise<DocumentData> {
+  return fileCoordination.run(
+    [{ path: file, mode: 'read' }],
+    async (signal) => {
+      signal?.throwIfAborted();
+      const result = await extractCoordinated(file, { ...options, signal });
+      signal?.throwIfAborted();
+      return result;
+    },
+    options.signal,
+  );
+}
+async function extractCoordinated(
+  file: string,
+  options: { ocr?: string; pages?: number; signal?: AbortSignal },
 ): Promise<DocumentData> {
   const extension = path.extname(file).toLowerCase();
   const result: DocumentData = {

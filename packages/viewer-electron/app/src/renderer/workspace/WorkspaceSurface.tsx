@@ -158,7 +158,7 @@ export function WorkspaceSurface({
           freezeDistance: 3500,
           detach: { mode: 'unmount', delay: 1500, max: 40 },
         },
-        navigation: { onClose: 'parent', framing: { fill: 0.82 }, childFraming: 'plane' },
+        navigation: { onClose: 'parent', framing: { fill: 0.92 }, childFraming: 'plane' },
       },
       elements: {
         minimap: { show: preferences.minimap },
@@ -172,8 +172,8 @@ export function WorkspaceSurface({
         // Automatic dimensions use the engine's live configuration; changing the
         // registered routes would reconstruct its store and discard linked planes.
         plane: {
-          width: Math.max(380, Math.min(960, size.width - 32)),
-          height: Math.max(300, Math.min(660, size.height - 72)),
+          width: Math.max(380, size.width - 64),
+          height: Math.max(300, size.height - 112),
           controls: { show: preferences.planeHeaders },
           resizable: preferences.resizing,
           backface: 'visible',

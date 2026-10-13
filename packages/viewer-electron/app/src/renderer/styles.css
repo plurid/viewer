@@ -843,6 +843,21 @@ select {
   display: flex;
   overflow-x: auto;
 }
+.column-preview {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 360px;
+  min-width: 320px;
+  min-height: 0;
+  height: 100%;
+  border-inline-end: 1px solid var(--line);
+}
+.column-preview .preview-info {
+  flex-wrap: wrap;
+}
+.column-preview .preview-file-info {
+  flex-wrap: wrap;
+}
 .file-column {
   min-width: 250px;
   width: 280px;
@@ -1023,6 +1038,22 @@ select {
 .dialog footer button {
   border-color: var(--line);
 }
+.dialog-keyboard-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dialog-keyboard-action kbd {
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+}
+.trash-dialog .dialog-copy {
+  overflow-wrap: anywhere;
+}
+.trash-dialog footer {
+  flex-wrap: wrap;
+}
 .dialog-copy {
   padding: 18px;
   color: var(--muted);
@@ -1069,6 +1100,22 @@ select {
 }
 .quick-preview {
   height: min(650px, calc(100vh - 200px));
+}
+.quick-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(90vw, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  height: min(88vh, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
+}
+.quick-preview-dialog > header {
+  flex-shrink: 0;
+}
+.quick-preview-dialog .quick-preview {
+  flex: 1;
+  min-height: 0;
+  height: auto;
 }
 .dialog .quick-preview-footer {
   flex: 0 0 auto;

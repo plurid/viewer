@@ -24,6 +24,7 @@ import type { FileModifiers } from './selection';
 
 import type { FolderPresentation } from '../../domain/folder-presentation';
 import { BrowserColumn } from './BrowserColumn';
+import { FolderSizeValue } from './sizes';
 
 export interface FileViewProps {
   presentation?: FolderPresentation;
@@ -123,21 +124,27 @@ export const FileRow = memo(function FileRow({
               data-column={column}
               className={`file-${column} ${column === 'modified' ? 'file-date' : ''} ${column === 'size' ? 'tabular' : ''}`}
             >
-              {column === 'modified' || column === 'created'
-                ? entry[column]
-                  ? date.format(entry[column])
-                  : '—'
-                : column === 'kind'
-                  ? entry.directory
-                    ? 'Folder'
-                    : entry.kind === 'symlink'
-                      ? 'Alias'
-                      : entry.extension.toUpperCase() || 'File'
-                  : column === 'extension'
-                    ? entry.extension || '—'
-                    : entry.directory
-                      ? '—'
-                      : formatBytes(entry.size)}
+              {column === 'modified' || column === 'created' ? (
+                entry[column] ? (
+                  date.format(entry[column])
+                ) : (
+                  '—'
+                )
+              ) : column === 'kind' ? (
+                entry.directory ? (
+                  'Folder'
+                ) : entry.kind === 'symlink' ? (
+                  'Alias'
+                ) : (
+                  entry.extension.toUpperCase() || 'File'
+                )
+              ) : column === 'extension' ? (
+                entry.extension || '—'
+              ) : entry.directory ? (
+                <FolderSizeValue path={entry.path} />
+              ) : (
+                formatBytes(entry.size)
+              )}
             </span>
           ))}
       {compact && entry.directory && <Icon name="right" size={14} />}
@@ -428,14 +435,18 @@ export function ColumnsView({
   ...props
 }: FileViewProps & { path: string; navigation: ColumnNavigation }) {
   const scroll = useRef<HTMLDivElement>(null);
+  const selected =
+    props.selection.length === 1
+      ? navigation.scope().find((entry) => entry.path === props.selection[0] && !entry.directory)
+      : undefined;
   useEffect(() => {
-    const last = scroll.current?.querySelector<HTMLElement>('.file-column:last-child');
+    const last = scroll.current?.lastElementChild as HTMLElement | undefined;
     if (last && scroll.current) {
       const right = last.offsetLeft + last.offsetWidth;
       if (right > scroll.current.scrollLeft + scroll.current.clientWidth)
         scroll.current.scrollLeft = right - scroll.current.clientWidth;
     }
-  }, [navigation.trail]);
+  }, [navigation.trail, selected?.path]);
   return (
     <div className="columns-view" ref={scroll}>
       <BrowserColumn
@@ -448,6 +459,16 @@ export function ColumnsView({
       {navigation.trail.map((folder) => (
         <Column key={folder} path={folder} props={props} navigation={navigation} />
       ))}
+      {selected && (
+        <div
+          className="column-preview"
+          role="region"
+          aria-label="File preview"
+          data-preview-path={selected.path}
+        >
+          <PreviewHost key={selected.path} path={selected.path} />
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { absolute, entry } from './filesystem';
 import { imageDimensions, readImageDimensions } from './image-dimensions';
 import { Archives } from './archives';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
+import { fileCoordination } from './file-coordination';
 
 interface Grant {
   resource: Resource;
@@ -32,6 +33,20 @@ export class Resources {
   }
   private async grantFile(file: string, scope: PreviewScope): Promise<Resource> {
     await this.access([file]);
+    const actual = await realpath(file);
+    scope.add(actual);
+    await this.access([actual]);
+    const info = await stat(actual);
+    if (!info.isFile()) throw new Error('Choose a regular file to preview.');
+    return fileCoordination.run([{ path: actual, mode: 'read' }], async (signal) => {
+      signal?.throwIfAborted();
+      await this.access([fileCoordination.path(actual)]);
+      scope.check();
+      return this.grantCoordinated(file, scope);
+    });
+  }
+  private async grantCoordinated(file: string, scope: PreviewScope): Promise<Resource> {
+    await this.access([file]);
     scope.check();
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     const item = await entry(absolute(file));
@@ -45,7 +60,7 @@ export class Resources {
     const id = randomUUID();
     const resource = {
       dimensions: item.mime.startsWith('image/')
-        ? await readImageDimensions(actual).catch(() => undefined)
+        ? await readImageDimensions(fileCoordination.path(actual)).catch(() => undefined)
         : undefined,
       id,
       url: `viewer-resource://${id}/asset/${encodeURIComponent(path.basename(actual))}`,
@@ -136,7 +151,20 @@ export class Resources {
     return grant.file;
   }
   read(id: string, requested = MAX_READ): Promise<ResourceRead> {
-    return this.work.track(this.paths(id), () => this.readBounded(id, requested));
+    return this.work.track(this.paths(id), () =>
+      this.coordinated(id, () => this.readBounded(id, requested)),
+    );
+  }
+  private async coordinated<T>(id: string, work: () => Promise<T>): Promise<T> {
+    const grant = this.get(id);
+    return grant.file
+      ? fileCoordination.run([{ path: grant.file, mode: 'read' }], async (signal) => {
+          signal?.throwIfAborted();
+          await this.access([fileCoordination.path(grant.file!)]);
+          this.get(id);
+          return work();
+        })
+      : work();
   }
   private async readBounded(id: string, requested = MAX_READ): Promise<ResourceRead> {
     const grant = this.get(id);
@@ -150,7 +178,7 @@ export class Resources {
       size = grant.data.length;
     } else {
       const file = await open(
-        grant.file!,
+        fileCoordination.path(grant.file!),
         constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
       );
       try {
@@ -173,7 +201,7 @@ export class Resources {
     return { text: binary ? '' : buffer.toString('utf8'), binary, truncated: size > limit };
   }
   archive(id: string) {
-    return this.work.track(this.paths(id), () => this.listArchive(id));
+    return this.work.track(this.paths(id), () => this.coordinated(id, () => this.listArchive(id)));
   }
   private async listArchive(id: string) {
     const grant = this.get(id);
@@ -184,7 +212,9 @@ export class Resources {
     return entries;
   }
   archiveEntry(id: string, name: string): Promise<Resource> {
-    return this.work.track(this.paths(id), () => this.readArchiveEntry(id, name));
+    return this.work.track(this.paths(id), () =>
+      this.coordinated(id, () => this.readArchiveEntry(id, name)),
+    );
   }
   private async readArchiveEntry(id: string, name: string): Promise<Resource> {
     const grant = this.get(id);
@@ -227,6 +257,7 @@ export class Resources {
   }
   private async respond(request: Request, scope: PreviewScope): Promise<Response> {
     let opened: FileHandle | undefined;
+    let claim: Awaited<ReturnType<typeof fileCoordination.acquire>> | undefined;
     try {
       const url = new URL(request.url);
       const grant = this.get(url.hostname);
@@ -255,6 +286,14 @@ export class Resources {
         grant.assets?.add(file);
       }
       if (!grant.data) await this.access([file!]);
+      if (file && !grant.data) {
+        claim = await fileCoordination.acquire([{ path: file, mode: 'read' }], request.signal);
+        claim.signal?.throwIfAborted();
+        scope.check();
+        file = claim.path(file);
+        await this.access([file]);
+        this.get(url.hostname);
+      }
       const info = grant.data ? null : await stat(file!);
       if (info && !info.isFile()) return new Response(null, { status: 403 });
       if (info) {
@@ -310,13 +349,20 @@ export class Resources {
       if (grant.data) body = new Uint8Array(grant.data.subarray(start, end + 1));
       else {
         const stream = opened!.createReadStream({ start, end, autoClose: true });
+        const held = claim;
+        const cancelled = () => stream.destroy(new Error('File access was cancelled.'));
+        held?.signal?.addEventListener('abort', cancelled, { once: true });
+        stream.on('error', () => {});
         const streams = this.streams.get(url.hostname) ?? new Map<Readable, string>();
         streams.set(stream, file!);
         this.streams.set(url.hostname, streams);
         stream.once('close', () => {
+          held?.signal?.removeEventListener('abort', cancelled);
+          void held?.release().catch(() => {});
           streams.delete(stream);
           if (!streams.size) this.streams.delete(url.hostname);
         });
+        claim = undefined;
         body = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
       }
       opened = undefined; // The stream now owns and closes the descriptor, including cancellation.
@@ -325,6 +371,7 @@ export class Resources {
       return new Response('File is unavailable or this resource has expired.', { status: 404 });
     } finally {
       await opened?.close();
+      await claim?.release();
     }
   }
 }

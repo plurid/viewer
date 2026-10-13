@@ -49,6 +49,7 @@ export const settingsSchema = z
         foldersFirst: z.boolean(),
         showHidden: z.boolean(),
         restoreSession: z.boolean(),
+        confirmTrash: z.boolean().default(true),
         newPlaneLocation: z
           .enum([
             'current',

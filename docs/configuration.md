@@ -39,6 +39,8 @@ Supported overrides include view, sort/direction, grouping, hidden files, folder
 
 List headers and searchable column actions control fields, ordering and widths. Browser-column edges resize with drag or Left/Right when the separator is focused; Shift changes the keyboard step, double-click fits filenames, and Option applies a width to the visible trail. Names retain full-text tooltips. **Use as default folder view** updates defaults; **Reset this folder’s view** removes that folder's overrides. Grouping currently renders in List view.
 
+**Calculate Size** retains individual folder measurements for the Size column, Get Info and later selections. Selecting a measured folder with other files adds its known contents to the selection total; selected descendants are not counted twice. Missing, partial and stale measurements remain distinct from a measured empty folder. File changes invalidate affected measurements. Columns view previews a single selected file beside its browsing trail, using the same preview modules as planes and Quick Preview.
+
 `settings.browsing.newPlaneLocation` chooses `current`, `home`, `desktop`, `documents`, `downloads`, `pictures`, `movies`, `music` or `custom`. A custom location uses `newPlanePath`. Current follows a folder plane, a terminal's working folder or a preview's parent, with Home as the fallback. `emptyWorkspaceLocation` is a separate preference for the first plane in an empty workspace, used by its New folder plane button, + and Command-N. It defaults to `home` and accepts the same choices except `current`; custom uses the separate `emptyWorkspacePath`. Later planes use `newPlaneLocation`. Both paths must be absolute. Creating a plane always creates a fresh root.
 
 ## Opening and shortcuts
@@ -46,6 +48,8 @@ List headers and searchable column actions control fields, ordering and widths. 
 `settings.fileOpening.default` is `automatic`, `plane` or `native`. Automatic uses an available preview module, otherwise the OS association. `types` overrides individual lowercase extensions, for example `{ "pdf": "plane", "mkv": "native" }`. Office extensions start with native opening. Explicit **Open linked plane**, **Open in another plane**, **Open in …** and **Open With…** remain available regardless of automatic opening policy.
 
 `settings.shortcuts` maps command IDs to `Cmd+…` or `Ctrl+…`, with optional `Alt` and `Shift`; an empty string disables an override's binding. Settings → Shortcuts lists the defaults. Useful IDs include `copy-path` (Option-Command-C, newline-separated absolute paths as plain text), `open-selection`, `parent`, `back`, `forward`, `view-list`, `view-grid`, `view-columns`, `view-gallery`, `new-root-folder`, `open-terminal`, `open-tmux`, `open-terminal-plane` and `open-config`. Recipe and custom-action shortcuts join the same conflict checks. Text editing, dialogs and terminal input retain their own key handling.
+
+`settings.browsing.confirmTrash` defaults to `true` and is available as **Confirm before moving to Trash** in Settings → Browsing. Set it to `false` to move files directly to the native system Trash, with the same guarded Undo. When confirmation is enabled, Escape cancels and Enter confirms; both keys appear before their button labels. This setting does not enable permanent deletion. New folder requires Command-Shift-N; pressing only modifiers cannot invoke a command.
 
 ## Declarative custom actions
 

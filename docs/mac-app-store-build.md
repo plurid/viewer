@@ -24,7 +24,9 @@ For a locally runnable Store development build:
 
 The October 12 local inventory contains **Apple Development: Ioan Pavel (YQ79LQ8A7M)** with its private key. Its certificate's `OU` is `49W9L8Z9J5`, SHA-1 fingerprint is `73F2194C8987542A13C52931452B28A739EB4D01`, and expiry is October 12, 2027. The parenthetical certificate-name suffix is not its Team ID. Propal's Developer ID Application identity is also present; Developer ID signs direct distribution and cannot substitute for the Store development identity. The replacement Viewer profile passes local platform, expiry, certificate, app, team and Provisioning UDID checks. The signed bundle's embedded profile is byte-identical to that replacement and authorizes exactly one matching certificate and one device.
 
-For submission packaging, additionally make **Apple Distribution / Mac App Distribution** and **Mac Installer Distribution** identities available for the same team and obtain a **Mac App Store Connect** profile for the same explicit Viewer App ID. The distribution profile does not register a test device. A distribution-signed MAS application is tested through Apple's distribution, not by launching that bundle locally. [Apple Store-profile instructions](https://developer.apple.com/help/account/provisioning-profiles/create-an-app-store-provisioning-profile), [Electron signing guide](https://www.electronjs.org/docs/latest/tutorial/mac-app-store-submission-guide).
+On October 13, the same team’s **Mac App Distribution** and **Mac Installer Distribution** certificates and **Viewer Store Distribution** profile were created for the explicit Viewer App ID. Both public certificates match their locally generated public signing requests and valid Keychain identities; private keys were not exported. Certificate/profile expiry is October 13, 2027. Public certificate fingerprints are `60C27D7EAFDD313E072270A37C0C3B1BC6DC5DEB` (application SHA-1) and `0C8751D28DCD4A8A76A9EE3C1D570341AEA96CCB` (installer SHA-1). Public requests/certificates and the private provisioning document are under ignored `out/mac-app-store/`; no credential material is in source control. The optional `tools/signing-request.swift` helper signs a public PKCS#10 request with an exactly tagged permanent Keychain key and exports only its public key. It never exports private key bytes or grants Accessibility access.
+
+The distribution profile does not register a test device. Build `2026101317` is packaged locally with these assets, passes deep strict bundle signature checks and has a verified Apple installer chain. Its package SHA-256 is `e8cfa868be544179af6a0e91ae4bdb8aa2a455117e27035bf98554a010141d0d`. App Store Connect access under Propal is confirmed; no Viewer record or upload exists yet. A distribution-signed MAS application is tested through Apple's distribution, not by launching that bundle locally. [Apple Store-profile instructions](https://developer.apple.com/help/account/provisioning-profiles/create-an-app-store-provisioning-profile), [Electron signing guide](https://www.electronjs.org/docs/latest/tutorial/mac-app-store-submission-guide).
 
 ## Development build
 
@@ -51,7 +53,7 @@ After the development sandbox and release gates pass, use distribution assets an
 ```sh
 export VIEWER_MAC_CHANNEL='mas'
 export VIEWER_MAS_IDENTITY='Apple Distribution: Propal Invest SRL (49W9L8Z9J5)'
-export VIEWER_MAS_INSTALLER_IDENTITY='Mac Installer Distribution: Propal Invest SRL (49W9L8Z9J5)'
+export VIEWER_MAS_INSTALLER_IDENTITY='3rd Party Mac Developer Installer: Propal Invest SRL (49W9L8Z9J5)'
 export VIEWER_MAS_PROFILE='/absolute/path/Viewer-AppStore.provisionprofile'
 export VIEWER_MAS_BUILD='2'
 pnpm mas:preflight
@@ -67,6 +69,8 @@ VIEWER_MAC_CHANNEL=direct pnpm make
 ```
 
 ## File permissions and reader strategy
+
+File content and mutations now use a small in-process `NSFileCoordinator` bridge alongside native access checks. Synchronous accessors retain claims while Node readers/writers and streams are alive. A separate bounded queue for one intermediate claim prevents case-only rename deadlocks when root writers are occupied. Operations follow returned URLs, accept verified ancestry/Unicode aliases, reject actual relocation, and recheck permissions after waiting. Rename notifies the coordinator of successful moves; sandboxed moves also request the related-item extension before moving. Revocation/ejection drain affected claims before releasing scope. Cancellation/timeout/Worker cleanup are tested; provider conflicts and offline behavior still need native acceptance. [Apple file coordination](https://developer.apple.com/documentation/foundation/nsfilecoordinator).
 
 MAS mode is selected by Electron's `process.mas`, not by a preference or renderer request. Native folder, application and import/export pickers request security-scoped bookmarks. `FileAccess` stores them atomically with mode `0600` in `file-access-v1.json` under the app's private user-data directory. They are not part of `config.jsonc`, exported settings, agent proposals or renderer API arguments.
 

@@ -50,6 +50,8 @@ if (process.platform === 'darwin') {
       'Foundation',
       '-framework',
       'AppKit',
+      '-framework',
+      'Security',
       'tools/macos-files.mm',
       '-o',
       'assets/viewer-macos-files.node',

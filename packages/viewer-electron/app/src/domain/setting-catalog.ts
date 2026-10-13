@@ -142,6 +142,13 @@ export const settingCatalog: SettingDefinition[] = [
     label: 'Restore the previous workspace',
     kind: 'boolean',
   },
+  {
+    path: 'settings.browsing.confirmTrash',
+    category: 'Browsing',
+    label: 'Confirm before moving to Trash',
+    detail: 'When off, files go straight to the system Trash. Undo remains available.',
+    kind: 'boolean',
+  },
   ...listColumns
     .filter((column) => column.id !== 'name')
     .map((column) => ({

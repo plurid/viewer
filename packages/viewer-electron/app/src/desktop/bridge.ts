@@ -44,6 +44,7 @@ import { Storage, stateSchema } from './storage';
 import { Watchers } from './watchers';
 import { FileAccess } from './file-access';
 import { NativeSelections } from './native-selections';
+import { fileCoordination } from './file-coordination';
 
 const localPath = z
   .string()
@@ -462,7 +463,10 @@ export class Desktop {
       this.thumbnails.clear();
     };
     this.operations = new Operations(
-      (file) => (process.platform === 'darwin' ? macFiles().trash(file) : shell.trashItem(file)),
+      (file) =>
+        process.platform === 'darwin'
+          ? macFiles().trash(file, fileCoordination.purpose())
+          : shell.trashItem(file),
       (job) => emit({ type: 'job', job }),
       (progress) => emit({ type: 'job-progress', progress }),
       changed,
@@ -720,6 +724,7 @@ export class Desktop {
       this.executions.close(),
       this.resources.close(),
       this.thumbnails.close(),
+      fileCoordination.quiesce(),
     ]);
     await this.fileAccess.close();
     for (const request of this.agentCommands.values())
@@ -842,6 +847,7 @@ export class Desktop {
           resources = await this.resources.affected(root);
           this.emit({ type: 'file-access', path: root, resources });
           await Promise.all([
+            fileCoordination.quiesce(root),
             this.resources.quiesce(root),
             this.thumbnails.quiesce(root),
             this.watchers.revoke(root),
@@ -873,6 +879,7 @@ export class Desktop {
             this.emit({ type: 'file-access', path: root, resources });
             const previews = this.resources.quiesce(root);
             const thumbnails = this.thumbnails.quiesce(root);
+            const coordinated = fileCoordination.quiesce(root);
             await this.actions.quiesce(root);
             await this.operations.quiesce(root);
             await this.executions.quiesce(root);
@@ -881,7 +888,7 @@ export class Desktop {
             await this.watchers.revoke(root);
             await this.search.quiesce();
             await this.files.reset();
-            await Promise.all([previews, thumbnails]);
+            await Promise.all([previews, thumbnails, coordinated]);
             await macFiles().eject(root);
           });
         } finally {

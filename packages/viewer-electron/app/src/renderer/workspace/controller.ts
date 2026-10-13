@@ -153,10 +153,15 @@ export function useWorkspaceController({
         const node =
           engine.current &&
           flattenTree(engine.current.tree.get()).find((node) => hostID(node) === id);
-        if (node) {
-          engine.current?.tree.open(node.planeID);
-        }
-        frameWorkspace(engine, surface, [id]);
+        const api = engine.current;
+        if (node && api) {
+          api.tree.open(node.planeID);
+          const docked = api.camera.docked();
+          // Folder navigation retains the current presentation. Framing a docked
+          // page would reveal space, even when the destination is the same plane.
+          if (docked && docked !== node.planeID) api.camera.dock(node.planeID, { animate: true });
+          else if (!docked) frameWorkspace(engine, surface, [id]);
+        } else frameWorkspace(engine, surface, [id]);
         setActivePane(id);
       },
       frameAll: () => frameWorkspace(engine, surface),

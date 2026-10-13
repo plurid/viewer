@@ -42,6 +42,31 @@ vi.mock('node:fs/promises', async (original) => {
     },
   };
 });
+// Publication uses renameatx_np on macOS. Inject failures at that same boundary
+// so collision and cross-volume tests still exercise the native path.
+vi.mock('../src/desktop/macos-files', async (original) => {
+  const actual = await original<typeof import('../src/desktop/macos-files')>();
+  const spelling = (file: string) => file.replace(/^\/private\/var\//, '/var/').normalize('NFC');
+  return {
+    ...actual,
+    macFiles: () => {
+      const native = actual.macFiles();
+      return Object.defineProperty(Object.create(native), 'renameExclusive', {
+        value: async (source: string, destination: string, purpose?: string) => {
+          if (exdev.source && spelling(source) === spelling(exdev.source)) {
+            exdev.source = '';
+            throw Object.assign(new Error('Cross-device link'), { code: 'EXDEV' });
+          }
+          if (exdev.race && spelling(destination) === spelling(exdev.race)) {
+            exdev.race = '';
+            await writeFile(destination, 'concurrent writer', { flag: 'wx' });
+          }
+          return native.renameExclusive(source, destination, purpose);
+        },
+      });
+    },
+  };
+});
 import { Operations } from '../src/desktop/operations';
 import { operationJournal } from '../src/desktop/operation-journal';
 import { DocumentStore } from '../src/desktop/document-store';
@@ -415,7 +440,7 @@ describe('file operation queue', () => {
     const source = path.join(root, 'Résumé.txt');
     await writeFile(source, 'contents');
     const renamed = await run({ kind: 'rename', sources: [source], name: 'résumé.txt' });
-    expect(renamed.status).toBe('completed');
+    expect(renamed.status, JSON.stringify(renamed.errors)).toBe('completed');
     await operations.undo(renamed.id);
     expect(await readFile(source, 'utf8')).toBe('contents');
     await run({ kind: 'rename', sources: [source], name: 'résumé.txt' });

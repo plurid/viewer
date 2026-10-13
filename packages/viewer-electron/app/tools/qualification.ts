@@ -276,8 +276,12 @@ async function main() {
     const directEnvironment = {
       VIEWER_TEST_BINARY: path.join(direct.bundle, 'Contents/MacOS/Viewer'),
     };
+    await run('native-coordination', ['exec', 'tsx', 'tests/native-coordination.ts'], {
+      VIEWER_COORDINATION_EVIDENCE: path.join(directory, 'native-coordination.json'),
+    });
     for (const scenario of [
       'file-workflows',
+      'daily-file-work',
       'chrome',
       'menus-models',
       'refinements',

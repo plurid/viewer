@@ -67,6 +67,7 @@ let menuBindings = '';
 function menu(): void {
   const settings = desktop?.settings.snapshot().settings;
   const bindings = JSON.stringify([
+    settings?.browsing.confirmTrash,
     settings?.shortcuts,
     settings?.recipes.map((recipe) => [recipe.id, recipe.name, recipe.shortcut]),
   ]);
@@ -178,7 +179,7 @@ function menu(): void {
           { label: 'Copy To…', click: command('copy-to') },
           { label: 'Move To…', click: command('move-to') },
           {
-            label: 'Move to Trash…',
+            label: settings?.browsing.confirmTrash === false ? 'Move to Trash' : 'Move to Trash…',
             accelerator: accelerator(
               settings?.shortcuts['trash'] ?? defaultShortcuts['trash'] ?? 'Cmd+Backspace',
             ),

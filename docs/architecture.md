@@ -74,6 +74,8 @@ These services are in-repository extension points; they are not a third-party pl
 
 `workspace/open-path.ts` owns captured-path navigation and native permission recovery. Sidebar and Places commands identify known folder destinations, so denied Volumes/Favorites paths can open the native picker before their initial stat succeeds. Cancellation retains the current folder; successful selection opens the actual selected folder. Results from a closed plane, changed folder or switched workspace are ignored. Linked and independent root opening retain their placement semantics, and arbitrary denied file paths do not become folder requests.
 
+Focusing a plane retains a docked presentation: navigating in the same docked folder does not issue a spatial framing command. New plane dimensions follow the viewport, and framing uses a 0.92 fill ratio. Quick Preview has its own responsive dialog size rather than changing every wide dialog. Columns previews reuse `PreviewHost`, including resource disposal on selection changes and permission revocation. Folder-size workers return per-root totals as well as the selection total; the renderer shares a bounded measurement cache and subscriptions across list rows, information dialogs and changing selections, without replacing filesystem metadata with logical directory sizes.
+
 `ui/Volumes.tsx` first displays native mount inventory and capacity without requesting a broad `/Volumes` grant. Opening a mount passes through captured-path permission recovery; cancellation retains the mount dialog. Eject blocks/drains affected work and purges caches/index data before invoking the native eject service. Actual reconnect/cloud-provider coordination remains a release acceptance gate.
 
 ## Verification scope

@@ -33,6 +33,10 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.browsing.sort': ['Sort by name | modified | created | kind | extension | size.'],
   'settings.browsing.descending': ['true reverses the selected sort order.'],
+  'settings.browsing.confirmTrash': [
+    'true shows a confirmation before native Trash; false sends selected items straight to Trash.',
+    'This never permanently deletes files. Guarded operation Undo remains available in both modes.',
+  ],
   'settings.browsing.group': [
     'none | kind | modified. Group headings currently appear in List view.',
   ],

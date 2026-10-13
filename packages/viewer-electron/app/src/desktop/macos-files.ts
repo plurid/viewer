@@ -9,7 +9,20 @@ export interface NativeVolume {
   ejectable: boolean;
   readOnly: boolean;
 }
-interface MacFiles {
+export interface FileAccessIntent {
+  path: string;
+  mode: 'read' | 'metadata' | 'write' | 'move' | 'delete';
+}
+export interface MacFiles {
+  coordinateStart(
+    id: string,
+    intents: FileAccessIntent[],
+    purpose: string,
+    nested?: boolean,
+  ): Promise<string[]>;
+  coordinateCancel(id: string): void;
+  coordinateEnd(id: string): Promise<void>;
+  coordinateSameItem(original: string, returned: string): boolean;
   clipboardVersion(drag?: boolean): number;
   clipboardRead(drag?: boolean): {
     files: { path: string; directory: boolean; bookmark?: string }[];
@@ -18,8 +31,8 @@ interface MacFiles {
   clipboardWrite(paths: string[]): number;
   copyMetadata(sourceFD: number, targetFD: number): Promise<void>;
   copyLinkMetadata(source: string, target: string): Promise<void>;
-  renameExclusive(source: string, target: string): Promise<void>;
-  trash(file: string): Promise<TrashReceipt>;
+  renameExclusive(source: string, target: string, purpose?: string): Promise<void>;
+  trash(file: string, purpose?: string): Promise<TrashReceipt>;
   volumes(): Promise<NativeVolume[]>;
   eject(file: string): Promise<void>;
 }

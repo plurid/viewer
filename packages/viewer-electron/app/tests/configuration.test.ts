@@ -27,6 +27,26 @@ afterEach(async () => {
 });
 
 describe('authoritative JSONC configuration', () => {
+  it('defaults existing configurations to Trash confirmation and persists the explicit preference', async () => {
+    const service = create();
+    await service.load();
+    const config = await read();
+    delete config.settings.browsing.confirmTrash;
+    await fs.writeFile(file(), JSON.stringify(config));
+    await service.reload();
+    expect(service.snapshot().settings.browsing.confirmTrash).toBe(true);
+    await service.patch(
+      [{ path: 'settings.browsing.confirmTrash', value: false }],
+      service.snapshot().revision,
+    );
+    expect((await read()).settings.browsing.confirmTrash).toBe(false);
+    expect(await fs.readFile(file(), 'utf8')).toContain(
+      'false sends selected items straight to Trash',
+    );
+    const reloaded = create();
+    await reloaded.load();
+    expect(reloaded.snapshot().settings.browsing.confirmTrash).toBe(false);
+  });
   it('adds guidance for newly introduced fields in an already-commented configuration', () => {
     const original = documentConfiguration(
       '{"settings":{"browsing":{"newPlaneLocation":"current","newPlanePath":""}}}',

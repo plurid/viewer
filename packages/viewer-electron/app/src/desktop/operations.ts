@@ -26,6 +26,7 @@ import { macFiles, type TrashReceipt, type ReceiptAccess } from './macos-files';
 import { createArchive, extractArchive } from './archive-jobs';
 import { operationJournal, outputProof, type OperationReceipt } from './operation-journal';
 import { privateStage } from './staging';
+import { fileCoordination } from './file-coordination';
 
 interface UndoStep {
   from: string;
@@ -265,28 +266,43 @@ export class Operations {
     for (const step of [...task.undo].reverse()) {
       task.intent = { source: step.from, destination: step.remove ? undefined : step.to };
       await this.checkpoint();
-      await this.withStep(step, async () => {
-        await this.access(step.remove ? [step.from] : [step.from, step.to]);
-        const current = await lstat(step.from);
-        if (
-          `${current.dev}:${current.ino}` !== step.identity ||
-          (!current.isDirectory() &&
-            (current.size !== step.size || current.mtimeMs !== step.modified))
-        )
-          throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
-        if (step.proof && (await outputProof(step.from)) !== step.proof)
-          throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
-        if (step.remove) await this.trash(step.from);
-        else if (step.caseOnly && (await exists(step.to)))
-          await this.changeCase(step.from, step.to);
-        // A Trash bookmark authorizes its item, rather than browsing the Trash
-        // directory. Restore it with one exclusive native rename; hard-link
-        // publication requires different sandbox rights and can fall back to
-        // streaming a resource fork unnecessarily.
-        else if (step.trash && process.platform === 'darwin')
-          await macFiles().renameExclusive(step.from, step.to);
-        else await this.publish(step.from, step.to);
-      });
+      await this.withStep(step, () =>
+        fileCoordination.run(
+          step.remove
+            ? [{ path: step.from, mode: 'delete' }]
+            : [
+                { path: step.from, mode: 'move' },
+                { path: step.to, mode: 'write' },
+              ],
+          async (signal) => {
+            signal?.throwIfAborted();
+            await this.access(step.remove ? [step.from] : [step.from, step.to]);
+            const current = await lstat(step.from);
+            if (
+              `${current.dev}:${current.ino}` !== step.identity ||
+              (!current.isDirectory() &&
+                (current.size !== step.size || current.mtimeMs !== step.modified))
+            )
+              throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
+            if (step.proof && (await outputProof(step.from)) !== step.proof)
+              throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
+            if (step.remove) await this.trash(step.from);
+            else if (step.caseOnly && (await exists(step.to)))
+              await this.changeCase(step.from, step.to);
+            // A Trash bookmark authorizes its item, rather than browsing the Trash
+            // directory. Restore it with one exclusive native rename; hard-link
+            // publication requires different sandbox rights and can fall back to
+            // streaming a resource fork unnecessarily.
+            else if (step.trash && process.platform === 'darwin')
+              await macFiles().renameExclusive(
+                fileCoordination.path(step.from),
+                fileCoordination.path(step.to),
+                fileCoordination.purpose(),
+              );
+            else await this.publish(step.from, step.to);
+          },
+        ),
+      );
       if (!step.remove) this.filesChanged([{ source: step.from, destination: step.to }]);
       task.undo.splice(task.undo.indexOf(step), 1);
       task.intent = undefined;
@@ -305,7 +321,18 @@ export class Operations {
       : work();
   }
   private async trashItem(task: Task, file: string): Promise<void> {
-    const receipt = await this.trash(file);
+    const receipt = await fileCoordination.run(
+      [{ path: file, mode: 'delete' }],
+      async (signal) => {
+        signal?.throwIfAborted();
+        this.check(task);
+        const actual = fileCoordination.path(file);
+        await this.access([actual]);
+        signal?.throwIfAborted();
+        return this.trash(actual);
+      },
+      task.abort.signal,
+    );
     if (!receipt) return;
     await this.receiptAccess(receipt, async () => {
       const proof = await outputProof(receipt.path);
@@ -326,7 +353,14 @@ export class Operations {
     await this.checkpoint();
   }
   exclusive<T>(
-    work: (publish: (source: string, destination: string) => Promise<void>) => Promise<T>,
+    work: (
+      publish: (
+        source: string,
+        destination: string,
+        guard?: () => Promise<void>,
+        signal?: AbortSignal,
+      ) => Promise<void>,
+    ) => Promise<T>,
   ): Promise<T> {
     const task = this.exclusiveQueue
       .catch(() => {})
@@ -335,7 +369,9 @@ export class Operations {
         if (this.stopped) throw new Error('The operation service is closed.');
         this.running = true;
         try {
-          return await work((source, destination) => this.publish(source, destination));
+          return await work((source, destination, guard, signal) =>
+            this.publish(source, destination, undefined, guard, signal),
+          );
         } finally {
           this.running = false;
           for (const resolve of this.idle.splice(0)) resolve();
@@ -375,25 +411,46 @@ export class Operations {
   private check(task: Task): void {
     task.abort.signal.throwIfAborted();
   }
-  /** Files use an exclusive hard link; directory publication reserves an empty destination.
+  /** macOS uses a coordinated exclusive rename; other platforms use exclusive publication.
    * A concurrent writer can make publication fail, but its file is never overwritten. */
-  private async publish(source: string, destination: string, task?: Task): Promise<void> {
+  private async publish(
+    source: string,
+    destination: string,
+    task?: Task,
+    guard?: () => Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (process.platform === 'darwin') {
+      return fileCoordination.run(
+        [
+          { path: source, mode: 'move' },
+          { path: destination, mode: 'write' },
+        ],
+        async (signal) => {
+          signal?.throwIfAborted();
+          if (task) this.check(task);
+          const from = fileCoordination.path(source),
+            to = fileCoordination.path(destination);
+          await this.access([from, to]);
+          await guard?.();
+          signal?.throwIfAborted();
+          const info = await lstat(from);
+          if (!info.isDirectory() && !info.isFile() && !info.isSymbolicLink())
+            throw new Error('Special devices and sockets cannot be transferred.');
+          await macFiles().renameExclusive(from, to, fileCoordination.purpose());
+        },
+        task?.abort.signal ?? signal,
+      );
+    }
     await this.access([source, destination]);
+    await guard?.();
+    signal?.throwIfAborted();
     const info = await lstat(source);
     if (!info.isDirectory()) {
       if (!info.isFile() && !info.isSymbolicLink())
         throw new Error('Special devices and sockets cannot be transferred.');
-      // macOS hard-link creation follows symbolic links, so recreate the link itself.
       if (info.isSymbolicLink()) {
         await symlink(await readlink(source), destination);
-        const owned = await lstat(destination);
-        try {
-          if (process.platform === 'darwin') await macFiles().copyLinkMetadata(source, destination);
-        } catch (error) {
-          const current = await lstat(destination).catch(() => null);
-          if (current?.dev === owned.dev && current.ino === owned.ino) await unlink(destination);
-          throw error;
-        }
       } else {
         try {
           await link(source, destination);
@@ -418,7 +475,6 @@ export class Operations {
       }
       return;
     }
-    if (process.platform === 'darwin') return macFiles().renameExclusive(source, destination);
     await mkdir(destination, { mode: info.mode });
     const reserved = await lstat(destination);
     try {
@@ -482,47 +538,107 @@ export class Operations {
     fingerprints: CopyFingerprint[],
   ): Promise<void> {
     this.check(task);
+    // Content coordination can hydrate a placeholder. Capture its fingerprint
+    // after acquisition, before copying, rather than retaining placeholder size.
+    if ((await lstat(source)).isFile()) {
+      return fileCoordination.run(
+        [
+          { path: source, mode: 'read' },
+          { path: target, mode: 'write' },
+        ],
+        async (signal) => {
+          await this.access([source, target]);
+          signal?.throwIfAborted();
+          this.check(task);
+          const info = await lstat(source);
+          if (!info.isFile())
+            throw new Error('Source changed while waiting for its file provider.');
+          fingerprints.push({ file: source, info });
+          await this.copyFile(source, target, info, task, signal);
+        },
+        task.abort.signal,
+      );
+    }
     const info = await lstat(source);
+    if (info.isSymbolicLink()) {
+      return fileCoordination.run(
+        [
+          { path: source, mode: 'metadata' },
+          { path: target, mode: 'write' },
+        ],
+        async (signal) => {
+          signal?.throwIfAborted();
+          this.check(task);
+          const from = fileCoordination.path(source),
+            to = fileCoordination.path(target);
+          await this.access([from, to]);
+          const current = await lstat(from);
+          if (!current.isSymbolicLink())
+            throw new Error('The symbolic link changed while waiting for its file provider.');
+          fingerprints.push({ file: source, info: current });
+          await symlink(await readlink(from), to);
+          if (process.platform === 'darwin') await macFiles().copyLinkMetadata(from, to);
+          signal?.throwIfAborted();
+        },
+        task.abort.signal,
+      );
+    }
     const children = info.isDirectory() ? (await readdir(source)).sort() : undefined;
     fingerprints.push({ file: source, info, children });
-    if (info.isSymbolicLink()) {
-      await symlink(await readlink(source), target);
-      if (process.platform === 'darwin') await macFiles().copyLinkMetadata(source, target);
-      return;
-    }
     if (info.isDirectory()) {
       await mkdir(target, { mode: info.mode | 0o700 });
       for (const name of children!)
         await this.copy(task, path.join(source, name), path.join(target, name), fingerprints);
       if (process.platform === 'darwin') {
-        const input = await open(
-          source,
-          constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+        await fileCoordination.run(
+          [
+            { path: source, mode: 'metadata' },
+            { path: target, mode: 'write' },
+          ],
+          async (signal) => {
+            signal?.throwIfAborted();
+            await this.access([fileCoordination.path(source), fileCoordination.path(target)]);
+            const input = await open(
+              fileCoordination.path(source),
+              constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+            );
+            let output: Awaited<ReturnType<typeof open>> | undefined;
+            try {
+              const opened = await input.stat();
+              if (opened.dev !== info.dev || opened.ino !== info.ino)
+                throw new Error('Source folder changed during the copy.');
+              output = await open(
+                fileCoordination.path(target),
+                constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+              );
+              await macFiles().copyMetadata(input.fd, output.fd);
+              signal?.throwIfAborted();
+              this.check(task);
+            } finally {
+              await input.close();
+              await output?.close();
+            }
+          },
+          task.abort.signal,
         );
-        let output: Awaited<ReturnType<typeof open>> | undefined;
-        try {
-          const opened = await input.stat();
-          if (opened.dev !== info.dev || opened.ino !== info.ino)
-            throw new Error('Source folder changed during the copy.');
-          output = await open(
-            target,
-            constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
-          );
-          await macFiles().copyMetadata(input.fd, output.fd);
-          this.check(task);
-        } finally {
-          await input.close();
-          await output?.close();
-        }
       } else await chmod(target, info.mode);
     } else if (info.isFile()) {
-      await this.copyFile(source, target, info, task);
+      throw new Error('Source changed while starting the copy.');
     } else {
       throw new Error('Special devices and sockets cannot be transferred.');
     }
     if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
   }
-  private async copyFile(source: string, target: string, info: Stats, task?: Task): Promise<void> {
+  private async copyFile(
+    source: string,
+    target: string,
+    info: Stats,
+    task?: Task,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    source = fileCoordination.path(source);
+    target = fileCoordination.path(target);
+    signal?.throwIfAborted();
     if (task) {
       task.job.current = source;
       task.job.bytesTotal += info.size;
@@ -548,6 +664,7 @@ export class Operations {
       const buffer = Buffer.allocUnsafe(256 * 1024);
       let total = 0;
       while (total < info.size) {
+        signal?.throwIfAborted();
         if (task) this.check(task);
         const { bytesRead } = await input.read(
           buffer,
@@ -560,6 +677,7 @@ export class Operations {
         total += bytesRead;
         let written = 0;
         while (written < bytesRead) {
+          signal?.throwIfAborted();
           const result = await output.write(buffer, written, bytesRead - written, null);
           if (!result.bytesWritten) throw new Error('The destination stopped accepting data.');
           written += result.bytesWritten;
@@ -569,6 +687,7 @@ export class Operations {
           this.progress(task);
         }
       }
+      signal?.throwIfAborted();
       if (process.platform === 'darwin') await macFiles().copyMetadata(input.fd, output.fd);
       await output.sync();
       const after = await lstat(source);
@@ -640,20 +759,29 @@ export class Operations {
         // Remove only the copied entries. A newly created child keeps its directory
         // nonempty, so it survives even if it appears after validation.
         for (const fingerprint of [...fingerprints].reverse()) {
-          this.check(task);
-          const current = await lstat(fingerprint.file);
-          if (
-            current.dev !== fingerprint.info.dev ||
-            current.ino !== fingerprint.info.ino ||
-            (!current.isDirectory() &&
-              (current.ctimeMs !== fingerprint.info.ctimeMs ||
-                current.size !== fingerprint.info.size))
-          )
-            throw new Error(
-              'Source changed during the move. The completed copy and remaining original items have been kept.',
-            );
-          if (current.isDirectory()) await rmdir(fingerprint.file);
-          else await unlink(fingerprint.file);
+          await fileCoordination.run(
+            [{ path: fingerprint.file, mode: 'delete' }],
+            async (signal) => {
+              signal?.throwIfAborted();
+              this.check(task);
+              const file = fileCoordination.path(fingerprint.file);
+              await this.access([file]);
+              const current = await lstat(file);
+              if (
+                current.dev !== fingerprint.info.dev ||
+                current.ino !== fingerprint.info.ino ||
+                (!current.isDirectory() &&
+                  (current.ctimeMs !== fingerprint.info.ctimeMs ||
+                    current.size !== fingerprint.info.size))
+              )
+                throw new Error(
+                  'Source changed during the move. The completed copy and remaining original items have been kept.',
+                );
+              if (current.isDirectory()) await rmdir(file);
+              else await unlink(file);
+            },
+            task.abort.signal,
+          );
         }
       }
       return false;
@@ -766,7 +894,17 @@ export class Operations {
                 await this.access([destination]);
                 task.intent = { source, destination };
                 await this.checkpoint();
-                if (request.kind === 'mkdir') await mkdir(destination);
+                if (request.kind === 'mkdir')
+                  await fileCoordination.run(
+                    [{ path: destination, mode: 'write' }],
+                    async (signal) => {
+                      signal?.throwIfAborted();
+                      this.check(task);
+                      await this.access([fileCoordination.path(destination!)]);
+                      await mkdir(fileCoordination.path(destination!));
+                    },
+                    task.abort.signal,
+                  );
                 else if (request.kind === 'compress' || request.kind === 'extract') {
                   const stage = await privateStage(path.dirname(destination), '.viewer-archive-');
                   const staging = stage.file;

@@ -18,6 +18,7 @@ import { absolute, entry, exists, validName } from '../filesystem';
 import { DocumentStore } from '../document-store';
 import { localBookFields } from '../formats';
 import type { Operations } from '../operations';
+import { fileCoordination } from '../file-coordination';
 const output = z.object({
   rows: z
     .array(
@@ -637,7 +638,16 @@ export class ActionPlanner {
               throw new Error('A source changed immediately before its operation.');
             row.stagedPath = path.join(row.source.parent, '.viewer-action-' + randomUUID());
             await this.checkpoint(plan, row);
-            await publish(row.source.path, row.stagedPath);
+            await publish(
+              row.source.path,
+              row.stagedPath,
+              async () => {
+                abort.signal.throwIfAborted();
+                if (!same(row.source!, await entry(row.source!.path)))
+                  throw new Error('A source changed while waiting for its file provider.');
+              },
+              abort.signal,
+            );
             await this.checkpoint(plan, row);
           }
           for (const row of selected) {
@@ -650,22 +660,65 @@ export class ActionPlanner {
                 : plan.context.sources.map((source) => path.dirname(source)),
             );
             if (!(await exists(path.dirname(row.destination))))
-              await mkdir(path.dirname(row.destination), { recursive: true });
+              await fileCoordination.run(
+                [{ path: path.dirname(row.destination), mode: 'write' }],
+                async (signal) => {
+                  signal?.throwIfAborted();
+                  await this.scope(
+                    row.destination,
+                    row.source,
+                    plan.outputRoot
+                      ? [plan.outputRoot]
+                      : plan.context.sources.map((source) => path.dirname(source)),
+                  );
+                  await mkdir(fileCoordination.path(path.dirname(row.destination)), {
+                    recursive: true,
+                  });
+                },
+                abort.signal,
+              );
             if (row.source) {
               const staged = await entry(row.stagedPath!);
               if (!same(row.source, staged))
                 throw new Error('A staged source changed; it was preserved for recovery.');
-              await publish(row.stagedPath!, row.destination);
+              await publish(
+                row.stagedPath!,
+                row.destination,
+                async () => {
+                  abort.signal.throwIfAborted();
+                  if (!same(row.source!, await entry(row.stagedPath!)))
+                    throw new Error('A staged source changed while waiting for its file provider.');
+                },
+                abort.signal,
+              );
               changes.push({ source: row.source.path, destination: row.destination });
-            } else if (row.kind === 'summary') {
-              const handle = await open(row.destination, 'wx', 0o600);
-              try {
-                await handle.writeFile(row.text || '');
-                await handle.sync();
-              } finally {
-                await handle.close();
-              }
-            } else if (row.kind === 'mkdir') await mkdir(row.destination);
+            } else
+              await fileCoordination.run(
+                [{ path: row.destination, mode: 'write' }],
+                async (signal) => {
+                  signal?.throwIfAborted();
+                  await this.scope(
+                    row.destination,
+                    row.source,
+                    plan.outputRoot
+                      ? [plan.outputRoot]
+                      : plan.context.sources.map((source) => path.dirname(source)),
+                  );
+                  if (row.kind === 'summary') {
+                    await this.validateSummary(plan);
+                    const handle = await open(fileCoordination.path(row.destination), 'wx', 0o600);
+                    try {
+                      await handle.writeFile(row.text || '');
+                      await handle.sync();
+                    } finally {
+                      await handle.close();
+                    }
+                  } else if (row.kind === 'mkdir')
+                    await mkdir(fileCoordination.path(row.destination));
+                  signal?.throwIfAborted();
+                },
+                abort.signal,
+              );
             row.completed = true;
             row.stagedPath = undefined;
             await this.checkpoint(plan, row);

@@ -27,6 +27,25 @@ async function measure(paths: string[], cancel = false) {
   return { task, result: await result };
 }
 describe('read-only folder sizes', () => {
+  it('retains individual folder totals when calculating a mixed selection', async () => {
+    const root = await temporary();
+    const folder = path.join(root, 'folder');
+    const empty = path.join(root, 'empty');
+    const file = path.join(root, 'note.txt');
+    await mkdir(folder);
+    await mkdir(empty);
+    await writeFile(path.join(folder, 'nested.txt'), '12345');
+    await writeFile(file, 'abc');
+    const { result } = await measure([folder, empty, file]);
+    expect(result.bytes).toBe(8);
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        { path: folder, bytes: 5, files: 1, folders: 1, skipped: 0 },
+        { path: empty, bytes: 0, files: 0, folders: 1, skipped: 0 },
+        { path: file, bytes: 3, files: 1, folders: 0, skipped: 0 },
+      ]),
+    );
+  });
   it('measures hidden files, preserves files and prunes overlapping selections without following links', async () => {
     const root = await temporary();
     const folder = path.join(root, 'folder');

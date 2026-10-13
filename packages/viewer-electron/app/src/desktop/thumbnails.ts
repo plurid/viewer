@@ -2,6 +2,7 @@ import { nativeImage } from 'electron';
 import { realpath } from 'node:fs/promises';
 import { entry } from './filesystem';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
+import { fileCoordination } from './file-coordination';
 /** Cache bounded, resized PNGs, never original decoded images. */
 export class Thumbnails {
   private cache = new Map<string, { file: string; source: string; value: string }>();
@@ -28,11 +29,21 @@ export class Thumbnails {
       .then(async () => {
         if (this.closed) return '';
         scope.check();
-        const image = await nativeImage.createThumbnailFromPath(file, {
-          width: size,
-          height: size,
-        });
-        const value = image.toDataURL();
+        const value = await fileCoordination.run(
+          [{ path: actual, mode: 'read' }],
+          async (signal) => {
+            signal?.throwIfAborted();
+            scope.check();
+            if ((await entry(fileCoordination.path(actual))).size > 64000000) return '';
+            const image = await nativeImage.createThumbnailFromPath(fileCoordination.path(actual), {
+              width: size,
+              height: size,
+            });
+            signal?.throwIfAborted();
+            scope.check();
+            return image.toDataURL();
+          },
+        );
         if (this.closed) return '';
         scope.check();
         if (value.length > 1000000) return '';

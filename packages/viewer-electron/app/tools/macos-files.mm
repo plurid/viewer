@@ -1,11 +1,13 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <Security/SecTask.h>
 #include <node_api.h>
 #include <copyfile.h>
 #include <cerrno>
 #include <string>
 #include <cstring>
 #include <sys/stat.h>
+#include <sys/mount.h>
 #include <stdio.h>
 #include <fcntl.h>
 
@@ -34,6 +36,38 @@ static NSString *stringArg(napi_env env, napi_value value) {
 static napi_value invalid(napi_env env) {
   napi_throw_type_error(env, nullptr, "Invalid native file argument."); return nullptr;
 }
+static NSString *coordinatedItemPath(NSURL *url) {
+  // Resolve ancestry aliases while preserving a symbolic link as the item.
+  return [[url URLByDeletingLastPathComponent].URLByResolvingSymlinksInPath URLByAppendingPathComponent:url.lastPathComponent].path;
+}
+static bool sameCoordinatedItem(NSURL *url, NSString *original) {
+  NSString *returned = coordinatedItemPath(url);
+  if ([returned isEqualToString:original]) return true;
+  if (![returned.precomposedStringWithCanonicalMapping isEqualToString:original.precomposedStringWithCanonicalMapping]) return false;
+  struct stat before{}, after{};
+  int first = lstat(original.fileSystemRepresentation, &before), firstError = errno;
+  int second = lstat(returned.fileSystemRepresentation, &after), secondError = errno;
+  if (first == 0 && second == 0) return before.st_dev == after.st_dev && before.st_ino == after.st_ino;
+  // New Unicode names also come back decomposed. Only APFS/HFS guarantee
+  // canonical Unicode lookup equivalence; do not assume it on a remote volume.
+  struct statfs volume{};
+  return first != 0 && firstError == ENOENT && second != 0 && secondError == ENOENT &&
+    statfs(original.stringByDeletingLastPathComponent.fileSystemRepresentation, &volume) == 0 &&
+    (std::strcmp(volume.f_fstypename, "apfs") == 0 || std::strcmp(volume.f_fstypename, "hfs") == 0);
+}
+static bool sandboxedProcess() {
+  static const bool sandboxed = [] {
+    SecTaskRef task = SecTaskCreateFromSelf(nullptr);
+    if (!task) return false;
+    CFTypeRef value = SecTaskCopyValueForEntitlement(task, CFSTR("com.apple.security.app-sandbox"), nullptr);
+    bool enabled = value && CFGetTypeID(value) == CFBooleanGetTypeID() && CFBooleanGetValue((CFBooleanRef)value);
+    if (value) CFRelease(value);
+    CFRelease(task);
+    return enabled;
+  }();
+  return sandboxed;
+}
+#include "file-coordination.h"
 
 static napi_value clipboardVersion(napi_env env, napi_callback_info info) {
   @autoreleasepool {
@@ -100,6 +134,7 @@ struct Work {
   int source = -1, target = -1;
   NSString *file = nil;
   NSString *targetFile = nil;
+  NSString *purpose = nil;
   NSString *error = nil;
   int errorNumber = 0;
   NSString *result = nil;
@@ -119,19 +154,47 @@ static void execute(napi_env, void *data) {
       if (lstat(task->file.fileSystemRepresentation, &source) != 0 || lstat(task->targetFile.fileSystemRepresentation, &target) != 0 || !S_ISLNK(source.st_mode) || !S_ISLNK(target.st_mode)) task->error = @"A symbolic link changed during the transfer.";
       else if (copyfile(task->file.fileSystemRepresentation, task->targetFile.fileSystemRepresentation, nullptr, COPYFILE_METADATA | COPYFILE_NOFOLLOW_SRC | COPYFILE_NOFOLLOW_DST) != 0) task->error = [NSString stringWithFormat:@"Could not preserve symbolic link metadata: %s", std::strerror(errno)];
     } else if (task->kind == Kind::Rename) {
-      if (renameatx_np(AT_FDCWD, task->file.fileSystemRepresentation, AT_FDCWD, task->targetFile.fileSystemRepresentation, RENAME_EXCL) != 0) {
-        task->errorNumber = errno;
-        task->error = [NSString stringWithFormat:@"Could not move the item: %s", std::strerror(errno)];
-      }
+      NSFileCoordinator *coordinator = [[NSFileCoordinator alloc] initWithFilePresenter:nil];
+      if (task->purpose) coordinator.purposeIdentifier = task->purpose;
+      NSURL *source = [NSURL fileURLWithPath:task->file], *target = [NSURL fileURLWithPath:task->targetFile];
+      NSString *sourcePath = coordinatedItemPath(source);
+      NSString *targetPath = coordinatedItemPath(target);
+      __block bool entered = false;
+      [coordinator coordinateWritingItemAtURL:source options:NSFileCoordinatorWritingForMoving writingItemAtURL:target options:NSFileCoordinatorWritingForReplacing error:&error byAccessor:^(NSURL *from, NSURL *to) {
+        entered = true;
+        if (!sameCoordinatedItem(from, sourcePath) || !sameCoordinatedItem(to, targetPath)) {
+          task->error = @"The item moved while waiting for its file provider. Refresh the folder and retry.";
+          return;
+        }
+        if (sandboxedProcess()) [coordinator itemAtURL:from willMoveToURL:to];
+        if (renameatx_np(AT_FDCWD, from.fileSystemRepresentation, AT_FDCWD, to.fileSystemRepresentation, RENAME_EXCL) != 0) {
+          task->errorNumber = errno;
+          task->error = [NSString stringWithFormat:@"Could not move the item: %s", std::strerror(errno)];
+        } else [coordinator itemAtURL:from didMoveToURL:to];
+      }];
+      if (!entered) task->error = error.localizedDescription ?: @"The file provider could not prepare this move.";
     } else if (task->kind == Kind::Trash) {
-      NSURL *result = nil;
-      if (![NSFileManager.defaultManager trashItemAtURL:[NSURL fileURLWithPath:task->file] resultingItemURL:&result error:&error]) task->error = error.localizedDescription ?: @"The item could not be moved to Trash.";
-      else {
-        task->result = result.path;
-        NSNumber *directory; [result getResourceValue:&directory forKey:NSURLIsDirectoryKey error:nil]; task->directory = directory.boolValue;
-        NSData *bookmark = [result bookmarkDataWithOptions:NSURLBookmarkCreationWithSecurityScope includingResourceValuesForKeys:nil relativeToURL:nil error:nil];
-        if (bookmark) task->bookmark = [bookmark base64EncodedStringWithOptions:0];
-      }
+      NSFileCoordinator *coordinator = [[NSFileCoordinator alloc] initWithFilePresenter:nil];
+      if (task->purpose) coordinator.purposeIdentifier = task->purpose;
+      NSURL *source = [NSURL fileURLWithPath:task->file];
+      NSString *sourcePath = coordinatedItemPath(source);
+      __block bool entered = false;
+      [coordinator coordinateWritingItemAtURL:source options:NSFileCoordinatorWritingForDeleting error:&error byAccessor:^(NSURL *url) {
+        entered = true;
+        if (!sameCoordinatedItem(url, sourcePath)) {
+          task->error = @"The item moved while waiting for its file provider. Refresh the folder and retry.";
+          return;
+        }
+        NSURL *result = nil; NSError *trashError = nil;
+        if (![NSFileManager.defaultManager trashItemAtURL:url resultingItemURL:&result error:&trashError]) task->error = trashError.localizedDescription ?: @"The item could not be moved to Trash.";
+        else {
+          task->result = result.path;
+          NSNumber *directory; [result getResourceValue:&directory forKey:NSURLIsDirectoryKey error:nil]; task->directory = directory.boolValue;
+          NSData *bookmark = [result bookmarkDataWithOptions:NSURLBookmarkCreationWithSecurityScope includingResourceValuesForKeys:nil relativeToURL:nil error:nil];
+          if (bookmark) task->bookmark = [bookmark base64EncodedStringWithOptions:0];
+        }
+      }];
+      if (!entered) task->error = error.localizedDescription ?: @"The file provider could not prepare this deletion.";
     } else if (task->kind == Kind::Eject) {
       if (![NSWorkspace.sharedWorkspace unmountAndEjectDeviceAtURL:[NSURL fileURLWithPath:task->file] error:&error]) {
         if (([error.domain isEqualToString:NSOSStatusErrorDomain] && error.code == -47) || ([error.domain isEqualToString:NSPOSIXErrorDomain] && error.code == EBUSY)) {
@@ -207,24 +270,25 @@ static napi_value metadata(napi_env env, napi_callback_info info) {
   Work *task = new Work{}; task->kind = Kind::Metadata; task->source = source; task->target = target; return queue(env, task);
 }
 static napi_value fileWork(napi_env env, napi_callback_info info, Kind kind) {
-  size_t count = 1; napi_value args[1]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
-  NSString *file = count == 1 ? stringArg(env, args[0]) : nil;
+  size_t count = 2; napi_value args[2]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
+  NSString *file = count >= 1 ? stringArg(env, args[0]) : nil;
   if (!file.isAbsolutePath) return invalid(env);
-  Work *task = new Work{}; task->kind = kind; task->file = file; return queue(env, task);
+  Work *task = new Work{}; task->kind = kind; task->file = file; task->purpose = count > 1 ? stringArg(env, args[1]) : nil; return queue(env, task);
 }
 static napi_value trash(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::Trash); }
 static napi_value pairWork(napi_env env, napi_callback_info info, Kind kind) {
-  size_t count = 2; napi_value args[2]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
-  NSString *source = count == 2 ? stringArg(env, args[0]) : nil;
-  NSString *target = count == 2 ? stringArg(env, args[1]) : nil;
+  size_t count = 3; napi_value args[3]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
+  NSString *source = count >= 2 ? stringArg(env, args[0]) : nil;
+  NSString *target = count >= 2 ? stringArg(env, args[1]) : nil;
   if (!source.isAbsolutePath || !target.isAbsolutePath) return invalid(env);
-  Work *task = new Work{}; task->kind = kind; task->file = source; task->targetFile = target; return queue(env, task);
+  Work *task = new Work{}; task->kind = kind; task->file = source; task->targetFile = target; task->purpose = count > 2 ? stringArg(env, args[2]) : nil; return queue(env, task);
 }
 static napi_value linkMetadata(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::LinkMetadata); }
 static napi_value renameExclusive(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::Rename); }
 static napi_value eject(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::Eject); }
 static napi_value volumes(napi_env env, napi_callback_info) { Work *task = new Work{}; task->kind = Kind::Volumes; return queue(env, task); }
 static napi_value init(napi_env env, napi_value exports) {
+  registerFileCoordination(env, exports);
   napi_property_descriptor methods[] = {
     {"clipboardVersion", nullptr, clipboardVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardRead", nullptr, clipboardRead, nullptr, nullptr, nullptr, napi_default, nullptr},

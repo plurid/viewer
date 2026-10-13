@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { CommandContext } from '../commands/registry';
 import type { FolderActions } from '../commands/folder';
 import { DestinationDialog } from '../commands/DestinationDialog';
@@ -8,6 +8,71 @@ import { getState, report } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { OpenWithDialog } from '../ui/OpenWithDialog';
 import { RenameActions } from '../actions/RenameActions';
+const moveToTrash = async (context: CommandContext) => {
+  await window.viewer.operate({
+    kind: 'trash',
+    sources: context.selection.map((file) => file.path),
+  });
+};
+
+function TrashConfirmation({ context, onClose }: { context: CommandContext; onClose(): void }) {
+  const submitted = useRef(false);
+  const confirm = () => {
+    if (submitted.current) return;
+    submitted.current = true;
+    void moveToTrash(context).catch(report);
+    onClose();
+  };
+  return (
+    <Dialog
+      title="Move to Trash?"
+      onClose={onClose}
+      className="trash-dialog"
+      onKeyDown={(event) => {
+        if (
+          event.key !== 'Enter' ||
+          event.repeat ||
+          event.nativeEvent.isComposing ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey ||
+          event.shiftKey
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        confirm();
+      }}
+    >
+      <p className="dialog-copy">
+        Move{' '}
+        {context.selection.length === 1
+          ? `“${context.selection[0]?.name}”`
+          : `${context.selection.length} items`}{' '}
+        to the system Trash?
+      </p>
+      <footer>
+        <button
+          className="dialog-keyboard-action"
+          aria-label="Cancel"
+          aria-keyshortcuts="Escape"
+          onClick={onClose}
+        >
+          <kbd aria-hidden="true">Esc</kbd> Cancel
+        </button>
+        <button
+          className="danger dialog-keyboard-action"
+          aria-label="Move to Trash"
+          aria-keyshortcuts="Enter"
+          data-autofocus
+          onClick={confirm}
+        >
+          <kbd aria-hidden="true">Enter</kbd> Move to Trash
+        </button>
+      </footer>
+    </Dialog>
+  );
+}
 /** Physical folders and virtual results share the same file-operation dialogs. */
 export function useFileDialogs(): {
   actions: Pick<FolderActions, 'dialog' | 'destination' | 'info' | 'trash' | 'openWith'>;
@@ -35,7 +100,10 @@ export function useFileDialogs(): {
       destination: (kind, context) => setDestination({ kind, context }),
       info: setInfo,
       openWith: setApplications,
-      trash: setTrash,
+      trash: (context) => {
+        if (getState().settings.settings.browsing.confirmTrash) setTrash(context);
+        else return moveToTrash(context);
+      },
     },
     content: (
       <>
@@ -101,31 +169,7 @@ export function useFileDialogs(): {
         {info && (
           <FileInformation entries={[...info.selection]} onClose={() => setInfo(undefined)} />
         )}
-        {trash && (
-          <Dialog title="Move to Trash?" onClose={() => setTrash(undefined)}>
-            <p className="dialog-copy">
-              Move{' '}
-              {trash.selection.length === 1
-                ? `“${trash.selection[0]?.name}”`
-                : `${trash.selection.length} items`}{' '}
-              to the system Trash?
-            </p>
-            <footer>
-              <button onClick={() => setTrash(undefined)}>Cancel</button>
-              <button
-                className="danger"
-                onClick={() => {
-                  void window.viewer
-                    .operate({ kind: 'trash', sources: trash.selection.map((file) => file.path) })
-                    .catch(report);
-                  setTrash(undefined);
-                }}
-              >
-                Move to Trash
-              </button>
-            </footer>
-          </Dialog>
-        )}
+        {trash && <TrashConfirmation context={trash} onClose={() => setTrash(undefined)} />}
       </>
     ),
   };

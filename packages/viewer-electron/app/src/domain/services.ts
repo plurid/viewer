@@ -36,6 +36,7 @@ export interface ApplicationSettings {
     foldersFirst: boolean;
     showHidden: boolean;
     restoreSession: boolean;
+    confirmTrash: boolean;
     newPlaneLocation:
       | 'current'
       | 'home'
@@ -258,6 +259,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       foldersFirst: true,
       showHidden: false,
       restoreSession: true,
+      confirmTrash: true,
       newPlaneLocation: 'current',
       newPlanePath: '',
       emptyWorkspaceLocation: 'home',

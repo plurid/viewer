@@ -66,13 +66,14 @@ export function matchesShortcut(
   event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'key'>,
 ): boolean {
   const parts = shortcutParts(value);
+  const key = parts.find((part) => !['cmd', 'ctrl', 'shift', 'alt'].includes(part));
   return (
     !!value &&
     event.metaKey === parts.includes('cmd') &&
     event.ctrlKey === parts.includes('ctrl') &&
     event.altKey === parts.includes('alt') &&
     event.shiftKey === parts.includes('shift') &&
-    parts.includes(event.key.toLowerCase())
+    key === event.key.toLowerCase()
   );
 }
 export function accelerator(value: string): string | undefined {

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { gzipSync } from 'node:zlib';
+import { crc32, deflateSync, gzipSync } from 'node:zlib';
 import { zipSync, strToU8 } from 'fflate';
 import type { SavedState } from '../src/domain/contracts';
 import { audioFixture, imageFixture, videoFixture } from './media-fixtures';
@@ -65,6 +65,36 @@ function tar(): Buffer {
   header.write(sum.toString(8).padStart(6, '0') + '\0 ', 148);
   return Buffer.concat([header, data, Buffer.alloc(512 - data.length), Buffer.alloc(1024)]);
 }
+/** Large decoded-image fixture for viewport fitting; only generated opaque pixels. */
+export function sizedImageFixture(width: number, height: number): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const name = Buffer.from(type),
+      length = Buffer.alloc(4),
+      checksum = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    checksum.writeUInt32BE(crc32(Buffer.concat([name, data])));
+    return Buffer.concat([length, name, data, checksum]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 6;
+  const stride = width * 4 + 1,
+    pixels = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const at = y * stride + 1 + x * 4;
+      pixels.set(x < width / 2 ? [0x82, 0xb3, 0xcf, 0xff] : [0xb7, 0xba, 0x93, 0xff], at);
+    }
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(pixels)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
 export async function createFixtures(): Promise<{
   root: string;
   files: string;

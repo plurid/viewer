@@ -70,36 +70,45 @@ export class FolderSizes {
         this.emit({ ...task });
       }
     };
-    const directories: string[] = [];
-    const inspect = async (file: string) => {
+    type Item = NonNullable<FolderSizeTask['items']>[number];
+    const items = roots.map((path) => ({ path, bytes: 0, files: 0, folders: 0, skipped: 0 }));
+    const directories: { path: string; item: Item }[] = [];
+    const inspect = async (file: string, item: Item) => {
       if (signal.aborted) return;
       try {
         const info = await lstat(file);
         if (signal.aborted) return;
         if (info.isDirectory()) {
           task.folders++;
-          directories.push(file);
+          item.folders++;
+          directories.push({ path: file, item });
         } else if (info.isFile() || info.isSymbolicLink()) {
           task.files++;
           task.bytes += info.size;
-        } else task.skipped++;
+          item.files++;
+          item.bytes += info.size;
+        } else {
+          task.skipped++;
+          item.skipped++;
+        }
       } catch {
         if (signal.aborted) return;
         task.skipped++;
+        item.skipped++;
       }
       progress();
     };
     try {
-      for (const root of roots) await inspect(root);
+      for (const item of items) await inspect(item.path, item);
       while (directories.length) {
         signal.throwIfAborted();
         const folder = directories.pop()!;
         try {
-          const directory = await opendir(folder);
+          const directory = await opendir(folder.path);
           let batch: Promise<void>[] = [];
           for await (const item of directory) {
             signal.throwIfAborted();
-            batch.push(inspect(path.join(folder, item.name)));
+            batch.push(inspect(path.join(folder.path, item.name), folder.item));
             if (batch.length === 8) {
               await Promise.all(batch);
               batch = [];
@@ -109,11 +118,13 @@ export class FolderSizes {
         } catch (error) {
           if (signal.aborted) throw error;
           task.skipped++;
+          folder.item.skipped++;
         }
       }
       signal.throwIfAborted();
       task.status = 'completed';
       task.measuredAt = Date.now();
+      task.items = items;
     } catch (error) {
       task.status = signal.aborted ? 'cancelled' : 'failed';
       if (!signal.aborted) task.error = error instanceof Error ? error.message : String(error);

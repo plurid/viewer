@@ -3,6 +3,7 @@ import { chmod, lstat, mkdir, open, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import { Archives, archiveFingerprint } from './archives';
+import { fileCoordination } from './file-coordination';
 
 export interface ArchiveWork {
   signal: AbortSignal;
@@ -74,45 +75,69 @@ export async function createArchive(
     for (const entry of entries) {
       work.signal.throwIfAborted();
       await work.access([entry.file]);
-      const stream = entry.info.isDirectory()
-        ? new ZipPassThrough(entry.name + '/')
-        : new ZipDeflate(entry.name, { level: 1 });
-      stream.os = 3;
-      stream.attrs = (entry.info.mode & 0o777) << 16;
-      stream.mtime = entry.info.mtime;
-      zip.add(stream);
-      if (entry.info.isDirectory()) stream.push(new Uint8Array(), true);
-      else {
-        const input = await open(
-          entry.file,
-          constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-        );
-        try {
-          if (!same(entry.info, await input.stat()))
-            throw new Error('A source changed before archiving.');
-          const buffer = Buffer.allocUnsafe(64 * 1024);
-          let offset = 0;
-          while (offset < entry.info.size) {
-            work.signal.throwIfAborted();
-            const { bytesRead } = await input.read(
-              buffer,
-              0,
-              Math.min(buffer.length, entry.info.size - offset),
-              null,
-            );
-            if (!bytesRead) throw new Error('A source changed while archiving.');
-            stream.push(buffer.subarray(0, bytesRead));
-            await writes;
-            offset += bytesRead;
-            done += bytesRead;
-            work.progress(entry.file, done, total);
-          }
-          stream.push(new Uint8Array(), true);
-        } finally {
-          await input.close();
+      const archiveEntry = async (signal?: AbortSignal) => {
+        signal?.throwIfAborted();
+        const actual = fileCoordination.path(entry.file);
+        await work.access([actual]);
+        if (entry.info.isFile()) {
+          const hydrated = await lstat(actual);
+          if (
+            !hydrated.isFile() ||
+            hydrated.dev !== entry.info.dev ||
+            hydrated.ino !== entry.info.ino
+          )
+            throw new Error('A source changed while waiting for its file provider.');
+          // Placeholder metadata is captured during traversal; hydrated length
+          // and modification times are captured before the first content byte.
+          total += hydrated.size - entry.info.size;
+          if (total > 2 * 1024 * 1024 * 1024) throw new Error('ZIP creation is limited to 2 GB.');
+          entry.info = hydrated;
         }
-      }
-      await writes;
+        const stream = entry.info.isDirectory()
+          ? new ZipPassThrough(entry.name + '/')
+          : new ZipDeflate(entry.name, { level: 1 });
+        stream.os = 3;
+        stream.attrs = (entry.info.mode & 0o777) << 16;
+        stream.mtime = entry.info.mtime;
+        zip.add(stream);
+        if (entry.info.isDirectory()) stream.push(new Uint8Array(), true);
+        else {
+          const input = await open(
+            actual,
+            constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+          );
+          try {
+            if (!same(entry.info, await input.stat()))
+              throw new Error('A source changed before archiving.');
+            const buffer = Buffer.allocUnsafe(64 * 1024);
+            let offset = 0;
+            while (offset < entry.info.size) {
+              work.signal.throwIfAborted();
+              signal?.throwIfAborted();
+              const { bytesRead } = await input.read(
+                buffer,
+                0,
+                Math.min(buffer.length, entry.info.size - offset),
+                null,
+              );
+              if (!bytesRead) throw new Error('A source changed while archiving.');
+              stream.push(buffer.subarray(0, bytesRead));
+              await writes;
+              offset += bytesRead;
+              done += bytesRead;
+              work.progress(entry.file, done, total);
+            }
+            stream.push(new Uint8Array(), true);
+          } finally {
+            await input.close();
+          }
+        }
+        await writes;
+        signal?.throwIfAborted();
+      };
+      if (entry.info.isDirectory()) await archiveEntry();
+      else
+        await fileCoordination.run([{ path: entry.file, mode: 'read' }], archiveEntry, work.signal);
     }
     for (const entry of entries) {
       if (
@@ -135,6 +160,21 @@ export async function createArchive(
   }
 }
 export async function extractArchive(
+  source: string,
+  target: string,
+  work: ArchiveWork,
+): Promise<void> {
+  return fileCoordination.run(
+    [{ path: source, mode: 'read' }],
+    async (signal) => {
+      signal?.throwIfAborted();
+      await extractCoordinated(source, target, { ...work, signal: signal ?? work.signal });
+      signal?.throwIfAborted();
+    },
+    work.signal,
+  );
+}
+async function extractCoordinated(
   source: string,
   target: string,
   work: ArchiveWork,

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { createRequire } from 'node:module';
 import { zipSync, strToU8 } from 'fflate';
@@ -11,7 +11,7 @@ import { parse } from 'jsonc-parser';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
-import { createFixtures } from './fixtures';
+import { createFixtures, sizedImageFixture } from './fixtures';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import { repeatedPreviewFixture } from './workspace-fixtures';
@@ -29,6 +29,8 @@ const binary =
   process.env.VIEWER_TEST_BINARY ||
   path.join(appRoot, `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`);
 const fixture = await createFixtures();
+if (process.env.VIEWER_TEST_SCENARIO === 'daily-file-work')
+  await writeFile(path.join(fixture.files, 'Images', 'Wide.png'), sizedImageFixture(2048, 1280));
 if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
   const require = createRequire(import.meta.url);
   await writeFile(
@@ -384,7 +386,7 @@ async function reloadPage(): Promise<void> {
   );
   await activateTestWindow();
 }
-async function click(selector: string, count = 1): Promise<void> {
+async function click(selector: string, count = 1, modifiers = 0): Promise<void> {
   if (settingsMode && selector === 'dialog [aria-label="Close"]') {
     // Closing destroys this CDP target before it necessarily acknowledges the
     // evaluation. Observe the actual close rather than awaiting that reply.
@@ -424,6 +426,7 @@ async function click(selector: string, count = 1): Promise<void> {
       button: 'left',
       buttons: 1,
       clickCount,
+      modifiers,
       x: point.x,
       y: point.y,
     });
@@ -432,6 +435,7 @@ async function click(selector: string, count = 1): Promise<void> {
       button: 'left',
       buttons: 0,
       clickCount,
+      modifiers,
       x: point.x,
       y: point.y,
     });
@@ -523,6 +527,323 @@ async function captureEngine(): Promise<void> {
     true,
   );
 }
+async function verifyDailyFileWork(): Promise<void> {
+  const note = path.join(fixture.files, 'README.md');
+  const models = path.join(fixture.files, 'Models');
+  const content = await readFile(note);
+  await evaluate('document.querySelector(".folder-explorer").focus()');
+  await key('Shift', 'ShiftLeft', 12);
+  await key('Meta', 'MetaLeft', 12);
+  assert.equal(
+    await evaluate('!!document.querySelector("dialog[open]")'),
+    false,
+    'Command + Shift alone must not create a folder',
+  );
+  await key('N', 'KeyN', 12);
+  await until(
+    () =>
+      evaluate<boolean>(
+        'document.querySelector("dialog[open]")?.getAttribute("aria-label") === "New folder"',
+      ),
+    Boolean,
+    'actual New Folder binding',
+  );
+  await key('Escape', 'Escape');
+
+  const trashJobs = () => evaluate<OperationJob[]>('window.viewer.jobs()');
+  const trashNote = async (confirm: boolean) => {
+    const prior = new Set((await trashJobs()).map((job) => job.id));
+    await click(fileSelector(note));
+    await key('Backspace', 'Backspace', 4);
+    if (confirm) {
+      await until(
+        () => evaluate<boolean>('!!document.querySelector(".trash-dialog[open]")'),
+        Boolean,
+        'Trash confirmation',
+      );
+      assert.deepEqual(
+        await evaluate(
+          'Array.from(document.querySelectorAll(".trash-dialog kbd")).map(key=>key.textContent)',
+        ),
+        ['Esc', 'Enter'],
+      );
+      assert.equal(
+        await evaluate('document.activeElement?.getAttribute("aria-label")'),
+        'Move to Trash',
+      );
+      await snapshot('desktop-native-trash-keyboard.png');
+      await key('Enter', 'Enter');
+    } else assert.equal(await evaluate('!!document.querySelector(".trash-dialog")'), false);
+    const job = await until(
+      trashJobs,
+      (jobs) =>
+        jobs.some(
+          (job) =>
+            !prior.has(job.id) &&
+            job.kind === 'trash' &&
+            ['completed', 'failed'].includes(job.status),
+        ),
+      'native Trash result',
+    ).then((jobs) => jobs.find((job) => !prior.has(job.id) && job.kind === 'trash')!);
+    assert.equal(job.status, 'completed', JSON.stringify(job.errors));
+    await assert.rejects(lstat(note), { code: 'ENOENT' });
+    await evaluate(`window.viewer.undo(${JSON.stringify(job.id)})`);
+    await until(
+      async () => {
+        try {
+          return (await readFile(note)).equals(content);
+        } catch {
+          return false;
+        }
+      },
+      Boolean,
+      'Trash Undo contents',
+    );
+    await until(
+      () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(note))})`),
+      Boolean,
+      'restored file row',
+    );
+  };
+  await click(fileSelector(note));
+  await key('Backspace', 'Backspace', 4);
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".trash-dialog[open]")'),
+    Boolean,
+    'cancelable Trash dialog',
+  );
+  await key('Escape', 'Escape');
+  assert.ok((await readFile(note)).equals(content), 'Escape preserves the file');
+  await trashNote(true);
+  await tab('Browsing');
+  await setting('Confirm before moving to Trash');
+  await click('dialog [aria-label="Close"]');
+  await trashNote(false);
+  await tab('Browsing');
+  await setting('Confirm before moving to Trash');
+  await click('dialog [aria-label="Close"]');
+
+  await click(fileSelector(models));
+  await evaluate(
+    'window.__qaSizes = []; window.__qaSizeOff = window.viewer.onEvent(event => { if(event.type === "folder-size") window.__qaSizes.push(event.task); });',
+  );
+  await paletteCommand('Calculate Size');
+  const measured = await until(
+    () => evaluate<import('../src/domain/metadata').FolderSizeTask[]>('window.__qaSizes'),
+    (tasks) => tasks.some((task) => task.status === 'completed'),
+    'folder size',
+  ).then((tasks) => tasks.find((task) => task.status === 'completed')!);
+  await until(
+    () =>
+      evaluate<string>(
+        `document.querySelector(${JSON.stringify(fileSelector(models))})?.querySelector('[data-column="size"]')?.textContent || ''`,
+      ),
+    (value) => value === formatBytes(measured.bytes),
+    'folder size in Size column',
+  );
+  await click(fileSelector(note), 1, 4);
+  const noteEntry = await evaluate<{ size: number }>(`window.viewer.stat(${JSON.stringify(note)})`);
+  await until(
+    () => evaluate<string>('document.querySelector(".folder-status .selection-size").textContent'),
+    (value) => value === formatBytes(measured.bytes + noteEntry.size),
+    'mixed-selection measured total',
+  );
+  await snapshot('desktop-native-measured-selection.png');
+  await evaluate('window.__qaSizeOff();');
+
+  await paletteCommand('Columns view');
+  await click(fileSelector(note));
+  await until(
+    () => evaluate<string>('document.querySelector(".column-preview")?.dataset.previewPath || ""'),
+    (value) => value === note,
+    'root-column inline preview',
+  );
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".column-preview .preview-host")?.dataset.previewModule || ""',
+      ),
+    (value) => value === 'text',
+    'inline Markdown renderer',
+  );
+  await snapshot('desktop-native-column-preview.png');
+  await click(fileSelector(models));
+  assert.equal(
+    await evaluate('!!document.querySelector(".column-preview")'),
+    false,
+    'Selecting a folder removes the old preview',
+  );
+  const children = await evaluate<{ entries: { path: string; directory: boolean }[] }>(
+    `window.viewer.list(${JSON.stringify(models)})`,
+  );
+  const child = children.entries.find((file) => !file.directory && file.path.endsWith('.obj'))!;
+  await until(
+    () =>
+      evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(child.path))})`),
+    Boolean,
+    'child column',
+  );
+  await click(fileSelector(child.path));
+  await until(
+    () => evaluate<string>('document.querySelector(".column-preview")?.dataset.previewPath || ""'),
+    (value) => value === child.path,
+    'nested-column inline preview',
+  );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".column-preview canvas")'),
+    Boolean,
+    'nested 3D model preview',
+  );
+  await snapshot('desktop-native-column-model.png');
+
+  await evaluate(
+    'window.__qaEngine.camera.dock(window.__qaEngine.tree.get()[0].planeID, {animate:false})',
+  );
+  await settleCamera();
+  const docked = await evaluate<string>('window.__qaEngine.camera.docked()');
+  await click(
+    `.location-sidebar button[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
+  );
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".folder-explorer")?.getAttribute("aria-label") || ""',
+      ),
+    (value) => value === 'Folder ' + path.join(fixture.files, 'Documents'),
+    'sidebar folder navigation',
+  );
+  await settleCamera();
+  assert.equal(
+    await evaluate('window.__qaEngine.camera.docked()'),
+    docked,
+    'Sidebar navigation must retain docking',
+  );
+  await key('ArrowUp', 'ArrowUp', 4);
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(note))})`),
+    Boolean,
+    'return to fixture parent',
+  );
+  await settleCamera();
+  assert.equal(await evaluate('window.__qaEngine.camera.docked()'), docked);
+
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 2560,
+    height: 1440,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  const wideImage = path.join(fixture.files, 'Images', 'Wide.png');
+  await click(fileSelector(path.join(fixture.files, 'Images')));
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(wideImage))})`),
+    Boolean,
+    'generated large image column',
+  );
+  await click(fileSelector(wideImage));
+  await key(' ', 'Space');
+  await until(
+    () =>
+      evaluate<boolean>(
+        'document.querySelector(".quick-preview-dialog .image-stage img")?.naturalWidth === 2048',
+      ),
+    Boolean,
+    'large image decode',
+  );
+  const imageFit = await evaluate<{
+    imageWidth: number;
+    imageHeight: number;
+    stageWidth: number;
+    stageHeight: number;
+  }>(
+    `(()=>{const i=document.querySelector('.quick-preview-dialog .image-stage img').getBoundingClientRect(),s=document.querySelector('.quick-preview-dialog .image-stage').getBoundingClientRect();return {imageWidth:i.width,imageHeight:i.height,stageWidth:s.width,stageHeight:s.height};})()`,
+  );
+  assert.ok(
+    imageFit.imageWidth / imageFit.stageWidth >= 0.8 ||
+      imageFit.imageHeight / imageFit.stageHeight >= 0.8,
+    'Large image uses its preview area: ' + JSON.stringify(imageFit),
+  );
+  await snapshot('desktop-native-large-image-preview.png');
+  await key('Escape', 'Escape');
+  await click(fileSelector(note));
+  await key(' ', 'Space');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".quick-preview-dialog[open]")'),
+    Boolean,
+    'large-display Quick Preview',
+  );
+  const bounds = await evaluate<{
+    width: number;
+    height: number;
+    viewportWidth: number;
+    viewportHeight: number;
+  }>(
+    `(()=>{const r=document.querySelector('.quick-preview-dialog').getBoundingClientRect();return {width:r.width,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight};})()`,
+  );
+  assert.ok(
+    bounds.width / bounds.viewportWidth >= 0.85 && bounds.height / bounds.viewportHeight >= 0.83,
+    JSON.stringify(bounds),
+  );
+  await snapshot('desktop-native-large-quick-preview.png');
+  await key('Escape', 'Escape');
+  await key('n', 'KeyN', 4);
+  await until(
+    () => evaluate<number>('window.__qaEngine.tree.get().length'),
+    (count) => count === 2,
+    'large-display new plane',
+  );
+  await settleCamera();
+  const newPlane = await evaluate<{
+    width: number;
+    height: number;
+    viewportWidth: number;
+    viewportHeight: number;
+  }>(
+    `(()=>{const id=window.__qaEngine.tree.get()[1].planeID;const r=document.querySelector('[data-plurid-plane='+JSON.stringify(id)+']').getBoundingClientRect();return {width:r.width,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight};})()`,
+  );
+  assert.ok(
+    newPlane.width / newPlane.viewportWidth >= 0.75 &&
+      newPlane.height / newPlane.viewportHeight >= 0.75,
+    'New plane must use the large display: ' + JSON.stringify(newPlane),
+  );
+  await snapshot('desktop-native-large-plane.png');
+  await paletteCommand('Close plane');
+  await until(
+    () => evaluate<number>('window.__qaEngine.tree.get().length'),
+    (count) => count === 1,
+    'closed generated root',
+  );
+  await evaluate(
+    'window.__qaEngine.camera.dock(window.__qaEngine.tree.get()[0].planeID, {animate:false})',
+  );
+  await settleCamera();
+  await click(fileSelector(note));
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 800,
+    height: 600,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await key(' ', 'Space');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".quick-preview-dialog[open]")'),
+    Boolean,
+    'small-display Quick Preview',
+  );
+  assert.equal(
+    await evaluate(
+      '(()=>{const r=document.querySelector(".quick-preview-dialog").getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight;})()',
+    ),
+    true,
+  );
+  await snapshot('desktop-native-small-quick-preview.png');
+  await key('Escape', 'Escape');
+  await command('Emulation.clearDeviceMetricsOverride');
+  console.log(
+    'Daily file work: exact shortcut keys, Trash preference/Enter/Escape/Undo, shared folder sizes, inline column previews, retained docking and responsive Quick Preview.',
+  );
+}
+
 async function verifySelectionReliability(): Promise<void> {
   const rows = await evaluate<string[]>(
     'Array.from(document.querySelectorAll(".folder-explorer [data-file-path]")).map(row=>row.dataset.filePath)',
@@ -4395,6 +4716,13 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'daily-file-work') {
+    await verifyDailyFileWork();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'model-lighting') {
     await verifyModelLighting();
     await verifyBackgroundApp();
