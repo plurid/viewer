@@ -1,7 +1,9 @@
+import type { PlanePlacement } from '../../domain/project';
 import { useMemo, useRef, type RefObject } from 'react';
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
-import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
+import { PLURID_PUBSUB_TOPIC, type TreePlane } from '@plurid/plurid-data';
 import type { FileEntry } from '../../domain/contracts';
+import { sameSourceVersion, sourceVersion, type EvidenceNavigation } from '../../domain/inspection';
 import { matchingPane } from '../../domain/planes';
 import {
   activeWorkspace,
@@ -9,7 +11,12 @@ import {
   addRootFolder,
   addSearchPane,
   addTerminalPane,
+  addCollectionPane,
   getState,
+  installProject,
+  consumeProjectLayout,
+  updatePane,
+  report,
   reconcilePanes,
   removePanes,
   setActivePane,
@@ -33,6 +40,95 @@ export function useWorkspaceController({
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
+      async openEvidence(evidence, parentPaneID) {
+        const origin = activeWorkspace().id;
+        const entry = await window.viewer.stat(evidence.path);
+        if (origin !== activeWorkspace().id)
+          throw new Error('The workspace changed. Open the result again.');
+        if (!sameSourceVersion(sourceVersion(entry), evidence.version))
+          throw new Error(
+            'This search evidence is stale. Refresh the index before opening its location.',
+          );
+        controller.open(entry, parentPaneID, { evidence });
+      },
+      captureLayout() {
+        const api = engine.current;
+        if (!api) throw new Error('Wait for the workspace to finish opening.');
+        const placements: PlanePlacement[] = [];
+        const visit = (nodes: TreePlane[], parent?: string) => {
+          for (const node of nodes) {
+            const id = hostID(node);
+            if (!activeWorkspace().panes.some((pane) => pane.id === id)) continue;
+            placements.push({
+              id,
+              parent,
+              location: { ...node.location },
+              width: node.width,
+              height: node.height,
+              show: node.show,
+              bridge: {
+                length: node.bridgeLength,
+                side: node.bridgeSide,
+                offset: node.bridgeOffset,
+                angle: node.planeAngle,
+              },
+            });
+            visit(node.children || [], id);
+          }
+        };
+        visit(api.tree.get());
+        const docked = flattenTree(api.tree.get()).find(
+          (node) => node.planeID === api.camera.docked(),
+        );
+        return {
+          placements,
+          active: getState().activePane || undefined,
+          docked: docked ? hostID(docked) : undefined,
+        };
+      },
+      restoreLayout(layout) {
+        const api = engine.current;
+        if (!api) throw new Error('Wait for the workspace to finish opening.');
+        const nodes = new Map(flattenTree(api.tree.get()).map((node) => [hostID(node), node]));
+        const tree = new Map<string, TreePlane>();
+        for (const placement of layout.placements) {
+          const node = nodes.get(placement.id);
+          if (!node)
+            throw new Error(
+              'This arrangement needs a plane that is no longer open. Reload the saved project to restore it.',
+            );
+          tree.set(placement.id, {
+            ...node,
+            children: [],
+            location: { ...placement.location },
+            width: placement.width,
+            height: placement.height,
+            show: placement.show,
+            manuallyPositioned: true,
+            sizeMode: 'manual',
+            spawnedByLinkID: undefined,
+            bridgeLength: placement.bridge?.length,
+            bridgeSide: placement.bridge?.side,
+            bridgeOffset: placement.bridge?.offset,
+            planeAngle: placement.bridge?.angle,
+          });
+        }
+        const roots: TreePlane[] = [];
+        for (const placement of layout.placements) {
+          const node = tree.get(placement.id)!;
+          if (placement.parent) tree.get(placement.parent)!.children!.push(node);
+          else roots.push(node);
+        }
+        api.store.dispatch(pluridStateModules.space.actions.setTree(roots));
+        consumeProjectLayout(layout);
+        if (layout.active) setActivePane(layout.active);
+        const docked = layout.docked && tree.get(layout.docked);
+        if (docked) api.camera.dock(docked.planeID, { animate: false });
+        else {
+          api.camera.reveal({ animate: false });
+          frameWorkspace(engine, surface);
+        }
+      },
       newTerminal(target, profileID) {
         const api = engine.current;
         if (!api || !readyRef.current || target.workspaceID !== activeWorkspace().id) return;
@@ -75,6 +171,11 @@ export function useWorkspaceController({
         const id = addSearchPane(query, name, root, recursive, content);
         frameWorkspace(engine, surface, [id]);
       },
+      openCollection(id) {
+        if (!engine.current || !readyRef.current) return;
+        const paneID = addCollectionPane(id);
+        frameWorkspace(engine, surface, [paneID]);
+      },
       newRootFolder(target) {
         if (!engine.current || !readyRef.current) return;
         const pane = addRootFolder(target);
@@ -86,8 +187,21 @@ export function useWorkspaceController({
       open(
         entry: FileEntry,
         parentPaneID?: string,
-        options?: { another?: boolean; link?: string },
+        options?: {
+          another?: boolean;
+          link?: string;
+          evidence?: EvidenceNavigation;
+        },
       ) {
+        if (!entry.directory && entry.name === 'viewer.project.jsonc') {
+          void window.viewer
+            .project({ kind: 'read', file: entry.path })
+            .then((document) => {
+              if (document && typeof document === 'object') return installProject(document);
+            })
+            .catch(report);
+          return;
+        }
         const api = engine.current;
         if (!api || !readyRef.current) return;
         const space = activeWorkspace();
@@ -112,6 +226,8 @@ export function useWorkspaceController({
             { rootID, owners },
           );
         if (existing) {
+          if (existing.type === 'preview' && options?.evidence)
+            updatePane(existing.id, { evidence: options.evidence });
           controller.focusPane(existing.id);
           return;
         }
@@ -120,6 +236,8 @@ export function useWorkspaceController({
           keepSeparate: options?.another,
         });
         pending.set(pane.id, linked ? (rootID ?? pane.id) : pane.id);
+        if (pane.type === 'preview' && options?.evidence)
+          updatePane(pane.id, { evidence: options.evidence });
         setActivePane(pane.id);
         if (api && linked) {
           api.pubsub.publish({

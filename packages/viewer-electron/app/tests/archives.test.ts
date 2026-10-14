@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
 import { strToU8, zipSync } from 'fflate';
 import { Archives } from '../src/desktop/archives';
@@ -13,6 +15,16 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
+it.skipIf(process.platform === 'win32')(
+  'refuses special archive sources without waiting for a FIFO writer',
+  async () => {
+    const file = path.join(root, 'Pipe.xlsx');
+    await promisify(execFile)('/usr/bin/mkfifo', [file]);
+    const archives = new Archives();
+    await expect(archives.list(file)).rejects.toThrow('regular file');
+    await expect(archives.list(root)).rejects.toThrow('regular file');
+  },
+);
 function tarEntry(name: string, value: Buffer, type = '0'): Buffer {
   const header = Buffer.alloc(512);
   header.write(name);

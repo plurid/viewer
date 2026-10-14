@@ -13,7 +13,7 @@ import 'prismjs/components/prism-bash';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty, Loading } from '../../ui/primitives';
-import { parseDelimited } from '../parse';
+import { DelimitedTable } from '../DataTable';
 import { getState, report } from '../../state/store';
 
 function JSONNode({ name, value, depth = 0 }: { name: string; value: unknown; depth?: number }) {
@@ -59,98 +59,15 @@ function JSONNode({ name, value, depth = 0 }: { name: string; value: unknown; de
     </div>
   );
 }
-function DataTable({ text, delimiter }: { text: string; delimiter: string }) {
-  const { rows, malformed } = useMemo(() => parseDelimited(text, delimiter), [text, delimiter]);
-  const ref = useRef<HTMLDivElement>(null);
-  const [query, setQuery] = useState('');
-  const header = rows[0] ?? [];
-  const body = useMemo(
-    () =>
-      rows
-        .slice(1)
-        .filter(
-          (row) =>
-            !query ||
-            row.some((cell) => cell.toLocaleLowerCase().includes(query.toLocaleLowerCase())),
-        ),
-    [rows, query],
-  );
-  const columns = Math.min(
-    100,
-    Math.max(header.length, ...rows.slice(0, 100).map((row) => row.length), 1),
-  );
-  const virtual = useVirtualizer({
-    count: body.length,
-    getScrollElement: () => ref.current,
-    estimateSize: () => 32,
-    overscan: 8,
-  });
-  const template = {
-    gridTemplateColumns: `repeat(${columns}, minmax(140px, 1fr))`,
-    minWidth: columns * 140,
-  };
-  return (
-    <div className="data-viewer">
-      <div className="preview-toolbar">
-        <span className="muted">
-          {body.length.toLocaleString()} rows · {columns} columns
-        </span>
-        <span className="toolbar-spacer" />
-        <input
-          aria-label="Filter table rows"
-          placeholder="Filter rows"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
-      {malformed && (
-        <p className="inline-warning">
-          Unclosed quoted field; the displayed data may be incomplete.
-        </p>
-      )}
-      <div
-        className="data-scroll"
-        ref={ref}
-        role="table"
-        aria-label="Delimited data"
-        aria-rowcount={body.length + 1}
-      >
-        <div className="data-row data-header" role="row" style={template}>
-          {Array.from({ length: columns }, (_, index) => (
-            <div role="columnheader" key={index}>
-              {header[index] || `Column ${index + 1}`}
-            </div>
-          ))}
-        </div>
-        <div
-          style={{ height: virtual.getTotalSize(), position: 'relative', minWidth: columns * 140 }}
-        >
-          {virtual.getVirtualItems().map((item) => (
-            <div
-              role="row"
-              className="data-row"
-              key={item.key}
-              style={{
-                ...template,
-                position: 'absolute',
-                top: item.start,
-                height: item.size,
-                width: '100%',
-              }}
-            >
-              {Array.from({ length: columns }, (_, index) => (
-                <div role="cell" title={body[item.index][index]} key={index}>
-                  {body[item.index][index]}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-function Code({ text, extension }: { text: string; extension: string }) {
+function Code({
+  text,
+  extension,
+  line: targetLine,
+}: {
+  text: string;
+  extension: string;
+  line?: number;
+}) {
   const scroll = useRef<HTMLDivElement>(null);
   const lines = useMemo(() => text.split('\n'), [text]);
   const language =
@@ -174,6 +91,10 @@ function Code({ text, extension }: { text: string; extension: string }) {
     estimateSize: () => 22,
     overscan: 12,
   });
+  useEffect(() => {
+    if (targetLine)
+      virtual.scrollToIndex(Math.min(lines.length - 1, targetLine - 1), { align: 'center' });
+  }, [targetLine, lines.length, virtual]);
   return (
     <div className="code-scroll" ref={scroll} tabIndex={0} aria-label="File text">
       <div
@@ -192,7 +113,7 @@ function Code({ text, extension }: { text: string; extension: string }) {
             grammar && line.length < 10000 ? Prism.highlight(line, grammar, language) : null;
           return (
             <div
-              className="code-line"
+              className={'code-line' + (item.index + 1 === targetLine ? ' evidence-line' : '')}
               key={item.key}
               style={{ position: 'absolute', top: item.start, height: item.size }}
             >
@@ -218,6 +139,11 @@ export default function TextPreview(context: PreviewContext) {
   );
   const [error, setError] = useState('');
   const [raw, setRaw] = useState(false);
+  const evidenceLine =
+    context.evidence?.anchor.kind === 'text' ? context.evidence.anchor.line : undefined;
+  useEffect(() => {
+    if (evidenceLine) setRaw(true);
+  }, [evidenceLine]);
   useEffect(() => {
     void services
       .read(resource.id)
@@ -297,7 +223,11 @@ export default function TextPreview(context: PreviewContext) {
         </p>
       )}
       {['csv', 'tsv'].includes(ext) ? (
-        <DataTable text={data.text} delimiter={ext === 'tsv' ? '\t' : ','} />
+        <DelimitedTable
+          text={data.text}
+          delimiter={ext === 'tsv' ? '\t' : ','}
+          anchor={context.evidence?.anchor.kind === 'cells' ? context.evidence.anchor : undefined}
+        />
       ) : markdown && !raw ? (
         <article className="markdown">
           <ReactMarkdown
@@ -323,7 +253,7 @@ export default function TextPreview(context: PreviewContext) {
           </div>
         )
       ) : (
-        <Code text={data.text} extension={ext} />
+        <Code text={data.text} extension={ext} line={evidenceLine} />
       )}
     </div>
   );

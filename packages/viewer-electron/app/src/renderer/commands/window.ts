@@ -12,9 +12,12 @@ import {
 } from '../state/store';
 import type { WorkspaceController } from '../workspace/context';
 import { actionCommands } from '../actions/commands';
+import { basketEntries, addToBasket } from '../state/store';
+import { sourceVersion } from '../../domain/inspection';
 import { copyPathCommand } from './copy-path';
 import { repeatedPreviews } from '../workspace/recovery';
 import type { CommandContext, CommandDefinition } from './registry';
+import { requestProject, type ProjectCommand } from '../workspace/projects';
 
 export interface WindowActions {
   workspace: WorkspaceController;
@@ -45,6 +48,165 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
   const sidebar = (context: CommandContext) => context.scope === 'sidebar' && !!context.sidebar;
   const shortcut = (context: CommandContext) => sidebar(context) && !!context.sidebar?.path;
   const commands: CommandDefinition[] = [
+    {
+      id: 'related-files',
+      label: 'Related files…',
+      group: 'Files',
+      icon: 'link',
+      aliases: ['provenance', 'dependencies', 'source links', 'relationships'],
+      when: (context) => context.selection.length > 0 || !!context.path,
+      run: (context) => {
+        const paths = context.selection.length
+          ? context.selection.map((file) => file.path)
+          : context.path
+            ? [context.path]
+            : [];
+        window.dispatchEvent(
+          new CustomEvent('viewer:relationships', { detail: { paths, paneID: context.paneID } }),
+        );
+      },
+    },
+    {
+      id: 'workflows',
+      label: 'Workflows…',
+      group: 'Workspace',
+      icon: 'file',
+      aliases: ['pipeline', 'run workflow', 'workflow file'],
+      when: () => true,
+      run: (context) => {
+        window.dispatchEvent(
+          new CustomEvent('viewer:workflows', {
+            detail: {
+              context,
+              ...(context.selection.length === 1 &&
+              /(?:^|\.)workflow\.jsonc$/.test(context.selection[0].name)
+                ? { file: context.selection[0].path }
+                : {}),
+            },
+          }),
+        );
+      },
+    },
+    {
+      id: 'add-to-basket',
+      label: 'Add to basket',
+      group: 'Files',
+      icon: 'check',
+      aliases: ['collect', 'basket', 'keep selection'],
+      when: (context) => context.selection.length > 0,
+      run: (context) => {
+        basketEntries(context.selection);
+      },
+    },
+    {
+      id: 'collections',
+      label: 'Collections and basket…',
+      group: 'Workspace',
+      icon: 'folder',
+      aliases: ['collection', 'basket', 'virtual folder'],
+      when: windowScope,
+      run: () => {
+        window.dispatchEvent(new Event('viewer:collections'));
+      },
+    },
+    {
+      id: 'basket-all-query',
+      label: 'Add all indexed matches to basket',
+      group: 'Files',
+      icon: 'search',
+      aliases: ['all results', 'snapshot selection'],
+      when: (context) =>
+        !!space.panes.find((pane) => pane.id === context.paneID && pane.type === 'search'),
+      run: async (context) => {
+        const pane = space.panes.find((pane) => pane.id === context.paneID);
+        if (pane?.type !== 'search') return;
+        const snapshot = await window.viewer.querySnapshot({
+          query: pane.query,
+          root: pane.allLocations ? undefined : pane.path,
+          content: pane.content ?? false,
+          recursive: pane.recursive ?? true,
+        });
+        addToBasket(
+          snapshot.entries.map((entry) => ({ path: entry.path, version: sourceVersion(entry) })),
+        );
+      },
+    },
+    {
+      id: 'compare-locations',
+      label: 'Compare locations…',
+      group: 'Files',
+      icon: 'columns',
+      aliases: ['compare folders', 'diff', 'reconcile'],
+      when: () => true,
+      run: (context) => {
+        window.dispatchEvent(
+          new CustomEvent('viewer:compare', {
+            detail:
+              context.selection.length === 2
+                ? context.selection.map((file) => file.path)
+                : context.directory
+                  ? [context.directory]
+                  : [],
+          }),
+        );
+      },
+    },
+    {
+      id: 'checkpoints',
+      label: 'Content checkpoints…',
+      group: 'App',
+      icon: 'file',
+      aliases: ['recovery', 'snapshots', 'restore checkpoint'],
+      when: windowScope,
+      run: () => {
+        window.dispatchEvent(new Event('viewer:checkpoints'));
+      },
+    },
+    {
+      id: 'inspect-file',
+      label: 'Inspect file…',
+      group: 'Files',
+      icon: 'file',
+      aliases: ['facts', 'document metadata', 'pages', 'dimensions'],
+      when: (context) =>
+        context.selection.length === 1 || (context.scope === 'preview' && !!context.path),
+      run: (context) => {
+        window.dispatchEvent(
+          new CustomEvent('viewer:inspect', {
+            detail: context.selection[0]?.path || context.path,
+          }),
+        );
+      },
+    },
+    {
+      id: 'plane-notes',
+      label: 'Plane notes…',
+      group: 'Plane',
+      icon: 'file',
+      aliases: ['annotate', 'notes'],
+      when: paneScope,
+      run: (context) => {
+        window.dispatchEvent(new CustomEvent('viewer:notes', { detail: context.paneID }));
+      },
+    },
+    ...(
+      [
+        ['create', 'Create project…'],
+        ['open', 'Open project…'],
+        ['save', 'Save project'],
+        ['reload', 'Reload project…'],
+        ['arrangements', 'Saved arrangements…'],
+        ['bindings', 'Project folders…'],
+      ] as [ProjectCommand, string][]
+    ).map(([command, label]) => ({
+      id: 'project-' + command,
+      label,
+      group: 'Project',
+      icon: 'folder' as const,
+      aliases: ['project', command],
+      when: () => actions.ready && (['create', 'open'].includes(command) || !!space.project),
+      run: () => requestProject(command),
+    })),
     {
       id: 'volumes',
       label: 'Volumes…',

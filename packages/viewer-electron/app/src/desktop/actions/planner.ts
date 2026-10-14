@@ -16,6 +16,7 @@ import type {
 import type { FileChange } from '../../domain/changes';
 import { absolute, entry, exists, validName } from '../filesystem';
 import { DocumentStore } from '../document-store';
+import { renameNames, type RenameInput } from '../../domain/batch-rename';
 import { localBookFields } from '../formats';
 import type { Operations } from '../operations';
 import { fileCoordination } from '../file-coordination';
@@ -59,6 +60,8 @@ const contained = (file: string, root: string) =>
 const same = (a: FileEntry, b: FileEntry) =>
   a.identity === b.identity && a.size === b.size && a.modified === b.modified && a.kind === b.kind;
 interface Dependencies {
+  rename?(input: RenameInput, signal: AbortSignal): Promise<string[]>;
+  snapshot?(title: string, sources: string[], signal: AbortSignal): Promise<string>;
   access?(files: readonly string[]): Promise<void>;
   recipes(): ActionRecipe[];
   providers(): ModelProvider[];
@@ -97,6 +100,8 @@ const stepSchema = z.object({
   completed: z.boolean().optional(),
 });
 const planSchema = z.object({
+  version: z.literal(1).default(1),
+  checkpointID: z.string().optional(),
   id: z.string(),
   revision: z.number(),
   recipeID: z.string(),
@@ -107,6 +112,7 @@ const planSchema = z.object({
     paneID: z.string(),
     sources: z.array(z.string()).max(2000),
     actor: z.enum(['user', 'agent']),
+    clientID: z.string().max(200).optional(),
     recursive: z.boolean().optional(),
   }),
   status: z.enum([
@@ -232,18 +238,20 @@ export class ActionPlanner {
     this.dependencies.emit(structuredClone(plan));
     if (durable) await this.store.save([...this.plans.values()].slice(-100));
   }
-  start(request: ActionRequest): Promise<string> {
+  start(request: ActionRequest, expectedRecipe?: ActionRecipe): Promise<string> {
     if (this.closed) return Promise.reject(new Error('Actions have closed.'));
-    const work = this.create(request).finally(() => this.starting.delete(work));
+    const work = this.create(request, expectedRecipe).finally(() => this.starting.delete(work));
     this.starting.add(work);
     return work;
   }
-  private async create(request: ActionRequest): Promise<string> {
+  private async create(request: ActionRequest, expectedRecipe?: ActionRecipe): Promise<string> {
     await this.load();
     await this.dependencies.access?.(request.context.sources);
     if (this.closed) throw new Error('Actions have closed.');
     const recipe = this.dependencies.recipes().find((recipe) => recipe.id === request.recipeID);
     if (!recipe) throw new Error('This action recipe is unavailable.');
+    if (expectedRecipe && JSON.stringify(recipe) !== JSON.stringify(expectedRecipe))
+      throw new Error('The recipe changed after approval. Review the workflow rule again.');
     if (!request.context.sources.length) throw new Error('Select files or a folder first.');
     if (this.plans.size >= 100)
       for (const [id, old] of this.plans) {
@@ -255,6 +263,7 @@ export class ActionPlanner {
     if (this.plans.size >= 100)
       throw new Error('Review or finish existing tasks before starting another.');
     const plan: ActionPlan = {
+      version: 1,
       id: randomUUID(),
       revision: 0,
       recipeID: recipe.id,
@@ -291,6 +300,11 @@ export class ActionPlanner {
   }
   cancel(id: string): void {
     this.aborts.get(id)?.abort();
+    const plan = this.plans.get(id);
+    if (plan?.status === 'review') {
+      plan.status = 'cancelled';
+      void this.publish(plan).catch(() => {});
+    }
   }
   async quiesce(root: string): Promise<void> {
     const related = (file: string) =>
@@ -370,18 +384,28 @@ export class ActionPlanner {
     if (!files.length) throw new Error('No supported files were found in the selection.');
     if (recipe.kind === 'summarize') plan.summaryInputs = files;
     if (recipe.kind === 'batch-rename') {
-      plan.rows = files.map((file, index) => {
-        const extension = path.extname(file.name);
-        let name = file.name.slice(0, file.name.length - extension.length);
-        if (request.options?.find)
-          name = name.split(request.options.find).join(request.options.replace || '');
-        name = (request.options?.prefix || '') + name + (request.options?.suffix || '');
-        name = (request.options?.template || recipe.template)
-          .replace(/\{name\}/g, name)
-          .replace(/\{extension\}/g, extension)
-          .replace(/\{number\}/g, String((request.options?.start ?? 1) + index));
-        return this.row(file, path.join(file.parent, name));
-      });
+      const names: RenameInput['names'] = [];
+      for (const file of files) {
+        signal.throwIfAborted();
+        const metadata =
+          request.options?.metadata && !file.directory
+            ? (await this.dependencies.extract(file.path, signal)).metadata
+            : undefined;
+        names.push({
+          name: file.name,
+          extension: file.directory ? '' : path.extname(file.name),
+          metadata,
+        });
+      }
+      const input = { names, options: request.options || {}, template: recipe.template };
+      if (input.options.regex && !this.dependencies.rename)
+        throw new Error('Regex rename previews require an isolated worker.');
+      const renamed = this.dependencies.rename
+        ? await this.dependencies.rename(input, signal)
+        : renameNames(input);
+      plan.rows = files.map((file, index) =>
+        this.row(file, path.join(file.parent, renamed[index])),
+      );
     } else {
       const provider = this.dependencies
         .providers()
@@ -624,6 +648,16 @@ export class ActionPlanner {
       .exclusive(async (publish) => {
         const changes: FileChange[] = [];
         try {
+          if (approval.checkpoint) {
+            if (!this.dependencies.snapshot)
+              throw new Error('Checkpoints are unavailable in this build.');
+            plan.checkpointID = await this.dependencies.snapshot(
+              plan.title,
+              selected.flatMap((row) => (row.source ? [row.source.path] : [])),
+              abort.signal,
+            );
+            await this.publish(plan);
+          }
           if (selected.some((row) => row.kind === 'summary')) await this.validateSummary(plan);
           for (const row of selected) {
             abort.signal.throwIfAborted();

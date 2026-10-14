@@ -178,6 +178,45 @@ afterEach(async () => {
   await rm(native.profile, { recursive: true, force: true });
 });
 describe('native window and application shutdown', () => {
+  it('treats a load cancellation after closing a starting workspace as an expected close', async () => {
+    TestWindow.windows[0].close();
+    await vi.waitFor(() => expect(TestWindow.windows[0].destroyed).toBe(true));
+    let reject!: (error: Error) => void;
+    const loading = new Promise<void>((_resolve, fail) => {
+      reject = fail;
+    });
+    const spy = vi.spyOn(TestWindow.prototype, 'loadURL').mockReturnValue(loading);
+    try {
+      application.emit('activate');
+      await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(2));
+      const starting = TestWindow.windows[1];
+      starting.close();
+      await vi.waitFor(() => expect(starting.destroyed).toBe(true));
+      reject(new Error('ERR_ABORTED while closing'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(native.dispose).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it('settles a Settings load cancelled by an actual native close', async () => {
+    let reject!: (error: Error) => void;
+    const loading = new Promise<void>((_resolve, fail) => {
+      reject = fail;
+    });
+    const spy = vi.spyOn(TestWindow.prototype, 'loadURL').mockReturnValue(loading);
+    try {
+      const opening = native.options!.openSettings();
+      await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(2));
+      const starting = TestWindow.windows[1];
+      starting.close();
+      await vi.waitFor(() => expect(starting.destroyed).toBe(true));
+      reject(new Error('ERR_ABORTED while closing Settings'));
+      await expect(opening).resolves.toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
   it('retains a Rectangle-sized frame when closing and reopening on macOS', async () => {
     const frame = { x: 0, y: 25, width: 1920, height: 1000 };
     const window = TestWindow.windows[0];

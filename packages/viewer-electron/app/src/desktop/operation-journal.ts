@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { lstat, readdir, readlink } from 'node:fs/promises';
 import { z } from 'zod';
 import { DocumentStore } from './document-store';
+import { sourceVersionSchema } from '../domain/inspection';
 
 const file = z
   .string()
@@ -78,6 +79,10 @@ const record = z
         sources: z.array(file).max(10000),
         destination: file.optional(),
         name: z.string().max(255).optional(),
+        expectedSources: z
+          .array(z.object({ path: file, version: sourceVersionSchema }).strict())
+          .max(10000)
+          .optional(),
       })
       .strict(),
     undo: z.array(undoStepSchema).max(10000),

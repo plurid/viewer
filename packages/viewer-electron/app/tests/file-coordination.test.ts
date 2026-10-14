@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { FileCoordination } from '../src/desktop/file-coordination';
 import type { FileAccessIntent } from '../src/desktop/macos-files';
 
@@ -39,6 +41,26 @@ function service(native: ReturnType<typeof binding>, timeout?: number) {
   return result;
 }
 describe('coordinated access boundary', () => {
+  it.skipIf(process.platform === 'win32')(
+    'denies FIFO content before starting a native provider wait',
+    async () => {
+      const file = path.join(root, 'Pipe.xlsx');
+      await promisify(execFile)('/usr/bin/mkfifo', [file]);
+      const native = binding(),
+        coordination = service(native);
+      await expect(coordination.acquire([{ path: file, mode: 'read' }])).rejects.toThrow(
+        'regular file',
+      );
+      const alias = path.join(root, 'Linked pipe.xlsx');
+      await symlink(file, alias);
+      native.coordinateStart.mockRejectedValue(new Error('Reached native provider wait'));
+      await expect(coordination.acquire([{ path: alias, mode: 'read' }])).rejects.toThrow(
+        'regular file',
+      );
+      expect(native.coordinateStart).not.toHaveBeenCalled();
+      expect(native.coordinateEnd).not.toHaveBeenCalled();
+    },
+  );
   it('uses a canonical ancestry alias and releases once after the reader closes', async () => {
     const folder = path.join(root, 'actual'),
       alias = path.join(root, 'alias');

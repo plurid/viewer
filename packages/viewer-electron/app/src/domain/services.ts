@@ -1,7 +1,10 @@
+import type { SearchEvidence, EvidenceAnchor } from './inspection';
 import type { FileEntry, UIPreferences, ViewMode, SortKey } from './contracts';
 import type { FolderOverride } from './folder-presentation';
 import type { CustomAction, TerminalProfile } from './automation';
 import type { ProviderKind } from './model-providers';
+import type { ChangePlan } from './change-plan';
+import type { OfficeContent } from './office';
 export type { ProviderKind } from './model-providers';
 export interface ModelProvider {
   id: string;
@@ -25,6 +28,7 @@ export interface ActionRecipe {
   shortcut?: string;
 }
 export interface ApplicationSettings {
+  checkpoints: { budgetBytes: number };
   appearance: 'system' | 'dark' | 'light';
   browsing: {
     mode: ViewMode;
@@ -114,6 +118,7 @@ export interface IndexedQuery {
 }
 export interface IndexedResult {
   entries: FileEntry[];
+  evidence?: SearchEvidence[];
   more: boolean;
   indexed: boolean;
   status: IndexStatus;
@@ -121,6 +126,7 @@ export interface IndexedResult {
 export interface DocumentEvidence {
   source: string;
   text: string;
+  anchor?: EvidenceAnchor;
 }
 export interface DocumentData {
   path: string;
@@ -128,6 +134,8 @@ export interface DocumentData {
   evidence: DocumentEvidence[];
   text: string;
   chapters?: { title: string; html: string }[];
+  office?: OfficeContent;
+  coverageReason?: string;
   truncated: boolean;
 }
 export interface ActionContext {
@@ -136,6 +144,7 @@ export interface ActionContext {
   paneID: string;
   sources: string[];
   actor: 'user' | 'agent';
+  clientID?: string;
   recursive?: boolean;
 }
 export interface ActionRequest {
@@ -149,6 +158,11 @@ export interface ActionRequest {
     find?: string;
     replace?: string;
     start?: number;
+    padding?: number;
+    case?: 'keep' | 'lower' | 'upper' | 'title';
+    regex?: boolean;
+    ignoreCase?: boolean;
+    metadata?: boolean;
   };
 }
 export interface ProposedChange {
@@ -164,31 +178,18 @@ export interface ProposedChange {
   stagedPath?: string;
   error?: string;
 }
-export interface ActionPlan {
-  id: string;
-  revision: number;
+export interface ActionPlan extends ChangePlan<ProposedChange> {
   recipeID: string;
-  title: string;
   context: ActionContext;
-  status:
-    | 'planning'
-    | 'review'
-    | 'applying'
-    | 'completed'
-    | 'partial'
-    | 'cancelled'
-    | 'failed'
-    | 'recovery';
-  rows: ProposedChange[];
   outputRoot?: string;
   summary?: string;
   summaryInputs?: FileEntry[];
   error?: string;
-  undoable: boolean;
 }
 export interface ActionApproval {
   id: string;
   revision: number;
+  checkpoint?: boolean;
   rows: { id: string; destination: string; approved: boolean }[];
 }
 export const builtInRecipes: ActionRecipe[] = [
@@ -248,6 +249,7 @@ export const builtInRecipes: ActionRecipe[] = [
 ];
 export function defaultSettings(home: string): ApplicationSettings {
   return {
+    checkpoints: { budgetBytes: 5 * 1024 ** 3 },
     appearance: 'system',
     browsing: {
       mode: 'list',
@@ -270,9 +272,9 @@ export function defaultSettings(home: string): ApplicationSettings {
       default: 'automatic',
       types: {
         doc: 'native',
-        docx: 'native',
+        docx: 'plane',
         xls: 'native',
-        xlsx: 'native',
+        xlsx: 'plane',
         ppt: 'native',
         pptx: 'native',
       },

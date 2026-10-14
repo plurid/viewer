@@ -20,6 +20,10 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | Native file permission | A private picker bookmark or native clipboard/drag session capability, canonicalized and released after dependent work drains; `desktop/file-access.ts`. |
 | Model data permission | Private user consent for an exact provider endpoint and data level, independently revocable; `desktop/model-permissions.ts`, `domain/model-permissions.ts`. |
 | Operation receipt | A validated durable record of mutation intent, output identity and eligible guarded Undo; `desktop/operation-journal.ts`. It never authorizes blindly replaying interrupted mutations. |
+| Workflow | A portable JSONC DAG that explicitly composes inspection, comparison and reviewed changes; `domain/workflows.ts`, `desktop/workflows.ts`. Run receipts and resolved bindings stay private. |
+| Watch rule | A private approval for an incoming-file selection workflow, content scope and exact definition/recipe revision; `domain/watch-rules.ts`, `desktop/watch-rules.ts`. It creates reviews and cannot apply them. |
+| File relationship | A versioned receipt link, declared/inferred local reference or separate reported note; `domain/relationships.ts`, `desktop/relationships.ts`. It is evidence with a basis, not automatic authority. |
+| Office content | Bounded DOCX body blocks or XLSX source-addressed stored cells, shared by previews, inspection, search and agent readers; `domain/office.ts`, `desktop/office.ts`. Formulas and external data never execute. |
 
 Keep file selection/input independent of camera input. Keep shared presentation independent of local navigation. Keep engine IDs inside `renderer/workspace/controller.ts`. Keep credentials and effective grants out of editable configuration. A working directory is not a sandbox.
 

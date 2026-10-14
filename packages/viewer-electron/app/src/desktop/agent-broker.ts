@@ -4,11 +4,12 @@ import type {
   AgentPlane,
   AgentWorkspaceSnapshot,
   CommandDescriptor,
+  AgentProposal,
 } from '../domain/agent-requests';
 import type { AgentRequests } from './agent-requests';
 import type { SettingsService } from './settings';
 import { createServer, type Server, type Socket } from 'node:net';
-import { chmod, realpath, mkdtemp, rm } from 'node:fs/promises';
+import { chmod, realpath, mkdtemp, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -24,9 +25,69 @@ import type { FileServices } from './file-services';
 import type { ActionPlanner } from './actions/planner';
 import { entry, absolute } from './filesystem';
 import { DocumentStore } from './document-store';
+import { AgentClients } from './agent-clients';
+import type { AgentCapability, AgentClientRequest } from '../domain/agent-clients';
+import { sourceVersion, sameSourceVersion } from '../domain/inspection';
+import { parseDelimited } from '../domain/delimited';
+import type { RelationshipsResult, FileRelation } from '../domain/relationships';
+import { drawingGeometryOptionsSchema } from '../domain/drawing-geometry';
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 const tools = [
+  {
+    name: 'read_drawing_geometry',
+    description:
+      'Read source-versioned DXF entity bounds, lengths, areas, radii and optional bounded coordinates using Viewer’s shared drawing reader. Units are declared, never guessed. Named content permission is required; sampled/unsupported coverage is explicit.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        offset: { type: 'integer', minimum: 0, maximum: 50000 },
+        limit: { type: 'integer', minimum: 1, maximum: 100 },
+        layer: { type: 'string' },
+        points: { type: 'boolean' },
+      },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_relationships',
+    description:
+      'Read bounded, granted operation provenance and optional local reference syntax. Private user notes are excluded; scanning contents requires a named content grant.',
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string' }, content: { type: 'boolean' } },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  },
+  ...['inspect_file', 'read_content', 'query_table'].map((name) => ({
+    name,
+    description:
+      name === 'inspect_file'
+        ? 'Inspect source-versioned facts and original evidence in a granted file. Requires a named client with content permission; OCR is explicit.'
+        : name === 'read_content'
+          ? 'Read bounded extracted original passages with source versions and reader coverage.'
+          : 'Read a bounded CSV/TSV or XLSX row window with original cell anchors. XLSX sheet defaults to the first visible worksheet. Stored values and formula text only; no formulas execute.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        ...(name === 'inspect_file'
+          ? { ocr: { type: 'boolean' } }
+          : name === 'query_table'
+            ? {
+                offset: { type: 'integer', minimum: 0 },
+                limit: { type: 'integer', minimum: 1, maximum: 200 },
+                sheet: { type: 'string', maxLength: 200 },
+              }
+            : {}),
+      },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  })),
   {
     name: 'list_workspaces',
     description: 'List Viewer workspaces and planes visible within the agent folder grants.',
@@ -242,12 +303,20 @@ const tools = [
   },
 ];
 export class AgentBroker {
+  private taskAdmissions: Promise<unknown> = Promise.resolve();
+  private admitTask<T>(work: () => Promise<T>): Promise<T> {
+    const task = this.taskAdmissions.catch(() => {}).then(work);
+    this.taskAdmissions = task;
+    return task;
+  }
+  readonly clients: AgentClients;
   private server?: Server;
   private starting?: Promise<void>;
   private socketDirectory?: string;
   private streams = new Set<Socket>();
   private token = randomBytes(32).toString('hex');
-  private owned = new Set<string>();
+  private owned = new Map<string, string>();
+  private activeCalls = new Map<string, number>();
   private connection: DocumentStore<{ socket: string; pid: number }>;
   private tokenStore: DocumentStore<string>;
   constructor(
@@ -262,8 +331,18 @@ export class AgentBroker {
       config: SettingsService;
       access?(files: readonly string[]): Promise<void>;
       workspaceState?(): Promise<AgentWorkspaceSnapshot | undefined>;
+      relationships?(file: string, content: boolean): Promise<RelationshipsResult>;
     },
   ) {
+    this.clients = new AgentClients(dataPath, async (paths) => {
+      await this.extension?.access?.(paths);
+      for (const root of paths) {
+        const actual = await realpath(absolute(root));
+        if (!(await stat(actual)).isDirectory()) throw new Error('Choose a folder for the client.');
+        if (within(actual, await realpath(dataPath).catch(() => path.resolve(dataPath))))
+          throw new Error('Private Viewer data cannot be an agent folder.');
+      }
+    });
     this.connection = new DocumentStore(path.join(dataPath, 'agent-connection-v1.json'), (value) =>
       z.object({ socket: z.string(), pid: z.number() }).parse(value),
     );
@@ -357,18 +436,79 @@ export class AgentBroker {
     const token = randomBytes(32).toString('hex');
     await this.tokenStore.save(token);
     this.token = token;
-    this.owned.clear();
+    await this.stop('legacy');
     for (const stream of this.streams) stream.destroy();
     return token;
   }
+  async clientRequest(request: AgentClientRequest): Promise<unknown> {
+    if (request.kind === 'list') return this.clients.list();
+    if (request.kind === 'create')
+      return this.clients.create({
+        ...request.client,
+        roots: await Promise.all(request.client.roots.map((root) => realpath(absolute(root)))),
+      });
+    const result = await this.clients.update(
+      request.id,
+      request.revision,
+      request.kind === 'update'
+        ? {
+            ...request.client,
+            roots: await Promise.all(request.client.roots.map((root) => realpath(absolute(root)))),
+          }
+        : undefined,
+    );
+    await this.stop(request.id);
+    return result;
+  }
+  async stop(clientID: string): Promise<void> {
+    this.extension?.requests.stop(clientID);
+    for (const [id, owner] of this.owned)
+      if (owner === clientID) {
+        this.actions.cancel(id);
+        this.owned.delete(id);
+      }
+    for (const plan of await this.actions.all())
+      if (plan.context.actor === 'agent' && plan.context.clientID === clientID)
+        this.actions.cancel(plan.id);
+  }
+  async authorizeProposal(proposal: AgentProposal): Promise<void> {
+    await this.clients.context.run(proposal.clientID ?? 'legacy', async () => {
+      const capability =
+        proposal.kind === 'navigation'
+          ? 'navigation'
+          : proposal.kind === 'terminal-write'
+            ? 'terminal-write'
+            : 'propose';
+      await this.clients.require(capability);
+      if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
+      if (proposal.target?.directory && proposal.target.paneID !== 'none')
+        await this.authorize(proposal.target.directory);
+      for (const file of proposal.target?.selection ?? []) await this.authorize(file.path);
+      if (proposal.kind === 'terminal-write')
+        await this.authorize(this.extension!.requests.terminalDirectory(proposal.terminalID!));
+      if (proposal.navigation)
+        await this.authorizeNavigation(proposal.navigation, proposal.target!);
+    });
+  }
   async authorize(file: string): Promise<string> {
     if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
+    if (within(absolute(file), path.resolve(this.dataPath)))
+      throw new Error(
+        'Private Viewer credentials, grants and recovery data are unavailable to generic agent file tools.',
+      );
     await this.extension?.access?.([file]);
     const actual = await realpath(absolute(file));
+    const privateRoot = await realpath(this.dataPath).catch(() => path.resolve(this.dataPath));
+    if (within(actual, privateRoot))
+      throw new Error('Private Viewer data is unavailable to generic agent file tools.');
+    const client = await this.clients.get();
     const roots = await Promise.all(
-      this.settings().agents.roots.map((root) => realpath(root).catch(() => '')),
+      (client?.roots ?? this.settings().agents.roots).map((root) => realpath(root).catch(() => '')),
     );
     if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
+    const latest = await this.clients.get();
+    if (client && latest?.revision !== client.revision)
+      throw new Error('Client folder permissions changed. Try again.');
     if (!roots.some((root) => root && within(actual, root)))
       throw new Error('This file is outside the agent’s authorized folders.');
     return actual;
@@ -409,13 +549,53 @@ export class AgentBroker {
     }
   }
   async handle(token: unknown, request: unknown): Promise<unknown> {
-    if (
-      !this.settings().agents.enabled ||
-      typeof token !== 'string' ||
-      Buffer.byteLength(token) !== Buffer.byteLength(this.token) ||
-      !timingSafeEqual(Buffer.from(token), Buffer.from(this.token))
-    )
+    if (!this.settings().agents.enabled || typeof token !== 'string' || token.length !== 64)
       throw new Error('Agent access is disabled or its token is invalid.');
+    const legacy =
+      Buffer.byteLength(token) === Buffer.byteLength(this.token) &&
+      timingSafeEqual(Buffer.from(token), Buffer.from(this.token));
+    const actor = legacy ? 'legacy' : await this.clients.authenticate(token);
+    if (!actor) throw new Error('Agent access is disabled or its token is invalid.');
+    return this.clients.context.run(actor, async () => {
+      const client = await this.clients.get();
+      const policy = JSON.stringify(this.settings().agents);
+      const active = this.activeCalls.get(actor) ?? 0;
+      if (active >= (client?.budgets.maxTasks ?? 20))
+        throw new Error('This client has reached its concurrent request budget.');
+      this.activeCalls.set(actor, active + 1);
+      const parsed = z
+        .object({ method: z.string(), params: z.unknown().optional() })
+        .safeParse(request);
+      const tool =
+        parsed.success && parsed.data.method === 'tools/call'
+          ? z
+              .object({ name: z.string().max(200) })
+              .passthrough()
+              .safeParse(parsed.data.params)
+          : undefined;
+      try {
+        const result = await this.handleAuthenticated(request);
+        const latest = await this.clients.get();
+        if (
+          (client && latest?.revision !== client.revision) ||
+          policy !== JSON.stringify(this.settings().agents)
+        )
+          throw new Error('Agent permissions changed while this request was running. Try again.');
+        if (tool?.success)
+          await this.clients
+            .audit(tool.data.name, 'completed', 'Request completed.')
+            .catch(() => {});
+        return result;
+      } catch (error) {
+        if (tool?.success)
+          await this.clients.audit(tool.data.name, 'failed', 'Request failed.').catch(() => {});
+        throw error;
+      } finally {
+        this.activeCalls.set(actor, (this.activeCalls.get(actor) ?? 1) - 1);
+      }
+    });
+  }
+  private async handleAuthenticated(request: unknown): Promise<unknown> {
     const message = z.object({ method: z.string(), params: z.unknown().optional() }).parse(request);
     if (message.method === 'initialize') {
       const params = z.object({ protocolVersion: z.string() }).passthrough().parse(message.params);
@@ -435,6 +615,32 @@ export class AgentBroker {
       .object({ name: z.string(), arguments: z.record(z.string(), z.unknown()).optional() })
       .parse(message.params);
     const args = call.arguments || {};
+    const capability: AgentCapability | undefined = [
+      'get_task',
+      'cancel_task',
+      'get_proposal',
+    ].includes(call.name)
+      ? undefined
+      : ['read_terminal'].includes(call.name)
+        ? 'terminal-read'
+        : ['write_terminal'].includes(call.name)
+          ? 'terminal-write'
+          : ['inspect_file', 'read_content', 'query_table', 'read_drawing_geometry'].includes(
+                call.name,
+              )
+            ? 'content'
+            : [
+                  'propose_open_path',
+                  'propose_selection',
+                  'propose_focus_plane',
+                  'propose_workspace_switch',
+                ].includes(call.name)
+              ? 'navigation'
+              : call.name.startsWith('propose_') || call.name === 'run_action'
+                ? 'propose'
+                : 'metadata';
+    if (capability) await this.clients.require(capability);
+    else await this.clients.get();
     let value: unknown;
     if (['list_workspaces', 'list_planes'].includes(call.name)) {
       const input =
@@ -558,7 +764,11 @@ export class AgentBroker {
       }
       await this.authorizeNavigation(request, target);
       value = extension.requests.navigation(request, target);
-      this.owned.add((value as { id: string }).id);
+      this.owned.set((value as { id: string }).id, this.clients.actor());
+      if (await this.clients.get()) {
+        await extension.requests.review((value as { id: string }).id, true);
+        value = { ...(value as object), requiresUserReview: false };
+      }
     } else if (['list_commands', 'explain_command', 'propose_command'].includes(call.name)) {
       const extension = this.extension;
       const catalog = extension?.catalog();
@@ -586,7 +796,7 @@ export class AgentBroker {
           };
         else {
           value = await extension.requests.command(command.id, catalog.target, command.label);
-          this.owned.add((value as { id: string }).id);
+          this.owned.set((value as { id: string }).id, this.clients.actor());
         }
       }
     } else if (call.name === 'read_config') {
@@ -619,7 +829,7 @@ export class AgentBroker {
       if (call.name === 'validate_config') value = this.extension.config.preview(input.patches);
       else {
         value = this.extension.requests.configuration(input.patches);
-        this.owned.add((value as { id: string }).id);
+        this.owned.set((value as { id: string }).id, this.clients.actor());
       }
     } else if (['read_terminal', 'write_terminal'].includes(call.name)) {
       if (!this.extension) throw new Error('Terminal API is unavailable.');
@@ -636,13 +846,58 @@ export class AgentBroker {
       } else {
         if (input.data === undefined) throw new Error('Provide terminal input.');
         value = await terminal.writeTerminal(input.id, input.data);
-        this.owned.add((value as { id: string }).id);
+        this.owned.set((value as { id: string }).id, this.clients.actor());
       }
     } else if (call.name === 'get_proposal') {
       if (!this.extension) throw new Error('Proposal API is unavailable.');
       const input = z.object({ id: z.string() }).strict().parse(args);
-      if (!this.owned.has(input.id)) throw new Error('Proposal belongs to another actor.');
+      if (this.owned.get(input.id) !== this.clients.actor())
+        throw new Error('Proposal belongs to another actor.');
       value = this.extension.requests.get(input.id);
+    } else if (call.name === 'get_relationships') {
+      const input = z
+        .object({ path: z.string().min(1).max(32768), content: z.boolean().default(false) })
+        .strict()
+        .parse(args);
+      await this.authorize(input.path);
+      const client = await this.clients.get();
+      if (input.content) {
+        await this.clients.require('content');
+        if (!client) throw new Error('Use a named client for content reference scans.');
+      }
+      if (!this.extension?.relationships) throw new Error('Relationship services are unavailable.');
+      const result = await this.extension.relationships(input.path, input.content),
+        relations: FileRelation[] = [];
+      const allowed = new Set<string>();
+      for (const relation of result.relations) {
+        if (relation.basis === 'reported') continue;
+        try {
+          await this.authorize(relation.from.path);
+          await this.authorize(relation.to.path);
+          relations.push({ ...relation, note: undefined });
+          allowed.add(relation.from.path);
+          allowed.add(relation.to.path);
+        } catch {
+          /* Inaccessible endpoints and their private paths are omitted. */
+        }
+      }
+      await this.authorize(input.path);
+      value = {
+        file: input.path,
+        relations,
+        files: result.files
+          .filter((file) => allowed.has(file.path))
+          .map(({ path, status, version }) => ({ path, status, version })),
+        coverage:
+          relations.length ===
+          result.relations.filter((relation) => relation.basis !== 'reported').length
+            ? result.coverage
+            : 'partial',
+      };
+      if (
+        Buffer.byteLength(JSON.stringify(value)) > (client?.budgets.maxReadBytes ?? 4 * 1024 ** 2)
+      )
+        throw new Error('The relationship result exceeds the client read budget.');
     } else if (call.name === 'get_context') {
       const context = this.context();
       const sources: string[] = [];
@@ -667,6 +922,119 @@ export class AgentBroker {
       const input = z.object({ path: z.string() }).strict().parse(args);
       await this.authorize(input.path);
       value = await entry(input.path);
+    } else if (call.name === 'read_drawing_geometry') {
+      const input = drawingGeometryOptionsSchema
+        .extend({ path: z.string().min(1).max(32768) })
+        .strict()
+        .parse(args);
+      const client = await this.clients.get();
+      if (!client)
+        throw new Error('Use a named client with content permission for drawing geometry.');
+      await this.authorize(input.path);
+      const before = await entry(input.path);
+      const { path: file, ...options } = input;
+      value = await this.files.drawingGeometry(file, options);
+      await this.authorize(file);
+      if (!sameSourceVersion(sourceVersion(before), sourceVersion(await entry(file))))
+        throw new Error('The drawing changed. Read its geometry again.');
+      if (Buffer.byteLength(JSON.stringify(value)) > client.budgets.maxReadBytes)
+        throw new Error(
+          'Geometry exceeds the client read budget. Request fewer entities or omit points.',
+        );
+    } else if (['inspect_file', 'read_content', 'query_table'].includes(call.name)) {
+      const input = z
+        .object({
+          path: z.string().min(1).max(32768),
+          ...(call.name === 'inspect_file'
+            ? { ocr: z.boolean().default(false) }
+            : call.name === 'query_table'
+              ? {
+                  offset: z.number().int().min(0).max(100000).default(0),
+                  limit: z.number().int().min(1).max(200).default(100),
+                  sheet: z.string().min(1).max(200).optional(),
+                }
+              : {}),
+        })
+        .strict()
+        .parse(args);
+      const client = await this.clients.get();
+      if (!client)
+        throw new Error(
+          'Create a named agent client with explicit content permission in Settings.',
+        );
+      await this.authorize(input.path);
+      const before = await entry(input.path);
+      if (before.directory) throw new Error('Choose a file.');
+      if (call.name === 'inspect_file')
+        value = await this.files.inspect(input.path, true, 'ocr' in input && Boolean(input.ocr));
+      else {
+        const document = await this.files.extract(input.path);
+        if (call.name === 'query_table') {
+          const offset = 'offset' in input ? Number(input.offset) : 0,
+            limit = 'limit' in input ? Number(input.limit) : 100;
+          if (before.extension === 'xlsx' && document.office?.kind === 'workbook') {
+            const sheets = document.office.sheets;
+            const name = 'sheet' in input ? input.sheet : undefined;
+            const sheet = name
+              ? sheets.find((sheet) => sheet.name === name)
+              : sheets.find((sheet) => !sheet.hidden) || sheets[0];
+            if (!sheet)
+              throw new Error('Requested worksheet is not in the available reader output.');
+            value = {
+              path: input.path,
+              version: sourceVersion(before),
+              sheets: sheets.map((sheet) => ({ name: sheet.name, hidden: sheet.hidden })),
+              sheet: sheet.name,
+              rows: sheet.rows.slice(offset, offset + limit).map((row) => ({
+                row: row.row,
+                cells: row.cells.map((cell) => ({
+                  ...cell,
+                  anchor: { kind: 'cells', sheet: sheet.name, row: row.row, column: cell.column },
+                })),
+              })),
+              more: sheet.rows.length > offset + limit,
+              truncated: document.truncated || sheet.truncated,
+              coverage: 'partial',
+              reason: document.coverageReason,
+            };
+          } else {
+            if (!['csv', 'tsv'].includes(before.extension))
+              throw new Error('Choose a CSV, TSV or XLSX table.');
+            if ('sheet' in input && input.sheet)
+              throw new Error('CSV and TSV tables have no named worksheets.');
+            const table = parseDelimited(
+              document.evidence.find((item) => item.source === 'text')?.text ?? document.text,
+              before.extension === 'tsv' ? '\t' : ',',
+            );
+            value = {
+              path: input.path,
+              version: sourceVersion(before),
+              headers: table.rows[0] ?? [],
+              rows: table.rows.slice(offset + 1, offset + 1 + limit).map((cells, index) => ({
+                cells,
+                anchor: { kind: 'cells', row: offset + index + 2, column: 1 },
+              })),
+              more: table.rows.length > offset + 1 + limit,
+              coverage: document.truncated || table.malformed ? 'partial' : 'complete',
+            };
+          }
+        } else
+          value = {
+            path: input.path,
+            version: sourceVersion(before),
+            metadata: document.metadata,
+            evidence: document.evidence,
+            coverage: document.truncated || document.coverageReason ? 'partial' : 'complete',
+            ...(document.coverageReason ? { reason: document.coverageReason } : {}),
+          };
+      }
+      await this.authorize(input.path);
+      if (!sameSourceVersion(sourceVersion(before), sourceVersion(await entry(input.path))))
+        throw new Error('The source changed. Read it again.');
+      if (Buffer.byteLength(JSON.stringify(value)) > client.budgets.maxReadBytes)
+        throw new Error(
+          'This result exceeds the client read budget. Request a smaller table window or increase its budget in Settings.',
+        );
     } else if (call.name === 'search_files') {
       const input = z
         .object({
@@ -677,7 +1045,11 @@ export class AgentBroker {
         .strict()
         .parse(args);
       await this.authorize(input.root);
-      const result = await this.files.query(input as IndexedQuery);
+      const client = await this.clients.get();
+      const result = await this.files.query({
+        ...input,
+        content: client ? client.capabilities.includes('content') : true,
+      } as IndexedQuery);
       const entries = [];
       for (const item of result.entries) {
         try {
@@ -694,30 +1066,61 @@ export class AgentBroker {
         running: result.status.running,
       };
     } else if (call.name === 'run_action') {
-      const input = z
-        .object({
-          recipeID: z.string(),
-          sources: z.array(z.string()).min(1).max(2000),
-          instructions: z.string().max(12000).optional(),
-          recursive: z.boolean().optional(),
-        })
-        .strict()
-        .parse(args);
-      for (const file of input.sources) await this.authorize(file);
-      const context = this.context();
-      if (!context) throw new Error('Open Viewer to review this task.');
-      const request: ActionRequest = {
-        recipeID: input.recipeID,
-        instructions: input.instructions,
-        context: { ...context, actor: 'agent', sources: input.sources, recursive: input.recursive },
-      };
-      const id = await this.actions.start(request);
-      this.owned.add(id);
-      value = { id, applyRequiresUserReview: true };
+      value = await this.admitTask(async () => {
+        await this.clients.require('propose');
+        const input = z
+          .object({
+            recipeID: z.string(),
+            sources: z.array(z.string()).min(1).max(2000),
+            instructions: z.string().max(12000).optional(),
+            recursive: z.boolean().optional(),
+          })
+          .strict()
+          .parse(args);
+        for (const file of input.sources) await this.authorize(file);
+        const recipe = this.settings().recipes.find((recipe) => recipe.id === input.recipeID);
+        if (recipe?.data !== 'names') await this.clients.require('content');
+        const client = await this.clients.get();
+        if (client) {
+          const running = (await this.actions.all()).filter(
+            (task) =>
+              task.context.actor === 'agent' &&
+              task.context.clientID === client.id &&
+              ['planning', 'review', 'applying'].includes(task.status),
+          ).length;
+          if (running >= client.budgets.maxTasks)
+            throw new Error('Review or stop a task before starting another.');
+        }
+        const context = this.context();
+        if (!context) throw new Error('Open Viewer to review this task.');
+        const request: ActionRequest = {
+          recipeID: input.recipeID,
+          instructions: input.instructions,
+          context: {
+            ...context,
+            actor: 'agent',
+            clientID: this.clients.actor(),
+            sources: input.sources,
+            recursive: input.recursive,
+          },
+        };
+        const id = await this.actions.start(request);
+        this.owned.set(id, this.clients.actor());
+        return { id, applyRequiresUserReview: true };
+      });
     } else if (call.name === 'get_task' || call.name === 'cancel_task') {
       const input = z.object({ id: z.string() }).strict().parse(args);
-      if (!this.owned.has(input.id)) throw new Error('This task belongs to another actor.');
       const plan = await this.actions.get(input.id);
+      if (
+        this.owned.get(input.id) !== this.clients.actor() &&
+        !(plan.context.actor === 'agent' && plan.context.clientID === this.clients.actor())
+      )
+        throw new Error('This task belongs to another actor.');
+      if (
+        call.name === 'get_task' &&
+        this.settings().recipes.find((recipe) => recipe.id === plan.recipeID)?.data !== 'names'
+      )
+        await this.clients.require('content');
       for (const file of plan.context.sources) await this.authorize(file);
       if (call.name === 'cancel_task') {
         this.actions.cancel(input.id);
@@ -727,9 +1130,12 @@ export class AgentBroker {
       throw new Error(
         'Unknown agent tool. Commands require review or an explicit execution grant.',
       );
+    if (capability) await this.clients.require(capability);
+    else await this.clients.get();
     return { content: [{ type: 'text', text: JSON.stringify(value) }] };
   }
   async close(): Promise<void> {
+    await this.clients.close();
     await this.starting?.catch(() => {});
     for (const stream of this.streams) stream.destroy();
     await new Promise<void>((resolve) =>

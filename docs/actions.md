@@ -57,9 +57,33 @@ When updating from a build that encrypted its local agent token, generate fresh 
 
 The packaged executable's `--mcp` mode is a headless stdio client for the running Viewer instance; that instance owns the index, proposals and user review. The Unix socket has mode 0600 in an owned mode-0700 temporary directory, avoiding macOS path-length limits.
 
-The recipe tools remain `get_context`, `list_actions`, `read_metadata`, `search_files`, `run_action`, `get_task` and `cancel_task`. The shared command/configuration tools are `list_commands`, `explain_command`, `propose_command`, `read_config`, `validate_config`, `propose_config` and `get_proposal`; terminal tools are `read_terminal` and `write_terminal`. Canonical-path checks apply to file/terminal requests, including after permission revocation. Only tasks/proposals started by the current token can be inspected. Rotating the token disconnects current clients. Clients sharing one token share its folder grants; separate per-client grants are future work.
+The recipe tools remain `get_context`, `list_actions`, `read_metadata`, `search_files`, `run_action`, `get_task` and `cancel_task`. The shared command/configuration tools are `list_commands`, `explain_command`, `propose_command`, `read_config`, `validate_config`, `propose_config` and `get_proposal`; terminal tools are `read_terminal` and `write_terminal`. Canonical-path checks apply to file/terminal requests, including after permission revocation. Only tasks/proposals started by the current actor can be inspected. Settings → Agents can create named clients with separate tokens, folder roots, metadata/content/navigation/proposal/terminal capabilities and read/task budgets. Private storage retains client token hashes; credentials are shown only when created or rotated. Revocation immediately invalidates the credential. The compatibility token retains its existing shared roots and reviewed navigation behavior.
 
-Navigation tools are `list_workspaces`, `list_planes`, `propose_open_path`, `propose_selection`, `propose_focus_plane` and `propose_workspace_switch`. Discovery reads the live published workspace catalog and omits inaccessible paths and history/layout. Parameterized navigation always requires user review, rechecks folder grants and stale origins/destinations, preserves independent versus linked plane ownership and can continue from an empty workspace. See [agent-navigation.md](agent-navigation.md) for arguments and the agent interaction sequence.
+Navigation tools are `list_workspaces`, `list_planes`, `propose_open_path`, `propose_selection`, `propose_focus_plane` and `propose_workspace_switch`. Discovery reads the live published workspace catalog and omits inaccessible paths and history/layout. A named navigation capability permits navigation within that client's/native folder grants without another review. Compatibility-token requests still require review. Both paths recheck grants and stale origins/destinations, preserve independent versus linked plane ownership and can continue from an empty workspace. See [agent-navigation.md](agent-navigation.md) for arguments and the agent interaction sequence.
+
+Named content clients can use `inspect_file`, `read_content` and `query_table` for
+source-versioned facts, original passages and bounded CSV/TSV/XLSX windows. XLSX
+accepts an optional exact `sheet` name and retains original sparse cell addresses;
+formulas are never executed. See [Office previews](office-previews.md). File access
+and client revision are checked again after reads; response budgets are enforced.
+Metadata clients cannot obtain content by choosing a different tool.
+
+`read_drawing_geometry` reads DXF through the same geometry reader as the viewer.
+Arguments are `path`, optional `offset`/`limit` (at most 100 entities), `layer` and
+`points`. Pages include source versions, the source-byte SHA-256, bounds, declared
+units and available entity lengths/areas/radii. Unknown units remain unknown.
+Coordinates represent the shared reader's 2D paths, including tessellated curves;
+analytic measurements and approximation flags are separate. Point output is
+limited to 2,000 coordinates and layers to 100 per response, with explicit paging
+and truncation indicators. The reader does not infer a closed panel area from
+unjoined line segments or union overlapping contours. Native/client grants and
+returned-byte budgets apply. Other 3D geometry formats remain future agent tools.
+
+`get_relationships` returns bounded receipt provenance and optional local
+references. Both endpoints are permission-filtered; private reported notes and
+commentary are excluded. Content scans additionally require a named content
+capability. [Workflows and watch rules](workflows.md) compose the ordinary review
+services; MCP cannot enable a watch approval or directly apply its file changes.
 
 Command discovery uses the same captured context, availability and IDs as the UI. A command proposal opens review before invocation, and completion waits for the workspace acknowledgement or a subprocess's final status. Origin changes or executor changes fail the proposal rather than retargeting it. Configuration proposals validate first, then apply a reviewed revision; they cannot change effective approvals. Recipe file changes still require their normal row review and Apply. No direct `apply`, `trash` or `delete` MCP tool is exposed.
 

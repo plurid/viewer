@@ -126,6 +126,7 @@ export default function ModelPreview(context: PreviewContext) {
       disposeObject(markings);
       markings.clear();
       points.length = 0;
+      context.state?.set('model.measurement', []);
       setDistance(undefined);
       dirty = true;
       schedule();
@@ -149,10 +150,18 @@ export default function ModelPreview(context: PreviewContext) {
     );
     renderer.domElement.tabIndex = 0;
     const controls = new OrbitControls(camera, renderer.domElement);
+    const remembered = context.state?.get('model.camera') as
+      { position?: number[]; target?: number[] } | undefined;
+    let restoringView = true;
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
     controls.enabled = controlsInteractive;
     controls.addEventListener('change', () => {
+      if (!restoringView && object)
+        context.state?.set('model.camera', {
+          position: camera.position.toArray(),
+          target: controls.target.toArray(),
+        });
       dirty = true;
       schedule();
     });
@@ -197,6 +206,14 @@ export default function ModelPreview(context: PreviewContext) {
       );
       if (!point) return;
       if (points.length === 2) clearMeasure();
+      addMeasurementPoint(point);
+      context.state?.set(
+        'model.measurement',
+        points.map((point) => point.toArray()),
+      );
+    };
+    const addMeasurementPoint = (point: THREE.Vector3) => {
+      if (!object) return;
       points.push(point.clone());
       const extent = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3()).length();
       const marker = new THREE.Mesh(
@@ -393,6 +410,20 @@ export default function ModelPreview(context: PreviewContext) {
       )
         throw new Error('This model has invalid geometry.');
       setDimensions(bounds.getSize(new THREE.Vector3()).toArray());
+      const retained = context.state?.get('model.measurement');
+      if (
+        Array.isArray(retained) &&
+        retained.length <= 2 &&
+        retained.every(
+          (point) =>
+            Array.isArray(point) &&
+            point.length === 3 &&
+            point.every((value) => typeof value === 'number' && Number.isFinite(value)) &&
+            bounds.containsPoint(new THREE.Vector3(...(point as [number, number, number]))),
+        )
+      )
+        for (const point of retained)
+          addMeasurementPoint(new THREE.Vector3(...(point as [number, number, number])));
       scene.add(loaded);
       setInfo(
         `${meshes.toLocaleString()} meshes · ${Math.round(triangles).toLocaleString()} triangles · ${vertices.toLocaleString()} vertices`,
@@ -444,6 +475,18 @@ export default function ModelPreview(context: PreviewContext) {
       session.current.animate(playback.current.animation, playback.current.playing);
       session.current.active(visibility.current.active, visibility.current.interactive);
       frame();
+      if (
+        remembered?.position?.length === 3 &&
+        remembered.target?.length === 3 &&
+        [...remembered.position, ...remembered.target].every(Number.isFinite)
+      ) {
+        camera.position.fromArray(remembered.position);
+        controls.target.fromArray(remembered.target);
+        controls.update();
+        dirty = true;
+        schedule();
+      }
+      restoringView = false;
       setLoading(false);
     })().catch((error) => {
       if (!disposed && !abort.signal.aborted) {

@@ -1,3 +1,44 @@
+import type { EvidenceNavigation, SourceVersion, InspectionResult } from './inspection';
+import type { WorkflowRequest, WorkflowReply } from './workflows';
+import type { WatchRule, WatchRuleRequest, WatchRuleReply } from './watch-rules';
+import type { RelationshipsRequest, RelationshipsReply } from './relationships';
+import type {
+  ProjectAssociation,
+  ProjectLayout,
+  JSONValue,
+  ProjectRequest,
+  ProjectReply,
+} from './project';
+import type { Collection, BasketItem, QuerySnapshot } from './collections';
+import type {
+  SettingsSnapshot,
+  IndexStatus,
+  ActionPlan,
+  IndexedQuery,
+  SettingsPatch,
+  IndexedResult,
+  ActionRequest,
+  ActionApproval,
+  ActionContext,
+  DocumentData,
+} from './services';
+import type {
+  AgentProposal,
+  AgentNavigation,
+  CommandDescriptor,
+  AgentWorkspaceSnapshot,
+  ExecutionGrant,
+} from './agent-requests';
+import type { CapturedTarget, TerminalEvent, ExecutionTask, TerminalStart } from './automation';
+import type { FolderSizeTask, ApplicationChoices, NativeApplication } from './metadata';
+import type { FileChange } from './changes';
+import type { ComparisonRequest, ComparisonResult } from './comparison';
+import type { OperationPlanRequest, OperationPlanReply } from './operation-plan';
+import type { CheckpointRequest, CheckpointReply } from './change-plan';
+import type { AgentClientRequest, AgentClientReply, AgentAudit } from './agent-clients';
+import type { ModelDataPermission, ModelDataLevel } from './model-permissions';
+import type { FileInformation, FileInformationPatch } from './file-information';
+import type { Volume } from './volumes';
 /** Serializable contracts shared by main, preload and renderer. */
 export type FileKind = 'directory' | 'file' | 'symlink' | 'other';
 export interface FileEntry {
@@ -51,6 +92,7 @@ export interface PreviewPane {
   path: string;
   /** Explicit Open another plane copies survive duplicate-preview recovery. */
   keepSeparate?: boolean;
+  evidence?: EvidenceNavigation;
 }
 export interface SearchPane {
   id: string;
@@ -67,8 +109,15 @@ export interface TerminalPane {
   type: 'terminal';
   path: string;
   profileID: string;
+  startOnOpen?: boolean;
 }
-export type Pane = FolderPane | PreviewPane | SearchPane | TerminalPane;
+export interface CollectionPane {
+  id: string;
+  type: 'collection';
+  path: string;
+  collectionID: string;
+}
+export type Pane = FolderPane | PreviewPane | SearchPane | TerminalPane | CollectionPane;
 export interface Workspace {
   id: string;
   name: string;
@@ -76,9 +125,16 @@ export interface Workspace {
   roots: string[];
   activePane?: string;
   arrangement: Record<string, string>;
+  project?: ProjectAssociation;
+  layout?: ProjectLayout;
+  /** Private remount generation for an explicit project reload. */
+  epoch?: number;
+  collections?: Collection[];
+  basket?: BasketItem[];
 }
 export interface SavedState {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
+  previewStates?: Record<string, Record<string, JSONValue>>;
   preferencesRevision?: number;
   workspaces: Workspace[];
   activeWorkspace: string;
@@ -139,7 +195,7 @@ export interface Bootstrap {
   state: SavedState | null;
   openPaths: string[];
   recovery?: string;
-  settings?: import('./services').SettingsSnapshot;
+  settings?: SettingsSnapshot;
 }
 export type OperationKind =
   | 'copy'
@@ -157,6 +213,8 @@ export interface OperationRequest {
   sources: string[];
   destination?: string;
   name?: string;
+  /** Source versions captured in a reviewed plan; checked again when queued work starts. */
+  expectedSources?: { path: string; version: SourceVersion }[];
 }
 export type CollisionDecision = 'skip' | 'keep-both' | 'replace' | 'cancel';
 export interface Collision {
@@ -228,24 +286,25 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'watch-rule'; rule: WatchRule }
   | { type: 'service-error'; service: string; message: string }
-  | { type: 'agent-proposal'; proposal: import('./agent-requests').AgentProposal }
+  | { type: 'agent-proposal'; proposal: AgentProposal }
   | {
       type: 'agent-command';
       id: string;
       command: string;
-      target: import('./automation').CapturedTarget;
-      navigation?: import('./agent-requests').AgentNavigation;
+      target: CapturedTarget;
+      navigation?: AgentNavigation;
     }
-  | { type: 'terminal'; event: import('./automation').TerminalEvent }
-  | { type: 'execution'; task: import('./automation').ExecutionTask }
-  | { type: 'folder-size'; task: import('./metadata').FolderSizeTask }
-  | { type: 'settings'; snapshot: import('./services').SettingsSnapshot }
+  | { type: 'terminal'; event: TerminalEvent }
+  | { type: 'execution'; task: ExecutionTask }
+  | { type: 'folder-size'; task: FolderSizeTask }
+  | { type: 'settings'; snapshot: SettingsSnapshot }
   | { type: 'model-permission'; providerID: string }
   | { type: 'file-access'; path: string; resources?: string[] }
-  | { type: 'index'; status: import('./services').IndexStatus }
-  | { type: 'action'; plan: import('./services').ActionPlan }
-  | { type: 'file-changes'; changes: import('./changes').FileChange[] }
+  | { type: 'index'; status: IndexStatus }
+  | { type: 'action'; plan: ActionPlan }
+  | { type: 'file-changes'; changes: FileChange[] }
   | { type: 'folder-changed'; path: string }
   | { type: 'watch-error'; path: string; message: string; code?: string }
   | { type: 'search'; batch: SearchBatch }
@@ -256,85 +315,87 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  watchRules(request: WatchRuleRequest): Promise<WatchRuleReply>;
+  relationships(request: RelationshipsRequest): Promise<RelationshipsReply>;
+  workflow(request: WorkflowRequest): Promise<WorkflowReply>;
+  querySnapshot(query: IndexedQuery): Promise<QuerySnapshot>;
+  compare(request: ComparisonRequest): Promise<ComparisonResult | null>;
+  operationPlan(request: OperationPlanRequest): Promise<OperationPlanReply>;
+  checkpoints(request: CheckpointRequest): Promise<CheckpointReply>;
+  inspect(file: string, content?: boolean, ocr?: boolean): Promise<InspectionResult>;
+  project(request: ProjectRequest): Promise<ProjectReply>;
   commandsPublish(
-    target: import('./automation').CapturedTarget,
-    commands: import('./agent-requests').CommandDescriptor[],
-    workspaces?: import('./agent-requests').AgentWorkspaceSnapshot,
+    target: CapturedTarget,
+    commands: CommandDescriptor[],
+    workspaces?: AgentWorkspaceSnapshot,
   ): Promise<void>;
   agentCommandResult(id: string, error?: string): Promise<void>;
-  agentReviewList(): Promise<import('./agent-requests').AgentProposal[]>;
+  agentReviewList(): Promise<AgentProposal[]>;
   agentReview(id: string, approve: boolean): Promise<void>;
-  agentGrants(): Promise<import('./agent-requests').ExecutionGrant[]>;
+  agentGrants(): Promise<ExecutionGrant[]>;
+  agentClients(request: AgentClientRequest): Promise<AgentClientReply>;
+  agentAudit(clientID?: string): Promise<AgentAudit[]>;
+  agentStop(clientID: string): Promise<void>;
   agentGrant(
     actionID: string,
     root: string,
-    capability: import('./agent-requests').ExecutionGrant['capability'],
+    capability: ExecutionGrant['capability'],
     allow: boolean,
+    clientID?: string,
   ): Promise<void>;
   configOpen(): Promise<void>;
-  configValidate(): Promise<import('./services').SettingsSnapshot>;
-  configTransfer(kind: 'import' | 'export'): Promise<import('./services').SettingsSnapshot>;
+  configValidate(): Promise<SettingsSnapshot>;
+  configTransfer(kind: 'import' | 'export'): Promise<SettingsSnapshot>;
   terminalApplication(): Promise<{ name: string; path: string; running: boolean }>;
   terminalExternal(cwd: string, tmux: boolean): Promise<void>;
-  terminalStart(request: import('./automation').TerminalStart): Promise<void>;
+  terminalStart(request: TerminalStart): Promise<void>;
   terminalWrite(id: string, data: string): Promise<void>;
   terminalResize(id: string, cols: number, rows: number): Promise<void>;
   terminalAck(id: string, bytes: number): Promise<void>;
   terminalClose(id: string): Promise<void>;
-  customExecute(actionID: string, target: import('./automation').CapturedTarget): Promise<string>;
-  executionList(): Promise<import('./automation').ExecutionTask[]>;
+  customExecute(actionID: string, target: CapturedTarget): Promise<string>;
+  executionList(): Promise<ExecutionTask[]>;
   executionCancel(id: string): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
   openSettings(): Promise<void>;
-  settingsGet(): Promise<import('./services').SettingsSnapshot>;
-  settingsPatch(
-    patches: import('./services').SettingsPatch[],
-    revision: number,
-  ): Promise<import('./services').SettingsSnapshot>;
+  settingsGet(): Promise<SettingsSnapshot>;
+  settingsPatch(patches: SettingsPatch[], revision: number): Promise<SettingsSnapshot>;
   providerCredential(id: string, key: string): Promise<void>;
   providerModels(id: string): Promise<string[]>;
-  providerPermissionGet(
-    id: string,
-  ): Promise<import('./model-permissions').ModelDataPermission | null>;
-  providerPermissionSet(
-    id: string,
-    endpoint: string,
-    level: import('./model-permissions').ModelDataLevel | null,
-  ): Promise<void>;
-  indexStatus(): Promise<import('./services').IndexStatus>;
-  indexedQuery(
-    query: import('./services').IndexedQuery,
-  ): Promise<import('./services').IndexedResult>;
+  providerPermissionGet(id: string): Promise<ModelDataPermission | null>;
+  providerPermissionSet(id: string, endpoint: string, level: ModelDataLevel | null): Promise<void>;
+  indexStatus(): Promise<IndexStatus>;
+  indexedQuery(query: IndexedQuery): Promise<IndexedResult>;
   indexRebuild(): Promise<void>;
-  actionStart(request: import('./services').ActionRequest): Promise<string>;
-  actionGet(id: string): Promise<import('./services').ActionPlan>;
-  actionList(): Promise<import('./services').ActionPlan[]>;
-  actionApply(approval: import('./services').ActionApproval): Promise<void>;
+  actionStart(request: ActionRequest): Promise<string>;
+  actionGet(id: string): Promise<ActionPlan>;
+  actionList(): Promise<ActionPlan[]>;
+  actionApply(approval: ActionApproval): Promise<void>;
   actionCancel(id: string): Promise<void>;
   actionUndo(id: string): Promise<void>;
   actionRecover(id: string): Promise<void>;
   actionExportSummary(id: string, destination: string): Promise<void>;
   agentToken(): Promise<string>;
-  contextPublish(context: import('./services').ActionContext): Promise<void>;
+  contextPublish(context: ActionContext): Promise<void>;
   thumbnail(path: string, size: number): Promise<string>;
-  document(id: string): Promise<import('./services').DocumentData>;
+  document(id: string): Promise<DocumentData>;
   list(path: string): Promise<FolderListing>;
   stat(path: string): Promise<FileEntry>;
-  fileInformation(path: string): Promise<import('./file-information').FileInformation>;
+  fileInformation(path: string): Promise<FileInformation>;
   fileInformationUpdate(
     path: string,
     revision: string,
-    patch: import('./file-information').FileInformationPatch,
-  ): Promise<import('./file-information').FileInformation>;
+    patch: FileInformationPatch,
+  ): Promise<FileInformation>;
   chooseFolder(defaultPath?: string): Promise<string | null>;
   reveal(path: string): Promise<void>;
   openExternal(path: string): Promise<void>;
   nativeFilePanel(kind: 'preview' | 'share', paths: string[]): Promise<void>;
-  applications(paths: string[]): Promise<import('./metadata').ApplicationChoices>;
-  chooseApplication(): Promise<import('./metadata').NativeApplication | null>;
+  applications(paths: string[]): Promise<ApplicationChoices>;
+  chooseApplication(): Promise<NativeApplication | null>;
   openWith(paths: string[], applicationID: string): Promise<void>;
-  folderSizeStart(paths: string[]): Promise<import('./metadata').FolderSizeTask>;
-  folderSizeGet(id: string): Promise<import('./metadata').FolderSizeTask>;
+  folderSizeStart(paths: string[]): Promise<FolderSizeTask>;
+  folderSizeGet(id: string): Promise<FolderSizeTask>;
   folderSizeCancel(id: string): Promise<void>;
   watch(path: string, subscriber: string): Promise<void>;
   unwatch(subscriber: string): Promise<void>;
@@ -357,7 +418,7 @@ export interface ViewerAPI {
   clipboardRead(): Promise<{ paths: string[]; cut: boolean } | null>;
   fileDropPaths(files: File[]): Promise<string[]>;
   fileDragStart(paths: string[]): Promise<void>;
-  volumesList(): Promise<import('./volumes').Volume[]>;
+  volumesList(): Promise<Volume[]>;
   volumeEject(path: string): Promise<void>;
   fileAccessList(): Promise<
     {

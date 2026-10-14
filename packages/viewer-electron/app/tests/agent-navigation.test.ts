@@ -18,12 +18,35 @@ import { AgentRequests } from '../src/desktop/agent-requests';
 import { SettingsService } from '../src/desktop/settings';
 import type { FileServices } from '../src/desktop/file-services';
 import type { ActionPlanner } from '../src/desktop/actions/planner';
+import type { ActionPlan, ActionRequest } from '../src/domain/services';
+import type { FileRelation } from '../src/domain/relationships';
+import { readDrawingGeometry } from '../src/desktop/drawing-geometry';
+import { panelDrawing } from './dxf-fixtures';
+import { officeFixture } from './office-fixtures';
+import { extractDocument } from '../src/desktop/formats';
 
 let root: string, files: string, secret: string, token: string;
 let settings: SettingsService, broker: AgentBroker, requests: AgentRequests;
 let catalog: { target: CapturedTarget; commands: [] } | undefined;
 let snapshot: AgentWorkspaceSnapshot;
 let denied: boolean;
+let actionTasks: ActionPlan[];
+let relationshipRows: FileRelation[];
+const startAction = vi.fn(async (request: ActionRequest) => {
+  const id = crypto.randomUUID();
+  actionTasks.push({
+    version: 1,
+    id,
+    revision: 1,
+    title: 'Generated task',
+    recipeID: request.recipeID,
+    context: request.context,
+    status: 'review',
+    rows: [],
+    undoable: false,
+  });
+  return id;
+});
 const navigate = vi.fn<(request: AgentNavigation, target: CapturedTarget) => Promise<void>>();
 const plane = (id: string, file: string) => ({
   id,
@@ -39,6 +62,9 @@ const call = async <T = unknown>(name: string, args: Record<string, unknown> = {
   return JSON.parse(result.content[0].text) as T;
 };
 beforeEach(async () => {
+  actionTasks = [];
+  relationshipRows = [];
+  startAction.mockClear();
   root = await mkdtemp(path.join(os.tmpdir(), 'viewer-agent-navigation-'));
   files = path.join(root, 'Shared');
   secret = path.join(root, 'Private');
@@ -107,18 +133,67 @@ beforeEach(async () => {
     async () => {},
     { read: () => ({ cwd: files, output: '' }), write: () => {} },
     navigate,
+    {
+      actor: () => broker.clients.actor(),
+      check: (proposal) => broker.authorizeProposal(proposal),
+      run: (id, work) => broker.clients.context.run(id, work),
+      executeAllowed: async () => true,
+      cancelExecution: () => {},
+    },
   );
   broker = new AgentBroker(
     data,
     () => settings.snapshot().settings,
-    () => undefined,
-    {} as FileServices,
-    {} as ActionPlanner,
+    () =>
+      catalog
+        ? {
+            workspaceID: catalog.target.workspaceID,
+            rootID: catalog.target.rootID,
+            paneID: catalog.target.paneID,
+            sources: [],
+            actor: 'user',
+          }
+        : undefined,
+    {
+      extract: vi.fn(async (file: string) => {
+        if (file.endsWith('.xlsx')) return extractDocument(file);
+        const text = await readFile(file, 'utf8');
+        return {
+          path: file,
+          metadata: {},
+          text,
+          evidence: [
+            { source: 'text', text, anchor: { kind: 'text', line: 1, start: 0, end: text.length } },
+          ],
+          truncated: false,
+        };
+      }),
+      inspect: vi.fn(),
+      drawingGeometry: readDrawingGeometry,
+    } as unknown as FileServices,
+    {
+      cancel: vi.fn(),
+      all: vi.fn(async () => structuredClone(actionTasks)),
+      start: startAction,
+    } as unknown as ActionPlanner,
     {
       catalog: () => catalog,
       config: settings,
       requests,
       workspaceState: async () => snapshot,
+      relationships: async (file: string) => ({
+        file,
+        relations: relationshipRows,
+        files: relationshipRows
+          .flatMap((row) => [row.from, row.to])
+          .map((node) => ({
+            path: node.path,
+            status: 'unverified' as const,
+            reason: 'Private reason text',
+          })),
+        coverage: 'complete' as const,
+        reasons: [],
+      }),
       access: async () => {
         if (denied) throw new Error('Native folder permission was revoked.');
       },
@@ -133,6 +208,244 @@ afterEach(async () => {
 });
 
 describe('reviewed MCP workspace navigation', () => {
+  it('redacts relationship endpoints outside client roots and private user notes; reference contents need their own capability', async () => {
+    const source = path.join(files, 'Résumé.txt'),
+      target = path.join(files, 'Related.txt'),
+      privateTarget = path.join(secret, 'Private.txt');
+    await writeFile(target, 'Related');
+    await writeFile(privateTarget, 'Private');
+    const relation = (
+      id: string,
+      to: string,
+      basis: FileRelation['basis'] = 'observed',
+    ): FileRelation => ({
+      id,
+      from: { path: source },
+      to: { path: to },
+      kind: 'copy',
+      basis,
+      receipt: { service: 'operation', id },
+      note: 'Private user note',
+    });
+    relationshipRows = [
+      relation('normal', target),
+      relation('outside', privateTarget),
+      relation('user-note', target, 'reported'),
+    ];
+    const client = await broker.clients.create({
+      name: 'Provenance reader',
+      roots: [files],
+      capabilities: ['metadata'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = client.token;
+    const result = await call<{ relations: FileRelation[]; coverage: string }>(
+      'get_relationships',
+      { path: source },
+    );
+    expect(result.relations.map((row) => row.id)).toEqual(['normal']);
+    expect(result.coverage).toBe('partial');
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(JSON.stringify(result)).not.toContain('Private');
+    await expect(call('get_relationships', { path: source, content: true })).rejects.toThrow(
+      'no content',
+    );
+  });
+  it('counts persisted client tasks and serializes admission when two requests race for the last slot', async () => {
+    const client = await broker.clients.create({
+      name: 'Planner',
+      roots: [files],
+      capabilities: ['propose'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = client.token;
+    actionTasks.push({
+      version: 1,
+      id: crypto.randomUUID(),
+      revision: 1,
+      title: 'Cold task',
+      recipeID: 'batch-rename',
+      context: {
+        workspaceID: 'origin',
+        rootID: 'folder',
+        paneID: 'folder',
+        sources: [files],
+        actor: 'agent',
+        clientID: client.client.id,
+      },
+      status: 'review',
+      rows: [],
+      undoable: false,
+    });
+    const results = await Promise.allSettled([
+      call('run_action', { recipeID: 'batch-rename', sources: [path.join(files, 'Résumé.txt')] }),
+      call('run_action', { recipeID: 'batch-rename', sources: [path.join(files, 'Résumé.txt')] }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(startAction).toHaveBeenCalledOnce();
+    expect(actionTasks).toHaveLength(2);
+    await expect(
+      call('run_action', { recipeID: 'batch-rename', sources: [files] }),
+    ).rejects.toThrow('Review or stop');
+  });
+  it('requires content capability for source-versioned original passages and enforces returned-data budgets', async () => {
+    const first = path.join(files, 'Résumé.txt');
+    const reader = await broker.clients.create({
+      name: 'Contents',
+      roots: [files],
+      capabilities: ['content'],
+      budgets: { maxReadBytes: 1024, maxTasks: 2 },
+    });
+    token = reader.token;
+    expect(await call('read_content', { path: first })).toMatchObject({
+      path: first,
+      coverage: 'complete',
+      evidence: [{ text: 'Generated selection.' }],
+      version: { size: 20 },
+    });
+    await expect(call('read_content', { path: secret })).rejects.toThrow('outside');
+    const large = path.join(files, 'Large.txt');
+    await writeFile(large, 'a'.repeat(2048));
+    await expect(call('read_content', { path: large })).rejects.toThrow('read budget');
+    const { name, roots, budgets } = reader.client;
+    await broker.clientRequest({
+      kind: 'update',
+      id: reader.client.id,
+      revision: 1,
+      client: { name, roots, budgets, capabilities: ['metadata'] },
+    });
+    await expect(call('read_content', { path: first })).rejects.toThrow('no content');
+  });
+  it('reads named worksheet windows at original sparse coordinates and honours content grants', async () => {
+    const file = path.join(files, 'Measurements.xlsx');
+    await writeFile(file, officeFixture('workbook'));
+    const reader = await broker.clients.create({
+      name: 'Sheets',
+      roots: [files],
+      capabilities: ['content'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = reader.token;
+    const result = await call<{
+      sheet: string;
+      rows: {
+        row: number;
+        cells: {
+          value: string;
+          formula?: string;
+          anchor: { row: number; column: number; sheet: string };
+        }[];
+      }[];
+      more: boolean;
+      coverage: string;
+    }>('query_table', { path: file, offset: 1, limit: 1 });
+    expect(result.sheet).toBe('Measurements');
+    expect(result.rows[0].row).toBe(61);
+    expect(result.rows[0].cells[1]).toMatchObject({
+      value: '20',
+      formula: 'SUM(B1,7.5)',
+      anchor: { sheet: 'Measurements', row: 61, column: 2 },
+    });
+    expect(result.more).toBe(true);
+    expect(result.coverage).toBe('partial');
+    expect(await call('query_table', { path: file, sheet: 'Hidden' })).toMatchObject({
+      sheet: 'Hidden',
+      rows: [{ row: 4 }],
+    });
+    await expect(call('query_table', { path: file, sheet: 'Missing' })).rejects.toThrow(
+      'worksheet',
+    );
+    const metadata = await broker.clients.create({
+      name: 'Names',
+      roots: [files],
+      capabilities: ['metadata'],
+      budgets: reader.client.budgets,
+    });
+    token = metadata.token;
+    await expect(call('query_table', { path: file })).rejects.toThrow('no content');
+  });
+  it('requires a named content grant and canonical folder scope for bounded drawing geometry', async () => {
+    const file = path.join(files, 'Panel.dxf');
+    await writeFile(file, panelDrawing);
+    const reader = await broker.clients.create({
+      name: 'CAD reader',
+      roots: [files],
+      capabilities: ['content'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = reader.token;
+    expect(
+      await call('read_drawing_geometry', { path: file, points: true, limit: 1 }),
+    ).toMatchObject({
+      path: file,
+      units: { symbol: 'mm' },
+      bounds: { max: { x: 200, y: 100 } },
+    });
+    await writeFile(path.join(secret, 'Secret.dxf'), panelDrawing);
+    await expect(
+      call('read_drawing_geometry', { path: path.join(secret, 'Secret.dxf') }),
+    ).rejects.toThrow('outside');
+    const metadata = await broker.clients.create({
+      name: 'Metadata',
+      roots: [files],
+      capabilities: ['metadata'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = metadata.token;
+    await expect(call('read_drawing_geometry', { path: file })).rejects.toThrow('no content');
+    token = reader.token;
+    await broker.clientRequest({
+      kind: 'update',
+      id: reader.client.id,
+      revision: reader.client.revision,
+      client: {
+        name: reader.client.name,
+        roots: reader.client.roots,
+        capabilities: ['content'],
+        budgets: { maxReadBytes: 1024, maxTasks: 2 },
+      },
+    });
+    await expect(call('read_drawing_geometry', { path: file, points: true })).rejects.toThrow(
+      'read budget',
+    );
+  });
+  it('navigates with a named client grant, keeps proposals owned and rejects other clients and revoked credentials', async () => {
+    const navigator = await broker.clients.create({
+      name: 'Navigator',
+      roots: [files],
+      capabilities: ['navigation'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    const reader = await broker.clients.create({
+      name: 'Reader',
+      roots: [files],
+      capabilities: ['metadata'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    const original = token;
+    token = navigator.token;
+    const proposal = await call<{ id: string; requiresUserReview: boolean }>('propose_open_path', {
+      path: files,
+    });
+    expect(proposal.requiresUserReview).toBe(false);
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(await call('get_proposal', { id: proposal.id })).toMatchObject({
+      clientID: navigator.client.id,
+      status: 'completed',
+    });
+    token = reader.token;
+    await expect(call('get_proposal', { id: proposal.id })).rejects.toThrow('another actor');
+    await expect(call('propose_open_path', { path: files })).rejects.toThrow('no navigation');
+    token = navigator.token;
+    await expect(call('propose_open_path', { path: secret })).rejects.toThrow('outside');
+    await broker.clientRequest({ kind: 'revoke', id: navigator.client.id, revision: 1 });
+    await expect(call('propose_open_path', { path: files })).rejects.toThrow('invalid');
+    token = original;
+    const legacy = await call<{ requiresUserReview: boolean }>('propose_open_path', {
+      path: files,
+    });
+    expect(legacy.requiresUserReview).toBe(true);
+  });
   it('discovers live granted planes, redacts inaccessible workspaces and never exposes histories/layout', async () => {
     const workspaces =
       await call<{ id: string; roots: string[]; active: boolean; panes: unknown[] }[]>(

@@ -125,6 +125,11 @@ const config: ForgeConfig = {
         },
         { entry: 'src/desktop/worker.ts', config: 'vite.services.config.ts', target: 'main' },
         {
+          entry: 'src/desktop/rename-worker.ts',
+          config: 'vite.services.config.ts',
+          target: 'main',
+        },
+        {
           entry: 'src/desktop/folder-size-worker.ts',
           config: 'vite.services.config.ts',
           target: 'main',

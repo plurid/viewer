@@ -42,6 +42,11 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
   const registry = useCommands();
   const opening = useViewer((state) => state.settings.settings.fileOpening);
   const openEntry = (entry: FileEntry, linked = false, another = false) => {
+    const evidence = search.result?.evidence?.find((hit) => hit.path === entry.path);
+    if (evidence && !another) {
+      void workspace.openEvidence(evidence, id).catch(report);
+      return;
+    }
     if (nativeOpening(entry, opening, linked)) {
       void window.viewer.openExternal(entry.path).catch(report);
       return;
@@ -235,6 +240,36 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
           <ListView {...props} />
         )}
       </FileTable>
+      {pane.content &&
+        selected.length === 1 &&
+        (() => {
+          const hit = search.result?.evidence?.find((hit) => hit.path === selected[0].path);
+          return hit ? (
+            <div className="search-evidence">
+              <button
+                onClick={() => {
+                  void workspace.openEvidence(hit, id).catch(report);
+                }}
+              >
+                {hit.anchor.kind === 'pdf'
+                  ? 'Page ' + hit.anchor.page
+                  : hit.anchor.kind === 'epub'
+                    ? 'Chapter ' + (hit.anchor.chapter + 1)
+                    : hit.anchor.kind === 'text'
+                      ? 'Line ' + hit.anchor.line
+                      : hit.anchor.kind === 'document'
+                        ? 'Passage ' + (hit.anchor.block + 1)
+                        : 'Open source location'}
+              </button>
+              <p>{hit.quote}</p>
+              {hit.coverage === 'partial' && <span className="muted">Partially indexed</span>}
+            </div>
+          ) : (
+            <div className="search-evidence muted">
+              No source passage is available for this match.
+            </div>
+          );
+        })()}
       <footer className="folder-status">
         <span>
           {search.result?.status.running

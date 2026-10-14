@@ -84,6 +84,9 @@ export default function EPUBPreview(context: PreviewContext) {
   const [document, setDocument] = useState<DocumentData>();
   const [error, setError] = useState('');
   const [chapter, setChapter] = usePreviewState(context, 'epub.chapter', 0);
+  useEffect(() => {
+    if (context.evidence?.anchor.kind === 'epub') setChapter(context.evidence.anchor.chapter);
+  }, [context.evidence, setChapter]);
   const [size, setSize] = usePreviewState(context, 'epub.size', 17);
   const [contents, setContents] = usePreviewState(context, 'epub.contents', true);
   useEffect(() => {

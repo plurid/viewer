@@ -10,12 +10,26 @@ import type {
   SavedState,
   UIPreferences,
   Workspace,
+  FileEntry,
+  TerminalPane,
 } from '../../domain/contracts';
 import { migratePlaneNavigation, normalizePreferences, reorder } from '../../domain/preferences';
 import { clearSessions, focusFiles, trimSessions, remapSessions } from '../workspace/sessions';
 import { pathMapper, type FileChange } from '../../domain/changes';
 import { parentPath } from '../../domain/planes';
-import { defaultSettings, newPlaneFolder, type SettingsSnapshot } from '../../domain/services';
+import {
+  collectionSchema,
+  basketItemSchema,
+  type Collection,
+  type BasketItem,
+} from '../../domain/collections';
+import { sourceVersion } from '../../domain/inspection';
+import {
+  defaultSettings,
+  newPlaneFolder,
+  type SettingsSnapshot,
+  type ApplicationSettings,
+} from '../../domain/services';
 
 import {
   panePresentation,
@@ -23,6 +37,15 @@ import {
   type FolderOverride,
   type FolderPresentation,
 } from '../../domain/folder-presentation';
+import {
+  projectReference,
+  resolveProjectPath,
+  previewValuesSchema,
+  type ProjectDocument,
+  type ProjectAssociation,
+  type JSONValue,
+  type ProjectLayout,
+} from '../../domain/project';
 
 interface ViewerState {
   settings: SettingsSnapshot;
@@ -138,6 +161,7 @@ export function initialize(bootstrap: Bootstrap): void {
   };
   const saved = {
     ...original,
+    version: 4 as const,
     ui: settings.ui,
     look: settings.look,
     workspaces: original.workspaces.map((space) => ({
@@ -147,7 +171,7 @@ export function initialize(bootstrap: Bootstrap): void {
           ? {
               ...pane,
               ...panePresentation(
-                resolveFolderPresentation(pane.path, settings.settings, settings.ui),
+                scopedPresentation(pane.path, settings.settings, settings.ui, space),
               ),
             }
           : pane,
@@ -307,7 +331,10 @@ export function receiveProgress(progress: OperationProgress): boolean {
 }
 function savePatch(patch: Partial<SavedState>): void {
   update(
-    { ...current, saved: { ...current.saved, ...patch, ui: patch.ui ?? current.saved.ui } },
+    {
+      ...current,
+      saved: { ...current.saved, ...patch, version: 4, ui: patch.ui ?? current.saved.ui },
+    },
     true,
   );
 }
@@ -385,9 +412,62 @@ export function renameShortcut(path: string, name: string): void {
 export function changeWorkspace(transform: (space: Workspace) => Workspace): void {
   savePatch({
     workspaces: current.saved.workspaces.map((space) =>
-      space.id === current.saved.activeWorkspace ? transform(space) : space,
+      space.id === current.saved.activeWorkspace
+        ? (() => {
+            const next = transform(space);
+            return next.project && next !== space
+              ? { ...next, project: { ...next.project, dirty: true } }
+              : next;
+          })()
+        : space,
     ),
   });
+}
+export function addToBasket(items: BasketItem[]): void {
+  const existing = activeWorkspace().basket ?? [];
+  const merged = new Map(existing.map((item) => [item.path, item]));
+  for (const item of items) merged.set(item.path, basketItemSchema.parse(item));
+  if (merged.size > 10000) throw new Error('The basket holds at most 10,000 files.');
+  changeWorkspace((space) => ({ ...space, basket: [...merged.values()] }));
+}
+export function basketEntries(entries: readonly FileEntry[]) {
+  addToBasket(entries.map((item) => ({ path: item.path, version: sourceVersion(item) })));
+}
+export function removeFromBasket(paths: string[]) {
+  const removed = new Set(paths);
+  changeWorkspace((space) => ({
+    ...space,
+    basket: (space.basket ?? []).filter((item) => !removed.has(item.path)),
+  }));
+}
+export function saveCollection(value: Collection) {
+  const collection = collectionSchema.parse(value);
+  if (
+    (activeWorkspace().collections?.length ?? 0) >= 200 &&
+    !activeWorkspace().collections?.some((value) => value.id === collection.id)
+  )
+    throw new Error('Remove a collection before creating another.');
+  changeWorkspace((space) => ({
+    ...space,
+    collections: [
+      ...(space.collections ?? []).filter((item) => item.id !== collection.id),
+      collection,
+    ],
+  }));
+}
+export function addCollectionPane(collectionID: string): string {
+  const collection = activeWorkspace().collections?.find((value) => value.id === collectionID);
+  if (!collection) throw new Error('This collection is unavailable.');
+  if (activeWorkspace().panes.length >= 200)
+    throw new Error('Close a plane before opening another.');
+  const id = uuid(),
+    file = collection.kind === 'query' ? collection.sources[0] : parentPath(collection.sources[0]);
+  changeWorkspace((space) => ({
+    ...space,
+    panes: [...space.panes, { id, type: 'collection', path: file, collectionID }],
+    roots: [...space.roots, id],
+  }));
+  return id;
 }
 export function updatePane(id: string, patch: Partial<Pane>): void {
   const pane = activeWorkspace().panes.find((pane) => pane.id === id);
@@ -660,6 +740,191 @@ export async function flushState(flushEngine = true): Promise<void> {
   await window.viewer.save(saved);
 }
 
+export function previewValues(
+  paneID: string,
+  owner = activeWorkspace().id,
+): Record<string, JSONValue> {
+  return current.saved.previewStates?.[owner + ':' + paneID] ?? {};
+}
+export function savePreviewValue(
+  paneID: string,
+  key: string,
+  value: unknown,
+  owner = activeWorkspace().id,
+  resetView = false,
+): void {
+  if (
+    !current.saved.workspaces
+      .find((space) => space.id === owner)
+      ?.panes.some((pane) => pane.id === paneID)
+  )
+    return;
+  const previous = previewValues(paneID, owner);
+  const values = {
+    ...(resetView
+      ? Object.fromEntries(Object.entries(previous).filter(([key]) => key.startsWith('notes.')))
+      : previous),
+    [key]: value,
+  };
+  const parsed = previewValuesSchema.safeParse(values);
+  if (!parsed.success) return;
+  // Preview pan/zoom already has local React state. Avoid invalidating all commands
+  // on every pointer move; the private session write uses the usual debounce.
+  current = {
+    ...current,
+    saved: {
+      ...current.saved,
+      version: 4,
+      previewStates: {
+        ...current.saved.previewStates,
+        [owner + ':' + paneID]: parsed.data,
+      },
+      workspaces: current.saved.workspaces.map((space) =>
+        space.id === owner && space.project
+          ? { ...space, project: { ...space.project, dirty: true } }
+          : space,
+      ),
+    },
+  };
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    void flushState(false).catch(report);
+  }, 400);
+}
+export async function installProject(
+  document: ProjectDocument,
+  bindings?: Record<string, string>,
+): Promise<void> {
+  await flushState();
+  const existing = current.saved.workspaces.find((space) => space.project?.file === document.file);
+  bindings ??= existing?.project?.bindings ?? {};
+  if (!existing && current.saved.workspaces.length >= 30)
+    throw new Error('Close a workspace before opening another project.');
+  const folders: Record<string, FolderOverride> = {};
+  for (const item of document.definition.folders) {
+    const file = resolveProjectPath(document.root, item.target, bindings);
+    if (file) folders[file] = item.view;
+  }
+  const association: ProjectAssociation = { ...document, bindings, folders, dirty: false };
+  const id = existing?.id ?? uuid();
+  const panes: Pane[] = document.definition.planes.flatMap((plane): Pane[] => {
+    const path = resolveProjectPath(document.root, plane.target, bindings);
+    if (!path) return [];
+    if (plane.type === 'folder')
+      return [
+        {
+          ...folderPane(path, { visible: current.saved.ui.sidebar.inNewPlanes, width: 210 }),
+          id: plane.id,
+          ...panePresentation(
+            scopedPresentation(path, current.settings.settings, current.saved.ui, {
+              project: association,
+            } as Workspace),
+          ),
+        },
+      ];
+    if (plane.type === 'preview') return [{ id: plane.id, type: 'preview', path }];
+    if (plane.type === 'collection')
+      return [{ id: plane.id, type: 'collection', path, collectionID: plane.collectionID }];
+    if (plane.type === 'terminal')
+      return [
+        { id: plane.id, type: 'terminal', path, profileID: plane.profileID, startOnOpen: false },
+      ];
+    return [
+      {
+        id: plane.id,
+        type: 'search',
+        path,
+        query: plane.query,
+        name: plane.name,
+        allLocations: false,
+        recursive: plane.recursive,
+        content: plane.content,
+      },
+    ];
+  });
+  const available = new Set(panes.map((pane) => pane.id));
+  const placements = document.definition.layout.placements
+    .filter((plane) => available.has(plane.id))
+    .map((plane) => ({
+      ...plane,
+      parent: plane.parent && available.has(plane.parent) ? plane.parent : undefined,
+    }));
+  const layout = {
+    placements,
+    active: available.has(document.definition.layout.active || '')
+      ? document.definition.layout.active
+      : panes[0]?.id,
+    docked: available.has(document.definition.layout.docked || '')
+      ? document.definition.layout.docked
+      : undefined,
+  };
+  const workspace: Workspace = {
+    id,
+    epoch: (existing?.epoch ?? 0) + 1,
+    name: document.definition.name,
+    panes,
+    roots: placements.filter((plane) => !plane.parent).map((plane) => plane.id),
+    activePane: layout.active,
+    arrangement: {},
+    layout,
+    project: association,
+    collections: document.definition.collections?.flatMap((collection) => {
+      const sources = collection.sources.flatMap(
+        (target) => resolveProjectPath(document.root, target, bindings) ?? [],
+      );
+      return sources.length ? [{ ...collection, sources }] : [];
+    }),
+  };
+  const previewStates = { ...current.saved.previewStates };
+  for (const pane of document.definition.planes)
+    if (pane.state) previewStates[id + ':' + pane.id] = pane.state;
+  adapters.set(id, new Map());
+  savePatch({
+    workspaces: existing
+      ? current.saved.workspaces.map((space) => (space.id === id ? workspace : space))
+      : [...current.saved.workspaces, workspace],
+    activeWorkspace: id,
+    previewStates,
+  });
+  update({ ...current, activePane: layout.active ?? '', quickPreview: null });
+  await flushState(false);
+}
+export function associateProject(project: ProjectAssociation): void {
+  changeWorkspace((space) => ({ ...space, name: project.definition.name, project }));
+  // Association follows a successful explicit save, rather than a draft edit.
+  savePatch({
+    workspaces: current.saved.workspaces.map((space) =>
+      space.id === current.saved.activeWorkspace
+        ? { ...space, project: { ...project, dirty: false } }
+        : space,
+    ),
+  });
+}
+export function consumeProjectLayout(layout: ProjectLayout): void {
+  savePatch({
+    workspaces: current.saved.workspaces.map((space) =>
+      space.id === current.saved.activeWorkspace
+        ? {
+            ...space,
+            roots: layout.placements.filter((plane) => !plane.parent).map((plane) => plane.id),
+            layout: undefined,
+          }
+        : space,
+    ),
+  });
+}
+export function projectFolderReferences(project: ProjectAssociation) {
+  return [
+    ...Object.entries(project.folders).map(([file, view]) => ({
+      target: projectReference(project.root, file, project.bindings),
+      view,
+    })),
+    ...project.definition.folders.filter(
+      (item) => item.target.binding && !Object.hasOwn(project.bindings, item.target.binding),
+    ),
+  ];
+}
+
 export function receiveFileChanges(changes: FileChange[]): void {
   const map = pathMapper(changes);
   const saved = current.saved;
@@ -670,6 +935,17 @@ export function receiveFileChanges(changes: FileChange[]): void {
         ...saved,
         workspaces: saved.workspaces.map((space) => ({
           ...space,
+          collections: space.collections?.map((collection) => ({
+            ...collection,
+            sources: collection.sources.map(map),
+          })),
+          basket: space.basket?.map((item) => ({
+            ...item,
+            path: map(item.path),
+            ...(item.evidence
+              ? { evidence: { ...item.evidence, path: map(item.evidence.path) } }
+              : {}),
+          })),
           panes: space.panes.map((pane) =>
             pane.type === 'folder'
               ? { ...pane, path: map(pane.path), history: pane.history.map(map) }
@@ -726,15 +1002,81 @@ export function receiveFileChanges(changes: FileChange[]): void {
 }
 
 export function folderPresentation(path: string): FolderPresentation {
-  return resolveFolderPresentation(path, current.settings.settings, current.saved.ui);
+  return scopedPresentation(path, current.settings.settings, current.saved.ui, activeWorkspace());
+}
+function scopedPresentation(
+  path: string,
+  settings: ApplicationSettings,
+  ui: UIPreferences,
+  space: Workspace,
+): FolderPresentation {
+  const override = space.project?.folders[path];
+  return resolveFolderPresentation(
+    path,
+    override
+      ? {
+          ...settings,
+          folders: {
+            ...settings.folders,
+            [path]: {
+              ...settings.folders[path],
+              ...override,
+              ...(override.list
+                ? {
+                    list: {
+                      ...settings.folders[path]?.list,
+                      ...override.list,
+                      visible: {
+                        ...settings.folders[path]?.list?.visible,
+                        ...override.list.visible,
+                      },
+                      widths: { ...settings.folders[path]?.list?.widths, ...override.list.widths },
+                    },
+                  }
+                : {}),
+            },
+          },
+        }
+      : settings,
+    ui,
+  );
 }
 export function useFolderPresentation(path: string): FolderPresentation {
   const browsing = useViewer((state) => state.settings.settings.browsing);
   const override = useViewer((state) => state.settings.settings.folders[path]);
   const list = useViewer((state) => state.saved.ui.list);
-  return useMemo(() => folderPresentation(path), [path, browsing, override, list]);
+  const project = useViewer((state) => activeWorkspace(state).project?.folders[path]);
+  return useMemo(() => folderPresentation(path), [path, browsing, override, list, project]);
 }
 export function updateFolderPresentation(path: string, patch: FolderOverride | null): void {
+  const project = activeWorkspace().project;
+  if (project) {
+    const folders = { ...project.folders };
+    if (patch === null) delete folders[path];
+    else
+      folders[path] = {
+        ...folders[path],
+        ...patch,
+        ...(patch.list ? { list: { ...folders[path]?.list, ...patch.list } } : {}),
+      };
+    changeWorkspace((space) => {
+      const next = { ...space, project: { ...project, folders, dirty: true } };
+      return {
+        ...next,
+        panes: space.panes.map((pane) =>
+          pane.type === 'folder' && pane.path === path
+            ? {
+                ...pane,
+                ...panePresentation(
+                  scopedPresentation(path, current.settings.settings, current.saved.ui, next),
+                ),
+              }
+            : pane,
+        ),
+      };
+    });
+    return;
+  }
   const folders = { ...current.settings.settings.folders };
   if (patch === null) delete folders[path];
   else
@@ -752,7 +1094,7 @@ export function updateFolderPresentation(path: string, patch: FolderOverride | n
         pane.type === 'folder' && pane.path === path
           ? {
               ...pane,
-              ...panePresentation(resolveFolderPresentation(path, settings, current.saved.ui)),
+              ...panePresentation(scopedPresentation(path, settings, current.saved.ui, space)),
             }
           : pane,
       ),
@@ -827,7 +1169,7 @@ export function receiveSettings(snapshot: SettingsSnapshot): void {
     let changed = false;
     const panes = space.panes.map((pane) => {
       if (pane.type !== 'folder') return pane;
-      const value = panePresentation(resolveFolderPresentation(pane.path, settings, ui));
+      const value = panePresentation(scopedPresentation(pane.path, settings, ui, space));
       if (Object.entries(value).every(([key, value]) => pane[key as keyof typeof pane] === value))
         return pane;
       changed = true;
@@ -877,14 +1219,10 @@ export function addSearchPane(
   return pane.id;
 }
 
-export function addTerminalPane(
-  path: string,
-  profileID: string,
-  root: boolean,
-): import('../../domain/contracts').TerminalPane {
+export function addTerminalPane(path: string, profileID: string, root: boolean): TerminalPane {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('Close a plane before opening another.');
-  const pane: import('../../domain/contracts').TerminalPane = {
+  const pane: TerminalPane = {
     id: uuid(),
     type: 'terminal',
     path,

@@ -4,6 +4,7 @@ import type { PreviewContext } from '../contracts';
 import { Empty } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
 import { NativeOpenActions } from '../../ui/NativeOpenActions';
+import { usePreviewState } from '../state';
 
 export default function MediaPreview(context: PreviewContext) {
   const { resource, active } = context;
@@ -13,6 +14,12 @@ export default function MediaPreview(context: PreviewContext) {
   const [ready, setReady] = useState(false);
   const [slow, setSlow] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [position, setPosition] = usePreviewState(context, 'media.position', 0);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (ready && context.evidence?.anchor.kind === 'media' && ref.current)
+      ref.current.currentTime = context.evidence.anchor.seconds;
+  }, [ready, context.evidence]);
   const audio = resource.entry.mime.startsWith('audio/');
   useEffect(() => {
     if (ready || error || !active) return;
@@ -90,6 +97,20 @@ export default function MediaPreview(context: PreviewContext) {
     onCanPlay: () => {
       setReady(true);
       setSlow(false);
+    },
+    onLoadedMetadata: () => {
+      const media = ref.current;
+      if (media && !restored.current) {
+        media.currentTime = Math.min(
+          position,
+          Number.isFinite(media.duration) ? media.duration : position,
+        );
+        restored.current = true;
+      }
+    },
+    onTimeUpdate: () => {
+      const seconds = ref.current?.currentTime;
+      if (seconds !== undefined && Math.abs(seconds - position) >= 1) setPosition(seconds);
     },
     preload: 'metadata' as const,
     onError: () => setError('Open this file in its default app or choose another player.'),

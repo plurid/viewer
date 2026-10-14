@@ -14,6 +14,12 @@ export default function PDFPreview(context: PreviewContext) {
   const [zoom, setZoom] = usePreviewState(context, 'pdf.zoom', 1);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  useEffect(() => {
+    if (context.evidence?.anchor.kind === 'pdf') {
+      setPage(context.evidence.anchor.page);
+      setQuery(context.evidence.quote.slice(0, 150));
+    }
+  }, [context.evidence, setPage]);
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -58,6 +64,9 @@ export default function PDFPreview(context: PreviewContext) {
     observer.observe(element);
     return () => observer.disconnect();
   }, [pdf]);
+  useEffect(() => {
+    if (pdf && page > pdf.numPages) setPage(pdf.numPages);
+  }, [pdf, page, setPage]);
   useEffect(() => {
     if (!pdf || !active || !canvas.current || !text.current) return;
     let cancelled = false;

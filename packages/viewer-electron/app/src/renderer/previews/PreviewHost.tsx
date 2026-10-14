@@ -9,6 +9,7 @@ import type { PreviewContext, PreviewModule } from './contracts';
 import { previewState } from './state';
 import { choosePreview } from './registry';
 import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
+import { sameSourceVersion, sourceVersion, type EvidenceNavigation } from '../../domain/inspection';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
 function componentFor(module: PreviewModule) {
@@ -29,6 +30,7 @@ const services: PreviewContext['services'] = {
 };
 export const PreviewHost = memo(function PreviewHost({
   path,
+  evidence,
   active = true,
   interactive = true,
   resource: supplied,
@@ -36,6 +38,7 @@ export const PreviewHost = memo(function PreviewHost({
   renderFooter,
 }: {
   path?: string;
+  evidence?: EvidenceNavigation;
   active?: boolean;
   interactive?: boolean;
   resource?: Resource;
@@ -53,8 +56,8 @@ export const PreviewHost = memo(function PreviewHost({
     if (active) setActivated(true);
   }, [active]);
   const viewState = useMemo(
-    () => previewState(paneID || path || supplied?.id || 'temporary'),
-    [paneID, path, supplied?.id],
+    () => previewState(paneID || path || supplied?.id || 'temporary', resource?.entry),
+    [paneID, path, supplied?.id, resource?.id],
   );
   const limits = useViewer((state) => state.settings.settings.previews);
   const look = useViewer((state) => state.saved.look);
@@ -181,6 +184,11 @@ export const PreviewHost = memo(function PreviewHost({
           <Suspense fallback={<Loading label={`Loading ${module.label.toLowerCase()}…`} />}>
             <Viewer
               resource={resource}
+              evidence={
+                evidence && sameSourceVersion(sourceVersion(resource.entry), evidence.version)
+                  ? evidence
+                  : undefined
+              }
               active={active}
               interactive={interactive}
               signal={abort.signal}

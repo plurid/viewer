@@ -1,4 +1,4 @@
-import type { PaneSidebar, SidebarSection, UIPreferences } from './contracts';
+import type { PaneSidebar, SidebarSection, UIPreferences, ListColumn } from './contracts';
 import { columnWidth, listColumns } from './list-columns';
 
 export const sidebarSections: SidebarSection[] = ['locations', 'favorites', 'recents'];
@@ -157,7 +157,7 @@ export function normalizePreferences(value?: unknown): UIPreferences {
                   listColumns.some((column) => column.id === key),
                 ),
               ]),
-            ] as import('./contracts').ListColumn[],
+            ] as ListColumn[],
           }
         : {}),
     },

@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react';
 import type { ExecutionGrant } from '../../domain/agent-requests';
 import type { ApplicationSettings } from '../../domain/services';
-export function AgentGrants({ settings }: { settings: ApplicationSettings }) {
+export function AgentGrants({
+  settings,
+  clientID = 'legacy',
+  roots = settings.agents.roots,
+}: {
+  settings: ApplicationSettings;
+  clientID?: string;
+  roots?: string[];
+}) {
   const [grants, setGrants] = useState<ExecutionGrant[]>([]);
-  const [root, setRoot] = useState(settings.agents.roots[0] || '');
+  const [root, setRoot] = useState(roots[0] || '');
   const [error, setError] = useState('');
   useEffect(() => {
-    if (!settings.agents.roots.includes(root)) setRoot(settings.agents.roots[0] || '');
-  }, [settings.agents.roots, root]);
+    if (!roots.includes(root)) setRoot(roots[0] || '');
+  }, [roots, root]);
   useEffect(() => {
     void window.viewer
       .agentGrants()
@@ -16,14 +24,18 @@ export function AgentGrants({ settings }: { settings: ApplicationSettings }) {
   }, []);
   const save = (id: string, capability: ExecutionGrant['capability'], allow: boolean) => {
     void window.viewer
-      .agentGrant(id, root, capability, allow)
+      .agentGrant(id, root, capability, allow, clientID)
       .then(() => window.viewer.agentGrants())
       .then(setGrants)
       .catch((error: Error) => setError(error.message));
   };
   const allowed = (id: string, capability: ExecutionGrant['capability']) =>
     grants.some(
-      (grant) => grant.actionID === id && grant.root === root && grant.capability === capability,
+      (grant) =>
+        (grant.clientID ?? 'legacy') === clientID &&
+        grant.actionID === id &&
+        grant.root === root &&
+        grant.capability === capability,
     );
   return (
     <>
@@ -38,11 +50,11 @@ export function AgentGrants({ settings }: { settings: ApplicationSettings }) {
         <select
           value={root}
           title={root}
-          disabled={!settings.agents.roots.length}
+          disabled={!roots.length}
           onChange={(event) => setRoot(event.target.value)}
         >
           <option value="">Choose an authorized folder</option>
-          {settings.agents.roots.map((root) => (
+          {roots.map((root) => (
             <option key={root}>{root}</option>
           ))}
         </select>
@@ -88,27 +100,29 @@ export function AgentGrants({ settings }: { settings: ApplicationSettings }) {
           {error}
         </p>
       )}
-      {grants.length > 0 && (
+      {grants.some((grant) => (grant.clientID ?? 'legacy') === clientID) && (
         <details>
           <summary>Existing grants</summary>
-          {grants.map((grant) => (
-            <div className="settings-grant" key={grant.id}>
-              <span title={grant.root}>
-                {grant.actionID} · {grant.capability} · {grant.root}
-              </span>
-              <button
-                onClick={() => {
-                  void window.viewer
-                    .agentGrant(grant.actionID, grant.root, grant.capability, false)
-                    .then(() => window.viewer.agentGrants())
-                    .then(setGrants)
-                    .catch((error: Error) => setError(error.message));
-                }}
-              >
-                Revoke
-              </button>
-            </div>
-          ))}
+          {grants
+            .filter((grant) => (grant.clientID ?? 'legacy') === clientID)
+            .map((grant) => (
+              <div className="settings-grant" key={grant.id}>
+                <span title={grant.root}>
+                  {grant.actionID} · {grant.capability} · {grant.root}
+                </span>
+                <button
+                  onClick={() => {
+                    void window.viewer
+                      .agentGrant(grant.actionID, grant.root, grant.capability, false, clientID)
+                      .then(() => window.viewer.agentGrants())
+                      .then(setGrants)
+                      .catch((error: Error) => setError(error.message));
+                  }}
+                >
+                  Revoke
+                </button>
+              </div>
+            ))}
         </details>
       )}
     </>

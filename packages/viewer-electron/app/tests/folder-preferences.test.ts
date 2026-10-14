@@ -204,9 +204,12 @@ describe('shared Finder input and file opening', () => {
     const file = (extension: string, mime = 'application/octet-stream') =>
       ({ name: 'Fixture.' + extension, extension, mime, directory: false }) as FileEntry;
     const policy = defaultSettings('/fixtures').fileOpening;
-    for (const extension of ['md', 'txt', 'epub', 'pdf', 'json'])
+    for (const extension of ['md', 'txt', 'epub', 'pdf', 'json', 'docx', 'xlsx'])
       expect(nativeOpening(file(extension), policy)).toBe(false);
-    expect(nativeOpening(file('docx'), policy)).toBe(true);
+    expect(nativeOpening(file('doc'), policy)).toBe(true);
+    expect(
+      nativeOpening(file('docx'), { ...policy, types: { ...policy.types, docx: 'native' } }),
+    ).toBe(true);
     expect(nativeOpening(file('unrecognized'), policy)).toBe(true);
     expect(nativeOpening(file('docx'), policy, true)).toBe(false);
     expect(nativeOpening(file('pdf'), { default: 'native', types: { pdf: 'plane' } })).toBe(false);

@@ -8,17 +8,29 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  watchRules: (request) => invoke('watchRules', request),
+  relationships: (request) => invoke('relationships', request),
+  workflow: (request) => invoke('workflow', request),
+  querySnapshot: (query) => invoke('querySnapshot', query),
+  compare: (request) => invoke('compare', request),
+  operationPlan: (request) => invoke('operationPlan', request),
   commandsPublish: (target, commands, workspaces) =>
     invoke('commandsPublish', target, commands, workspaces),
   agentCommandResult: (id, error) => invoke('agentCommandResult', id, error),
   agentReviewList: () => invoke('agentReviewList'),
   agentReview: (id, approve) => invoke('agentReview', id, approve),
   agentGrants: () => invoke('agentGrants'),
-  agentGrant: (actionID, root, capability, allow) =>
-    invoke('agentGrant', actionID, root, capability, allow),
+  agentClients: (request) => invoke('agentClients', request),
+  agentAudit: (clientID) => invoke('agentAudit', clientID),
+  agentStop: (clientID) => invoke('agentStop', clientID),
+  agentGrant: (actionID, root, capability, allow, clientID) =>
+    invoke('agentGrant', actionID, root, capability, allow, clientID),
   configOpen: () => invoke('configOpen'),
   configValidate: () => invoke('configValidate'),
   configTransfer: (kind) => invoke('configTransfer', kind),
+  project: (request) => invoke('project', request),
+  checkpoints: (request) => invoke('checkpoints', request),
+  inspect: (file, content, ocr) => invoke('inspect', file, content, ocr),
   terminalApplication: () => invoke('terminalApplication'),
   terminalExternal: (cwd, tmux) => invoke('terminalExternal', cwd, tmux),
   terminalStart: (request) => invoke('terminalStart', request),

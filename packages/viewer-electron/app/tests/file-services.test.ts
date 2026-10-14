@@ -52,6 +52,48 @@ afterEach(() => {
 });
 const services = () => new FileServices('/isolated-profile', '/worker', '/ocr', () => {});
 describe('read-only file-services shutdown', () => {
+  it('keeps an explicit inspection valid when only search indexing is reconfigured', async () => {
+    const files = services();
+    await files.configure(defaultSettings('/fixtures').search);
+    const pending = files.inspect('/drawing.dxf', true);
+    await vi.advanceTimersByTimeAsync(0);
+    const request = worker.postMessage.mock.calls.find(
+      ([request]) => request.method === 'inspect',
+    )![0];
+    await files.configure({ ...defaultSettings('/fixtures').search, paused: true });
+    const inspected = {
+      path: '/drawing.dxf',
+      facts: { drawingWidth: { value: 200, unit: 'mm', source: 'DXF' } },
+    };
+    worker.emit('message', { id: request.id, value: inspected });
+    await expect(pending).resolves.toEqual(inspected);
+    await files.close();
+  });
+  it('still rejects inspection results after the native file grant was revoked', async () => {
+    let denied = false;
+    const files = new FileServices(
+      '/private',
+      '/worker',
+      '/ocr',
+      () => {},
+      () => {},
+      {
+        access: async (paths) => {
+          if (denied) throw new FileAccessRequired(paths[0]);
+        },
+      },
+    );
+    const pending = files.inspect('/drawing.dxf', true);
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    await vi.advanceTimersByTimeAsync(0);
+    const request = worker.postMessage.mock.calls.find(
+      ([request]) => request.method === 'inspect',
+    )![0];
+    denied = true;
+    worker.emit('message', { id: request.id, value: { path: '/drawing.dxf', facts: {} } });
+    await rejected;
+    await files.close();
+  });
   it('preserves OS permission errors from readers so previews can request folder access', async () => {
     const files = services();
     const pending = files.extract('/document.pdf');
@@ -90,7 +132,15 @@ describe('read-only file-services shutdown', () => {
     const sent = worker.postMessage.mock.calls.find(
       ([request]) => request.method === 'configure',
     )![0];
-    expect(sent.args).toEqual([{ ...configuration, roots: ['/allowed'], contentRoots: [] }]);
+    expect(sent.args).toEqual([
+      {
+        ...configuration,
+        roots: ['/allowed'],
+        contentRoots: [],
+        exclusions: [...configuration.exclusions, '/private'],
+      },
+    ]);
+    expect(configuration.exclusions).not.toContain('/private');
     expect(configuration.roots).toEqual(['/allowed', '/denied']);
     expect(configuration.contentRoots).toEqual(['/denied']);
     expect((await files.status()).roots).toContainEqual({

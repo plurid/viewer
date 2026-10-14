@@ -235,10 +235,22 @@ The defining visual behavior is a titled file plane beside its folder, with a vi
 - Filename-first finding and proposal review with explicit scope, evidence, and Apply/Undo.
 - Declarative custom commands and real terminal planes within the same quiet desktop grammar.
 - File-content previews within the same visual system.
+- Project, plane-note and file-inspection dialogs reuse the same compact controls, neutral surfaces and explicit choices.
+- Named client settings, checkpoints, comparison and collections extend the existing Settings, review and file-list patterns.
+- Workflow definitions, runs and receipts use native disclosures and the existing review, field and selected-metadata treatments.
+- Related-file records name their basis, while watch-rule approval keeps folder, file-type and local-content scope visible.
 
 Extracted from [renderer styles](packages/viewer-electron/app/src/renderer/styles.css), [engine looks](packages/viewer-electron/app/src/renderer/workspace/look.ts), [window chrome](packages/viewer-electron/app/src/renderer/App.tsx), [plane headers](packages/viewer-electron/app/src/renderer/workspace/PlaneHeader.tsx), [shared commands](packages/viewer-electron/app/src/renderer/commands/registry.ts), [sidebar](packages/viewer-electron/app/src/renderer/ui/Sidebar.tsx), [Settings](packages/viewer-electron/app/src/renderer/ui/Settings.tsx), and [file views](packages/viewer-electron/app/src/renderer/explorer/views.tsx). [PRODUCT.md](PRODUCT.md) is the confirmed authority for the incumbent family and desktop constraints.
 
 The current extension also follows [linked-plane geometry](packages/viewer-electron/app/src/renderer/workspace/WorkspaceSurface.tsx), [native Settings lifecycle](packages/viewer-electron/app/src/main.ts), [filename finder](packages/viewer-electron/app/src/renderer/commands/CommandPalette.tsx), [virtual search roots](packages/viewer-electron/app/src/renderer/explorer/SearchExplorer.tsx), [action review](packages/viewer-electron/app/src/renderer/actions/ActionHub.tsx), and [EPUB preview](packages/viewer-electron/app/src/renderer/previews/modules/EPUBPreview.tsx). [Automation settings](packages/viewer-electron/app/src/renderer/ui/AutomationSettings.tsx), [agent review](packages/viewer-electron/app/src/renderer/actions/AgentReview.tsx) and [terminal planes](packages/viewer-electron/app/src/renderer/terminals/TerminalPlane.tsx) extend that incumbent through code; no approved visual comp supplies a replacement identity.
+
+[Project controls](packages/viewer-electron/app/src/renderer/workspace/projects.tsx) and [inspection and notes](packages/viewer-electron/app/src/renderer/ui/Inspection.tsx) extend the existing dialog family. Their rendered evidence is [dark inspection](packages/viewer-electron/app/out/project-acceptance/inspection.png), [dark arrangements](packages/viewer-electron/app/out/project-acceptance/arrangements.png), [light notes](packages/viewer-electron/app/out/project-acceptance/notes-light.png) and [compact light arrangements](packages/viewer-electron/app/out/project-acceptance/arrangements-compact-light.png). These screens establish no new visual identity.
+
+The later additions follow [named agent clients](packages/viewer-electron/app/src/renderer/ui/AgentClients.tsx), [checkpoints](packages/viewer-electron/app/src/renderer/ui/Checkpoints.tsx), [comparison](packages/viewer-electron/app/src/renderer/ui/Comparison.tsx), [operation review](packages/viewer-electron/app/src/renderer/ui/OperationReview.tsx), [collections](packages/viewer-electron/app/src/renderer/ui/Collections.tsx) and the [collection explorer](packages/viewer-electron/app/src/renderer/explorer/CollectionExplorer.tsx). Rendered evidence covers [dark client settings](packages/viewer-electron/app/out/agent-client-acceptance/clients.png), the [review checkpoint option](packages/viewer-electron/app/out/change-review-acceptance/review.png), [comparison](packages/viewer-electron/app/out/comparison-collection-acceptance/comparison.png), [operation review](packages/viewer-electron/app/out/comparison-collection-acceptance/operation-review.png) and the [collections manager](packages/viewer-electron/app/out/comparison-collection-acceptance/collections.png). Configuration disclosure, checkpoint-manager details and the unobscured collection-plane layout are source-derived; these additions have no verified light, compact or error renders, or screen-reader runtime evidence.
+
+[Workflow controls](packages/viewer-electron/app/src/renderer/ui/Workflows.tsx), [workflow artifacts](packages/viewer-electron/app/src/renderer/ui/WorkflowArtifact.tsx) and the [project-file notice](packages/viewer-electron/app/src/renderer/workspace/projects.tsx) extend the same system. Their evidence includes [dark review waiting](packages/viewer-electron/app/out/workflow-acceptance/waiting-review.png), [light review waiting](packages/viewer-electron/app/out/workflow-acceptance/waiting-review-light.png), [light completion](packages/viewer-electron/app/out/workflow-acceptance/completed-light.png), the [dark editor](packages/viewer-electron/app/out/workflow-acceptance/editor-dark.png), the [light editor](packages/viewer-electron/app/out/workflow-acceptance/editor-light.png) and the [project change notice](packages/viewer-electron/app/out/project-acceptance/project-file-notice.png). Native pickers, long-content, error and compact states, and screen-reader runtime remain unverified for this extension.
+
+[Related files](packages/viewer-electron/app/src/renderer/ui/Relationships.tsx), its [map](packages/viewer-electron/app/src/renderer/ui/RelationshipMap.tsx) and [basis labels](packages/viewer-electron/app/src/renderer/ui/relationship-labels.ts), plus [watch rules](packages/viewer-electron/app/src/renderer/ui/WatchRules.tsx) within Workflows, retain this incumbent treatment. Their captured evidence is the [light relationship list](packages/viewer-electron/app/out/workflow-acceptance/relationships-list-light.png), [light map](packages/viewer-electron/app/out/workflow-acceptance/relationships-map-light.png), [dark watch approval](packages/viewer-electron/app/out/watch-rule-acceptance/approval-dark.png), [light watch approval](packages/viewer-electron/app/out/watch-rule-acceptance/approval-light.png) and [light watch review waiting](packages/viewer-electron/app/out/watch-rule-acceptance/waiting-review-light.png), all at 1440×940. Related files has no verified dark, compact, long-content or many-node render, or screen-reader runtime evidence. Watch scope was seeded through the real API for these captures; the native folder picker remains unverified.
 
 ## Colors
 
@@ -263,6 +275,8 @@ Terminal contents use the recorded `terminal-space`, `terminal-ink` and `termina
 **The Shared Look Rule.** Apply the selected look to both the shell and the spatial engine; extend previews with the same surface and text roles.
 
 **The Selected Metadata Rule.** Use the selected metadata role on selected rows, tiles, and gallery items so secondary information stays readable against selection.
+
+Selected workflow-run status and timestamps extend the same selected-metadata treatment: `.workflow-run-choice[aria-pressed='true'] span` uses `selection-muted` over selection. The reviewed dark pair measures 5.42:1; ordinary unselected run metadata keeps the muted role.
 
 ## Typography
 
@@ -309,7 +323,15 @@ Quick Preview combines quiet module/size metadata, previous/next navigation and 
 
 Get Info uses the existing 440px dialog, with a maximum width of `calc(100vw - 60px)`. Its content scrolls within `min(550px, calc(100vh - 200px))` and retains the 18px dialog inset. The filename and wrapping path span the full width above a 90px label column and flexible value column, separated by 12px. Native allocation, owner and group values form a wrapping strip. Save/Reload stays sticky within the content area; Done remains in the separate dialog footer.
 
+Project, inspection and notes use that same dialog width and maximum width. Their shared content region (`.dialog-body`) keeps the dialog inset (18px), scrolls within `min(580px, calc(100vh - 180px))`, and leaves the existing separated footer intact. Project and inspection groups use the content spacing step (12px). In arrangement rows, the name is a flexible, shrinkable column with `overflow-wrap: anywhere`; Restore does not shrink. The rendered long name wraps with Restore and Done visible at 1440×940 in dark mode and 900×640 in light mode. No additional responsive breakpoint is introduced.
+
 Proposal review is a bounded modal surface, with width `min(920px, calc(100vw - 80px))` and height `min(700px, calc(100vh - 90px))`. Context, selection, evidence, and footer surround a scrollable virtual row area. Each row gives the editable filename the available width; the directory is quieter context below it. Virtual search roots use the folder list layout and a local result status/paging strip within their own plane.
+
+Comparison, operation review and Collections and basket reuse the wide-dialog variant (1050px), bounded by the existing dialog maximum width and `calc(100vh - 60px)` maximum height. Their shared body retains its 18px inset and scroll boundary, with panel spacing (16px) between groups. Comparison has two flexible location columns and a horizontally scrollable results grid whose rows have a minimum width (650px). Operation review removes the form's extra inset so the body owns its spacing and the separated footer retains its 16px inset. Comparison and operation review render up to 100 rows per page with Previous, Next and the visible range. These are source-defined layout behaviors; the supplied dark screens do not establish additional responsive guarantees.
+
+Workflows narrows the wide-dialog variant through `.workflow-dialog` to `min(900px, calc(100vw - 48px))`; the inherited dialog maximum width remains in effect. The shared dialog body scrolls with its existing inset. `.workflow-body` separates main groups (24px), while sections and definition contents use 14px gaps. Ordered steps use 16px gaps and a 24px list inset. The project-file status notice sits below the titlebar (top 68px; left/right 24px), with a flexible message and two ordinary actions. Its source permits message wrapping, but no long-message or compact-layout claim follows from the supplied render.
+
+Related files uses the shared wide dialog and scrolling body. `.relationships-body` has the existing dialog spacing step (18px); divided list records use 16px vertical padding and 12px internal gaps, with two endpoint columns separated by 24px. The map occupies a bounded scroll region (420px maximum height) around a 900px SVG. The source caps it at the current file plus 20 related endpoints and 100 non-self links; its accompanying link list uses the same displayed endpoint set. The full relationship list pages in groups of 50. These source bounds do not establish a many-node or compact-layout guarantee. Watch approval remains inside the existing workflow body; `.watch-rule-form` uses 16px gaps within the incumbent padded form, with explanation text bounded to 70ch.
 
 **The Reachable Chrome Rule.** Keep contextual plane headers and linked relationships within the framed viewport; expose frame and dock through scoped commands, and use docking for focused reading. Preserve usable saved camera views on reopen, recover a clipped active plane, and keep preview consolidation explicit and undoable.
 
@@ -371,6 +393,26 @@ On macOS, regular files and folders extend that information with allocation, own
 
 Edits remain drafts until Save changes; Reload and Saved/Unsaved changes feedback share the sticky action row. Done closes the dialog from its own footer. Loading, saving, read-only volume, ownership, unsupported metadata and unreadable metadata states use the established status/error text and disabled controls. Locked disables tag, comment and permission edits. Preserve the existing keyboard focus surface/text feedback and suppression of rings and halos.
 
+### Project Dialogs
+
+Saved arrangements and Project folders use ordinary system-font rows within the shared dialog. Each row (`.project-control-row`) has a line divider, the panel gap (16px) and vertical padding (8px). The name or folder detail takes the remaining width; Restore and Choose… keep their footprint. Arrangement names, binding labels and folder paths wrap unbroken text rather than pushing actions outside the dialog. Save current arrangement… stays in the body, while Done occupies the existing footer. Saving a name uses the incumbent Name dialog; Reload project uses the incumbent confirmation pattern with Cancel and the primary action.
+
+Project folders places its local-location explanation above the rows: choosing a folder authorizes that location. This permission copy uses the muted text role and stays with the affected controls. Project inline errors use the shared `.error` selector and `role="alert"`, inheriting the danger role and wrapping; their error-state appearance is source-verified, without a captured error screenshot.
+
+An externally changed project produces a neutral `.project-file-notice` status strip: surface fill, line border, tile rounding (6px), 12px by 16px inset and 12px action gap. Project file changed on disk. precedes Review updated project… and Dismiss. Review opens the existing Reload project confirmation; discovering the edit leaves the current workspace in place until that explicit review action. The notice has `role="status"`; its screen-reader runtime and error variant are unverified.
+
+### Plane Notes
+
+Plane notes uses a full-width, vertically resizable text field (`.plane-notes`) within the dialog body. It inherits the body font rather than the browser's textarea face, with the existing ink, field, line, control-radius and accent-caret roles. The field has a minimum height (220px) and an internal inset (10px). Cancel and the primary Save notes action remain in the separated footer. The light-mode evidence shows the shared field treatment and visible caret without a focus ring or halo.
+
+### File Inspection
+
+Inspect file starts with a complete wrapping muted path and a visible Read file contents checkbox. The initial choice is unchecked. For PDF files, Recognize scanned text on this Mac appears only after content reading is selected. Facts use a two-column grid (`.inspection-facts`): muted labels in `minmax(100px, 1fr)`, values in `minmax(0, 2fr)`, the panel gap (16px) and thin row dividers. Values wrap inside their available column.
+
+Evidence passages use left-aligned ordinary buttons (`.inspection-passage`), with a stronger source label above quieter excerpt text. Both lines wrap unbroken text; the button is bounded to the available width. Loading and coverage copy remain plain task feedback, and Done stays in the footer. Inspection errors use the same `.error` and alert treatment as project errors; no captured error state establishes further styling.
+
+**The Explicit Inspection Rule.** Keep the content-reading choice visible beside the facts; begin unchecked and reveal PDF scan recognition only within the chosen content-reading state.
+
 ### Contextual Plane Header
 
 Folder headers combine a direct navigation toggle, back/forward navigation, a titled drag region, view menu, search, frame/dock, more actions, and close. Space Settings controls each of these icons independently. The view and actions buttons toggle their own menus; pointer dismissal ignores the originating button so a second click closes the open menu. Preview headers replace folder navigation/view/search with the module's primary controls in the same header. There is no second permanent preview toolbar in a linked plane. The first title press selects and moves the plane; pressing an already selected plane retains the current multiselection. File selection, text selection, media, image, and model gestures keep their own functions. Duplicate floating engine controls remain disabled.
@@ -415,6 +457,12 @@ Shortcuts uses labeled editable bindings and a reset action; recipe bindings rem
 
 **The Settings Window Rule.** Keep Settings modeless, searchable and stable across categories, with live updates and close-flush; extend its editors with the shared system fonts, neutral surfaces and ordinary controls.
 
+### Agent Clients
+
+Agents extends its existing Settings page with divided rows of named clients (`.agent-client-row`). Each name is strong text above a muted capability summary or Revoked state. Permissions, Stop tasks, Revoke and Activity use the ordinary Settings action group; revoked rows retain Activity. The source uses wrapping flex rows with a flexible name region, not HTML table markup. The new-client and permissions editor reuses labeled `.settings-row` controls for name, folder scope, individual capabilities and numeric budgets. Read file contents remains a separate visible checkbox from metadata and navigation permissions.
+
+After client creation, a short one-time-credential explanation precedes a conditionally displayed, read-only `.agent-configuration` textarea. It retains the Settings field surface, border, rounding and selectable text; focus selects its contents. Recent activity is a disclosure with muted timestamps and tool/status lines. The supplied screenshot verifies the named client rows and the beginning of the editor; configuration and activity presentation are source-derived.
+
 ### Protected Action Review
 
 Run action states the captured selection, chosen recipe, recursion and relevant provider/data context. Create proposal leads to review before any file change. Tasks/Review appears in the titlebar only while work needs attention; its task list names the status and change count.
@@ -424,6 +472,48 @@ Review rows show the source filename, completion/conflict/error information, an 
 Select available changes skips unresolved issues. Apply names the approved count and stays unavailable with no selected changes. Applying/busy states prevent duplicate submissions; cancellation, partial/interrupted recovery, and guarded Undo changes remain visible when applicable. Summary export first chooses a folder and name, then creates a reviewable file-change proposal. Provider or agent recipe output never silently applies changes.
 
 **The Proposal Review Rule.** Put filename changes, directory context, row approval and evidence together; require explicit Apply for every file-change proposal and expose guarded Undo or recovery when available.
+
+### Content Checkpoints
+
+The review footer adds an initially unchecked Keep a content checkpoint option (`.checkpoint-choice`) before Apply. It uses a compact grid (4px gap), the compact body size (12px), a maximum width (440px) and automatic right margin. When selected, estimated bytes, available storage and the file-contents/mode limitation appear as wrapping muted lines beneath the checkbox; the dark review screenshot shows this chosen state. The option does not add a second action style.
+
+Content checkpoints uses the existing narrow dialog and project-control rows. The source places storage usage and the excluded metadata explanation above the records. Each `.checkpoint-record` wraps its title/date/size region onto a full-width first line, followed by Restore to folder… and Remove; Done remains in the footer. Loading, an empty explanation, disabled controls and the shared error treatment use existing roles. This manager has no supplied standalone screenshot.
+
+### Comparison and Operation Review
+
+Compare locations places equally weighted Left location and Right location fields above the initially unchecked content-reading option. That option names SHA-256 comparison and explains possible provider downloads in smaller muted text. The result summary gives entry count, traversal coverage and selected count. The divided `.comparison-row` grid keeps relative path primary, with Left size, Right size and textual Status columns. Open left/Open right actions sit beneath the path. Column headings use compact muted text (12px); no new status palette is introduced.
+
+The comparison result container explicitly uses `role="table"`, labeled Comparison results, with `aria-rowcount` including the header. Its heading row exposes five `columnheader` roles, including the selection column, and each result row exposes corresponding `cell` roles. This is source-verified semantic markup, not a claim of screen-reader runtime verification. The footer keeps Close/Stop, Compare and Review copy to right… together.
+
+Operation review uses a selected-count explanation above Select all changes and Clear selection. Each divided `.operation-review-row` pairs a selection checkbox with a flexible stack of strong operation/filename, muted source path and labeled destination fields. Name is editable for rename/create-folder rows; Destination folder appears when applicable. An initially unchecked Save a content checkpoint first option (`.review-checkpoint`) sits within the body above Cancel and the counted Apply action. Its explanation uses the same compact muted text as the comparison permission option. Paging preserves the existing row-selection controls without inventing a separate navigation treatment.
+
+### Collections and Basket
+
+Collections and basket uses the shared wide dialog and `.project-control-row` dividers. A strong basket count and Clear basket precede wrapping path references with Remove actions. Review copy…, Review move… and Refresh source versions use an ordinary action group. A full-width Collection name field precedes Save basket as collection; New query collection is a native disclosure with query, folder and a separate Search indexed file contents choice. Named collections pair a strong name and muted reference count/query with Open plane and Remove. The body scrolls while Done remains in the separated footer.
+
+The collection plane's actual source reuses `FileTable` and `ListView`, rather than a custom collection grid. Its `.search-row` names the collection and explicit/query context, followed by Refresh and Add selection/collection to basket. Shared configurable file columns, header alignment, selected metadata colors and dense row treatment come from the existing file-list system. Rows retain listbox/option selection semantics. A `.collection-issues` disclosure has a bounded scroll area (120px), and the ordinary folder-status footer reports file/selection counts and reference or query-snapshot context. The supplied image obscures this plane; its layout and error disclosure are source-derived.
+
+### Workflows
+
+Workflows starts with the ordinary Open workflow… action, a labeled template selector and Create…. A definition uses native `details`/`summary` (`.workflow-definition`), retaining its disclosure marker through `display: list-item`. Its summary pairs the strong workflow name with the muted file path. Opening a definition leaves execution behind the explicit Run workflow action. Expanded contents use ordered step IDs with quieter kind/dependency text, ordinary binding rows and the existing Run/Edit/Reload/folder-permission actions.
+
+Runs use full-width `.workflow-run-choice` buttons with a strong name on the left and quieter status/date on the right. `aria-pressed` identifies the selected run; selection uses the existing fill, ink and selected-metadata roles. The selected-run section lists each step and textual state. Needs review exposes Review copy… or Review recipe… through the established review flow. Resume workflow, Cancel run and Remove run history use ordinary buttons whose availability follows the run state. They add no status-specific palette or new command style.
+
+Edit definition reveals a labeled Workflow JSONC textarea (`.workflow-editor`) within the native definition disclosure. It uses the shared field/ink/line colors, control radius (5px), accent caret and an inset (10px 12px), with the source monospace fallback and line height (1.55). The field resizes vertically from a minimum height (220px). Focus changes its border to accent and retains the absence of outlines and halos. Cancel editing and Save definition use the existing action group. The dark and light editor captures verify this field treatment.
+
+`WorkflowArtifact` reuses inspection details: native file disclosures show filename and Metadata/content coverage, then the complete path, existing fact grid and evidence-passage buttons when present. The comparison artifact reuses the same fact grid for coverage and status counts; this variant is source-derived. Completed copy/recipe steps show a plain muted `.workflow-receipt` paragraph. That receipt and the following output-reference count occupy separate lines: the receipt has a 6px top margin, and `.workflow-steps li > small` is block-level with its own 6px top margin. The light completion capture verifies that separation. No additional artifact card, color system or preview typography is established.
+
+### Related Files
+
+Related files starts with the complete muted file path, pressed-state List/Map controls, Refresh and an initially unchecked Read local references in this file choice. List records place the strong relationship kind beside its muted basis, followed by From/To filename buttons, full paths, textual version status and Open in plane actions. Shared labels identify Recorded operation, Declared link, User note and Suggested link; the captures show recorded-operation and user-note examples, while the other label mappings are source-derived. Add a relationship note is a native disclosure with a Related file path field, a required Note textarea and Save relationship note. The textarea inherits the body font and existing field, ink, line, control-radius and accent-caret roles, with a 10px by 12px inset. Saved notes expose Remove note within their record.
+
+The map uses neutral, line-bordered file rectangles (240×48px, 5px rounding), system body text and smaller parent context (11px). The current file uses selection fill, ink and selected-metadata text; other nodes use the field surface and muted parent text. Muted arrows show direction, and suggested links use a dashed stroke in source. Beneath the SVG, `.relationship-map-links` pairs each displayed link's strong kind with its explicit basis and a From/to endpoint line. This text list and the diagram filter to the same endpoint set. Parent labels retain their trailing context when shortened, keeping the final destination folder visible for duplicate basenames. Native HTML buttons under Explore diagram files provide node exploration with filename, parent context and complete-path tooltip; the SVG itself is labeled as a diagram, not used as an interactive button surface. The light map verifies the basis/kind labels and duplicate-name context; screen-reader runtime remains unverified.
+
+### Watch Rules
+
+Watch rules is a section within Workflows, using the existing 14px heading and `.watch-rule-row` line dividers. A strong rule name sits above its muted folder path, with Paused, Watching, Running or Needs review expressed as ordinary text. Open run and Pause use the existing action group. A paused rule exposes Review and enable… and Remove rule. Reviewing returns to a native disclosure named Review watch rule with the saved scope visible before the explicit Enable watch rule action.
+
+The approval form names the workflow and explains that new or changed files feed the run, existing files are skipped when enabling, and copies/renames wait for review. Watched folder and Choose folder… precede File extensions, Include subfolders, the separate Allow local content inspection checkbox and Minimum time between runs. The content explanation states its input/output scope, possible cloud downloads and manual model recipes. Cooldown choices are 30 seconds, 1 minute and 5 minutes. Fields, checkbox labels, muted explanations, Cancel and primary Enable reuse the existing controls; the scope is an approval surface and does not approve subsequent file mutations. The dark and light approval captures verify this form, and the light waiting-review capture shows Open run/Pause followed by the selected run and Review copy… in the existing review flow.
 
 ### Agent Command Review
 
@@ -441,6 +531,18 @@ Images, supported audio/video, PDF, text/code/Markdown/JSON/CSV, models and arch
 
 Model stages use neutral ambient fill and key/fill lights attached to the model camera, preserving readable reverse faces during orbiting. The hemisphere follows the stage's up axis, and CAD material colors enter the renderer as linear RGB. Dimensions and surface measurements retain the source geometry and units.
 
+### Office Previews
+
+[OfficePreview](packages/viewer-electron/app/src/renderer/previews/modules/OfficePreview.tsx) follows `office-preview-v1` within the existing file plane. DOCX paragraphs, source headings and tables use the shared type and theme roles. The centered body has a readable measure (74ch), document inset (24px 32px 48px) and line spacing (1.7); tables scroll horizontally when needed. Original block citations scroll to the passage and mark it with selection fill and an accent outline.
+
+XLSX keeps the native Worksheet selector, including `(hidden)` labels, in the contextual header. The shared [DataTable](packages/viewer-electron/app/src/renderer/previews/DataTable.tsx) uses virtual rows (32px), lettered columns with a minimum width (140px) and a sticky source-row column (48px). Filter rows preserves original row numbers and cell addresses. Selecting a cell reveals its saved value and formula, or No saved value, in the wrapping detail strip. Formulas remain text and are not recalculated.
+
+Preview details is an ordinary header button with expanded/control semantics and a scoped Show/Hide preview details command. Coverage and formula counts appear in a nonshrinking inline body section, outside header clipping. The [renderer styles](packages/viewer-electron/app/src/renderer/styles.css) retain the shared raised surface, line divider and compact type. Loading and unavailable previews reuse the incumbent primitives; unavailable content offers Open in Default App.
+
+**The Office Source Address Rule.** Preserve original DOCX block citations and worksheet cell addresses; filtering keeps source row numbers, and formula details distinguish saved values from missing cached values.
+
+The supplied [Office acceptance evidence](packages/viewer-electron/app/out/office-acceptance/result.json) verifies four packaged checks and settled, fully opaque captures: Word in dark/light and compact light, workbook formulas/filtering in dark/light and compact light, hidden/empty sheets in compact light, and unavailable recovery in dark. The Office finish disposition is ship, with coverage clipping resolved and the compact Word capture supplied. Loading capture, physical assistive technology, genuine native pickers and Store acceptance gates remain unverified.
+
 ### Operations
 
 The operations control appears for pending work, conflicts, or unseen failures. Its anchored popover shows bounded progress, cancellation, paths, errors, and available undo; past jobs open through Commands or the native menu. Conflicts provide Skip, Keep both, and Replace, with an explicit remaining-conflicts checkbox. Replace explains that the existing item goes to Trash and requires its own confirmation. Idle browsing keeps the workspace open.
@@ -448,6 +550,8 @@ The operations control appears for pending work, conflicts, or unseen failures. 
 ### Menus and Feedback
 
 Searchable context actions render through body portals with viewport-bounded overflow. Dialogs use native modal focus behavior; transient surfaces restore focus to their initiating control when it remains available. Focus rings and halos are suppressed across app and engine chrome; keyboard-focused controls use the raised surface and accent text, with the same treatment on a focused checkbox's label. Carets, active-command surfaces, selected files and drag/drop feedback remain visible. Errors use the danger role and wrap long paths. Empty/loading views use SVGs, plain task text, and the existing type hierarchy. Session workspace recovery is a compact transient status with Undo, rather than permanent window chrome.
+
+Dialog Close icon focus (`.dialog .icon-button:focus-visible`) uses the selection fill and normal ink, with no outline or shadow halo. The reviewed comparison, operation-review and collection-manager screenshots show this filled control. Ordinary dialog buttons and checkbox labels retain the existing raised-surface/accent focus treatment.
 
 ## Do's and Don'ts
 
@@ -468,6 +572,8 @@ Searchable context actions render through body portals with viewport-bounded ove
 - Do extend reusable recipe, provider and agent editors with the existing system font and surface tokens.
 - Do state layout-only consequences for sidebar/workspace actions and the Trash consequence before replacing a file.
 - Do retain file-content conventions such as syntax coloring, contained imagery, Markdown quotation borders and EPUB chapter hierarchy.
+- Do wrap project names, inspection paths and evidence within their available width while keeping row actions and dialog footers reachable.
+- Do use the shared body font and field roles for plane notes, and keep the content-reading choice explicit in file inspection.
 
 ### Don't:
 

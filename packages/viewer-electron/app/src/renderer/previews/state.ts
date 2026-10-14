@@ -1,7 +1,38 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import type { PreviewContext } from './contracts';
+import type { FileEntry } from '../../domain/contracts';
+import { sameSourceVersion, sourceVersion, type SourceVersion } from '../../domain/inspection';
+import { activeWorkspace, getState, previewValues, savePreviewValue } from '../state/store';
 const views = new Map<string, Map<string, unknown>>();
-export function previewState(id: string): NonNullable<PreviewContext['state']> {
+export function previewState(id: string, file?: FileEntry): NonNullable<PreviewContext['state']> {
+  const owner = getState() && activeWorkspace().id;
+  if (owner && activeWorkspace().panes.some((pane) => pane.id === id))
+    return {
+      get: (key) => {
+        const values = previewValues(id, owner),
+          before = values['_sourceVersion'] as SourceVersion | undefined;
+        if (
+          file &&
+          before &&
+          !sameSourceVersion(before, sourceVersion(file)) &&
+          !key.startsWith('notes.')
+        )
+          return;
+        return values[key];
+      },
+      set: (key, value) => {
+        const before = previewValues(id, owner)['_sourceVersion'] as SourceVersion | undefined;
+        if (file)
+          savePreviewValue(
+            id,
+            '_sourceVersion',
+            sourceVersion(file),
+            owner,
+            !!before && !sameSourceVersion(before, sourceVersion(file)),
+          );
+        savePreviewValue(id, key, value, owner);
+      },
+    };
   let view = views.get(id);
   if (!view) {
     view = new Map();

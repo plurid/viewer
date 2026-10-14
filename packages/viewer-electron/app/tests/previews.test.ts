@@ -19,6 +19,12 @@ const file = (name: string): FileEntry => ({
   hidden: false,
 });
 describe('preview extension contract', () => {
+  it('offers Office previews for DOCX/XLSX while leaving old binary and presentation formats to the fallback', () => {
+    for (const name of ['Report.docx', 'Budget.xlsx'])
+      expect(choosePreview(file(name)).id).toBe('office');
+    for (const name of ['Old.doc', 'Old.xls', 'Slides.pptx'])
+      expect(choosePreview(file(name)).id).toBe('fallback');
+  });
   it('routes DXF drawings ahead of ambiguous text or image MIME and gives them a drawing icon', () => {
     for (const mime of ['application/octet-stream', 'image/vnd.dxf', 'text/plain']) {
       const drawing = { ...file('cut.dxf'), mime };

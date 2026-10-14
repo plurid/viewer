@@ -26,6 +26,11 @@ export function PlaneHeader({
   const node = context.treePlane as TreePlane;
   const id = node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id));
+  const collection = useViewer((state) =>
+    activeWorkspace(state).collections?.find(
+      (value) => pane?.type === 'collection' && value.id === pane.collectionID,
+    ),
+  );
   const dragging = useViewer((state) => state.saved.ui.space.dragging);
   const controls = useViewer((state) => state.saved.ui.space.headerControls);
   const registry = useCommands();
@@ -43,7 +48,12 @@ export function PlaneHeader({
   );
   const request: CommandRequest = {
     paneID: id,
-    scope: pane?.type === 'folder' ? 'folder' : pane?.type === 'search' ? 'files' : 'preview',
+    scope:
+      pane?.type === 'folder'
+        ? 'folder'
+        : pane?.type === 'search' || pane?.type === 'collection'
+          ? 'files'
+          : 'preview',
     context: { paneID: id, selection: [], path: pane?.path },
   };
   const available = registry.list(request);
@@ -136,11 +146,13 @@ export function PlaneHeader({
           size={16}
         />
         <span className="plane-title">
-          {pane?.type === 'search'
-            ? pane.name
-            : pane?.type === 'terminal'
-              ? 'Terminal · ' + (pane.path.split(/[\\/]/).pop() || pane.path)
-              : pane?.path.split(/[\\/]/).pop() || pane?.path || 'Plane'}
+          {pane?.type === 'collection'
+            ? (collection?.name ?? 'Collection')
+            : pane?.type === 'search'
+              ? pane.name
+              : pane?.type === 'terminal'
+                ? 'Terminal · ' + (pane.path.split(/[\\/]/).pop() || pane.path)
+                : pane?.path.split(/[\\/]/).pop() || pane?.path || 'Plane'}
         </span>
       </span>
       {pane?.type === 'folder' ? (

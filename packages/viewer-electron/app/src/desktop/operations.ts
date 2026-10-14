@@ -1,3 +1,5 @@
+import type { FileChange } from '../domain/changes';
+import type { ObservedOperationLink } from '../domain/relationships';
 import { randomUUID } from 'node:crypto';
 import { constants, type Stats } from 'node:fs';
 import {
@@ -21,7 +23,8 @@ import type {
   OperationProgress,
   OperationRequest,
 } from '../domain/contracts';
-import { absolute, exists, message, validName } from './filesystem';
+import { absolute, exists, message, validName, entry } from './filesystem';
+import { sourceVersion, sameSourceVersion } from '../domain/inspection';
 import { macFiles, type TrashReceipt, type ReceiptAccess } from './macos-files';
 import { createArchive, extractArchive } from './archive-jobs';
 import { operationJournal, outputProof, type OperationReceipt } from './operation-journal';
@@ -85,7 +88,7 @@ export class Operations {
     private trash: (file: string) => Promise<void | TrashReceipt>,
     private changed: (job: OperationJob) => void,
     private progressed: (progress: OperationProgress) => void = () => {},
-    private filesChanged: (changes: import('../domain/changes').FileChange[]) => void = () => {},
+    private filesChanged: (changes: FileChange[]) => void = () => {},
     private access: (files: readonly string[]) => Promise<void> = async () => {},
     dataPath?: string,
     private receiptAccess: ReceiptAccess = async (_receipt, work) => work(),
@@ -142,6 +145,41 @@ export class Operations {
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
   }
+  /** Minimal durable provenance; bookmarks, staging paths and Undo internals stay private. */
+  observedLinks(): ObservedOperationLink[] {
+    const result: ObservedOperationLink[] = [];
+    for (const task of [...this.tasks.values()].slice(-100).toReversed()) {
+      const sources = new Map(
+        task.request.expectedSources?.map((source) => [source.path, source.version]) ?? [],
+      );
+      const targets = new Map(task.undo.map((step) => [step.from, step]));
+      for (let index = task.job.completed.length - 1; index >= 0; index--) {
+        const item = task.job.completed[index];
+        if (!item.source || !item.destination || item.source === item.destination) continue;
+        const source = sources.get(item.source),
+          target = targets.get(item.destination);
+        result.push({
+          id: task.job.id + ':' + index,
+          revision: task.job.revision,
+          kind: task.job.kind,
+          source: item.source,
+          destination: item.destination,
+          ...(source ? { sourceVersion: source } : {}),
+          ...(target
+            ? {
+                targetVersion: {
+                  identity: target.identity,
+                  modified: target.modified,
+                  size: target.size,
+                },
+              }
+            : {}),
+        });
+        if (result.length === 2000) return result.reverse();
+      }
+    }
+    return result.reverse();
+  }
   start(request: OperationRequest): string {
     if (this.stopped) throw new Error('The file operation queue has closed.');
     if (request.kind === 'alias' && process.platform !== 'darwin')
@@ -151,6 +189,8 @@ export class Operations {
     const roots = operationRoots(sources);
     if (request.destination) request = { ...request, destination: absolute(request.destination) };
     if (request.name !== undefined) validName(request.name);
+    if (request.name && ['copy', 'move', 'transfer'].includes(request.kind) && roots.length !== 1)
+      throw new Error('A destination name requires a single source.');
     if (
       ['copy', 'move', 'transfer', 'mkdir', 'compress', 'extract'].includes(request.kind) &&
       !request.destination
@@ -810,6 +850,13 @@ export class Operations {
             await this.access(
               [source, request.destination].filter((file): file is string => !!file),
             );
+            for (const expected of request.expectedSources ?? []) {
+              if (expected.path !== source && !expected.path.startsWith(source + path.sep))
+                continue;
+              await this.access([expected.path]);
+              if (!sameSourceVersion(expected.version, sourceVersion(await entry(expected.path))))
+                throw new Error('The source changed after review. Prepare a new plan.');
+            }
             job.current = source || request.destination;
             task.intent = { source, destination: request.destination };
             await this.checkpoint();
@@ -840,7 +887,7 @@ export class Operations {
                       ? await this.unique(source)
                       : request.kind === 'alias'
                         ? await this.unique(source + ' alias')
-                        : path.join(request.destination!, path.basename(source));
+                        : path.join(request.destination!, request.name ?? path.basename(source));
               if (source === destination) throw new Error('Source and destination are the same.');
               await this.access([destination]);
               task.intent = { source, destination };

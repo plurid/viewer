@@ -267,8 +267,9 @@ describe('reviewed file action transactions', () => {
 describe('scoped proposal-only MCP broker', () => {
   it('requires authentication, enforces canonical scopes and never advertises apply/delete tools', async () => {
     settings.agents = { enabled: true, roots: [files], allowLayout: false };
+    const profile = path.join(root, 'Profile');
     const broker = new AgentBroker(
-      root,
+      profile,
       () => settings,
       context,
       {
@@ -284,12 +285,21 @@ describe('scoped proposal-only MCP broker', () => {
     const token = await broker.credential();
     await Promise.all([broker.start(), broker.start()]);
     const connection = JSON.parse(
-      await readFile(path.join(root, 'agent-connection-v1.json'), 'utf8'),
+      await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
     ) as { socket: string };
     expect(Buffer.byteLength(connection.socket)).toBeLessThan(104);
     expect((await stat(connection.socket)).mode & 0o777).toBe(0o600);
     expect((await stat(path.dirname(connection.socket))).mode & 0o777).toBe(0o700);
-    expect((await stat(path.join(root, 'agent-token-v1.json'))).mode & 0o777).toBe(0o600);
+    expect((await stat(path.join(profile, 'agent-token-v1.json'))).mode & 0o777).toBe(0o600);
+    settings.agents.roots = [root];
+    await expect(broker.authorize(path.join(profile, 'agent-token-v1.json'))).rejects.toThrow(
+      'Private Viewer',
+    );
+    await symlink(path.join(profile, 'agent-token-v1.json'), path.join(files, 'private-token'));
+    await expect(broker.authorize(path.join(files, 'private-token'))).rejects.toThrow(
+      'Private Viewer',
+    );
+    settings.agents.roots = [files];
     const list = (await broker.handle(token, { method: 'tools/list' })) as {
       tools: { name: string }[];
     };

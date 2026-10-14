@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, stat, realpath } from 'node:fs/promises';
 import { macFiles, type FileAccessIntent, type MacFiles } from './macos-files';
 
 type Binding = Pick<
@@ -118,6 +118,26 @@ export class FileCoordination {
       throw new Error('Declare all coordinated file paths before starting the operation.');
     if (parent)
       signal = signal ? AbortSignal.any([signal, parent.abort.signal]) : parent.abort.signal;
+    // NSFileCoordinator can wait for a FIFO writer before our descriptor reader
+    // runs. Reject existing special sources before entering that native wait.
+    // A missing provider item may still materialize in its accessor; the reader
+    // must validate its opened descriptor as well.
+    for (const intent of normalized.filter((intent) => intent.mode === 'read')) {
+      let info = await lstat(intent.path).catch((error) => {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw error;
+      });
+      if (info?.isSymbolicLink())
+        info = await stat(intent.path).catch((error) => {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+          throw error;
+        });
+      if (info && !info.isFile() && !info.isDirectory())
+        throw new Error('File content coordination requires a regular file, folder or link.');
+    }
+    if (this.closed) throw new Error('File coordination has closed.');
+    if (this.active.size >= 128) throw new Error('Too many pending file provider requests.');
+    signal?.throwIfAborted();
     const id = randomUUID(),
       native = this.native(),
       abort = new AbortController();

@@ -1,3 +1,5 @@
+import type { EvidenceNavigation } from '../../domain/inspection';
+import type { DocumentData } from '../../domain/services';
 import type { ComponentType } from 'react';
 import type { ArchiveListing, FileEntry, Resource, ResourceRead } from '../../domain/contracts';
 
@@ -12,6 +14,7 @@ export interface PreviewCommand {
 }
 
 export interface PreviewContext {
+  evidence?: EvidenceNavigation;
   resource: Resource;
   state?: { get(key: string): unknown; set(key: string, value: unknown): void };
   limits?: { maxImagePixels: number; maxModelMB: number };
@@ -22,7 +25,7 @@ export interface PreviewContext {
   commands?: { header?: HTMLElement; register(commands: readonly PreviewCommand[]): () => void };
   services: {
     thumbnail(file: string, size: number): Promise<string>;
-    document(id: string): Promise<import('../../domain/services').DocumentData>;
+    document(id: string): Promise<DocumentData>;
     read(id: string, limit?: number): Promise<ResourceRead>;
     archive(id: string): Promise<ArchiveListing>;
     archiveEntry(id: string, name: string): Promise<Resource>;

@@ -1,7 +1,14 @@
+import type { EvidenceNavigation } from '../../domain/inspection';
+import type { ProjectLayout } from '../../domain/project';
+import type { CapturedTarget } from '../../domain/automation';
 import { createContext, useContext } from 'react';
 import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 export interface WorkspaceController {
-  newTerminal(target: import('../../domain/automation').CapturedTarget, profileID?: string): void;
+  openCollection(id: string): void;
+  openEvidence(evidence: EvidenceNavigation, parentPaneID?: string): Promise<void>;
+  captureLayout(): ProjectLayout;
+  restoreLayout(layout: ProjectLayout): void;
+  newTerminal(target: CapturedTarget, profileID?: string): void;
   rootID(paneID: string): string | undefined;
   newSearch(
     query: string,
@@ -14,7 +21,11 @@ export interface WorkspaceController {
   open(
     entry: FileEntry,
     parentPaneID?: string,
-    options?: { another?: boolean; link?: string },
+    options?: {
+      another?: boolean;
+      link?: string;
+      evidence?: EvidenceNavigation;
+    },
   ): void;
   openPath(
     path: string,

@@ -8,6 +8,8 @@ import { useWorkspace } from '../workspace/context';
 import { Dialog, Empty, IconButton, Loading, NameDialog } from '../ui/primitives';
 import { useModelPermission } from '../ui/ModelDataPermission';
 import { modelDataLabels, modelPermissionCovers } from '../../domain/model-permissions';
+import type { CheckpointEstimate } from '../../domain/change-plan';
+import { formatBytes } from '../../domain/files';
 const busy = (plan: ActionPlan) => ['planning', 'applying'].includes(plan.status);
 const name = (path: string) => path.split(/[\\/]/).pop() || path;
 function destinationParts(path: string) {
@@ -65,9 +67,10 @@ export function ActionHub() {
         },
       });
     };
-    const show = () => {
+    const show = (event: Event) => {
       setOpen(true);
-      setSelected(undefined);
+      const id = (event as CustomEvent<string | undefined>).detail;
+      setSelected(typeof id === 'string' ? id : undefined);
     };
     window.addEventListener('viewer:action-request', task);
     window.addEventListener('viewer:tasks', show);
@@ -251,6 +254,61 @@ function ConfigureTask({
             ))}
             <p className="muted">Template fields: {'{name} {extension} {number}'}</p>
             <label className="field-label">
+              Letter case
+              <select
+                value={options.case || 'keep'}
+                onChange={(event) =>
+                  setOptions({
+                    ...options,
+                    case: event.target.value as NonNullable<ActionRequest['options']>['case'],
+                  })
+                }
+              >
+                <option value="keep">Keep</option>
+                <option value="lower">lowercase</option>
+                <option value="upper">UPPERCASE</option>
+                <option value="title">Title Case</option>
+              </select>
+            </label>
+            <label className="field-label">
+              Number padding
+              <input
+                type="number"
+                min={0}
+                max={12}
+                value={options.padding ?? 0}
+                onChange={(event) =>
+                  setOptions({ ...options, padding: Number(event.target.value) })
+                }
+              />
+            </label>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={!!options.regex}
+                onChange={(event) => setOptions({ ...options, regex: event.target.checked })}
+              />{' '}
+              Find with regular expression
+            </label>
+            {options.regex && (
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={!!options.ignoreCase}
+                  onChange={(event) => setOptions({ ...options, ignoreCase: event.target.checked })}
+                />{' '}
+                Ignore case
+              </label>
+            )}
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={!!options.metadata}
+                onChange={(event) => setOptions({ ...options, metadata: event.target.checked })}
+              />{' '}
+              Read document metadata for template fields
+            </label>
+            <label className="field-label">
               Start numbering at
               <input
                 type="number"
@@ -349,6 +407,9 @@ function ConfigureTask({
   );
 }
 function TaskReview({ plan }: { plan: ActionPlan }) {
+  const [checkpoint, setCheckpoint] = useState(false);
+  const [estimate, setEstimate] = useState<CheckpointEstimate>();
+  const [checkpointError, setCheckpointError] = useState('');
   const [edits, setEdits] = useState(() =>
     plan.rows.map((row) => ({ id: row.id, destination: row.destination, approved: row.approved })),
   );
@@ -366,6 +427,34 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
   });
   const review = plan.status === 'review';
   const selected = edits.filter((edit) => edit.approved).length;
+  const checkpointPaths = [
+    ...new Set(
+      edits
+        .filter((edit) => edit.approved)
+        .flatMap((edit) => plan.rows.find((row) => row.id === edit.id)?.source?.path || []),
+    ),
+  ];
+  const checkpointKey = JSON.stringify(checkpointPaths);
+  useEffect(() => {
+    if (!checkpoint || !checkpointPaths.length) {
+      setEstimate(undefined);
+      return;
+    }
+    let live = true;
+    setEstimate(undefined);
+    setCheckpointError('');
+    void window.viewer
+      .checkpoints({ kind: 'estimate', paths: checkpointPaths })
+      .then((value) => {
+        if (live && value && 'supported' in value) setEstimate(value);
+      })
+      .catch((error: Error) => {
+        if (live) setCheckpointError(error.message);
+      });
+    return () => {
+      live = false;
+    };
+  }, [checkpoint, checkpointKey]);
   const act = async (run: () => Promise<void>) => {
     setWorking(true);
     setError('');
@@ -532,6 +621,40 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
         </p>
       )}
       <footer>
+        {review && checkpointPaths.length > 0 && (
+          <div className="checkpoint-choice">
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={checkpoint}
+                disabled={working}
+                onChange={(event) => setCheckpoint(event.target.checked)}
+              />
+              Keep a content checkpoint
+            </label>
+            {checkpoint && (
+              <span className="muted">
+                {estimate
+                  ? formatBytes(estimate.bytes) +
+                    ' · ' +
+                    formatBytes(estimate.availableBytes) +
+                    ' available'
+                  : checkpointError || 'Estimating…'}
+              </span>
+            )}
+            {checkpoint && (
+              <span className="muted">
+                File contents and mode. Finder tags and ACLs are not included.
+              </span>
+            )}
+            {checkpoint &&
+              estimate?.issues.map((issue) => (
+                <span className="error" key={issue}>
+                  {issue}
+                </span>
+              ))}
+          </div>
+        )}
         {busy(plan) && (
           <button
             disabled={working}
@@ -572,10 +695,17 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
         {review && !!plan.rows.length && (
           <button
             className="primary"
-            disabled={working || !selected}
+            disabled={
+              working || !selected || (checkpoint && (!estimate?.supported || !!checkpointError))
+            }
             onClick={() =>
               void act(() =>
-                window.viewer.actionApply({ id: plan.id, revision: plan.revision, rows: edits }),
+                window.viewer.actionApply({
+                  id: plan.id,
+                  revision: plan.revision,
+                  rows: edits,
+                  checkpoint,
+                }),
               )
             }
           >

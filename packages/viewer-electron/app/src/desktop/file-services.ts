@@ -1,5 +1,9 @@
+import type { QuerySnapshot } from '../domain/collections';
+import type { DrawingGeometryOptions, DrawingGeometryPage } from '../domain/drawing-geometry';
 import path from 'node:path';
 import { UtilityClient } from './utility-client';
+import { entry } from './filesystem';
+import { sameSourceVersion, sourceVersion, type InspectionResult } from '../domain/inspection';
 import type { FolderSizeTask } from '../domain/metadata';
 import type {
   ApplicationSettings,
@@ -19,10 +23,11 @@ export class FileServices {
   private closing?: Promise<void>;
   private lifecycle: Promise<void> = Promise.resolve();
   private revision = 0;
+  private accessRevision = 0;
   private createIndex: () => UtilityClient;
   private createMeasurement: () => UtilityClient;
   constructor(
-    dataPath: string,
+    private dataPath: string,
     worker: string,
     ocr: string,
     emit: (status: IndexStatus) => void,
@@ -94,7 +99,12 @@ export class FileServices {
             if ((error as NodeJS.ErrnoException).code !== 'FILE_ACCESS_REQUIRED') throw error;
           }
         }
-        const effective = { ...value, roots: allowed, contentRoots };
+        const effective = {
+          ...value,
+          roots: allowed,
+          contentRoots,
+          exclusions: [...new Set([...value.exclusions, this.dataPath])],
+        };
         this.unavailable = unavailable;
         await this.index.call('configure', [effective]);
         this.configuration = effective;
@@ -127,6 +137,28 @@ export class FileServices {
     await this.options.access?.(result.entries.map((entry) => entry.path));
     return { ...result, status: this.withUnavailable(result.status) };
   }
+  async snapshot(value: IndexedQuery) {
+    const revision = this.revision;
+    if (value.root) await this.options.access?.([value.root]);
+    const snapshot = await this.index.call<QuerySnapshot>('query-snapshot', [value]);
+    await this.options.access?.(snapshot.entries.map((item) => item.path));
+    let cursor = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(8, snapshot.entries.length) }, async () => {
+        while (cursor < snapshot.entries.length) {
+          const item = snapshot.entries[cursor++];
+          if (!sameSourceVersion(sourceVersion(item), sourceVersion(await entry(item.path))))
+            throw new Error(
+              'A matching file changed since indexing. Refresh the index and take a new snapshot.',
+            );
+        }
+      }),
+    );
+    if (revision !== this.revision)
+      throw new Error('Search permissions changed. Take another selection snapshot.');
+    await this.options.access?.(snapshot.entries.map((item) => item.path));
+    return snapshot;
+  }
   async sizeStart(paths: string[]) {
     await this.options.access?.(paths);
     return this.measurement.call<FolderSizeTask>('size-start', [paths]);
@@ -154,8 +186,32 @@ export class FileServices {
     await this.options.access?.([file]);
     return result;
   }
+  async inspect(file: string, content = false, ocr = false, signal?: AbortSignal) {
+    await this.options.access?.([file]);
+    // Explicit inspection is independent of index preferences. Reset/revocation
+    // still retires its results, and the native grant is checked again below.
+    const revision = this.accessRevision;
+    const result = await this.index.call<InspectionResult>('inspect', [file, content, ocr], signal);
+    if (revision !== this.accessRevision) throw new Error('File access changed. Inspect again.');
+    await this.options.access?.([file]);
+    return result;
+  }
+  async drawingGeometry(file: string, options: DrawingGeometryOptions = {}, signal?: AbortSignal) {
+    await this.options.access?.([file]);
+    const revision = this.accessRevision;
+    const result = await this.index.call<DrawingGeometryPage>(
+      'drawing-geometry',
+      [file, options],
+      signal,
+    );
+    if (revision !== this.accessRevision)
+      throw new Error('File access changed. Read the geometry again.');
+    await this.options.access?.([file]);
+    return result;
+  }
   reset(): Promise<void> {
     this.revision++;
+    this.accessRevision++;
     const work = this.lifecycle
       .catch(() => {})
       .then(async () => {

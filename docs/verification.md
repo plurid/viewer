@@ -253,3 +253,41 @@ After `pnpm mas:dev`, run `pnpm test:mas` for the signed development baseline. I
 `VIEWER_TEST_SCENARIO=model-lighting pnpm test:desktop` checks rendered CAD geometry through several orbit angles, both appearances and minimum-window framing. It preserves dimensions and isolates orbit gestures from the Plurid camera, then checks existing GLB/STL loading. Optional `VIEWER_TEST_STEP_FILE=/absolute/path/to/colored-model.step` copies a local file into the disposable fixture without editing its source; the near-black-face assertion is intended for models whose original materials are visibly colored. Bitmap analysis crops a full viewport capture rather than changing the offscreen WebGL surface for a cropped capture.
 
 Development captures and review output live in the ignored `.impeccable/review/` directory. Durable interface guidance lives in [DESIGN.md](../DESIGN.md). Feature documentation is in [actions.md](actions.md), [search.md](search.md), [configuration.md](configuration.md), [terminals.md](terminals.md), [model-previews.md](model-previews.md) and [architecture.md](architecture.md).
+
+## Office reader and preview checks
+
+The current suite passes 459 tests across 64 files, TypeScript and lint. The direct
+macOS package builds successfully. New Office checks cover package relationships,
+body paragraphs/tables, sparse worksheet addresses, saved/uncached formulas,
+original content-index citations and revocation purge, malformed/unreadable
+containers, XML/content limits and cancellation. Named-agent worksheet windows
+preserve sheet/row/column anchors and content capabilities.
+
+A generated FIFO reproduced a native wait before the archive descriptor reader
+could reject the source. Content coordination now rejects existing special files
+before calling the native accessor; a binding regression proves no native request
+starts, and the real archive test completes without a writer. Archive opens also
+use nonblocking/nofollow descriptors and validate regular files. Compressed TAR
+uses the same bounded descriptor instead of reopening its pathname. This does not
+prove every provider failure or noncooperating external-writer race is resolved.
+
+After `pnpm package`, `pnpm exec tsx tests/native-office.ts` passes four owned direct
+checks: rendered DOCX metadata/body/table and passage citations, XLSX evidence
+and filtering/formula details, durable sheet/cold citation state, and visible
+coverage/empty/error recovery. The script leaves completed evidence and nine
+captures in `out/office-acceptance`. Captures wait for full ancestor opacity and
+stable camera transforms; earlier transition captures were replaced.
+
+On this same package, `tests/native-workflows.ts` passes five checks, including
+CSV row 61/column 2, image regions, shared DXF facts and actual workflow review/
+apply/resume/receipt restoration. `tests/native-agent-clients.ts` passes four
+checks for the actual MCP/worker, content scopes, actor ownership and credential
+revocation. Owned apps quit gracefully and generated profiles are removed.
+
+The Office finish reviewer disposition is `ship` for its single scored correction:
+the previously clipped Preview details is visible as an inline body disclosure.
+The compact Word capture now frames the whole docked plane. Loading captures,
+physical assistive-technology interaction, real native folder pickers, cloud edge
+cases, supported macOS versions and immutable Store distribution qualification
+remain outside these checks. See [Office previews](office-previews.md) for reader
+coverage and limits.

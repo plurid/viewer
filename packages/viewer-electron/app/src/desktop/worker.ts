@@ -3,10 +3,25 @@ import type { ApplicationSettings, IndexedQuery, IndexStatus } from '../domain/s
 import { FileIndex } from './index-core';
 import { IndexWatcher } from './index-watch';
 import { extractDocument } from './formats';
+import { inspectFile } from './inspection';
+import { readDrawingGeometry } from './drawing-geometry';
+import type { DrawingGeometryOptions } from '../domain/drawing-geometry';
+import { sameSourceVersion, sourceVersion } from '../domain/inspection';
 import { workerPort } from './worker-port';
 interface Request {
   id: string;
-  method: 'init' | 'configure' | 'query' | 'status' | 'update' | 'extract' | 'cancel' | 'close';
+  method:
+    | 'init'
+    | 'configure'
+    | 'query'
+    | 'query-snapshot'
+    | 'status'
+    | 'update'
+    | 'extract'
+    | 'inspect'
+    | 'drawing-geometry'
+    | 'cancel'
+    | 'close';
   args: unknown[];
 }
 let index: FileIndex | undefined;
@@ -69,7 +84,7 @@ port.on('message', async (event) => {
         (value) => {
           if (ready) port.postMessage({ event: 'index', value: watchedStatus(value) });
         },
-        async (file) => (await extractDocument(file)).text,
+        async (file) => extractDocument(file),
         { roots: [], contentRoots: [], exclusions: [], paused: false },
       );
       // Persisted index rows are private derived data. Before any query/status
@@ -83,24 +98,64 @@ port.on('message', async (event) => {
     } else if (request.method === 'query') {
       const result = index.query(request.args[0] as IndexedQuery);
       value = { ...result, status: watchedStatus(result.status) };
+    } else if (request.method === 'query-snapshot') {
+      const query = request.args[0] as IndexedQuery;
+      if (
+        watchedStatus(index.status()).roots.some(
+          (root) =>
+            root.status === 'offline' &&
+            (!query.root ||
+              query.root === root.path ||
+              query.root.startsWith(root.path.replace(/\/$/, '') + '/')),
+        )
+      )
+        throw new Error(
+          'A search root stopped updating. Rebuild the index before taking a selection snapshot.',
+        );
+      value = index.snapshot(query);
     } else if (request.method === 'status') value = watchedStatus(index.status());
     else if (request.method === 'update') {
       await index.update(request.args[0] as string, request.args[1] as boolean);
       value = true;
+    } else if (request.method === 'inspect') {
+      const abort = new AbortController();
+      controllers.set(request.id, abort);
+      try {
+        value = await inspectFile(request.args[0] as string, {
+          content: request.args[1] === true,
+          ocr: request.args[2] === true ? ocr : undefined,
+          signal: abort.signal,
+        });
+      } finally {
+        controllers.delete(request.id);
+      }
+    } else if (request.method === 'drawing-geometry') {
+      const abort = new AbortController();
+      controllers.set(request.id, abort);
+      try {
+        value = await readDrawingGeometry(
+          request.args[0] as string,
+          request.args[1] as DrawingGeometryOptions,
+          abort.signal,
+        );
+      } finally {
+        controllers.delete(request.id);
+      }
     } else if (request.method === 'extract') {
       const file = request.args[0] as string;
       const info = await entry(file);
-      const key = file + ':' + info.identity + ':' + info.modified;
+      const key = file + ':' + info.identity + ':' + info.modified + ':' + info.size;
       const abort = new AbortController();
       controllers.set(request.id, abort);
       try {
         const document =
           extracted.get(key) ||
           (await extractDocument(file, {
-            ocr,
             pages: request.args[1] as number | undefined,
             signal: abort.signal,
           }));
+        if (!sameSourceVersion(sourceVersion(info), sourceVersion(await entry(file))))
+          throw new Error('The document changed while being read. Open it again.');
         extracted.set(key, document);
         let size = [...extracted.values()].reduce(
           (n, value) => n + JSON.stringify(value).length,

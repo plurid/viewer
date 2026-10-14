@@ -123,6 +123,14 @@ export async function ownedApp(binary: string, profile: string) {
       return reply.result.value;
     };
     await command('Emulation.setFocusEmulationEnabled', { enabled: true });
+    // A debugger target exists before loadURL resolves. Browser.close during
+    // that interval can close only the loading Mac window rather than Quit.
+    await until(
+      () => evaluate<string>('document.readyState'),
+      (state) => state === 'complete',
+      'owned renderer finished loading',
+    );
+    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>resolve(true)))');
     return { command, evaluate };
   }
   async function close(connection?: Awaited<ReturnType<typeof connect>>) {
@@ -134,7 +142,9 @@ export async function ownedApp(binary: string, profile: string) {
         child.kill('SIGTERM');
         for (let i = 0; i < 100 && child.exitCode === null && child.signalCode === null; i++)
           await delay(50);
-        throw new Error('Owned app needed termination instead of graceful Quit');
+        throw new Error(
+          'Owned app needed termination instead of graceful Quit. Recent app output: ' + output,
+        );
       }
       assert.equal(child.exitCode, 0, 'Owned app quit cleanly');
     } finally {

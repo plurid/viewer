@@ -1,3 +1,8 @@
+import type { ComparisonRequest } from '../src/domain/comparison';
+import type { OperationPlanRequest } from '../src/domain/operation-plan';
+import type { FileInformationPatch } from '../src/domain/file-information';
+import type { AgentClientRequest } from '../src/domain/agent-clients';
+import type { ReadableStream } from 'node:stream/web';
 import { createServer } from 'vite';
 import { rename, rm, mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -11,6 +16,20 @@ import { Watchers } from '../src/desktop/watchers';
 import { FolderSizes } from '../src/desktop/folder-sizes';
 import { Search } from '../src/desktop/search';
 import { Storage } from '../src/desktop/storage';
+import { Projects } from '../src/desktop/projects';
+import { Workflows } from '../src/desktop/workflows';
+import { WatchRules } from '../src/desktop/watch-rules';
+import type { WatchRuleRequest } from '../src/domain/watch-rules';
+import { Relationships } from '../src/desktop/relationships';
+import type { RelationshipsRequest } from '../src/domain/relationships';
+import { inspectFile } from '../src/desktop/inspection';
+import type { WorkflowRequest } from '../src/domain/workflows';
+import { Checkpoints } from '../src/desktop/checkpoints';
+import { AgentClients } from '../src/desktop/agent-clients';
+import { Comparisons } from '../src/desktop/comparison';
+import { OperationPlans } from '../src/desktop/operation-plans';
+import type { CheckpointRequest } from '../src/domain/change-plan';
+import type { ProjectRequest } from '../src/domain/project';
 import { entry, list } from '../src/desktop/filesystem';
 import { SettingsService } from '../src/desktop/settings';
 import { FileInformationService } from '../src/desktop/file-information';
@@ -63,11 +82,35 @@ const operations = new Operations(
   (progress) => emit({ type: 'job-progress', progress }),
 );
 const storage = new Storage(path.join(fixture.root, 'state.json'));
+const agentClients = new AgentClients(path.join(fixture.root, 'agents'), async (paths) => {
+  paths.forEach(scoped);
+});
+const projects = new Projects(async (paths) => {
+  paths.forEach(scoped);
+});
+const checkpoints = new Checkpoints(
+  path.join(fixture.root, 'checkpoints'),
+  async (paths) => {
+    paths.forEach(scoped);
+  },
+  () => settings.snapshot().settings.checkpoints.budgetBytes,
+);
+const comparisons = new Comparisons(async (paths) => {
+  paths.forEach(scoped);
+});
+const operationPlans = new OperationPlans(
+  path.join(fixture.root, 'plans'),
+  operations,
+  checkpoints,
+  async (paths) => {
+    paths.forEach(scoped);
+  },
+);
 await storage.save(fixture.state);
 const index = await FileIndex.open(
   path.join(fixture.root, 'files.sqlite'),
   (status) => emit({ type: 'index', status }),
-  async (file) => (await extractDocument(file)).text,
+  async (file) => extractDocument(file),
 );
 let indexSettings = '';
 const settings = new SettingsService(
@@ -86,6 +129,7 @@ const settings = new SettingsService(
 await settings.load(fixture.state);
 index.configure(settings.snapshot().settings.search);
 const actions = new ActionPlanner(fixture.root, {
+  snapshot: async (title, sources, signal) => (await checkpoints.create(title, sources, signal)).id,
   recipes: () => settings.snapshot().settings.recipes,
   providers: () => [],
   extract: (file, signal) => extractDocument(scoped(file), { signal }),
@@ -102,6 +146,43 @@ const actions = new ActionPlanner(fixture.root, {
     }
   },
 });
+const workflows: Workflows = new Workflows(path.join(fixture.root, 'workflows'), {
+  access: async (paths) => {
+    paths.forEach(scoped);
+  },
+  files: {
+    inspect: (file, content, ocr, signal) =>
+      inspectFile(scoped(file), { content, signal, ...(ocr ? { ocr: '' } : {}) }),
+  },
+  comparisons,
+  plans: operationPlans,
+  operations,
+  actions,
+  authorizeRun: (run) => watchRules.authorize(run),
+  recipeForRun: (run, id) => watchRules.recipeForRun(run, id),
+});
+const watchRules: WatchRules = new WatchRules(path.join(fixture.root, 'workflows'), {
+  access: async (paths) => {
+    paths.forEach(scoped);
+  },
+  workflows,
+  recipes: () => settings.snapshot().settings.recipes,
+  changed: (rule) => emit({ type: 'watch-rule', rule }),
+});
+const relationships = new Relationships(path.join(fixture.root, 'relationships'), {
+  access: async (paths) => {
+    paths.forEach(scoped);
+  },
+  operations: async () => {
+    await operations.load();
+    return operations.observedLinks();
+  },
+  recipes: () => actions.all(),
+  workflows: async () => {
+    const result = await workflows.request({ kind: 'list' });
+    return Array.isArray(result) ? result : [];
+  },
+});
 let clipboard: { paths: string[]; cut: boolean } | null = null;
 const resourceURL = (value: Resource) => ({
   ...value,
@@ -115,6 +196,53 @@ function scoped(file: string): string {
 }
 async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
   switch (method) {
+    case 'watchRules':
+      return watchRules.request(args[0] as WatchRuleRequest);
+    case 'relationships':
+      return relationships.request(args[0] as RelationshipsRequest);
+    case 'workflow': {
+      const request = args[0] as WorkflowRequest;
+      if (request.kind === 'choose') return path.join(fixture.files, 'viewer.workflow.jsonc');
+      return workflows.request(request);
+    }
+    case 'querySnapshot': {
+      const query = args[0] as IndexedQuery;
+      if (query.root) scoped(query.root);
+      return index.snapshot(query);
+    }
+    case 'compare': {
+      const request = args[0] as ComparisonRequest;
+      if (request.kind === 'cancel') {
+        comparisons.cancel(request.id);
+        return null;
+      }
+      return comparisons.run(
+        request.id,
+        scoped(request.left),
+        scoped(request.right),
+        request.hashes,
+      );
+    }
+    case 'operationPlan':
+      return operationPlans.request(args[0] as OperationPlanRequest);
+    case 'checkpoints': {
+      const request = args[0] as CheckpointRequest;
+      if (request.kind === 'list') return checkpoints.list();
+      if (request.kind === 'estimate') return checkpoints.estimate(request.paths.map(scoped));
+      if (request.kind === 'remove') {
+        await checkpoints.remove(request.id);
+        return null;
+      }
+      return checkpoints.restore(request.id, scoped(request.destination), operations);
+    }
+    case 'inspect':
+      return inspectFile(scoped(args[0] as string), { content: args[1] === true });
+    case 'project': {
+      const request = args[0] as ProjectRequest;
+      if (request.kind === 'choose') return path.join(fixture.files, 'viewer.project.jsonc');
+      if (request.kind === 'read') return projects.read(scoped(request.file));
+      return projects.save(scoped(request.file), request.revision, request.definition);
+    }
     case 'bootstrap':
       return {
         home: fixture.files,
@@ -136,7 +264,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return information.update(
         scoped(args[0] as string),
         args[1] as string,
-        args[2] as import('../src/domain/file-information').FileInformationPatch,
+        args[2] as FileInformationPatch,
       );
     case 'openSettings':
       return;
@@ -144,6 +272,20 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'agentGrants':
     case 'executionList':
       return [];
+    case 'agentClients': {
+      const request = args[0] as AgentClientRequest;
+      if (request.kind === 'list') return agentClients.list();
+      if (request.kind === 'create') throw new Error('Connect agent clients in the desktop app.');
+      return agentClients.update(
+        request.id,
+        request.revision,
+        request.kind === 'update' ? request.client : undefined,
+      );
+    }
+    case 'agentAudit':
+      return agentClients.history(args[0] as string | undefined);
+    case 'agentStop':
+      return;
     case 'settingsGet':
       return settings.snapshot();
     case 'settingsPatch': {
@@ -345,10 +487,7 @@ const server = await createServer({
               }),
             );
             response.writeHead(result.status, Object.fromEntries(result.headers));
-            if (result.body)
-              Readable.fromWeb(result.body as import('node:stream/web').ReadableStream).pipe(
-                response,
-              );
+            if (result.body) Readable.fromWeb(result.body as ReadableStream).pipe(response);
             else response.end();
             return;
           }
@@ -392,6 +531,7 @@ async function close() {
   resources.clear();
   search.close();
   await actions.close();
+  await watchRules.close();
   await Promise.all([watchers.close(), operations.close(), index.close(), settings.flush()]);
   for (const client of clients) client.end();
   await server.close();

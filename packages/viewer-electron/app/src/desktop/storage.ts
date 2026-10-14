@@ -3,6 +3,14 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SavedState } from '../domain/contracts';
+import { collectionSchema, basketItemSchema } from '../domain/collections';
+import { evidenceNavigationSchema } from '../domain/inspection';
+import {
+  folderOverrideSchema,
+  layoutSchema,
+  projectDefinitionSchema,
+  previewValuesSchema,
+} from '../domain/project';
 import {
   migratePlaneNavigation,
   needsNavigationMigration,
@@ -17,7 +25,14 @@ const localPath = z
   .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
 const id = z.string().min(1).max(200);
 const pane = z.discriminatedUnion('type', [
-  z.object({ id, type: z.literal('terminal'), path: localPath, profileID: id }),
+  z.object({ id, type: z.literal('collection'), path: localPath, collectionID: z.uuid() }),
+  z.object({
+    id,
+    type: z.literal('terminal'),
+    path: localPath,
+    profileID: id,
+    startOnOpen: z.boolean().optional(),
+  }),
   z.object({
     id,
     type: z.literal('search'),
@@ -44,6 +59,7 @@ const pane = z.discriminatedUnion('type', [
     id,
     type: z.literal('preview'),
     path: localPath,
+    evidence: evidenceNavigationSchema.optional(),
     keepSeparate: z
       .unknown()
       .optional()
@@ -52,7 +68,8 @@ const pane = z.discriminatedUnion('type', [
 ]);
 const savedStateSchema = z
   .object({
-    version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    previewStates: z.record(id, previewValuesSchema).optional(),
     preferencesRevision: z.number().int().min(0).optional(),
     workspaces: z
       .array(
@@ -63,6 +80,22 @@ const savedStateSchema = z
           roots: z.array(id).max(200),
           activePane: id.optional(),
           arrangement: z.record(z.string().max(300), z.string().max(4 * 1024 * 1024)),
+          collections: z.array(collectionSchema).max(200).optional(),
+          basket: z.array(basketItemSchema).max(10000).optional(),
+          layout: layoutSchema.optional(),
+          epoch: z.number().int().min(0).optional(),
+          project: z
+            .object({
+              file: localPath,
+              root: localPath,
+              revision: z.string().max(200),
+              definition: projectDefinitionSchema,
+              bindings: z.record(id, localPath),
+              folders: z.record(localPath, folderOverrideSchema),
+              dirty: z.boolean(),
+            })
+            .strict()
+            .optional(),
         }),
       )
       .min(1)
@@ -139,6 +172,20 @@ export class Storage {
       } finally {
         await handle.close();
       }
+    }
+    if (state.version < 4) {
+      const backup = await open(
+        this.file + '.before-projects-v4-' + randomUUID() + '.bak',
+        'wx',
+        0o600,
+      );
+      try {
+        await backup.writeFile(text);
+        await backup.sync();
+      } finally {
+        await backup.close();
+      }
+      state = { ...state, version: 4 };
     }
     return { state };
   }

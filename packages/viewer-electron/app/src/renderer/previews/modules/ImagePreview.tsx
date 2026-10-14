@@ -39,6 +39,18 @@ export default function ImagePreview(context: PreviewContext) {
   const [error, setError] = useState(false);
   const available = !error && !byteLimited && !thumbnailFailed && (!large || !!thumbnail);
   const stage = useRef<HTMLDivElement>(null);
+  const image = useRef<HTMLImageElement>(null);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const region = context.evidence?.anchor.kind === 'image' ? context.evidence.anchor : undefined;
+  useEffect(() => {
+    const element = image.current;
+    if (!element) return;
+    const resize = () => setImageSize({ width: element.clientWidth, height: element.clientHeight });
+    const observer = new ResizeObserver(resize);
+    observer.observe(element);
+    resize();
+    return () => observer.disconnect();
+  }, [available, resource.id]);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   useEffect(() => {
     const element = stage.current;
@@ -169,6 +181,7 @@ export default function ImagePreview(context: PreviewContext) {
         }}
       >
         <img
+          ref={image}
           src={large ? thumbnail || undefined : resource.url}
           alt={resource.entry.name}
           draggable={false}
@@ -180,6 +193,26 @@ export default function ImagePreview(context: PreviewContext) {
           }
           style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
         />
+        {region && imageSize.width > 0 && (
+          <div
+            className="image-evidence-overlay"
+            aria-label="Referenced image region"
+            style={{
+              width: imageSize.width,
+              height: imageSize.height,
+              transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            }}
+          >
+            <div
+              style={{
+                left: region.x * 100 + '%',
+                top: region.y * 100 + '%',
+                width: Math.min(region.width, 1 - region.x) * 100 + '%',
+                height: Math.min(region.height, 1 - region.y) * 100 + '%',
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

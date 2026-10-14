@@ -22,6 +22,7 @@ import {
 } from '@plurid/plurid-data';
 import { activeWorkspace, report, setActivePane, storageAdapter, useViewer } from '../state/store';
 import { SearchExplorer } from '../explorer/SearchExplorer';
+import { CollectionExplorer } from '../explorer/CollectionExplorer';
 import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
 import { Empty } from '../ui/primitives';
@@ -65,6 +66,7 @@ function PreviewContent() {
     <div className="preview-plane" onPointerDownCapture={() => setActivePane(record.id)}>
       <PreviewHost
         path={record.path}
+        evidence={record.type === 'preview' ? record.evidence : undefined}
         paneID={record.id}
         active={plane.shown && plane.culled === 'visible'}
         interactive={interactive}
@@ -80,6 +82,15 @@ function TerminalContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((pane) => pane.id === plane.parameters.id),
   );
+  const [started, setStarted] = useState(false);
+  if (pane?.type === 'terminal' && pane.startOnOpen === false && !started)
+    return (
+      <Empty icon="terminal" title="Terminal ready" detail={pane.path}>
+        <button className="primary" onClick={() => setStarted(true)}>
+          Start terminal
+        </button>
+      </Empty>
+    );
   return pane?.type === 'terminal' ? (
     <Suspense fallback={<Empty title="Opening terminal…" />}>
       <LazyTerminalPlane pane={pane} />
@@ -92,10 +103,15 @@ function SearchContent() {
   const plane = usePluridPlane();
   return <SearchExplorer id={plane.parameters.id} />;
 }
+function CollectionContent() {
+  const plane = usePluridPlane();
+  return <CollectionExplorer id={plane.parameters.id} />;
+}
 const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/terminals/:id', component: TerminalContent },
   { route: '/folders/:id', component: FolderContent },
   { route: '/searches/:id', component: SearchContent },
+  { route: '/collections/:id', component: CollectionContent },
   { route: '/previews/:id', component: PreviewContent },
 ];
 export function WorkspaceSurface({
@@ -129,13 +145,13 @@ export function WorkspaceSurface({
   }, [surface]);
   const view = useMemo(
     () =>
-      space.roots.map((id) => {
+      (space.layout ? space.panes.map((pane) => pane.id) : space.roots).map((id) => {
         const pane = space.panes.find((item) => item.id === id);
-        return `/${pane?.type === 'folder' ? 'folders' : pane?.type === 'search' ? 'searches' : pane?.type === 'terminal' ? 'terminals' : 'previews'}/${id}`;
+        return `/${pane?.type === 'folder' ? 'folders' : pane?.type === 'search' ? 'searches' : pane?.type === 'terminal' ? 'terminals' : pane?.type === 'collection' ? 'collections' : 'previews'}/${id}`;
       }),
-    [space.roots],
+    [space.roots, space.layout],
   );
-  const storage = useMemo(() => storageAdapter(space.id), [space.id]);
+  const storage = useMemo(() => storageAdapter(space.id), [space.id, space.epoch]);
   const configuration = useMemo<PluridPartialConfiguration>(
     () => ({
       global: { look: looks[look] },
@@ -261,7 +277,7 @@ export function WorkspaceSurface({
       }}
     >
       <PluridApplication
-        key={space.id}
+        key={space.id + ':' + (space.epoch ?? 0)}
         ref={engine}
         id={`viewer-${space.id}`}
         planes={planes}
@@ -272,7 +288,15 @@ export function WorkspaceSurface({
         onReady={(api) => {
           setApi(api);
           onReady();
-          if (!Object.keys(space.arrangement).length)
+          if (space.layout) {
+            requestAnimationFrame(() => {
+              try {
+                workspace.restoreLayout(space.layout!);
+              } catch (error) {
+                report(error);
+              }
+            });
+          } else if (!Object.keys(space.arrangement).length)
             requestAnimationFrame(() => frameWorkspace(engine, surface));
           else {
             const active = space.activePane || space.roots[0];

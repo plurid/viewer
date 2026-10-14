@@ -2,6 +2,7 @@ import path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { z } from 'zod';
 import { DocumentStore } from './document-store';
+import type { TrashReceipt } from './macos-files';
 
 const localPath = z
   .string()
@@ -269,10 +270,7 @@ export class FileAccess {
   }
   /** A private Trash receipt leases one item during guarded Undo, without
    * creating saved permission to browse the user's Trash. */
-  async withReceipt<T>(
-    receipt: import('./macos-files').TrashReceipt,
-    work: () => Promise<T>,
-  ): Promise<T> {
+  async withReceipt<T>(receipt: TrashReceipt, work: () => Promise<T>): Promise<T> {
     if (!this.scoped) return work();
     if (this.closed) throw new Error('Folder access has closed.');
     const grant = document.shape.grants.element.parse(receipt);

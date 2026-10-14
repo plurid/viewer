@@ -1,7 +1,11 @@
+import type { QuerySnapshot } from '../domain/collections';
 import { DatabaseSync } from 'node:sqlite';
+import { randomUUID } from 'node:crypto';
 import { opendir, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { FileEntry } from '../domain/contracts';
+import type { DocumentData } from '../domain/services';
+import { searchEvidence, sourceVersion } from '../domain/inspection';
 import type {
   ApplicationSettings,
   IndexedQuery,
@@ -27,13 +31,16 @@ export class FileIndex {
   constructor(
     file: string,
     private emit: (value: IndexStatus) => void = () => {},
-    private extract?: (file: string) => Promise<string>,
+    private extract?: (file: string) => Promise<string | DocumentData>,
     initialScope?: ApplicationSettings['search'],
   ) {
     this.config = initialScope;
     this.db = new DatabaseSync(file);
     this.db.exec(
       "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=2000; CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, root TEXT, name TEXT, extension TEXT, size INTEGER, modified REAL, hidden INTEGER, directory INTEGER, data TEXT, seen INTEGER); CREATE INDEX IF NOT EXISTS files_root ON files(root); CREATE INDEX IF NOT EXISTS files_ext ON files(extension); CREATE INDEX IF NOT EXISTS files_name ON files(name,path); CREATE VIRTUAL TABLE IF NOT EXISTS names USING fts5(name, content, path UNINDEXED, tokenize='trigram');",
+    );
+    this.db.exec(
+      'CREATE TABLE IF NOT EXISTS source_documents(path TEXT PRIMARY KEY, version TEXT NOT NULL, document TEXT NOT NULL)',
     );
     const version = Number(
       (this.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
@@ -48,13 +55,13 @@ export class FileIndex {
   static async open(
     file: string,
     emit?: (value: IndexStatus) => void,
-    extract?: (file: string) => Promise<string>,
+    extract?: (file: string) => Promise<string | DocumentData>,
     initialScope?: ApplicationSettings['search'],
   ) {
     await mkdir(path.dirname(file), { recursive: true });
     return new FileIndex(file, emit, extract, initialScope);
   }
-  put(item: FileEntry, root: string, seen = Date.now(), content = ''): void {
+  put(item: FileEntry, root: string, seen = Date.now(), content: string | DocumentData = ''): void {
     this.putMany([{ item, root, seen, content }]);
   }
   ingest(items: FileEntry[], root: string): void {
@@ -65,7 +72,9 @@ export class FileIndex {
           .map((item) => ({ item, root, seen: Date.now(), content: '' })),
       );
   }
-  private putMany(items: { item: FileEntry; root: string; seen: number; content: string }[]): void {
+  private putMany(
+    items: { item: FileEntry; root: string; seen: number; content: string | DocumentData }[],
+  ): void {
     const drop = this.db.prepare(
       'DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)',
     );
@@ -91,7 +100,40 @@ export class FileIndex {
           JSON.stringify(item),
           seen,
         );
-        name.run(item.path, fold(item.name), fold(content), item.path);
+        const original: DocumentData =
+          typeof content === 'string'
+            ? {
+                path: item.path,
+                metadata: {},
+                evidence: content ? [{ source: 'text', text: content }] : [],
+                text: content,
+                truncated: content.length > 150000,
+              }
+            : content;
+        name.run(item.path, fold(item.name), fold(original.text.slice(0, 150000)), item.path);
+        this.db.prepare('DELETE FROM source_documents WHERE path=?').run(item.path);
+        if (original.text) {
+          let remaining = 150000;
+          const evidence = original.evidence.flatMap((part) => {
+            const text = part.text.slice(0, remaining);
+            remaining -= text.length;
+            return text ? [{ ...part, text }] : [];
+          });
+          this.db.prepare('INSERT INTO source_documents VALUES(?,?,?)').run(
+            item.path,
+            JSON.stringify(sourceVersion(item)),
+            JSON.stringify({
+              ...original,
+              evidence,
+              text: '',
+              chapters: undefined,
+              office: undefined,
+              truncated:
+                original.truncated ||
+                original.evidence.reduce((n, item) => n + item.text.length, 0) > 150000,
+            }),
+          );
+        }
       }
       this.db.exec('COMMIT');
       this.count = undefined;
@@ -111,6 +153,7 @@ export class FileIndex {
           .prepare('DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)')
           .run(row.path);
         this.db.prepare('DELETE FROM files WHERE path=?').run(row.path);
+        this.db.prepare('DELETE FROM source_documents WHERE path=?').run(row.path);
       }
       this.db.exec('COMMIT');
       this.count = undefined;
@@ -153,7 +196,7 @@ export class FileIndex {
       running: this.roots.some((root) => root.status === 'indexing'),
     };
   }
-  query(request: IndexedQuery): IndexedResult {
+  query(request: IndexedQuery, limitCap = 500, includeEvidence = true): IndexedResult {
     const root = request.root;
     const indexed =
       !root ||
@@ -234,10 +277,16 @@ export class FileIndex {
       where.push('names MATCH ?');
       params.push(term);
     } else if (text) {
-      where.push('instr(files.name,?)>0');
-      params.push(fold(text));
+      if (request.content) {
+        join = ' JOIN names ON names.rowid=files.rowid ';
+        where.push('(instr(files.name,?)>0 OR instr(names.content,?)>0)');
+        params.push(fold(text), fold(text));
+      } else {
+        where.push('instr(files.name,?)>0');
+        params.push(fold(text));
+      }
     }
-    const limit = Math.max(1, Math.min(500, request.limit ?? 150));
+    const limit = Math.max(1, Math.min(limitCap, request.limit ?? 150));
     const rows = this.db
       .prepare(
         'SELECT files.data FROM files' +
@@ -247,11 +296,48 @@ export class FileIndex {
           ' ORDER BY files.name,files.path LIMIT ? OFFSET ?',
       )
       .all(...params, limit + 1, Math.max(0, request.offset ?? 0)) as { data: string }[];
+    const entries = rows.slice(0, limit).map((row) => JSON.parse(row.data) as FileEntry);
+    const evidence =
+      request.content && includeEvidence
+        ? entries.flatMap((item) => {
+            const source = this.db
+              .prepare('SELECT version,document FROM source_documents WHERE path=?')
+              .get(item.path) as { version: string; document: string } | undefined;
+            if (!source || source.version !== JSON.stringify(sourceVersion(item))) return [];
+            return searchEvidence(item, JSON.parse(source.document) as DocumentData, text) ?? [];
+          })
+        : undefined;
     return {
-      entries: rows.slice(0, limit).map((row) => JSON.parse(row.data) as FileEntry),
+      entries,
+      evidence,
       more: rows.length > limit,
       indexed,
       status: this.status(),
+    };
+  }
+  snapshot(request: IndexedQuery): QuerySnapshot {
+    const result = this.query({ ...request, offset: 0, limit: 10000 }, 10000, false);
+    if (!result.indexed)
+      throw new Error('Index this location before selecting all indexed matches.');
+    if (
+      result.status.running ||
+      result.status.roots.some(
+        (root) => (!request.root || inside(request.root, root.path)) && root.status !== 'ready',
+      )
+    )
+      throw new Error(
+        'Wait for this location to finish indexing before taking a selection snapshot.',
+      );
+    if (result.more)
+      throw new Error(
+        'This query has more than 10,000 matches. Narrow the query before taking a basket snapshot.',
+      );
+    return {
+      id: randomUUID(),
+      query: { ...request, offset: undefined, limit: undefined },
+      entries: result.entries,
+      created: Date.now(),
+      coverage: 'indexed-matches',
     };
   }
   private excluded(file: string): boolean {
@@ -283,6 +369,9 @@ export class FileIndex {
       args.push(root, prefix.length, prefix);
     }
     this.db.prepare("UPDATE names SET content='' WHERE " + denied.join(' AND ')).run(...args);
+    this.db.exec(
+      "DELETE FROM source_documents WHERE path NOT IN (SELECT path FROM files) OR path IN (SELECT path FROM names WHERE content='')",
+    );
     this.count = undefined;
     this.generation++;
     const generation = this.generation;
@@ -309,7 +398,12 @@ export class FileIndex {
     generation: number,
     ownerRoot = root.path,
   ): Promise<void> {
-    const buffer: { item: FileEntry; root: string; seen: number; content: string }[] = [];
+    const buffer: {
+      item: FileEntry;
+      root: string;
+      seen: number;
+      content: string | DocumentData;
+    }[] = [];
     const flush = () => {
       if (buffer.length) {
         this.putMany(buffer);
@@ -331,7 +425,7 @@ export class FileIndex {
           if (this.excluded(file)) continue;
           try {
             const item = await entry(file);
-            let content = '';
+            let content: string | DocumentData = '';
             if (
               !item.directory &&
               item.kind === 'file' &&
@@ -344,7 +438,7 @@ export class FileIndex {
               .split('/')
               .some((part) => part.startsWith('.'));
             if (generation !== this.generation) return;
-            buffer.push({ item, root: ownerRoot, seen, content: content.slice(0, 150000) });
+            buffer.push({ item, root: ownerRoot, seen, content });
             if (buffer.length >= 100) flush();
             root.count++;
             if (child.isDirectory()) queue.push(file);
@@ -411,7 +505,7 @@ export class FileIndex {
             .relative(root, file)
             .split('/')
             .some((part) => part.startsWith('.'));
-          let content = '';
+          let content: string | DocumentData = '';
           if (
             !item.directory &&
             item.kind === 'file' &&
@@ -420,7 +514,7 @@ export class FileIndex {
           )
             content = (await this.extract?.(file).catch(() => '')) ?? '';
           if (generation !== this.generation) return;
-          this.put(item, root, Date.now(), content.slice(0, 150000));
+          this.putMany([{ item, root, seen: Date.now(), content }]);
           if (item.directory && item.kind !== 'symlink')
             await this.crawl(
               { path: file, status: 'indexing', count: 0, errors: 0 },

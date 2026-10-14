@@ -1,4 +1,5 @@
-import { open, readFile, stat } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { crc32, gunzip, inflateRaw } from 'node:zlib';
 import { promisify } from 'node:util';
 import type { ArchiveEntry, ArchiveListing } from '../domain/contracts';
@@ -8,6 +9,19 @@ const ENTRY_LIMIT = 32 * 1024 * 1024;
 const INDEX_LIMIT = 20000;
 const unzip = promisify(inflateRaw),
   untar = promisify(gunzip);
+async function openArchive(file: string) {
+  const handle = await open(
+    fileCoordination.path(file),
+    constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
+  );
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error('Archive source must be a regular file.');
+    return handle;
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
+}
 interface IndexedEntry extends ArchiveEntry {
   offset: number;
   compressed: number;
@@ -145,7 +159,7 @@ export class Archives {
         'This archive entry cannot be previewed (unsupported compression, encryption, or size).',
       );
     if (index.data) return index.data.subarray(entry.offset, entry.offset + entry.size);
-    const handle = await open(fileCoordination.path(file), 'r');
+    const handle = await openArchive(file);
     try {
       if (entry.method === -1) {
         const data = Buffer.alloc(entry.size);
@@ -175,7 +189,7 @@ export class Archives {
     }
   }
   private async load(file: string): Promise<Index> {
-    const handle = await open(fileCoordination.path(file), 'r');
+    const handle = await openArchive(file);
     try {
       const info = await handle.stat();
       const signature = Buffer.alloc(4);
@@ -256,11 +270,16 @@ export class Archives {
         if (info.size > 64 * 1024 * 1024)
           throw new Error('Compressed TAR preview is limited to 64 MB.');
         // Native zlib runs in the worker pool; one decompression at a time bounds memory.
-        data = await this.background(async () =>
-          untar(await readFile(fileCoordination.path(file)), {
-            maxOutputLength: 128 * 1024 * 1024,
-          }),
-        );
+        data = await this.background(async () => {
+          const compressed = Buffer.alloc(info.size);
+          let offset = 0;
+          while (offset < compressed.length) {
+            const read = await handle.read(compressed, offset, compressed.length - offset, offset);
+            if (!read.bytesRead) throw new Error('Compressed TAR changed or is truncated.');
+            offset += read.bytesRead;
+          }
+          return untar(compressed, { maxOutputLength: 128 * 1024 * 1024 });
+        });
       }
       const total = data?.length ?? info.size;
       const entries: IndexedEntry[] = [];

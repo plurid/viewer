@@ -41,7 +41,7 @@ export default function ExamplePreview({ resource, services, signal }: PreviewCo
 
 `PreviewContext` contains file metadata and a resource URL, an abort signal, active/interactive flags, the current look, fixed read/archive/document/thumbnail interfaces, and an optional renderer command capability. Optional `metadata()` and `thumbnail()` module hooks share that contract. Explorer, filesystem and Plurid state stay outside a preview module.
 
-Use `usePreviewState(context, key, initial)` for lightweight viewer state that should survive spatial culling, such as zoom or the current page. Its bounded host/resource cache is session-only. Do not retain a decoded model, GPU renderer or original image buffer there. Modules still release resources and stop media/animation on inactive/unmount paths. EPUB's local parser returns evidence and bounded chapter markup; the reader sanitizes markup before rendering it and never evaluates document scripts.
+Use `usePreviewState(context, key, initial)` for lightweight viewer state that should survive spatial culling, such as zoom, the current page or worksheet. Workspace-owned planes persist bounded JSON values in private state; temporary previews use a bounded session cache. Source-version changes reset viewer state while preserving notes. Do not retain a decoded model, GPU renderer or original image buffer there. Modules still release resources and stop media/animation on inactive/unmount paths. EPUB's local parser returns evidence and bounded chapter markup; the reader sanitizes markup before rendering it and never evaluates document scripts. DOCX/XLSX use shared worker extraction and the table/evidence adapter; see [Office previews](office-previews.md).
 
 ## Contextual controls and commands
 

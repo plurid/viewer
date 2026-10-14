@@ -102,6 +102,24 @@ button[aria-pressed='true'] {
 .context-menu :focus-visible {
   outline: none;
 }
+.dialog :focus,
+.dialog :focus-visible,
+.settings-shell :focus,
+.settings-shell :focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.dialog .icon-button:focus-visible,
+#viewer .dialog .icon-button:focus-visible {
+  color: var(--ink);
+  background: var(--selection);
+}
+.dialog :is(button, select, summary, a[href], [role='button']):focus-visible,
+.settings-shell :is(button, select, summary, a[href], [role='button']):focus-visible,
+.dialog label:has(input[type='checkbox']:focus-visible, input[type='radio']:focus-visible) {
+  color: var(--accent);
+  background: var(--raised);
+}
 /* Plane focus uses Plurid's halo; text editors retain their caret. */
 #viewer :focus-visible,
 #viewer [data-plurid-focus='true'] {
@@ -1517,6 +1535,7 @@ select {
   min-height: 0;
 }
 .image-stage {
+  position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -2008,6 +2027,114 @@ select {
   z-index: 1;
   background: var(--raised);
   font-weight: 600;
+}
+.office-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.workbook-sheet-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.workbook-sheet-picker select {
+  min-width: 120px;
+  max-width: 280px;
+}
+.office-coverage {
+  font-size: 12px;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+  padding: 4px 12px;
+  flex: none;
+}
+.office-coverage p {
+  line-height: 1.5;
+}
+.workbook-cell-detail {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+  min-height: 34px;
+}
+.workbook-cell-detail strong {
+  flex: none;
+}
+.workbook-cell-detail span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  max-height: 80px;
+  overflow: auto;
+}
+.data-row > .workbook-row-number {
+  position: sticky;
+  left: 0;
+  background: var(--raised);
+  color: var(--muted);
+  text-align: right;
+}
+.data-row > div:has(.workbook-cell) {
+  padding: 0;
+}
+.workbook-cell {
+  display: block;
+  width: 100%;
+  height: 32px;
+  min-height: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  background: transparent;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-document-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.office-document {
+  max-width: 74ch;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+  line-height: 1.7;
+}
+.office-document p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.office-document h1,
+.office-document h2,
+.office-document h3 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+.office-table-scroll {
+  overflow: auto;
+}
+.office-document table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.office-document td {
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.office-document .evidence-passage {
+  background: var(--selection);
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
 }
 .archive-scroll {
   flex: 1;
@@ -3031,7 +3158,7 @@ select {
   overflow: auto;
   z-index: 40;
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 12px;
 }
@@ -3133,4 +3260,552 @@ select {
 .command-selection-range input {
   min-width: 0;
   width: 90px;
+}
+
+.project-controls {
+  display: grid;
+  gap: 12px;
+}
+.project-control-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.project-control-row > div {
+  min-width: 0;
+}
+.project-control-row p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.project-control-row button {
+  flex: none;
+}
+
+.search-evidence {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+.search-evidence > p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.search-evidence > button {
+  flex: none;
+}
+.evidence-line {
+  background: var(--selection);
+}
+
+.inspection-details {
+  display: grid;
+  gap: 12px;
+}
+.inspection-path {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.inspection-details label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.inspection-facts {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+.inspection-facts > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.inspection-facts dt {
+  color: var(--muted);
+}
+.inspection-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.inspection-passage {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px;
+}
+.inspection-passage > span {
+  color: var(--muted);
+}
+.plane-notes {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+}
+
+.dialog-body {
+  padding: 18px;
+  max-height: min(580px, calc(100vh - 180px));
+  overflow: auto;
+}
+
+.plane-notes {
+  font: inherit;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px;
+  caret-color: var(--accent);
+}
+.project-control-row > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.project-control-row strong,
+.inspection-passage > strong,
+.inspection-passage > span {
+  overflow-wrap: anywhere;
+}
+.inspection-passage {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.checkpoint-choice {
+  margin-right: auto;
+  display: grid;
+  gap: 4px;
+  max-width: 440px;
+  min-width: 0;
+  font-size: 12px;
+}
+.checkpoint-choice > span {
+  overflow-wrap: anywhere;
+}
+
+.checkpoint-record {
+  flex-wrap: wrap;
+}
+.checkpoint-record > div {
+  flex: 1 1 100%;
+}
+.agent-client-row {
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.agent-client-row > span {
+  flex: 1 1 260px;
+  overflow-wrap: anywhere;
+}
+.agent-client-row small {
+  display: block;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.agent-activity {
+  padding-left: 20px;
+}
+.agent-activity li {
+  padding: 8px 0;
+  display: grid;
+  gap: 4px;
+}
+.agent-activity time {
+  color: var(--muted);
+}
+.comparison-locations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.comparison-locations label {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.comparison-locations input,
+.operation-review-row input:not([type='checkbox']) {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.comparison-table {
+  overflow-x: auto;
+}
+.comparison-row {
+  display: grid;
+  grid-template-columns: 20px minmax(200px, 2fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(
+      112px,
+      1fr
+    );
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: start;
+  min-width: 650px;
+}
+.comparison-heading {
+  color: var(--muted);
+  font-size: 12px;
+}
+.comparison-name {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.comparison-name .settings-actions {
+  margin-top: 8px;
+}
+.operation-review-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.operation-review-row > div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.operation-review-row label {
+  display: grid;
+  gap: 6px;
+}
+.operation-review-body,
+.comparison-body {
+  display: grid;
+  gap: 16px;
+}
+.collections-body,
+.collections-query-form {
+  display: grid;
+  gap: 16px;
+}
+.collections-body input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.collections-body .project-control-row > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.collections-body small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.collection-issues {
+  padding: 12px 16px;
+  max-height: 120px;
+  overflow: auto;
+}
+.collection-issues p {
+  overflow-wrap: anywhere;
+}
+.review-checkpoint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.5;
+}
+.review-checkpoint > input {
+  margin: 3px 0 0;
+  flex: 0 0 auto;
+}
+.review-checkpoint > span {
+  min-width: 0;
+}
+.review-checkpoint small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.operation-review-dialog form {
+  padding: 0;
+}
+.operation-review-dialog form footer {
+  padding: 16px;
+  border-top: 1px solid var(--line);
+}
+/* Workflow definitions and receipts follow the shared flat dialog spacing. */
+.workflow-dialog {
+  width: min(900px, calc(100vw - 48px));
+}
+.project-file-notice {
+  position: absolute;
+  z-index: 30;
+  top: 68px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+.project-file-notice span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.workflow-body {
+  display: grid;
+  gap: 24px;
+}
+.workflow-body section {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+.workflow-definition-content {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+.workflow-definition > summary {
+  cursor: pointer;
+  display: list-item;
+}
+.workflow-definition > summary strong {
+  margin-left: 6px;
+}
+.workflow-definition > summary .muted {
+  margin-left: 16px;
+}
+.workflow-body h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.workflow-body .settings-actions {
+  align-items: end;
+  flex-wrap: wrap;
+}
+.workflow-body .settings-actions label {
+  display: grid;
+  gap: 8px;
+}
+.workflow-body .project-control-row small {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.workflow-steps {
+  margin: 0;
+  padding-left: 24px;
+  display: grid;
+  gap: 16px;
+}
+.workflow-steps li {
+  min-width: 0;
+  padding-left: 6px;
+}
+.workflow-steps li > span {
+  margin-left: 12px;
+  color: var(--muted);
+}
+.workflow-run-choice {
+  text-align: left;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.workflow-run-choice[aria-pressed='true'] {
+  background: var(--selection);
+}
+.workflow-run-choice[aria-pressed='true'] span {
+  color: var(--selection-muted);
+}
+.evidence-cell {
+  background: var(--selection);
+  color: var(--ink);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.image-evidence-overlay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  transform-origin: center;
+}
+.image-evidence-overlay > div {
+  position: absolute;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--selection) 25%, transparent);
+}
+.workflow-run-choice span {
+  color: var(--muted);
+}
+.workflow-editor {
+  width: 100%;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.55;
+  resize: vertical;
+  min-height: 220px;
+  background: var(--field);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px 12px;
+  caret-color: var(--accent);
+}
+.workflow-editor:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.workflow-steps li > small {
+  display: block;
+  margin-top: 6px;
+}
+.workflow-receipt {
+  margin: 6px 0 0;
+}
+.relationships-body {
+  display: grid;
+  gap: 18px;
+}
+.relationship-row {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+}
+.relationship-type {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.relationship-files {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.relationship-files > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.relationship-files small,
+.relationship-row p {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.relationship-map {
+  max-height: 420px;
+  overflow: auto;
+}
+.relationship-map svg {
+  display: block;
+  font:
+    13px -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+.relationship-map .settings-actions button {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.relationship-map .settings-actions button small {
+  color: var(--muted);
+}
+.relationship-map-links {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.relationship-map-links li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.relationship-map-links li > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.relationship-map-links small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.watch-rule-notice {
+  top: auto;
+  bottom: 80px;
+  left: auto;
+  right: 24px;
+}
+.watch-rule-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.watch-rule-row small {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.watch-rule-row .project-control-row > div {
+  min-width: 0;
+}
+.watch-rule-row p {
+  overflow-wrap: anywhere;
+}
+.watch-rules details {
+  margin-top: 16px;
+}
+.watch-rule-form {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+}
+.watch-rule-form p {
+  max-width: 70ch;
+  margin: 0;
+}
+.relationship-note form {
+  display: grid;
+  gap: 14px;
+  padding: 14px 0 0;
+}
+.relationship-note textarea {
+  background: var(--field);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px 12px;
+  caret-color: var(--accent);
+  resize: vertical;
+  font: inherit;
+}
+.workflow-artifact {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
 }

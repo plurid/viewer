@@ -56,6 +56,13 @@ const textFormats = [
 ];
 export const previewModules: PreviewModule[] = [
   {
+    id: 'office',
+    label: 'Office document',
+    formats: ['docx', 'xlsx'],
+    detect: extension(['docx', 'xlsx']),
+    load: () => import('./modules/OfficePreview'),
+  },
+  {
     id: 'dxf',
     label: 'DXF drawing',
     formats: ['dxf'],

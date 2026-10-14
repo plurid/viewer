@@ -1,3 +1,4 @@
+import type { ParseError } from 'jsonc-parser';
 import { pathMapper, type FileChange } from '../domain/changes';
 import { preferencesSchema } from './preferences-schema';
 import { settingCatalog } from '../domain/setting-catalog';
@@ -6,7 +7,7 @@ import { z } from 'zod';
 import type { ApplicationSettings, SettingsPatch, SettingsSnapshot } from '../domain/services';
 import { defaultSettings } from '../domain/services';
 import { providerKinds } from '../domain/model-providers';
-import type { UIPreferences } from '../domain/contracts';
+import type { UIPreferences, Pane, FolderPane } from '../domain/contracts';
 import { normalizePreferences } from '../domain/preferences';
 import { defaultShortcuts, shortcutKey, validShortcut } from '../domain/shortcuts';
 import fs from 'node:fs/promises';
@@ -37,6 +38,16 @@ const recipe = z
   .strict();
 export const settingsSchema = z
   .object({
+    checkpoints: z
+      .object({
+        budgetBytes: z
+          .number()
+          .int()
+          .min(0)
+          .max(1024 ** 4),
+      })
+      .strict()
+      .default({ budgetBytes: 5 * 1024 ** 3 }),
     appearance: z.enum(['system', 'dark', 'light']),
     browsing: z
       .object({
@@ -484,7 +495,7 @@ export class SettingsService {
   }
   async importConfiguration(file: string): Promise<SettingsSnapshot> {
     const text = await fs.readFile(file, 'utf8');
-    const errors: import('jsonc-parser').ParseError[] = [];
+    const errors: ParseError[] = [];
     const { parse } = await import('jsonc-parser');
     const config = configSchema.parse(parse(text, errors, { allowTrailingComma: true }));
     if (errors.length) throw new Error('Import contains invalid JSONC.');
@@ -507,14 +518,14 @@ export class SettingsService {
     if (JSON.stringify(folders) !== JSON.stringify(snapshot.settings.folders))
       await this.patch([{ path: 'settings.folders', value: folders }], snapshot.revision);
   }
-  async seedFolders(panes: import('../domain/contracts').Pane[]): Promise<void> {
+  async seedFolders(panes: Pane[]): Promise<void> {
     await this.load();
     if (!this.seedPending) return;
     this.seedPending = false;
     if (Object.keys(this.document.settings.folders).length) return;
     const folders = Object.fromEntries(
       panes
-        .filter((pane): pane is import('../domain/contracts').FolderPane => pane.type === 'folder')
+        .filter((pane): pane is FolderPane => pane.type === 'folder')
         .map((pane) => [
           pane.path,
           {

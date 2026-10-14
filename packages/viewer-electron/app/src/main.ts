@@ -131,6 +131,12 @@ function menu(): void {
       {
         label: 'File',
         submenu: [
+          { label: 'Create Project…', click: command('project-create') },
+          { label: 'Workflows…', click: command('workflows') },
+          { label: 'Open Project…', click: command('project-open') },
+          { label: 'Save Project', click: command('project-save') },
+          { label: 'Reload Project…', click: command('project-reload') },
+          { type: 'separator' },
           {
             label: 'New Folder Plane',
             accelerator: accelerator(settings?.shortcuts['new-root-folder'] ?? 'Cmd+N'),
@@ -403,7 +409,12 @@ async function createWindow(): Promise<void> {
     window = null;
   });
   menu();
-  await window.loadURL(devURL || 'viewer-app://app/index.html');
+  try {
+    await createdWindow.loadURL(devURL || 'viewer-app://app/index.html');
+  } catch (error) {
+    if (createdWindow.isDestroyed() || closePending || quitPending || quitting) return;
+    throw error;
+  }
   if (!backgroundTest && !createdWindow.isDestroyed() && !closePending && !quitPending) {
     if (restored.maximized) createdWindow.maximize();
     createdWindow.show();
@@ -494,7 +505,12 @@ async function openSettingsWindow(): Promise<void> {
   });
   const url = new URL(devURL || 'viewer-app://app/index.html');
   url.searchParams.set('window', 'settings');
-  await created.loadURL(url.toString());
+  try {
+    await created.loadURL(url.toString());
+  } catch (error) {
+    if (created.isDestroyed() || closePending || quitPending || quitting) return;
+    throw error;
+  }
   if (!backgroundTest) created.show();
 }
 app.on('second-instance', () => {

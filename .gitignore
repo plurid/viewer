@@ -3,9 +3,8 @@ node_modules/
 out/
 coverage/
 *.tsbuildinfo
-.impeccable/review/
-.impeccable/config.local.json
 .DS_Store
+.impeccable
 
 packages/viewer-electron/app/assets/viewer-ocr
 packages/viewer-electron/app/assets/viewer-applications

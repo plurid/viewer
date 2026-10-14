@@ -42,6 +42,14 @@ import { WorkspaceContext } from './workspace/context';
 import { WorkspaceSurface } from './workspace/WorkspaceSurface';
 import { Icon } from './ui/Icon';
 import { Dialog, ErrorBoundary, IconButton, NameDialog } from './ui/primitives';
+import { ProjectControls, ProjectFileNotice } from './workspace/projects';
+import { InspectionControls } from './ui/Inspection';
+import { CheckpointControls } from './ui/Checkpoints';
+import { OperationReviewControls } from './ui/OperationReview';
+import { ComparisonControls } from './ui/Comparison';
+import { CollectionControls } from './ui/Collections';
+import { WorkflowControls } from './ui/Workflows';
+import { RelationshipControls } from './ui/Relationships';
 import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { QuickPreview } from './previews/QuickPreview';
@@ -565,7 +573,16 @@ function AppWindow() {
   ).length;
   return (
     <WorkspaceContext.Provider value={controller}>
+      <ProjectControls />
+      <InspectionControls />
+      <CheckpointControls />
+      <OperationReviewControls />
+      <ComparisonControls />
+      <CollectionControls />
+      <WorkflowControls />
+      <RelationshipControls />
       <div className="app-shell" data-look={saved.look} data-density={density}>
+        <ProjectFileNotice />
         <AgentReview />
         <ExecutionPanel />
         <header className="app-titlebar">

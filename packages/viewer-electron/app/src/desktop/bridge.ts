@@ -1,9 +1,13 @@
+import type { FileChange } from '../domain/changes';
+import type { ComparisonRequest } from '../domain/comparison';
+import type { FileInformationPatch } from '../domain/file-information';
 import { AgentRequests } from './agent-requests';
-import type { CapturedTarget } from '../domain/automation';
+import type { CapturedTarget, TerminalStart } from '../domain/automation';
 import type {
   AgentNavigation,
   AgentWorkspaceSnapshot,
   CommandDescriptor,
+  ExecutionGrant,
 } from '../domain/agent-requests';
 import { Executions } from './executions';
 import { Terminals } from './terminals';
@@ -23,23 +27,40 @@ import { Applications } from './applications';
 import { SettingsService } from './settings';
 import { Credentials, Providers } from './providers';
 import { ModelPermissions } from './model-permissions';
-import { modelDataLevels, modelEndpoint } from '../domain/model-permissions';
+import { modelDataLevels, modelEndpoint, type ModelDataLevel } from '../domain/model-permissions';
 import { macFiles } from './macos-files';
 import { Thumbnails } from './thumbnails';
 import { ActionPlanner } from './actions/planner';
 import { AgentBroker } from './agent-broker';
+import { Comparisons } from './comparison';
+import { OperationPlans } from './operation-plans';
+import { operationPlanRequestSchema, type OperationPlanRequest } from '../domain/operation-plan';
+import { sourceVersionSchema } from '../domain/inspection';
+import {
+  agentClientInputSchema,
+  type AgentClientRequest,
+  type AgentClient,
+} from '../domain/agent-clients';
 import type {
   ActionContext,
   ActionRequest,
   ActionApproval,
   SettingsPatch,
   IndexedQuery,
+  ApplicationSettings,
 } from '../domain/services';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
-import type { ApiMethod, ApiResult, DesktopEvent } from '../domain/contracts';
+import type {
+  ApiMethod,
+  ApiResult,
+  DesktopEvent,
+  SearchRequest,
+  SavedState,
+  TextEditCommand,
+} from '../domain/contracts';
 import { absolute, entry, list } from './filesystem';
 import { Operations } from './operations';
 import { Resources } from './resources';
@@ -50,6 +71,17 @@ import { FileAccess } from './file-access';
 import { NativeSelections } from './native-selections';
 import { fileCoordination } from './file-coordination';
 import { FileInformationService, informationPatchSchema } from './file-information';
+import { Projects } from './projects';
+import { Checkpoints } from './checkpoints';
+import { Workflows } from './workflows';
+import { WatchRules } from './watch-rules';
+import { watchRuleRequestSchema, type WatchRuleRequest } from '../domain/watch-rules';
+import { Relationships } from './relationships';
+import type { RelationshipsRequest } from '../domain/relationships';
+import { workflowDefinitionSchema, type WorkflowRequest } from '../domain/workflows';
+import { boundedRename } from './rename-preview';
+import type { CheckpointRequest } from '../domain/change-plan';
+import { projectDefinitionSchema, type ProjectRequest } from '../domain/project';
 
 const localPath = z
   .string()
@@ -57,6 +89,17 @@ const localPath = z
   .max(32768)
   .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
 const id = z.string().min(1).max(200);
+const indexedQuerySchema = z
+  .object({
+    query: z.string().max(300),
+    root: localPath.optional(),
+    offset: z.number().int().min(0).max(1000000).optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+    showHidden: z.boolean().optional(),
+    content: z.boolean().optional(),
+    recursive: z.boolean().optional(),
+  })
+  .strict();
 const workspaceSnapshotSchema = z.object({
   activeWorkspace: id,
   workspaces: z
@@ -69,7 +112,7 @@ const workspaceSnapshotSchema = z.object({
           .array(
             z.object({
               id,
-              type: z.enum(['folder', 'preview', 'search', 'terminal']),
+              type: z.enum(['folder', 'preview', 'search', 'terminal', 'collection']),
               path: localPath,
               mode: z.enum(['list', 'grid', 'columns', 'gallery']).optional(),
               allLocations: z.boolean().optional(),
@@ -117,6 +160,102 @@ const targetSchema = z.object({
     .max(2000),
 });
 const schemas = {
+  watchRules: z.tuple([watchRuleRequestSchema]),
+  relationships: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('read'), file: localPath, content: z.boolean() }).strict(),
+      z
+        .object({
+          kind: z.literal('note'),
+          from: localPath,
+          to: localPath,
+          note: z.string().trim().min(1).max(4000),
+        })
+        .strict(),
+      z.object({ kind: z.literal('remove-note'), id: z.uuid() }).strict(),
+    ]),
+  ]),
+  workflow: z.tuple([
+    z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('choose'),
+          mode: z.enum(['open', 'create']),
+          defaultPath: localPath.optional(),
+        })
+        .strict(),
+      z.object({ kind: z.literal('read'), file: localPath }).strict(),
+      z
+        .object({
+          kind: z.literal('save'),
+          file: localPath,
+          revision: z.string().max(100),
+          definition: workflowDefinitionSchema,
+        })
+        .strict(),
+      z.object({ kind: z.literal('list') }).strict(),
+      z.object({ kind: z.literal('get'), id: z.uuid() }).strict(),
+      z
+        .object({
+          kind: z.literal('start'),
+          file: localPath,
+          revision: z.string().max(100),
+          bindings: z.record(z.string().max(100), localPath),
+          context: contextSchema,
+        })
+        .strict(),
+      z.object({ kind: z.literal('resume'), id: z.uuid() }).strict(),
+      z.object({ kind: z.literal('cancel'), id: z.uuid() }).strict(),
+      z.object({ kind: z.literal('remove'), id: z.uuid() }).strict(),
+    ]),
+  ]),
+  querySnapshot: z.tuple([indexedQuerySchema]),
+  compare: z.tuple([
+    z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('run'),
+          id: z.uuid(),
+          left: localPath,
+          right: localPath,
+          hashes: z.boolean(),
+        })
+        .strict(),
+      z.object({ kind: z.literal('cancel'), id: z.uuid() }).strict(),
+    ]),
+  ]),
+  operationPlan: z.tuple([operationPlanRequestSchema]),
+  checkpoints: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('list') }).strict(),
+      z
+        .object({ kind: z.literal('estimate'), paths: z.array(localPath).min(1).max(2000) })
+        .strict(),
+      z.object({ kind: z.literal('remove'), id: z.uuid() }).strict(),
+      z.object({ kind: z.literal('restore'), id: z.uuid(), destination: localPath }).strict(),
+    ]),
+  ]),
+  inspect: z.tuple([localPath, z.boolean().optional(), z.boolean().optional()]),
+  project: z.tuple([
+    z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('choose'),
+          mode: z.enum(['open', 'create']),
+          defaultPath: localPath.optional(),
+        })
+        .strict(),
+      z.object({ kind: z.literal('read'), file: localPath }).strict(),
+      z
+        .object({
+          kind: z.literal('save'),
+          file: localPath,
+          revision: z.string().max(200),
+          definition: projectDefinitionSchema,
+        })
+        .strict(),
+    ]),
+  ]),
   commandsPublish: z.tuple([
     targetSchema,
     z
@@ -136,11 +275,31 @@ const schemas = {
   agentReviewList: z.tuple([]),
   agentReview: z.tuple([id, z.boolean()]),
   agentGrants: z.tuple([]),
+  agentClients: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('list') }).strict(),
+      z.object({ kind: z.literal('create'), client: agentClientInputSchema }).strict(),
+      z
+        .object({
+          kind: z.literal('update'),
+          id: z.uuid(),
+          revision: z.number().int().positive(),
+          client: agentClientInputSchema,
+        })
+        .strict(),
+      z
+        .object({ kind: z.literal('revoke'), id: z.uuid(), revision: z.number().int().positive() })
+        .strict(),
+    ]),
+  ]),
+  agentAudit: z.tuple([id.optional()]),
+  agentStop: z.tuple([id]),
   agentGrant: z.tuple([
     id,
     localPath,
     z.enum(['execute', 'terminal-read', 'terminal-write']),
     z.boolean(),
+    id.optional(),
   ]),
   configOpen: z.tuple([]),
   configValidate: z.tuple([]),
@@ -223,17 +382,7 @@ const schemas = {
   providerPermissionGet: z.tuple([id]),
   providerPermissionSet: z.tuple([id, z.url().max(4000), z.enum(modelDataLevels).nullable()]),
   indexStatus: z.tuple([]),
-  indexedQuery: z.tuple([
-    z.object({
-      query: z.string().max(300),
-      root: localPath.optional(),
-      offset: z.number().int().min(0).max(1000000).optional(),
-      limit: z.number().int().min(1).max(500).optional(),
-      showHidden: z.boolean().optional(),
-      content: z.boolean().optional(),
-      recursive: z.boolean().optional(),
-    }),
-  ]),
+  indexedQuery: z.tuple([indexedQuerySchema]),
   indexRebuild: z.tuple([]),
   actionStart: z.tuple([
     z.object({
@@ -248,6 +397,11 @@ const schemas = {
           find: z.string().max(1000).optional(),
           replace: z.string().max(1000).optional(),
           start: z.number().int().min(0).optional(),
+          padding: z.number().int().min(0).max(12).optional(),
+          case: z.enum(['keep', 'lower', 'upper', 'title']).optional(),
+          regex: z.boolean().optional(),
+          ignoreCase: z.boolean().optional(),
+          metadata: z.boolean().optional(),
         })
         .optional(),
     }),
@@ -261,6 +415,7 @@ const schemas = {
     z.object({
       id,
       revision: z.number().int().min(0),
+      checkpoint: z.boolean().optional(),
       rows: z.array(z.object({ id, destination: localPath, approved: z.boolean() })).max(4000),
     }),
   ]),
@@ -307,6 +462,10 @@ const schemas = {
       sources: z.array(localPath).max(10000),
       destination: localPath.optional(),
       name: z.string().max(255).optional(),
+      expectedSources: z
+        .array(z.object({ path: localPath, version: sourceVersionSchema }).strict())
+        .max(10000)
+        .optional(),
     }),
   ]),
   jobs: z.tuple([]),
@@ -344,6 +503,13 @@ export class Desktop {
   readonly resources: Resources;
   readonly fileAccess: FileAccess;
   readonly information: FileInformationService;
+  readonly projects: Projects;
+  readonly checkpoints: Checkpoints;
+  readonly comparisons: Comparisons;
+  readonly operationPlans: OperationPlans;
+  readonly workflows: Workflows;
+  readonly watchRules: WatchRules;
+  readonly relationships: Relationships;
   readonly operations: Operations;
   readonly watchers: Watchers;
   readonly search: Search;
@@ -405,6 +571,15 @@ export class Desktop {
         : undefined,
     );
     const access = (files: readonly string[]) => this.fileAccess.require(files);
+    this.projects = new Projects(access);
+    this.comparisons = new Comparisons(access);
+    this.checkpoints = new Checkpoints(
+      path.join(dataPath, 'checkpoints'),
+      access,
+      () => this.settings.snapshot().settings.checkpoints.budgetBytes,
+      fileCoordination,
+      () => this.operations.all(),
+    );
     this.information = new FileInformationService(access, (file) => {
       emit({ type: 'folder-changed', path: path.dirname(file) });
       void this.files.update(file).catch(() => {});
@@ -493,7 +668,7 @@ export class Desktop {
       (task) => emit({ type: 'folder-size', task }),
       { backend: process.mas ? 'thread' : options.fileBackend, access },
     );
-    const changed = (changes: import('../domain/changes').FileChange[]) => {
+    const changed = (changes: FileChange[]) => {
       emit({ type: 'file-changes', changes });
       void this.settings.remapFolders(changes).catch(() => this.settings.announce());
       for (const change of changes) {
@@ -514,6 +689,7 @@ export class Desktop {
       dataPath,
       (receipt, work) => this.fileAccess.withReceipt(receipt, work),
     );
+    this.operationPlans = new OperationPlans(dataPath, this.operations, this.checkpoints, access);
     this.actions = new ActionPlanner(dataPath, {
       access,
       recipes: () => this.settings.snapshot().settings.recipes,
@@ -521,8 +697,45 @@ export class Desktop {
       extract: (file, signal) => this.files.extract(file, signal),
       generate: (...args) => this.providers.generate(...args),
       operations: this.operations,
+      rename: (input, signal) =>
+        boundedRename(
+          path.join(path.dirname(options.worker), 'rename-worker.cjs'),
+          input,
+          signal,
+          options.fileBackend,
+        ),
+      snapshot: async (title, sources, signal) =>
+        (await this.checkpoints.create(title, sources, signal)).id,
       emit: (plan) => emit({ type: 'action', plan }),
       changed,
+    });
+    this.workflows = new Workflows(dataPath, {
+      access,
+      files: this.files,
+      comparisons: this.comparisons,
+      plans: this.operationPlans,
+      operations: this.operations,
+      actions: this.actions,
+      authorizeRun: (run) => this.watchRules.authorize(run),
+      recipeForRun: (run, id) => this.watchRules.recipeForRun(run, id),
+    });
+    this.watchRules = new WatchRules(dataPath, {
+      access,
+      workflows: this.workflows,
+      recipes: () => this.settings.snapshot().settings.recipes,
+      changed: (rule) => emit({ type: 'watch-rule', rule }),
+    });
+    this.relationships = new Relationships(dataPath, {
+      access,
+      operations: async () => {
+        await this.operations.load();
+        return this.operations.observedLinks();
+      },
+      recipes: () => this.actions.all(),
+      workflows: async () => {
+        const runs = await this.workflows.request({ kind: 'list' });
+        return Array.isArray(runs) ? runs : [];
+      },
     });
     this.agentRequests = new AgentRequests(
       dataPath,
@@ -544,6 +757,16 @@ export class Desktop {
         await this.agents.authorizeNavigation(request, target);
         await this.sendAgentCommand('workspace-navigation', target, request);
       },
+      {
+        actor: () => this.agents.clients.actor(),
+        check: (proposal) => this.agents.authorizeProposal(proposal),
+        run: (clientID, work) => this.agents.clients.context.run(clientID, work),
+        executeAllowed: async () => {
+          const client = await this.agents.clients.get();
+          return !client || client.capabilities.includes('execute');
+        },
+        cancelExecution: (id) => this.executions.cancel(id),
+      },
     );
     this.agents = new AgentBroker(
       dataPath,
@@ -557,6 +780,12 @@ export class Desktop {
         config: this.settings,
         access,
         workspaceState: async () => this.workspaceCatalog,
+        relationships: async (file, content) => {
+          const result = await this.relationships.request({ kind: 'read', file, content });
+          if (!result || !('relations' in result))
+            throw new Error('The relationship result is unavailable.');
+          return result;
+        },
       },
     );
     this.watchers = new Watchers(emit);
@@ -582,6 +811,9 @@ export class Desktop {
             'configTransfer',
             'terminalApplication',
             'agentGrants',
+            'agentClients',
+            'agentAudit',
+            'agentStop',
             'agentGrant',
             'settingsGet',
             'settingsPatch',
@@ -602,7 +834,15 @@ export class Desktop {
             throw new Error('This API is unavailable in Settings.');
           if (
             role !== 'settings' &&
-            ['providerCredential', 'agentToken', 'agentGrant', 'fileAccessRevoke'].includes(name)
+            [
+              'providerCredential',
+              'agentToken',
+              'agentClients',
+              'agentAudit',
+              'agentStop',
+              'agentGrant',
+              'fileAccessRevoke',
+            ].includes(name)
           )
             throw new Error('Manage credentials in Settings.');
           return {
@@ -619,9 +859,7 @@ export class Desktop {
       },
     );
   }
-  private async configureIndex(
-    config: import('../domain/services').ApplicationSettings['search'],
-  ): Promise<void> {
+  private async configureIndex(config: ApplicationSettings['search']): Promise<void> {
     const key = JSON.stringify(config);
     if (key === this.indexConfiguration) return;
     this.indexConfiguration = key;
@@ -732,6 +970,9 @@ export class Desktop {
     if (process.platform === 'darwin') macFiles().dismissFilePanels();
     this.settings.close();
     this.resources.clear();
+    this.comparisons.close();
+    await this.watchRules.close();
+    await this.workflows.close();
     // Cancel the read-only worker before waiting for planners that may be
     // awaiting extraction. File mutations still drain through their journal.
     const results = await Promise.allSettled([
@@ -748,6 +989,10 @@ export class Desktop {
       this.resources.close(),
       this.thumbnails.close(),
       this.information.close(),
+      this.projects.flush(),
+      this.checkpoints.close(),
+      this.operationPlans.close(),
+      this.relationships.close(),
       fileCoordination.quiesce(),
     ]);
     await this.fileAccess.close();
@@ -788,6 +1033,44 @@ export class Desktop {
   }
   private async invoke(method: ApiMethod, args: unknown[], senderID?: number): Promise<unknown> {
     switch (method) {
+      case 'compare': {
+        const request = args[0] as ComparisonRequest;
+        if (request.kind === 'cancel') {
+          this.comparisons.cancel(request.id);
+          return null;
+        }
+        return this.comparisons.run(request.id, request.left, request.right, request.hashes);
+      }
+      case 'operationPlan':
+        return this.operationPlans.request(args[0] as OperationPlanRequest);
+      case 'checkpoints': {
+        const request = args[0] as CheckpointRequest;
+        if (request.kind === 'list') return this.checkpoints.list();
+        if (request.kind === 'estimate') return this.checkpoints.estimate(request.paths);
+        if (request.kind === 'remove') {
+          await this.checkpoints.remove(request.id);
+          return null;
+        }
+        return this.checkpoints.restore(request.id, request.destination, this.operations);
+      }
+      case 'inspect':
+        return this.files.inspect(args[0] as string, args[1] as boolean, args[2] as boolean);
+      case 'project': {
+        const request = args[0] as ProjectRequest;
+        if (request.kind === 'read') return this.projects.read(request.file);
+        if (request.kind === 'save')
+          return this.projects.save(request.file, request.revision, request.definition);
+        const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
+          title: request.mode === 'open' ? 'Open Project Folder' : 'Create Project in Folder',
+          buttonLabel: request.mode === 'open' ? 'Open Project' : 'Choose Folder',
+          properties: ['openDirectory'],
+          defaultPath: request.defaultPath,
+          securityScopedBookmarks: this.fileAccess.scoped,
+        });
+        if (result.canceled || !result.filePaths[0]) return null;
+        await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
+        return path.join(result.filePaths[0], 'viewer.project.jsonc');
+      }
       case 'commandsPublish':
         this.commandCatalog = {
           target: args[0] as CapturedTarget,
@@ -808,12 +1091,50 @@ export class Desktop {
         return this.agentRequests.review(args[0] as string, args[1] as boolean);
       case 'agentGrants':
         return this.agentRequests.listGrants();
+      case 'agentClients': {
+        const request = args[0] as AgentClientRequest;
+        const reply = await this.agents.clientRequest(request);
+        if (request.kind === 'create') {
+          await this.agents.start();
+          const created = reply as {
+            client: AgentClient;
+            token: string;
+          };
+          return {
+            ...created,
+            configuration: JSON.stringify(
+              {
+                mcpServers: {
+                  viewer: {
+                    command: process.execPath,
+                    args: ['--mcp'],
+                    env: {
+                      VIEWER_AGENT_TOKEN: created.token,
+                      ...(process.env.VIEWER_DATA_DIRECTORY
+                        ? { VIEWER_DATA_DIRECTORY: process.env.VIEWER_DATA_DIRECTORY }
+                        : {}),
+                    },
+                  },
+                },
+              },
+              null,
+              2,
+            ),
+          };
+        }
+        return reply;
+      }
+      case 'agentAudit':
+        return this.agents.clients.history(args[0] as string | undefined);
+      case 'agentStop':
+        return this.agents.stop(args[0] as string);
       case 'agentGrant':
         return this.agentRequests.grant(
           args[0] as string,
           args[1] as string,
-          args[2] as import('../domain/agent-requests').ExecutionGrant['capability'],
+          args[2] as ExecutionGrant['capability'],
           args[3] as boolean,
+          args[4] as string | undefined,
         );
       case 'configOpen': {
         await this.settings.load();
@@ -856,10 +1177,7 @@ export class Desktop {
         await this.fileAccess.require([args[0] as string]);
         return this.externalTerminals.open(args[0] as string, args[1] as boolean);
       case 'terminalStart':
-        return this.terminals.start(
-          args[0] as import('../domain/automation').TerminalStart,
-          senderID!,
-        );
+        return this.terminals.start(args[0] as TerminalStart, senderID!);
       case 'terminalWrite':
         return this.terminals.write(args[0] as string, args[1] as string, senderID!);
       case 'terminalResize':
@@ -874,10 +1192,7 @@ export class Desktop {
       case 'terminalClose':
         return this.terminals.stop(args[0] as string, senderID!);
       case 'customExecute':
-        return this.executions.start(
-          args[0] as string,
-          args[1] as import('../domain/automation').CapturedTarget,
-        );
+        return this.executions.start(args[0] as string, args[1] as CapturedTarget);
       case 'executionList':
         return this.executions.list();
       case 'executionCancel':
@@ -904,6 +1219,7 @@ export class Desktop {
             this.resources.quiesce(root),
             this.thumbnails.quiesce(root),
             this.watchers.revoke(root),
+            this.watchRules.revoke(root),
             this.search.quiesce(),
             this.actions.quiesce(root),
             this.operations.quiesce(root),
@@ -985,15 +1301,46 @@ export class Desktop {
           throw new Error(
             'The provider endpoint changed. Review its new address before allowing data access.',
           );
-        await this.modelPermissions.set(
-          provider,
-          args[2] as import('../domain/model-permissions').ModelDataLevel | null,
-        );
+        await this.modelPermissions.set(provider, args[2] as ModelDataLevel | null);
         this.emit({ type: 'model-permission', providerID: provider.id });
         return;
       }
       case 'indexedQuery':
         return this.files.query(args[0] as IndexedQuery);
+      case 'querySnapshot':
+        return this.files.snapshot(args[0] as IndexedQuery);
+      case 'watchRules':
+        return this.watchRules.request(args[0] as WatchRuleRequest);
+      case 'relationships':
+        return this.relationships.request(args[0] as RelationshipsRequest);
+      case 'workflow': {
+        const request = args[0] as WorkflowRequest;
+        if (request.kind !== 'choose')
+          return this.workflows.request(
+            request.kind === 'start'
+              ? { ...request, context: { ...request.context, actor: 'user', clientID: undefined } }
+              : request,
+          );
+        const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
+          title: request.mode === 'create' ? 'Create Workflow in Folder' : 'Open Workflow',
+          buttonLabel: request.mode === 'create' ? 'Choose Folder' : 'Open Workflow',
+          properties: request.mode === 'create' ? ['openDirectory'] : ['openFile'],
+          defaultPath: request.defaultPath,
+          securityScopedBookmarks: this.fileAccess.scoped,
+          ...(request.mode === 'open'
+            ? { filters: [{ name: 'Workflow JSONC', extensions: ['jsonc', 'json'] }] }
+            : {}),
+        });
+        if (result.canceled || !result.filePaths[0]) return null;
+        await this.fileAccess.remember(
+          result.filePaths[0],
+          request.mode === 'create',
+          result.bookmarks?.[0],
+        );
+        return request.mode === 'create'
+          ? path.join(result.filePaths[0], 'viewer.workflow.jsonc')
+          : result.filePaths[0];
+      }
       case 'indexStatus':
         return this.files.status();
       case 'indexRebuild':
@@ -1083,6 +1430,7 @@ export class Desktop {
           };
         void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
         await this.actions.load();
+        await this.watchRules.start();
         this.options.settingsChanged?.();
         await this.configureAgents(this.settings.snapshot().settings.agents.enabled);
         const paths = this.openPaths.splice(0);
@@ -1122,7 +1470,7 @@ export class Desktop {
         return this.information.update(
           args[0] as string,
           args[1] as string,
-          args[2] as import('../domain/file-information').FileInformationPatch,
+          args[2] as FileInformationPatch,
         );
       case 'chooseFolder': {
         const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
@@ -1196,9 +1544,7 @@ export class Desktop {
       case 'unwatch':
         return this.watchers.remove(args[0] as string);
       case 'search':
-        await this.fileAccess.require([
-          (args[0] as import('../domain/contracts').SearchRequest).root,
-        ]);
+        await this.fileAccess.require([(args[0] as SearchRequest).root]);
         return this.search.start(args[0] as Parameters<Search['start']>[0]);
       case 'cancelSearch':
         return this.search.cancel(args[0] as string);
@@ -1229,7 +1575,7 @@ export class Desktop {
         return this.resources.archiveEntry(args[0] as string, args[1] as string);
       case 'save':
         return this.storage.save({
-          ...(args[0] as import('../domain/contracts').SavedState),
+          ...(args[0] as SavedState),
           ui: this.settings.snapshot().ui,
           look: this.settings.snapshot().look,
           preferencesRevision: this.settings.snapshot().revision,
@@ -1335,7 +1681,7 @@ export class Desktop {
         return;
       }
       case 'textEdit': {
-        const command = args[0] as import('../domain/contracts').TextEditCommand;
+        const command = args[0] as TextEditCommand;
         this.windows.get(senderID!)!.window.webContents[command]();
         return;
       }

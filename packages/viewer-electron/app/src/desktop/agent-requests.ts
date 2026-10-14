@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { AgentNavigation, AgentProposal, ExecutionGrant } from '../domain/agent-requests';
-import type { CapturedTarget } from '../domain/automation';
+import type { CapturedTarget, ExecutionTask } from '../domain/automation';
 import type { SettingsPatch } from '../domain/services';
 import { DocumentStore } from './document-store';
 import type { SettingsService } from './settings';
@@ -31,12 +31,20 @@ export class AgentRequests {
       write(id: string, data: string): void;
     },
     private navigate?: (request: AgentNavigation, target: CapturedTarget) => Promise<void>,
+    private authority?: {
+      actor(): string;
+      check(proposal: AgentProposal): Promise<void>;
+      run<T>(clientID: string, work: () => Promise<T>): Promise<T>;
+      executeAllowed(): Promise<boolean>;
+      cancelExecution(id: string): void;
+    },
   ) {
     this.store = new DocumentStore(path.join(directory, 'execution-approvals-v1.json'), (value) =>
       z
         .array(
           z.object({
             id: z.string(),
+            clientID: z.string().optional().default('legacy'),
             actionID: z.string(),
             root: z.string(),
             fingerprint: z.string(),
@@ -68,6 +76,7 @@ export class AgentRequests {
     root: string,
     capability: ExecutionGrant['capability'],
     allow: boolean,
+    clientID = 'legacy',
   ): Promise<void> {
     const task = this.grantQueue
       .catch(() => {})
@@ -82,6 +91,7 @@ export class AgentRequests {
           (grant) =>
             !(
               grant.actionID === actionID &&
+              (grant.clientID ?? 'legacy') === clientID &&
               grant.root === root &&
               grant.capability === capability
             ),
@@ -96,6 +106,7 @@ export class AgentRequests {
             throw new Error('Choose an existing custom action.');
           next.push({
             id: randomUUID(),
+            clientID,
             actionID,
             root,
             capability,
@@ -118,6 +129,7 @@ export class AgentRequests {
     return this.grants.some(
       (grant) =>
         grant.capability === capability &&
+        (grant.clientID ?? 'legacy') === (this.authority?.actor() ?? 'legacy') &&
         grant.actionID === actionID &&
         within(root, grant.root) &&
         (capability !== 'execute' || grant.fingerprint === this.actionFingerprint(actionID)),
@@ -143,7 +155,13 @@ export class AgentRequests {
       if (!old) break;
       this.proposals.delete(old[0]);
     }
-    const value = { ...proposal, id: randomUUID(), status: 'review' as const, fingerprint: hash };
+    const value = {
+      ...proposal,
+      clientID: this.authority?.actor() ?? 'legacy',
+      id: randomUUID(),
+      status: 'review' as const,
+      fingerprint: hash,
+    };
     this.proposals.set(value.id, value);
     this.emit(value);
     return value;
@@ -155,6 +173,7 @@ export class AgentRequests {
   ): Promise<{ id: string; requiresUserReview: boolean }> {
     if (
       commandID.startsWith('custom.') &&
+      (!this.authority || (await this.authority.executeAllowed())) &&
       (await this.allowed(commandID, target.directory, 'execute'))
     ) {
       const proposal = this.add(
@@ -263,7 +282,7 @@ export class AgentRequests {
     });
     return { id: proposal.id, requiresUserReview: true };
   }
-  execution(task: import('../domain/automation').ExecutionTask): void {
+  execution(task: ExecutionTask): void {
     if (task.status === 'running') return;
     for (const proposal of this.proposals.values())
       if (proposal.taskID === task.id) {
@@ -285,31 +304,56 @@ export class AgentRequests {
     proposal.status = 'running';
     this.emit(proposal);
     try {
-      if (proposal.kind === 'configuration')
-        await this.settings.patch(proposal.patches!, proposal.revision!);
-      else if (proposal.kind === 'terminal-write')
-        this.terminal.write(proposal.terminalID!, proposal.data!);
-      else if (proposal.kind === 'navigation') {
-        if (!this.navigate) throw new Error('Workspace navigation is unavailable.');
-        await this.navigate(proposal.navigation!, proposal.target!);
-      } else {
-        if (
-          proposal.fingerprint &&
-          proposal.fingerprint !== this.actionFingerprint(proposal.commandID!)
-        )
-          throw new Error('Action configuration changed. Ask the agent for a new proposal.');
-        for (const file of proposal.target!.selection)
-          if ((await entry(file.path)).identity !== file.identity)
-            throw new Error('Selection changed. Ask the agent for a new proposal.');
-        const result = await this.execute(proposal.commandID!, proposal.target!);
-        if (result?.taskID) proposal.taskID = result.taskID;
-      }
-      proposal.status = proposal.taskID ? 'running' : 'completed';
+      await this.authority?.check(proposal);
+      const execute = async () => {
+        if (this.proposals.get(id)?.status !== 'running')
+          throw new Error('This agent task was stopped.');
+        if (proposal.kind === 'configuration')
+          await this.settings.patch(proposal.patches!, proposal.revision!);
+        else if (proposal.kind === 'terminal-write')
+          this.terminal.write(proposal.terminalID!, proposal.data!);
+        else if (proposal.kind === 'navigation') {
+          if (!this.navigate) throw new Error('Workspace navigation is unavailable.');
+          await this.navigate(proposal.navigation!, proposal.target!);
+        } else {
+          if (
+            proposal.fingerprint &&
+            proposal.fingerprint !== this.actionFingerprint(proposal.commandID!)
+          )
+            throw new Error('Action configuration changed. Ask the agent for a new proposal.');
+          for (const file of proposal.target!.selection)
+            if ((await entry(file.path)).identity !== file.identity)
+              throw new Error('Selection changed. Ask the agent for a new proposal.');
+          await this.authority?.check(proposal);
+          if (this.proposals.get(id)?.status !== 'running')
+            throw new Error('This agent task was stopped.');
+          const result = await this.execute(proposal.commandID!, proposal.target!);
+          if (result?.taskID) proposal.taskID = result.taskID;
+          if (this.proposals.get(id)?.status === 'cancelled' && proposal.taskID)
+            this.authority?.cancelExecution(proposal.taskID);
+        }
+      };
+      if (this.authority) await this.authority.run(proposal.clientID ?? 'legacy', execute);
+      else await execute();
+      if (this.proposals.get(id)?.status !== 'cancelled')
+        proposal.status = proposal.taskID ? 'running' : 'completed';
     } catch (error) {
-      proposal.status = 'failed';
+      if (this.proposals.get(id)?.status !== 'cancelled') proposal.status = 'failed';
       proposal.error = error instanceof Error ? error.message : String(error);
       throw error;
     } finally {
+      this.emit(proposal);
+    }
+  }
+  stop(clientID: string): void {
+    for (const proposal of this.proposals.values()) {
+      if (
+        (proposal.clientID ?? 'legacy') !== clientID ||
+        !['review', 'running'].includes(proposal.status)
+      )
+        continue;
+      if (proposal.taskID) this.authority?.cancelExecution(proposal.taskID);
+      proposal.status = 'cancelled';
       this.emit(proposal);
     }
   }

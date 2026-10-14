@@ -27,7 +27,8 @@ export const plainText = (html: string) =>
   )
     .replace(/[\t ]+/g, ' ')
     .trim();
-async function bytes(file: string, limit: number): Promise<Uint8Array> {
+/** Caller must hold a read coordination claim for this file. */
+export async function documentBytes(file: string, limit: number): Promise<Uint8Array> {
   const handle = await open(
     fileCoordination.path(file),
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
@@ -75,7 +76,10 @@ async function extractCoordinated(
     text: '',
     truncated: false,
   };
-  if (extension === '.pdf') {
+  if (extension === '.docx' || extension === '.xlsx') {
+    const { extractOffice } = await import('./office');
+    return extractOffice(file, options.signal);
+  } else if (extension === '.pdf') {
     const [pdf, worker] = await Promise.all([
       import('pdfjs-dist/legacy/build/pdf.mjs'),
       import('pdfjs-dist/legacy/build/pdf.worker.mjs'),
@@ -97,7 +101,7 @@ async function extractCoordinated(
       pdfRoot = path.join(directory, '../renderer/main_window/pdfjs');
     }
     const parameters = {
-      data: await bytes(file, 64000000),
+      data: await documentBytes(file, 64000000),
       isEvalSupported: false,
       useSystemFonts: true,
       disableFontFace: true,
@@ -120,6 +124,7 @@ async function extractCoordinated(
           result.evidence.push({ source: 'metadata:' + key.toLowerCase(), text: value });
         }
       const pages = Math.min(document.numPages, options.pages ?? 16, 64);
+      result.metadata.pages = String(document.numPages);
       result.truncated = pages < document.numPages;
       for (let i = 1; i <= pages; i++) {
         options.signal?.throwIfAborted();
@@ -127,7 +132,13 @@ async function extractCoordinated(
         const text = (await page.getTextContent()).items
           .map((item) => ('str' in item ? item.str : ''))
           .join(' ');
-        if (text.trim()) result.evidence.push({ source: 'page ' + i, text: text.slice(0, 20000) });
+        if (text.trim())
+          result.evidence.push({
+            source: 'page ' + i,
+            text: text.slice(0, 20000),
+            anchor: { kind: 'pdf', page: i },
+          });
+        if (text.length > 20000) result.truncated = true;
         page.cleanup();
       }
       if (
@@ -138,7 +149,7 @@ async function extractCoordinated(
       ) {
         // A subprocess does not inherit folder grants acquired later through
         // PowerBox. Read in the authorized process and send bounded PDF bytes.
-        const input = await bytes(file, 64000000);
+        const input = await documentBytes(file, 64000000);
         const pending = run(options.ocr, ['-', String(pages)], {
           timeout: 90000,
           maxBuffer: 2000000,
@@ -159,6 +170,7 @@ async function extractCoordinated(
               result.evidence.push({
                 source: 'OCR page ' + record.page,
                 text: record.text.slice(0, 20000),
+                anchor: { kind: 'pdf', page: record.page },
               });
       }
     } finally {
@@ -236,9 +248,13 @@ async function extractCoordinated(
         return [{ title, html: html.slice(0, 400000) }];
       });
     result.chapters = chapters;
+    let chapter = 0;
+    for (const evidence of result.evidence)
+      if (evidence.source.startsWith('chapter:'))
+        evidence.anchor = { kind: 'epub', chapter: chapter++ };
     result.truncated = chapters.length >= 300;
   } else {
-    const data = await bytes(file, 4000000);
+    const data = await documentBytes(file, 4000000);
     if (data.subarray(0, 8192).includes(0)) throw new Error('This format has no text extractor.');
     const text = new TextDecoder().decode(data);
     result.evidence.push({ source: 'text', text: text.slice(0, 150000) });
