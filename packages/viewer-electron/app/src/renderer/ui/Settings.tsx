@@ -26,6 +26,7 @@ import { normalizePreferences } from '../../domain/preferences';
 import { Icon, type IconName } from './Icon';
 import { IconButton, Loading } from './primitives';
 const toolbarIcons: Record<string, IconName> = {
+  parent: 'parent-plane',
   sidebar: 'sidebar',
   back: 'left',
   forward: 'right',

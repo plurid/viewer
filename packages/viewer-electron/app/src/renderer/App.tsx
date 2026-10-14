@@ -63,6 +63,7 @@ import { Sidebar } from './ui/Sidebar';
 import { ContextMenu } from './ui/ContextMenu';
 import { OpenWithDialog } from './ui/OpenWithDialog';
 import { Volumes } from './ui/Volumes';
+import { Trash } from './ui/Trash';
 import { openWorkspacePath } from './workspace/open-path';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 
@@ -80,6 +81,12 @@ export function App() {
 function AppWindow() {
   const registry = useCommands();
   const [volumesOpen, setVolumesOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setTrashOpen(true);
+    window.addEventListener('viewer:trash', open);
+    return () => window.removeEventListener('viewer:trash', open);
+  }, []);
   useEffect(() => {
     const open = () => setVolumesOpen(true);
     window.addEventListener('viewer:volumes', open);
@@ -680,6 +687,7 @@ function AppWindow() {
           </div>
         )}
         {quick && <QuickPreview session={quick} />}
+        {trashOpen && <Trash onClose={() => setTrashOpen(false)} />}
         {volumesOpen && (
           <Volumes
             onClose={() => setVolumesOpen(false)}

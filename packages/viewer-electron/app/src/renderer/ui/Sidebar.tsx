@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent } from 'react';
 import type { SidebarSection } from '../../domain/contracts';
+import { trashLocation } from '../../domain/trash';
 import { reorder } from '../../domain/preferences';
 import {
   activeWorkspace,
@@ -216,15 +217,20 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                     key={item.path}
                     className={`location ${current === item.path ? 'selected' : ''} ${drop === item.path ? 'sidebar-drop' : ''}`}
                     title={item.path}
-                    draggable
+                    draggable={item.path !== trashLocation}
                     onDragStart={(event) => drag(event, section, item.path)}
                     onDragEnd={() => setDrop('')}
-                    onContextMenu={(event) =>
+                    onContextMenu={(event) => {
+                      if (item.path === trashLocation) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        return;
+                      }
                       context(section, event, {
                         ...item,
                         name: sidebar.labels[item.path] || item.name,
-                      })
-                    }
+                      });
+                    }}
                     onDragOver={(event) => {
                       if (
                         !event.dataTransfer.types.includes(SIDEBAR_DRAG) &&
@@ -243,6 +249,10 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                       void finishDrop(event, section, item.path).catch(report);
                     }}
                     onClick={(event) => {
+                      if (item.path === trashLocation) {
+                        window.dispatchEvent(new Event('viewer:trash'));
+                        return;
+                      }
                       if (item.path === '/Volumes' && bootstrap.platform === 'darwin') {
                         window.dispatchEvent(new Event('viewer:volumes'));
                         return;
@@ -254,15 +264,19 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                   >
                     <Icon
                       name={
-                        section === 'recents'
-                          ? 'clock'
-                          : section === 'favorites'
-                            ? 'star'
-                            : item.path === bootstrap.home
-                              ? 'home'
-                              : item.name === 'Volumes' || item.name === 'Computer'
-                                ? 'disk'
-                                : 'folder'
+                        item.path === trashLocation
+                          ? 'trash'
+                          : item.name === 'Applications'
+                            ? 'grid'
+                            : section === 'recents'
+                              ? 'clock'
+                              : section === 'favorites'
+                                ? 'star'
+                                : item.path === bootstrap.home
+                                  ? 'home'
+                                  : item.name === 'Volumes' || item.name === 'Computer'
+                                    ? 'disk'
+                                    : 'folder'
                       }
                       size={16}
                     />

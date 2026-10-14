@@ -1,4 +1,5 @@
 import type { CustomAction } from './automation';
+import { forbiddenTrashCommands } from './trash';
 
 export const agentRemovalPolicy = Object.freeze({
   requiresUserApproval: true,
@@ -28,6 +29,8 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
   }
   if (terminalCommands.has(command))
     throw new Error('Agent terminal execution is unavailable because it can bypass Trash.');
+  if (forbiddenTrashCommands.has(command))
+    throw new Error('Emptying Trash is available only through the native user interface.');
   if (externalCommands.has(command))
     throw new Error(
       'Agents cannot launch external applications that can bypass Trash. Open a Viewer preview instead.',
@@ -36,5 +39,7 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
     throw new Error(
       'Agent file Undo can remove outputs outside the captured selection. Review it yourself in Recent file operations.',
     );
+  if (command === 'parent-plane' || command === 'view-open-plane')
+    throw new Error('Use propose_focus_plane for an explicitly authorized destination plane.');
   return command;
 }

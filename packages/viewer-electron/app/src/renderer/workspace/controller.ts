@@ -4,7 +4,7 @@ import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid
 import { PLURID_PUBSUB_TOPIC, type TreePlane } from '@plurid/plurid-data';
 import type { FileEntry } from '../../domain/contracts';
 import { sameSourceVersion, sourceVersion, type EvidenceNavigation } from '../../domain/inspection';
-import { matchingPane } from '../../domain/planes';
+import { matchingPane, normalizedPanePath } from '../../domain/planes';
 import {
   activeWorkspace,
   addPane,
@@ -23,7 +23,7 @@ import {
 } from '../state/store';
 import { rootOwners } from './sessions';
 import { repeatedPreviews } from './recovery';
-import { flattenTree, hostID } from './tree';
+import { flattenTree, hostID, parentPaneID, linkedPaneID } from './tree';
 import { frameWorkspace } from './framing';
 import type { WorkspaceController } from './context';
 import { openWorkspacePath } from './open-path';
@@ -40,6 +40,44 @@ export function useWorkspaceController({
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
+      subscribeLinks: (listener) => engine.current?.store.subscribe(listener) ?? (() => {}),
+      parentPaneID: (id) =>
+        engine.current ? parentPaneID(engine.current.tree.get(), id) : undefined,
+      linkedPaneID: (id, entry) =>
+        engine.current
+          ? linkedPaneID(
+              engine.current.tree.get(),
+              activeWorkspace(),
+              id,
+              entry,
+              getState().bootstrap.platform,
+            )
+          : undefined,
+      existingPaneID(id, entry) {
+        const direct = controller.linkedPaneID(id, entry);
+        if (direct) return direct;
+        const nodes = new Set(
+          engine.current ? flattenTree(engine.current.tree.get()).map(hostID) : [],
+        );
+        const path = normalizedPanePath(entry.path, getState().bootstrap.platform);
+        const matches = activeWorkspace().panes.filter(
+          (pane) =>
+            nodes.has(pane.id) &&
+            pane.type === (entry.directory ? 'folder' : 'preview') &&
+            normalizedPanePath(pane.path, getState().bootstrap.platform) === path,
+        );
+        const owners = engine.current
+          ? rootOwners(
+              engine.current.tree.get(),
+              hostID,
+              activeWorkspace().roots,
+              new Map<string, string>(),
+            )
+          : new Map<string, string>();
+        return (
+          matches.find((pane) => owners.get(pane.id) === owners.get(id))?.id ?? matches.at(-1)?.id
+        );
+      },
       async openEvidence(evidence, parentPaneID) {
         const origin = activeWorkspace().id;
         const entry = await window.viewer.stat(evidence.path);

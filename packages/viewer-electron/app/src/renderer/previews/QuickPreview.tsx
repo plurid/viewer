@@ -41,7 +41,15 @@ export const QuickPreview = memo(function QuickPreview({
                   paneID: session.paneID,
                   linked: true,
                 })
-                .then(() => quickPreview(null))
+                .then(() => {
+                  const opened = getState().activePane;
+                  quickPreview(null);
+                  // Closing a native <dialog> restores focus to its source row.
+                  // Focus the destination after that restoration has completed.
+                  requestAnimationFrame(() => {
+                    if (opened) workspace.focusPane(opened);
+                  });
+                })
                 .catch(report);
             }}
           >

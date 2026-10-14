@@ -659,6 +659,33 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.linked-plane-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  color: var(--accent);
+}
+.file-linked-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.file-linked-label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gallery-item-container > .linked-plane-marker {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--surface);
+}
 .file-table {
   position: relative;
   flex: 1;
@@ -1601,6 +1628,179 @@ select {
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+.model-shading-panel {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 12px;
+  width: 270px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: var(--shadow);
+  scrollbar-gutter: stable;
+}
+.model-shading-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.model-shading-fields {
+  display: grid;
+  gap: 12px;
+}
+.model-shading-fields label {
+  display: grid;
+  gap: 6px;
+}
+.model-shading-fields select {
+  width: 100%;
+}
+.model-brightness > span {
+  display: flex;
+  justify-content: space-between;
+}
+.model-brightness output {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.model-shading-fields input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.model-shading-fields .model-shading-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.model-shading-fields p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.trash-dialog {
+  width: min(940px, 94vw);
+  height: min(680px, 88vh);
+  display: flex;
+  flex-direction: column;
+}
+.trash-dialog > header {
+  flex: none;
+}
+.trash-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.trash-body > .empty-state {
+  flex: 1;
+}
+.trash-message {
+  margin: 16px 20px;
+}
+.trash-access {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.trash-access > div {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.trash-access > div + div {
+  margin-top: 12px;
+}
+.trash-access > div > div {
+  flex: 1;
+  min-width: 0;
+}
+.trash-access p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.trash-access button {
+  flex: none;
+}
+.trash-inventory {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100px;
+  overflow: auto;
+}
+.trash-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.trash-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 3fr) minmax(100px, 1fr) 80px;
+  align-items: center;
+  gap: 20px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+  min-width: 480px;
+}
+.trash-inventory.with-origins .trash-row {
+  grid-template-columns: minmax(200px, 2fr) minmax(150px, 2fr) minmax(100px, 1fr) 80px;
+  min-width: 630px;
+}
+.trash-row > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.trash-row > span:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.trash-filename {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.trash-filename > svg {
+  flex: none;
+  color: var(--muted);
+}
+.trash-filename > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trash-heading {
+  height: 42px;
+  flex: none;
+  color: var(--muted);
+  background: var(--raised);
+  font-size: 12px;
+}
+.trash-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+.trash-footer > span {
+  margin-right: auto;
+}
+.trash-footer > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .preview-overlay {
   position: absolute;

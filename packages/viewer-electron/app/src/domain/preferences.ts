@@ -117,6 +117,7 @@ export function normalizePreferences(value?: unknown): UIPreferences {
         ? (space.opening as UIPreferences['space']['opening'])
         : 'face-on',
       headerControls: {
+        parent: boolean(controls.parent, true),
         sidebar: boolean(controls.sidebar, true),
         back: boolean(controls.back, true),
         forward: boolean(controls.forward, true),

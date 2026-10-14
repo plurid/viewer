@@ -38,6 +38,7 @@ export const preferencesSchema = z
         opening: z.enum(['face-on', 'pair', 'dock']),
         headerControls: z
           .object({
+            parent: boolean.default(true),
             sidebar: boolean,
             back: boolean,
             forward: boolean,

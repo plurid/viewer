@@ -236,6 +236,7 @@ export const settingCatalog: SettingDefinition[] = [
   })),
   ...(
     [
+      ['parent', 'Back to parent button'],
       ['sidebar', 'Navigation button'],
       ['back', 'Back button'],
       ['forward', 'Forward button'],

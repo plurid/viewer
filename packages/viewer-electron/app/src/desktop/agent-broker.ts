@@ -498,7 +498,16 @@ export class AgentBroker {
       const trash =
         within(actual, path.join(os.homedir(), '.Trash')) ||
         within(actual, path.join(os.homedir(), '.local/share/Trash')) ||
-        actual.split(path.sep).some((part) => ['.Trashes', '$Recycle.Bin'].includes(part));
+        (process.platform === 'linux' &&
+          process.env.XDG_DATA_HOME &&
+          path.isAbsolute(process.env.XDG_DATA_HOME) &&
+          within(actual, path.join(process.env.XDG_DATA_HOME, 'Trash'))) ||
+        actual
+          .split(path.sep)
+          .some(
+            (part) =>
+              ['.Trash', '.Trashes', '$Recycle.Bin'].includes(part) || /^\.Trash-\d+$/.test(part),
+          );
       if (
         trash ||
         actual === path.parse(actual).root ||

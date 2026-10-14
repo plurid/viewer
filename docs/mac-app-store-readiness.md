@@ -23,6 +23,17 @@ Assessed October 13, 2026, for Viewer 0.1.0, Apple Silicon, macOS 13 or later. *
 
 ## Remaining release gates
 
+The October 14 sidebar Trash, model shading and linked-navigation extension is
+checked in a separate local direct bundle; it does not qualify the earlier Store
+candidate. Before including it in a release, verify genuine picker-backed access
+to the user's system Trash under the signed sandbox and physical native menu /
+Cancel behavior. Actual permanent emptying requires a separately reviewed,
+disposable selection and human confirmation; agents must not approve it. Current
+read-only testing records macOS privacy denial and disables emptying. The native
+guard tests replace removal with no-ops. Windows/Linux adapters are outside this
+macOS acceptance and remain unqualified. See [Trash and Applications](trash.md)
+and the [current verification evidence](verification.md#model-shading-linked-navigation-and-trash).
+
 | Area | Required work/evidence |
 | --- | --- |
 | Native file authorization | Actual Cancel/denial, two independent grants/sibling denial, cold ordinary bookmark restore and Settings-origin revocation/denial now pass on signed `2026101318`. Remaining: stale/moved repair, physical Settings interaction and revocation during ongoing work. Private Trash-receipt cold restore already has a signed automated check. |

@@ -24,6 +24,8 @@ For example, discover the workspace, switch to it, focus the appropriate folder,
 
 These are `tools/call` parameter examples, with placeholder paths and IDs. They do not supply an authentication token or bypass review. A file opened as a root has independent ownership; a linked preview retains its parent. Focus and current-folder navigation preserve docking through the existing controller.
 
+The user interface also offers Back to parent plane, source-row link markers and View open plane. Generic `parent-plane` and `view-open-plane` agent commands and their custom-action aliases are blocked: use `propose_focus_plane` with an explicitly granted destination instead. Trash browsing has no MCP tool. Empty Trash/Recycle Bin is never a command or API operation; its native menu selection and confirmation belong only to the user.
+
 Folder/root ownership and active column are checked again before applying a request. Selection checks all file identities before publishing any selection. Switching/focusing verifies the destination plane IDs, types and paths still match the reviewed snapshot. Removed or changed origins/destinations fail. Native access, canonical agent scope and Agents-enabled status are rechecked after review. Symbolic links cannot escape the granted roots. A partly visible workspace may appear in discovery, but switching to it requires every destination plane to be granted.
 
 Clients sharing a token share its folder scope. Per-client grants, unattended navigation grants and portable project definitions remain separate future features. See [actions.md](actions.md) for MCP setup, command/configuration proposals and terminal capabilities.

@@ -154,6 +154,7 @@ export function CollectionExplorer({ id }: { id: string }) {
     }),
   );
   const props: FileViewProps = {
+    paneID: id,
     entries,
     selection,
     selectionSet: set,

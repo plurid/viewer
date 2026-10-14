@@ -10,6 +10,10 @@ export interface WorkspaceController {
   restoreLayout(layout: ProjectLayout): void;
   newTerminal(target: CapturedTarget, profileID?: string): void;
   rootID(paneID: string): string | undefined;
+  parentPaneID(paneID: string): string | undefined;
+  linkedPaneID(paneID: string, entry: Pick<FileEntry, 'path' | 'directory'>): string | undefined;
+  existingPaneID(paneID: string, entry: Pick<FileEntry, 'path' | 'directory'>): string | undefined;
+  subscribeLinks(listener: () => void): () => void;
   newSearch(
     query: string,
     name: string,

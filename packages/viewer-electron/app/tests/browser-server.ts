@@ -4,7 +4,7 @@ import type { FileInformationPatch } from '../src/domain/file-information';
 import type { AgentClientRequest } from '../src/domain/agent-clients';
 import type { ReadableStream } from 'node:stream/web';
 import { createServer } from 'vite';
-import { rename, rm, mkdir } from 'node:fs/promises';
+import { rename, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { ServerResponse } from 'node:http';
@@ -249,6 +249,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
         platform: 'darwin',
         locations: [
           { name: 'Studio', path: fixture.files },
+          { name: 'Applications', path: path.join(fixture.files, 'Applications') },
+          { name: 'Trash', path: 'viewer://trash' },
           ...['Models', 'Documents', 'Images', 'Data', 'Source', 'Transfers'].map((name) => ({
             name: permissionScenario && name === 'Models' ? 'Volumes' : name,
             path: path.join(fixture.files, name),
@@ -346,6 +348,24 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return [];
     case 'providerPermissionGet':
       return null;
+    case 'trashList':
+      return {
+        revision: 'fixture-read-only',
+        truncated: false,
+        canEmpty: false,
+        locations: [{ id: 'home', name: 'Home', state: 'ready' }],
+        items: [
+          { id: 'trash-1', name: 'Project archive', directory: true, size: 0, location: 'Home' },
+          {
+            id: 'trash-2',
+            name: 'Assembly drawing.pdf',
+            directory: false,
+            size: 125000,
+            location: 'Home',
+          },
+          { id: 'trash-3', name: 'Notes.txt', directory: false, size: 3400, location: 'Home' },
+        ],
+      };
     case 'volumesList':
       return [
         {
@@ -535,7 +555,7 @@ async function close() {
   await Promise.all([watchers.close(), operations.close(), index.close(), settings.flush()]);
   for (const client of clients) client.end();
   await server.close();
-  await rm(fixture.root, { recursive: true, force: true });
+  console.log('Fixtures preserved:', fixture.root);
   process.exit(0);
 }
 process.on('SIGINT', () => {

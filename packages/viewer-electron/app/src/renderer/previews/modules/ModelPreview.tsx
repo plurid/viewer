@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -11,7 +11,15 @@ import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
 import { cadFormats } from '../../../domain/model-formats';
 import { importCad } from '../model/cad';
 import { printingScale } from '../model/printing';
-import { cadMaterial, modelLighting } from '../model/appearance';
+import {
+  cadMaterial,
+  modelLighting,
+  normalizeModelAppearance,
+  defaultModelAppearance,
+  type ModelAppearance,
+} from '../model/appearance';
+import { modelSurfaceAppearance } from '../model/surface-appearance';
+import { ShadingControls } from '../model/ShadingControls';
 import { pickModelSurface } from '../model/pick-surface';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
@@ -21,6 +29,7 @@ import { Empty, IconButton, Loading } from '../../ui/primitives';
 interface ModelSession {
   frame(): void;
   wireframe(value: boolean): void;
+  appearance(value: ModelAppearance): void;
   animate(index: number, playing: boolean): void;
   active(value: boolean, interactive: boolean): void;
   measure(value: boolean): void;
@@ -67,19 +76,36 @@ export default function ModelPreview(context: PreviewContext) {
     cadFormats.includes(resource.entry.extension) || resource.entry.extension === '3mf';
   const unit = physicalUnits ? 'mm' : assumedUnit;
   const [wire, setWire] = usePreviewState(context, 'model.wire', false);
+  const [savedAppearance, saveAppearance] = usePreviewState<unknown>(
+    context,
+    'model.appearance',
+    defaultModelAppearance,
+  );
+  const appearance = useMemo(() => normalizeModelAppearance(savedAppearance), [savedAppearance]);
+  const [shadingOpen, setShadingOpen] = useState(false);
+  const [hasDeformingMeshes, setHasDeformingMeshes] = useState(false);
+  const shadingID = useId();
+  const shadingButton = useRef<HTMLButtonElement>(null);
+  const closeShading = () => {
+    setShadingOpen(false);
+    shadingButton.current?.focus({ preventScroll: true });
+  };
   const [animations, setAnimations] = useState<string[]>([]);
   const [animation, setAnimation] = useState(0);
   const [playing, setPlaying] = useState(false);
   const visibility = useRef({ active, interactive });
   visibility.current = { active, interactive };
-  const playback = useRef({ wire, animation, playing, measure });
-  playback.current = { wire, animation, playing, measure };
+  const playback = useRef({ wire, animation, playing, measure, appearance });
+  playback.current = { wire, animation, playing, measure, appearance };
   useEffect(() => {
     session.current?.active(active, interactive);
   }, [active, interactive]);
   useEffect(() => {
     session.current?.wireframe(wire);
   }, [wire]);
+  useEffect(() => {
+    session.current?.appearance(appearance);
+  }, [appearance]);
   useEffect(() => {
     session.current?.animate(animation, playing);
   }, [animation, playing]);
@@ -103,6 +129,7 @@ export default function ModelPreview(context: PreviewContext) {
     }
     let disposed = false,
       object: THREE.Object3D | undefined,
+      surfaces: ReturnType<typeof modelSurfaceAppearance> | undefined,
       mixer: THREE.AnimationMixer | undefined,
       clips: THREE.AnimationClip[] = [];
     let frameRequest = 0,
@@ -142,7 +169,8 @@ export default function ModelPreview(context: PreviewContext) {
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = playback.current.appearance.exposure;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     element.append(renderer.domElement);
     renderer.domElement.setAttribute(
       'aria-label',
@@ -237,7 +265,15 @@ export default function ModelPreview(context: PreviewContext) {
     };
     renderer.domElement.addEventListener('pointerdown', down);
     renderer.domElement.addEventListener('pointerup', pick);
-    modelLighting(scene, camera);
+    const lighting = modelLighting(scene, camera);
+    const applyAppearance = (value: ModelAppearance, wireframe: boolean) => {
+      renderer.toneMappingExposure = value.exposure;
+      renderer.shadowMap.enabled = value.shadows && value.shading !== 'normals' && !wireframe;
+      lighting.apply(value.lighting, renderer.shadowMap.enabled);
+      surfaces?.apply(value, wireframe);
+      dirty = true;
+      schedule();
+    };
     let lastFrame = performance.now();
     function schedule() {
       if (!disposed && renderActive && !frameRequest) frameRequest = requestAnimationFrame(render);
@@ -254,6 +290,7 @@ export default function ModelPreview(context: PreviewContext) {
         dirty = true;
       }
       if (dirty || changed) {
+        lighting.update();
         renderer.render(scene, camera);
         dirty = false;
       }
@@ -262,6 +299,7 @@ export default function ModelPreview(context: PreviewContext) {
     function frame() {
       if (!object) return;
       const box = new THREE.Box3().setFromObject(object);
+      lighting.fit(box);
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       const extent = Math.max(size.x, size.y, size.z, 0.01);
@@ -425,6 +463,8 @@ export default function ModelPreview(context: PreviewContext) {
         for (const point of retained)
           addMeasurementPoint(new THREE.Vector3(...(point as [number, number, number])));
       scene.add(loaded);
+      surfaces = modelSurfaceAppearance(loaded);
+      setHasDeformingMeshes(surfaces.hasDeformingMeshes);
       setInfo(
         `${meshes.toLocaleString()} meshes · ${Math.round(triangles).toLocaleString()} triangles · ${vertices.toLocaleString()} vertices`,
       );
@@ -437,19 +477,8 @@ export default function ModelPreview(context: PreviewContext) {
           measuring = value;
           if (!value) clearMeasure();
         },
-        wireframe: (value) => {
-          loaded.traverse((child) => {
-            if (child instanceof THREE.Mesh)
-              for (const material of Array.isArray(child.material)
-                ? child.material
-                : [child.material]) {
-                if ('wireframe' in material)
-                  (material as THREE.MeshStandardMaterial).wireframe = value;
-              }
-          });
-          dirty = true;
-          schedule();
-        },
+        wireframe: (value) => applyAppearance(playback.current.appearance, value),
+        appearance: (value) => applyAppearance(value, playback.current.wire),
         animate: (index, playing) => {
           mixer?.stopAllAction();
           if (clips[index]) mixer?.clipAction(clips[index]).play();
@@ -501,6 +530,8 @@ export default function ModelPreview(context: PreviewContext) {
       cancelAnimationFrame(frameRequest);
       resize.disconnect();
       controls.dispose();
+      surfaces?.dispose();
+      lighting.dispose();
       disposeObject(markings);
       mixer?.stopAllAction();
       if (object) {
@@ -543,6 +574,13 @@ export default function ModelPreview(context: PreviewContext) {
           run: () => setWire((value) => !value),
         },
         {
+          id: 'model-shading',
+          label: shadingOpen ? 'Hide shading controls' : 'Model shading…',
+          aliases: ['lighting', 'clay', 'shadows', 'brightness'],
+          available: !loading && !error,
+          run: () => setShadingOpen((value) => !value),
+        },
+        {
           id: 'model-playback',
           label: playing ? 'Pause animation' : 'Play animation',
           available: animations.length > 0 && !error,
@@ -558,7 +596,7 @@ export default function ModelPreview(context: PreviewContext) {
           },
         })),
       ],
-      [loading, error, wire, playing, animations, measure],
+      [loading, error, wire, playing, animations, measure, shadingOpen],
     ),
   );
   return (
@@ -585,6 +623,16 @@ export default function ModelPreview(context: PreviewContext) {
           onClick={() => setWire(!wire)}
         >
           Wireframe
+        </button>
+        <button
+          ref={shadingButton}
+          className={shadingOpen ? 'selected' : ''}
+          aria-expanded={shadingOpen}
+          aria-controls={shadingID}
+          disabled={loading || !!error}
+          onClick={() => setShadingOpen((value) => !value)}
+        >
+          Shading
         </button>
         {animations.length > 0 && (
           <>
@@ -624,6 +672,15 @@ export default function ModelPreview(context: PreviewContext) {
         <span className="muted">{resource.entry.extension.toUpperCase()}</span>
       </PreviewToolbar>
       <div className="model-stage" ref={stage}>
+        {shadingOpen && !loading && !error && (
+          <ShadingControls
+            id={shadingID}
+            value={appearance}
+            change={saveAppearance}
+            close={closeShading}
+            hasDeformingMeshes={hasDeformingMeshes}
+          />
+        )}
         {loading && (
           <div className="preview-overlay">
             <Loading label="Loading model…" />

@@ -93,6 +93,7 @@ typography:
 rounded:
   control: '5px'
   tile: '6px'
+  stage-panel: '7px'
   menu: '8px'
   dialog: '10px'
 spacing:
@@ -213,6 +214,37 @@ components:
     textColor: '{colors.ink}'
     rounded: '{rounded.control}'
     padding: '7px 9px'
+  model-shading-panel:
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.ink}'
+    typography: '{typography.body}'
+    rounded: '{rounded.stage-panel}'
+    padding: '12px'
+    width: '270px'
+  linked-plane-marker:
+    backgroundColor: 'transparent'
+    textColor: '{colors.accent}'
+    rounded: '{rounded.control}'
+    padding: '4px'
+    size: '24px'
+  trash-inventory-dialog:
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.ink}'
+    typography: '{typography.body}'
+    rounded: '{rounded.dialog}'
+    width: 'min(940px, 94vw)'
+    height: 'min(680px, 88vh)'
+  trash-inventory-row:
+    textColor: '{colors.ink}'
+    typography: '{typography.body}'
+    padding: '0 20px'
+    height: '48px'
+  trash-inventory-heading:
+    backgroundColor: '{colors.raised}'
+    textColor: '{colors.muted}'
+    typography: '{typography.body-compact}'
+    padding: '0 20px'
+    height: '42px'
 ---
 
 # Design System: Viewer
@@ -239,6 +271,9 @@ The defining visual behavior is a titled file plane beside its folder, with a vi
 - Named client settings, checkpoints, comparison and collections extend the existing Settings, review and file-list patterns.
 - Workflow definitions, runs and receipts use native disclosures and the existing review, field and selected-metadata treatments.
 - Related-file records name their basis, while watch-rule approval keeps folder, file-type and local-content scope visible.
+- Model presentation uses compact Shading controls within the existing content stage.
+- Child headers and filename markers return to existing linked planes while retaining docked or spatial presentation.
+- Applications and virtual Trash reuse ordinary sidebar rows; Trash inventory keeps access status and its footer visible.
 
 Extracted from [renderer styles](packages/viewer-electron/app/src/renderer/styles.css), [engine looks](packages/viewer-electron/app/src/renderer/workspace/look.ts), [window chrome](packages/viewer-electron/app/src/renderer/App.tsx), [plane headers](packages/viewer-electron/app/src/renderer/workspace/PlaneHeader.tsx), [shared commands](packages/viewer-electron/app/src/renderer/commands/registry.ts), [sidebar](packages/viewer-electron/app/src/renderer/ui/Sidebar.tsx), [Settings](packages/viewer-electron/app/src/renderer/ui/Settings.tsx), and [file views](packages/viewer-electron/app/src/renderer/explorer/views.tsx). [PRODUCT.md](PRODUCT.md) is the confirmed authority for the incumbent family and desktop constraints.
 
@@ -251,6 +286,8 @@ The later additions follow [named agent clients](packages/viewer-electron/app/sr
 [Workflow controls](packages/viewer-electron/app/src/renderer/ui/Workflows.tsx), [workflow artifacts](packages/viewer-electron/app/src/renderer/ui/WorkflowArtifact.tsx) and the [project-file notice](packages/viewer-electron/app/src/renderer/workspace/projects.tsx) extend the same system. Their evidence includes [dark review waiting](packages/viewer-electron/app/out/workflow-acceptance/waiting-review.png), [light review waiting](packages/viewer-electron/app/out/workflow-acceptance/waiting-review-light.png), [light completion](packages/viewer-electron/app/out/workflow-acceptance/completed-light.png), the [dark editor](packages/viewer-electron/app/out/workflow-acceptance/editor-dark.png), the [light editor](packages/viewer-electron/app/out/workflow-acceptance/editor-light.png) and the [project change notice](packages/viewer-electron/app/out/project-acceptance/project-file-notice.png). Native pickers, long-content, error and compact states, and screen-reader runtime remain unverified for this extension.
 
 [Related files](packages/viewer-electron/app/src/renderer/ui/Relationships.tsx), its [map](packages/viewer-electron/app/src/renderer/ui/RelationshipMap.tsx) and [basis labels](packages/viewer-electron/app/src/renderer/ui/relationship-labels.ts), plus [watch rules](packages/viewer-electron/app/src/renderer/ui/WatchRules.tsx) within Workflows, retain this incumbent treatment. Their captured evidence is the [light relationship list](packages/viewer-electron/app/out/workflow-acceptance/relationships-list-light.png), [light map](packages/viewer-electron/app/out/workflow-acceptance/relationships-map-light.png), [dark watch approval](packages/viewer-electron/app/out/watch-rule-acceptance/approval-dark.png), [light watch approval](packages/viewer-electron/app/out/watch-rule-acceptance/approval-light.png) and [light watch review waiting](packages/viewer-electron/app/out/watch-rule-acceptance/waiting-review-light.png), all at 1440×940. Related files has no verified dark, compact, long-content or many-node render, or screen-reader runtime evidence. Watch scope was seeded through the real API for these captures; the native folder picker remains unverified.
+
+The model, linked-navigation and Trash extension is code-led within this existing world, without a replacement visual system. Sources are [Shading controls](packages/viewer-electron/app/src/renderer/previews/model/ShadingControls.tsx), [model appearance](packages/viewer-electron/app/src/renderer/previews/model/appearance.ts), [ModelPreview](packages/viewer-electron/app/src/renderer/previews/modules/ModelPreview.tsx), [linked markers](packages/viewer-electron/app/src/renderer/workspace/LinkedPlaneButton.tsx), [plane navigation](packages/viewer-electron/app/src/renderer/workspace/controller.ts), [Trash inventory](packages/viewer-electron/app/src/renderer/ui/Trash.tsx), the [desktop Trash service](packages/viewer-electron/app/src/desktop/trash.ts) and [native macOS menu/confirmation](packages/viewer-electron/app/tools/trash-ui.h). Current evidence comprises 14 [model/navigation captures](.impeccable/review/models-links-trash-v3/model-navigation-acceptance-MigAQR), four [fixture-based populated Trash renders](.impeccable/review/models-links-trash-v3/trash-ui-acceptance) and three [native read-only captures](.impeccable/review/models-links-trash-v3/trash-readonly-acceptance-qEwPUo). All 21 supplied captures were validated; the finish review returned ship with no material fixes. The earlier `trash-readonly-acceptance-dWr3Hd` evidence is superseded and preserved.
 
 ## Colors
 
@@ -312,6 +349,8 @@ Automatic planes follow the measured workspace: width is bounded from 380px to 9
 File lists use virtualized rows (36px comfortable, 30px compact), with a flexible name column and configurable metadata columns. Folder and search headers share their grid, insets and horizontal viewport with the rows. Name aligns with filename text after its icon; dates and kind align left, size right. Browsing Settings and header actions show or hide Modified, Created, Kind, Extension and Size; Name stays visible. Narrow planes scroll horizontally instead of hiding configured fields. Column dividers resize through projected pointer coordinates or keyboard steps; double-click restores the default width. Pointer movement updates grid variables without publishing preferences until release. Filenames retain their full-name tooltip; optional wrapping measures natural row heights. Grid and gallery use contained thumbnails and truncated file names; columns retain separate scrollable folder lists. Small control gaps and the repeated frontmatter spacing steps keep chrome compact. Dialog content uses the larger panel/dialog steps.
 
 Folder view, sort, metadata layout and browsing-column width are shared by path across roots and workspaces. Selection, history, filters and scroll remain local to each explorer. Browsing-column edges resize in projected coordinates, adjusting the element directly during drag and saving on release. The separator supports Left/Right steps (10px, or 50px with Shift), Home/End limits (160–1600px), double-click fitting to filenames and Option to apply the width to the visible trail.
+
+Model Shading uses a stage-contained panel with a small inset (12px from the top/right), the recorded width and internal padding, and bounds of `calc(100% - 24px)` in both axes. Its own scroll area and stable scrollbar gutter keep controls reachable in compact Quick Preview and linked planes. Trash uses the recorded larger dialog bounds, the inherited viewport maximum width of `calc(100vw - 60px)`, a flexible scrolling body and a nonshrinking header/footer. Its inventory keeps the heading separate from virtual rows; inventory columns scroll horizontally when their minimum widths exceed the available space.
 
 Transient surfaces remain bounded by the native viewport. Searchable context actions use a compact width (304px); the command palette is wider (560px). The palette anchors its top edge at 22% of the window height, bounded to 80–240px, and keeps its search field stationary as results grow downward. Its result list scrolls before reaching the bottom clearance (20px). The operations popover anchors below the upper-right control (370px wide, 64px from the top, 16px from the right) and scrolls within the window. It never consumes workspace width.
 
@@ -420,6 +459,30 @@ Evidence passages use left-aligned ordinary buttons (`.inspection-passage`), wit
 Folder headers combine a direct navigation toggle, back/forward navigation, a titled drag region, view menu, search, frame/dock, more actions, and close. Space Settings controls each of these icons independently. The view and actions buttons toggle their own menus; pointer dismissal ignores the originating button so a second click closes the open menu. Preview headers replace folder navigation/view/search with the module's primary controls in the same header. There is no second permanent preview toolbar in a linked plane. The first title press selects and moves the plane; pressing an already selected plane retains the current multiselection. File selection, text selection, media, image, and model gestures keep their own functions. Duplicate floating engine controls remain disabled.
 
 Images, models, PDF, text, and media contribute commands scoped to their preview. Keep zoom, fit, page, search, and playback actions with the preview they affect; unavailable actions do not appear as command results. Supplemental file information stays compact within the plane body.
+
+### Linked Plane Navigation
+
+Back to parent plane uses the existing outline SVG and plane icon-button footprint at the start of a child header. Space → Plane toolbar controls its visibility. It appears only when an immediate parent exists; Option-Command-Up invokes the same scoped action. Root planes omit it. This navigates the plane relationship without changing folder history.
+
+A compact accent link glyph sits beside an originating filename in list, grid and browsing columns; gallery places it at the tile's upper-right corner on the existing surface. The marker uses the recorded square footprint and a small SVG (14px), an accessible label naming its file, and the View linked plane tooltip. It appears only for that parent's live direct child. Pointer and keyboard activation focus the existing child without opening another plane or activating the surrounding file row. View open plane provides the corresponding context command for one matching file or folder, preferring its direct child and then a matching plane in the same root.
+
+**The Existing Plane Rule.** Return to the immediate parent or an existing matching plane while retaining the current docked or spatial presentation; keep agent navigation in the reviewed, destination-scoped focus tool.
+
+The [native model/navigation result](packages/viewer-electron/app/out/model-navigation-acceptance-MigAQR/result.json) verifies parent navigation, its visibility preference and root omission, marker activation by keyboard, markers in all four file views, and reuse without increasing pane count. The [parent list](.impeccable/review/models-links-trash-v3/model-navigation-acceptance-MigAQR/parent-link-markers-dark.png) and [gallery](.impeccable/review/models-links-trash-v3/model-navigation-acceptance-MigAQR/gallery-link-marker-dark.png) captures show the incumbent selection and glyph treatment.
+
+### Applications and Trash
+
+Applications is an ordinary directory shortcut with the existing grid glyph. On macOS it opens `/Applications` in the current folder plane using normal directory navigation. Trash uses the existing Trash glyph and a virtual sidebar target; Windows labels the destination Recycle Bin. Activating it opens a dedicated read-only dialog rather than exposing the system Trash folder as an editable explorer.
+
+The inventory uses the recorded heading and row roles with Name, Trash location and right-aligned Size. Original location appears only when at least one item has known source metadata; missing values in that column and folder sizes use an em dash. Filename and path cells truncate with full-value tooltips. Rows use file/folder SVGs, thin dividers and virtual scrolling, without selection, item preview, restore or per-item erase controls. The table exposes source-derived row/header/cell semantics; assistive-technology runtime remains unverified.
+
+The separated footer keeps the visible count on the left and Refresh, Trash actions and Done on the right, wrapping when necessary. Trash actions opens a native menu only when the complete nonempty inventory is available and the native bridge is present. Unavailable locations show their name, wrapping permission/error detail and Allow access… where supported. Zero readable items with an unavailable location says Trash is unavailable and counts items visible; a readable empty inventory says Trash is empty. Partial or truncated inventory keeps the actions disabled and explains the limit. The macOS permission chooser accepts the exact private Trash directory shown by the service; successful post-grant browsing is not established by the current captures.
+
+**The Trash State Rule.** Keep unavailable, incomplete and empty inventories distinct, retain readable location feedback and the footer, and leave Trash actions disabled until the full inventory can be read.
+
+Empty Trash… belongs solely to a native menu selection followed by an unconditional native warning with Cancel as the default. The confirmation names permanent erasure, the item count and trashed-folder contents. Viewer exposes no erasure/approve endpoint, command, shortcut, MCP or scheduled route; editable JSONC and saved grants do not change this flow. Coding agents must never select or approve Empty Trash. This records Viewer's own boundary, without claiming control over other programs.
+
+The [native read-only result](packages/viewer-electron/app/out/trash-readonly-acceptance-qEwPUo/result.json) confirms Applications navigation and the actual macOS permission-denied inventory with actions disabled. The [compact denied state](.impeccable/review/models-links-trash-v3/trash-readonly-acceptance-qEwPUo/native-trash-compact-dark.png) retains Allow access…, status, Refresh and Done; the [compact populated light render](.impeccable/review/models-links-trash-v3/trash-ui-acceptance/populated-compact-light.png) is fixture evidence for row and footer presentation. The native run invoked no grant picker, Trash menu, confirmation or erasure. Supplied verification also reports 60 passing in-memory tests and 13 native C++ guards with `unlinkat` replaced by a no-op. Positive native emptying, post-grant macOS browsing, Windows/Linux execution, assistive technology and Store qualification remain unverified. No user data was removed.
 
 ### Searchable Actions
 
@@ -537,6 +600,16 @@ Images, supported audio/video, PDF, text/code/Markdown/JSON/CSV, models and arch
 
 Model stages use neutral ambient fill and key/fill lights attached to the model camera, preserving readable reverse faces during orbiting. The hemisphere follows the stage's up axis, and CAD material colors enter the renderer as linear RGB. Dimensions and surface measurements retain the source geometry and units.
 
+### Model Shading
+
+Shading is an ordinary selected/expanded toolbar button in Quick Preview and the linked preview header. It opens the bounded stage panel with Surface and Lighting selects, a Brightness range and percentage output, Show edges and Shadows checkboxes, and Reset shading. The fields use existing system type, neutral surfaces, border/caret roles and compact gaps (12px between controls, 6px inside labels). Close shading controls and Escape close only this panel and return focus to Shading. Pointer and wheel events within the panel stay with its controls rather than the model camera.
+
+Surface offers Original materials, Clay and Normals. Lighting offers Studio, Contrast and Soft. Contrast is the default, with brightness at 85%, edges off and self-shadows on; its lower ambient fill and exposure preserve recess detail. Brightness spans 40–160% in five-percentage-point steps. Normals disables lighting, brightness and shadows while retaining their saved settings. Edges applies to rigid meshes; animated/deforming meshes receive a plain limitation note directing users to Wireframe. Reset shading restores the default appearance.
+
+**The Presentation Rule.** Persist model appearance separately from its camera and update the live stage without reimporting the file or changing source materials, textures, geometry, units or dimensions.
+
+The [native model/navigation result](packages/viewer-electron/app/out/model-navigation-acceptance-MigAQR/result.json) verifies live STEP/STL appearance changes with unchanged source bytes and dimensions, Escape behavior, and linked appearance/camera persistence after cold restart. The [Studio panel](.impeccable/review/models-links-trash-v3/model-navigation-acceptance-MigAQR/step-studio-controls-dark.png), [Normals state](.impeccable/review/models-links-trash-v3/model-navigation-acceptance-MigAQR/step-normals-dark.png) and [compact light panel](.impeccable/review/models-links-trash-v3/model-navigation-acceptance-MigAQR/step-controls-compact-light.png) show the current field, disabled and scrolling treatments. These are file-preview controls within the existing world; they establish no new shell palette or model-editing workflow.
+
 ### PDF Previews
 
 [PDFPreview](packages/viewer-electron/app/src/renderer/previews/modules/PDFPreview.tsx) keeps the incumbent neutral controls and white page stage. Fit page is the default in Quick Preview and linked planes. Fit width remains an explicit choice; percentages use actual CSS document scale and stay fixed across resizing. Explicit choices persist under `pdf.view`; the old width-relative `pdf.zoom` value is ignored. [Viewport sizing](packages/viewer-electron/app/src/renderer/previews/pdf-viewport.ts) includes page rotation.
@@ -591,6 +664,9 @@ Dialog Close icon focus (`.dialog .icon-button:focus-visible`) uses the selectio
 - Do retain file-content conventions such as syntax coloring, contained imagery, Markdown quotation borders and EPUB chapter hierarchy.
 - Do wrap project names, inspection paths and evidence within their available width while keeping row actions and dialog footers reachable.
 - Do use the shared body font and field roles for plane notes, and keep the content-reading choice explicit in file inspection.
+- Do keep Shading inside the model stage, preserve its compact scroll area, and save presentation separately from the model camera.
+- Do show linked-child markers beside file identity and retain docked or spatial presentation when returning to an existing plane.
+- Do keep Trash inventory read-only, distinguish unavailable from empty, and leave its count and ordinary footer actions reachable.
 
 ### Don't:
 
@@ -605,3 +681,6 @@ Dialog Close icon focus (`.dialog .icon-button:focus-visible`) uses the selectio
 - Don't make file content or model gestures drag the plane instead of performing their own task.
 - Don't reuse dark syntax colors unchanged in light previews or use ordinary muted text on dark selected files.
 - Don't turn synthetic verification fixtures into shipping product imagery.
+- Don't let Shading reimport or alter source models, materials, textures, units or dimensions.
+- Don't expose Trash erasure or approval through renderer commands, shortcuts, MCP, scheduled routes or editable grants, or let a coding agent select or approve Empty Trash.
+- Don't treat fixture-based populated Trash renders or no-op guard checks as positive native emptying, post-grant browsing or Store qualification.

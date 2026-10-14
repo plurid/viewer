@@ -428,6 +428,36 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       run: (context) => actions.workspace.focusPane(context.paneID!),
     },
     {
+      id: 'parent-plane',
+      label: 'Back to parent plane',
+      group: 'Plane',
+      icon: 'parent-plane',
+      aliases: ['parent plane', 'back to parent'],
+      shortcut: '⌥⌘↑',
+      when: (context) => paneScope(context) && !!actions.workspace.parentPaneID(context.paneID!),
+      run: (context) => {
+        const parent = actions.workspace.parentPaneID(context.paneID!);
+        if (parent) actions.workspace.focusPane(parent);
+      },
+    },
+    {
+      id: 'view-open-plane',
+      label: 'View open plane',
+      group: 'Files',
+      icon: 'link',
+      primary: true,
+      aliases: ['view linked plane', 'show existing plane', 'vl'],
+      when: (context) =>
+        !!context.paneID &&
+        context.selection.length === 1 &&
+        !!actions.workspace.existingPaneID(context.paneID, context.selection[0]),
+      run: (context) => {
+        const id = actions.workspace.existingPaneID(context.paneID!, context.selection[0]);
+        if (!id) throw new Error('This plane is no longer open.');
+        actions.workspace.focusPane(id);
+      },
+    },
+    {
       id: 'dock',
       label: actions.engine.current?.camera.docked() ? 'Reveal space' : 'Dock plane',
       group: 'Plane',

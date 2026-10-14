@@ -419,7 +419,13 @@ describe('agent removal safety', () => {
   });
   it('blocks opaque code and terminal input even when named clients retain old write capabilities', async () => {
     const f = await fixture();
-    for (const command of ['open-default', 'open-with', 'open-selection', 'undo-file']) {
+    for (const command of [
+      'open-default',
+      'open-with',
+      'open-selection',
+      'undo-file',
+      'parent-plane',
+    ]) {
       expect(() => agentCommandID(command, [])).toThrow();
       f.config.customActions = [action({ kind: 'builtin', command })];
       await expect(f.call('propose_command', { commandID: 'custom.cleanup' })).rejects.toThrow();

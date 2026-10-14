@@ -62,7 +62,7 @@ export function PlaneHeader({
     void registry
       .invoke(command, request)
       .then(() => {
-        if (!['search', 'close-plane'].includes(command)) focusFiles(id);
+        if (!['search', 'close-plane', 'parent-plane'].includes(command)) focusFiles(id);
       })
       .catch(report);
   };
@@ -91,6 +91,13 @@ export function PlaneHeader({
   };
   return (
     <div className="plane-controls" data-viewer-plane={id} onPointerDown={() => setActivePane(id)}>
+      {controls.parent && available.some((item) => item.id === 'parent-plane') && (
+        <IconButton
+          icon="parent-plane"
+          label="Back to parent plane"
+          onClick={() => run('parent-plane')}
+        />
+      )}
       {pane?.type === 'folder' && (controls.sidebar || controls.back || controls.forward) && (
         <div className="plane-navigation">
           {controls.sidebar && (

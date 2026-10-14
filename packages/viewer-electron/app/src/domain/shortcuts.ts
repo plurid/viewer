@@ -9,6 +9,7 @@ export const defaultShortcuts: Record<string, string> = {
   'go-to': 'Cmd+L',
   'open-selection': 'Cmd+O',
   parent: 'Cmd+ArrowUp',
+  'parent-plane': 'Cmd+Alt+ArrowUp',
   back: 'Cmd+[',
   forward: 'Cmd+]',
   copy: 'Cmd+C',

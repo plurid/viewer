@@ -144,6 +144,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
   );
   if (!pane) return <Empty title="Search is unavailable" />;
   const props: FileViewProps = {
+    paneID: id,
     entries,
     selection,
     cursor: session.cursor,

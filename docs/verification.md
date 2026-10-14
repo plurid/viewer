@@ -370,3 +370,51 @@ native Trash execution, physical approval, assistive technology and Store
 qualification remain unverified by this pass. The in-memory operation checks
 prove failure/cancellation handling at the service boundary rather than a real
 filesystem removal.
+
+## Model shading, linked navigation and Trash
+
+The October 14 extension passes `pnpm check`, `pnpm lint` and 60 selected
+regressions across eight files: Trash service/agent boundaries, model appearance,
+linked navigation, picking, CAD, workspaces and agent workspace/safety. These
+checks do not remove real files. Older integration suites with permanent fixture
+cleanup were not rerun.
+
+`tests/native-trash-guard.ts` compiles the actual macOS inventory/confinement
+guards with `unlinkat` replaced by a recording no-op. All 13 checks pass, covering
+changed identities/inventories, forged roots, symlink leaves, wrong ownership and
+a generated directory moved outside Trash. Generated file contents and the
+outside sentinel remain intact. This proves refusal and confinement logic without
+performing permanent removal.
+
+The preserving build tool now accepts an optional freshly compiled macOS N-API
+binding after the seed and fresh output arguments. The final local direct app is
+`out/Viewer-model-navigation-trash-v3-darwin-arm64/Viewer.app`, using
+`out/viewer-macos-files-trash-v2.node`. Compilation and local ad-hoc signature
+verification pass. The seed, intermediates, generated profiles and fixtures are
+preserved. This is not a Store or notarized distribution artifact.
+
+With `VIEWER_TEST_BINARY` pointing at that app, `tests/native-model-navigation.ts`
+passes four owned native groups. STEP/STL surface and lighting changes retain the
+live canvas, dimensions and source bytes; linked appearance and camera survive
+cold restart. Configurable Back to parent preserves docking. File/folder link
+markers render in list, grid, columns and gallery; marker activation and View
+open plane focus the existing plane without increasing its count. Completed
+[model/navigation evidence](../packages/viewer-electron/app/out/model-navigation-acceptance-MigAQR/result.json)
+includes fourteen settled desktop/compact captures.
+
+`tests/native-trash-readonly.ts` passes actual sidebar Trash display, absence of a
+public erasure method and navigation into `/Applications`. macOS privacy denied
+the user's Trash in this isolated app: zero visible items, one unavailable
+location and emptying disabled. This is denial evidence, not an empty system
+Trash. No native action menu, confirmation, erasure or grant picker was invoked.
+Completed [read-only evidence](../packages/viewer-electron/app/out/trash-readonly-acceptance-qEwPUo/result.json)
+includes three settled native captures. Four browser captures exercise populated
+read-only generated inventories in dark/light desktop and compact windows with
+native actions disabled.
+
+The finish reviewer returned `ship` with no material UI fixes after inspecting
+the source boundary and all 21 current captures. Positive post-grant system
+Trash browsing, physical emptying/confirmation, Windows/Linux runtime behavior,
+assistive technology and signed Store access remain unverified. No user data was
+removed. See [Trash and Applications](trash.md) for the native-only action design
+and platform limits.

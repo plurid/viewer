@@ -1,4 +1,4 @@
-/** Local JS-only rebuild from an existing direct package. Keeps every intermediate; never deletes. */
+/** Local rebuild from a direct package. Keeps every intermediate; never deletes. */
 import { cp, lstat, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -81,6 +81,20 @@ await cp(source, output, {
   errorOnExist: true,
   verbatimSymlinks: true,
 });
+// Optional freshly compiled N-API binding. Only the new output is changed;
+// the seed and its native binary remain intact for rollback and comparison.
+const nativeBinding = process.argv[4] ? path.resolve(process.argv[4]) : undefined;
+if (nativeBinding) {
+  if (!(await lstat(nativeBinding)).isFile() || !nativeBinding.endsWith('.node'))
+    throw new Error('Provide a compiled macOS N-API .node file.');
+  await cp(nativeBinding, path.join(output, 'Contents/Resources/viewer-macos-files.node'));
+  await promisify(execFile)('/usr/bin/codesign', [
+    '--force',
+    '--sign',
+    '-',
+    path.join(output, 'Contents/Resources/viewer-macos-files.node'),
+  ]);
+}
 const archive = path.join(output, 'Contents/Resources/app.asar');
 await asar.createPackageWithOptions(unpacked, archive, { unpack: '**/node-pty/**' });
 const hash = createHash('sha256').update(asar.getRawHeader(archive).headerString).digest('hex');
@@ -145,8 +159,10 @@ await writeFile(
     {
       output,
       seed: source,
-      scope:
-        'Local JS-only direct rebuild. Source seed and intermediates preserved. Not a Store/distribution build.',
+      scope: nativeBinding
+        ? 'Local direct rebuild with the specified fresh N-API binding. Seed and intermediates preserved. Not a Store/distribution build.'
+        : 'Local JS-only direct rebuild. Source seed and intermediates preserved. Not a Store/distribution build.',
+      ...(nativeBinding ? { nativeBinding } : {}),
       inheritedVersion: JSON.parse(await readFile(path.join(unpacked, 'package.json'), 'utf8'))
         .version,
     },

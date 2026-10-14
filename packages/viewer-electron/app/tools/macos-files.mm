@@ -10,6 +10,7 @@
 #include <sys/mount.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <algorithm>
 
 // A small in-process bridge: dynamic PowerBox grants belong to this process.
 // Filesystem work runs on N-API's bounded pool, never the Cocoa/renderer thread.
@@ -67,6 +68,7 @@ static bool sandboxedProcess() {
   }();
   return sandboxed;
 }
+#include "trash-ui.h"
 #include "file-coordination.h"
 
 static napi_value clipboardVersion(napi_env env, napi_callback_info info) {
@@ -305,6 +307,7 @@ static napi_value init(napi_env env, napi_value exports) {
   registerFileInformation(env, exports);
   registerFilePanels(env, exports);
   napi_property_descriptor methods[] = {
+    {"trashMenu", nullptr, trashMenu, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardVersion", nullptr, clipboardVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardRead", nullptr, clipboardRead, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardWrite", nullptr, clipboardWrite, nullptr, nullptr, nullptr, napi_default, nullptr},

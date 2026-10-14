@@ -25,8 +25,10 @@ import type { FileModifiers } from './selection';
 import type { FolderPresentation } from '../../domain/folder-presentation';
 import { BrowserColumn } from './BrowserColumn';
 import { FolderSizeValue } from './sizes';
+import { LinkedPlaneButton } from '../workspace/LinkedPlaneButton';
 
 export interface FileViewProps {
+  paneID?: string;
   presentation?: FolderPresentation;
   depths?: ReadonlyMap<string, number>;
   expanded?: string[];
@@ -66,7 +68,7 @@ export const FileRow = memo(function FileRow({
   selected: boolean;
   props: Pick<
     FileViewProps,
-    'select' | 'open' | 'context' | 'drag' | 'toggle' | 'expanded' | 'depths'
+    'select' | 'open' | 'context' | 'drag' | 'toggle' | 'expanded' | 'depths' | 'paneID'
   >;
   compact?: boolean;
   columns?: readonly ListColumn[];
@@ -113,6 +115,7 @@ export const FileRow = memo(function FileRow({
         <span className="filename" title={entry.name}>
           {entry.name}
         </span>
+        <LinkedPlaneButton paneID={props.paneID} entry={entry} />
         {entry.error && <Icon name="warning" size={14} />}
       </span>
       {!compact &&
@@ -167,8 +170,14 @@ function useRowActions(props: FileViewProps) {
 export function ListView(props: FileViewProps) {
   const actions = useRowActions(props);
   const rowProps = useMemo(
-    () => ({ ...actions, toggle: props.toggle, expanded: props.expanded, depths: props.depths }),
-    [actions, props.toggle, props.expanded, props.depths],
+    () => ({
+      ...actions,
+      toggle: props.toggle,
+      expanded: props.expanded,
+      depths: props.depths,
+      paneID: props.paneID,
+    }),
+    [actions, props.toggle, props.expanded, props.depths, props.paneID],
   );
   const defaultCompact = useViewer(
     (state) => state.settings.settings.browsing.density === 'compact',
@@ -336,7 +345,10 @@ export function GridView(props: FileViewProps) {
                 <div className="tile-preview">
                   <Thumbnail entry={entry} />
                 </div>
-                <span>{entry.name}</span>
+                <span className="file-linked-label">
+                  <span>{entry.name}</span>
+                  <LinkedPlaneButton paneID={props.paneID} entry={entry} />
+                </span>
                 <small>{entry.directory ? 'Folder' : formatBytes(entry.size)}</small>
               </div>
             ))}
@@ -421,7 +433,7 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
               compact
               entry={props.entries[item.index]}
               selected={props.selectionSet.has(props.entries[item.index].path)}
-              props={actions}
+              props={{ ...actions, paneID: props.paneID }}
             />
           </div>
         ))}
@@ -510,26 +522,32 @@ export function GalleryView(props: FileViewProps) {
           {virtual.getVirtualItems().map((item) => {
             const entry = props.entries[item.index];
             return (
-              <button
-                className={`gallery-item ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
-                style={{ position: 'absolute', left: item.start, height: '100%' }}
+              <div
+                className="gallery-item-container"
                 key={entry.path}
-                data-file-path={entry.path}
-                data-directory-path={entry.directory ? entry.path : undefined}
-                aria-selected={props.selectionSet.has(entry.path)}
-                role="option"
-                onClick={(event) => props.select(entry, event)}
-                onDoubleClick={(event) =>
-                  props.open(entry, event.altKey || event.metaKey || event.ctrlKey)
-                }
-                onContextMenu={(event) => props.context(entry, event)}
-                draggable
-                onDragStart={(event) => props.drag(entry, event)}
-                title={entry.name}
+                style={{ position: 'absolute', left: item.start, height: '100%' }}
               >
-                <Thumbnail entry={entry} />
-                <span>{entry.name}</span>
-              </button>
+                <button
+                  className={`gallery-item ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
+                  style={{ height: '100%' }}
+                  data-file-path={entry.path}
+                  data-directory-path={entry.directory ? entry.path : undefined}
+                  aria-selected={props.selectionSet.has(entry.path)}
+                  role="option"
+                  onClick={(event) => props.select(entry, event)}
+                  onDoubleClick={(event) =>
+                    props.open(entry, event.altKey || event.metaKey || event.ctrlKey)
+                  }
+                  onContextMenu={(event) => props.context(entry, event)}
+                  draggable
+                  onDragStart={(event) => props.drag(entry, event)}
+                  title={entry.name}
+                >
+                  <Thumbnail entry={entry} />
+                  <span>{entry.name}</span>
+                </button>
+                <LinkedPlaneButton paneID={props.paneID} entry={entry} />
+              </div>
             );
           })}
         </div>

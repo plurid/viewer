@@ -235,6 +235,9 @@ const descriptions: Record<string, string[]> = {
   'ui.space.headerControls': [
     'Show/hide individual plane toolbar icons. false hides an icon, not the underlying command.',
   ],
+  'ui.space.headerControls.parent': [
+    'Show Back to parent on linked-plane headers. Root planes have no parent button.',
+  ],
   'ui.list': [
     'Global List-view defaults; settings.folders[path].list overrides these for one folder.',
   ],

@@ -68,6 +68,9 @@ import { Resources } from './resources';
 import { Search } from './search';
 import { Storage, stateSchema } from './storage';
 import { Watchers } from './watchers';
+import { Trash } from './trash';
+import { applicationsPath } from './trash-locations';
+import { trashLocation, trashName, type DesktopPlatform } from '../domain/trash';
 import { FileAccess } from './file-access';
 import { NativeSelections } from './native-selections';
 import { fileCoordination } from './file-coordination';
@@ -486,6 +489,9 @@ const schemas = {
   fileDropPaths: z.tuple([z.array(localPath).max(10000)]),
   fileDragStart: z.tuple([z.array(localPath).min(1).max(10000)]),
   volumesList: z.tuple([]),
+  trashList: z.tuple([]),
+  trashMenu: z.tuple([z.string().regex(/^[a-f0-9]{64}$/)]),
+  trashAccess: z.tuple([z.string().regex(/^[a-f0-9]{64}$/)]),
   volumeEject: z.tuple([localPath]),
   fileAccessList: z.tuple([]),
   fileAccessRevoke: z.tuple([localPath]),
@@ -531,6 +537,7 @@ export class Desktop {
   // HOME becomes the container in App Sandbox. Sidebar/default paths describe
   // the actual user's folders; knowing those paths does not confer access.
   private readonly home = process.mas ? os.userInfo().homedir : os.homedir();
+  private readonly trash: Trash;
   private context?: ActionContext;
   private indexConfiguration = '';
   private openPaths: string[] = [];
@@ -571,6 +578,7 @@ export class Desktop {
           }
         : undefined,
     );
+    this.trash = new Trash(this.home, this.fileAccess);
     const access = (files: readonly string[]) => this.fileAccess.require(files);
     this.projects = new Projects(access);
     this.comparisons = new Comparisons(access);
@@ -981,6 +989,7 @@ export class Desktop {
   }
   private async disposeServices(): Promise<void> {
     this.ready = false;
+    this.trash.close();
     if (process.platform === 'darwin') macFiles().dismissFilePanels();
     this.settings.close();
     this.resources.clear();
@@ -1250,6 +1259,12 @@ export class Desktop {
       }
       case 'volumesList':
         return process.platform === 'darwin' ? macFiles().volumes() : [];
+      case 'trashList':
+        return this.trash.list();
+      case 'trashMenu':
+        return this.trash.menu(this.windows.get(senderID!)!.window, args[0] as string);
+      case 'trashAccess':
+        return this.trash.requestAccess(this.windows.get(senderID!)!.window, args[0] as string);
       case 'volumeEject': {
         const root = args[0] as string;
         const volume = (await macFiles().volumes()).find((volume) => volume.path === root);
@@ -1465,9 +1480,18 @@ export class Desktop {
               path: path.join(home, name),
             })),
             {
+              name: 'Applications',
+              path: applicationsPath(
+                process.platform as DesktopPlatform,
+                home,
+                process.env.ProgramFiles,
+              ),
+            },
+            {
               name: process.platform === 'darwin' ? 'Volumes' : 'Computer',
               path: process.platform === 'darwin' ? '/Volumes' : path.parse(home).root,
             },
+            { name: trashName(process.platform as DesktopPlatform), path: trashLocation },
           ],
           openPaths: paths,
         };

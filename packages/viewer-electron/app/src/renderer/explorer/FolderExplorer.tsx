@@ -279,6 +279,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   });
   if (!pane) return <Empty title="Folder is unavailable" />;
   const viewProps: FileViewProps = {
+    paneID: id,
     entries,
     presentation,
     depths: tree.depths,
