@@ -321,6 +321,8 @@ Settings occupies a separate modeless native window: default outer size 900×640
 
 Quick Preview combines quiet module/size metadata, previous/next navigation and its two open actions in one footer. The default-open button names the OS application, such as Open in Code, and falls back to Open when no name is available. Long application names truncate visually while retaining their complete tooltip. File identity stays in the dialog title; no second metadata footer or external-open icon repeats those actions.
 
+PDF uses the measured scroll-stage content box, excluding its existing inset (24px). Fit page takes the smaller width or height ratio and adapts when the stage, search rows or page dimensions change. The white sheet remains a block with content-sized width and automatic horizontal margins: smaller pages center, while oversized pages retain a reachable left edge.
+
 Get Info uses the existing 440px dialog, with a maximum width of `calc(100vw - 60px)`. Its content scrolls within `min(550px, calc(100vh - 200px))` and retains the 18px dialog inset. The filename and wrapping path span the full width above a 90px label column and flexible value column, separated by 12px. Native allocation, owner and group values form a wrapping strip. Save/Reload stays sticky within the content area; Done remains in the separate dialog footer.
 
 Project, inspection and notes use that same dialog width and maximum width. Their shared content region (`.dialog-body`) keeps the dialog inset (18px), scrolls within `min(580px, calc(100vh - 180px))`, and leaves the existing separated footer intact. Project and inspection groups use the content spacing step (12px). In arrangement rows, the name is a flexible, shrinkable column with `overflow-wrap: anywhere`; Restore does not shrink. The rendered long name wraps with Restore and Done visible at 1440×940 in dark mode and 900×640 in light mode. No additional responsive breakpoint is introduced.
@@ -531,6 +533,14 @@ Images, supported audio/video, PDF, text/code/Markdown/JSON/CSV, models and arch
 
 Model stages use neutral ambient fill and key/fill lights attached to the model camera, preserving readable reverse faces during orbiting. The hemisphere follows the stage's up axis, and CAD material colors enter the renderer as linear RGB. Dimensions and surface measurements retain the source geometry and units.
 
+### PDF Previews
+
+[PDFPreview](packages/viewer-electron/app/src/renderer/previews/modules/PDFPreview.tsx) keeps the incumbent neutral controls and white page stage. Fit page is the default in Quick Preview and linked planes. Fit width remains an explicit choice; percentages use actual CSS document scale and stay fixed across resizing. Explicit choices persist under `pdf.view`; the old width-relative `pdf.zoom` value is ignored. [Viewport sizing](packages/viewer-electron/app/src/renderer/previews/pdf-viewport.ts) includes page rotation.
+
+**The PDF Fit Rule.** Fit the whole page to both content-box dimensions by default; recalculate fitting after resize, search-row changes, page changes and rotation, while preserving explicit Fit width or CSS-percentage choices.
+
+The supplied [PDF acceptance evidence](packages/viewer-electron/app/out/pdf-acceptance/result.json) records five passing owned-native checks and seven valid captures: wide/compact dark PDFs, compact search and rotation, desktop/compact light PDFs, and the context menu with both icons visible. Finish review: ship, with no material fixes required. No detector ran; native permissions, assistive technology and Mac App Store qualification are outside this evidence.
+
 ### Office Previews
 
 [OfficePreview](packages/viewer-electron/app/src/renderer/previews/modules/OfficePreview.tsx) follows `office-preview-v1` within the existing file plane. DOCX paragraphs, source headings and tables use the shared type and theme roles. The centered body has a readable measure (74ch), document inset (24px 32px 48px) and line spacing (1.7); tables scroll horizontally when needed. Original block citations scroll to the passage and mark it with selection fill and an accent outline.
@@ -550,6 +560,8 @@ The operations control appears for pending work, conflicts, or unseen failures. 
 ### Menus and Feedback
 
 Searchable context actions render through body portals with viewport-bounded overflow. Dialogs use native modal focus behavior; transient surfaces restore focus to their initiating control when it remains available. Focus rings and halos are suppressed across app and engine chrome; keyboard-focused controls use the raised surface and accent text, with the same treatment on a focused checkbox's label. Carets, active-command surfaces, selected files and drag/drop feedback remain visible. Errors use the danger role and wrap long paths. Empty/loading views use SVGs, plain task text, and the existing type hierarchy. Session workspace recovery is a compact transient status with Undo, rather than permanent window chrome.
+
+The [context-menu mapping](packages/viewer-electron/app/src/renderer/commands/menu.ts) gives Workspace the existing command glyph and Project the existing folder glyph, keeping both distinct within the incumbent icon system.
 
 Dialog Close icon focus (`.dialog .icon-button:focus-visible`) uses the selection fill and normal ink, with no outline or shadow halo. The reviewed comparison, operation-review and collection-manager screenshots show this filled control. Ordinary dialog buttons and checkbox labels retain the existing raised-surface/accent focus treatment.
 

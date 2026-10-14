@@ -256,7 +256,7 @@ Development captures and review output live in the ignored `.impeccable/review/`
 
 ## Office reader and preview checks
 
-The current suite passes 459 tests across 64 files, TypeScript and lint. The direct
+The Office delivery passed 459 tests across 64 files, TypeScript and lint. The direct
 macOS package builds successfully. New Office checks cover package relationships,
 body paragraphs/tables, sparse worksheet addresses, saved/uncached formulas,
 original content-index citations and revocation purge, malformed/unreadable
@@ -293,3 +293,25 @@ physical assistive-technology interaction, real native folder pickers, cloud edg
 cases, supported macOS versions and immutable Store distribution qualification
 remain outside these checks. See [Office previews](office-previews.md) for reader
 coverage and limits.
+
+## PDF fit and context-menu icon checks
+
+The October 14 correction passes 465 tests across 65 files, `pnpm check`,
+`pnpm lint` and `pnpm package`. The six PDF viewport regressions cover tall,
+landscape and compact hosts, explicit width fitting, fixed percentages and
+unrecognized saved values. PDF percentages now use PDF.js's CSS unit conversion;
+the old width-relative `pdf.zoom` values do not override the new Fit page default.
+
+`pnpm exec tsx tests/native-pdf.ts` first reproduced the old package rendering
+a 3,109px-tall page in 1,061px of available height. The rebuilt package passes five
+checks: distinct Workspace/Project menu glyphs, whole-page Quick Preview on large
+and compact windows including the search row, landscape/rotated/large-format
+page fitting, explicit Fit width and fixed percentage sizing, and linked-plane
+zoom retention through graceful Quit and a fresh process. All fixtures and
+profiles are generated; owned app processes quit and profiles are removed.
+
+Completed evidence and seven settled dark/light captures are in
+`out/pdf-acceptance`. A fresh finish reviewer returned `ship` with no material
+fixes for this PDF fitting and menu-icon refinement. These direct-package checks
+do not replace native picker, assistive-technology, supported macOS or Store
+distribution qualification.

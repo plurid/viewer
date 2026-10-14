@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
+import {
+  getDocument,
+  GlobalWorkerOptions,
+  PixelsPerInch,
+  TextLayer,
+  type PDFDocumentProxy,
+} from 'pdfjs-dist';
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
+import { pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 
@@ -11,7 +18,10 @@ export default function PDFPreview(context: PreviewContext) {
   const { resource, signal, active } = context;
   const [pdf, setPDF] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = usePreviewState(context, 'pdf.page', 1);
-  const [zoom, setZoom] = usePreviewState(context, 'pdf.zoom', 1);
+  // The old pdf.zoom value was width-relative, even though its label said 100%.
+  const [savedZoom, setZoom] = usePreviewState<PDFZoom>(context, 'pdf.view', 'page');
+  const zoom = pdfZoom(savedZoom);
+  const [scale, setScale] = useState(1);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   useEffect(() => {
@@ -30,7 +40,7 @@ export default function PDFPreview(context: PreviewContext) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const text = useRef<HTMLDivElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(700);
+  const [available, setAvailable] = useState({ width: 0, height: 0 });
   useEffect(() => {
     const local = new URL('/pdfjs/', document.baseURI).href;
     const task = getDocument({
@@ -58,9 +68,13 @@ export default function PDFPreview(context: PreviewContext) {
   useEffect(() => {
     const element = scroll.current;
     if (!element) return;
-    const observer = new ResizeObserver((entries) =>
-      setWidth(Math.max(180, entries[0].contentRect.width - 48)),
-    );
+    const observer = new ResizeObserver(([entry]) => {
+      // ResizeObserver's content box already excludes padding and scrollbars.
+      const { width, height } = entry.contentRect;
+      setAvailable((before) =>
+        before.width === width && before.height === height ? before : { width, height },
+      );
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, [pdf]);
@@ -68,7 +82,15 @@ export default function PDFPreview(context: PreviewContext) {
     if (pdf && page > pdf.numPages) setPage(pdf.numPages);
   }, [pdf, page, setPage]);
   useEffect(() => {
-    if (!pdf || !active || !canvas.current || !text.current) return;
+    if (
+      !pdf ||
+      !active ||
+      !canvas.current ||
+      !text.current ||
+      available.width <= 0 ||
+      available.height <= 0
+    )
+      return;
     let cancelled = false;
     let render: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | undefined;
     let layer: TextLayer | undefined;
@@ -76,8 +98,12 @@ export default function PDFPreview(context: PreviewContext) {
       .getPage(page)
       .then(async (sheet) => {
         if (cancelled) return;
-        const initial = sheet.getViewport({ scale: 1 });
-        const viewport = sheet.getViewport({ scale: (width / initial.width) * zoom });
+        const initial = sheet.getViewport({ scale: PixelsPerInch.PDF_TO_CSS_UNITS });
+        const nextScale = pdfScale(initial, available, zoom);
+        const viewport = sheet.getViewport({
+          scale: nextScale * PixelsPerInch.PDF_TO_CSS_UNITS,
+        });
+        setScale(nextScale);
         const target = canvas.current!;
         const container = text.current!;
         const ratio = Math.min(devicePixelRatio, 2);
@@ -108,7 +134,10 @@ export default function PDFPreview(context: PreviewContext) {
       render?.cancel();
       layer?.cancel();
     };
-  }, [pdf, page, zoom, width, active]);
+  }, [pdf, page, zoom, available, active]);
+  useEffect(() => {
+    scroll.current?.scrollTo(0, 0);
+  }, [page, zoom]);
   useEffect(() => {
     if (!pdf || !query.trim()) {
       setMatches([]);
@@ -177,19 +206,31 @@ export default function PDFPreview(context: PreviewContext) {
           run: () => setSearchOpen(true),
         },
         {
+          id: 'pdf-fit-page',
+          label: 'Fit PDF page',
+          available: !!pdf,
+          run: () => setZoom('page'),
+        },
+        {
+          id: 'pdf-fit-width',
+          label: 'Fit PDF width',
+          available: !!pdf,
+          run: () => setZoom('width'),
+        },
+        {
           id: 'zoom-in',
           label: 'Zoom in',
-          available: !!pdf && zoom < 2,
-          run: () => setZoom((value) => Math.min(2, value + 0.25)),
+          available: !!pdf && scale < 4,
+          run: () => setZoom(Math.min(4, Math.max(0.1, Math.round(scale * 1.25 * 100) / 100))),
         },
         {
           id: 'zoom-out',
           label: 'Zoom out',
-          available: !!pdf && zoom > 0.5,
-          run: () => setZoom((value) => Math.max(0.5, value - 0.25)),
+          available: !!pdf && scale > 0.1,
+          run: () => setZoom(Math.max(0.1, Math.min(4, Math.round((scale / 1.25) * 100) / 100))),
         },
       ],
-      [pdf, page, zoom],
+      [pdf, page, scale, setPage, setZoom],
     ),
   );
   if (error) return <Empty icon="pdf" title="PDF could not be displayed" detail={error} />;
@@ -225,13 +266,33 @@ export default function PDFPreview(context: PreviewContext) {
         <select
           aria-label="PDF zoom"
           value={zoom}
-          onChange={(event) => setZoom(Number(event.target.value))}
+          onChange={(event) => {
+            const value = event.target.value;
+            setZoom(pdfZoom(value === 'page' || value === 'width' ? value : Number(value)));
+          }}
         >
-          {[0.5, 0.75, 1, 1.25, 1.5, 2].map((value) => (
-            <option value={value} key={value}>
-              {Math.round(value * 100)}%
-            </option>
-          ))}
+          <option value="page">Fit page</option>
+          <option value="width">Fit width</option>
+          {[
+            ...new Set([
+              0.25,
+              0.5,
+              0.75,
+              1,
+              1.25,
+              1.5,
+              2,
+              3,
+              4,
+              ...(typeof zoom === 'number' ? [zoom] : []),
+            ]),
+          ]
+            .sort((a, b) => a - b)
+            .map((value) => (
+              <option value={value} key={value}>
+                {Math.round(value * 100)}%
+              </option>
+            ))}
         </select>
         <IconButton icon="search" label="Search PDF" onClick={() => setSearchOpen(true)} />
       </PreviewToolbar>

@@ -28,6 +28,8 @@ const icons: Record<string, IconName> = {
   Space: 'model',
   Sidebar: 'sidebar',
   App: 'settings',
+  Workspace: 'command',
+  Project: 'folder',
   Workspaces: 'grid',
 };
 const order = ['Files', 'View', 'Folder', 'Navigation', 'Terminal', 'Actions', 'Plane', 'App'];

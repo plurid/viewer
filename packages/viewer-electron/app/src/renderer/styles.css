@@ -1800,14 +1800,13 @@ select {
   overflow: auto;
   padding: 24px;
   background: var(--field);
-  text-align: center;
 }
 .pdf-sheet {
-  display: inline-block;
+  width: max-content;
+  margin-inline: auto;
   position: relative;
   background: white;
   box-shadow: 0 2px 12px #0003;
-  text-align: left;
 }
 .pdf-sheet canvas {
   display: block;
