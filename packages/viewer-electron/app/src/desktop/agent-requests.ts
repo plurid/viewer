@@ -8,6 +8,8 @@ import type { SettingsPatch } from '../domain/services';
 import { DocumentStore } from './document-store';
 import type { SettingsService } from './settings';
 import { entry, absolute } from './filesystem';
+import { agentCommandID } from '../domain/agent-safety';
+import { sameSourceVersion, sourceVersion } from '../domain/inspection';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
@@ -82,6 +84,10 @@ export class AgentRequests {
       .catch(() => {})
       .then(async () => {
         await this.load();
+        if (allow && capability !== 'terminal-read')
+          throw new Error(
+            'Agent actions require approval each time. Shell execution and terminal input cannot enforce Trash-only removal.',
+          );
         if (allow) {
           root = await fs.realpath(absolute(root));
           if (!(await fs.stat(root)).isDirectory())
@@ -97,20 +103,13 @@ export class AgentRequests {
             ),
         );
         if (allow) {
-          if (
-            capability === 'execute' &&
-            !this.settings
-              .snapshot()
-              .settings.customActions.some((action) => 'custom.' + action.id === actionID)
-          )
-            throw new Error('Choose an existing custom action.');
           next.push({
             id: randomUUID(),
             clientID,
             actionID,
             root,
             capability,
-            fingerprint: capability === 'execute' ? this.actionFingerprint(actionID) : '',
+            fingerprint: '',
           });
         }
         await this.store.save(next);
@@ -171,36 +170,27 @@ export class AgentRequests {
     target: CapturedTarget,
     title: string,
   ): Promise<{ id: string; requiresUserReview: boolean }> {
-    if (
-      commandID.startsWith('custom.') &&
-      (!this.authority || (await this.authority.executeAllowed())) &&
-      (await this.allowed(commandID, target.directory, 'execute'))
-    ) {
-      const proposal = this.add(
-        {
-          kind: 'command',
-          title,
-          commandID,
-          target: structuredClone(target),
-          detail: 'Authorized by a saved grant.',
-        },
-        this.actionFingerprint(commandID),
-      );
-      await this.review(proposal.id, true);
-      return { id: proposal.id, requiresUserReview: false };
-    }
+    const resolved = agentCommandID(commandID, this.settings.snapshot().settings.customActions);
+    const trash = resolved === 'trash';
+    if (trash && !target.selection.length)
+      throw new Error('Select the exact items to move to Trash.');
     const action = this.settings
       .snapshot()
       .settings.customActions.find((action) => 'custom.' + action.id === commandID);
     const proposal = this.add(
       {
         kind: 'command',
-        title,
+        title: trash ? 'Move to Trash' : title,
         commandID,
+        ...(trash ? { removal: 'trash' as const } : {}),
         target: structuredClone(target),
-        detail: action
-          ? JSON.stringify(action.executor, null, 2)
-          : `Run ${title} for the captured selection.`,
+        detail: trash
+          ? 'Move only these items to the system Trash:\n\n' +
+            target.selection.map((file) => file.path).join('\n') +
+            '\n\nSelected folders include their contents. Nothing is permanently deleted. This approval applies only to this request.'
+          : action
+            ? JSON.stringify(action.executor, null, 2)
+            : `Run ${title} for the captured selection.`,
       },
       action ? this.actionFingerprint(commandID) : undefined,
     );
@@ -258,29 +248,10 @@ export class AgentRequests {
     return value;
   }
   async writeTerminal(
-    id: string,
-    data: string,
+    _id: string,
+    _data: string,
   ): Promise<{ id: string; requiresUserReview: boolean }> {
-    const value = this.terminal.read(id);
-    if (await this.allowed('*', value.cwd, 'terminal-write')) {
-      const proposal = this.add({
-        kind: 'terminal-write',
-        title: 'Write to terminal',
-        terminalID: id,
-        data,
-        detail: 'Authorized by a saved terminal write grant.',
-      });
-      await this.review(proposal.id, true);
-      return { id: proposal.id, requiresUserReview: false };
-    }
-    const proposal = this.add({
-      kind: 'terminal-write',
-      title: 'Write to terminal',
-      terminalID: id,
-      data,
-      detail: `Directory: ${value.cwd}\n\n` + JSON.stringify(data),
-    });
-    return { id: proposal.id, requiresUserReview: true };
+    throw new Error('Agent terminal input is unavailable because it can permanently delete files.');
   }
   execution(task: ExecutionTask): void {
     if (task.status === 'running') return;
@@ -311,19 +282,31 @@ export class AgentRequests {
         if (proposal.kind === 'configuration')
           await this.settings.patch(proposal.patches!, proposal.revision!);
         else if (proposal.kind === 'terminal-write')
-          this.terminal.write(proposal.terminalID!, proposal.data!);
+          throw new Error(
+            'Agent terminal input is unavailable because it can permanently delete files.',
+          );
         else if (proposal.kind === 'navigation') {
           if (!this.navigate) throw new Error('Workspace navigation is unavailable.');
           await this.navigate(proposal.navigation!, proposal.target!);
         } else {
+          const resolved = agentCommandID(
+            proposal.commandID!,
+            this.settings.snapshot().settings.customActions,
+          );
           if (
             proposal.fingerprint &&
             proposal.fingerprint !== this.actionFingerprint(proposal.commandID!)
           )
             throw new Error('Action configuration changed. Ask the agent for a new proposal.');
-          for (const file of proposal.target!.selection)
-            if ((await entry(file.path)).identity !== file.identity)
+          for (const file of proposal.target!.selection) {
+            const current = await entry(file.path);
+            if (
+              current.identity !== file.identity ||
+              (resolved === 'trash' &&
+                !sameSourceVersion(sourceVersion(current), sourceVersion(file)))
+            )
               throw new Error('Selection changed. Ask the agent for a new proposal.');
+          }
           await this.authority?.check(proposal);
           if (this.proposals.get(id)?.status !== 'running')
             throw new Error('This agent task was stopped.');

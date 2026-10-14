@@ -258,14 +258,7 @@ describe('agent review and execution grants', () => {
       [
         {
           path: 'settings.customActions',
-          value: [
-            command({
-              kind: 'executable',
-              executable: '/bin/echo',
-              args: ['{paths}'],
-              perItem: false,
-            }),
-          ],
+          value: [command({ kind: 'builtin', command: 'copy-path' })],
         },
       ],
       0,
@@ -278,17 +271,20 @@ describe('agent review and execution grants', () => {
     });
     return { settings, execute, requests, write };
   }
-  it('reviews by default, invalidates changed executor grants, and scopes unattended execution to canonical folders', async () => {
+  it('requires fresh review and refuses grants that could bypass removal approval', async () => {
     const { settings, execute, requests } = await setup();
     const first = await requests.command('custom.fixture', target(), 'Fixture');
     expect(first.requiresUserReview).toBe(true);
     expect(execute).not.toHaveBeenCalled();
     await requests.review(first.id, true);
     expect(execute).toHaveBeenCalledOnce();
-    await requests.grant('custom.fixture', root, 'execute', true);
-    const unattended = await requests.command('custom.fixture', target(), 'Fixture');
-    expect(unattended.requiresUserReview).toBe(false);
-    expect(requests.get(unattended.id).status).toBe('completed');
+    await expect(requests.grant('custom.fixture', root, 'execute', true)).rejects.toThrow(
+      'approval each time',
+    );
+    const again = await requests.command('custom.fixture', target(), 'Fixture');
+    expect(again.requiresUserReview).toBe(true);
+    expect(requests.get(again.id).status).toBe('review');
+    expect(execute).toHaveBeenCalledOnce();
     const action = command({
       kind: 'executable',
       executable: '/bin/echo',
@@ -299,28 +295,22 @@ describe('agent review and execution grants', () => {
       [{ path: 'settings.customActions', value: [action] }],
       settings.snapshot().revision,
     );
-    expect((await requests.command('custom.fixture', target(), 'Fixture')).requiresUserReview).toBe(
-      true,
+    await expect(requests.command('custom.fixture', target(), 'Fixture')).rejects.toThrow(
+      'bypass Trash',
     );
-    const sibling = path.join(root, 'outside');
-    await fs.mkdir(sibling);
-    await requests.grant('custom.fixture', sibling, 'execute', true);
-    const link = path.join(sibling, 'escape');
-    await fs.symlink(root, link);
-    expect(
-      (await requests.command('custom.fixture', target(link), 'Fixture')).requiresUserReview,
-    ).toBe(true);
+    await expect(requests.review(again.id, true)).rejects.toThrow('bypass Trash');
+    expect(execute).toHaveBeenCalledOnce();
   });
   it('separates terminal read/write grants and configuration proposals cannot self-authorize', async () => {
     const { requests, write } = await setup();
     await expect(requests.readTerminal('terminal')).rejects.toThrow('separate read grant');
     await requests.grant('*', root, 'terminal-read', true);
     expect((await requests.readTerminal('terminal')).output).toBe('fixture screen');
-    const pending = await requests.writeTerminal('terminal', 'pwd\r');
-    expect(pending.requiresUserReview).toBe(true);
+    await expect(requests.writeTerminal('terminal', 'pwd\r')).rejects.toThrow('permanently delete');
+    await expect(requests.grant('*', root, 'terminal-write', true)).rejects.toThrow(
+      'approval each time',
+    );
     expect(write).not.toHaveBeenCalled();
-    await requests.review(pending.id, true);
-    expect(write).toHaveBeenCalledWith('terminal', 'pwd\r');
     expect(() => requests.configuration([{ path: 'executionApprovals', value: [] }])).toThrow(
       'Unknown setting',
     );
@@ -347,7 +337,7 @@ describe('agent review and execution grants', () => {
       task: { output: 'fixture output' },
     });
     execute.mockRejectedValueOnce(new Error('The originating plane changed.'));
-    const stale = await requests.command('open-terminal-plane', target(), 'Terminal');
+    const stale = await requests.command('copy-path', target(), 'Copy path');
     await expect(requests.review(stale.id, true)).rejects.toThrow('originating plane');
     expect(requests.get(stale.id).status).toBe('failed');
   });

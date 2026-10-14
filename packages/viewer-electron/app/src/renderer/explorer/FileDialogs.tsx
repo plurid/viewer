@@ -8,10 +8,15 @@ import { getState, report } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { OpenWithDialog } from '../ui/OpenWithDialog';
 import { RenameActions } from '../actions/RenameActions';
+import { sourceVersion } from '../../domain/inspection';
 const moveToTrash = async (context: CommandContext) => {
   await window.viewer.operate({
     kind: 'trash',
     sources: context.selection.map((file) => file.path),
+    expectedSources: context.selection.map((file) => ({
+      path: file.path,
+      version: sourceVersion(file),
+    })),
   });
 };
 

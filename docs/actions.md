@@ -87,7 +87,23 @@ services; MCP cannot enable a watch approval or directly apply its file changes.
 
 Command discovery uses the same captured context, availability and IDs as the UI. A command proposal opens review before invocation, and completion waits for the workspace acknowledgement or a subprocess's final status. Origin changes or executor changes fail the proposal rather than retargeting it. Configuration proposals validate first, then apply a reviewed revision; they cannot change effective approvals. Recipe file changes still require their normal row review and Apply. No direct `apply`, `trash` or `delete` MCP tool is exposed.
 
-Settings → Agents can explicitly grant unattended execution to an exact custom-action definition in a canonical folder. Editing that action invalidates its grant. Terminal output reading and input writing use separate grants. Effective grants are stored outside JSONC; imported configuration cannot authorize itself. Custom executables, shell scripts and terminal input have the user's OS permissions: their working directory is not a sandbox. Arbitrary command mutations do not acquire the operation service's Undo. Disabling Agents rejects further requests and closes the server; enabling it starts the local server live. Viewer must be running to supply context and review UI.
+Every agent command requires fresh user review, including custom built-in aliases.
+Saved execution grants never suppress that review. A Trash request lists the exact
+paths and explains that selected folders include their contents. Its approval
+cannot be replayed or reused for a later request. Changing the selected source or
+custom action requires a new proposal. Source versions are checked again inside
+the coordinated Trash operation; Trash failure never falls back to permanent
+deletion. Granted roots, Home, disk roots, system folders and private Viewer data
+cannot be trashed through the agent API.
+
+Agent shell scripts, executables, terminal profiles and terminal input are blocked
+because they can bypass Trash. They are excluded from agent command discovery;
+old clients and saved write/execution grants cannot re-enable them. Terminal
+output reading remains separately granted. Human-invoked custom commands and
+terminal use remain available in the app. Effective grants stay outside JSONC;
+imported configuration cannot authorize itself. Disabling Agents rejects further
+requests and closes the server. Viewer must be running to supply context and
+review UI. Coding agents also follow the repository's [removal policy](../AGENTS.md).
 
 See [configuration.md](configuration.md) for declarative actions, placeholders and validation, and [terminals.md](terminals.md) for shell profiles and session behavior.
 

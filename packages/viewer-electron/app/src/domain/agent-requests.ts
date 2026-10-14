@@ -38,6 +38,7 @@ export interface AgentProposal {
   title: string;
   target?: CapturedTarget;
   commandID?: string;
+  removal?: 'trash';
   navigation?: AgentNavigation;
   patches?: SettingsPatch[];
   revision?: number;

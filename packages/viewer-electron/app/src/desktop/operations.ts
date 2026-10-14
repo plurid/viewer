@@ -371,6 +371,14 @@ export class Operations {
         const actual = fileCoordination.path(file);
         await this.access([actual]);
         signal?.throwIfAborted();
+        for (const expected of task.request.expectedSources ?? []) {
+          if (expected.path !== file && !expected.path.startsWith(file + path.sep)) continue;
+          const current = fileCoordination.path(expected.path);
+          await this.access([current]);
+          if (!sameSourceVersion(expected.version, sourceVersion(await entry(current))))
+            throw new Error('The source changed after review. Nothing was moved to Trash.');
+        }
+        signal?.throwIfAborted();
         return this.trash(actual);
       },
       task.abort.signal,

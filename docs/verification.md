@@ -315,3 +315,22 @@ Completed evidence and seven settled dark/light captures are in
 fixes for this PDF fitting and menu-icon refinement. These direct-package checks
 do not replace native picker, assistive-technology, supported macOS or Store
 distribution qualification.
+
+## Agent removal safeguards
+
+`pnpm exec vitest run tests/agent-safety.test.ts` passes 11 in-memory security
+regressions. The tests exercise the actual command/proposal broker and operation
+service with simulated file metadata, coordination and dispatch. They verify
+mandatory per-request review with the manual confirmation preference disabled,
+legacy-grant and custom-alias handling, rejection and replay protection, changed
+sources/executors, revoked scope, canonical escapes/private data, protected roots,
+blocked shell/terminal routes and the advertised Trash-only policy. Two operation
+checks reject a source changed inside coordination and verify that a Trash error
+never calls permanent deletion. No actual files or folders are removed; mocked
+filesystem deletion calls fail the tests.
+
+The source also passes TypeScript and lint. The filesystem integration suites
+were not rerun in this pass because their fixture cleanup permanently removes
+generated folders. Packaging and fresh native UI evidence require permission to
+move the previous generated build folders to Trash first. The previously built
+app and its earlier evidence do not verify these new safeguards.

@@ -31,6 +31,7 @@ import { sourceVersion, sameSourceVersion } from '../domain/inspection';
 import { parseDelimited } from '../domain/delimited';
 import type { RelationshipsResult, FileRelation } from '../domain/relationships';
 import { drawingGeometryOptionsSchema } from '../domain/drawing-geometry';
+import { agentCommandID, agentRemovalPolicy } from '../domain/agent-safety';
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 const tools = [
@@ -168,7 +169,7 @@ const tools = [
   {
     name: 'propose_command',
     description:
-      'Propose a command for the captured active context. User review is the default; explicit executor grants may permit unattended execution.',
+      'Propose a command for the captured context. Every command requires user approval. File removals use system Trash only; shell, executable and terminal execution are unavailable.',
     inputSchema: {
       type: 'object',
       properties: { commandID: { type: 'string' } },
@@ -209,16 +210,6 @@ const tools = [
       type: 'object',
       properties: { id: { type: 'string' } },
       required: ['id'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'write_terminal',
-    description: 'Propose terminal input; needs user review or a separate terminal write grant.',
-    inputSchema: {
-      type: 'object',
-      properties: { id: { type: 'string' }, data: { type: 'string' } },
-      required: ['id', 'data'],
       additionalProperties: false,
     },
   },
@@ -484,11 +475,49 @@ export class AgentBroker {
       if (proposal.target?.directory && proposal.target.paneID !== 'none')
         await this.authorize(proposal.target.directory);
       for (const file of proposal.target?.selection ?? []) await this.authorize(file.path);
+      if (
+        proposal.kind === 'command' &&
+        agentCommandID(proposal.commandID!, this.settings().customActions) === 'trash'
+      )
+        await this.authorizeRemoval(proposal.target!.selection.map((file) => file.path));
       if (proposal.kind === 'terminal-write')
         await this.authorize(this.extension!.requests.terminalDirectory(proposal.terminalID!));
       if (proposal.navigation)
         await this.authorizeNavigation(proposal.navigation, proposal.target!);
     });
+  }
+  private async authorizeRemoval(files: readonly string[]): Promise<void> {
+    const client = await this.clients.get();
+    const roots = await Promise.all(
+      [...(client?.roots ?? this.settings().agents.roots), os.homedir()].map((root) =>
+        realpath(absolute(root)).catch(() => absolute(root)),
+      ),
+    );
+    for (const file of files) {
+      const actual = await this.authorize(file);
+      if (
+        actual === path.parse(actual).root ||
+        roots.includes(actual) ||
+        (process.platform !== 'win32' &&
+          [
+            '/Users',
+            '/System',
+            '/Library',
+            '/Applications',
+            '/Volumes',
+            '/private',
+            '/usr',
+            '/bin',
+            '/sbin',
+            '/etc',
+            '/tmp',
+            '/var',
+          ].includes(actual))
+      )
+        throw new Error(
+          'Agents cannot move a granted root, Home, a whole disk or a system folder to Trash. Select individual items inside a granted folder.',
+        );
+    }
   }
   async authorize(file: string): Promise<string> {
     if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
@@ -775,8 +804,21 @@ export class AgentBroker {
       if (!extension || !catalog) throw new Error('Focus a folder plane in Viewer first.');
       await this.authorize(catalog.target.directory);
       for (const file of catalog.target.selection) await this.authorize(file.path);
+      const commands = catalog.commands.filter((command) => {
+        try {
+          agentCommandID(command.id, this.settings().customActions);
+          return true;
+        } catch {
+          return false;
+        }
+      });
       if (call.name === 'list_commands')
-        value = { target: catalog.target, commands: catalog.commands, reviewByDefault: true };
+        value = {
+          target: catalog.target,
+          commands,
+          reviewByDefault: true,
+          removalPolicy: agentRemovalPolicy,
+        };
       else {
         const input = z
           .object({ commandID: z.string().max(200) })
@@ -784,11 +826,15 @@ export class AgentBroker {
           .parse(args);
         const command = catalog.commands.find((command) => command.id === input.commandID);
         if (!command) throw new Error('Command is unavailable in the captured context.');
+        const resolved = agentCommandID(command.id, this.settings().customActions);
+        if (resolved === 'trash')
+          await this.authorizeRemoval(catalog.target.selection.map((file) => file.path));
         if (call.name === 'explain_command')
           value = {
             ...command,
             target: catalog.target,
             reviewByDefault: true,
+            removalPolicy: agentRemovalPolicy,
             customAction: this.settings().customActions.find(
               (action) => 'custom.' + action.id === command.id,
             ),

@@ -20,11 +20,11 @@ const descriptions = {
     'Open paths, select files, focus planes and change workspaces.',
   ],
   propose: ['Propose changes', 'Create review tasks and suggest configuration changes.'],
-  execute: ['Use exact execution grants', 'Only saved custom-command grants bypass review.'],
+  execute: ['Unattended execution unavailable', 'Every agent command requires approval.'],
   'terminal-read': ['Read terminal output', 'Also requires a separate terminal read grant.'],
   'terminal-write': [
-    'Propose terminal input',
-    'Input requires review unless a terminal write grant exists.',
+    'Terminal input unavailable',
+    'Shell commands can permanently delete files and bypass Trash.',
   ],
 } as const;
 const defaults: AgentClientInput = {
@@ -201,7 +201,10 @@ export function AgentClientSettings({ settings }: { settings: ApplicationSetting
             </span>
             <input
               type="checkbox"
-              checked={draft.capabilities.includes(cap)}
+              disabled={cap === 'execute' || cap === 'terminal-write'}
+              checked={
+                cap !== 'execute' && cap !== 'terminal-write' && draft.capabilities.includes(cap)
+              }
               onChange={(e) =>
                 setDraft({
                   ...draft,

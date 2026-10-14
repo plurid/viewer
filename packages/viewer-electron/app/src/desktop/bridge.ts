@@ -2,6 +2,7 @@ import type { FileChange } from '../domain/changes';
 import type { ComparisonRequest } from '../domain/comparison';
 import type { FileInformationPatch } from '../domain/file-information';
 import { AgentRequests } from './agent-requests';
+import { agentCommandID } from '../domain/agent-safety';
 import type { CapturedTarget, TerminalStart } from '../domain/automation';
 import type {
   AgentNavigation,
@@ -742,12 +743,8 @@ export class Desktop {
       this.settings,
       (proposal) => emit({ type: 'agent-proposal', proposal }),
       async (command, target) => {
-        const action = this.settings
-          .snapshot()
-          .settings.customActions.find((action) => 'custom.' + action.id === command);
-        if (action && (action.executor.kind === 'executable' || action.executor.kind === 'shell'))
-          return { taskID: await this.executions.start(action.id, target) };
-        else await this.sendAgentCommand(command, target);
+        const resolved = agentCommandID(command, this.settings.snapshot().settings.customActions);
+        await this.sendAgentCommand(resolved, target);
       },
       {
         read: (id) => this.terminals.agentRead(id),
