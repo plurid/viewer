@@ -13,6 +13,10 @@ checks work together. Store qualification remains a separate gate.
 - Checkpoints are opt-in during change review, with a 5 GiB default total budget.
   Built-in guarded Undo remains available independently.
 - Project folder views take precedence inside that project only.
+- Close project detaches the saved definition while retaining open planes, layout
+  and preview notes in the ordinary workspace. It performs no file operation;
+  shared folder preferences resume. Missing files offer Close project directly.
+  Dismiss remembers the unchanged problem across folder-watch notifications.
 - Content indexing, embeddings, OCR, transcription and provider transmission are
   opt-in. Opening a project never starts its commands or workflows.
 

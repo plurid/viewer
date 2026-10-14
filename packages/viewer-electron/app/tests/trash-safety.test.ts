@@ -28,6 +28,7 @@ const mock = vi.hoisted(() => ({
   menu: vi.fn(),
   execute: vi.fn(),
   read: vi.fn(),
+  settings: vi.fn(async () => {}),
 }));
 vi.mock('../src/desktop/macos-files', () => ({
   macFiles: () => ({
@@ -41,6 +42,7 @@ vi.mock('../src/desktop/macos-files', () => ({
 vi.mock('electron', () => ({
   Menu: { buildFromTemplate: mock.menu },
   dialog: { showOpenDialog: mock.open, showMessageBox: mock.confirm },
+  shell: { openExternal: mock.settings },
 }));
 vi.mock('node:child_process', () => ({ execFile: mock.execute }));
 vi.mock('node:fs/promises', () => ({
@@ -196,13 +198,17 @@ it('keeps a symlink as a single trashed item without reading its target', async 
   expect(mock.read).not.toHaveBeenCalled();
 });
 it('denies emptying on incomplete inventories or lost permissions', async () => {
-  access.require.mockRejectedValue(new Error('Choose the Trash folder'));
+  access.require.mockRejectedValue(
+    Object.assign(new Error('Choose the Trash folder'), { code: 'FILE_ACCESS_REQUIRED' }),
+  );
   const result = await service().list();
   expect(result.canEmpty).toBe(false);
   expect(result.locations[0]).toMatchObject({ state: 'unavailable', canRequestAccess: true });
 });
 it('never grants an ordinary folder selected in place of Trash', async () => {
-  access.require.mockRejectedValueOnce(new Error('Needs access'));
+  access.require.mockRejectedValueOnce(
+    Object.assign(new Error('Needs access'), { code: 'FILE_ACCESS_REQUIRED' }),
+  );
   const trash = service(),
     value = await trash.list();
   mock.open.mockResolvedValue({
@@ -217,6 +223,37 @@ it('never grants an ordinary folder selected in place of Trash', async () => {
   mock.open.mockResolvedValue({ canceled: true, filePaths: [] });
   await trash.requestAccess(window, value.locations[0].id);
   expect(access.remember).not.toHaveBeenCalled();
+});
+it('routes macOS privacy denial to settings without opening a misleading folder picker or granting access', async () => {
+  access.require.mockRejectedValue(
+    Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }),
+  );
+  const trash = service(),
+    value = await trash.list();
+  expect(value.canEmpty).toBe(false);
+  expect(value.locations[0]).toMatchObject({
+    access: 'privacy',
+    canRequestAccess: true,
+    message: expect.stringContaining('Full Disk Access'),
+  });
+  expect(value.locations[0].message).not.toContain('EPERM');
+  await trash.requestAccess(window, value.locations[0].id);
+  expect(mock.settings).toHaveBeenCalledExactlyOnceWith(
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+  );
+  expect(mock.open).not.toHaveBeenCalled();
+  expect(access.remember).not.toHaveBeenCalled();
+  expect(mock.native).not.toHaveBeenCalled();
+  expect(mock.confirm).not.toHaveBeenCalled();
+});
+it('does not offer a grant for an unverified Trash root', async () => {
+  mock.files.get(root)!.link = true;
+  const trash = service(),
+    value = await trash.list();
+  expect(value.locations[0].canRequestAccess).toBe(false);
+  await expect(trash.requestAccess(window, value.locations[0].id)).rejects.toThrow('unavailable');
+  expect(mock.settings).not.toHaveBeenCalled();
+  expect(mock.open).not.toHaveBeenCalled();
 });
 it('revokes the UI route when the service or window closes', async () => {
   const trash = service(),

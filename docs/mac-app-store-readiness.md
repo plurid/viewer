@@ -25,8 +25,8 @@ Assessed October 13, 2026, for Viewer 0.1.0, Apple Silicon, macOS 13 or later. *
 
 The October 14 sidebar Trash, model shading and linked-navigation extension is
 checked in a separate local direct bundle; it does not qualify the earlier Store
-candidate. Before including it in a release, verify genuine picker-backed access
-to the user's system Trash under the signed sandbox and physical native menu /
+candidate. Before including it in a release, verify user-granted Full Disk Access
+and independent access to the user's system Trash under the signed sandbox, plus physical native menu /
 Cancel behavior. Actual permanent emptying requires a separately reviewed,
 disposable selection and human confirmation; agents must not approve it. Current
 read-only testing records macOS privacy denial and disables emptying. The native

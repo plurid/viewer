@@ -17,6 +17,7 @@ export interface TrashLocation {
   state: 'ready' | 'unavailable';
   message?: string;
   canRequestAccess?: boolean;
+  access?: 'privacy' | 'folder';
 }
 export interface TrashSnapshot {
   revision: string;

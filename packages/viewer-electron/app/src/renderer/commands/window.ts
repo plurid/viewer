@@ -195,6 +195,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
         ['open', 'Open project…'],
         ['save', 'Save project'],
         ['reload', 'Reload project…'],
+        ['close', 'Close project'],
         ['arrangements', 'Saved arrangements…'],
         ['bindings', 'Project folders…'],
       ] as [ProjectCommand, string][]
@@ -203,7 +204,10 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       label,
       group: 'Project',
       icon: 'folder' as const,
-      aliases: ['project', command],
+      aliases:
+        command === 'close'
+          ? ['close project', 'exit project', 'leave project']
+          : ['project', command],
       when: () => actions.ready && (['create', 'open'].includes(command) || !!space.project),
       run: () => requestProject(command),
     })),

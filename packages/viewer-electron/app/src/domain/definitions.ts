@@ -5,3 +5,5 @@ export interface DefinitionDocument<T> {
   revision: string;
   definition: T;
 }
+
+export const missingDefinitionCode = 'DEFINITION_MISSING';

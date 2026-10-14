@@ -589,7 +589,6 @@ function AppWindow() {
       <WorkflowControls />
       <RelationshipControls />
       <div className="app-shell" data-look={saved.look} data-density={density}>
-        <ProjectFileNotice />
         <AgentReview />
         <ExecutionPanel />
         <header className="app-titlebar">
@@ -644,6 +643,7 @@ function AppWindow() {
             }}
           />
         </header>
+        <ProjectFileNotice />
         <div className="app-main">
           <Sidebar />
           <main className="workspace-main">

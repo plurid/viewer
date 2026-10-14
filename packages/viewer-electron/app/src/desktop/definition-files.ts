@@ -6,7 +6,7 @@ import { parse, applyEdits, modify, printParseErrorCode, type ParseError } from 
 import type { ZodType } from 'zod';
 import { configChanges } from './configuration';
 import { fileCoordination } from './file-coordination';
-import type { DefinitionDocument } from '../domain/definitions';
+import { missingDefinitionCode, type DefinitionDocument } from '../domain/definitions';
 const revision = (text: string) => createHash('sha256').update(text).digest('hex');
 export function decodeDefinition<T>(
   text: string,
@@ -27,12 +27,12 @@ export function decodeDefinition<T>(
     );
   return schema.parse(value);
 }
-async function source(file: string, title: string, limit: number): Promise<string> {
+async function source(file: string, title: string, limit: number): Promise<string | null> {
   const info = await lstat(file).catch((error: NodeJS.ErrnoException) => {
     if (error.code === 'ENOENT') return null;
     throw error;
   });
-  if (!info) return '';
+  if (!info) return null;
   if (!info.isFile() || info.isSymbolicLink())
     throw new Error(
       'Choose a regular ' + title.toLowerCase() + ' file, rather than an alias or symbolic link.',
@@ -101,7 +101,13 @@ export class DefinitionFiles<T> {
         await this.access([file]);
         signal?.throwIfAborted();
         const text = await source(fileCoordination.path(file), this.title, this.limit);
-        if (!text) throw new Error('No ' + this.title.toLowerCase() + ' definition was found.');
+        if (text === null)
+          throw Object.assign(
+            new Error('No ' + this.title.toLowerCase() + ' definition was found.'),
+            {
+              code: missingDefinitionCode,
+            },
+          );
         const definition = decodeDefinition(text, this.schema, this.title, this.limit);
         await this.access([file]);
         return { file, root: path.dirname(file), revision: revision(text), definition };

@@ -900,6 +900,11 @@ export function associateProject(project: ProjectAssociation): void {
     ),
   });
 }
+/** Detach only the definition. The workspace, engine, previews and files stay open. */
+export function closeProject(): void {
+  if (!activeWorkspace().project) return;
+  changeWorkspace((space) => ({ ...space, project: undefined }));
+}
 export function consumeProjectLayout(layout: ProjectLayout): void {
   savePatch({
     workspaces: current.saved.workspaces.map((space) =>

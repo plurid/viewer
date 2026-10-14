@@ -418,3 +418,49 @@ Trash browsing, physical emptying/confirmation, Windows/Linux runtime behavior,
 assistive technology and signed Store access remain unverified. No user data was
 removed. See [Trash and Applications](trash.md) for the native-only action design
 and platform limits.
+
+## Project exit and macOS Trash permission recovery
+
+The original model/navigation/Trash direct bundle reproduces the reported project
+bug in an owned hidden instance: dismissing a missing-definition warning hides it
+until an unrelated real folder-watch notification. The default
+`tests/native-project-exit.ts` assertion fails against that original app. Missing
+definition fixtures are absent from the start; reproduction performs no deletion.
+
+The corrected `out/Viewer-project-recovery-v2-darwin-arm64/Viewer.app` passes four
+native groups in `tests/native-project-exit.ts`: stable dismissal across the real
+folder notification, the visible Close project command with persisted detachment
+and the folder/root/active plane retained, cold restart without reattaching the
+missing project, and actual macOS privacy denial presented as Full Disk Access
+recovery with emptying disabled. The normal-flow notice also passes a geometry
+assertion that it does not cover the plane toolbar. Completed
+[native recovery evidence](../packages/viewer-electron/app/out/project-exit-acceptance-W3gqwv/result.json)
+includes seven desktop/compact dark/light captures. The earlier first-build
+captures and all generated profiles and files are preserved.
+
+68 tests across seven selected files pass: project session, missing/empty
+definition reads, Trash safety, workspaces, agent workspace/safety and commands.
+The state tests preserve preview notes and engine storage and close only the
+active association; no project-file or operation service is called. Simulated
+privacy denial opens only the fixed settings URL, invokes no folder picker,
+grants no permission and never calls the native erasure menu or confirmation.
+Unverified Trash roots expose no grant action. Missing definitions now carry a
+stable error code through desktop IPC; an empty existing file is invalid rather
+than missing.
+
+`pnpm check`, `pnpm lint` and the preserving production build/local ad-hoc signature
+verification pass. The build retains its seed, native binding and intermediates.
+Existing Vite config-loader, CJS import-meta and large-chunk warnings remain;
+this correction does not qualify a Store or notarized package. No physical
+Privacy Settings navigation, Full Disk Access grant, positive system Trash
+browsing or emptying was performed. FDA and independent App Sandbox
+authorization remain separate release checks. See
+[Apple's macOS security guidance](https://developer.apple.com/videos/play/wwdc2019/701/?time=1995).
+
+The fresh finish reviewer returned `ship` for current source/render behavior and
+the independently reproduced old-build failures, with no material fixes. All seven
+current and four old-build captures were reviewed. Direct comparison with the
+three original user screenshots is unavailable: their Desktop files disappeared
+after the initial inspection. Old-build reproductions are not presented as
+original user pixels. The missing historical comparison and native permission /
+platform limits do not receive a passing verification claim.

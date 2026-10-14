@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { missingDefinitionCode } from '../../domain/definitions';
 import {
   projectDefinitionSchema,
   projectReference,
@@ -11,6 +12,7 @@ import { parentPath } from '../../domain/planes';
 import {
   activeWorkspace,
   associateProject,
+  closeProject,
   changeWorkspace,
   folderPresentation,
   installProject,
@@ -23,7 +25,8 @@ import {
 import { Dialog, NameDialog } from '../ui/primitives';
 import { useWorkspace } from './context';
 
-export type ProjectCommand = 'open' | 'create' | 'save' | 'reload' | 'arrangements' | 'bindings';
+export type ProjectCommand =
+  'open' | 'create' | 'save' | 'reload' | 'close' | 'arrangements' | 'bindings';
 export function requestProject(command: ProjectCommand): void {
   window.dispatchEvent(new CustomEvent('viewer:project', { detail: command }));
 }
@@ -32,17 +35,25 @@ export function ProjectFileNotice() {
   const space = useViewer(activeWorkspace),
     project = space.project;
   const [changed, setChanged] = useState<string>(),
-    [problem, setProblem] = useState('');
+    [problem, setProblem] = useState<{ message: string; missing: boolean }>();
   const [ignored, setIgnored] = useState<string>();
   useEffect(() => {
     setChanged(undefined);
-    setProblem('');
+    setProblem(undefined);
     setIgnored(undefined);
     if (!project) return;
     let alive = true,
       pending = false,
       again = false;
     const subscriber = 'project-definition:' + space.id + ':' + crypto.randomUUID();
+    const isCurrent = () => {
+      const current = activeWorkspace(getState());
+      return alive && current.id === space.id && current.project?.file === project.file;
+    };
+    const failed = (error: { message: string; code?: string }) => {
+      if (isCurrent())
+        setProblem({ message: error.message, missing: error.code === missingDefinitionCode });
+    };
     const inspect = async () => {
       if (pending) {
         again = true;
@@ -52,14 +63,15 @@ export function ProjectFileNotice() {
       try {
         const document = await readProject(project.file);
         const current = activeWorkspace(getState());
-        if (alive && current.id === space.id && current.project?.file === document.file) {
+        if (isCurrent() && current.project?.file === document.file) {
           setChanged(
-            document.revision === current.project.revision ? undefined : document.revision,
+            document.revision === current.project!.revision ? undefined : document.revision,
           );
-          setProblem('');
+          setProblem(undefined);
+          setIgnored((value) => (value?.startsWith('problem:') ? undefined : value));
         }
       } catch (error) {
-        if (alive) setProblem((error as Error).message);
+        failed(error as Error & { code?: string });
       } finally {
         pending = false;
         if (alive && again) {
@@ -70,7 +82,8 @@ export function ProjectFileNotice() {
     };
     const remove = window.viewer.onEvent((event) => {
       if (event.type === 'folder-changed' && event.path === project.root) void inspect();
-      if (event.type === 'watch-error' && event.path === project.root) setProblem(event.message);
+      if (event.type === 'watch-error' && event.path === project.root)
+        failed({ message: event.message });
     });
     void window.viewer
       .watch(project.root, subscriber)
@@ -79,7 +92,7 @@ export function ProjectFileNotice() {
         else void window.viewer.unwatch(subscriber).catch(report);
       })
       .catch((error) => {
-        if (alive) setProblem(error.message);
+        failed(error);
       });
     return () => {
       alive = false;
@@ -87,15 +100,30 @@ export function ProjectFileNotice() {
       void window.viewer.unwatch(subscriber).catch(report);
     };
   }, [space.id, project?.file, project?.revision]);
-  if (!project || (!problem && (!changed || changed === ignored))) return null;
+  const noticeID = problem
+    ? 'problem:' + problem.message
+    : changed
+      ? 'revision:' + changed
+      : undefined;
+  if (!project || !noticeID || noticeID === ignored) return null;
   return (
     <div className="project-file-notice" role="status">
-      <span>{problem ? 'Project file: ' + problem : 'Project file changed on disk.'}</span>
-      <button onClick={() => requestProject('reload')}>Review updated project…</button>
+      <span title={project.file}>
+        {problem?.missing
+          ? 'Project file is missing. Your open planes are still available.'
+          : problem
+            ? 'Project file: ' + problem.message
+            : 'Project file changed on disk.'}
+      </span>
+      {!problem?.missing && (
+        <button onClick={() => requestProject('reload')}>
+          {problem ? 'Retry…' : 'Review updated project…'}
+        </button>
+      )}
+      <button onClick={() => requestProject('close')}>Close project</button>
       <button
         onClick={() => {
-          setIgnored(changed);
-          setProblem('');
+          setIgnored(noticeID);
         }}
       >
         Dismiss
@@ -190,21 +218,44 @@ export function ProjectControls() {
   const [naming, setNaming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const operation = useRef(0);
+  useEffect(() => {
+    operation.current++;
+    setPanel(null);
+    setReload(undefined);
+    setNaming(false);
+    setBusy(false);
+    setError('');
+  }, [space.id]);
   useEffect(() => {
     const listener = (event: Event) => {
       const command = (event as CustomEvent<ProjectCommand>).detail;
+      if (command === 'close') {
+        operation.current++;
+        closeProject();
+        setPanel(null);
+        setReload(undefined);
+        setNaming(false);
+        setBusy(false);
+        setError('');
+        return;
+      }
       if (command === 'arrangements' || command === 'bindings') {
         setPanel(command);
         return;
       }
       if (busy) return;
+      const token = ++operation.current;
+      const owner = activeWorkspace().id;
+      const isCurrent = () => token === operation.current && activeWorkspace().id === owner;
       setBusy(true);
       setError('');
       void (async () => {
         if (command === 'open') {
           const file = await window.viewer.project({ kind: 'choose', mode: 'open' });
-          if (typeof file === 'string') {
+          if (typeof file === 'string' && isCurrent()) {
             const document = await readProject(file);
+            if (!isCurrent()) return;
             await installProject(document);
             if (
               document.definition.bindings.some(
@@ -218,7 +269,10 @@ export function ProjectControls() {
         const current = activeWorkspace();
         let project = current.project;
         if (command === 'reload') {
-          if (project) setReload(await readProject(project.file));
+          if (project) {
+            const document = await readProject(project.file);
+            if (isCurrent()) setReload(document);
+          }
           return;
         }
         if (!project || command === 'create') {
@@ -227,7 +281,7 @@ export function ProjectControls() {
             mode: 'create',
             defaultPath: current.panes.find((pane) => pane.type === 'folder')?.path,
           });
-          if (typeof file !== 'string') return;
+          if (typeof file !== 'string' || !isCurrent()) return;
           const root = parentPath(file);
           const bindings: Record<string, string> = {};
           for (const pane of current.panes) {
@@ -269,10 +323,14 @@ export function ProjectControls() {
           definition: input,
         });
         if (!reply || typeof reply !== 'object') throw new Error('The project was not saved.');
-        associateProject({ ...project, ...reply, dirty: false });
+        if (isCurrent()) associateProject({ ...project, ...reply, dirty: false });
       })()
-        .catch(report)
-        .finally(() => setBusy(false));
+        .catch((error) => {
+          if (isCurrent()) report(error);
+        })
+        .finally(() => {
+          if (isCurrent()) setBusy(false);
+        });
     };
     window.addEventListener('viewer:project', listener);
     return () => window.removeEventListener('viewer:project', listener);

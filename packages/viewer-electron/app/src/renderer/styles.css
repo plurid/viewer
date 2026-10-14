@@ -3773,12 +3773,10 @@ select {
   width: min(900px, calc(100vw - 48px));
 }
 .project-file-notice {
-  position: absolute;
-  z-index: 30;
-  top: 68px;
-  left: 24px;
-  right: 24px;
+  flex-shrink: 0;
+  margin: 12px 24px;
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   background: var(--surface);
@@ -3788,8 +3786,11 @@ select {
 }
 .project-file-notice span {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 280px;
   overflow-wrap: anywhere;
+}
+.project-file-notice button {
+  flex-shrink: 0;
 }
 .workflow-body {
   display: grid;

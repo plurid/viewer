@@ -98,7 +98,9 @@ export function Trash({ onClose }: { onClose(): void }) {
                     disabled={busy}
                     onClick={() => void action(() => window.viewer.trashAccess(location.id))}
                   >
-                    Allow access…
+                    {location.access === 'privacy'
+                      ? 'Open Privacy Settings…'
+                      : 'Allow folder access…'}
                   </button>
                 )}
               </div>

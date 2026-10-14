@@ -3,7 +3,7 @@ import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
-import { Menu, dialog, type BrowserWindow } from 'electron';
+import { Menu, dialog, shell, type BrowserWindow } from 'electron';
 import type { TrashItem, TrashSnapshot, DesktopPlatform } from '../domain/trash';
 import { trashName } from '../domain/trash';
 import { linuxMounts, trashRoots, type TrashRoot } from './trash-locations';
@@ -47,10 +47,21 @@ export class Trash {
   }
   async requestAccess(window: BrowserWindow, locationID: string): Promise<void> {
     const root = this.#last?.available.get(locationID);
-    if (!root || process.platform !== 'darwin')
+    const location = this.#last?.snapshot.locations.find((value) => value.id === locationID);
+    if (this.#closed || window.isDestroyed()) return;
+    if (!root || process.platform !== 'darwin' || !location?.canRequestAccess)
       throw new Error('This Trash location is unavailable. Refresh Trash.');
+    if (location.access === 'privacy') {
+      // A folder picker cannot grant macOS Full Disk Access. This fixed link
+      // opens settings only; it neither grants access nor changes agent scopes.
+      await shell.openExternal(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+      );
+      return;
+    }
     const result = await dialog.showOpenDialog(window, {
       title: `Allow access to ${root.name} Trash`,
+      message: `Select ${root.path}. The folder is hidden; use Command-Shift-G to enter this exact path.`,
       defaultPath: root.path,
       properties: ['openDirectory', 'showHiddenFiles', 'dontAddToRecent'],
       securityScopedBookmarks: this.access.scoped,
@@ -233,12 +244,20 @@ export class Trash {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
         // A missing grant can mask a nonexistent volume Trash in a sandbox.
         // Report the location; never assume its contents are empty.
+        const code = (error as NodeJS.ErrnoException).code;
+        const privacy = platform === 'darwin' && (code === 'EPERM' || code === 'EACCES');
+        const folderAccess = platform === 'darwin' && code === 'FILE_ACCESS_REQUIRED';
         snapshot.locations.push({
           id: locationID,
           name: candidate.name,
           state: 'unavailable',
-          message: error instanceof Error ? error.message : String(error),
-          canRequestAccess: platform === 'darwin',
+          message: privacy
+            ? 'macOS requires Full Disk Access for Viewer to read Trash. Enable Viewer in System Settings → Privacy & Security → Full Disk Access, then quit and reopen Viewer.'
+            : error instanceof Error
+              ? error.message
+              : String(error),
+          canRequestAccess: privacy || folderAccess,
+          ...(privacy ? { access: 'privacy' } : folderAccess ? { access: 'folder' } : {}),
         });
       }
     }
