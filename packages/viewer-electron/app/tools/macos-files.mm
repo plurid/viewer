@@ -307,7 +307,7 @@ static napi_value init(napi_env env, napi_value exports) {
   registerFileInformation(env, exports);
   registerFilePanels(env, exports);
   napi_property_descriptor methods[] = {
-    {"trashMenu", nullptr, trashMenu, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"trashConfirmation", nullptr, trashConfirmation, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardVersion", nullptr, clipboardVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardRead", nullptr, clipboardRead, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardWrite", nullptr, clipboardWrite, nullptr, nullptr, nullptr, napi_default, nullptr},

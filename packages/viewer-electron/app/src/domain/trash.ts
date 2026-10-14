@@ -10,6 +10,9 @@ export interface TrashItem {
   location: string;
   originalPath?: string;
   deleted?: string;
+  modified?: number;
+  previewable?: boolean;
+  symbolicLink?: boolean;
 }
 export interface TrashLocation {
   id: string;
@@ -25,6 +28,18 @@ export interface TrashSnapshot {
   locations: TrashLocation[];
   truncated: boolean;
   canEmpty: boolean;
+  /** Breadcrumbs below the system Trash. Emptying always reviews the whole Trash. */
+  ancestors?: TrashItem[];
+  totalItems?: number;
+}
+export interface TrashRestoreResult {
+  restored: number;
+  cancelled: boolean;
+}
+export interface TrashOrigin {
+  file: string;
+  originalPath: string;
+  identity: string;
 }
 
 /** The public bridge can inspect Trash or display native UI. It cannot empty it. */
@@ -34,4 +49,6 @@ export const forbiddenTrashCommands = new Set([
   'empty-recycle-bin',
   'recycle-bin-empty',
   'trash-menu',
+  'trash-confirmation',
+  'trash-restore',
 ]);

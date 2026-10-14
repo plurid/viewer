@@ -63,7 +63,7 @@ export class FileSelection {
   private prefix = '';
   private typedAt = 0;
   constructor(
-    private session: BrowseSession,
+    private session: Pick<BrowseSession, 'selection' | 'anchor' | 'cursor' | 'cache'>,
     private commit: (paths: string[]) => void,
   ) {}
   private apply(entries: readonly FileEntry[], preserve = false) {

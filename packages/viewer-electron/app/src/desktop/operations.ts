@@ -1,4 +1,5 @@
 import type { FileChange } from '../domain/changes';
+import type { TrashOrigin } from '../domain/trash';
 import type { ObservedOperationLink } from '../domain/relationships';
 import { randomUUID } from 'node:crypto';
 import { constants, type Stats } from 'node:fs';
@@ -144,6 +145,15 @@ export class Operations {
   }
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
+  }
+  /** Exact native Trash receipts only; a filename alone never proves an origin. */
+  async trashOrigins(): Promise<TrashOrigin[]> {
+    await this.load();
+    return [...this.tasks.values()].flatMap((task) =>
+      task.undo
+        .filter((step) => step.trash && path.isAbsolute(step.to))
+        .map((step) => ({ file: step.from, originalPath: step.to, identity: step.identity })),
+    );
   }
   /** Minimal durable provenance; bookmarks, staging paths and Undo internals stay private. */
   observedLinks(): ObservedOperationLink[] {

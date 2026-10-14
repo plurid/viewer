@@ -123,8 +123,14 @@ const api: ViewerAPI = {
   clipboardRead: () => invoke('clipboardRead'),
   fileDropPaths: async () => [],
   volumesList: () => invoke('volumesList'),
-  trashList: () => invoke('trashList'),
-  trashMenu: () => Promise.reject(new Error('Trash actions require the desktop app.')),
+  trashList: (folderID) => invoke('trashList', folderID),
+  trashConfirmation: () => Promise.reject(new Error('Empty Trash requires the desktop app.')),
+  trashPreview: (itemID) => invoke('trashPreview', itemID),
+  trashCopyPaths: async (itemIDs) => {
+    const paths = await invoke<string[]>('trashCopyPaths', itemIDs);
+    await copyBrowserPaths(paths, () => invoke('copyPaths', paths), navigator.clipboard);
+  },
+  trashRestore: () => Promise.reject(new Error('Restore requires the desktop app.')),
   trashAccess: () => Promise.reject(new Error('Trash permissions require the desktop app.')),
   volumeEject: (path) => invoke('volumeEject', path),
   fileAccessList: () => invoke('fileAccessList'),

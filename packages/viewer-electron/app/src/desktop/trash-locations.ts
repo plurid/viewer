@@ -5,6 +5,7 @@ export interface TrashRoot {
   name: string;
   info?: string;
   shared?: string;
+  originBase?: string;
 }
 export function trashRoots(
   platform: DesktopPlatform,
@@ -27,7 +28,12 @@ export function trashRoots(
     ];
   const folder = dataHome && path.isAbsolute(dataHome) ? dataHome : path.join(home, '.local/share');
   const roots = [
-    { path: path.join(folder, 'Trash/files'), info: path.join(folder, 'Trash/info'), name: 'Home' },
+    {
+      path: path.join(folder, 'Trash/files'),
+      info: path.join(folder, 'Trash/info'),
+      name: 'Home',
+      originBase: folder,
+    },
   ];
   for (const mount of mounts) {
     for (const base of [
@@ -38,6 +44,7 @@ export function trashRoots(
         path: path.join(base, 'files'),
         info: path.join(base, 'info'),
         name: mount.name,
+        originBase: mount.path,
         ...(base.includes('/.Trash/') ? { shared: path.join(mount.path, '.Trash') } : {}),
       });
   }

@@ -39,7 +39,7 @@ import type { AgentClientRequest, AgentClientReply, AgentAudit } from './agent-c
 import type { ModelDataPermission, ModelDataLevel } from './model-permissions';
 import type { FileInformation, FileInformationPatch } from './file-information';
 import type { Volume } from './volumes';
-import type { TrashSnapshot } from './trash';
+import type { TrashSnapshot, TrashRestoreResult } from './trash';
 /** Serializable contracts shared by main, preload and renderer. */
 export type FileKind = 'directory' | 'file' | 'symlink' | 'other';
 export interface FileEntry {
@@ -421,9 +421,12 @@ export interface ViewerAPI {
   fileDropPaths(files: File[]): Promise<string[]>;
   fileDragStart(paths: string[]): Promise<void>;
   volumesList(): Promise<Volume[]>;
-  trashList(): Promise<TrashSnapshot>;
-  /** Displays a native menu. There is intentionally no empty/approve endpoint. */
-  trashMenu(revision: string): Promise<void>;
+  trashList(folderID?: string): Promise<TrashSnapshot>;
+  /** Presents native confirmation only. There is no empty/approve endpoint. */
+  trashConfirmation(revision: string): Promise<void>;
+  trashPreview(itemID: string): Promise<Resource>;
+  trashCopyPaths(itemIDs: string[]): Promise<void>;
+  trashRestore(itemIDs: string[], destination: 'original' | 'choose'): Promise<TrashRestoreResult>;
   trashAccess(locationID: string): Promise<void>;
   volumeEject(path: string): Promise<void>;
   fileAccessList(): Promise<

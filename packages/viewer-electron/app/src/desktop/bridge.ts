@@ -489,8 +489,27 @@ const schemas = {
   fileDropPaths: z.tuple([z.array(localPath).max(10000)]),
   fileDragStart: z.tuple([z.array(localPath).min(1).max(10000)]),
   volumesList: z.tuple([]),
-  trashList: z.tuple([]),
-  trashMenu: z.tuple([z.string().regex(/^[a-f0-9]{64}$/)]),
+  trashList: z.tuple([
+    z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+  ]),
+  trashConfirmation: z.tuple([z.string().regex(/^[a-f0-9]{64}$/)]),
+  trashPreview: z.tuple([z.string().regex(/^[a-f0-9]{64}$/)]),
+  trashCopyPaths: z.tuple([
+    z
+      .array(z.string().regex(/^[a-f0-9]{64}$/))
+      .min(1)
+      .max(1000),
+  ]),
+  trashRestore: z.tuple([
+    z
+      .array(z.string().regex(/^[a-f0-9]{64}$/))
+      .min(1)
+      .max(1000),
+    z.enum(['original', 'choose']),
+  ]),
   trashAccess: z.tuple([z.string().regex(/^[a-f0-9]{64}$/)]),
   volumeEject: z.tuple([localPath]),
   fileAccessList: z.tuple([]),
@@ -578,7 +597,16 @@ export class Desktop {
           }
         : undefined,
     );
-    this.trash = new Trash(this.home, this.fileAccess);
+    this.trash = new Trash(this.home, this.fileAccess, {
+      origins: () => this.operations.trashOrigins(),
+      preview: (file) => this.resources.grant(file),
+      release: (id) => this.resources.release(id),
+      changed: (source, destination) => {
+        emit({ type: 'folder-changed', path: path.dirname(source) });
+        emit({ type: 'folder-changed', path: path.dirname(destination) });
+        void this.resources.clear(source);
+      },
+    });
     const access = (files: readonly string[]) => this.fileAccess.require(files);
     this.projects = new Projects(access);
     this.comparisons = new Comparisons(access);
@@ -1260,9 +1288,21 @@ export class Desktop {
       case 'volumesList':
         return process.platform === 'darwin' ? macFiles().volumes() : [];
       case 'trashList':
-        return this.trash.list();
-      case 'trashMenu':
-        return this.trash.menu(this.windows.get(senderID!)!.window, args[0] as string);
+        return this.trash.list(args[0] as string | undefined);
+      case 'trashConfirmation':
+        return this.trash.confirmation(this.windows.get(senderID!)!.window, args[0] as string);
+      case 'trashPreview':
+        return this.trash.preview(args[0] as string);
+      case 'trashCopyPaths':
+        return this.trash.copyPaths(args[0] as string[]);
+      case 'trashRestore':
+        return this.operations.exclusive(() =>
+          this.trash.restore(
+            this.windows.get(senderID!)!.window,
+            args[0] as string[],
+            args[1] as 'original' | 'choose',
+          ),
+        );
       case 'trashAccess':
         return this.trash.requestAccess(this.windows.get(senderID!)!.window, args[0] as string);
       case 'volumeEject': {

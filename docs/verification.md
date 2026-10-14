@@ -464,3 +464,52 @@ three original user screenshots is unavailable: their Desktop files disappeared
 after the initial inspection. Old-build reproductions are not presented as
 original user pixels. The missing historical comparison and native permission /
 platform limits do not receive a passing verification claim.
+
+## Folder-style Trash browser (October 14)
+
+The Trash browser now supports directory breadcrumbs, filtered/virtualized file
+rows, ordinary range and multi-selection, keyboard navigation, Quick Look,
+read-only Get Info, Copy Path, Restore, and Restore to…. These contextual actions
+stay inside the dialog and are not published as agent commands. Empty Trash… is
+centered between the item count and right-aligned Refresh/Done controls. It opens
+native confirmation directly; synthetic renderer clicks are ignored. No bridge,
+MCP method, approval response, shortcut, or editable grant can directly erase
+Trash. macOS keeps its affirmative continuation entirely in native code, with
+Cancel as the default and unchanged inventory/confinement checks before erasure.
+
+Restore accepts opaque, versioned inventory IDs. It checks private Trash roots,
+ancestors, item identity/version, destination identity, existing names, and disk
+identity before moving. It never replaces or merges a destination, recreates
+missing parents, or falls back to copy-and-delete. Known original destinations
+come from exact Viewer Trash receipts or platform metadata. A macOS item deleted
+outside Viewer may have no known original location; Restore to… asks for a folder
+instead. Cross-disk restoration is deliberately refused. Linux orphan metadata is
+retained rather than permanently removed by Viewer.
+
+`pnpm check` and `pnpm lint` pass. The selected Trash, selection, commands,
+agent-safety and API-boundary regressions pass 65 tests across five files. The
+native erasure guard harness passes 13 checks with `unlinkat` replaced by a
+recording no-op; it performs no erasure. With
+`VIEWER_TEST_MAC_BINDING=out/viewer-macos-files-trash-folder-v1.node`, the generated
+`trash-restore-native.test.ts` fixture also passes using the real macOS exclusive
+rename: nested Unicode content restores intact, a symbolic link stays a link,
+and a colliding destination and its source are both preserved. This check never
+uses the owner's system Trash; all fixtures remain available.
+
+The preserving production build creates
+`out/Viewer-trash-folder-v2-darwin-arm64/Viewer.app` and passes local ad-hoc signature
+verification. `tests/native-trash-browser.ts` passes against that build. Its
+[native renderer evidence](../packages/viewer-electron/app/out/trash-browser-acceptance-2vUfyl/result.json)
+contains eight desktop/compact dark/light captures and covers the centered
+footer, selection, contextual preview/info, folder navigation, restore collision
+and success states, and disabled empty state. The renderer fixture intercepts
+Trash calls before opening the view; Empty/Restore are stubs and only a generated
+text file uses the real preview service. It asserts that synthetic Empty button
+activation is ignored and that trusted activation reaches only the presenter
+stub. No real native confirmation or affirmative erasure was invoked.
+
+Positive system Trash restoration, Full Disk Access/App Sandbox grants, actual
+erasure, physical assistive technology, Windows/Linux execution and Mac App Store
+qualification are not established by this pass. Existing Vite config-loader,
+CJS import-meta and large-chunk warnings remain. Earlier failed fixture setup
+attempts and every intermediate/profile/generated file are retained.

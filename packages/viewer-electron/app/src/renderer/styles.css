@@ -1743,6 +1743,79 @@ select {
   min-height: 0;
   overflow: auto;
 }
+.trash-toolbar {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto minmax(120px, 170px);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.trash-breadcrumbs,
+.trash-breadcrumbs > span,
+.trash-breadcrumbs button,
+.trash-selection-actions,
+.trash-search,
+.trash-utility-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.trash-breadcrumbs {
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.trash-breadcrumbs > span {
+  flex: none;
+  gap: 2px;
+}
+.trash-breadcrumbs button {
+  border: 0;
+  padding: 6px;
+  background: transparent;
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.trash-breadcrumbs button[aria-current='page'] {
+  font-weight: 600;
+}
+.trash-search {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+}
+.trash-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.trash-search:focus-within {
+  border-color: var(--accent);
+}
+.trash-row[role='option'] {
+  cursor: default;
+  user-select: none;
+}
+.trash-row[role='option']:hover {
+  background: var(--raised);
+}
+.trash-row.is-selected,
+.trash-row.is-selected:hover {
+  background: var(--selection);
+  --muted: var(--selection-muted);
+}
+.trash-scroll:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
 .trash-row {
   display: grid;
   grid-template-columns: minmax(200px, 3fr) minmax(100px, 1fr) 80px;
@@ -1774,8 +1847,9 @@ select {
 .trash-filename > svg {
   flex: none;
   color: var(--muted);
+  margin-left: auto;
 }
-.trash-filename > span {
+.trash-filename > span:not(.file-icon) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1786,21 +1860,48 @@ select {
   background: var(--raised);
   font-size: 12px;
 }
-.trash-footer {
-  display: flex;
-  gap: 8px;
+.trash-dialog .trash-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 16px;
   align-items: center;
   padding: 16px 20px;
   border-top: 1px solid var(--line);
   flex: none;
 }
 .trash-footer > span {
-  margin-right: auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.trash-footer > button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.trash-empty {
+  justify-self: center;
+}
+.trash-utility-actions {
+  justify-self: end;
+}
+.trash-info-dialog dl {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 14px 20px;
+  margin: 0;
+  padding: 24px;
+}
+.trash-info-dialog dt {
+  color: var(--muted);
+}
+.trash-info-dialog dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.trash-context-menu {
+  position: relative;
+  z-index: 1000;
+}
+.trash-context-menu .context-menu {
+  max-height: calc(100vh - 16px);
 }
 .preview-overlay {
   position: absolute;

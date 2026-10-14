@@ -23,6 +23,8 @@ const mock = vi.hoisted(() => ({
     }
   >(),
   native: vi.fn(),
+  move: vi.fn(),
+  clipboard: vi.fn(),
   open: vi.fn(),
   confirm: vi.fn(),
   menu: vi.fn(),
@@ -36,11 +38,12 @@ vi.mock('../src/desktop/macos-files', () => ({
       { path: '/', name: 'Local' },
       { path: '/Volumes/External', name: 'External' },
     ],
-    trashMenu: mock.native,
+    trashConfirmation: mock.native,
+    renameExclusive: mock.move,
   }),
 }));
 vi.mock('electron', () => ({
-  Menu: { buildFromTemplate: mock.menu },
+  clipboard: { writeText: mock.clipboard },
   dialog: { showOpenDialog: mock.open, showMessageBox: mock.confirm },
   shell: { openExternal: mock.settings },
 }));
@@ -76,6 +79,17 @@ let access: { require: ReturnType<typeof vi.fn>; remember: ReturnType<typeof vi.
 beforeEach(() => {
   vi.clearAllMocks();
   mock.files.clear();
+  mock.open.mockReset();
+  mock.move.mockReset();
+  mock.move.mockImplementation(async (source: string, target: string) => {
+    if (mock.files.has(target)) throw new Error('Destination already exists.');
+    for (const [file, value] of [...mock.files]) {
+      if (file === source || file.startsWith(source + path.sep)) {
+        mock.files.set(target + file.slice(source.length), value);
+        mock.files.delete(file);
+      }
+    }
+  });
   const uid = process.getuid!();
   mock.files.set(root, { directory: true, uid, ino: 1, mode: 0o40700, size: 64, modified: 1000 });
   mock.files.set(root + '/Notes.txt', {
@@ -125,7 +139,7 @@ it('decodes mountinfo escaping and skips pseudo filesystems', () => {
     ),
   ).toEqual([{ path: '/media/Some Disk', name: 'Some Disk' }]);
 });
-it('lists Trash without launching a native menu, confirmation or removal process', async () => {
+it('lists Trash without launching a confirmation or removal process', async () => {
   const value = await service().list();
   expect(value.items).toMatchObject([
     { name: 'Notes.txt', directory: false, size: 13, location: 'Home' },
@@ -138,7 +152,7 @@ it('lists Trash without launching a native menu, confirmation or removal process
 it('opens native UI with the sealed inventory and exposes no emptying method', async () => {
   const trash = service();
   const value = await trash.list();
-  await trash.menu(window, value.revision);
+  await trash.confirmation(window, value.revision);
   expect(mock.native).toHaveBeenCalledOnce();
   const review = JSON.parse(mock.native.mock.calls[0][0]);
   expect(review).toMatchObject({
@@ -151,8 +165,11 @@ it('opens native UI with the sealed inventory and exposes no emptying method', a
     'constructor',
     'list',
     'close',
+    'preview',
+    'copyPaths',
+    'restore',
     'requestAccess',
-    'menu',
+    'confirmation',
   ]);
   expect(mock.execute).not.toHaveBeenCalled();
   expect(mock.confirm).not.toHaveBeenCalled();
@@ -160,9 +177,9 @@ it('opens native UI with the sealed inventory and exposes no emptying method', a
 it('rejects arbitrary, stale and changed inventories before displaying native UI', async () => {
   const trash = service(),
     value = await trash.list();
-  await expect(trash.menu(window, 'forged')).rejects.toThrow('Refresh');
+  await expect(trash.confirmation(window, 'forged')).rejects.toThrow('Refresh');
   mock.files.get(root + '/Notes.txt')!.modified++;
-  await expect(trash.menu(window, value.revision)).rejects.toThrow('changed');
+  await expect(trash.confirmation(window, value.revision)).rejects.toThrow('changed');
   expect(mock.native).not.toHaveBeenCalled();
 });
 it.each(['link', 'owner', 'permissions', 'canonical'] as const)(
@@ -259,7 +276,7 @@ it('revokes the UI route when the service or window closes', async () => {
   const trash = service(),
     value = await trash.list();
   trash.close();
-  await trash.menu(window, value.revision);
+  await trash.confirmation(window, value.revision);
   await expect(trash.list()).rejects.toThrow('closed');
   expect(mock.native).not.toHaveBeenCalled();
 });
@@ -282,4 +299,159 @@ it('blocks emptying IDs and builtin aliases from agents, regardless of saved gra
       ]),
     ).toThrow('native user interface');
   }
+});
+
+const add = (file: string, directory = false, ino = 10) =>
+  mock.files.set(file, {
+    directory,
+    uid: process.getuid!(),
+    ino,
+    mode: directory ? 0o40700 : 0o100600,
+    size: directory ? 64 : 15,
+    modified: 1000,
+  });
+const origins = () =>
+  Promise.resolve([
+    { file: root + '/Notes.txt', originalPath: home + '/Documents/Notes.txt', identity: '1:2' },
+  ]);
+
+it('browses folders with scoped breadcrumbs and preserves the whole-Trash confirmation revision', async () => {
+  add(root + '/Nested', true, 3);
+  add(root + '/Nested/Child.txt', false, 4);
+  const trash = service(),
+    top = await trash.list();
+  const nested = await trash.list(top.items.find((item) => item.name === 'Nested')!.id);
+  expect(nested.ancestors?.map((item) => item.name)).toEqual(['Nested']);
+  expect(nested.items.map((item) => item.name)).toEqual(['Child.txt']);
+  expect(nested.totalItems).toBe(2);
+  expect(nested.revision).toBe(top.revision);
+  expect(mock.move).not.toHaveBeenCalled();
+  expect(mock.native).not.toHaveBeenCalled();
+});
+it('never previews a trashed symlink or traverses a replaced parent folder', async () => {
+  add(root + '/Nested', true, 3);
+  add(root + '/Nested/Child.txt', false, 4);
+  const preview = vi.fn();
+  const trash = new Trash(home, access as unknown as FileAccess, { preview });
+  const top = await trash.list();
+  const folderID = top.items.find((item) => item.directory)!.id;
+  const nested = await trash.list(folderID);
+  mock.files.get(root + '/Nested')!.link = true;
+  await expect(trash.preview(nested.items[0].id)).rejects.toThrow('changed');
+  await expect(trash.list(folderID)).rejects.toThrow('changed');
+  expect(preview).not.toHaveBeenCalled();
+});
+it('expires changed file selections even when a refresh keeps the same inode', async () => {
+  const trash = service(),
+    top = await trash.list();
+  const old = top.items[0].id;
+  mock.files.get(root + '/Notes.txt')!.modified++;
+  const refreshed = await trash.list();
+  expect(refreshed.items[0].id).not.toBe(old);
+  await expect(trash.copyPaths([old])).rejects.toThrow('changed');
+  expect(mock.clipboard).not.toHaveBeenCalled();
+});
+it('uses exact receipt identity to show original locations, never filename matching', async () => {
+  const trash = new Trash(home, access as unknown as FileAccess, { origins });
+  expect((await trash.list()).items[0].originalPath).toBe(home + '/Documents/Notes.txt');
+  mock.files.get(root + '/Notes.txt')!.ino++;
+  expect((await trash.list()).items[0].originalPath).toBeUndefined();
+});
+it('restores to an exact original destination with a non-replacing native move', async () => {
+  add(home + '/Documents', true);
+  const changed = vi.fn();
+  const trash = new Trash(home, access as unknown as FileAccess, { origins, changed });
+  const top = await trash.list();
+  expect(await trash.restore(window, [top.items[0].id], 'original')).toEqual({
+    restored: 1,
+    cancelled: false,
+  });
+  expect(mock.move).toHaveBeenCalledExactlyOnceWith(
+    root + '/Notes.txt',
+    home + '/Documents/Notes.txt',
+  );
+  expect(mock.files.get(home + '/Documents/Notes.txt')?.ino).toBe(2);
+  expect(changed).toHaveBeenCalledOnce();
+  expect(mock.native).not.toHaveBeenCalled();
+  expect(mock.execute).not.toHaveBeenCalled();
+});
+it('keeps every selected item when any original destination collides', async () => {
+  add(home + '/Documents', true);
+  add(home + '/Documents/Notes.txt', false, 50);
+  const trash = new Trash(home, access as unknown as FileAccess, { origins });
+  const top = await trash.list();
+  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow(
+    'already exists',
+  );
+  expect(mock.move).not.toHaveBeenCalled();
+  expect(mock.files.get(home + '/Documents/Notes.txt')?.ino).toBe(50);
+  expect(mock.files.get(root + '/Notes.txt')?.ino).toBe(2);
+});
+it('requires Restore to… for an item without a proven original destination', async () => {
+  const trash = service(),
+    top = await trash.list();
+  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow('Restore to');
+  expect(mock.move).not.toHaveBeenCalled();
+});
+it('cancelling Restore to… neither grants a folder nor moves any item', async () => {
+  const trash = service(),
+    top = await trash.list();
+  mock.open.mockResolvedValue({ canceled: true, filePaths: [] });
+  expect(await trash.restore(window, [top.items[0].id], 'choose')).toEqual({
+    restored: 0,
+    cancelled: true,
+  });
+  expect(access.remember).not.toHaveBeenCalled();
+  expect(mock.move).not.toHaveBeenCalled();
+});
+it('restores an entire nested folder without selecting its child twice', async () => {
+  add(home + '/Documents', true, 50);
+  add(root + '/Nested', true, 3);
+  add(root + '/Nested/Child.txt', false, 4);
+  const trash = service(),
+    top = await trash.list();
+  const folderID = top.items.find((item) => item.directory)!.id;
+  const nested = await trash.list(folderID);
+  mock.open.mockResolvedValue({ canceled: false, filePaths: [home + '/Documents'] });
+  expect(await trash.restore(window, [folderID, nested.items[0].id], 'choose')).toEqual({
+    restored: 1,
+    cancelled: false,
+  });
+  expect(mock.move).toHaveBeenCalledOnce();
+  expect(mock.files.get(home + '/Documents/Nested/Child.txt')?.ino).toBe(4);
+});
+it('refuses a symlink destination and never falls back to deleting after a failed move', async () => {
+  add(home + '/Documents', true, 50);
+  mock.files.get(home + '/Documents')!.canonical = home + '/Elsewhere';
+  const trash = new Trash(home, access as unknown as FileAccess, { origins }),
+    top = await trash.list();
+  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow(
+    'symbolic link',
+  );
+  expect(mock.move).not.toHaveBeenCalled();
+  mock.files.get(home + '/Documents')!.canonical = undefined;
+  mock.move.mockRejectedValue(new Error('Different filesystem'));
+  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow(
+    'Different filesystem',
+  );
+  expect(mock.files.get(root + '/Notes.txt')?.ino).toBe(2);
+  expect(mock.execute).not.toHaveBeenCalled();
+});
+it('rechecks destination identity after the preflight and keeps sources on a race', async () => {
+  add(home + '/Documents', true, 50);
+  const trash = new Trash(home, access as unknown as FileAccess, { origins }),
+    top = await trash.list();
+  access.require.mockImplementation(async (files: string[]) => {
+    if (files.includes(root + '/Notes.txt') && mock.files.get(home + '/Documents')!.ino === 50) {
+      // Change after destination preflight, on the second source check.
+      const checks = access.require.mock.calls.filter(([values]) =>
+        values.includes(root + '/Notes.txt'),
+      ).length;
+      if (checks >= 2) mock.files.get(home + '/Documents')!.ino = 51;
+    }
+  });
+  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow(
+    'destination changed',
+  );
+  expect(mock.move).not.toHaveBeenCalled();
 });

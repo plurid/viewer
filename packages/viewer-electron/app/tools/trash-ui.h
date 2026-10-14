@@ -1,4 +1,4 @@
-// macOS Trash erasure belongs exclusively to this native menu's action callback.
+// macOS Trash erasure belongs exclusively to the native confirmation's result.
 // No erasure function, approval token or confirmation response is exported to JS.
 #include <dirent.h>
 #include <unistd.h>
@@ -181,13 +181,13 @@ static void showError(NSString* message) {
 } // namespace viewer_trash
 
 #ifndef VIEWER_TRASH_GUARD_TESTS
-@interface ViewerTrashMenuTarget : NSObject
+@interface ViewerTrashConfirmation : NSObject
 @property(nonatomic, strong) NSArray* roots;
 @property(nonatomic) NSUInteger count;
-- (void)emptyFromNativeMenu:(id)sender;
+- (void)present;
 @end
-@implementation ViewerTrashMenuTarget
-- (void)emptyFromNativeMenu:(id)sender {
+@implementation ViewerTrashConfirmation
+- (void)present {
   if (viewer_trash::busy) return;
   viewer_trash::busy = true;
   NSArray* requested = self.roots;
@@ -235,7 +235,7 @@ static void showError(NSString* message) {
 }
 @end
 
-static napi_value trashMenu(napi_env env, napi_callback_info info) {
+static napi_value trashConfirmation(napi_env env, napi_callback_info info) {
   @autoreleasepool {
     size_t count = 1, bytes = 0; napi_value args[1];
     napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
@@ -245,17 +245,14 @@ static napi_value trashMenu(napi_env env, napi_callback_info info) {
     NSData* data = [NSData dataWithBytes:json.data() length:bytes];
     NSDictionary* request = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
     if (![request isKindOfClass:NSDictionary.class] || ![request[@"roots"] isKindOfClass:NSArray.class] || ![request[@"count"] isKindOfClass:NSNumber.class]) return invalid(env);
-    ViewerTrashMenuTarget* target = [[ViewerTrashMenuTarget alloc] init];
+    ViewerTrashConfirmation* target = [[ViewerTrashConfirmation alloc] init];
     target.roots = request[@"roots"];
     target.count = [request[@"count"] unsignedIntegerValue];
     if (!target.count || target.count > 4000) return invalid(env);
-    NSMenu* menu = [[NSMenu alloc] initWithTitle:@"Trash actions"];
-    menu.autoenablesItems = NO;
-    NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:@"Empty Trash…" action:@selector(emptyFromNativeMenu:) keyEquivalent:@""];
-    item.target = target;
-    item.enabled = !viewer_trash::busy;
-    [menu addItem:item];
-    [menu popUpMenuPositioningItem:nil atLocation:NSEvent.mouseLocation inView:nil];
+    // Presenting this UI cannot supply an affirmative response. Cancel is the
+    // default; NSAlertSecondButtonReturn from native human interaction is the
+    // only continuation that can reach guarded removal.
+    [target present];
     napi_value output; napi_get_undefined(env, &output); return output;
   }
 }

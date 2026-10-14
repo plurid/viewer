@@ -5,6 +5,7 @@ import type { AgentClientRequest } from '../src/domain/agent-clients';
 import type { ReadableStream } from 'node:stream/web';
 import { createServer } from 'vite';
 import { rename, mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { ServerResponse } from 'node:http';
@@ -184,6 +185,17 @@ const relationships = new Relationships(path.join(fixture.root, 'relationships')
   },
 });
 let clipboard: { paths: string[]; cut: boolean } | null = null;
+const trashFixturePaths = new Map<string, string>();
+const trashFixtureID = (file: string) => {
+  const id = createHash('sha256').update(file).digest('hex');
+  trashFixturePaths.set(id, file);
+  return id;
+};
+const trashFixturePath = (id: string) => {
+  const file = trashFixturePaths.get(id);
+  if (!file) throw new Error('This fixture item is unavailable. Refresh Trash.');
+  return scoped(file);
+};
 const resourceURL = (value: Resource) => ({
   ...value,
   url: value.url.replace('viewer-resource://', fixtureOrigin + '/__test/resource/'),
@@ -348,24 +360,41 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return [];
     case 'providerPermissionGet':
       return null;
-    case 'trashList':
+    case 'trashList': {
+      const folder = args[0] ? trashFixturePath(args[0] as string) : undefined;
+      const entries = folder
+        ? (await list(folder)).entries
+        : await Promise.all(
+            [
+              path.join(fixture.files, 'Documents'),
+              path.join(fixture.files, 'Documents/Project brief.pdf'),
+              path.join(fixture.files, 'Documents/Project notes.md'),
+            ].map(entry),
+          );
+      const item = (value: (typeof entries)[number]) => ({
+        id: trashFixtureID(value.path),
+        name: value.name,
+        directory: value.directory,
+        size: value.size,
+        modified: value.modified,
+        location: 'Home',
+        originalPath: value.path,
+        previewable: value.kind === 'file',
+        symbolicLink: value.kind === 'symlink',
+      });
       return {
         revision: 'fixture-read-only',
         truncated: false,
         canEmpty: false,
         locations: [{ id: 'home', name: 'Home', state: 'ready' }],
-        items: [
-          { id: 'trash-1', name: 'Project archive', directory: true, size: 0, location: 'Home' },
-          {
-            id: 'trash-2',
-            name: 'Assembly drawing.pdf',
-            directory: false,
-            size: 125000,
-            location: 'Home',
-          },
-          { id: 'trash-3', name: 'Notes.txt', directory: false, size: 3400, location: 'Home' },
-        ],
+        ancestors: folder ? [item(await entry(folder))] : [],
+        items: entries.map(item),
       };
+    }
+    case 'trashPreview':
+      return resourceURL(await resources.grant(trashFixturePath(args[0] as string)));
+    case 'trashCopyPaths':
+      return (args[0] as string[]).map(trashFixturePath);
     case 'volumesList':
       return [
         {

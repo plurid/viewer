@@ -14,8 +14,8 @@ export interface FileAccessIntent {
   mode: 'read' | 'metadata' | 'write' | 'move' | 'delete';
 }
 export interface MacFiles {
-  /** Displays native UI only. Native menu selection and confirmation own erasure. */
-  trashMenu(review: string): void;
+  /** Displays native confirmation only. No callable erasure/approval endpoint. */
+  trashConfirmation(review: string): void;
   information(file: string): Promise<string>;
   updateInformation(file: string, revision: string, json: string): Promise<string>;
   alias(source: string, destination: string): Promise<void>;

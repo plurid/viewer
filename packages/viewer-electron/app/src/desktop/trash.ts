@@ -1,10 +1,18 @@
 import { createHash } from 'node:crypto';
+import type { Stats } from 'node:fs';
 import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
-import { Menu, dialog, shell, type BrowserWindow } from 'electron';
-import type { TrashItem, TrashSnapshot, DesktopPlatform } from '../domain/trash';
+import { clipboard, dialog, shell, type BrowserWindow } from 'electron';
+import type {
+  TrashItem,
+  TrashSnapshot,
+  TrashOrigin,
+  TrashRestoreResult,
+  DesktopPlatform,
+} from '../domain/trash';
+import type { Resource } from '../domain/contracts';
 import { trashName } from '../domain/trash';
 import { linuxMounts, trashRoots, type TrashRoot } from './trash-locations';
 import { macFiles } from './macos-files';
@@ -19,31 +27,348 @@ type ReadResult = {
   roots: ReviewedRoot[];
   available: Map<string, TrashRoot>;
 };
+type BackingItem = {
+  file: string;
+  root: TrashRoot;
+  rootIdentity: string;
+  version: ReviewedItem;
+  item: TrashItem;
+  parents: BackingItem[];
+};
+interface TrashServices {
+  origins?(): Promise<TrashOrigin[]>;
+  preview?(file: string): Promise<Resource>;
+  release?(id: string): void;
+  changed?(source: string, destination: string): void;
+}
 const id = (text: string) => createHash('sha256').update(text).digest('hex');
 const identity = (value: { dev: number; ino: number }) => `${value.dev}:${value.ino}`;
+function moveLinux(source: string, destination: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Interactive mode disables GIO's default overwrite flag. EOF on stdin
+    // supplies no affirmative response if another process creates a collision.
+    const child = execFile(
+      '/usr/bin/gio',
+      [
+        'move',
+        '--interactive',
+        '--no-copy-fallback',
+        '--no-target-directory',
+        '--',
+        source,
+        destination,
+      ],
+      {
+        timeout: 120000,
+        env: { ...process.env, LC_ALL: 'C' },
+      },
+      (error) => (error ? reject(error) : resolve()),
+    );
+    child.stdin?.end();
+  });
+}
 
-/** A dedicated read-only Trash inventory. Erasure has no bridge method and no
- * command registration. macOS owns the entire native menu/confirmation/removal
- * flow in trash-ui.h. Other platforms own it in a private native-menu callback.
+/** A dedicated Trash browser. Erasure has no bridge method and no command
+ * registration. macOS owns confirmation/removal in trash-ui.h. Other platforms
+ * keep removal inside the private continuation of a native confirmation.
  * No editable settings, agent approval response or caller-supplied path is used. */
 export class Trash {
   #last?: ReadResult;
   #busy = false;
   #closed = false;
+  #known = new Map<string, BackingItem>();
   constructor(
     private home: string,
     private access: FileAccess,
+    private services: TrashServices = {},
   ) {}
 
-  async list(): Promise<TrashSnapshot> {
+  async list(folderID?: string): Promise<TrashSnapshot> {
     if (this.#closed) throw new Error('Trash has closed.');
+    const folder = folderID ? this.#known.get(folderID) : undefined;
+    if (folderID && !folder)
+      throw new Error('This Trash folder is no longer available. Return to Trash.');
     const result = await this.#read();
     this.#last = result;
+    if (folder) {
+      const info = await this.#verify(folder, false);
+      if (!info.isDirectory() || info.isSymbolicLink())
+        throw new Error('This Trash folder changed. Return to Trash.');
+      const names = (await readdir(folder.file)).sort();
+      const items: TrashItem[] = [];
+      for (const name of names.slice(0, limit)) {
+        const file = path.join(folder.file, name);
+        const current = await lstat(file);
+        const item = this.#remember(
+          file,
+          folder.root,
+          folder.rootIdentity,
+          current,
+          {
+            name,
+            originalPath: folder.item.originalPath
+              ? path.join(folder.item.originalPath, name)
+              : undefined,
+            deleted: folder.item.deleted,
+          },
+          [...folder.parents, folder],
+        );
+        items.push(item);
+      }
+      await this.#verify(folder, false);
+      return {
+        ...result.snapshot,
+        totalItems: result.snapshot.items.length,
+        ancestors: [...folder.parents, folder].map((entry) => entry.item),
+        items,
+        truncated: names.length > limit,
+        canEmpty: result.snapshot.canEmpty,
+      };
+    }
     return result.snapshot;
   }
   close(): void {
     this.#closed = true;
     this.#last = undefined;
+    this.#known.clear();
+  }
+  async preview(itemID: string): Promise<Resource> {
+    const item = this.#get(itemID);
+    const info = await this.#verify(item);
+    if (!info.isFile() || info.isSymbolicLink() || !this.services.preview)
+      throw new Error('Only regular files in Trash can be previewed.');
+    const resource = await this.services.preview(item.file);
+    try {
+      await this.#verify(item);
+      return { ...resource, entry: { ...resource.entry, name: item.item.name } };
+    } catch (error) {
+      this.services.release?.(resource.id);
+      throw error;
+    }
+  }
+  async copyPaths(itemIDs: string[]): Promise<void> {
+    const items = itemIDs.map((itemID) => this.#get(itemID));
+    for (const item of items) await this.#verify(item);
+    clipboard.writeText(items.map((item) => item.file).join('\n'));
+  }
+  async restore(
+    window: BrowserWindow,
+    itemIDs: string[],
+    destination: 'original' | 'choose',
+  ): Promise<TrashRestoreResult> {
+    if (this.#closed || this.#busy || window.isDestroyed())
+      throw new Error('Trash is busy. Try again.');
+    this.#busy = true;
+    let restored = 0;
+    try {
+      const selected = [...new Set(itemIDs)].map((itemID) => this.#get(itemID));
+      if (!selected.length || selected.length > 1000)
+        throw new Error('Select up to 1,000 items to restore.');
+      // A selected folder carries its descendants exactly once.
+      const items = selected.filter(
+        (item) =>
+          !selected.some(
+            (parent) => item !== parent && item.file.startsWith(parent.file + path.sep),
+          ),
+      );
+      let folder: string | undefined;
+      if (destination === 'choose') {
+        const picked = await dialog.showOpenDialog(window, {
+          title: 'Restore to…',
+          message: 'Choose a destination. Existing files will be kept.',
+          properties: ['openDirectory', 'dontAddToRecent'],
+          securityScopedBookmarks: this.access.scoped,
+        });
+        if (picked.canceled || window.isDestroyed() || this.#closed)
+          return { restored: 0, cancelled: true };
+        if (picked.filePaths.length !== 1) throw new Error('Choose one destination folder.');
+        folder = await realpath(picked.filePaths[0]);
+        await this.access.remember(folder, true, picked.bookmarks?.[0]);
+      }
+      const targets = new Set<string>();
+      const plan: { item: BackingItem; target: string; parentIdentity: string }[] = [];
+      // Preflight every destination before the first move. Never replace, merge,
+      // recreate missing ancestors, or turn a failed move into copy-and-delete.
+      for (const item of items) {
+        await this.#verify(item);
+        const target = folder ? path.join(folder, item.item.name) : item.item.originalPath;
+        if (
+          !target ||
+          !path.isAbsolute(target) ||
+          target.includes('\0') ||
+          path.resolve(target) !== target
+        )
+          throw new Error(
+            'The original location is unavailable. Use Restore to… to choose a folder.',
+          );
+        const parent = await realpath(path.dirname(target)).catch(() => {
+          throw new Error(
+            'The original folder no longer exists. Use Restore to… to choose a folder.',
+          );
+        });
+        if (parent !== path.dirname(target))
+          throw new Error(
+            'The destination contains a symbolic link. Use Restore to… to choose its actual folder.',
+          );
+        if (
+          [...(this.#last?.available.values() ?? [])].some(
+            (root) => target === root.path || target.startsWith(root.path + path.sep),
+          )
+        )
+          throw new Error('Choose a destination outside Trash.');
+        if (target === item.file || parent.startsWith(item.file + path.sep))
+          throw new Error('Choose a destination outside the selected folder.');
+        await this.access.require([parent]);
+        const parentInfo = await lstat(parent);
+        if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink())
+          throw new Error('The destination is no longer a folder.');
+        if ((await lstat(item.file)).dev !== parentInfo.dev)
+          throw new Error(
+            'Restore needs a destination on the same disk. The item remains in Trash.',
+          );
+        const key = process.platform === 'linux' ? target : target.toLocaleLowerCase();
+        if (targets.has(key))
+          throw new Error(
+            'Two selected items have the same destination name. Restore them separately.',
+          );
+        targets.add(key);
+        try {
+          await lstat(target);
+          throw new Error(
+            `“${path.basename(target)}” already exists. Use Restore to… to choose another folder.`,
+          );
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+        plan.push({ item, target, parentIdentity: identity(parentInfo) });
+      }
+      for (const { item, target, parentIdentity } of plan) {
+        if (this.#closed || window.isDestroyed()) break;
+        await this.#verify(item);
+        const parent = path.dirname(target);
+        if ((await realpath(parent)) !== parent || identity(await lstat(parent)) !== parentIdentity)
+          throw new Error('The destination changed. Remaining items were kept in Trash.');
+        if (process.platform === 'darwin') {
+          await macFiles().renameExclusive(item.file, target);
+        } else if (process.platform === 'linux') {
+          // Never replace an existing destination or copy-and-delete. Keep
+          // .trashinfo metadata rather than permanently deleting it ourselves.
+          await moveLinux(item.file, target);
+        } else {
+          // Shell owns Recycle Bin bookkeeping. A collision gets a new name,
+          // never Yes-to-All, replacement flags, or a raw $Recycle.Bin deletion.
+          await run(
+            this.#powershell(),
+            [
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              `$ErrorActionPreference='Stop'; $shell=New-Object -ComObject Shell.Application; $bin=$shell.Namespace(10); $item=@($bin.Items() | Where-Object { $_.Path -ceq $env:VIEWER_TRASH_SOURCE }); if($item.Count -ne 1){throw 'Recycle Bin item changed.'}; $target=$shell.Namespace($env:VIEWER_TRASH_DESTINATION); if($null -eq $target){throw 'Destination is unavailable.'}; $target.MoveHere($item[0],8); $deadline=[DateTime]::UtcNow.AddSeconds(90); while(Test-Path -LiteralPath $env:VIEWER_TRASH_SOURCE){if([DateTime]::UtcNow -gt $deadline){throw 'Restore was not completed. Refresh Recycle Bin.'}; Start-Sleep -Milliseconds 100}`,
+            ],
+            {
+              timeout: 100000,
+              windowsHide: true,
+              env: {
+                ...process.env,
+                VIEWER_TRASH_SOURCE: item.file,
+                VIEWER_TRASH_DESTINATION: parent,
+              },
+            },
+          );
+        }
+        try {
+          await lstat(item.file);
+          throw new Error(
+            'This item is still in Trash. The destination may already exist; nothing was overwritten.',
+          );
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+        restored++;
+        this.#known.delete(item.item.id);
+        this.services.changed?.(item.file, target);
+      }
+      return { restored, cancelled: false };
+    } catch (error) {
+      if (restored)
+        throw new Error(
+          `${restored} ${restored === 1 ? 'item restored' : 'items restored'}. Remaining items were kept in Trash. ${error instanceof Error ? error.message : String(error)}`,
+        );
+      throw error;
+    } finally {
+      this.#busy = false;
+    }
+  }
+  #get(itemID: string): BackingItem {
+    const item = this.#known.get(itemID);
+    if (this.#closed || !item) throw new Error('This item is no longer available. Refresh Trash.');
+    return item;
+  }
+  async #verify(item: BackingItem, strict = true) {
+    if (this.#closed) throw new Error('Trash has closed.');
+    await this.access.require([item.root.path, item.file]);
+    const root = await lstat(item.root.path);
+    if (
+      !root.isDirectory() ||
+      root.isSymbolicLink() ||
+      identity(root) !== item.rootIdentity ||
+      (await realpath(item.root.path)) !== item.root.path
+    )
+      throw new Error('The Trash location changed. Refresh Trash.');
+    if (process.platform !== 'win32' && (root.uid !== process.getuid!() || root.mode & 0o077))
+      throw new Error('The private Trash folder could not be verified.');
+    for (const current of [...item.parents, item]) {
+      const info = await lstat(current.file);
+      if (
+        identity(info) !== current.version.identity ||
+        (current !== item && (!info.isDirectory() || info.isSymbolicLink())) ||
+        (current === item &&
+          strict &&
+          (info.size !== current.version.size || info.mtimeMs !== current.version.modified))
+      )
+        throw new Error('This item changed. Refresh Trash before using it.');
+      // Preserve a trashed symlink as an item, but never browse or preview it.
+      if (!info.isSymbolicLink() && (await realpath(current.file)) !== current.file)
+        throw new Error('A folder in Trash became a symbolic link. Refresh Trash.');
+    }
+    return lstat(item.file);
+  }
+  #remember(
+    file: string,
+    root: TrashRoot,
+    rootIdentity: string,
+    info: Stats,
+    metadata: Pick<TrashItem, 'name' | 'originalPath' | 'deleted'>,
+    parents: BackingItem[] = [],
+  ): TrashItem {
+    const itemID = id(JSON.stringify([file, identity(info), info.size, info.mtimeMs]));
+    if (parents.length > 64) throw new Error('This folder is too deep to browse in Viewer.');
+    if (this.#known.size >= 16000 && !this.#known.has(itemID))
+      this.#known.delete(this.#known.keys().next().value!);
+    const item: TrashItem = {
+      id: itemID,
+      ...metadata,
+      directory: info.isDirectory(),
+      previewable: info.isFile() && !info.isSymbolicLink(),
+      symbolicLink: info.isSymbolicLink(),
+      size: info.isDirectory() ? 0 : info.size,
+      modified: info.mtimeMs,
+      location: root.name,
+    };
+    this.#known.set(item.id, {
+      file,
+      root,
+      rootIdentity,
+      item,
+      parents,
+      version: {
+        name: path.basename(file),
+        identity: identity(info),
+        size: info.size,
+        modified: info.mtimeMs,
+      },
+    });
+    return item;
   }
   async requestAccess(window: BrowserWindow, locationID: string): Promise<void> {
     const root = this.#last?.available.get(locationID);
@@ -72,33 +397,25 @@ export class Trash {
     await this.access.remember(root.path, true, result.bookmarks?.[0]);
     await this.access.require([root.path]);
   }
-  async menu(window: BrowserWindow, revision: string): Promise<void> {
+  async confirmation(window: BrowserWindow, revision: string): Promise<void> {
     if (this.#closed || this.#busy || window.isDestroyed()) return;
     const displayed = this.#last;
     if (!displayed || displayed.snapshot.revision !== revision || !displayed.snapshot.canEmpty)
-      throw new Error('Refresh Trash before opening its actions.');
+      throw new Error('Refresh Trash before emptying it.');
     const current = await this.#read();
     if (current.snapshot.revision !== revision || !current.snapshot.canEmpty)
-      throw new Error('Trash changed. Refresh it before opening its actions.');
+      throw new Error('Trash changed. Refresh it before emptying it.');
     if (process.platform === 'darwin') {
-      // This call can ONLY display a native menu. It accepts no erase/approve flag.
-      macFiles().trashMenu(
+      // This call can ONLY display a native confirmation. It accepts no
+      // erase/approve flag; only NSAlert's affirmative human choice can erase.
+      macFiles().trashConfirmation(
         JSON.stringify({ roots: current.roots, count: current.snapshot.items.length }),
       );
       return;
     }
-    const title = trashName(process.platform as DesktopPlatform);
-    Menu.buildFromTemplate([
-      {
-        label: `Empty ${title}…`,
-        // The sole route to erasure. It is never returned, registered or published.
-        click: () => {
-          void this.#emptyFromNativeClick(window, revision);
-        },
-      },
-    ]).popup({ window });
+    await this.#confirmNatively(window, revision);
   }
-  async #emptyFromNativeClick(window: BrowserWindow, revision: string): Promise<void> {
+  async #confirmNatively(window: BrowserWindow, revision: string): Promise<void> {
     if (this.#closed || this.#busy || window.isDestroyed()) return;
     this.#busy = true;
     const title = trashName(process.platform as DesktopPlatform);
@@ -182,6 +499,12 @@ export class Trash {
     };
     const roots: ReviewedRoot[] = [],
       available = new Map<string, TrashRoot>();
+    const origins = new Map(
+      ((await this.services.origins?.().catch(() => [])) ?? []).map((origin) => [
+        origin.file,
+        origin,
+      ]),
+    );
     for (const candidate of candidates) {
       const locationID = id(candidate.path);
       available.set(locationID, candidate);
@@ -223,17 +546,20 @@ export class Trash {
             size: info.size,
             modified: info.mtimeMs,
           });
-          const item: TrashItem = {
-            id: id(candidate.path + '/' + name + ':' + identity(info)),
+          const file = path.join(candidate.path, name);
+          const receipt = origins.get(file);
+          let metadata: Pick<TrashItem, 'name' | 'originalPath' | 'deleted'> = {
             name,
-            directory: info.isDirectory(),
-            size: info.isDirectory() ? 0 : info.size,
-            location: candidate.name,
+            ...(receipt?.identity === identity(info) ? { originalPath: receipt.originalPath } : {}),
           };
+          if (metadata.originalPath) metadata.name = path.basename(metadata.originalPath);
           if (candidate.info) {
-            const metadata = await this.#trashInfo(candidate.info, name);
-            Object.assign(item, metadata);
+            // Missing/malformed metadata does not hide recoverable content.
+            const origin = await this.#trashInfo(candidate, name).catch(() => ({}));
+            metadata = { ...metadata, ...origin };
+            if (metadata.originalPath) metadata.name = path.basename(metadata.originalPath);
           }
+          const item = this.#remember(file, candidate, reviewed.identity, info, metadata);
           snapshot.items.push(item);
         }
         if (identity(await lstat(candidate.path)) !== reviewed.identity)
@@ -272,9 +598,19 @@ export class Trash {
     return { snapshot, roots, available };
   }
   async #trashInfo(
-    folder: string,
+    root: TrashRoot,
     name: string,
   ): Promise<{ originalPath?: string; deleted?: string }> {
+    const folder = root.info!;
+    const parent = await lstat(folder);
+    if (
+      !parent.isDirectory() ||
+      parent.isSymbolicLink() ||
+      parent.uid !== process.getuid!() ||
+      parent.mode & 0o077 ||
+      (await realpath(folder)) !== folder
+    )
+      throw new Error('Trash metadata folder could not be verified.');
     const file = path.join(folder, name + '.trashinfo');
     const info = await lstat(file);
     if (!info.isFile() || info.isSymbolicLink() || info.size > 65536)
@@ -283,8 +619,20 @@ export class Trash {
     if (!text.startsWith('[Trash Info]')) throw new Error('Trash metadata is invalid.');
     const source = /^Path=(.*)$/m.exec(text)?.[1],
       deleted = /^DeletionDate=(.*)$/m.exec(text)?.[1];
+    const decoded = source ? decodeURIComponent(source) : undefined;
+    // Absolute paths are normal in the home Trash. Relative paths on a mounted
+    // volume are relative to that volume, and must never contain '..'.
+    const base = root.originBase;
+    const originalPath =
+      decoded && !decoded.includes('\0') && !decoded.split('/').includes('..')
+        ? path.isAbsolute(decoded)
+          ? path.normalize(decoded)
+          : base
+            ? path.resolve(base, decoded)
+            : undefined
+        : undefined;
     return {
-      ...(source ? { originalPath: decodeURIComponent(source) } : {}),
+      ...(originalPath ? { originalPath } : {}),
       ...(deleted ? { deleted } : {}),
     };
   }
@@ -302,28 +650,38 @@ export class Trash {
     const values: unknown = JSON.parse(stdout || '[]');
     if (!Array.isArray(values) || values.length > limit)
       throw new Error('Recycle Bin returned an invalid inventory.');
-    const items: TrashItem[] = values
-      .map((value) => {
-        if (
-          !value ||
-          typeof value !== 'object' ||
-          typeof value.id !== 'string' ||
-          typeof value.name !== 'string' ||
-          typeof value.directory !== 'boolean' ||
-          typeof value.size !== 'number'
-        )
-          throw new Error('Recycle Bin returned an invalid item.');
-        return {
-          id: id(value.id),
+    const available = new Map<string, TrashRoot>();
+    const items: TrashItem[] = [];
+    for (const value of values) {
+      if (
+        !value ||
+        typeof value !== 'object' ||
+        typeof value.id !== 'string' ||
+        typeof value.name !== 'string' ||
+        typeof value.directory !== 'boolean' ||
+        typeof value.size !== 'number'
+      )
+        throw new Error('Recycle Bin returned an invalid item.');
+      if (
+        !path.isAbsolute(value.id) ||
+        value.id.includes('\0') ||
+        path.basename(value.name) !== value.name
+      )
+        throw new Error('Recycle Bin returned an invalid path.');
+      const root: TrashRoot = { path: path.dirname(value.id), name: 'Recycle Bin' };
+      const rootInfo = await lstat(root.path);
+      available.set(id(root.path), root);
+      items.push(
+        this.#remember(value.id, root, identity(rootInfo), await lstat(value.id), {
           name: value.name,
-          directory: value.directory,
-          size: value.size,
-          location: 'Recycle Bin',
-          ...(typeof value.originalPath === 'string' ? { originalPath: value.originalPath } : {}),
+          ...(typeof value.originalPath === 'string' && path.isAbsolute(value.originalPath)
+            ? { originalPath: path.join(value.originalPath, value.name) }
+            : {}),
           ...(typeof value.deleted === 'string' ? { deleted: value.deleted } : {}),
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
+        }),
+      );
+    }
+    items.sort((a, b) => a.name.localeCompare(b.name));
     const snapshot: TrashSnapshot = {
       revision: id(JSON.stringify(items)),
       items,
@@ -331,6 +689,6 @@ export class Trash {
       truncated: false,
       canEmpty: items.length > 0,
     };
-    return { snapshot, roots: [], available: new Map() };
+    return { snapshot, roots: [], available };
   }
 }
