@@ -495,7 +495,12 @@ export class AgentBroker {
     );
     for (const file of files) {
       const actual = await this.authorize(file);
+      const trash =
+        within(actual, path.join(os.homedir(), '.Trash')) ||
+        within(actual, path.join(os.homedir(), '.local/share/Trash')) ||
+        actual.split(path.sep).some((part) => ['.Trashes', '$Recycle.Bin'].includes(part));
       if (
+        trash ||
         actual === path.parse(actual).root ||
         roots.includes(actual) ||
         (process.platform !== 'win32' &&
@@ -515,7 +520,7 @@ export class AgentBroker {
           ].includes(actual))
       )
         throw new Error(
-          'Agents cannot move a granted root, Home, a whole disk or a system folder to Trash. Select individual items inside a granted folder.',
+          'Agents cannot remove Trash contents, a granted root, Home, a whole disk or a system folder. Select individual items inside a granted folder.',
         );
     }
   }

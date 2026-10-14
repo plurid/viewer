@@ -318,19 +318,55 @@ distribution qualification.
 
 ## Agent removal safeguards
 
-`pnpm exec vitest run tests/agent-safety.test.ts` passes 11 in-memory security
+`pnpm exec vitest run tests/agent-safety.test.ts` passes 13 in-memory security
 regressions. The tests exercise the actual command/proposal broker and operation
 service with simulated file metadata, coordination and dispatch. They verify
 mandatory per-request review with the manual confirmation preference disabled,
 legacy-grant and custom-alias handling, rejection and replay protection, changed
-sources/executors, revoked scope, canonical escapes/private data, protected roots,
-blocked shell/terminal routes and the advertised Trash-only policy. Two operation
+sources/executors, revoked scope, canonical escapes/private data, protected roots and Trash contents,
+blocked shell/external-app/terminal routes and the advertised Trash-only policy. Operation
 checks reject a source changed inside coordination and verify that a Trash error
-never calls permanent deletion. No actual files or folders are removed; mocked
+never calls permanent deletion. Additional checks cover actual failed job outcomes,
+early completion and cancellation before queued removal. No actual files or folders are removed; mocked
 filesystem deletion calls fail the tests.
 
-The source also passes TypeScript and lint. The filesystem integration suites
-were not rerun in this pass because their fixture cleanup permanently removes
-generated folders. Packaging and fresh native UI evidence require permission to
-move the previous generated build folders to Trash first. The previously built
-app and its earlier evidence do not verify these new safeguards.
+`pnpm check` and `pnpm lint` pass, including the new verification/build tools.
+The filesystem integration suites were not rerun because their old fixture cleanup
+permanently removes generated folders. The user approved only the old `.vite` and
+`out/Viewer-darwin-arm64` folders for native Trash; both remain recoverable there.
+
+`node --import tsx tools/build-preserving.ts <seed.app> <fresh-output.app>` builds
+the current JS using the installed Vite configuration with cleanup disabled,
+copies an existing direct bundle to a fresh output and repacks its archive. It
+updates both the plist archive hash and Electron's framework integrity digest,
+then verifies the local ad-hoc signature. The seed and all intermediate/generated
+folders remain intact. Native libraries, SDK and version are inherited; this is
+a local development rebuild, not Store/distribution packaging. Earlier failed
+rebuilds are preserved. The verified bundle is
+`out/Viewer-safety-v5-darwin-arm64/Viewer.app`.
+
+With `VIEWER_TEST_BINARY` pointing at that bundle,
+`node --import tsx tests/native-agent-safety.ts` passes four owned native checks:
+actual authenticated MCP discovery/denial despite imported capabilities, fresh
+exact-path review despite hidden manual confirmation and a valid legacy alias
+grant, compact large-selection scrolling, and the rendered unavailable/inactive permission controls. Reject leaves
+the generated file and nested folder contents intact; a second request requires
+new approval. Nine selected items with long exact paths scroll within the compact
+review body while the header and approval footer remain visible. The owned app
+quits gracefully. All fixtures and its isolated profile are preserved, with ten
+settled dark/light desktop/compact captures and
+[completed evidence](../packages/viewer-electron/app/out/agent-safety-acceptance-PF57QS/result.json).
+
+The scored UI evidence remains
+[`qChZqY`](../packages/viewer-electron/app/out/agent-safety-acceptance-qChZqY/result.json).
+The finish reviewer marked its one clipping correction resolved and returned
+`ship` at that scope. The final rebuild additionally corrects generated JSONC
+guidance about execution/write grants; its renderer entry hash and referenced
+asset names match the reviewed build. The final native repeat also verifies that
+the saved configuration states the fresh-approval rule.
+
+No real removal was approved by the agent during native verification. Positive
+native Trash execution, physical approval, assistive technology and Store
+qualification remain unverified by this pass. The in-memory operation checks
+prove failure/cancellation handling at the service boundary rather than a real
+filesystem removal.

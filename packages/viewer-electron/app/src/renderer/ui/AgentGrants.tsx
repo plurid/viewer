@@ -42,7 +42,8 @@ export function AgentGrants({
       <h2>Agent permissions</h2>
       <p className="settings-note">
         Every agent command requires approval. File removals use system Trash. Agents cannot run
-        shell scripts, executables or terminal input that could permanently delete files.
+        shell scripts, executables, external apps or terminal input that could permanently delete
+        files.
       </p>
       <label className="settings-row settings-wide-field">
         <span>Grant for folder</span>

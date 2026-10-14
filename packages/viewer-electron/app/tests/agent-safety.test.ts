@@ -2,8 +2,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { createHash } from 'node:crypto';
-import type { FileEntry } from '../src/domain/contracts';
+import type { FileEntry, OperationJob } from '../src/domain/contracts';
 import type { CapturedTarget, CustomAction } from '../src/domain/automation';
 import type { AgentProposal, CommandDescriptor } from '../src/domain/agent-requests';
 import { agentCommandID, agentRemovalPolicy } from '../src/domain/agent-safety';
@@ -19,6 +20,7 @@ const memory = vi.hoisted(() => ({
   stores: new Map<string, unknown>(),
   files: new Map<string, FileEntry>(),
   aliases: new Map<string, string>(),
+  operations: new Map<string, OperationJob>(),
   beforeCoordinate: undefined as (() => void) | undefined,
   remove: vi.fn(async () => {
     throw new Error('This test must never delete real files.');
@@ -135,8 +137,9 @@ async function fixture(roots = ['/Granted']) {
     'copy-path',
     'open-terminal',
   ].map((id) => ({ id, label: id, group: 'Files', aliases: [] }));
-  const execute = vi.fn(async (): Promise<void> => {}),
+  const execute = vi.fn(async (): Promise<void | { operationID: string }> => {}),
     write = vi.fn();
+  const cancelOperation = vi.fn();
   const requests: AgentRequests = new AgentRequests(
     '/Memory/Viewer',
     settings,
@@ -150,6 +153,8 @@ async function fixture(roots = ['/Granted']) {
       run: (clientID, work) => broker.clients.context.run(clientID, work),
       executeAllowed: async () => true,
       cancelExecution: () => {},
+      cancelOperation,
+      operation: (id) => memory.operations.get(id),
     },
   );
   const broker: AgentBroker = new AgentBroker(
@@ -182,17 +187,93 @@ async function fixture(roots = ['/Granted']) {
     })) as { content: { text: string }[] };
     return JSON.parse(result.content[0].text) as T;
   }
-  return { settings, config, target, execute, write, requests, broker, created, call };
+  return {
+    settings,
+    config,
+    target,
+    execute,
+    write,
+    cancelOperation,
+    requests,
+    broker,
+    created,
+    call,
+  };
 }
 beforeEach(() => {
   memory.stores.clear();
   memory.files.clear();
   memory.aliases.clear();
+  memory.operations.clear();
   memory.remove.mockClear();
   memory.beforeCoordinate = undefined;
 });
 
 describe('agent removal safety', () => {
+  it('reports the native removal job outcome rather than premature command success', async () => {
+    const f = await fixture();
+    const trash = vi.fn(async () => {
+      throw new Error('Trash unavailable');
+    });
+    const operations = new Operations(trash, (job) => {
+      memory.operations.set(job.id, job);
+      f.requests.operation(job);
+    });
+    f.execute.mockImplementationOnce(async () => {
+      const operationID = operations.start({ kind: 'trash', sources: ['/Granted/Report.txt'] });
+      // Finish before returning the ID to exercise the early-completion race.
+      await vi.waitFor(() => expect(operations.all()[0].status).toBe('failed'));
+      return { operationID };
+    });
+    const proposal = await f.call<{ id: string }>('propose_command', { commandID: 'trash' });
+    await f.requests.review(proposal.id, true);
+    expect(f.requests.get(proposal.id)).toMatchObject({
+      status: 'failed',
+      error: 'Trash unavailable',
+    });
+    expect(memory.remove).not.toHaveBeenCalled();
+    await operations.close();
+  });
+  it('cancels an approved but queued removal when its client is stopped', async () => {
+    const f = await fixture();
+    const trash = vi.fn(async () => {});
+    const operations = new Operations(trash, (job) => {
+      memory.operations.set(job.id, job);
+      f.requests.operation(job);
+    });
+    let release!: () => void, entered!: () => void;
+    const active = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const holding = operations.exclusive(async () => {
+      entered();
+      await gate;
+    });
+    await active;
+    f.cancelOperation.mockImplementation((id: string) => operations.cancel(id));
+    f.execute.mockImplementationOnce(async () => ({
+      operationID: operations.start({ kind: 'trash', sources: ['/Granted/Report.txt'] }),
+    }));
+    const proposal = await f.call<{ id: string }>('propose_command', { commandID: 'trash' });
+    await f.requests.review(proposal.id, true);
+    expect(f.requests.get(proposal.id).status).toBe('running');
+    await f.broker.clientRequest({
+      kind: 'revoke',
+      id: f.created.client.id,
+      revision: f.created.client.revision,
+    });
+    release();
+    await holding;
+    await vi.waitFor(() => expect(operations.all()[0].status).toBe('cancelled'));
+    expect(f.requests.get(proposal.id).status).toBe('cancelled');
+    expect(f.cancelOperation).toHaveBeenCalledOnce();
+    expect(trash).not.toHaveBeenCalled();
+    expect(memory.remove).not.toHaveBeenCalled();
+    await operations.close();
+  });
   it('checks the reviewed source again inside native Trash coordination', async () => {
     const file = item();
     memory.files.set(file.path, file);
@@ -213,7 +294,7 @@ describe('agent removal safety', () => {
       expect(operations.all().find((job) => job.id === id)?.status).toBe('failed'),
     );
     expect(trash).not.toHaveBeenCalled();
-    expect(operations.all()[0].errors[0].message).toContain('Nothing was moved to Trash');
+    expect(operations.all()[0].errors[0].message).toContain('This item was not moved to Trash');
     expect(memory.remove).not.toHaveBeenCalled();
     await operations.close();
   });
@@ -304,12 +385,23 @@ describe('agent removal safety', () => {
     expect(f.execute).not.toHaveBeenCalled();
     expect(scoped.execute).not.toHaveBeenCalled();
   });
-  it('protects granted roots, whole volumes and system directories from agent Trash requests', async () => {
-    for (const file of ['/Granted', '/', '/System', '/Users', '/Volumes']) {
+  it('protects granted roots, Home, whole volumes, system directories and existing Trash contents', async () => {
+    for (const file of [
+      '/Granted',
+      '/',
+      '/System',
+      '/Users',
+      '/Volumes',
+      os.homedir(),
+      path.join(os.homedir(), '.Trash'),
+      path.join(os.homedir(), '.Trash', 'Kept.txt'),
+      path.join(os.homedir(), '.local/share/Trash/files', 'Kept.txt'),
+      '/Volumes/External/.Trashes/501/Kept.txt',
+    ]) {
       const f = await fixture(file === '/Granted' ? ['/Granted'] : ['/']);
       f.target.selection = [item(file)];
       await expect(f.call('propose_command', { commandID: 'trash' })).rejects.toThrow(
-        'Agents cannot move',
+        'Agents cannot remove',
       );
       expect(f.execute).not.toHaveBeenCalled();
     }
@@ -327,6 +419,11 @@ describe('agent removal safety', () => {
   });
   it('blocks opaque code and terminal input even when named clients retain old write capabilities', async () => {
     const f = await fixture();
+    for (const command of ['open-default', 'open-with', 'open-selection', 'undo-file']) {
+      expect(() => agentCommandID(command, [])).toThrow();
+      f.config.customActions = [action({ kind: 'builtin', command })];
+      await expect(f.call('propose_command', { commandID: 'custom.cleanup' })).rejects.toThrow();
+    }
     for (const executor of [
       { kind: 'shell', executable: '/bin/zsh', script: 'rm -rf /Granted', perItem: false },
       { kind: 'executable', executable: '/bin/rm', args: ['-rf', '/Granted'], perItem: false },

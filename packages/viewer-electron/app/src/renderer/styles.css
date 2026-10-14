@@ -3215,6 +3215,30 @@ select {
   width: 100%;
 }
 
+.agent-review-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.agent-review-dialog > header {
+  flex-shrink: 0;
+}
+.agent-review-dialog > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.agent-review-body {
+  min-height: 0;
+  padding: 18px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.agent-review-dialog form > footer {
+  flex-shrink: 0;
+  padding: 18px;
+}
 .agent-proposal-detail {
   max-height: 45vh;
   overflow: auto;

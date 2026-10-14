@@ -7,6 +7,7 @@ export const agentRemovalPolicy = Object.freeze({
 });
 
 const terminalCommands = new Set(['open-terminal', 'open-tmux', 'open-terminal-plane']);
+const externalCommands = new Set(['open-default', 'open-with', 'open-selection']);
 
 /** Resolve aliases before review; opaque code cannot promise recoverable file removal. */
 export function agentCommandID(id: string, actions: readonly CustomAction[]): string {
@@ -27,5 +28,13 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
   }
   if (terminalCommands.has(command))
     throw new Error('Agent terminal execution is unavailable because it can bypass Trash.');
+  if (externalCommands.has(command))
+    throw new Error(
+      'Agents cannot launch external applications that can bypass Trash. Open a Viewer preview instead.',
+    );
+  if (command === 'undo-file')
+    throw new Error(
+      'Agent file Undo can remove outputs outside the captured selection. Review it yourself in Recent file operations.',
+    );
   return command;
 }

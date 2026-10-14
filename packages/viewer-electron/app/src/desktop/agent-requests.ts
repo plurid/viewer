@@ -10,6 +10,7 @@ import type { SettingsService } from './settings';
 import { entry, absolute } from './filesystem';
 import { agentCommandID } from '../domain/agent-safety';
 import { sameSourceVersion, sourceVersion } from '../domain/inspection';
+import type { OperationJob } from '../domain/contracts';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
@@ -27,7 +28,12 @@ export class AgentRequests {
     directory: string,
     private settings: SettingsService,
     private emit: (proposal: AgentProposal) => void,
-    private execute: (id: string, target: CapturedTarget) => Promise<void | { taskID: string }>,
+    private execute: (
+      id: string,
+      target: CapturedTarget,
+    ) => Promise<
+      void | { taskID: string; operationID?: never } | { operationID: string; taskID?: never }
+    >,
     private terminal: {
       read(id: string): { cwd: string; output: string };
       write(id: string, data: string): void;
@@ -39,6 +45,8 @@ export class AgentRequests {
       run<T>(clientID: string, work: () => Promise<T>): Promise<T>;
       executeAllowed(): Promise<boolean>;
       cancelExecution(id: string): void;
+      cancelOperation?(id: string): void;
+      operation?(id: string): OperationJob | undefined;
     },
   ) {
     this.store = new DocumentStore(path.join(directory, 'execution-approvals-v1.json'), (value) =>
@@ -263,6 +271,19 @@ export class AgentRequests {
         this.emit(proposal);
       }
   }
+  operation(job: OperationJob): void {
+    for (const proposal of this.proposals.values()) {
+      if (proposal.operationID !== job.id || proposal.status === 'cancelled') continue;
+      proposal.operation = structuredClone(job);
+      if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+        proposal.status = job.status as 'completed' | 'failed' | 'cancelled';
+        proposal.error = job.errors.length
+          ? job.errors.map((error) => error.message).join('\n')
+          : undefined;
+      }
+      this.emit(proposal);
+    }
+  }
   async review(id: string, approve: boolean): Promise<void> {
     const proposal = this.proposals.get(id);
     if (!proposal || proposal.status !== 'review')
@@ -312,13 +333,20 @@ export class AgentRequests {
             throw new Error('This agent task was stopped.');
           const result = await this.execute(proposal.commandID!, proposal.target!);
           if (result?.taskID) proposal.taskID = result.taskID;
+          if (result?.operationID) {
+            proposal.operationID = result.operationID;
+            const current = this.authority?.operation?.(result.operationID);
+            if (current) this.operation(current);
+          }
           if (this.proposals.get(id)?.status === 'cancelled' && proposal.taskID)
             this.authority?.cancelExecution(proposal.taskID);
+          if (this.proposals.get(id)?.status === 'cancelled' && proposal.operationID)
+            this.authority?.cancelOperation?.(proposal.operationID);
         }
       };
       if (this.authority) await this.authority.run(proposal.clientID ?? 'legacy', execute);
       else await execute();
-      if (this.proposals.get(id)?.status !== 'cancelled')
+      if (this.proposals.get(id)?.status !== 'cancelled' && !proposal.operationID)
         proposal.status = proposal.taskID ? 'running' : 'completed';
     } catch (error) {
       if (this.proposals.get(id)?.status !== 'cancelled') proposal.status = 'failed';
@@ -336,6 +364,7 @@ export class AgentRequests {
       )
         continue;
       if (proposal.taskID) this.authority?.cancelExecution(proposal.taskID);
+      if (proposal.operationID) this.authority?.cancelOperation?.(proposal.operationID);
       proposal.status = 'cancelled';
       this.emit(proposal);
     }

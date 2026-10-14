@@ -1,0 +1,158 @@
+/** Local JS-only rebuild from an existing direct package. Keeps every intermediate; never deletes. */
+import { cp, lstat, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { build, type UserConfig } from 'vite';
+import { VitePlugin, type VitePluginConfig } from '@electron-forge/plugin-vite';
+import forge from '../forge.config';
+
+if (process.platform !== 'darwin') throw new Error('This local rebuild requires macOS.');
+const source = path.resolve(process.argv[2] || '');
+if (!process.argv[2] || !source.endsWith('.app') || !(await lstat(source)).isDirectory())
+  throw new Error('Provide an existing direct Viewer.app as the seed; it is kept unchanged.');
+const output = path.resolve(process.argv[3] || 'out/Viewer-darwin-arm64/Viewer.app');
+if (
+  await lstat(output).then(
+    () => true,
+    (error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+      return false;
+    },
+  )
+)
+  throw new Error(
+    'Output already exists. Choose a new output or request approval to move it to Trash.',
+  );
+const require = createRequire(import.meta.url);
+const cli = createRequire(require.resolve('@electron-forge/cli/package.json'));
+const core = createRequire(cli.resolve('@electron-forge/core'));
+const packager = createRequire(core.resolve('@electron/packager'));
+const asar = (await import(pathToFileURL(packager.resolve('@electron/asar')).href)) as {
+  extractAll(source: string, destination: string): void;
+  createPackageWithOptions(
+    source: string,
+    destination: string,
+    options: { unpack: string },
+  ): Promise<void>;
+  getRawHeader(file: string): { headerString: string };
+};
+const seedPackage = JSON.parse(
+  asar.getRawHeader(path.join(source, 'Contents/Resources/app.asar')).headerString,
+);
+if (!seedPackage.files?.['.vite']) throw new Error('Seed is not a Viewer Vite package.');
+const plugin = forge.plugins?.find((item) => item instanceof VitePlugin);
+if (!plugin) throw new Error('The current Vite build configuration is unavailable.');
+const config = (plugin as unknown as { config: VitePluginConfig }).config;
+const viteBase = path.dirname(require.resolve('@electron-forge/plugin-vite'));
+const generatorModule = (await import(
+  pathToFileURL(path.join(viteBase, 'ViteConfig.js')).href
+)) as {
+  default: new (
+    config: VitePluginConfig,
+    root: string,
+    production: boolean,
+  ) => {
+    getBuildConfigs(): Promise<UserConfig[]>;
+    getRendererConfig(): Promise<UserConfig[]>;
+  };
+};
+await mkdir(path.resolve('out'), { recursive: true });
+const work = await mkdtemp(path.resolve('out/preserved-package-'));
+const generator = new generatorModule.default(config, process.cwd(), true);
+for (const target of [
+  ...(await generator.getBuildConfigs()),
+  ...(await generator.getRendererConfig()),
+]) {
+  target.build = { ...target.build, emptyOutDir: false };
+  target.logLevel = 'warn';
+  await build(target);
+}
+const unpacked = path.join(work, 'source');
+asar.extractAll(path.join(source, 'Contents/Resources/app.asar'), unpacked);
+await cp(path.resolve('.vite'), path.join(unpacked, '.vite'), { recursive: true });
+await mkdir(path.dirname(output), { recursive: true });
+await cp(source, output, {
+  recursive: true,
+  force: false,
+  errorOnExist: true,
+  verbatimSymlinks: true,
+});
+const archive = path.join(output, 'Contents/Resources/app.asar');
+await asar.createPackageWithOptions(unpacked, archive, { unpack: '**/node-pty/**' });
+const hash = createHash('sha256').update(asar.getRawHeader(archive).headerString).digest('hex');
+const run = promisify(execFile);
+await run('/usr/libexec/PlistBuddy', [
+  '-c',
+  'Set :ElectronAsarIntegrity:Resources/app.asar:hash ' + hash,
+  path.join(output, 'Contents/Info.plist'),
+]);
+// Electron 41+ also binds this plist map to a digest inside its framework.
+// Reuse the installed packager's bounded patcher without its cleanup hooks.
+const framework = path.join(output, 'Contents/Frameworks/Electron Framework.framework');
+const version = await run('/usr/bin/plutil', [
+  '-extract',
+  'CFBundleVersion',
+  'raw',
+  '-o',
+  '-',
+  path.join(framework, 'Resources/Info.plist'),
+]);
+interface IntegrityContext {
+  opts: { electronVersion: string; quiet: boolean };
+  renamedAppPath: string;
+  frameworkBundlePath: string;
+  asarIntegrity: Record<string, { algorithm: string; hash: string }>;
+}
+const mac = (await import(
+  pathToFileURL(path.join(path.dirname(core.resolve('@electron/packager')), 'mac.js')).href
+)) as {
+  MacApp: { prototype: { setIntegrityDigest(this: IntegrityContext): Promise<boolean> } };
+};
+if (
+  await mac.MacApp.prototype.setIntegrityDigest.call({
+    opts: { electronVersion: version.stdout.trim(), quiet: false },
+    renamedAppPath: output,
+    frameworkBundlePath: framework,
+    asarIntegrity: { 'Resources/app.asar': { algorithm: 'SHA256', hash } },
+  })
+) {
+  await run('/usr/bin/codesign', [
+    '--sign',
+    '-',
+    '--force',
+    '--deep',
+    '--preserve-metadata=entitlements,requirements,flags,runtime',
+    framework,
+  ]);
+}
+await run('/usr/bin/codesign', [
+  '--force',
+  '--sign',
+  '-',
+  '--entitlements',
+  path.resolve('assets/entitlements.mac.plist'),
+  output,
+]);
+await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', output]);
+// Make the limited purpose explicit: native dependencies/SDK/signing are inherited.
+await writeFile(
+  path.join(work, 'result.json'),
+  JSON.stringify(
+    {
+      output,
+      seed: source,
+      scope:
+        'Local JS-only direct rebuild. Source seed and intermediates preserved. Not a Store/distribution build.',
+      inheritedVersion: JSON.parse(await readFile(path.join(unpacked, 'package.json'), 'utf8'))
+        .version,
+    },
+    null,
+    2,
+  ),
+);
+console.log('Built preserved local app:', output);
+console.log('Preserved intermediate folder:', work);

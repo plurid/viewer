@@ -14,7 +14,7 @@ const introduction = [
   '// MCP agents: read_config -> validate_config -> propose_config -> get_proposal for reviewed changes.',
   '// MCP patches use {path:"settings.browsing.mode",value:"columns"}; use keys for dotted folder paths.',
   '// Example folder patch: {path:"",keys:["settings","folders","/absolute/path/Downloads"],value:{mode:"list"}}.',
-  '// Credentials, tokens, effective execution grants and workspace sessions live outside this file.',
+  '// Credentials, tokens, terminal-read grants and workspace sessions live outside this file.',
   '// Configuration changes do not run a recipe or approve file changes. Those require their action workflow.',
 ];
 
@@ -94,7 +94,7 @@ const descriptions: Record<string, string[]> = {
     'path/name/extension need one selected item or perItem:true. Arguments are literal, not shell source.',
     'Shell scripts receive directory as $1 and selected paths as $2 onward; quote those variables.',
     'perItem:true runs sequentially per selected entry. Processes use the captured working directory.',
-    'Process/terminal actions use OS permissions and have no file-operation Undo; agent grants live elsewhere.',
+    'Process/terminal actions are for direct user invocation. Agents cannot run them or launch external apps.',
   ],
   'settings.terminals': ['External terminal selection, embedded shell profiles and tmux defaults.'],
   'settings.terminals.application': [
@@ -177,8 +177,11 @@ const descriptions: Record<string, string[]> = {
     'Local MCP clients use Viewer while it is running, within the granted canonical folder roots.',
     'Read/configuration/command tools discover context and submit reviewed proposals.',
     'Use list_commands and explain_command to discover IDs; do not infer them from display labels.',
-    'Authentication, unattended executor grants and terminal read/write grants are managed in Settings > Agents.',
-    'Those grants are stored separately. Adding approval fields here cannot grant execution permission.',
+    'Authentication, folder scope and separate terminal-read grants are managed in Settings > Agents.',
+    'Every agent command requires fresh user approval. File/folder removals name exact paths and use system Trash only.',
+    'Old execution/write grants and hidden manual confirmation preferences cannot bypass removal approval.',
+    'Shell, executable, external-app and terminal-input actions are unavailable to agents; file Undo is reviewed by the user.',
+    'Approvals are separate from JSONC. Adding approval fields here cannot authorize execution or permanent deletion.',
   ],
   'settings.agents.enabled': [
     'Enable the local MCP server. false closes it and rejects further client requests.',

@@ -1,6 +1,6 @@
 import type { CapturedTarget, ExecutionTask } from './automation';
 import type { SettingsPatch } from './services';
-import type { Pane, ViewMode, FileEntry } from './contracts';
+import type { Pane, ViewMode, FileEntry, OperationJob } from './contracts';
 /** Live navigation discovery excludes history, camera/layout and unrelated preferences. */
 export interface AgentPlane {
   id: string;
@@ -48,6 +48,8 @@ export interface AgentProposal {
   status: 'review' | 'running' | 'completed' | 'rejected' | 'failed' | 'cancelled';
   taskID?: string;
   task?: ExecutionTask;
+  operationID?: string;
+  operation?: OperationJob;
   error?: string;
 }
 export interface ExecutionGrant {

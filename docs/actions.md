@@ -57,7 +57,7 @@ When updating from a build that encrypted its local agent token, generate fresh 
 
 The packaged executable's `--mcp` mode is a headless stdio client for the running Viewer instance; that instance owns the index, proposals and user review. The Unix socket has mode 0600 in an owned mode-0700 temporary directory, avoiding macOS path-length limits.
 
-The recipe tools remain `get_context`, `list_actions`, `read_metadata`, `search_files`, `run_action`, `get_task` and `cancel_task`. The shared command/configuration tools are `list_commands`, `explain_command`, `propose_command`, `read_config`, `validate_config`, `propose_config` and `get_proposal`; terminal tools are `read_terminal` and `write_terminal`. Canonical-path checks apply to file/terminal requests, including after permission revocation. Only tasks/proposals started by the current actor can be inspected. Settings → Agents can create named clients with separate tokens, folder roots, metadata/content/navigation/proposal/terminal capabilities and read/task budgets. Private storage retains client token hashes; credentials are shown only when created or rotated. Revocation immediately invalidates the credential. The compatibility token retains its existing shared roots and reviewed navigation behavior.
+The recipe tools remain `get_context`, `list_actions`, `read_metadata`, `search_files`, `run_action`, `get_task` and `cancel_task`. The shared command/configuration tools are `list_commands`, `explain_command`, `propose_command`, `read_config`, `validate_config`, `propose_config` and `get_proposal`; `read_terminal` requires a separate grant. Terminal input is unavailable. Canonical-path checks apply to file/terminal requests, including after permission revocation. Only tasks/proposals started by the current actor can be inspected. Settings → Agents can create named clients with separate tokens, folder roots, metadata/content/navigation/proposal/terminal-read capabilities and read/task budgets. Private storage retains client token hashes; credentials are shown only when created or rotated. Revocation immediately invalidates the credential. The compatibility token retains its existing shared roots and reviewed navigation behavior.
 
 Navigation tools are `list_workspaces`, `list_planes`, `propose_open_path`, `propose_selection`, `propose_focus_plane` and `propose_workspace_switch`. Discovery reads the live published workspace catalog and omits inaccessible paths and history/layout. A named navigation capability permits navigation within that client's/native folder grants without another review. Compatibility-token requests still require review. Both paths recheck grants and stale origins/destinations, preserve independent versus linked plane ownership and can continue from an empty workspace. See [agent-navigation.md](agent-navigation.md) for arguments and the agent interaction sequence.
 
@@ -85,7 +85,7 @@ commentary are excluded. Content scans additionally require a named content
 capability. [Workflows and watch rules](workflows.md) compose the ordinary review
 services; MCP cannot enable a watch approval or directly apply its file changes.
 
-Command discovery uses the same captured context, availability and IDs as the UI. A command proposal opens review before invocation, and completion waits for the workspace acknowledgement or a subprocess's final status. Origin changes or executor changes fail the proposal rather than retargeting it. Configuration proposals validate first, then apply a reviewed revision; they cannot change effective approvals. Recipe file changes still require their normal row review and Apply. No direct `apply`, `trash` or `delete` MCP tool is exposed.
+Command discovery filters the UI's captured catalog through the desktop agent safety policy. A command proposal opens review before invocation. Completion waits for the workspace acknowledgement or the actual file job outcome; failed/cancelled Trash jobs do not report success. Stopping the client cancels queued file removals. An already-running native Trash call may finish and remains recoverable. Origin changes or executor changes fail the proposal rather than retargeting it. Configuration proposals validate first, then apply a reviewed revision; they cannot change effective approvals. Recipe file changes still require their normal row review and Apply. No direct `apply`, `trash` or `delete` MCP tool is exposed.
 
 Every agent command requires fresh user review, including custom built-in aliases.
 Saved execution grants never suppress that review. A Trash request lists the exact
@@ -93,13 +93,13 @@ paths and explains that selected folders include their contents. Its approval
 cannot be replayed or reused for a later request. Changing the selected source or
 custom action requires a new proposal. Source versions are checked again inside
 the coordinated Trash operation; Trash failure never falls back to permanent
-deletion. Granted roots, Home, disk roots, system folders and private Viewer data
+deletion. Existing Trash contents, granted roots, Home, disk roots, system folders and private Viewer data
 cannot be trashed through the agent API.
 
-Agent shell scripts, executables, terminal profiles and terminal input are blocked
+Agent shell scripts, executables, external-app commands, terminal profiles and terminal input are blocked
 because they can bypass Trash. They are excluded from agent command discovery;
 old clients and saved write/execution grants cannot re-enable them. Terminal
-output reading remains separately granted. Human-invoked custom commands and
+output reading remains separately granted. Agent file Undo is unavailable because it can remove outputs outside the captured selection; users can review it in Recent file operations. Human-invoked custom commands and
 terminal use remain available in the app. Effective grants stay outside JSONC;
 imported configuration cannot authorize itself. Disabling Agents rejects further
 requests and closes the server. Viewer must be running to supply context and

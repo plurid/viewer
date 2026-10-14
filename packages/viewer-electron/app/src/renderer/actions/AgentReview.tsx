@@ -36,6 +36,7 @@ export function AgentReview() {
         if (!busy) review(false);
       }}
       wide
+      className="agent-review-dialog"
     >
       <form
         onSubmit={(event) => {
@@ -43,28 +44,30 @@ export function AgentReview() {
           review(true);
         }}
       >
-        <p>An agent requested this action.</p>
-        {proposal.target && (
-          <>
-            <p className="configuration-path">
-              {proposal.target.directory} · {proposal.target.selection.length} selected
-            </p>
-            {!!proposal.target.selection.length && (
-              <ul className="agent-proposal-files">
-                {proposal.target.selection.slice(0, 8).map((file) => (
-                  <li key={file.path} title={file.path}>
-                    {file.name}
-                  </li>
-                ))}
-                {proposal.target.selection.length > 8 && (
-                  <li>And {proposal.target.selection.length - 8} more</li>
-                )}
-              </ul>
-            )}
-          </>
-        )}
-        <pre className="agent-proposal-detail">{proposal.detail}</pre>
-        {error && <p role="alert">{error}</p>}
+        <div className="agent-review-body">
+          <p>An agent requested this action.</p>
+          {proposal.target && (
+            <>
+              <p className="configuration-path">
+                {proposal.target.directory} · {proposal.target.selection.length} selected
+              </p>
+              {!!proposal.target.selection.length && (
+                <ul className="agent-proposal-files">
+                  {proposal.target.selection.slice(0, 8).map((file) => (
+                    <li key={file.path} title={file.path}>
+                      {file.name}
+                    </li>
+                  ))}
+                  {proposal.target.selection.length > 8 && (
+                    <li>And {proposal.target.selection.length - 8} more</li>
+                  )}
+                </ul>
+              )}
+            </>
+          )}
+          <pre className="agent-proposal-detail">{proposal.detail}</pre>
+          {error && <p role="alert">{error}</p>}
+        </div>
         <footer>
           <button type="button" disabled={busy} onClick={() => review(false)}>
             Reject

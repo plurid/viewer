@@ -36,7 +36,7 @@ import { AgentBroker } from './agent-broker';
 import { Comparisons } from './comparison';
 import { OperationPlans } from './operation-plans';
 import { operationPlanRequestSchema, type OperationPlanRequest } from '../domain/operation-plan';
-import { sourceVersionSchema } from '../domain/inspection';
+import { sourceVersion, sourceVersionSchema } from '../domain/inspection';
 import {
   agentClientInputSchema,
   type AgentClientRequest,
@@ -683,7 +683,10 @@ export class Desktop {
         process.platform === 'darwin'
           ? macFiles().trash(file, fileCoordination.purpose())
           : shell.trashItem(file),
-      (job) => emit({ type: 'job', job }),
+      (job) => {
+        emit({ type: 'job', job });
+        this.agentRequests?.operation(job);
+      },
       (progress) => emit({ type: 'job-progress', progress }),
       changed,
       access,
@@ -744,6 +747,18 @@ export class Desktop {
       (proposal) => emit({ type: 'agent-proposal', proposal }),
       async (command, target) => {
         const resolved = agentCommandID(command, this.settings.snapshot().settings.customActions);
+        if (resolved === 'trash') {
+          return {
+            operationID: this.operations.start({
+              kind: 'trash',
+              sources: target.selection.map((file) => file.path),
+              expectedSources: target.selection.map((file) => ({
+                path: file.path,
+                version: sourceVersion(file),
+              })),
+            }),
+          };
+        }
         await this.sendAgentCommand(resolved, target);
       },
       {
@@ -763,6 +778,8 @@ export class Desktop {
           return !client || client.capabilities.includes('execute');
         },
         cancelExecution: (id) => this.executions.cancel(id),
+        cancelOperation: (id) => this.operations.cancel(id),
+        operation: (id) => this.operations.all().find((job) => job.id === id),
       },
     );
     this.agents = new AgentBroker(
