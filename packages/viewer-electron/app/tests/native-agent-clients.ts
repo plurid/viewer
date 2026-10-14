@@ -8,6 +8,7 @@ import { ownedApp, until } from './owned-app';
 import type { AgentClient, AgentClientReply } from '../src/domain/agent-clients';
 import type { DrawingGeometryPage } from '../src/domain/drawing-geometry';
 import { panelDrawing } from './dxf-fixtures';
+import { officeFixture } from './office-fixtures';
 const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-clients-'));
 const profile = path.join(root, 'Profile'),
   shared = path.join(root, 'Shared'),
@@ -17,6 +18,8 @@ const file = path.join(shared, 'Résumé.txt');
 await writeFile(file, 'Original generated passage with diacritics: ştiinţă.');
 const drawing = path.join(shared, 'Panel.dxf');
 await writeFile(drawing, panelDrawing);
+const workbook = path.join(shared, 'Measurements.xlsx');
+await writeFile(workbook, officeFixture('workbook'));
 await writeFile(
   path.join(profile, 'viewer-state-v1.json'),
   JSON.stringify({
@@ -150,6 +153,39 @@ try {
   assert.equal(geometry.contentHash.length, 64);
   evidence.push(
     'The actual MCP broker reads shared DXF bounds, coordinates, declared units, measurements and byte hash through the packaged worker; metadata-only credentials cannot read geometry.',
+  );
+  await assert.rejects(call(metadata.token, 'query_table', { path: workbook }), /no content/);
+  const sheet = (await call(token, 'query_table', {
+    path: workbook,
+    sheet: 'Measurements',
+    offset: 1,
+    limit: 1,
+  })) as {
+    coverage: string;
+    rows: {
+      row: number;
+      cells: {
+        value: string;
+        formula?: string;
+        cached?: boolean;
+        anchor: { sheet: string; row: number; column: number };
+      }[];
+    }[];
+  };
+  assert.equal(sheet.coverage, 'partial');
+  assert.equal(sheet.rows[0].row, 61);
+  assert.equal(sheet.rows[0].cells[1].value, '20');
+  assert.equal(sheet.rows[0].cells[1].formula, 'SUM(B1,7.5)');
+  assert.equal(sheet.rows[0].cells[1].cached, true);
+  assert.deepEqual(sheet.rows[0].cells[1].anchor, {
+    kind: 'cells',
+    sheet: 'Measurements',
+    row: 61,
+    column: 2,
+  });
+  assert.equal(sheet.rows[0].cells[2].cached, false);
+  evidence.push(
+    'The actual MCP broker and packaged Office worker return a named XLSX sheet window at source row 61 with saved/uncached formulas and original cell anchors; metadata-only credentials cannot read it.',
   );
   await assert.rejects(
     call(token, 'read_metadata', { path: path.join(profile, 'agent-clients-v1.json') }),

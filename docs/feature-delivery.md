@@ -56,8 +56,9 @@ qualify later builds for the Mac App Store; see mac-app-store-readiness.md.
   records the verified list/map/approval/review states at their scoped verdict.
 - `tests/native-agent-clients.ts` verifies Settings-only client management,
   capability and folder boundaries, source-versioned content, actual automatic
-  navigation, actor-owned proposals, actual shared DXF worker/geometry data and
-  immediate credential revocation. Metadata-only credentials cannot read geometry.
+  navigation, actor-owned proposals, actual shared DXF geometry and named XLSX
+  windows, and immediate credential revocation. Metadata-only credentials cannot
+  read geometry or worksheet cells.
 - `tests/native-change-review.ts` verifies opt-in checkpoint review, journaled
   recovery copies and termination of a pathological regex in its dedicated worker.
 - `tests/native-comparison-collections.ts` verifies actual comparison and operation

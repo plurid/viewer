@@ -265,8 +265,9 @@ preserve sheet/row/column anchors and content capabilities.
 
 A generated FIFO reproduced a native wait before the archive descriptor reader
 could reject the source. Content coordination now rejects existing special files
-before calling the native accessor; a binding regression proves no native request
-starts, and the real archive test completes without a writer. Archive opens also
+before calling the native accessor, including links to pipes; a binding regression
+proves no native request starts, and the real archive test completes without a
+writer. Archive opens also
 use nonblocking/nofollow descriptors and validate regular files. Compressed TAR
 uses the same bounded descriptor instead of reopening its pathname. This does not
 prove every provider failure or noncooperating external-writer race is resolved.
@@ -280,8 +281,9 @@ stable camera transforms; earlier transition captures were replaced.
 
 On this same package, `tests/native-workflows.ts` passes five checks, including
 CSV row 61/column 2, image regions, shared DXF facts and actual workflow review/
-apply/resume/receipt restoration. `tests/native-agent-clients.ts` passes four
-checks for the actual MCP/worker, content scopes, actor ownership and credential
+apply/resume/receipt restoration. `tests/native-agent-clients.ts` passes five
+checks for the actual MCP/worker, named XLSX windows with original anchors and
+saved/uncached formulas, content scopes, actor ownership and credential
 revocation. Owned apps quit gracefully and generated profiles are removed.
 
 The Office finish reviewer disposition is `ship` for its single scored correction:
