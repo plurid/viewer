@@ -1745,12 +1745,15 @@ select {
 }
 .trash-toolbar {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto minmax(120px, 170px);
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 170px);
   gap: 12px;
   align-items: center;
   padding: 10px 20px;
   border-bottom: 1px solid var(--line);
   flex: none;
+}
+.trash-toolbar.has-parent {
+  grid-template-columns: 32px minmax(0, 1fr) auto minmax(120px, 170px);
 }
 .trash-breadcrumbs,
 .trash-breadcrumbs > span,
@@ -1818,16 +1821,16 @@ select {
 }
 .trash-row {
   display: grid;
-  grid-template-columns: minmax(200px, 3fr) minmax(100px, 1fr) 80px;
+  grid-template-columns: minmax(200px, 2fr) minmax(160px, 2fr) 80px;
   align-items: center;
   gap: 20px;
   padding: 0 20px;
   border-bottom: 1px solid var(--line);
-  min-width: 480px;
+  min-width: 520px;
 }
-.trash-inventory.with-origins .trash-row {
-  grid-template-columns: minmax(200px, 2fr) minmax(150px, 2fr) minmax(100px, 1fr) 80px;
-  min-width: 630px;
+.trash-inventory.with-date .trash-row {
+  grid-template-columns: minmax(200px, 2fr) minmax(160px, 2fr) minmax(110px, 1fr) 80px;
+  min-width: 650px;
 }
 .trash-row > span {
   min-width: 0;
@@ -1859,6 +1862,58 @@ select {
   color: var(--muted);
   background: var(--raised);
   font-size: 12px;
+}
+.trash-heading button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+.trash-heading button:hover,
+.trash-heading button[aria-pressed='true'] {
+  color: var(--ink);
+}
+.trash-heading button:last-child {
+  justify-content: flex-end;
+}
+.trash-origin-details {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+}
+.trash-origin-details > div {
+  min-width: 0;
+}
+.trash-origin-details p {
+  max-height: 88px;
+  margin: 4px 0 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.trash-origin-details button {
+  flex: none;
+}
+.trash-original-path {
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+.trash-info-note {
+  display: block;
+  margin-top: 4px;
 }
 .trash-dialog .trash-footer {
   display: grid;

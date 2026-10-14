@@ -22,6 +22,7 @@ vi.mock('../src/desktop/macos-files', () => ({
     ) as MacFiles;
     return {
       volumes: async () => [],
+      datesAdded: binding.datesAdded,
       renameExclusive: binding.renameExclusive,
       trashConfirmation: () => {
         throw new Error('Native confirmation is forbidden in this generated restore test.');

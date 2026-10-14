@@ -513,3 +513,59 @@ erasure, physical assistive technology, Windows/Linux execution and Mac App Stor
 qualification are not established by this pass. Existing Vite config-loader,
 CJS import-meta and large-chunk warnings remain. Earlier failed fixture setup
 attempts and every intermediate/profile/generated file are retained.
+
+## Trash navigation, sorting and metadata refinement (October 14)
+
+The reported old-build affordances were reproduced before correction: Back and a
+duplicate Trash breadcrumb at the root, a static Name heading and no in-browser
+original-path detail. Root navigation is now contextual, native header buttons
+sort in both directions, and a single selection exposes a complete selectable,
+wrapping original path. Open original folder in plane uses ordinary guarded
+workspace navigation, creates a root plane at the containing folder and reports
+a missing original parent without closing Trash. Unknown original locations are
+explicit and retain Restore to…; Finder origins are not inferred.
+
+The macOS service now reads `NSURLAddedToDirectoryDateKey` on a bounded native
+worker and matches the result to the listed file identity, size and modification
+version. It caches optional metadata briefly and tolerates unavailable keys or
+closure during a pending read. The UI labels this **Date added**, never Date
+deleted, and never substitutes modification/change timestamps. A completely
+unavailable date column is omitted and Get Info explains its absence. Added dates
+are not inherited by macOS nested children; existing recorded-deletion metadata
+on other platforms retains its separate behavior.
+
+The focused command
+`pnpm exec vitest run tests/trash-presentation.test.ts tests/trash-safety.test.ts tests/selection.test.ts tests/commands.test.ts tests/agent-safety.test.ts tests/api-boundary.test.ts`
+passes **73 tests across six files**. `pnpm check`, `pnpm lint` and Prettier checks
+on changed files pass. The fresh native binding
+`out/viewer-macos-files-trash-metadata-v1.node` compiles successfully. Its real
+date-added test passes on generated APFS files/folders, including a file with a
+modification time backdated to 2000; links/missing files are skipped and invalid
+or oversized arguments are refused. The combined native run's restore fixture
+initially failed under the command sandbox's file coordination. Repeating only
+`tests/trash-restore-native.test.ts` outside that sandbox with the same binding
+passes. Together these two native tests add two passing cases; neither uses the
+owner's system Trash or performs cleanup/erasure.
+
+The preserving builder produces
+`out/Viewer-trash-refinement-v2-darwin-arm64/Viewer.app` and verifies its local
+ad-hoc signature. It retains all seeds and intermediates. The final build has the
+same UI as the reviewed v1 build and adds a close-during-metadata-read guard.
+Existing Vite config-loader, CJS import-meta and chunk-size warnings remain.
+
+`tests/native-trash-browser.ts --metadata-repro` passes against the v1 refinement
+build. Its [current evidence](../packages/viewer-electron/app/out/trash-browser-acceptance-4JvpPL/result.json)
+contains **14 unmodified captures** covering desktop 1440×940 and compact 900×640
+dark/light views: root and nested navigation, mouse/Enter Name sorting, date-added
+and no-date columns, unknown metadata in Get Info, full selected paths, context
+menu, preview, selection, collision/empty states, missing original parent and an
+actual generated original-folder plane. Trash mutation and confirmation methods
+are intercepted with stubs before the view opens. No real native confirmation or
+affirmative erasure occurs. One early harness run lacked Enter's native text
+event; the corrected input passes without changing production keyboard code.
+
+The finish reviewer returned **ship**, resolving all five named corrections. This
+does not establish system Trash erasure/restoration, positive Full Disk Access or
+App Sandbox grants, physical assistive technology, Windows/Linux runtime or Mac
+App Store qualification. Every generated file, profile, capture and failed run
+remains preserved.

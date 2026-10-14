@@ -77,6 +77,7 @@ export class Trash {
   #busy = false;
   #closed = false;
   #known = new Map<string, BackingItem>();
+  #addedDates = new Map<string, { read: number; added?: string }>();
   constructor(
     private home: string,
     private access: FileAccess,
@@ -131,6 +132,7 @@ export class Trash {
     this.#closed = true;
     this.#last = undefined;
     this.#known.clear();
+    this.#addedDates.clear();
   }
   async preview(itemID: string): Promise<Resource> {
     const item = this.#get(itemID);
@@ -587,6 +589,7 @@ export class Trash {
         });
       }
     }
+    if (platform === 'darwin') await this.#readAddedDates(snapshot.items);
     snapshot.items.sort((a, b) => a.name.localeCompare(b.name));
     snapshot.canEmpty =
       snapshot.items.length > 0 &&
@@ -596,6 +599,41 @@ export class Trash {
       JSON.stringify([roots, snapshot.items, snapshot.locations, snapshot.truncated]),
     );
     return { snapshot, roots, available };
+  }
+  async #readAddedDates(items: TrashItem[]): Promise<void> {
+    const now = Date.now();
+    const pending = items.filter((item) => {
+      const cached = this.#addedDates.get(item.id);
+      return !item.symbolicLink && (!cached || now - cached.read > 30000);
+    });
+    if (pending.length) {
+      const paths = pending.map((item) => this.#known.get(item.id)!.file);
+      // Optional, read-only metadata must not hide recoverable files when a
+      // volume does not implement this key. Never substitute mtime or ctime.
+      const dates = await macFiles()
+        .datesAdded(paths)
+        .catch(() => []);
+      if (this.#closed) return;
+      const byPath = new Map(dates.map((date) => [date.path, date]));
+      for (const item of pending) {
+        const backing = this.#known.get(item.id)!;
+        const date = byPath.get(backing.file);
+        const added =
+          date &&
+          date.identity === backing.version.identity &&
+          date.size === backing.version.size &&
+          Math.abs(date.modified - backing.version.modified) < 0.01 &&
+          typeof date.added === 'number' &&
+          Number.isFinite(date.added) &&
+          Math.abs(date.added) <= 8640000000000000
+            ? new Date(date.added).toISOString()
+            : undefined;
+        this.#addedDates.set(item.id, { read: now, added });
+      }
+      while (this.#addedDates.size > 16000)
+        this.#addedDates.delete(this.#addedDates.keys().next().value!);
+    }
+    for (const item of items) item.addedToTrash = this.#addedDates.get(item.id)?.added;
   }
   async #trashInfo(
     root: TrashRoot,

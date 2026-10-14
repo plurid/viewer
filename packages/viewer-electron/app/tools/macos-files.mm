@@ -130,7 +130,7 @@ static napi_value clipboardWrite(napi_env env, napi_callback_info info) {
   }
 }
 
-enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias };
+enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias, DatesAdded };
 struct Work {
   napi_async_work work; napi_deferred deferred; Kind kind;
   int source = -1, target = -1;
@@ -143,12 +143,40 @@ struct Work {
   NSString *bookmark = nil;
   bool directory = false;
   NSArray<NSDictionary *> *volumes = nil;
+  NSArray<NSString *> *files = nil;
+  NSArray<NSDictionary *> *dates = nil;
 };
 static void execute(napi_env, void *data) {
   Work *task = static_cast<Work *>(data);
   @autoreleasepool { @try {
     NSError *error = nil;
-    if (task->kind == Kind::Alias) {
+    if (task->kind == Kind::DatesAdded) {
+      NSMutableArray *dates = [NSMutableArray array];
+      for (NSString *file in task->files) {
+        @autoreleasepool {
+          struct stat before{}, after{};
+          if (lstat(file.fileSystemRepresentation, &before) != 0 ||
+            (!S_ISREG(before.st_mode) && !S_ISDIR(before.st_mode))) continue;
+          NSURL *url = [NSURL fileURLWithPath:file];
+          NSDictionary *values = [url resourceValuesForKeys:@[NSURLAddedToDirectoryDateKey] error:nil];
+          if (lstat(file.fileSystemRepresentation, &after) != 0 ||
+            before.st_dev != after.st_dev || before.st_ino != after.st_ino || before.st_mode != after.st_mode ||
+            before.st_size != after.st_size || before.st_mtimespec.tv_sec != after.st_mtimespec.tv_sec ||
+            before.st_mtimespec.tv_nsec != after.st_mtimespec.tv_nsec || before.st_ctimespec.tv_sec != after.st_ctimespec.tv_sec ||
+            before.st_ctimespec.tv_nsec != after.st_ctimespec.tv_nsec) continue;
+          NSMutableDictionary *date = [@{
+            @"path": file,
+            @"identity": [NSString stringWithFormat:@"%llu:%llu", (unsigned long long)after.st_dev, (unsigned long long)after.st_ino],
+            @"size": @(after.st_size),
+            @"modified": @(after.st_mtimespec.tv_sec * 1000.0 + after.st_mtimespec.tv_nsec / 1000000.0)
+          } mutableCopy];
+          id added = values[NSURLAddedToDirectoryDateKey];
+          if ([added isKindOfClass:NSDate.class]) date[@"added"] = @([added timeIntervalSince1970] * 1000.0);
+          [dates addObject:date];
+        }
+      }
+      task->dates = dates;
+    } else if (task->kind == Kind::Alias) {
       NSURL *source = [NSURL fileURLWithPath:task->file], *destination = [NSURL fileURLWithPath:task->targetFile];
       NSData *bookmark = [source bookmarkDataWithOptions:NSURLBookmarkCreationSuitableForBookmarkFile includingResourceValuesForKeys:nil relativeToURL:nil error:&error];
       // The operation owns a mode-0700 staging directory and exclusively
@@ -261,6 +289,18 @@ static void complete(napi_env env, napi_status status, void *data) {
         napi_set_element(env, result, index++, item);
       }
     }
+    if (task->kind == Kind::DatesAdded) {
+      napi_create_array(env, &result); uint32_t index = 0;
+      for (NSDictionary *date in task->dates) {
+        napi_value item; napi_create_object(env, &item);
+        property(env, item, "path", text(env, date[@"path"]));
+        property(env, item, "identity", text(env, date[@"identity"]));
+        for (NSString *key in @[@"size", @"modified", @"added"]) {
+          if (date[key]) property(env, item, key.UTF8String, number(env, [date[key] doubleValue]));
+        }
+        napi_set_element(env, result, index++, item);
+      }
+    }
     napi_resolve_deferred(env, task->deferred, result);
   }
   napi_delete_async_work(env, task->work); delete task;
@@ -299,6 +339,22 @@ static napi_value linkMetadata(napi_env env, napi_callback_info info) { return p
 static napi_value renameExclusive(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::Rename); }
 static napi_value alias(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::Alias); }
 static napi_value eject(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::Eject); }
+static napi_value datesAdded(napi_env env, napi_callback_info info) {
+  @autoreleasepool {
+    size_t count = 1; napi_value args[1]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
+    bool array = false; uint32_t length = 0;
+    if (count != 1 || napi_is_array(env, args[0], &array) != napi_ok || !array ||
+      napi_get_array_length(env, args[0], &length) != napi_ok || length > 4000) return invalid(env);
+    NSMutableArray<NSString *> *files = [NSMutableArray array];
+    for (uint32_t index = 0; index < length; ++index) {
+      napi_value item; napi_get_element(env, args[0], index, &item);
+      NSString *file = stringArg(env, item);
+      if (!file.isAbsolutePath) return invalid(env);
+      [files addObject:file];
+    }
+    Work *task = new Work{}; task->kind = Kind::DatesAdded; task->files = files; return queue(env, task);
+  }
+}
 static napi_value volumes(napi_env env, napi_callback_info) { Work *task = new Work{}; task->kind = Kind::Volumes; return queue(env, task); }
 #include "file-information.h"
 #include "file-panels.h"
@@ -317,6 +373,7 @@ static napi_value init(napi_env env, napi_value exports) {
     {"alias", nullptr, alias, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"trash", nullptr, trash, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"volumes", nullptr, volumes, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"datesAdded", nullptr, datesAdded, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"eject", nullptr, eject, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(methods)/sizeof(methods[0]), methods); return exports;

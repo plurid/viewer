@@ -13,9 +13,17 @@ export interface FileAccessIntent {
   path: string;
   mode: 'read' | 'metadata' | 'write' | 'move' | 'delete';
 }
+export interface NativeAddedDate {
+  path: string;
+  identity: string;
+  size: number;
+  modified: number;
+  added?: number;
+}
 export interface MacFiles {
   /** Displays native confirmation only. No callable erasure/approval endpoint. */
   trashConfirmation(review: string): void;
+  datesAdded(files: string[]): Promise<NativeAddedDate[]>;
   information(file: string): Promise<string>;
   updateInformation(file: string, revision: string, json: string): Promise<string>;
   alias(source: string, destination: string): Promise<void>;

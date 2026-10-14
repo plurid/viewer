@@ -24,6 +24,7 @@ const mock = vi.hoisted(() => ({
   >(),
   native: vi.fn(),
   move: vi.fn(),
+  dates: vi.fn(),
   clipboard: vi.fn(),
   open: vi.fn(),
   confirm: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('../src/desktop/macos-files', () => ({
     ],
     trashConfirmation: mock.native,
     renameExclusive: mock.move,
+    datesAdded: mock.dates,
   }),
 }));
 vi.mock('electron', () => ({
@@ -81,6 +83,7 @@ beforeEach(() => {
   mock.files.clear();
   mock.open.mockReset();
   mock.move.mockReset();
+  mock.dates.mockReset().mockResolvedValue([]);
   mock.move.mockImplementation(async (source: string, target: string) => {
     if (mock.files.has(target)) throw new Error('Destination already exists.');
     for (const [file, value] of [...mock.files]) {
@@ -148,6 +151,65 @@ it('lists Trash without launching a confirmation or removal process', async () =
   expect(mock.native).not.toHaveBeenCalled();
   expect(mock.execute).not.toHaveBeenCalled();
   expect(mock.confirm).not.toHaveBeenCalled();
+});
+it('uses verified macOS date-added metadata without calling it a deletion date', async () => {
+  mock.dates.mockResolvedValue([
+    {
+      path: root + '/Notes.txt',
+      identity: '1:2',
+      size: 13,
+      modified: 1000,
+      added: Date.parse('2026-10-14T12:34:00Z'),
+    },
+  ]);
+  const trash = service();
+  const value = await trash.list();
+  expect(value.items[0].addedToTrash).toBe('2026-10-14T12:34:00.000Z');
+  expect(value.items[0].deleted).toBeUndefined();
+  await trash.list();
+  expect(mock.dates).toHaveBeenCalledOnce();
+  expect(mock.native).not.toHaveBeenCalled();
+});
+it('rejects dates from a replaced file or changed version and tolerates unsupported metadata', async () => {
+  for (const mismatch of [
+    { identity: '1:99' },
+    { size: 999 },
+    { modified: 2000 },
+    { added: Infinity },
+  ]) {
+    mock.dates.mockResolvedValue([
+      {
+        path: root + '/Notes.txt',
+        identity: '1:2',
+        size: 13,
+        modified: 1000,
+        added: Date.now(),
+        ...mismatch,
+      },
+    ]);
+    expect((await service().list()).items[0].addedToTrash).toBeUndefined();
+  }
+  mock.dates.mockRejectedValue(new Error('Metadata unavailable'));
+  const value = await service().list();
+  expect(value.items).toHaveLength(1);
+  expect(value.items[0].addedToTrash).toBeUndefined();
+  expect(value.canEmpty).toBe(true);
+});
+it('can close while an optional native metadata read is pending', async () => {
+  let finish!: (dates: []) => void;
+  mock.dates.mockImplementation(
+    () =>
+      new Promise<[]>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const trash = service();
+  const reading = trash.list();
+  await vi.waitFor(() => expect(mock.dates).toHaveBeenCalledOnce());
+  trash.close();
+  finish([]);
+  await expect(reading).resolves.toHaveProperty('items');
+  await expect(trash.list()).rejects.toThrow('Trash has closed');
 });
 it('opens native UI with the sealed inventory and exposes no emptying method', async () => {
   const trash = service();

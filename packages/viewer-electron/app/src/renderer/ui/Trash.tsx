@@ -9,10 +9,17 @@ import {
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry, Resource } from '../../domain/contracts';
-import type { TrashItem, TrashSnapshot } from '../../domain/trash';
-import { trashName } from '../../domain/trash';
+import type { TrashItem, TrashSnapshot, TrashSortKey } from '../../domain/trash';
+import {
+  originalTrashFolder,
+  sortTrashItems,
+  trashDateColumn,
+  trashName,
+} from '../../domain/trash';
 import { formatBytes } from '../../domain/files';
-import { useViewer } from '../state/store';
+import { activeWorkspace, getState, useViewer } from '../state/store';
+import { useWorkspace } from '../workspace/context';
+import { openWorkspacePath } from '../workspace/open-path';
 import { FileIcon } from '../explorer/views';
 import { FileSelection } from '../explorer/selection';
 import { PreviewHost } from '../previews/PreviewHost';
@@ -224,6 +231,7 @@ function TrashPreview({
 }
 
 export function Trash({ onClose }: { onClose(): void }) {
+  const workspace = useWorkspace();
   const platform = useViewer((state) => state.bootstrap.platform);
   const title = trashName(platform);
   const rowID = useId();
@@ -235,6 +243,10 @@ export function Trash({ onClose }: { onClose(): void }) {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<{ key: TrashSortKey; descending: boolean }>({
+    key: 'name',
+    descending: false,
+  });
   const [menu, setMenu] = useState<{ x: number; y: number; ids: string[] }>();
   const [preview, setPreview] = useState<{ items: TrashItem[]; index: number }>();
   const [information, setInformation] = useState<TrashItem>();
@@ -306,18 +318,23 @@ export function Trash({ onClose }: { onClose(): void }) {
       window.removeEventListener('focus', focus);
     };
   }, [refresh]);
+  const dateKind = trashDateColumn(snapshot?.items ?? []);
+  const sortKey = sort.key === 'date' && !dateKind ? 'name' : sort.key;
   const items = useMemo(
     () =>
-      (snapshot?.items ?? [])
-        .filter((item) => item.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-        .toSorted(
-          (a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name),
+      sortTrashItems(
+        (snapshot?.items ?? []).filter((item) =>
+          item.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
         ),
-    [snapshot, query],
+        sortKey,
+        sort.descending,
+        dateKind,
+      ),
+    [snapshot, query, sortKey, sort.descending, dateKind],
   );
   const files = useMemo(() => items.map(asFile), [items]);
-  const hasOrigins = items.some((item) => !!item.originalPath);
   const selectedItems = items.filter((item) => selected.includes(item.id));
+  const selectedItem = selectedItems.length === 1 ? selectedItems[0] : undefined;
   const rows = useVirtualizer({
     count: items.length,
     getScrollElement: () => scroll.current,
@@ -368,6 +385,59 @@ export function Trash({ onClose }: { onClose(): void }) {
     }
     return true;
   }
+  async function openOriginal(item: TrashItem) {
+    if (!item.originalPath) return;
+    const workspaceID = activeWorkspace().id;
+    let opened: boolean;
+    try {
+      opened = await openWorkspacePath(
+        originalTrashFolder(item.originalPath),
+        {
+          workspaceID,
+          another: true,
+          directory: true,
+        },
+        workspace,
+      );
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === 'ENOENT' || code === 'ENOTDIR')
+        throw new Error(
+          'The original folder no longer exists. Use Restore to… to choose another folder.',
+        );
+      throw error;
+    }
+    if (!live.current) return;
+    if (!opened) {
+      setNotice('Opening the original folder was cancelled.');
+      return;
+    }
+    const paneID = getState().activePane;
+    onClose();
+    requestAnimationFrame(() => {
+      if (activeWorkspace().id === workspaceID && paneID) workspace.focusPane(paneID);
+    });
+  }
+  const originUnavailable =
+    'Viewer has no verified original location for this item. Use Restore to… to choose a folder.';
+  const sortHeading = (key: TrashSortKey, label: string) => {
+    const active = sortKey === key;
+    const direction = sort.descending ? 'descending' : 'ascending';
+    return (
+      <button
+        aria-pressed={active}
+        aria-label={
+          active
+            ? `${label}: sorted ${direction}. Sort ${sort.descending ? 'ascending' : 'descending'}`
+            : `${label}: sort ascending`
+        }
+        onClick={() => setSort({ key, descending: active ? !sort.descending : false })}
+      >
+        {label}
+        {active && <Icon name={sort.descending ? 'down' : 'up'} size={12} />}
+      </button>
+    );
+  };
   const showPreview = (ids: string[]) => {
     const chosen = items.filter(
       (item) => ids.includes(item.id) && !item.directory && item.previewable !== false,
@@ -431,6 +501,16 @@ export function Trash({ onClose }: { onClose(): void }) {
         },
         ...(menuItems.length === 1
           ? [
+              ...(menuItems[0].originalPath
+                ? [
+                    {
+                      id: 'open-original-folder',
+                      label: 'Open original folder in plane',
+                      icon: 'folder' as const,
+                      run: () => void action(() => openOriginal(menuItems[0])),
+                    },
+                  ]
+                : []),
               {
                 id: 'info',
                 label: 'Get Info',
@@ -444,31 +524,35 @@ export function Trash({ onClose }: { onClose(): void }) {
   return (
     <>
       <Dialog title={title} onClose={onClose} className="trash-dialog">
-        <div className="trash-toolbar">
-          <IconButton
-            icon="left"
-            label="Back to parent folder"
-            disabled={loading || !folder.current}
-            onClick={() => go(ancestors.at(-2)?.id)}
-          />
-          <nav className="trash-breadcrumbs" aria-label="Trash path">
-            <button onClick={() => go()} aria-current={!ancestors.length ? 'page' : undefined}>
-              <Icon name="trash" size={16} />
-              {title}
-            </button>
-            {ancestors.map((item, index) => (
-              <span key={item.id}>
-                <Icon name="right" size={12} />
-                <button
-                  onClick={() => go(item.id)}
-                  aria-current={index === ancestors.length - 1 ? 'page' : undefined}
-                  title={item.name}
-                >
-                  {item.name}
+        <div className={`trash-toolbar ${folder.current ? 'has-parent' : ''}`}>
+          {folder.current && (
+            <>
+              <IconButton
+                icon="left"
+                label="Back to parent folder"
+                disabled={loading}
+                onClick={() => go(ancestors.at(-2)?.id)}
+              />
+              <nav className="trash-breadcrumbs" aria-label="Trash path">
+                <button onClick={() => go()}>
+                  <Icon name="trash" size={16} />
+                  {title}
                 </button>
-              </span>
-            ))}
-          </nav>
+                {ancestors.map((item, index) => (
+                  <span key={item.id}>
+                    <Icon name="right" size={12} />
+                    <button
+                      onClick={() => go(item.id)}
+                      aria-current={index === ancestors.length - 1 ? 'page' : undefined}
+                      title={item.name}
+                    >
+                      {item.name}
+                    </button>
+                  </span>
+                ))}
+              </nav>
+            </>
+          )}
           <div className="trash-selection-actions">
             <IconButton
               icon="eye"
@@ -551,14 +635,13 @@ export function Trash({ onClose }: { onClose(): void }) {
             />
           )}
           {!loading && items.length > 0 && (
-            <div className={`trash-inventory ${hasOrigins ? 'with-origins' : ''}`}>
-              <div className="trash-row trash-heading" aria-hidden="true">
-                <span>
-                  Name <Icon name="up" size={12} />
-                </span>
-                {hasOrigins && <span>Original location</span>}
-                <span>Date deleted</span>
-                <span>Size</span>
+            <div className={`trash-inventory ${dateKind ? 'with-date' : ''}`}>
+              <div className="trash-row trash-heading" role="group" aria-label="Sort Trash">
+                {sortHeading('name', 'Name')}
+                {sortHeading('originalPath', 'Original location')}
+                {dateKind &&
+                  sortHeading('date', dateKind === 'deleted' ? 'Date deleted' : 'Date added')}
+                {sortHeading('size', 'Size')}
               </div>
               <div
                 className="trash-scroll"
@@ -684,12 +767,29 @@ export function Trash({ onClose }: { onClose(): void }) {
                           <span>{item.name}</span>
                           {item.directory && <Icon name="right" size={12} />}
                         </span>
-                        {hasOrigins && (
-                          <span className="muted" title={item.originalPath}>
-                            {item.originalPath || '—'}
+                        <span
+                          className="muted"
+                          title={
+                            item.originalPath
+                              ? originalTrashFolder(item.originalPath)
+                              : originUnavailable
+                          }
+                        >
+                          {item.originalPath
+                            ? originalTrashFolder(item.originalPath)
+                            : 'Unavailable'}
+                        </span>
+                        {dateKind && (
+                          <span
+                            title={
+                              dateKind === 'added'
+                                ? 'macOS date added to this Trash folder, not a recorded deletion time.'
+                                : undefined
+                            }
+                          >
+                            {date(dateKind === 'deleted' ? item.deleted : item.addedToTrash)}
                           </span>
                         )}
-                        <span>{date(item.deleted)}</span>
                         <span>{item.directory ? '—' : formatBytes(item.size)}</span>
                       </div>
                     );
@@ -709,6 +809,30 @@ export function Trash({ onClose }: { onClose(): void }) {
             </p>
           )}
         </div>
+        {selectedItem && (
+          <section className="trash-origin-details" aria-label="Original location details">
+            <div>
+              <span className="muted">Original location</span>
+              {selectedItem.originalPath ? (
+                <p className="trash-original-path">{selectedItem.originalPath}</p>
+              ) : (
+                <p>{originUnavailable}</p>
+              )}
+            </div>
+            {selectedItem.originalPath ? (
+              <button disabled={busy} onClick={() => void action(() => openOriginal(selectedItem))}>
+                Open original folder in plane
+              </button>
+            ) : (
+              <button
+                disabled={busy || !window.viewerNative}
+                onClick={() => void action(() => restore([selectedItem.id], 'choose'))}
+              >
+                Restore to…
+              </button>
+            )}
+          </section>
+        )}
         <footer className="trash-footer">
           <span className="muted" role="status">
             {snapshot
@@ -765,14 +889,39 @@ export function Trash({ onClose }: { onClose(): void }) {
             <dd>{information.directory ? 'Not calculated' : formatBytes(information.size)}</dd>
             <dt>Modified</dt>
             <dd>{date(information.modified)}</dd>
-            <dt>Deleted</dt>
-            <dd>{date(information.deleted)}</dd>
+            <dt>{information.deleted ? 'Deleted' : 'Added to Trash'}</dt>
+            <dd>
+              {information.deleted ? (
+                date(information.deleted)
+              ) : information.addedToTrash ? (
+                <>
+                  {date(information.addedToTrash)}
+                  <span className="trash-info-note muted">
+                    macOS date added to this Trash folder; not a recorded deletion time.
+                  </span>
+                </>
+              ) : (
+                'Unavailable — no date was provided for this item.'
+              )}
+            </dd>
             <dt>Original location</dt>
-            <dd>{information.originalPath || 'Unavailable — use Restore to…'}</dd>
+            <dd className="trash-original-path">{information.originalPath || originUnavailable}</dd>
             <dt>Trash location</dt>
             <dd>{information.location}</dd>
           </dl>
           <footer>
+            {information.originalPath && (
+              <button
+                disabled={busy}
+                onClick={() => {
+                  const item = information;
+                  setInformation(undefined);
+                  void action(() => openOriginal(item));
+                }}
+              >
+                Open original folder in plane
+              </button>
+            )}
             <button
               disabled={!window.viewerNative}
               onClick={() => {

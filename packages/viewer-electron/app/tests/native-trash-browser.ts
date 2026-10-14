@@ -13,6 +13,13 @@ const profile = path.join(root, 'Profile'),
 await mkdir(profile);
 await mkdir(files);
 const note = path.join(files, 'Build notes.txt');
+const originalFolder = path.join(
+  root,
+  'Original documents',
+  'Engineering reviews',
+  'Assembly clearance and manufacturing drawings',
+);
+await mkdir(originalFolder, { recursive: true });
 const contents =
   'Build notes\n\nRetain the original drawings and models.\nCheck the assembly clearance before printing.\n';
 await writeFile(note, contents);
@@ -88,14 +95,14 @@ try {
   await evaluate(`(() => {
     const api=window.viewer, resource=api.resource;
     window.__trashCalls={confirmation:0,restore:0,paths:0,preview:0};
-    window.__trashMode='normal';
-    const make=(digit,name,directory,originalPath)=>({id:digit.repeat(64),name,directory,previewable:!directory,size:directory?0:1040,location:'Home',modified:1791950400000,deleted:'2026-10-14T17:15:00',...(originalPath?{originalPath}:{})});
-    const folder=make('1','Project archive',true,'/Users/Example/Documents/Project archive');
-    const note=make('2','Build notes.txt',false,'/Users/Example/Documents/Build notes.txt');
+    window.__trashMode='normal'; window.__trashDates='added';
+    const make=(digit,name,directory,originalPath)=>({id:digit.repeat(64),name,directory,previewable:!directory,size:directory?0:1040,location:'Home',modified:1791950400000,addedToTrash:'2026-10-14T17:15:00',...(originalPath?{originalPath}:{})});
+    const folder=make('1','Project archive',true);
+    const note=make('2','Build notes.txt',false,${JSON.stringify(path.join(originalFolder, 'Build notes.txt'))});
     const loose=make('3','Unsorted notes — original location unavailable.txt',false);
-    const long=make('4','00026295_T02.200.008_00A_Assembly-review-notes.txt',false,'/Users/Example/Documents/Engineering/Assembly/00026295_T02.200.008_00A_Assembly-review-notes.txt');
+    const long=make('4','00026295_T02.200.008_00A_Assembly-review-notes.txt',false,${JSON.stringify(path.join(root, 'Missing original folder', '00026295_T02.200.008_00A_Assembly-review-notes.txt'))});
     window.__trashFixtureItems=[folder,note,loose,long];
-    api.trashList=async(folderID)=>({revision:'a'.repeat(64),locations:[{id:'home',name:'Home',state:'ready'}],truncated:false,canEmpty:window.__trashMode!=='empty',totalItems:4,items:window.__trashMode==='empty'?[]:folderID?[make('5','Nested notes.txt',false,'/Users/Example/Documents/Project archive/Nested notes.txt')]:window.__trashFixtureItems,ancestors:folderID?[folder]:[]});
+    api.trashList=async(folderID)=>({revision:'a'.repeat(64),locations:[{id:'home',name:'Home',state:'ready'}],truncated:false,canEmpty:window.__trashMode!=='empty',totalItems:4,items:(window.__trashMode==='empty'?[]:folderID?[make('5','Nested notes.txt',false)]:window.__trashFixtureItems).map(item=>window.__trashDates==='none'||folderID?{...item,addedToTrash:undefined}:item),ancestors:folderID?[folder]:[]});
     api.trashConfirmation=async()=>{window.__trashCalls.confirmation++};
     api.trashRestore=async(ids,destination)=>{window.__trashCalls.restore++;window.__trashLastRestore={ids,destination};if(window.__trashMode==='collision')throw Error('“Build notes.txt” already exists. Use Restore to… to choose another folder.');window.__trashFixtureItems=window.__trashFixtureItems.filter(item=>!ids.includes(item.id));return {restored:ids.length,cancelled:false}};
     api.trashCopyPaths=async()=>{window.__trashCalls.paths++};
@@ -114,6 +121,23 @@ try {
     (value) => value === 4,
     'Trash fixture rows',
   );
+  if (process.argv.includes('--metadata-repro')) {
+    await evaluate(`document.querySelector('[data-trash-id="${'2'.repeat(64)}"]').click()`);
+    const report = await evaluate(`(()=>({
+      rootBack:!!document.querySelector('.trash-toolbar > button[aria-label="Back to parent folder"]'),
+      duplicateRoot:!!document.querySelector('.trash-breadcrumbs button[aria-current="page"]'),
+      sortableName:!!Array.from(document.querySelectorAll('.trash-heading button')).find(button=>button.textContent.includes('Name')),
+      originalLocationDetails:!!document.querySelector('[aria-label="Original location details"]')
+    }))()`);
+    console.log('Trash affordance repro:', JSON.stringify(report));
+    assert.deepEqual(report, {
+      rootBack: false,
+      duplicateRoot: false,
+      sortableName: true,
+      originalLocationDetails: true,
+    });
+    await evaluate('document.querySelector(".trash-scroll").click()');
+  }
   const click = async (selector: string, button = 'left', count = 1) => {
     const point = await evaluate<{ x: number; y: number }>(
       `(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+Math.min(r.width/2,180),y:r.y+r.height/2}})()`,
@@ -133,6 +157,7 @@ try {
         key,
         code,
         modifiers,
+        ...(type === 'keyDown' && key === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {}),
         windowsVirtualKeyCode:
           key === 'Escape'
             ? 27
@@ -175,6 +200,96 @@ try {
     captures.push(file);
   };
   await capture('desktop-dark', 1440, 940);
+  assert.equal(await evaluate<boolean>('!!document.querySelector(".trash-breadcrumbs")'), false);
+  assert.match(
+    await evaluate<string>('document.querySelector(".trash-heading").textContent'),
+    /Date added/,
+  );
+  assert.doesNotMatch(
+    await evaluate<string>('document.querySelector(".trash-heading").textContent'),
+    /Date deleted/,
+  );
+  const ascending = await evaluate<string[]>(
+    'Array.from(document.querySelectorAll(".trash-filename > span:not(.file-icon)")).map(e=>e.textContent)',
+  );
+  await click('.trash-heading button');
+  const descending = await evaluate<string[]>(
+    'Array.from(document.querySelectorAll(".trash-filename > span:not(.file-icon)")).map(e=>e.textContent)',
+  );
+  assert.deepEqual(descending, ascending.toReversed());
+  assert.match(
+    await evaluate<string>(
+      'document.querySelector(".trash-heading button").getAttribute("aria-label")',
+    ),
+    /sorted descending/,
+  );
+  // Keyboard activation must toggle the same header.
+  await evaluate('document.querySelector(".trash-heading button").focus()');
+  await key('Enter', 'Enter');
+  assert.match(
+    await evaluate<string>(
+      'document.querySelector(".trash-heading button").getAttribute("aria-label")',
+    ),
+    /sorted ascending/,
+  );
+  await evaluate(
+    'window.__trashDates="none";Array.from(document.querySelectorAll(".trash-footer button")).find(button=>button.textContent==="Refresh").click()',
+  );
+  await until(
+    () => evaluate<boolean>('!document.querySelector(".trash-inventory.with-date")'),
+    Boolean,
+    'missing dates hide unpopulated column',
+  );
+  await capture('compact-dark-no-dates', 900, 640);
+  await click('[data-trash-id="' + '1'.repeat(64) + '"]');
+  assert.match(
+    await evaluate<string>('document.querySelector(".trash-origin-details").textContent'),
+    /no verified original location/,
+  );
+  await capture('compact-dark-unknown-origin', 900, 640);
+  await click('[data-trash-id="' + '1'.repeat(64) + '"]', 'right');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".trash-context-menu")'),
+    Boolean,
+    'unknown metadata menu',
+  );
+  await evaluate(
+    `Array.from(document.querySelectorAll('.trash-context-menu .command-result')).find(button=>button.textContent.includes('Get Info')).click()`,
+  );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".trash-info-dialog")'),
+    Boolean,
+    'unknown metadata information',
+  );
+  assert.match(
+    await evaluate<string>('document.querySelector(".trash-info-dialog").textContent'),
+    /no date was provided/,
+  );
+  assert.match(
+    await evaluate<string>('document.querySelector(".trash-info-dialog").textContent'),
+    /no verified original location/,
+  );
+  await capture('compact-dark-unknown-info', 900, 640);
+  await evaluate(
+    'Array.from(document.querySelectorAll(".trash-info-dialog footer button")).find(button=>button.textContent==="Done").click()',
+  );
+  await evaluate(
+    'window.__trashDates="added";Array.from(document.querySelectorAll(".trash-footer button")).find(button=>button.textContent==="Refresh").click()',
+  );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".trash-inventory.with-date")'),
+    Boolean,
+    'date-added metadata returns',
+  );
+  await click('[data-trash-id="' + '2'.repeat(64) + '"]');
+  assert.equal(
+    await evaluate<string>('document.querySelector(".trash-original-path").textContent'),
+    path.join(originalFolder, 'Build notes.txt'),
+  );
+  await capture('compact-dark-full-original-path', 900, 640);
+  evidence.push(
+    'Root has one Trash title and no disabled Back. All four headers sort; Name toggles by pointer and keyboard. macOS date-added metadata is labeled distinctly and an entirely unavailable date column is omitted. Known original paths wrap in selectable detail; unknown Finder-like origins are explicit.',
+  );
   const layout = await evaluate<{ centered: boolean; utilitiesRight: boolean }>(
     `(()=>{const f=document.querySelector('.trash-footer').getBoundingClientRect(),b=document.querySelector('.trash-empty').getBoundingClientRect(),u=document.querySelector('.trash-utility-actions').getBoundingClientRect();return {centered:Math.abs((b.x+b.width/2)-(f.x+f.width/2))<1,utilitiesRight:u.x>b.right}})()`,
   );
@@ -318,6 +433,51 @@ try {
   );
   assert.equal(await evaluate<boolean>('document.querySelector(".trash-empty").disabled'), true);
   await capture('compact-light-empty', 900, 640);
+  await evaluate(
+    'window.__trashMode="normal";Array.from(document.querySelectorAll(".trash-footer button")).find(button=>button.textContent==="Refresh").click()',
+  );
+  await until(
+    () => evaluate<number>('document.querySelectorAll("[data-trash-id]").length'),
+    (value) => value === 3,
+    'restored fixture inventory',
+  );
+  await click('[data-trash-id="' + '4'.repeat(64) + '"]');
+  await evaluate('document.querySelector(".trash-origin-details button").click()');
+  await until(
+    () => evaluate<string>('document.querySelector(".trash-body [role=alert]")?.textContent||""'),
+    (value) => value.includes('original folder no longer exists'),
+    'missing original parent feedback',
+  );
+  await capture('compact-light-missing-original-folder', 900, 640);
+  // Restore the fixture inventory only, then open a real generated parent as a
+  // root plane through the ordinary workspace navigation (no shell or mutation).
+  await evaluate(
+    `window.__trashFixtureItems.push({id:'2'.repeat(64),name:'Build notes.txt',directory:false,previewable:true,size:1040,location:'Home',originalPath:${JSON.stringify(path.join(originalFolder, 'Build notes.txt'))}});Array.from(document.querySelectorAll('.trash-footer button')).find(button=>button.textContent==='Refresh').click()`,
+  );
+  await until(
+    () => evaluate<number>('document.querySelectorAll("[data-trash-id]").length'),
+    (value) => value === 4,
+    'known origin fixture',
+  );
+  await click('[data-trash-id="' + '2'.repeat(64) + '"]');
+  await evaluate('document.querySelector(".trash-origin-details button").click()');
+  await until(
+    () => evaluate<boolean>('!document.querySelector(".trash-dialog")'),
+    Boolean,
+    'original folder opens and Trash closes',
+  );
+  await until(
+    () =>
+      evaluate<string[]>(
+        'Array.from(document.querySelectorAll("[data-file-owner]")).map(e=>e.getAttribute("aria-label"))',
+      ),
+    (values) => values.includes(`Folder ${originalFolder}`),
+    'actual original folder plane',
+  );
+  await capture('compact-light-original-folder-plane', 900, 640);
+  evidence.push(
+    'Open original folder reports a missing parent without closing Trash; a known generated original parent opens in an actual root folder plane and closes Trash. No files were restored, trashed or erased.',
+  );
   assert.equal(await readFile(note, 'utf8'), contents);
   await writeFile(
     path.join(output, 'result.json'),
