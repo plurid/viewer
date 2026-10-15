@@ -1,14 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { FileEntry, Resource } from '../../domain/contracts';
+import type { FileEntry } from '../../domain/contracts';
 import type { TrashItem, TrashSnapshot, TrashSortKey } from '../../domain/trash';
 import {
   originalTrashFolder,
@@ -22,213 +14,13 @@ import { useWorkspace } from '../workspace/context';
 import { openWorkspacePath } from '../workspace/open-path';
 import { FileIcon } from '../explorer/views';
 import { FileSelection } from '../explorer/selection';
-import { PreviewHost } from '../previews/PreviewHost';
-import type { ResolvedCommand } from '../commands/registry';
 import { Dialog, Empty, IconButton, Loading } from './primitives';
-import { ContextMenuResults } from './ContextMenuResults';
-import { Icon, type IconName } from './Icon';
-
-const asFile = (item: TrashItem): FileEntry => ({
-  path: item.id,
-  parent: '',
-  name: item.name,
-  extension: item.directory ? '' : item.name.split('.').slice(1).at(-1)?.toLowerCase() || '',
-  kind: item.directory
-    ? 'directory'
-    : item.symbolicLink
-      ? 'symlink'
-      : item.previewable === false
-        ? 'other'
-        : 'file',
-  directory: item.directory,
-  size: item.size,
-  modified: item.modified || 0,
-  created: 0,
-  hidden: item.name.startsWith('.'),
-  mime: '',
-  identity: item.id,
-});
-const date = (value?: string | number) => {
-  if (!value) return '—';
-  const time = new Date(value);
-  return Number.isNaN(time.valueOf()) ? '—' : time.toLocaleDateString();
-};
-type MenuAction = { id: string; label: string; icon: IconName; shortcut?: string; run(): void };
-
-/** This menu stays inside the native dialog's top layer. It is deliberately not
- * registered in the command catalog: agents cannot publish or invoke its UI. */
-function TrashMenu({
-  position,
-  actions,
-  onClose,
-}: {
-  position: { x: number; y: number };
-  actions: MenuAction[];
-  onClose(): void;
-}) {
-  const root = useRef<HTMLDivElement>(null);
-  const close = useRef(onClose);
-  close.current = onClose;
-  useEffect(() => {
-    const element = root.current?.querySelector<HTMLElement>('.context-menu');
-    if (element) {
-      const rect = element.getBoundingClientRect();
-      element.style.left = `${Math.max(8, Math.min(position.x, innerWidth - rect.width - 8))}px`;
-      element.style.top = `${Math.max(8, Math.min(position.y, innerHeight - rect.height - 8))}px`;
-    }
-    const dismiss = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) close.current();
-    };
-    window.addEventListener('pointerdown', dismiss);
-    return () => window.removeEventListener('pointerdown', dismiss);
-  }, [position]);
-  const commands: ResolvedCommand[] = actions.map((action) => ({
-    ...action,
-    source: 'trash-ui',
-    group: 'Files',
-    aliases: [],
-    primary: true,
-    context: { scope: 'files', workspaceID: '', selection: [], jobs: [], clipboard: null },
-  }));
-  return (
-    <div
-      ref={root}
-      className="trash-context-menu"
-      style={{ '--menu-left': `${position.x}px`, '--menu-top': `${position.y}px` } as CSSProperties}
-      onPointerDown={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
-    >
-      <ContextMenuResults
-        commands={commands}
-        recent={[]}
-        focused
-        onClose={onClose}
-        onSelect={(command) => {
-          onClose();
-          requestAnimationFrame(() => actions.find((action) => action.id === command.id)?.run());
-        }}
-      />
-    </div>
-  );
-}
-
-function TrashPreview({
-  items,
-  initial,
-  onClose,
-  restore,
-}: {
-  items: TrashItem[];
-  initial: number;
-  onClose(): void;
-  restore(ids: string[], destination: 'original' | 'choose'): Promise<boolean>;
-}) {
-  const [index, setIndex] = useState(initial);
-  const [resource, setResource] = useState<Resource>();
-  const [error, setError] = useState('');
-  const [restoreError, setRestoreError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const item = items[index];
-  useEffect(() => {
-    let closed = false,
-      owned: Resource | undefined;
-    setResource(undefined);
-    setError('');
-    setRestoreError('');
-    void window.viewer
-      .trashPreview(item.id)
-      .then((value) => {
-        if (closed) {
-          void window.viewer.release(value.id);
-          return;
-        }
-        owned = value;
-        setResource(value);
-      })
-      .catch((error) => {
-        if (!closed) setError((error as Error).message);
-      });
-    return () => {
-      closed = true;
-      if (owned) void window.viewer.release(owned.id);
-    };
-  }, [item.id]);
-  const step = (delta: number) => setIndex((index + delta + items.length) % items.length);
-  const footer = (size: number, label?: string) => (
-    <>
-      {restoreError && (
-        <p className="error trash-message" role="alert">
-          {restoreError}
-        </p>
-      )}
-      <footer className="quick-preview-footer">
-        <span className="quick-preview-metadata">
-          {label && <>{label} · </>}
-          {formatBytes(size)} · {item.location}
-        </span>
-        <div className="quick-preview-actions">
-          {items.length > 1 && (
-            <div className="quick-preview-navigation">
-              <IconButton icon="left" label="Previous file" onClick={() => step(-1)} />
-              <span>
-                {index + 1} / {items.length}
-              </span>
-              <IconButton icon="right" label="Next file" onClick={() => step(1)} />
-            </div>
-          )}
-          <button
-            disabled={busy || !window.viewerNative}
-            onClick={() => {
-              setBusy(true);
-              setRestoreError('');
-              void restore([item.id], item.originalPath ? 'original' : 'choose')
-                .then((restored) => {
-                  if (restored) onClose();
-                })
-                .catch((error) => setRestoreError((error as Error).message))
-                .finally(() => setBusy(false));
-            }}
-          >
-            {item.originalPath ? 'Restore' : 'Restore to…'}
-          </button>
-        </div>
-      </footer>
-    </>
-  );
-  return (
-    <Dialog
-      title={item.name}
-      className="quick-preview-dialog trash-preview-dialog"
-      onClose={onClose}
-      onKeyDown={(event) => {
-        if (
-          event.target instanceof Element &&
-          event.target.closest('input, textarea, select, button')
-        )
-          return;
-        if (items.length > 1 && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
-          event.preventDefault();
-          event.stopPropagation();
-          step(event.key === 'ArrowLeft' ? -1 : 1);
-        }
-      }}
-    >
-      <div className="quick-preview">
-        {error ? (
-          <Empty icon="warning" title="File unavailable" detail={error} />
-        ) : resource ? (
-          <PreviewHost
-            resource={resource}
-            renderFooter={(loaded, module) => footer(loaded.entry.size, module.label)}
-          />
-        ) : (
-          <Loading label="Opening preview…" />
-        )}
-      </div>
-      {(!resource || error) && footer(item.size)}
-    </Dialog>
-  );
-}
+import { Icon } from './Icon';
+import { asFile, originUnavailable, trashDate } from './trash/items';
+import { TrashMenu } from './trash/TrashMenu';
+import { TrashPreview } from './trash/TrashPreview';
+import { TrashInformation } from './trash/TrashInformation';
+import { trashMenuActions } from './trash/menu-actions';
 
 export function Trash({ onClose }: { onClose(): void }) {
   const workspace = useWorkspace();
@@ -421,8 +213,6 @@ export function Trash({ onClose }: { onClose(): void }) {
       if (activeWorkspace().id === workspaceID && paneID) workspace.focusPane(paneID);
     });
   }
-  const originUnavailable =
-    'Viewer has no verified original location for this item. Use Restore to… to choose a folder.';
   const sortHeading = (key: TrashSortKey, label: string) => {
     const active = sortKey === key;
     const direction = sort.descending ? 'descending' : 'ascending';
@@ -455,77 +245,14 @@ export function Trash({ onClose }: { onClose(): void }) {
   };
   const menuIDs = new Set(menu?.ids);
   const menuItems = menu ? items.filter((item) => menuIDs.has(item.id)) : [];
-  const menuActions: MenuAction[] = menuItems.length
-    ? [
-        ...(menuItems.length === 1 && menuItems[0].directory
-          ? [
-              {
-                id: 'open-selection',
-                label: 'Open folder',
-                icon: 'folder' as const,
-                run: () => go(menuItems[0].id),
-              },
-            ]
-          : []),
-        ...(menuItems.some((item) => !item.directory && item.previewable !== false)
-          ? [
-              {
-                id: 'quick-preview',
-                label: 'Quick Look',
-                icon: 'eye' as const,
-                shortcut: 'Space',
-                run: () => showPreview(menu!.ids),
-              },
-            ]
-          : []),
-        ...(menuItems.every((item) => item.originalPath) && window.viewerNative
-          ? [
-              {
-                id: 'restore',
-                label: 'Restore',
-                icon: 'restore' as const,
-                run: () => void action(() => restore(menu!.ids, 'original')),
-              },
-            ]
-          : []),
-        ...(window.viewerNative
-          ? [
-              {
-                id: 'restore-to',
-                label: 'Restore to…',
-                icon: 'folder' as const,
-                run: () => void action(() => restore(menu!.ids, 'choose')),
-              },
-            ]
-          : []),
-        {
-          id: 'copy-path',
-          label: menuItems.length === 1 ? 'Copy Path' : 'Copy Paths',
-          icon: 'copy',
-          run: () => void action(() => window.viewer.trashCopyPaths(menu!.ids)),
-        },
-        ...(menuItems.length === 1
-          ? [
-              ...(menuItems[0].originalPath
-                ? [
-                    {
-                      id: 'open-original-folder',
-                      label: 'Open original folder in plane',
-                      icon: 'folder' as const,
-                      run: () => void action(() => openOriginal(menuItems[0])),
-                    },
-                  ]
-                : []),
-              {
-                id: 'info',
-                label: 'Get Info',
-                icon: 'info' as const,
-                run: () => setInformation(menuItems[0]),
-              },
-            ]
-          : []),
-      ]
-    : [];
+  const menuActions = trashMenuActions(menuItems, menu?.ids ?? [], {
+    go,
+    showPreview,
+    act: (work) => void action(work),
+    restore,
+    openOriginal,
+    information: setInformation,
+  });
   return (
     <>
       <Dialog title={title} onClose={onClose} className="trash-dialog">
@@ -792,7 +519,7 @@ export function Trash({ onClose }: { onClose(): void }) {
                                 : undefined
                             }
                           >
-                            {date(dateKind === 'deleted' ? item.deleted : item.addedToTrash)}
+                            {trashDate(dateKind === 'deleted' ? item.deleted : item.addedToTrash)}
                           </span>
                         )}
                         <span>{item.directory ? '—' : formatBytes(item.size)}</span>
@@ -874,72 +601,15 @@ export function Trash({ onClose }: { onClose(): void }) {
         />
       )}
       {information && (
-        <Dialog
-          title={information.name}
-          className="trash-info-dialog"
+        <TrashInformation
+          item={information}
+          busy={busy}
           onClose={() => setInformation(undefined)}
-        >
-          <dl>
-            <dt>Kind</dt>
-            <dd>
-              {information.directory
-                ? 'Folder'
-                : information.symbolicLink
-                  ? 'Symbolic link'
-                  : information.previewable === false
-                    ? 'Other'
-                    : 'File'}
-            </dd>
-            <dt>Size</dt>
-            <dd>{information.directory ? 'Not calculated' : formatBytes(information.size)}</dd>
-            <dt>Modified</dt>
-            <dd>{date(information.modified)}</dd>
-            <dt>{information.deleted ? 'Deleted' : 'Added to Trash'}</dt>
-            <dd>
-              {information.deleted ? (
-                date(information.deleted)
-              ) : information.addedToTrash ? (
-                <>
-                  {date(information.addedToTrash)}
-                  <span className="trash-info-note muted">
-                    macOS date added to this Trash folder; not a recorded deletion time.
-                  </span>
-                </>
-              ) : (
-                'Unavailable — no date was provided for this item.'
-              )}
-            </dd>
-            <dt>Original location</dt>
-            <dd className="trash-original-path">{information.originalPath || originUnavailable}</dd>
-            <dt>Trash location</dt>
-            <dd>{information.location}</dd>
-          </dl>
-          <footer>
-            {information.originalPath && (
-              <button
-                disabled={busy}
-                onClick={() => {
-                  const item = information;
-                  setInformation(undefined);
-                  void action(() => openOriginal(item));
-                }}
-              >
-                Open original folder in plane
-              </button>
-            )}
-            <button
-              disabled={!window.viewerNative}
-              onClick={() => {
-                const item = information;
-                setInformation(undefined);
-                void action(() => restore([item.id], item.originalPath ? 'original' : 'choose'));
-              }}
-            >
-              {information.originalPath ? 'Restore' : 'Restore to…'}
-            </button>
-            <button onClick={() => setInformation(undefined)}>Done</button>
-          </footer>
-        </Dialog>
+          openOriginal={(item) => void action(() => openOriginal(item))}
+          restore={(item) =>
+            void action(() => restore([item.id], item.originalPath ? 'original' : 'choose'))
+          }
+        />
       )}
     </>
   );

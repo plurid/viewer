@@ -231,7 +231,9 @@ export function CollectionControls() {
               <small>
                 {collection.kind === 'explicit'
                   ? collection.sources.length + ' references'
-                  : collection.query}
+                  : collection.kind === 'tag'
+                    ? 'Tagged “' + collection.tag + '”'
+                    : collection.query}
               </small>
             </span>
             <div className="settings-actions">

@@ -7,6 +7,7 @@ import {
 } from '../../domain/shortcuts';
 import { editable } from '../commands/editing';
 import { fileControlOwnsKey, type FileKey } from './selection';
+import { overlayOpen } from '../ui/modal';
 type RoutedKey = FileKey &
   Partial<Pick<KeyboardEvent, 'isComposing' | 'repeat' | 'defaultPrevented'>>;
 export const explorerCommandIDs = new Set([
@@ -93,7 +94,7 @@ export function routeExplorerInput(event: RoutedKey, input: ExplorerInput): void
     editable(event.target) ||
     fileControlOwnsKey(event) ||
     (event.target as Element | null)?.closest?.('.terminal-plane') ||
-    document.querySelector('dialog[open], .context-menu')
+    overlayOpen()
   )
     return;
   const command = keyCommand(event, input.settings);

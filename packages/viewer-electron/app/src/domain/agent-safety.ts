@@ -16,6 +16,12 @@ const agentCommands = new Set([
   'duplicate',
   'compress',
   'extract',
+  // Quick actions only create new files.
+  'rotate-copy-left',
+  'rotate-copy-right',
+  'convert-jpeg',
+  'convert-png',
+  'images-to-pdf',
   'make-alias',
   'rename',
   'new-folder',

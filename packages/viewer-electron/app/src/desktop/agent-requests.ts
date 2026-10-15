@@ -14,6 +14,7 @@ import type { OperationJob } from '../domain/contracts';
 import { formatBytes } from '../domain/files';
 import { outputProof } from './operation-journal';
 import { errorMessage } from '../domain/errors';
+import { sharedClientID, storedClientID } from '../domain/agent-clients';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
@@ -79,7 +80,7 @@ export class AgentRequests {
         .array(
           z.object({
             id: z.string(),
-            clientID: z.string().optional().default('legacy'),
+            clientID: storedClientID.optional().default(sharedClientID),
             actionID: z.string(),
             root: z.string(),
             fingerprint: z.string(),
@@ -118,7 +119,7 @@ export class AgentRequests {
     root: string,
     capability: ExecutionGrant['capability'],
     allow: boolean,
-    clientID = 'legacy',
+    clientID = sharedClientID,
   ): Promise<void> {
     const task = this.grantQueue
       .catch(() => {})
@@ -137,7 +138,7 @@ export class AgentRequests {
           (grant) =>
             !(
               grant.actionID === actionID &&
-              (grant.clientID ?? 'legacy') === clientID &&
+              (grant.clientID ?? sharedClientID) === clientID &&
               grant.root === root &&
               grant.capability === capability
             ),
@@ -168,7 +169,7 @@ export class AgentRequests {
     return this.grants.some(
       (grant) =>
         grant.capability === capability &&
-        (grant.clientID ?? 'legacy') === (this.authority?.actor() ?? 'legacy') &&
+        (grant.clientID ?? sharedClientID) === (this.authority?.actor() ?? sharedClientID) &&
         grant.actionID === actionID &&
         within(root, grant.root) &&
         (capability !== 'execute' || grant.fingerprint === this.actionFingerprint(actionID)),
@@ -197,7 +198,7 @@ export class AgentRequests {
     }
     const value = {
       ...proposal,
-      clientID: this.authority?.actor() ?? 'legacy',
+      clientID: this.authority?.actor() ?? sharedClientID,
       id: randomUUID(),
       status: 'review' as const,
       fingerprint: hash,
@@ -426,7 +427,7 @@ export class AgentRequests {
             this.authority?.cancelOperation?.(proposal.operationID);
         }
       };
-      if (this.authority) await this.authority.run(proposal.clientID ?? 'legacy', execute);
+      if (this.authority) await this.authority.run(proposal.clientID ?? sharedClientID, execute);
       else await execute();
       if (this.proposals.get(id)?.status !== 'cancelled' && !proposal.operationID)
         proposal.status = proposal.taskID ? 'running' : 'completed';
@@ -441,7 +442,7 @@ export class AgentRequests {
   stop(clientID: string): void {
     for (const proposal of this.proposals.values()) {
       if (
-        (proposal.clientID ?? 'legacy') !== clientID ||
+        (proposal.clientID ?? sharedClientID) !== clientID ||
         !['review', 'running'].includes(proposal.status)
       )
         continue;

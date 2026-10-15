@@ -304,7 +304,8 @@ export class SettingsService {
       ui: normalizePreferences(),
     };
   }
-  async load(legacy?: { ui?: UIPreferences; look: 'dark' | 'light' }): Promise<void> {
+  /** `seed` carries interface preferences kept with workspace state, for a first configuration. */
+  async load(seed?: { ui?: UIPreferences; look: 'dark' | 'light' }): Promise<void> {
     this.loaded ??= (async () => {
       await fs.mkdir(this.dataPath, { recursive: true, mode: 0o700 });
       const value = await this.store.read();
@@ -335,9 +336,9 @@ export class SettingsService {
           };
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-          if (legacy) {
-            this.document.ui = normalizePreferences(legacy.ui);
-            this.document.settings.appearance = legacy.look;
+          if (seed) {
+            this.document.ui = normalizePreferences(seed.ui);
+            this.document.settings.appearance = seed.look;
           }
         }
         await this.write();

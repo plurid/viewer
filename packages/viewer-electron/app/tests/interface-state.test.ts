@@ -247,19 +247,19 @@ describe('layout-only changes', () => {
     expect(getState().saved.recents).toEqual(recents);
     expect(operate).not.toHaveBeenCalled();
   });
-  it('loads legacy state and falls back independently for invalid new preferences', () => {
-    const { ui: _ui, ...legacy } = getState().saved;
-    const parsed = stateSchema.parse(legacy);
+  it('loads state without interface preferences and falls back independently for invalid ones', () => {
+    const { ui: _ui, ...earlier } = getState().saved;
+    const parsed = stateSchema.parse(earlier);
     expect(parsed.ui.space).not.toHaveProperty('backs');
     const corrupt = stateSchema.parse({
-      ...legacy,
+      ...earlier,
       ui: {
         sidebar: { visible: false, width: 'wide', order: ['recents', 'recents', 'bad'] },
         space: { backs: false, minimap: true },
         recentCommands: ['rename', 'rename', 9],
       },
     });
-    expect(corrupt.workspaces).toEqual(legacy.workspaces);
+    expect(corrupt.workspaces).toEqual(earlier.workspaces);
     expect(corrupt.ui.sidebar.visible).toBe(false);
     expect(corrupt.ui.sidebar.width).toBe(210);
     expect(corrupt.ui.sidebar.order).toEqual(['recents', 'locations', 'favorites']);
@@ -311,7 +311,7 @@ describe('layout-only changes', () => {
   it('migrates navigation once across all workspaces, retaining layout and spatial choices', async () => {
     await newWorkspace('Second');
     const original = structuredClone(getState().saved);
-    const legacy = {
+    const version2 = {
       ...original,
       ui: {
         ...original.ui,
@@ -330,9 +330,9 @@ describe('layout-only changes', () => {
         panes: space.panes.map((pane) => ({ ...pane, sidebar: { visible: false, width: 300 } })),
       })),
     };
-    const unchanged = JSON.stringify(legacy);
-    const migrated = stateSchema.parse(legacy);
-    expect(JSON.stringify(legacy)).toBe(unchanged);
+    const unchanged = JSON.stringify(version2);
+    const migrated = stateSchema.parse(version2);
+    expect(JSON.stringify(version2)).toBe(unchanged);
     expect(migrated.ui).toMatchObject({
       version: 3,
       sidebar: { visible: false, inNewPlanes: true, width: 280 },
@@ -359,7 +359,7 @@ describe('layout-only changes', () => {
     });
     expect(operate).not.toHaveBeenCalled();
   });
-  it('persists intentional preview copies independently of legacy duplicate records', async () => {
+  it('persists intentional preview copies independently of reused preview records', async () => {
     addPane('/fixtures/image.png', 'preview', false);
     addPane('/fixtures/image.png', 'preview', false, { keepSeparate: true });
     await flushState(false);

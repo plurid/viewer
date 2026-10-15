@@ -24,7 +24,7 @@ afterEach(async () => {
   await trashTemporary(root);
 });
 describe('search, subscriptions and persistence', () => {
-  const legacyState = (): SavedState => ({
+  const earlierState = (): SavedState => ({
     version: 1,
     activeWorkspace: 'work',
     workspaces: [
@@ -42,7 +42,7 @@ describe('search, subscriptions and persistence', () => {
   });
   it('backs up the exact pre-migration layout before saving, then preserves subsequent visibility', async () => {
     const storage = new Storage(path.join(root, 'state.json'));
-    const original = legacyState();
+    const original = earlierState();
     original.workspaces[0].roots = [original.workspaces[0].panes[0].id];
     const bytes = JSON.stringify(original, null, 2);
     await writeFile(storage.file, bytes);
@@ -69,7 +69,7 @@ describe('search, subscriptions and persistence', () => {
   });
   it('never treats a valid layout as corrupt when the required migration backup cannot be written', async () => {
     const storage = new Storage(path.join(root, 'state.json'));
-    const original = JSON.stringify(legacyState());
+    const original = JSON.stringify(earlierState());
     await writeFile(storage.file, original);
     await chmod(root, 0o500);
     try {

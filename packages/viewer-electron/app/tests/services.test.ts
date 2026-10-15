@@ -109,7 +109,7 @@ describe('authoritative settings', () => {
     );
     expect(restored.snapshot().settings.browsing.newPlaneLocation).toBe('custom');
   });
-  it('persists toolbar choices and list layout without changing legacy defaults or file data', async () => {
+  it('persists toolbar choices and list layout without changing earlier defaults or file data', async () => {
     const settings = new SettingsService(
       root,
       root,

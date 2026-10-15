@@ -3412,7 +3412,7 @@ async function verifyRestoredPreviews(): Promise<void> {
     await restoredEngine(count);
     await settleCamera();
   };
-  const containedActive = (id = 'legacy-preview-3') =>
+  const containedActive = (id = 'reused-preview-3') =>
     evaluate<boolean>(`(() => {
       const surface = document.querySelector('.workspace-surface').getBoundingClientRect();
       const plane = document.querySelector(${JSON.stringify(`[data-plurid-plane]:has([data-viewer-plane=${JSON.stringify(id)}])`)}).getBoundingClientRect();
@@ -3445,7 +3445,7 @@ async function verifyRestoredPreviews(): Promise<void> {
   );
   const reopened = await until(
     async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
-    (state) => state.workspaces[0].activePane?.startsWith('legacy-preview-') === true,
+    (state) => state.workspaces[0].activePane?.startsWith('reused-preview-') === true,
     'existing preview chosen for reopening',
   );
   const reopenedID = reopened.workspaces[0].activePane!;

@@ -16,12 +16,10 @@ import {
   app,
   nativeTheme,
   safeStorage,
-  clipboard,
   dialog,
   ipcMain,
   shell,
   type BrowserWindow,
-  type MessageBoxOptions,
 } from 'electron';
 import type { AgentProposal } from '../domain/agent-requests';
 import { FileServices } from './file-services';
@@ -38,13 +36,15 @@ import { Comparisons } from './comparison';
 import { Duplicates } from './duplicates';
 import { OperationPlans } from './operation-plans';
 import { sourceVersion } from '../domain/inspection';
-import { type AgentClient } from '../domain/agent-clients';
+import { sharedClientID, type AgentClient } from '../domain/agent-clients';
 import type { ActionContext, ApplicationSettings } from '../domain/services';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import type { ApiMethod, ApiResult, DesktopEvent } from '../domain/contracts';
+import type { ApiMethod, ApiResult, DesktopEvent, FileEntry } from '../domain/contracts';
 import { absolute, entry, list } from './filesystem';
+import { spotlightTagged } from './spotlight';
+import { nativeImageConverter } from './native-image-convert';
 import { Operations } from './operations';
 import { Resources } from './resources';
 import { Search } from './search';
@@ -55,6 +55,8 @@ import { applicationsPath } from './trash-locations';
 import { trashLocation, trashName, type DesktopPlatform } from '../domain/trash';
 import { FileAccess } from './file-access';
 import { NativeSelections } from './native-selections';
+import { Pasteboard } from './pasteboard';
+import { confirmAgentProposal, confirmNatively } from './native-confirmation';
 import { fileCoordination } from './file-coordination';
 import { FileInformationService } from './file-information';
 import { Projects } from './projects';
@@ -71,6 +73,7 @@ export class Desktop {
   private nativeSelections = new NativeSelections((source) =>
     macFiles().clipboardVersion(source === 'drag'),
   );
+  private pasteboard: Pasteboard;
   readonly agentRequests: AgentRequests;
   private commandCatalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
   private workspaceCatalog?: AgentWorkspaceSnapshot;
@@ -118,12 +121,6 @@ export class Desktop {
   private flushes = new Map<string, () => void>();
   private flushing?: Promise<void>;
   private disposal?: Promise<void>;
-  private fileClipboard: {
-    paths: string[];
-    cut: boolean;
-    text: string;
-    changeCount?: number;
-  } | null = null;
   constructor(
     dataPath: string,
     private allowedURL: (url: string) => boolean,
@@ -149,6 +146,7 @@ export class Desktop {
           }
         : undefined,
     );
+    this.pasteboard = new Pasteboard(this.fileAccess, this.nativeSelections);
     this.trash = new Trash(this.home, this.fileAccess, {
       origins: () => this.operations.trashOrigins(),
       preview: (file) => this.resources.grant(file),
@@ -233,7 +231,7 @@ export class Desktop {
       access,
     );
     const confirmations = new ExecutionConfirmations(dataPath, (summary) =>
-      this.confirmNatively(summary.title, summary.detail, 'Run'),
+      confirmNatively(this.window, summary.title, summary.detail, 'Run'),
     );
     this.executions = new Executions(
       () => this.settings.snapshot().settings,
@@ -287,6 +285,7 @@ export class Desktop {
       (receipt, work) => this.fileAccess.withReceipt(receipt, work),
       (message) => emit({ type: 'service-error', service: 'operations', message }),
       new ProtectedPaths(this.home),
+      nativeImageConverter,
     );
     this.operationPlans = new OperationPlans(dataPath, this.operations, this.checkpoints, access);
     this.actions = new ActionPlanner(dataPath, {
@@ -372,7 +371,7 @@ export class Desktop {
         cancelOperation: (id) => this.operations.cancel(id),
         operation: (id) => this.operations.all().find((job) => job.id === id),
       },
-      (proposal) => this.confirmAgentProposal(proposal),
+      (proposal) => confirmAgentProposal(this.window, proposal),
     );
     this.agents = new AgentBroker(
       dataPath,
@@ -636,58 +635,9 @@ export class Desktop {
         'review:' + proposal.kind,
         proposal.status as 'completed' | 'failed' | 'rejected' | 'cancelled',
         detail,
-        proposal.clientID ?? 'legacy',
+        proposal.clientID ?? sharedClientID,
       )
       .catch(() => {});
-  }
-  /** The desktop process asks the person itself; the renderer cannot answer this dialog. */
-  private async confirmAgentProposal(proposal: AgentProposal): Promise<boolean> {
-    const files = proposal.target?.selection.map((file) => file.path) ?? [];
-    const listed = files.slice(0, 30).join('\n');
-    const more = files.length > 30 ? `\n…and ${files.length - 30} more, listed in the review.` : '';
-    const removal = proposal.removal === 'trash';
-    const options: MessageBoxOptions = {
-      type: 'warning',
-      title: 'Agent request',
-      message: removal
-        ? `Allow the agent to move ${files.length === 1 ? 'this item' : `these ${files.length} items`} to the Trash?`
-        : proposal.kind === 'configuration'
-          ? 'Allow the agent to change your configuration?'
-          : `Allow the agent to run “${proposal.title}”?`,
-      detail: (removal
-        ? listed +
-          more +
-          '\n\nFolders are moved with their contents. Nothing is permanently deleted.'
-        : proposal.detail + (files.length ? '\n\nItems:\n' + listed + more : '')
-      ).slice(0, 6000),
-      buttons: [
-        'Cancel',
-        removal ? 'Move to Trash' : proposal.kind === 'configuration' ? 'Change' : 'Run',
-      ],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    };
-    return this.showConfirmation(options);
-  }
-  private confirmNatively(message: string, detail: string, action: string): Promise<boolean> {
-    return this.showConfirmation({
-      type: 'warning',
-      message,
-      detail,
-      buttons: ['Cancel', action],
-      defaultId: 0,
-      cancelId: 0,
-      noLink: true,
-    });
-  }
-  /** Button 1 is the only affirmative answer; closing or cancelling refuses. */
-  private async showConfirmation(options: MessageBoxOptions): Promise<boolean> {
-    const window = this.window && !this.window.isDestroyed() ? this.window : undefined;
-    const { response } = window
-      ? await dialog.showMessageBox(window, options)
-      : await dialog.showMessageBox(options);
-    return response === 1;
   }
   private async sendAgentCommand(
     command: string,
@@ -1109,7 +1059,7 @@ export class Desktop {
       }
       case 'document': {
         const file = this.resources.documentSource(call.args[0]);
-        const document = await this.files.extract(file, undefined, true);
+        const document = await this.files.extract(file, this.resources.signal(call.args[0]), true);
         this.resources.documentSource(call.args[0]);
         return document;
       }
@@ -1212,6 +1162,26 @@ export class Desktop {
         // Only file-sharing addresses: the system mounts them and asks for credentials.
         await shell.openExternal(serverAddress(call.args[0]));
         return;
+      case 'taggedFiles': {
+        const [tag, roots] = call.args;
+        await this.fileAccess.require(roots);
+        const found = new Set<string>();
+        for (const root of roots)
+          for (const file of await spotlightTagged(absolute(root), tag)) {
+            if (found.size >= 10000) break;
+            found.add(file);
+          }
+        // Spotlight can lag behind the disk; only current, accessible items are returned.
+        const entries: FileEntry[] = [];
+        for (const file of found)
+          try {
+            await this.fileAccess.require([file]);
+            entries.push(await entry(file));
+          } catch {
+            // Gone, or outside granted folders.
+          }
+        return entries;
+      }
       case 'openExternal': {
         await this.fileAccess.require([call.args[0]]);
         const error = await shell.openPath(call.args[0]);
@@ -1301,88 +1271,14 @@ export class Desktop {
         } as Parameters<Storage['save']>[0]);
       case 'flushed':
         return this.flushes.get(call.args[0])?.();
-      case 'clipboardWrite': {
-        const paths = call.args[0];
-        await this.fileAccess.require(paths);
-        const text = paths.join('\n');
-        if (process.platform === 'darwin') {
-          const changeCount = macFiles().clipboardWrite(paths);
-          this.fileClipboard = { paths, cut: call.args[1], text, changeCount };
-        } else {
-          await clipboard.writeText(text);
-          this.fileClipboard = { paths, cut: call.args[1], text };
-        }
-        return;
-      }
-      case 'clipboardRead': {
-        const value = this.fileClipboard;
-        if (process.platform === 'darwin') {
-          const native = macFiles().clipboardRead();
-          const selection = this.nativeSelections.capture('clipboard', native.changeCount);
-          if (!native.files.length) return null;
-          // Only bookmarks obtained from the native pasteboard can confer access.
-          const incoming: { path: string; directory: boolean; bookmark: string }[] = [];
-          for (const file of native.files) {
-            try {
-              await this.fileAccess.require([file.path]);
-            } catch (error) {
-              if (
-                (error as NodeJS.ErrnoException).code !== 'FILE_ACCESS_REQUIRED' ||
-                !file.bookmark
-              )
-                throw error;
-              incoming.push({
-                path: file.path,
-                directory: file.directory,
-                bookmark: file.bookmark,
-              });
-            }
-          }
-          this.nativeSelections.assertImport(
-            incoming.map((file) => file.path),
-            selection,
-          );
-          await this.fileAccess.receiveNative(incoming);
-          await this.fileAccess.require(native.files.map((file) => file.path));
-          return {
-            paths: native.files.map((file) => file.path),
-            cut: value?.changeCount === native.changeCount && !!value.cut,
-          };
-        }
-        return value && (await clipboard.readText()) === value.text
-          ? { paths: value.paths, cut: value.cut }
-          : null;
-      }
-      case 'fileDropPaths': {
-        const paths = call.args[0];
-        if (process.platform === 'darwin' && this.fileAccess.scoped) {
-          const native = macFiles().clipboardRead(true);
-          const files = native.files;
-          const selection = this.nativeSelections.capture('drag', native.changeCount);
-          const requested = new Set(paths);
-          const incoming: { path: string; directory: boolean; bookmark: string }[] = [];
-          for (const file of files)
-            if (requested.has(file.path) && file.bookmark) {
-              try {
-                await this.fileAccess.require([file.path]);
-              } catch (error) {
-                if ((error as { code?: string }).code !== 'FILE_ACCESS_REQUIRED') throw error;
-                incoming.push({
-                  path: file.path,
-                  directory: file.directory,
-                  bookmark: file.bookmark,
-                });
-              }
-            }
-          this.nativeSelections.assertImport(
-            incoming.map((file) => file.path),
-            selection,
-          );
-          await this.fileAccess.receiveNative(incoming);
-        }
-        await this.fileAccess.require(paths);
-        return paths;
-      }
+      case 'clipboardWrite':
+        return this.pasteboard.write(call.args[0], call.args[1]);
+      case 'clipboardRead':
+        return this.pasteboard.read();
+      case 'fileDropPaths':
+        return this.pasteboard.dropped(call.args[0]);
+      case 'copyPaths':
+        return this.pasteboard.copyText(call.args[0]);
       case 'fileDragStart': {
         const paths = call.args[0];
         await this.fileAccess.require(paths);
@@ -1391,12 +1287,6 @@ export class Desktop {
         // Native file objects carry all selected paths to Finder and other apps.
         const icon = await app.getFileIcon(paths[0], { size: 'normal' });
         window.webContents.startDrag({ file: paths[0], files: paths, icon });
-        return;
-      }
-      case 'copyPaths': {
-        await clipboard.writeText(call.args[0].join('\n'));
-        // Plain-text paths must not retain a previous cut/copy file operation.
-        this.fileClipboard = null;
         return;
       }
       case 'textEdit': {

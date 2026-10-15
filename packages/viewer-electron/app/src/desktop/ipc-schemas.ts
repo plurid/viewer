@@ -365,6 +365,7 @@ export const schemas = {
   reveal: z.tuple([localPath]),
   openExternal: z.tuple([localPath]),
   connectServer: z.tuple([z.string().min(3).max(2048)]),
+  taggedFiles: z.tuple([z.string().trim().min(1).max(255), z.array(localPath).min(1).max(100)]),
   nativeFilePanel: z.tuple([z.enum(['preview', 'share']), z.array(localPath).min(1).max(100)]),
   applications: z.tuple([z.array(localPath).min(1).max(2000)]),
   chooseApplication: z.tuple([]),
@@ -391,10 +392,12 @@ export const schemas = {
         'trash',
         'compress',
         'extract',
+        'convert',
       ]),
       sources: z.array(localPath).max(10000),
       destination: localPath.optional(),
       name: z.string().max(255).optional(),
+      conversion: z.enum(['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf']).optional(),
       expectedSources: z
         .array(z.object({ path: localPath, version: sourceVersionSchema }).strict())
         .max(10000)

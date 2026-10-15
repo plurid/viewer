@@ -282,6 +282,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     cursor: session.cursor,
     selectionSet,
     select,
+    region: (found, base) => selecting.region(found, base),
     open,
     showHidden: pane.showHidden,
     context: (entry, event) => {

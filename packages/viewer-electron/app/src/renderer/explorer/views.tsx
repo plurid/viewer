@@ -26,6 +26,7 @@ import type { FolderPresentation } from '../../domain/folder-presentation';
 import { BrowserColumn } from './BrowserColumn';
 import { FolderSizeValue } from './sizes';
 import { LinkedPlaneButton } from '../workspace/LinkedPlaneButton';
+import { rowsUnder, tilesUnder, useMarquee, type MarqueeSelect } from './marquee';
 
 export interface FileViewProps {
   paneID?: string;
@@ -42,6 +43,8 @@ export interface FileViewProps {
   open(entry: FileEntry, linked?: boolean): void;
   context(entry: FileEntry, event: MouseEvent): void;
   drag(entry: FileEntry, event: DragEvent): void;
+  /** Marquee selection; views without it ignore drags on blank space. */
+  region?: MarqueeSelect;
 }
 const date = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -200,6 +203,7 @@ export function ListView(props: FileViewProps) {
   }, [props.entries, props.depths, props.presentation?.group]);
   const getItemKey = useCallback((index: number) => props.entries[index].path, [props.entries]);
   const scroll = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: props.entries.length,
     getItemKey,
@@ -216,6 +220,13 @@ export function ListView(props: FileViewProps) {
     const index = props.entries.findIndex((entry) => entry.path === props.cursor);
     if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });
   }, [props.cursor, props.entries, virtual]);
+  const marquee = useMarquee(
+    scroll,
+    content,
+    (rect) => rowsUnder(virtual.measurementsCache, rect).map((index) => props.entries[index]),
+    props.region,
+    props.selection,
+  );
   return (
     <div
       ref={scroll}
@@ -223,8 +234,10 @@ export function ListView(props: FileViewProps) {
       role="listbox"
       aria-label="Files"
       aria-multiselectable="true"
+      onPointerDown={marquee.onPointerDown}
     >
-      <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
+      <div ref={content} style={{ height: virtual.getTotalSize(), position: 'relative' }}>
+        {marquee.overlay}
         {virtual.getVirtualItems().map((item) => (
           <div
             key={item.key}
@@ -284,6 +297,7 @@ function Thumbnail({ entry }: { entry: FileEntry }) {
 }
 export function GridView(props: FileViewProps) {
   const scroll = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   useEffect(() => {
     const element = scroll.current;
@@ -306,6 +320,20 @@ export function GridView(props: FileViewProps) {
     const index = props.entries.findIndex((entry) => entry.path === props.cursor);
     if (index >= 0) virtual.scrollToIndex(Math.floor(index / columns), { align: 'auto' });
   }, [props.cursor, props.entries, columns, virtual]);
+  const marquee = useMarquee(
+    scroll,
+    content,
+    (rect) =>
+      tilesUnder(
+        virtual.measurementsCache,
+        rect,
+        columns,
+        content.current?.offsetWidth || width,
+        props.entries.length,
+      ).map((index) => props.entries[index]),
+    props.region,
+    props.selection,
+  );
   return (
     <div
       ref={scroll}
@@ -313,8 +341,10 @@ export function GridView(props: FileViewProps) {
       role="listbox"
       aria-label="Files"
       aria-multiselectable="true"
+      onPointerDown={marquee.onPointerDown}
     >
-      <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
+      <div ref={content} style={{ height: virtual.getTotalSize(), position: 'relative' }}>
+        {marquee.overlay}
         {virtual.getVirtualItems().map((row) => (
           <div
             className="grid-row"

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { opendir } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
+import { spotlightAvailable, spotlightNames } from './spotlight';
 import type { SearchRequest, SearchBatch, FileEntry } from '../domain/contracts';
 import { absolute, entry } from './filesystem';
 
@@ -13,7 +13,7 @@ export class Search {
     /** Spotlight lookup; absent where it cannot run (other platforms, the App Store build). */
     private spotlight:
       | ((root: string, query: string, signal: AbortSignal) => Promise<string[]>)
-      | null = process.platform === 'darwin' && !process.mas ? spotlightNames : null,
+      | null = spotlightAvailable ? spotlightNames : null,
   ) {}
   cancel(id: string): void {
     this.requests.get(id)?.abort();
@@ -116,16 +116,4 @@ export class Search {
       flush(true);
     }
   }
-}
-
-/** File paths under `root` whose names contain `query`, from the Spotlight index. */
-function spotlightNames(root: string, query: string, signal: AbortSignal): Promise<string[]> {
-  return new Promise((resolve, reject) =>
-    execFile(
-      '/usr/bin/mdfind',
-      ['-onlyin', root, '-name', query],
-      { signal, timeout: 3000, maxBuffer: 32 * 1024 * 1024 },
-      (error, stdout) => (error ? reject(error) : resolve(stdout.split('\n').filter(Boolean))),
-    ),
-  );
 }

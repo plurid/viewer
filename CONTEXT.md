@@ -1,6 +1,6 @@
 # Viewer domain map
 
-Viewer is a macOS-first file manager with familiar file navigation, spatial previews and user/agent commands. The active application is `packages/viewer-electron/app`; `old_app` is archival.
+Viewer is a macOS-first file manager with familiar file navigation, spatial previews and user/agent commands. The active application is `packages/viewer-electron/app`; the 2021 predecessor is recorded in `docs/old-app.md`.
 
 | Term                | Meaning and owner                                                                                                                                |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |

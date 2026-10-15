@@ -4,6 +4,7 @@ import { copyPathCommand } from './copy-path';
 import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath, baseName } from '../../domain/planes';
+import { convertibleImage } from '../../domain/image-conversions';
 export { parentPath } from '../../domain/planes';
 import {
   favorite,
@@ -36,6 +37,8 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
   const selected = (context: CommandContext) =>
     ['window', 'files', 'folder'].includes(context.scope) && context.selection.length > 0;
   const paths = (context: CommandContext) => context.selection.map((entry) => entry.path);
+  const images = (context: CommandContext) =>
+    selected(context) && context.selection.every(convertibleImage);
   const commands: CommandDefinition[] = [
     {
       id: 'invert-selection',
@@ -121,6 +124,47 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
           sources: paths(context),
           destination: context.directory,
           name: context.selection.length === 1 ? context.selection[0].name + '.zip' : 'Archive.zip',
+        });
+      },
+    },
+    ...(
+      [
+        ['rotate-left', 'rotate-copy-left', 'Rotated copy, left', ['rotate left', 'turn left']],
+        [
+          'rotate-right',
+          'rotate-copy-right',
+          'Rotated copy, right',
+          ['rotate right', 'turn right'],
+        ],
+        ['jpeg', 'convert-jpeg', 'Convert copy to JPEG', ['jpg', 'jpeg', 'convert image']],
+        ['png', 'convert-png', 'Convert copy to PNG', ['png', 'convert image']],
+      ] as const
+    ).map(([conversion, id, label, aliases]) => ({
+      id,
+      label,
+      group: 'Quick actions',
+      icon: 'image' as const,
+      aliases: [...aliases],
+      when: images,
+      run: async (context: CommandContext) => {
+        await window.viewer.operate({ kind: 'convert', conversion, sources: paths(context) });
+      },
+    })),
+    {
+      id: 'images-to-pdf',
+      label: 'Create PDF from images',
+      group: 'Quick actions',
+      icon: 'pdf',
+      aliases: ['pdf', 'combine images', 'make pdf'],
+      when: (context) => images(context) && !!context.directory,
+      run: async (context) => {
+        const first = context.selection[0].name.replace(/\.[^.]+$/, '');
+        await window.viewer.operate({
+          kind: 'convert',
+          conversion: 'pdf',
+          sources: paths(context),
+          destination: context.directory,
+          name: (context.selection.length === 1 ? first : first + ' and others') + '.pdf',
         });
       },
     },

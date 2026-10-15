@@ -177,7 +177,7 @@ describe('authoritative JSONC configuration', () => {
     ).rejects.toThrow();
     expect((await read()).version).toBe(99);
   });
-  it('backs up legacy settings and migrates competing folder views once, with the active plane last', async () => {
+  it('backs up settings-v1 and migrates competing folder views once, with the active plane last', async () => {
     const prior = JSON.stringify({
       version: 1,
       revision: 4,

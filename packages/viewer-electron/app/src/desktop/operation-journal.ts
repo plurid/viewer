@@ -24,6 +24,7 @@ const kind = z.enum([
   'trash',
   'compress',
   'extract',
+  'convert',
 ]);
 const count = z.number().nonnegative().finite();
 export const undoStepSchema = z
@@ -94,6 +95,7 @@ const record = z
         sources: z.array(file).max(10000),
         destination: file.optional(),
         name: z.string().max(255).optional(),
+        conversion: z.enum(['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf']).optional(),
         expectedSources: z
           .array(z.object({ path: file, version: sourceVersionSchema }).strict())
           .max(10000)
@@ -300,14 +302,14 @@ export class OperationLog {
   }
   /** Version 1 kept every receipt in one document; it is converted once and kept. */
   private async migrate(notices: string[]): Promise<void> {
-    const legacy = operationJournal(this.dataPath);
+    const previous = operationJournal(this.dataPath);
     let document;
     try {
-      document = await legacy.load();
+      document = await previous.load();
     } catch (error) {
       if (!(error instanceof SyntaxError || error instanceof z.ZodError)) throw error;
-      const kept = `${legacy.file}.unreadable-${Date.now()}`;
-      await rename(legacy.file, kept);
+      const kept = `${previous.file}.unreadable-${Date.now()}`;
+      await rename(previous.file, kept);
       notices.push(
         `Recent file operation history could not be read, so earlier Undo is unavailable. It was kept at ${kept}.`,
       );
@@ -326,7 +328,7 @@ export class OperationLog {
         continue;
       await this.writeCompact(file, index, receipt, 'wx');
     }
-    await rename(legacy.file, `${legacy.file}.migrated-${Date.now()}`);
+    await rename(previous.file, `${previous.file}.migrated-${Date.now()}`);
   }
   private fileFor(id: string): string {
     return path.join(this.directory, `${id}.jsonl`);

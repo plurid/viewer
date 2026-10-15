@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { ExecutionGrant } from '../../domain/agent-requests';
 import type { ApplicationSettings } from '../../domain/services';
+import { sharedClientID } from '../../domain/agent-clients';
 export function AgentGrants({
   settings,
-  clientID = 'legacy',
+  clientID = sharedClientID,
   roots = settings.agents.roots,
 }: {
   settings: ApplicationSettings;
@@ -32,7 +33,7 @@ export function AgentGrants({
   const allowed = (id: string, capability: ExecutionGrant['capability']) =>
     grants.some(
       (grant) =>
-        (grant.clientID ?? 'legacy') === clientID &&
+        (grant.clientID ?? sharedClientID) === clientID &&
         grant.actionID === id &&
         grant.root === root &&
         grant.capability === capability,
@@ -84,11 +85,11 @@ export function AgentGrants({
           {error}
         </p>
       )}
-      {grants.some((grant) => (grant.clientID ?? 'legacy') === clientID) && (
+      {grants.some((grant) => (grant.clientID ?? sharedClientID) === clientID) && (
         <details>
           <summary>Existing grants</summary>
           {grants
-            .filter((grant) => (grant.clientID ?? 'legacy') === clientID)
+            .filter((grant) => (grant.clientID ?? sharedClientID) === clientID)
             .map((grant) => (
               <div className="settings-grant" key={grant.id}>
                 <span title={grant.root}>

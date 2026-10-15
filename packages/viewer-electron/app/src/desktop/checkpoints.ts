@@ -71,7 +71,8 @@ const treeManifestSchema = z
       .max(10000),
   })
   .strict();
-const legacyManifestSchema = z
+/** Version 1 manifests list file proofs only. */
+const fileListManifestSchema = z
   .array(z.object({ snapshot: snapshotPath, hash: z.string().length(64) }).passthrough())
   .max(10000);
 /** Recovery content lives in the app's private storage. Capturing never mutates sources. */
@@ -400,7 +401,7 @@ export class Checkpoints {
     const manifest = await new DocumentStore(path.join(folder, 'manifest.json'), (value) =>
       record.manifestVersion === 2
         ? treeManifestSchema.parse(value)
-        : { version: 1 as const, entries: legacyManifestSchema.parse(value) },
+        : { version: 1 as const, entries: fileListManifestSchema.parse(value) },
     ).load();
     if (!manifest) throw new Error('The checkpoint manifest is unavailable.');
     const known = new Map(manifest.entries.map((proof) => [proof.snapshot, proof]));

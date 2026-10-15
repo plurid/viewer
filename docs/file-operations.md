@@ -16,6 +16,20 @@ Staging cleanup never deletes user-visible data. An emptied staging folder is re
 
 The Trash confirmation lists selected folders' full contents (file and folder counts and size), measured read-only in the background while the dialog is open; Enter still confirms immediately. **New folder with selection…** (⌃⌘N) creates a folder beside the selected items and moves them into it as two ordinary jobs, each with its own Undo; the move targets the folder actually created and only the items as they were chosen.
 
+## Selecting
+
+Drag across blank space in list or grid view to select the items under the rectangle. Hold Shift or Command to add them to the current selection. The view scrolls when the pointer nears its top or bottom edge, and the click that ends the drag keeps the selection. Rows outside the visible window are selected too, by their measured positions.
+
+## Quick actions
+
+The Quick actions submenu works on selected images (JPEG, PNG, TIFF, HEIC, GIF, BMP, WebP):
+
+- Rotated copy, left or right
+- Convert copy to JPEG or PNG
+- Create PDF from images, one page per image in selection order
+
+Each action creates a new file next to its source and never changes the source. Outputs are written to a private stage, published exclusively, and resolved like any new file (keep both, skip or replace). Undo moves them to the Trash. Images are decoded by the system image reader inside Viewer, so the actions work in the App Store build. Copies are re-encoded (JPEG at quality 92) and do not carry the source's metadata. Images over 100 megapixels are refused.
+
 ## Duplicates
 
 **Find duplicates…** searches selected folders (or the current one) for files with identical contents. It never follows links, compares only regular files of the same size, filters on the first 64 KB and confirms with full SHA-256; hard links to one file count once, because removing one frees nothing. The search is read-only, cancellable and bounded (100,000 files, five minutes). Nothing is chosen at first, and the last copy in a group cannot be chosen; chosen copies go to an ordinary reviewed operation plan, so moving them to Trash pins their versions, honours protected folders and keeps Undo.

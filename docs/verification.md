@@ -1,5 +1,43 @@
 # Verification
 
+## October 15 organization and features
+
+**593 unit tests across 79 files pass** (2 skipped), run with `VIEWER_TEST_PRESERVE=1`. All four TypeScript targets, ESLint and formatting pass. The renderer bundles. The packaged app was not built or run.
+
+**File splits, no behaviour change:**
+- The renderer store became twelve modules behind the unchanged `state/store.ts` API.
+- Window commands became eight modules, keeping their original order, which the palette and menus depend on.
+- Settings became one component per category.
+- Trash moved its menu, Quick Look, Get Info and menu actions into `ui/trash/`.
+- `Operations` gave its exclusive publish, copy and directory sync to `file-transfer.ts`, and its identity checks to `item-identity.ts`.
+- The agent broker's tool catalog moved to `agent-tools.ts`.
+- The bridge's pasteboard and native confirmations moved to their own modules.
+- The stylesheet became eleven ordered sections. The built CSS is byte-identical to before.
+
+**Smaller fixes and cleanup:**
+- Shared `dialogOpen`/`overlayOpen` helpers.
+- A released preview resource aborts its in-flight document extraction.
+- The shared agent connection is a first-class client (`sharedClientID`); stored grants under the earlier ID still apply.
+- The React alias workaround in the test configuration was removed after a clean install.
+
+**New features:**
+- Marquee selection.
+- Select All across indexed search pages, up to 10,000 matches.
+- Smart folders that follow the index.
+- Finder tag smart folders through Spotlight.
+- Image quick actions (rotated copies, JPEG/PNG copies, images to PDF) as an undoable `convert` operation that never changes sources.
+
+**New regressions cover:**
+- Marquee geometry, the selection model and the hook under jsdom.
+- Tag query escaping.
+- Quick actions through real file operations with a recording converter, including Undo and refusals.
+- The PDF cross-reference table and bitmap rotation.
+- Release aborting preview work.
+
+`noUncheckedIndexedAccess` was measured, not enabled: about 370 sites, mostly bounded loops in DXF geometry. Sampled desktop hits were already guarded.
+
+The 2021 predecessor is documented in `docs/old-app.md`; its files moved to `archive/`.
+
 ## October 15 follow-up
 
 **579 unit tests across 76 files pass** (2 skipped), run with `VIEWER_TEST_PRESERVE=1`. All four TypeScript targets, ESLint and formatting pass. The packaged app was not built or run.
@@ -374,7 +412,7 @@ distribution qualification.
 regressions. The tests exercise the actual command/proposal broker and operation
 service with simulated file metadata, coordination and dispatch. They verify
 mandatory per-request review with the manual confirmation preference disabled,
-legacy-grant and custom-alias handling, rejection and replay protection, changed
+shared-connection grant and custom-alias handling, rejection and replay protection, changed
 sources/executors, revoked scope, canonical escapes/private data, protected roots and Trash contents,
 blocked shell/external-app/terminal routes and the advertised Trash-only policy. Operation
 checks reject a source changed inside coordination and verify that a Trash error
@@ -400,7 +438,7 @@ rebuilds are preserved. The verified bundle is
 With `VIEWER_TEST_BINARY` pointing at that bundle,
 `node --import tsx tests/native-agent-safety.ts` passes four owned native checks:
 actual authenticated MCP discovery/denial despite imported capabilities, fresh
-exact-path review despite hidden manual confirmation and a valid legacy alias
+exact-path review despite hidden manual confirmation and a valid shared-connection alias
 grant, compact large-selection scrolling, and the rendered unavailable/inactive permission controls. Reject leaves
 the generated file and nested folder contents intact; a second request requires
 new approval. Nine selected items with long exact paths scroll within the compact

@@ -153,6 +153,15 @@ export class FileSelection {
     this.session.anchor = this.session.cursor;
     this.apply(next);
   }
+  /** Marquee selection: the entries under the rectangle, added to `base`. */
+  region(entries: readonly FileEntry[], base: readonly string[] = []) {
+    for (const entry of entries) this.session.cache.set(entry.path, entry);
+    if (entries.length) {
+      this.session.anchor = entries[0].path;
+      this.session.cursor = entries[entries.length - 1].path;
+    }
+    this.commit([...new Set([...base, ...entries.map((entry) => entry.path)])]);
+  }
   clear() {
     this.session.cursor = '';
     this.session.anchor = '';

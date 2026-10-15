@@ -1,0 +1,446 @@
+/* Dialogs, Get Info, tags, Quick Look, notices and the operations panel. */
+.dialog {
+  padding: 0;
+  width: 440px;
+  max-width: calc(100vw - 60px);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.dialog::backdrop {
+  background: #101319a6;
+}
+.dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.dialog form {
+  padding: 18px;
+}
+.dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid var(--line);
+}
+.dialog form footer {
+  padding: 18px 0 0;
+  border: none;
+}
+.name-dialog footer {
+  flex-wrap: wrap;
+}
+.dialog-secondary-action {
+  margin-right: auto;
+  min-width: 0;
+}
+.rename-action-select {
+  max-width: 175px;
+  padding: 6px 8px;
+  text-overflow: ellipsis;
+}
+.dialog footer button {
+  border-color: var(--line);
+}
+.dialog-keyboard-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dialog-keyboard-action kbd {
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+}
+.trash-dialog .dialog-copy {
+  overflow-wrap: anywhere;
+}
+.trash-dialog footer {
+  flex-wrap: wrap;
+}
+.dialog-copy {
+  padding: 18px;
+  color: var(--muted);
+}
+.file-information {
+  max-height: min(550px, calc(100vh - 200px));
+  overflow: auto;
+  margin: 0;
+  padding: 18px;
+}
+.file-information > section + section {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.file-information dt {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 10px;
+}
+.file-information dt:first-child {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 600;
+  margin-top: 0;
+}
+.file-information dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.file-information dl {
+  margin: 0;
+}
+.file-information section > dl {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px 12px;
+}
+.file-information section > dl > dt,
+.file-information section > dl > dd {
+  margin: 0;
+}
+.file-information section > dl > dt:first-child,
+.file-information section > dl > dd:nth-child(2) {
+  grid-column: 1 / -1;
+}
+.file-information section > dl > dd:nth-child(2) {
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.information-editor {
+  margin-top: 18px;
+  padding: 0 !important;
+}
+.information-editor fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.information-editor legend {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.information-native-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.file-information .information-native-details dt {
+  margin-top: 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.information-fields {
+  margin-top: 16px !important;
+}
+.information-lock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.information-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.information-tag-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.information-tag select {
+  width: 112px;
+  flex: 0 0 112px;
+}
+.information-tag-add {
+  display: flex;
+  gap: 8px;
+}
+.information-tag-add input {
+  min-width: 0;
+  flex: 1;
+  width: 100%;
+}
+.information-comment {
+  margin-top: 16px;
+}
+.information-comment textarea {
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 8px 9px;
+  font: inherit;
+}
+.information-additional {
+  margin-top: 16px;
+}
+.information-additional summary {
+  cursor: pointer;
+}
+.information-permissions {
+  margin-top: 16px;
+}
+.information-permissions summary {
+  cursor: pointer;
+  padding-block: 5px;
+}
+.information-permissions table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+.information-permissions th,
+.information-permissions td {
+  padding: 7px 8px;
+  text-align: center;
+  font-size: 12px;
+}
+.information-permissions th:first-child {
+  text-align: left;
+}
+.information-permissions tbody tr + tr {
+  border-top: 1px solid var(--line);
+}
+.information-save {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  position: sticky;
+  bottom: -18px;
+  padding-block: 10px;
+  background: var(--surface);
+  z-index: 1;
+}
+.information-save [role='status'] {
+  margin-right: auto;
+}
+.information-editor .error {
+  margin-block: 12px;
+  overflow-wrap: anywhere;
+}
+.tag-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 9px;
+  background: var(--subtle);
+}
+.tag-color-0 {
+  background: transparent;
+  border: 1px solid var(--subtle);
+}
+.tag-color-1 {
+  background: #92969e;
+}
+.tag-color-2 {
+  background: #70ac75;
+}
+.tag-color-3 {
+  background: #a78ac2;
+}
+.tag-color-4 {
+  background: #7fa9ce;
+}
+.tag-color-5 {
+  background: #d1ba6b;
+}
+.tag-color-6 {
+  background: #cf8585;
+}
+.tag-color-7 {
+  background: #ca9a70;
+}
+.field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--muted);
+}
+.field-label input {
+  color: var(--ink);
+}
+.wide-dialog {
+  width: 1050px;
+  max-height: calc(100vh - 60px);
+}
+.quick-preview {
+  height: min(650px, calc(100vh - 200px));
+}
+.quick-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(90vw, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  height: min(88vh, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
+}
+.quick-preview-dialog > header {
+  flex-shrink: 0;
+}
+.quick-preview-dialog .quick-preview {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.dialog .quick-preview-footer {
+  flex: 0 0 auto;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+}
+.quick-preview-metadata {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-preview-actions,
+.quick-preview-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.quick-preview-navigation {
+  gap: 2px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.open-default-button {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-preview-actions > .primary {
+  flex-shrink: 0;
+}
+.notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 500;
+  max-width: min(650px, calc(100vw - 40px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 7px;
+  box-shadow: var(--shadow);
+}
+.notice > svg {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+.notice > span {
+  overflow-wrap: anywhere;
+}
+.operations-panel {
+  position: fixed;
+  z-index: 200;
+  top: 64px;
+  right: 16px;
+  width: 370px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.operations-panel > header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 13px;
+  height: 46px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  z-index: 1;
+}
+.panel-empty {
+  padding: 20px;
+}
+.operation {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.operation-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.operation-title .muted {
+  font-size: 11px;
+  margin-left: auto;
+}
+.operation p {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  margin: 9px 0;
+}
+.operation-count {
+  font-size: 11px;
+  margin: 8px 0;
+}
+.operation progress {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--accent);
+}
+.collision {
+  padding: 12px 0;
+}
+.collision strong {
+  font-size: 12px;
+}
+.collision label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.collision-actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 12px;
+}
+.collision-actions button {
+  border-color: var(--line);
+  font-size: 12px;
+}

@@ -15,9 +15,11 @@ export const collectionSchema = z
   .object({
     id: z.uuid(),
     name: z.string().trim().min(1).max(100),
-    kind: z.enum(['explicit', 'query']),
+    /** Explicit references, an indexed query, or a Finder tag; the last two stay live. */
+    kind: z.enum(['explicit', 'query', 'tag']),
     sources: z.array(localPath).min(1).max(10000),
     query: z.string().max(300).optional(),
+    tag: z.string().trim().min(1).max(255).optional(),
     recursive: z.boolean().optional(),
     content: z.boolean().optional(),
   })
@@ -25,7 +27,8 @@ export const collectionSchema = z
   .refine(
     (value) => value.kind !== 'query' || !!value.query?.trim(),
     'A query collection needs search text.',
-  );
+  )
+  .refine((value) => value.kind !== 'tag' || !!value.tag, 'A tag collection needs a tag name.');
 export type Collection = z.infer<typeof collectionSchema>;
 export interface QuerySnapshot {
   id: string;

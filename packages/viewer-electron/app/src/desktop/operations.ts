@@ -2,21 +2,7 @@ import type { FileChange } from '../domain/changes';
 import type { TrashOrigin } from '../domain/trash';
 import type { ObservedOperationLink } from '../domain/relationships';
 import { randomUUID } from 'node:crypto';
-import { constants, type Stats } from 'node:fs';
-import {
-  link,
-  chmod,
-  lstat,
-  mkdir,
-  open,
-  readdir,
-  readlink,
-  realpath,
-  rename,
-  stat,
-  symlink,
-  utimes,
-} from 'node:fs/promises';
+import { lstat, mkdir, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   CollisionDecision,
@@ -33,6 +19,21 @@ import { privateStage } from './staging';
 import { fileCoordination } from './file-coordination';
 import { removeEmptyDirectory, unlinkVerified } from './removal';
 import { ProtectedPaths } from './protected-paths';
+import {
+  conversionOutput,
+  convertibleExtensions,
+  unavailableConverter,
+  type ImageConverter,
+} from './image-convert';
+import { holds, sameItem, unchanged, type Replaced } from './item-identity';
+import {
+  copyTree,
+  keepBothName,
+  publish,
+  syncDirectories,
+  type CopyFingerprint,
+  type TransferJob,
+} from './file-transfer';
 
 interface UndoStep {
   from: string;
@@ -47,41 +48,10 @@ interface UndoStep {
   bookmark?: string;
   directory?: boolean;
 }
-interface CopyFingerprint {
-  file: string;
-  info: Stats;
-  children?: string[];
-}
 class ReceiptFailure extends Error {}
-/** The existing item a person chose to replace, captured when the collision was shown. */
-type Replaced = Stats;
 interface Target {
   path: string;
   replaces?: Replaced;
-}
-/** Identity of an item reached under any spelling: case or Unicode variants,
- * symbolic-link ancestors and firmlinks all share its device and inode. */
-const sameItem = (a: Stats, b: Stats) => a.dev === b.dev && a.ino === b.ino;
-/** Whether the folder `ancestor` holds `file` at any depth, compared by identity. */
-async function holds(ancestor: Stats, file: string): Promise<boolean> {
-  if (!ancestor.isDirectory()) return false;
-  let current = await realpath(path.dirname(file));
-  for (;;) {
-    if (sameItem(await lstat(current), ancestor)) return true;
-    const parent = path.dirname(current);
-    if (parent === current) return false;
-    current = parent;
-  }
-}
-/** A replaced item must still be the one shown in the collision prompt. Folder
- * modification times change when entries are added or removed. */
-function unchanged(current: Stats, expected: Replaced): boolean {
-  return (
-    sameItem(current, expected) &&
-    current.mtimeMs === expected.mtimeMs &&
-    (current.isDirectory() ||
-      (current.size === expected.size && current.ctimeMs === expected.ctimeMs))
-  );
 }
 interface Task {
   job: OperationJob;
@@ -94,27 +64,6 @@ interface Task {
   intent?: OperationReceipt['intent'];
   /** The request Redo would start, pinned to the versions Undo restored. */
   redo?: OperationRequest;
-}
-
-/** Make a published tree's directory entries durable before its sources on another
- * volume are removed. File contents were already synced as they were copied. */
-async function syncDirectories(root: string): Promise<void> {
-  if (process.platform === 'win32') return;
-  const parent = path.dirname(root);
-  const pending = [parent, root];
-  while (pending.length) {
-    const directory = pending.pop()!;
-    if (!(await lstat(directory)).isDirectory()) continue;
-    if (directory !== parent)
-      for (const child of await readdir(directory, { withFileTypes: true }))
-        if (child.isDirectory()) pending.push(path.join(directory, child.name));
-    const handle = await open(directory, constants.O_RDONLY | (constants.O_DIRECTORY || 0));
-    try {
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-  }
 }
 
 /** Selected ancestors carry their descendants; membership checks preserve source order. */
@@ -150,6 +99,7 @@ export class Operations {
     private receiptAccess: ReceiptAccess = async (_receipt, work) => work(),
     private notice: (message: string) => void = () => {},
     private protection = new ProtectedPaths(),
+    private images: ImageConverter = unavailableConverter,
   ) {
     if (dataPath) this.journal = new OperationLog(dataPath);
   }
@@ -316,6 +266,22 @@ export class Operations {
       (!request.name || !request.name.toLowerCase().endsWith('.zip'))
     )
       throw new Error('Enter a ZIP archive name.');
+    if (request.kind === 'convert') {
+      if (!request.conversion) throw new Error('Choose an image quick action.');
+      if (
+        roots.some((file) => !convertibleExtensions.has(path.extname(file).slice(1).toLowerCase()))
+      )
+        throw new Error('Quick actions work on JPEG, PNG, TIFF, HEIC, GIF, BMP and WebP images.');
+      if (
+        request.conversion === 'pdf' &&
+        (!request.destination || !request.name?.toLowerCase().endsWith('.pdf'))
+      )
+        throw new Error('Choose a folder and a PDF name.');
+    }
+    // A PDF is one output from every source; other conversions create one file per image.
+    const single =
+      ['mkdir', 'compress'].includes(request.kind) ||
+      (request.kind === 'convert' && request.conversion === 'pdf');
     const job: OperationJob = {
       id: randomUUID(),
       revision: 0,
@@ -326,7 +292,7 @@ export class Operations {
       bytesDone: 0,
       bytesTotal: 0,
       itemsDone: 0,
-      itemsTotal: ['mkdir', 'compress'].includes(request.kind) ? 1 : roots.length,
+      itemsTotal: single ? 1 : roots.length,
       completed: [],
       errors: [],
       errorCount: 0,
@@ -457,7 +423,7 @@ export class Operations {
                 fileCoordination.path(step.to),
                 fileCoordination.purpose(),
               );
-            else await this.publish(step.from, step.to);
+            else await publish(step.from, step.to, this.access);
           },
         ),
       );
@@ -570,7 +536,7 @@ export class Operations {
               fileCoordination.path(step.to),
               fileCoordination.purpose(),
             )
-          : this.publish(step.from, step.to),
+          : publish(step.from, step.to, this.access),
       );
     } catch {
       return false;
@@ -591,7 +557,7 @@ export class Operations {
       await this.trashItem(task, destination, replaced);
     }
     try {
-      await this.publish(source, destination, task);
+      await publish(source, destination, this.access, this.transferJob(task));
     } catch (error) {
       if (replaced && !(await this.restoreReplaced(task, destination)))
         throw new Error(
@@ -618,7 +584,7 @@ export class Operations {
         this.running = true;
         try {
           return await work((source, destination, guard, signal) =>
-            this.publish(source, destination, undefined, guard, signal),
+            publish(source, destination, this.access, undefined, guard, signal),
           );
         } finally {
           this.running = false;
@@ -659,81 +625,19 @@ export class Operations {
   private check(task: Task): void {
     task.abort.signal.throwIfAborted();
   }
-  /** macOS uses a coordinated exclusive rename; other platforms use exclusive publication.
-   * A concurrent writer can make publication fail, but its file is never overwritten. */
-  private async publish(
-    source: string,
-    destination: string,
-    task?: Task,
-    guard?: () => Promise<void>,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    if (process.platform === 'darwin') {
-      return fileCoordination.run(
-        [
-          { path: source, mode: 'move' },
-          { path: destination, mode: 'write' },
-        ],
-        async (signal) => {
-          signal?.throwIfAborted();
-          if (task) this.check(task);
-          const from = fileCoordination.path(source),
-            to = fileCoordination.path(destination);
-          await this.access([from, to]);
-          await guard?.();
-          signal?.throwIfAborted();
-          const info = await lstat(from);
-          if (!info.isDirectory() && !info.isFile() && !info.isSymbolicLink())
-            throw new Error('Special devices and sockets cannot be transferred.');
-          await macFiles().renameExclusive(from, to, fileCoordination.purpose());
-        },
-        task?.abort.signal ?? signal,
-      );
-    }
-    await this.access([source, destination]);
-    await guard?.();
-    signal?.throwIfAborted();
-    const info = await lstat(source);
-    if (!info.isDirectory()) {
-      if (!info.isFile() && !info.isSymbolicLink())
-        throw new Error('Special devices and sockets cannot be transferred.');
-      if (info.isSymbolicLink()) {
-        await symlink(await readlink(source), destination);
-      } else {
-        try {
-          await link(source, destination);
-        } catch (error) {
-          // exFAT and some network mounts cannot create hard links. Keep the same
-          // exclusive destination and cancellable streaming semantics there.
-          if (
-            !['EPERM', 'EOPNOTSUPP', 'ENOTSUP', 'ENOSYS'].includes(
-              (error as NodeJS.ErrnoException).code || '',
-            )
-          )
-            throw error;
-          await this.copyFile(source, destination, info, task);
-        }
-      }
-      try {
-        // The destination now holds the same inode or a verified copy.
-        await unlinkVerified(source);
-      } catch (error) {
-        throw new Error(
-          `The destination is complete, but the original could not be removed: ${message(error)}`,
-        );
-      }
-      return;
-    }
-    await mkdir(destination, { mode: info.mode });
-    const reserved = await lstat(destination);
-    try {
-      await rename(source, destination);
-    } catch (error) {
-      const current = await lstat(destination).catch(() => null);
-      if (current?.dev === reserved.dev && current.ino === reserved.ino)
-        await removeEmptyDirectory(destination).catch(() => undefined);
-      throw error;
-    }
+  private transferJob(task: Task): TransferJob {
+    return {
+      check: () => this.check(task),
+      signal: task.abort.signal,
+      started: (file, bytes) => {
+        task.job.current = file;
+        task.job.bytesTotal += bytes;
+      },
+      copied: (bytes) => {
+        task.job.bytesDone += bytes;
+        this.progress(task);
+      },
+    };
   }
   private async changeCase(source: string, destination: string, task?: Task): Promise<void> {
     const temporary = path.join(path.dirname(source), `.viewer-rename-${randomUUID()}`);
@@ -742,22 +646,14 @@ export class Operations {
       task.intent = { source, destination, staging: temporary };
       await this.checkpoint();
     }
-    await this.publish(source, temporary, task);
+    await publish(source, temporary, this.access, task && this.transferJob(task));
     try {
-      await this.publish(temporary, destination, task);
+      await publish(temporary, destination, this.access, task && this.transferJob(task));
     } catch (error) {
       // Restore only when the old name is still available; preserve the intermediate otherwise.
-      await this.publish(temporary, source).catch(() => undefined);
+      await publish(temporary, source, this.access).catch(() => undefined);
       throw error;
     }
-  }
-  private async unique(destination: string): Promise<string> {
-    const ext = path.extname(destination);
-    const stem = destination.slice(0, destination.length - ext.length);
-    let suffix = 1;
-    let candidate = `${stem} copy${ext}`;
-    while (await exists(candidate)) candidate = `${stem} copy ${++suffix}${ext}`;
-    return candidate;
   }
   private async target(task: Task, source: string, destination: string): Promise<Target | null> {
     const existing = await lstat(destination).catch((error: NodeJS.ErrnoException) => {
@@ -769,7 +665,7 @@ export class Operations {
     if (source) {
       // Another spelling of the source itself must never be offered for Replace.
       if (sameItem(await lstat(source), existing)) {
-        if (task.request.kind === 'copy') return { path: await this.unique(destination) };
+        if (task.request.kind === 'copy') return { path: await keepBothName(destination) };
         throw new Error('Source and destination are the same item.');
       }
       if (await holds(existing, source)) replaceable = false;
@@ -794,7 +690,7 @@ export class Operations {
       this.check(task);
     }
     if (decision === 'skip') return null;
-    if (decision === 'keep-both') return { path: await this.unique(destination) };
+    if (decision === 'keep-both') return { path: await keepBothName(destination) };
     if (!replaceable)
       throw new Error(
         task.request.kind === 'mkdir'
@@ -802,186 +698,6 @@ export class Operations {
           : 'The existing item contains the source, so it cannot be replaced. Choose Keep both or Skip.',
       );
     return { path: destination, replaces: existing };
-  }
-  private async copy(
-    task: Task,
-    source: string,
-    target: string,
-    fingerprints: CopyFingerprint[],
-  ): Promise<void> {
-    this.check(task);
-    // Content coordination can hydrate a placeholder. Capture its fingerprint
-    // after acquisition, before copying, rather than retaining placeholder size.
-    if ((await lstat(source)).isFile()) {
-      return fileCoordination.run(
-        [
-          { path: source, mode: 'read' },
-          { path: target, mode: 'write' },
-        ],
-        async (signal) => {
-          await this.access([source, target]);
-          signal?.throwIfAborted();
-          this.check(task);
-          const info = await lstat(source);
-          if (!info.isFile())
-            throw new Error('Source changed while waiting for its file provider.');
-          fingerprints.push({ file: source, info });
-          await this.copyFile(source, target, info, task, signal);
-        },
-        task.abort.signal,
-      );
-    }
-    const info = await lstat(source);
-    if (info.isSymbolicLink()) {
-      return fileCoordination.run(
-        [
-          { path: source, mode: 'metadata' },
-          { path: target, mode: 'write' },
-        ],
-        async (signal) => {
-          signal?.throwIfAborted();
-          this.check(task);
-          const from = fileCoordination.path(source),
-            to = fileCoordination.path(target);
-          await this.access([from, to]);
-          const current = await lstat(from);
-          if (!current.isSymbolicLink())
-            throw new Error('The symbolic link changed while waiting for its file provider.');
-          fingerprints.push({ file: source, info: current });
-          await symlink(await readlink(from), to);
-          if (process.platform === 'darwin') await macFiles().copyLinkMetadata(from, to);
-          signal?.throwIfAborted();
-        },
-        task.abort.signal,
-      );
-    }
-    const children = info.isDirectory() ? (await readdir(source)).sort() : undefined;
-    fingerprints.push({ file: source, info, children });
-    if (info.isDirectory()) {
-      await mkdir(target, { mode: info.mode | 0o700 });
-      for (const name of children!)
-        await this.copy(task, path.join(source, name), path.join(target, name), fingerprints);
-      if (process.platform === 'darwin') {
-        await fileCoordination.run(
-          [
-            { path: source, mode: 'metadata' },
-            { path: target, mode: 'write' },
-          ],
-          async (signal) => {
-            signal?.throwIfAborted();
-            await this.access([fileCoordination.path(source), fileCoordination.path(target)]);
-            const input = await open(
-              fileCoordination.path(source),
-              constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
-            );
-            let output: Awaited<ReturnType<typeof open>> | undefined;
-            try {
-              const opened = await input.stat();
-              if (opened.dev !== info.dev || opened.ino !== info.ino)
-                throw new Error('Source folder changed during the copy.');
-              output = await open(
-                fileCoordination.path(target),
-                constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
-              );
-              await macFiles().copyMetadata(input.fd, output.fd);
-              signal?.throwIfAborted();
-              this.check(task);
-            } finally {
-              await input.close();
-              await output?.close();
-            }
-          },
-          task.abort.signal,
-        );
-      } else await chmod(target, info.mode);
-    } else if (info.isFile()) {
-      throw new Error('Source changed while starting the copy.');
-    } else {
-      throw new Error('Special devices and sockets cannot be transferred.');
-    }
-    if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
-  }
-  private async copyFile(
-    source: string,
-    target: string,
-    info: Stats,
-    task?: Task,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    source = fileCoordination.path(source);
-    target = fileCoordination.path(target);
-    signal?.throwIfAborted();
-    if (task) {
-      task.job.current = source;
-      task.job.bytesTotal += info.size;
-    }
-    const input = await open(
-      source,
-      constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
-    );
-    let output: Awaited<ReturnType<typeof open>> | undefined, owned: Stats | undefined;
-    try {
-      const opened = await input.stat();
-      if (
-        !opened.isFile() ||
-        opened.dev !== info.dev ||
-        opened.ino !== info.ino ||
-        opened.size !== info.size ||
-        opened.mtimeMs !== info.mtimeMs ||
-        opened.ctimeMs !== info.ctimeMs
-      )
-        throw new Error('Source changed before copying; it has been left untouched.');
-      output = await open(target, 'wx', info.mode);
-      owned = await output.stat();
-      const buffer = Buffer.allocUnsafe(256 * 1024);
-      let total = 0;
-      while (total < info.size) {
-        signal?.throwIfAborted();
-        if (task) this.check(task);
-        const { bytesRead } = await input.read(
-          buffer,
-          0,
-          Math.min(buffer.length, info.size - total),
-          null,
-        );
-        if (!bytesRead)
-          throw new Error('Source became shorter while copying; it has been left untouched.');
-        total += bytesRead;
-        let written = 0;
-        while (written < bytesRead) {
-          signal?.throwIfAborted();
-          const result = await output.write(buffer, written, bytesRead - written, null);
-          if (!result.bytesWritten) throw new Error('The destination stopped accepting data.');
-          written += result.bytesWritten;
-        }
-        if (task) {
-          task.job.bytesDone += bytesRead;
-          this.progress(task);
-        }
-      }
-      signal?.throwIfAborted();
-      if (process.platform === 'darwin') await macFiles().copyMetadata(input.fd, output.fd);
-      await output.sync();
-      const after = await lstat(source);
-      if (
-        after.dev !== info.dev ||
-        after.ino !== info.ino ||
-        after.mtimeMs !== info.mtimeMs ||
-        after.ctimeMs !== info.ctimeMs ||
-        after.size !== info.size
-      )
-        throw new Error('Source changed while copying; it has been left untouched.');
-      if (task) this.check(task);
-      if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
-    } catch (error) {
-      const current = owned && (await lstat(target).catch(() => null));
-      if (current && owned && current.dev === owned.dev && current.ino === owned.ino)
-        await unlinkVerified(target).catch(() => undefined);
-      throw error;
-    } finally {
-      await input.close();
-      await output?.close();
-    }
   }
   private async transfer(
     task: Task,
@@ -1004,7 +720,7 @@ export class Operations {
     const fingerprints: CopyFingerprint[] = [];
     try {
       await this.checkpoint();
-      await this.copy(task, source, staging, fingerprints);
+      await copyTree(this.transferJob(task), source, staging, fingerprints, this.access);
       this.check(task);
       // Do not clobber a file created while the transfer was in flight.
       if (!replaced && (await exists(destination)))
@@ -1096,7 +812,10 @@ export class Operations {
         const { job, request } = task;
         job.status = 'running';
         this.emit(task);
-        const items = ['mkdir', 'compress'].includes(request.kind) ? [''] : request.sources;
+        const single =
+          ['mkdir', 'compress'].includes(request.kind) ||
+          (request.kind === 'convert' && request.conversion === 'pdf');
+        const items = single ? [''] : request.sources;
         for (const source of items) {
           try {
             this.check(task);
@@ -1128,23 +847,25 @@ export class Operations {
             else if (move) await this.protection.check(source, 'moved or renamed');
             if (request.kind === 'trash') await this.trashItem(task, source);
             else {
-              destination = ['mkdir', 'compress'].includes(request.kind)
+              destination = single
                 ? path.join(request.destination!, validName(request.name!))
-                : request.kind === 'extract'
-                  ? path.join(
-                      request.destination!,
-                      validName(
-                        path.basename(source).replace(/\.(?:tar\.gz|tgz|zip|tar)$/i, '') ||
-                          'Extracted archive',
-                      ),
-                    )
-                  : request.kind === 'rename'
-                    ? path.join(path.dirname(source), validName(request.name!))
-                    : request.kind === 'duplicate'
-                      ? await this.unique(source)
-                      : request.kind === 'alias'
-                        ? await this.unique(source + ' alias')
-                        : path.join(request.destination!, request.name ?? path.basename(source));
+                : request.kind === 'convert'
+                  ? conversionOutput(source, request.conversion!)
+                  : request.kind === 'extract'
+                    ? path.join(
+                        request.destination!,
+                        validName(
+                          path.basename(source).replace(/\.(?:tar\.gz|tgz|zip|tar)$/i, '') ||
+                            'Extracted archive',
+                        ),
+                      )
+                    : request.kind === 'rename'
+                      ? path.join(path.dirname(source), validName(request.name!))
+                      : request.kind === 'duplicate'
+                        ? await keepBothName(source)
+                        : request.kind === 'alias'
+                          ? await keepBothName(source + ' alias')
+                          : path.join(request.destination!, request.name ?? path.basename(source));
               if (source === destination) throw new Error('Source and destination are the same.');
               await this.access([destination]);
               task.intent = { source, destination };
@@ -1274,6 +995,31 @@ export class Operations {
                   } finally {
                     await this.disposeStage(task, stage);
                   }
+                } else if (request.kind === 'convert') {
+                  const stage = await privateStage(
+                    path.dirname(destination),
+                    '.viewer-convert-',
+                    this.trash,
+                  );
+                  // The staged file keeps the output's extension, which picks its encoding.
+                  const staging = stage.file + path.extname(destination);
+                  task.intent = { source, destination, staging };
+                  try {
+                    await this.checkpoint();
+                    const inputs = source ? [source] : request.sources;
+                    await this.access([...inputs, staging]);
+                    job.current = source || destination;
+                    await this.images.convert(
+                      request.conversion!,
+                      inputs,
+                      staging,
+                      task.abort.signal,
+                    );
+                    this.check(task);
+                    await this.publishReplacing(task, staging, destination, replaced);
+                  } finally {
+                    await this.disposeStage(task, stage);
+                  }
                 } else undoable = await this.transfer(task, source, destination, move, replaced);
               }
               if (undoable && move) {
@@ -1290,9 +1036,16 @@ export class Operations {
               if (
                 !move &&
                 destination &&
-                ['copy', 'transfer', 'duplicate', 'alias', 'mkdir', 'compress', 'extract'].includes(
-                  request.kind,
-                )
+                [
+                  'copy',
+                  'transfer',
+                  'duplicate',
+                  'alias',
+                  'mkdir',
+                  'compress',
+                  'extract',
+                  'convert',
+                ].includes(request.kind)
               ) {
                 const proof = await outputProof(destination);
                 if (proof) {

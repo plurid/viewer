@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { AgentClients } from '../src/desktop/agent-clients';
-import type { AgentClientInput } from '../src/domain/agent-clients';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { sharedClientID, storedClientID, type AgentClientInput } from '../src/domain/agent-clients';
 const input: AgentClientInput = {
   name: 'Research',
   roots: ['/tmp'],
@@ -15,8 +15,13 @@ describe('private agent client authority', () => {
     const root = await temporaryRoot('viewer-client-');
     try {
       const clients = new AgentClients(root, async () => {});
-      await clients.audit('review:command', 'rejected', 'Move to Trash · 1 items: /a', 'legacy');
-      await clients.audit('review:command', 'cancelled', 'Rename', 'legacy');
+      await clients.audit(
+        'review:command',
+        'rejected',
+        'Move to Trash · 1 items: /a',
+        sharedClientID,
+      );
+      await clients.audit('review:command', 'cancelled', 'Rename', sharedClientID);
       await clients.close();
       const reopened = new AgentClients(root, async () => {});
       expect((await reopened.history()).map((entry) => entry.status)).toEqual([
@@ -100,5 +105,11 @@ describe('private agent client authority', () => {
       await clients.close();
       await trashTemporary(root);
     }
+  });
+});
+describe('shared connection', () => {
+  it('reads grants and records stored under the earlier client ID as the shared client', () => {
+    expect(storedClientID.parse('legacy')).toBe(sharedClientID);
+    expect(storedClientID.parse('a-named-client')).toBe('a-named-client');
   });
 });

@@ -105,13 +105,30 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
           search: () => {},
           refresh: () => window.dispatchEvent(new Event('viewer:refresh')),
           selectAll: () => {
-            selecting.all(entries);
+            if (!pane || (!offset && !search.result?.more)) {
+              selecting.all(entries);
+              return;
+            }
+            // Every indexed match across pages, each verified unchanged since indexing.
+            void window.viewer
+              .querySnapshot({
+                query: pane.query,
+                root: pane.allLocations ? undefined : pane.path,
+                content: pane.content ?? false,
+                recursive: pane.recursive ?? true,
+                showHidden: true,
+              })
+              .then((snapshot) => selecting.all(snapshot.entries))
+              .catch((error) => {
+                selecting.all(entries);
+                report(error);
+              });
           },
           invertSelection: () => selecting.invert(entries),
         }),
       valid: (context) => context.workspaceID === activeWorkspace().id,
     },
-    [selected, recipes, opening],
+    [selected, recipes, opening, offset, search.result?.more],
   );
   useContextPublish(id, active === id, selected);
   const handleKey = useFileKeyboard(id, (event) =>
@@ -142,6 +159,10 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       setActivePane(id);
       surface.current?.focus({ preventScroll: true });
       selecting.click(entry, event, entries);
+    },
+    region: (found, base) => {
+      setActivePane(id);
+      selecting.region(found, base);
     },
     open: (entry) => openEntry(entry),
     context: (entry, event) => {

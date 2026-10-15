@@ -75,6 +75,7 @@ const api: ViewerAPI = {
   reveal: (file) => invoke('reveal', file),
   openExternal: (file) => invoke('openExternal', file),
   connectServer: (address) => invoke('connectServer', address),
+  taggedFiles: (tag, roots) => invoke('taggedFiles', tag, roots),
   nativeFilePanel: (kind, files) => invoke('nativeFilePanel', kind, files),
   applications: (paths) => invoke('applications', paths),
   chooseApplication: () => invoke('chooseApplication'),

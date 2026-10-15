@@ -210,12 +210,17 @@ export type OperationKind =
   | 'mkdir'
   | 'trash'
   | 'compress'
-  | 'extract';
+  | 'extract'
+  | 'convert';
+/** Image quick actions. Each creates a new file; sources are never changed. */
+export type ImageConversion = 'rotate-left' | 'rotate-right' | 'jpeg' | 'png' | 'pdf';
 export interface OperationRequest {
   kind: OperationKind;
   sources: string[];
   destination?: string;
   name?: string;
+  /** Required for `convert`. */
+  conversion?: ImageConversion;
   /** Source versions captured in a reviewed plan; checked again when queued work starts. */
   expectedSources?: { path: string; version: SourceVersion }[];
 }
@@ -401,6 +406,8 @@ export interface ViewerAPI {
   openExternal(path: string): Promise<void>;
   /** Asks macOS to mount a network share; it shows its own sign-in. */
   connectServer(address: string): Promise<void>;
+  /** Files under `roots` carrying a Finder tag, found through Spotlight. */
+  taggedFiles(tag: string, roots: string[]): Promise<FileEntry[]>;
   nativeFilePanel(kind: 'preview' | 'share', paths: string[]): Promise<void>;
   applications(paths: string[]): Promise<ApplicationChoices>;
   chooseApplication(): Promise<NativeApplication | null>;

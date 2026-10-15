@@ -19,13 +19,13 @@ describe('DXF geometry and measurements', () => {
     expect(drawing.entities[4].area).toBeCloseTo(Math.PI * 100);
     expect(drawing.warnings).toEqual([]);
   });
-  it('decodes modern UTF-8 with inherited codepages and legacy Windows text', () => {
+  it('decodes modern UTF-8 with inherited codepages and Windows codepage text', () => {
     const source =
       panelDrawing.replace('0\nENDSEC', '9\n$DWGCODEPAGE\n3\nANSI_1252\n0\nENDSEC') + 'é 中文';
     expect(decodeDXF(new TextEncoder().encode(source))).toBe(source);
-    const legacy = source.replace('AC1027', 'AC1015').split('é')[0];
-    const bytes = new Uint8Array([...new TextEncoder().encode(legacy), 0xe9]);
-    expect(decodeDXF(bytes)).toBe(legacy + 'é');
+    const r2000 = source.replace('AC1027', 'AC1015').split('é')[0];
+    const bytes = new Uint8Array([...new TextEncoder().encode(r2000), 0xe9]);
+    expect(decodeDXF(bytes)).toBe(r2000 + 'é');
   });
   it('uses radian ellipse parameters and preserves exact rotated endpoints', () => {
     const e = parseDrawing(

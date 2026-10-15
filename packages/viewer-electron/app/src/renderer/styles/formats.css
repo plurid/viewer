@@ -1,0 +1,573 @@
+/* Drawings, PDF, text, code, JSON, Markdown, tables, Office, archives and media. */
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.model-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 10px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+.preview-host .model-info {
+  min-height: 34px;
+  padding: 6px 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.model-dimensions {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.model-measurement {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dxf-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.dxf-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.dxf-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--field);
+}
+.dxf-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.dxf-details {
+  width: 208px;
+  max-width: 42%;
+  flex-shrink: 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 11px;
+}
+.dxf-details header,
+.dxf-section-heading,
+.dxf-layer,
+.dxf-measurement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.dxf-details header {
+  margin-bottom: 12px;
+}
+.dxf-details > label:not(.dxf-layer) {
+  display: grid;
+  gap: 6px;
+}
+.dxf-details select {
+  min-width: 0;
+  width: 100%;
+  font-size: 11px;
+}
+.dxf-details > strong,
+.dxf-section-heading {
+  display: flex;
+  margin-top: 16px;
+  margin-bottom: 6px;
+}
+.dxf-layer {
+  min-height: 28px;
+}
+.dxf-layer > span:first-of-type {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dxf-measurement {
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.dxf-measurement > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dxf-readout {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  padding: 6px 9px;
+  background: var(--surface);
+  border-radius: 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.dxf-readout > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.preview-host .dxf-info {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  height: 34px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+}
+.dxf-guidance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.dxf-guidance > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dxf-units {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.dxf-units::before {
+  content: '·';
+}
+.dxf-info button {
+  padding: 2px 5px;
+  font-size: inherit;
+}
+.dxf-draft-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.dxf-info .icon-button {
+  width: 20px;
+  height: 20px;
+  padding: 2px;
+}
+.inline-warning {
+  padding: 8px 13px;
+  margin: 0;
+  color: var(--muted);
+  background: var(--field);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.pdf-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  background: var(--field);
+}
+.pdf-sheet {
+  width: max-content;
+  margin-inline: auto;
+  position: relative;
+  background: white;
+  box-shadow: 0 2px 12px #0003;
+}
+.pdf-sheet canvas {
+  display: block;
+}
+.page-number {
+  width: 54px;
+}
+.pdf-search-results {
+  padding: 6px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  max-height: 64px;
+  overflow: auto;
+}
+.pdf-search-results button {
+  font-size: 11px;
+  margin-left: 4px;
+}
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  transform-origin: 0 0;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+}
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+}
+.textLayer ::selection {
+  background: #3399ff66;
+  color: transparent;
+}
+.code-scroll,
+.json-scroll,
+.markdown {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.code-scroll {
+  font:
+    12px/22px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  padding: 12px 0;
+}
+.code-line {
+  display: flex;
+  white-space: pre;
+  min-width: 100%;
+}
+.line-number {
+  width: 58px;
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 16px;
+  color: var(--subtle);
+  user-select: none;
+}
+.code-line code {
+  padding-right: 24px;
+}
+.token.comment,
+.token.prolog {
+  color: var(--subtle);
+}
+.token.string,
+.token.attr-value {
+  color: #b7c79e;
+}
+.token.keyword,
+.token.boolean {
+  color: #c9b4d6;
+}
+.token.number,
+.token.constant {
+  color: #dfb891;
+}
+.token.function,
+.token.tag {
+  color: var(--accent);
+}
+:root[data-look='light'] .token.string,
+:root[data-look='light'] .token.attr-value,
+:root[data-look='light'] .json-string {
+  color: #386731;
+}
+:root[data-look='light'] .token.keyword,
+:root[data-look='light'] .token.boolean {
+  color: #755183;
+}
+:root[data-look='light'] .token.number,
+:root[data-look='light'] .token.constant,
+:root[data-look='light'] .json-number,
+:root[data-look='light'] .json-boolean {
+  color: #805d32;
+}
+.json-scroll {
+  padding: 18px;
+  font:
+    12px/24px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.json-node {
+  min-width: max-content;
+}
+.json-value {
+  display: flex;
+  align-items: center;
+}
+.json-value button {
+  padding: 0 4px;
+  width: 22px;
+  font-size: 12px;
+}
+.json-key {
+  color: var(--accent);
+}
+.json-children {
+  margin-left: 22px;
+}
+.json-string {
+  color: #b7c79e;
+}
+.json-number,
+.json-boolean {
+  color: #dfb891;
+}
+.markdown {
+  padding: 24px 32px;
+  line-height: 1.7;
+  user-select: text;
+}
+.markdown h1 {
+  font-size: 27px;
+  letter-spacing: -0.6px;
+  line-height: 1.25;
+  margin-top: 0;
+}
+.markdown h2 {
+  font-size: 21px;
+  margin-top: 28px;
+}
+.markdown h3 {
+  font-size: 17px;
+  margin-top: 24px;
+}
+.markdown p {
+  margin: 12px 0;
+}
+.markdown-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+button.markdown-link {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.markdown pre {
+  background: var(--field);
+  padding: 14px;
+  overflow: auto;
+  border-radius: 5px;
+}
+.markdown code {
+  font:
+    12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.markdown blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 16px;
+  color: var(--muted);
+  margin-left: 0;
+}
+.markdown table {
+  border-collapse: collapse;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid var(--line);
+  padding: 7px 12px;
+}
+.data-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.data-row {
+  display: grid;
+  font:
+    11px/32px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.data-row > div {
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.data-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--raised);
+  font-weight: 600;
+}
+.office-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.workbook-sheet-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.workbook-sheet-picker select {
+  min-width: 120px;
+  max-width: 280px;
+}
+.office-coverage {
+  font-size: 12px;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+  padding: 4px 12px;
+  flex: none;
+}
+.office-coverage p {
+  line-height: 1.5;
+}
+.workbook-cell-detail {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+  min-height: 34px;
+}
+.workbook-cell-detail strong {
+  flex: none;
+}
+.workbook-cell-detail span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  max-height: 80px;
+  overflow: auto;
+}
+.data-row > .workbook-row-number {
+  position: sticky;
+  left: 0;
+  background: var(--raised);
+  color: var(--muted);
+  text-align: right;
+}
+.data-row > div:has(.workbook-cell) {
+  padding: 0;
+}
+.workbook-cell {
+  display: block;
+  width: 100%;
+  height: 32px;
+  min-height: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  background: transparent;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.office-document-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.office-document {
+  max-width: 74ch;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+  line-height: 1.7;
+}
+.office-document p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.office-document h1,
+.office-document h2,
+.office-document h3 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+.office-table-scroll {
+  overflow: auto;
+}
+.office-document table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.office-document td {
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.office-document .evidence-passage {
+  background: var(--selection);
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+}
+.archive-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.archive-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border-radius: 0;
+  padding: 0 15px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
+  font-size: 12px;
+}
+.archive-row > span:first-of-type {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.archive-row > .muted {
+  font-size: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -9,7 +9,7 @@ export type ChangePlanStatus =
   | 'failed'
   | 'recovery';
 export interface ChangePlan<Row> {
-  /** Optional only for compatibility with pre-roadmap callers; new plans emit v1. */
+  /** Plans without a version are read as version 1, which every new plan states. */
   version?: 1;
   id: string;
   revision: number;

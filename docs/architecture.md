@@ -1,6 +1,6 @@
 # Architecture
 
-The active application is `packages/viewer-electron/app`. `old_app` is an archival reference and is excluded from the workspace and builds.
+The active application is `packages/viewer-electron/app`. The 2021 predecessor (`old_app`) and what it offered are recorded in [old-app.md](old-app.md); its files sit in `archive/` until removed.
 
 `src/domain` owns serializable file, operation, preview, and workspace contracts. It has no Electron or React dependencies. `src/desktop` implements filesystem access, resource capabilities, shared watchers, cancellable search, transfer jobs, and atomic persistence. `src/preload.ts` exposes a fixed typed bridge; the sandboxed renderer never imports Node or Electron. Each IPC method validates its arguments, origin and sending main frame. Arbitrary channels, remote navigation and renderer network access are unavailable.
 
@@ -41,6 +41,16 @@ File commands become serial jobs in the desktop process. Selected ancestors prun
 ## Plurid integration
 
 The implementation was informed by the sibling `technologies/tools/plurid` source and application patterns in `applications/containers/plurid-com/frontends/web/products/cores/dechat`. Viewer uses the direct named `PluridApplication`, typed public handles and the spawn-plane topic. Plurid React `0.0.0-40` and its data/engine graph are pinned in the root lockfile. The sibling source is newer than that published release; its `tree.spawn` return type differs, so linked creation uses `SPACE_SPAWN_PLANE` with parent identity and host-owned framing.
+
+The plurid source now has three handle APIs Viewer will adopt once a release that includes them is installed:
+
+| Viewer today | After upgrading plurid |
+| --- | --- |
+| `renderer/state/persistence.ts` `flushState` dispatches a synthetic `pagehide` to force Plurid's save, which also runs every other `pagehide` listener | `handle.persist.flush()` |
+| `workspace/controller.ts` dispatches `pluridStateModules.space.actions.setTree` on the store | `handle.tree.set(tree)` |
+| `workspace/controller.ts` brackets changes with `historyBegin`/`historyEnd` dispatches | `handle.history.transaction(work)`, which also closes the step when the work throws |
+
+Each change is local to those two files, because engine handles stay inside the workspace controller.
 
 Registered routes and the `view` array retain stable identities. `WorkspaceController.newRootFolder` synchronously reserves a fresh host folder/root, copies the originating folder’s view preferences and initializes independent history. The declarative root list merges additions with the live engine tree; no second imperative view mutation races React or duplicates a root. Captured workspace/pane ownership rejects stale invocations. Window plus, Command-N, Commands, native menu, plane actions and shortcut actions share this path. Live configuration sizes automatic planes to the available surface while manual resizing remains an engine concern. A host preference subscription reconciles restored engine configuration with current UI preferences, including deferred measured-tree hydration. Workspace navigation disables the engine's shared URL docking state, so one workspace cannot restore another's plane. The shell and engine receive one dark/light look. Only the plane title is a drag handle: its capture handler selects an unselected plane before the engine's gesture listener, so the first press moves that plane; an already selected plane preserves multiselection. Chrome buttons and content retain their own gestures. Model canvases isolate gesture initiation from engine controls while allowing move/up events to reach Three's document listeners. Plane backs are always visible; title dragging, headers and resizing default on. Native minimap navigation uses single-plane framing even for linked children, and its click capture binds the host active pane without issuing a competing camera tween. Restored engine configuration cannot override these two invariants. The native toolbar, minimap and viewcube default on with independent Settings switches; transform origin defaults off. Transform commands read and publish the engine's mode, shared with the native toolbar and Escape. Offscreen previews pause or dispose through engine culling, with models rendering only when dirty or animated and media pausing when inactive.
 

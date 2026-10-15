@@ -31,8 +31,19 @@ const icons: Record<string, IconName> = {
   Workspace: 'command',
   Project: 'folder',
   Workspaces: 'grid',
+  'Quick actions': 'image',
 };
-const order = ['Files', 'View', 'Folder', 'Navigation', 'Terminal', 'Actions', 'Plane', 'App'];
+const order = [
+  'Files',
+  'View',
+  'Folder',
+  'Navigation',
+  'Terminal',
+  'Actions',
+  'Quick actions',
+  'Plane',
+  'App',
+];
 const leaf = (command: ResolvedCommand): MenuEntry => ({
   kind: 'command',
   id: command.id,

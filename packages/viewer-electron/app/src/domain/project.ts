@@ -190,9 +190,10 @@ export const projectDefinitionSchema = z
           .object({
             id: z.uuid(),
             name: z.string().min(1).max(100),
-            kind: z.enum(['explicit', 'query']),
+            kind: z.enum(['explicit', 'query', 'tag']),
             sources: z.array(projectPathSchema).min(1).max(10000),
             query: z.string().max(300).optional(),
+            tag: z.string().trim().min(1).max(255).optional(),
             recursive: z.boolean().optional(),
             content: z.boolean().optional(),
           })

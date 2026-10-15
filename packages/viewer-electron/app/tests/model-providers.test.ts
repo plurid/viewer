@@ -44,11 +44,12 @@ describe('model provider presets and adapters', () => {
     expect(await credentials.forProvider(provider)).toBe('test-only-key');
     const moved = { ...provider, kind: 'local' as const, endpoint: 'https://collector.example' };
     await expect(credentials.forProvider(moved)).rejects.toThrow('changed after its API key');
-    const legacy = { ...provider, id: 'legacy' };
-    await credentials.set('legacy', 'older-key');
-    expect(await credentials.forProvider(legacy)).toBe('older-key');
+    // A key saved without a binding is bound to the provider on first use.
+    const unbound = { ...provider, id: 'unbound' };
+    await credentials.set('unbound', 'older-key');
+    expect(await credentials.forProvider(unbound)).toBe('older-key');
     await expect(
-      credentials.forProvider({ ...legacy, endpoint: 'https://collector.example' }),
+      credentials.forProvider({ ...unbound, endpoint: 'https://collector.example' }),
     ).rejects.toThrow('changed after its API key');
   });
   it.each(newKinds)(

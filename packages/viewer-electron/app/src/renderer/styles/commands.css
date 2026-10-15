@@ -1,0 +1,170 @@
+/* Context menus and the command palette. */
+.context-menu {
+  position: fixed;
+  left: var(--menu-left);
+  top: var(--menu-top);
+  z-index: 1000;
+  width: 304px;
+  max-width: calc(100vw - 16px);
+  max-height: min(540px, calc(100vh - 16px));
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.context-menu-content {
+  position: relative;
+  z-index: 1000;
+}
+.context-menu.command-search {
+  width: 304px;
+}
+.context-submenu {
+  position: fixed;
+  z-index: 1001;
+  width: 304px;
+  max-width: calc(100vw - 16px);
+  max-height: min(520px, calc(100vh - 16px));
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.command-search {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+}
+.command-search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.command-search-field input {
+  padding: 4px 2px;
+  width: 100%;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+}
+.command-search-field svg {
+  flex-shrink: 0;
+}
+.command-results {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 5px;
+  overscroll-behavior: contain;
+}
+.command-result {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  text-align: left;
+  min-height: 34px;
+}
+.command-result[aria-selected='true'],
+.command-result[data-active='true'] {
+  background: var(--selection);
+  --muted: var(--selection-muted);
+}
+.command-result svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.command-result-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+.command-result-text > span,
+.command-result-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-result-text small {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.command-result kbd {
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.command-group {
+  padding: 7px 9px 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.command-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 5px 9px;
+}
+.command-empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 14px 9px;
+}
+.command-palette {
+  --palette-top: clamp(80px, 22vh, 240px);
+  position: fixed;
+  inset: var(--palette-top) 0 auto;
+  margin: 0 auto;
+  width: 560px;
+  max-height: min(570px, calc(100vh - var(--palette-top) - 20px));
+}
+.command-palette[open] {
+  display: flex;
+  flex-direction: column;
+}
+.command-palette > header {
+  display: none;
+}
+.command-palette .command-search-field {
+  padding: 14px 16px;
+}
+.command-palette .command-results {
+  max-height: min(430px, calc(100vh - 180px));
+}
+.palette-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  padding: 6px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.palette-context > span {
+  flex: 1 0 100%;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.palette-context > button {
+  flex-shrink: 0;
+  font-size: 11px;
+}

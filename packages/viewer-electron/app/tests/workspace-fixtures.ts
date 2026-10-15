@@ -4,8 +4,8 @@ import { normalizePreferences } from '../src/domain/preferences';
 
 /** The reported topology and camera, with generated IDs and synthetic image paths only. */
 export function repeatedPreviewFixture(files: string): SavedState {
-  const folderID = 'legacy-folder';
-  const previews = ['legacy-preview-1', 'legacy-preview-2', 'legacy-preview-3'];
+  const folderID = 'reused-folder';
+  const previews = ['reused-preview-1', 'reused-preview-2', 'reused-preview-3'];
   const route = (id: string) => `plurid://app/${id === folderID ? 'folders' : 'previews'}/${id}`;
   const planeID = (id: string) => `${route(id)}@0`;
   const division = () => ({ value: '', parameters: {}, query: {} });
@@ -89,10 +89,10 @@ export function repeatedPreviewFixture(files: string): SavedState {
   ui.sidebar.visible = false;
   return {
     version: 1,
-    activeWorkspace: 'legacy-workspace',
+    activeWorkspace: 'reused-workspace',
     workspaces: [
       {
-        id: 'legacy-workspace',
+        id: 'reused-workspace',
         name: 'Restored workspace',
         panes: [
           {
@@ -114,7 +114,7 @@ export function repeatedPreviewFixture(files: string): SavedState {
         ],
         roots: [folderID],
         activePane: previews[2],
-        arrangement: { 'pluridState-viewer-legacy-workspace': JSON.stringify(arrangement) },
+        arrangement: { 'pluridState-viewer-reused-workspace': JSON.stringify(arrangement) },
       },
     ],
     favorites: [],

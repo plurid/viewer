@@ -1,0 +1,540 @@
+/* Folder views: lists, grids, columns, gallery, search and empty states. */
+.folder-plane {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface);
+}
+.folder-explorer {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  color: var(--ink);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+  position: relative;
+  min-height: 0;
+  container-type: inline-size;
+}
+.folder-explorer.drop-target {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+.breadcrumb-row {
+  padding: 7px 13px;
+  min-height: 34px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow-x: auto;
+  color: var(--muted);
+  scrollbar-width: none;
+}
+.breadcrumbs span {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.breadcrumbs button {
+  padding: 2px 5px;
+  font-size: 12px;
+}
+.breadcrumbs span:last-child button {
+  color: var(--ink);
+  font-weight: 500;
+}
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.search-row input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 4px 0;
+  color: var(--ink);
+}
+.search-row button {
+  font-size: 11px;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+.file-head,
+.file-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) 160px 96px 95px;
+  align-items: center;
+  padding: 0 18px;
+}
+.file-head {
+  height: 30px;
+  color: var(--muted);
+  overflow: hidden;
+  scrollbar-gutter: stable;
+  font-size: 11px;
+  background: var(--field);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.file-head button {
+  text-align: left;
+  padding: 3px 0;
+  border: 0;
+  font-size: 11px;
+}
+.file-head > :first-child {
+  padding-left: 27px;
+}
+.file-head > :last-child {
+  text-align: right;
+}
+.folder-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.file-scroll {
+  overflow: auto;
+  scrollbar-gutter: stable;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+.file-row {
+  height: 36px;
+  user-select: none;
+  cursor: default;
+  font-size: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
+}
+.file-row:hover {
+  background: var(--raised);
+}
+.file-row.is-drop-target,
+.file-tile.is-drop-target,
+.gallery-item.is-drop-target {
+  background: var(--selection);
+}
+.file-column.is-drop-target .column-title {
+  background: var(--selection);
+  color: var(--ink);
+}
+.file-row.is-selected,
+.file-tile.is-selected,
+.gallery-item.is-selected {
+  background: var(--selection);
+  --muted: var(--selection-muted);
+}
+.file-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+}
+.file-name > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-name .filename {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.linked-plane-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  color: var(--accent);
+}
+.file-linked-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.file-linked-label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gallery-item-container > .linked-plane-marker {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--surface);
+}
+.file-table {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow-x: auto;
+}
+.file-table-content {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: calc(var(--file-minimum) + var(--file-gutter, 15px));
+}
+.file-table .file-head,
+.file-table .file-row {
+  grid-template-columns: var(--file-columns);
+}
+.file-table .file-head > .file-heading {
+  position: relative;
+  padding: 0;
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  text-align: left;
+}
+.file-heading .column-label {
+  width: calc(100% - 12px);
+  margin-right: 12px;
+  padding: 3px 8px 3px 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-heading[data-column='name'] .column-label {
+  padding-left: 27px;
+}
+.file-heading[data-column='size'] .column-label {
+  text-align: right;
+  padding-right: 0;
+  width: 100%;
+  margin-right: 0;
+}
+.file-heading .column-resizer {
+  position: absolute;
+  z-index: 1;
+  width: 8px;
+  right: -4px;
+  top: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+.column-resizer:hover,
+.column-resizer:focus-visible {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.file-table .file-row > [data-column] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+.file-table .file-row > [data-column='size'] {
+  text-align: right;
+  padding-right: 0;
+}
+.file-table[data-wrap-names='true'] .file-row {
+  height: auto;
+  min-height: 36px;
+  padding-block: 8px;
+}
+[data-density='compact'] .file-table[data-wrap-names='true'] .file-row {
+  min-height: 30px;
+  padding-block: 5px;
+}
+.file-table[data-wrap-names='true'] .filename {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.file-icon {
+  display: inline-flex;
+  position: relative;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.family-folder,
+.family-model {
+  color: var(--accent);
+}
+.family-image {
+  color: #b7ba93;
+}
+.family-code,
+.family-data {
+  color: #b4aecf;
+}
+:root[data-look='light'] .family-image {
+  color: #686d32;
+}
+:root[data-look='light'] .family-code,
+:root[data-look='light'] .family-data {
+  color: #6c5d9c;
+}
+.symlink-mark {
+  position: absolute;
+  right: -4px;
+  bottom: -5px;
+  color: var(--ink);
+}
+.file-date,
+.file-kind,
+.file-size {
+  color: var(--muted);
+  font-size: 11px;
+}
+.file-size {
+  text-align: right;
+}
+.folder-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: 31px;
+  padding: 0 15px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.folder-error {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--danger);
+  padding: 9px 15px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.folder-error span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.grid-scroll {
+  padding: 12px 12px 0;
+}
+.grid-row {
+  display: grid;
+  gap: 7px;
+}
+.file-tile {
+  height: 133px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px;
+  gap: 3px;
+  user-select: none;
+  min-width: 0;
+}
+.file-tile:hover {
+  background: var(--raised);
+}
+.tile-preview {
+  height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.tile-preview img {
+  max-width: 100%;
+  max-height: 78px;
+  object-fit: contain;
+  border-radius: 3px;
+}
+.file-tile > span {
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: 12px;
+}
+.file-tile small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.columns-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+}
+.column-preview {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 360px;
+  min-width: 320px;
+  min-height: 0;
+  height: 100%;
+  border-inline-end: 1px solid var(--line);
+}
+.column-preview .preview-info {
+  flex-wrap: wrap;
+}
+.column-preview .preview-file-info {
+  flex-wrap: wrap;
+}
+.file-column {
+  min-width: 250px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  height: 100%;
+  flex-shrink: 0;
+}
+.column-title {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 8px 14px;
+  background: var(--field);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-row {
+  display: flex;
+  gap: 10px;
+}
+.compact-row .file-name {
+  flex: 1;
+}
+.gallery-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.gallery-preview {
+  flex: 1;
+  min-height: 0;
+}
+.gallery-strip {
+  height: 115px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 6px;
+  padding: 7px 10px;
+  overflow-x: auto;
+}
+.gallery-strip > div {
+  flex-shrink: 0;
+}
+.gallery-item {
+  width: 100px;
+  flex-shrink: 0;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.gallery-item img {
+  max-width: 88px;
+  max-height: 58px;
+  object-fit: contain;
+}
+.gallery-item > .file-icon {
+  height: 58px;
+  align-items: center;
+}
+.gallery-item > span:last-child {
+  width: 90px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+  height: 100%;
+  padding: 30px;
+  text-align: center;
+}
+.empty-state > svg {
+  color: var(--subtle);
+  margin-bottom: 4px;
+}
+.empty-state strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.empty-state p {
+  color: var(--muted);
+  max-width: 420px;
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.loading {
+  height: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Marquee selection over blank file space; it never receives pointer input. */
+.file-marquee {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  pointer-events: none;
+}

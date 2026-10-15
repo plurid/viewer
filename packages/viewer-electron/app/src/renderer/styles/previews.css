@@ -1,0 +1,209 @@
+/* Preview host, images, audio, video and 3D models. */
+.preview-plane,
+.preview-host {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+.preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.preview-info {
+  height: 31px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.preview-file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.preview-filename {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preview-file-details {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.preview-toolbar {
+  --preview-control-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  min-height: 42px;
+  flex-shrink: 0;
+}
+.preview-toolbar input {
+  max-width: 180px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.preview-toolbar button,
+.preview-toolbar select {
+  height: var(--preview-control-height);
+  min-height: var(--preview-control-height);
+  padding-block: 0;
+  font-size: 12px;
+}
+.preview-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-toolbar input:not([type='checkbox']):not([type='range']) {
+  height: var(--preview-control-height);
+}
+.image-viewer,
+.model-viewer,
+.pdf-viewer,
+.text-viewer,
+.archive-viewer,
+.archive-child,
+.data-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.image-stage {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  background: var(--field);
+  cursor: grab;
+  touch-action: none;
+}
+.image-stage:active {
+  cursor: grabbing;
+}
+.image-stage img {
+  max-width: calc(100% - 40px);
+  max-height: calc(100% - 40px);
+  object-fit: contain;
+  user-select: none;
+}
+.audio-viewer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 30px;
+}
+.audio-viewer > svg {
+  color: var(--accent);
+}
+.audio-viewer h2 {
+  font-size: 18px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+  text-align: center;
+  margin: 0;
+}
+.audio-viewer audio {
+  width: min(440px, 100%);
+}
+.video-viewer {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #17191e;
+}
+.video-viewer video {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+}
+.model-stage {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+}
+.model-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.model-shading-panel {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 12px;
+  width: 270px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: var(--shadow);
+  scrollbar-gutter: stable;
+}
+.model-shading-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.model-shading-fields {
+  display: grid;
+  gap: 12px;
+}
+.model-shading-fields label {
+  display: grid;
+  gap: 6px;
+}
+.model-shading-fields select {
+  width: 100%;
+}
+.model-brightness > span {
+  display: flex;
+  justify-content: space-between;
+}
+.model-brightness output {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.model-shading-fields input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.model-shading-fields .model-shading-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.model-shading-fields p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}

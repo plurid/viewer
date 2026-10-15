@@ -214,10 +214,10 @@ describe('reviewed content checkpoints', () => {
   it('restores older file-hash manifests while rejecting unrecorded files in their trees', async () => {
     const folder = root + '/Source';
     await mkdir(folder);
-    await writeFile(folder + '/Original.txt', 'legacy recovery contents');
+    await writeFile(folder + '/Original.txt', 'version 1 recovery contents');
     const directory = root + '/Private';
     const service = new Checkpoints(directory, access, () => 1024 ** 2, coordination);
-    const record = await service.create('Legacy contents', [folder]);
+    const record = await service.create('Version 1 contents', [folder]);
     const manifestPath = path.join(directory, record.id, 'manifest.json');
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
     await writeFile(

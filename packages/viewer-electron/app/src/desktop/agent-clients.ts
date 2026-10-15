@@ -9,6 +9,8 @@ import {
   type AgentCapability,
   type AgentClient,
   type AgentClientInput,
+  sharedClientID,
+  storedClientID,
 } from '../domain/agent-clients';
 const storedClient = agentClientInputSchema
   .extend({
@@ -50,7 +52,7 @@ export class AgentClients {
             .object({
               id: z.uuid(),
               at: z.number(),
-              clientID: z.string().max(200),
+              clientID: storedClientID,
               tool: z.string().max(200),
               status: z.enum(['completed', 'failed', 'rejected', 'cancelled']),
               detail: z.string().max(1000),
@@ -78,11 +80,11 @@ export class AgentClients {
     return this.records.map(publicClient);
   }
   actor(): string {
-    return this.context.getStore() ?? 'legacy';
+    return this.context.getStore() ?? sharedClientID;
   }
   async get(id = this.actor()): Promise<AgentClient | undefined> {
     await this.load();
-    if (id === 'legacy') return;
+    if (id === sharedClientID) return;
     const client = this.records.find((client) => client.id === id && !client.revoked);
     if (!client) throw new Error('This agent client is revoked or unavailable.');
     return publicClient(client);

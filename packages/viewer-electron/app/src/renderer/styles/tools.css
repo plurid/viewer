@@ -1,0 +1,754 @@
+/* Terminals, executions, agents, projects, inspection, checkpoints, comparison, collections, duplicates, workflows and relationships. */
+.terminal-plane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  padding: 8px;
+}
+.terminal-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.terminal-emulator {
+  height: 100%;
+  width: 100%;
+}
+.terminal-search-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.terminal-search-control input {
+  width: min(340px, 70%);
+}
+.terminal-plane .xterm {
+  height: 100%;
+}
+
+.execution-panel {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  max-width: min(560px, calc(100% - 32px));
+  max-height: 55%;
+  overflow: auto;
+  z-index: 40;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.execution-panel > div,
+.execution-panel section > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.execution-panel pre {
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.5 Menlo,
+    monospace;
+  user-select: text;
+}
+.execution-panel section {
+  padding-top: 12px;
+}
+
+.settings-page {
+  scrollbar-gutter: stable;
+}
+.configuration-path {
+  user-select: text;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.settings-folder-override,
+.settings-grant {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px auto;
+  align-items: center;
+  gap: 12px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.settings-grant {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.settings-folder-override > span,
+.settings-grant > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.settings-row > div {
+  min-width: 0;
+  flex: 0 1 65%;
+  width: 65%;
+}
+.settings-row > div textarea {
+  width: 100%;
+}
+
+.agent-review-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.agent-review-dialog > header {
+  flex-shrink: 0;
+}
+.agent-review-dialog > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.agent-review-body {
+  min-height: 0;
+  padding: 18px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.agent-review-dialog form > footer {
+  flex-shrink: 0;
+  padding: 18px;
+}
+.agent-proposal-detail {
+  max-height: 45vh;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.5 Menlo,
+    monospace;
+  padding: 16px;
+  background: var(--bg);
+  user-select: text;
+}
+.agent-proposal-files {
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+.file-row {
+  position: relative;
+}
+.folder-disclosure {
+  position: absolute;
+  top: 8px;
+}
+.file-group-label {
+  height: 26px;
+  line-height: 26px;
+  padding-inline: 16px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg);
+}
+
+.command-selection-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.command-selection-range input {
+  min-width: 0;
+  width: 90px;
+}
+
+.project-controls {
+  display: grid;
+  gap: 12px;
+}
+.project-control-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.project-control-row > div {
+  min-width: 0;
+}
+.project-control-row p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.project-control-row button {
+  flex: none;
+}
+
+.search-evidence {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+.search-evidence > p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.search-evidence > button {
+  flex: none;
+}
+.evidence-line {
+  background: var(--selection);
+}
+
+.inspection-details {
+  display: grid;
+  gap: 12px;
+}
+.inspection-path {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.inspection-details label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.inspection-facts {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+.inspection-facts > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.inspection-facts dt {
+  color: var(--muted);
+}
+.inspection-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.inspection-passage {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px;
+}
+.inspection-passage > span {
+  color: var(--muted);
+}
+.plane-notes {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+}
+
+.dialog-body {
+  padding: 18px;
+  max-height: min(580px, calc(100vh - 180px));
+  overflow: auto;
+}
+
+.plane-notes {
+  font: inherit;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px;
+  caret-color: var(--accent);
+}
+.project-control-row > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.project-control-row strong,
+.inspection-passage > strong,
+.inspection-passage > span {
+  overflow-wrap: anywhere;
+}
+.inspection-passage {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.checkpoint-choice {
+  margin-right: auto;
+  display: grid;
+  gap: 4px;
+  max-width: 440px;
+  min-width: 0;
+  font-size: 12px;
+}
+.checkpoint-choice > span {
+  overflow-wrap: anywhere;
+}
+
+.checkpoint-record {
+  flex-wrap: wrap;
+}
+.checkpoint-record > div {
+  flex: 1 1 100%;
+}
+.agent-client-row {
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.agent-client-row > span {
+  flex: 1 1 260px;
+  overflow-wrap: anywhere;
+}
+.agent-client-row small {
+  display: block;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.agent-activity {
+  padding-left: 20px;
+}
+.agent-activity li {
+  padding: 8px 0;
+  display: grid;
+  gap: 4px;
+}
+.agent-activity time {
+  color: var(--muted);
+}
+.comparison-locations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.comparison-locations label {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.comparison-locations input,
+.operation-review-row input:not([type='checkbox']) {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.comparison-table {
+  overflow-x: auto;
+}
+.comparison-row {
+  display: grid;
+  grid-template-columns: 20px minmax(200px, 2fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(
+      112px,
+      1fr
+    );
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: start;
+  min-width: 650px;
+}
+.comparison-heading {
+  color: var(--muted);
+  font-size: 12px;
+}
+.comparison-name {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.comparison-name .settings-actions {
+  margin-top: 8px;
+}
+.operation-review-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.operation-review-row > div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.operation-review-row label {
+  display: grid;
+  gap: 6px;
+}
+.operation-review-body,
+.comparison-body {
+  display: grid;
+  gap: 16px;
+}
+.collections-body,
+.collections-query-form {
+  display: grid;
+  gap: 16px;
+}
+.basket-list {
+  max-height: 320px;
+  overflow: auto;
+}
+.duplicates-body {
+  display: grid;
+  gap: 12px;
+}
+.duplicate-groups {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+}
+.duplicate-group {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.duplicate-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.duplicate-file > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.collections-body .basket-list .project-control-row > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.collections-body input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.collections-body .project-control-row > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.collections-body small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.collection-issues {
+  padding: 12px 16px;
+  max-height: 120px;
+  overflow: auto;
+}
+.collection-issues p {
+  overflow-wrap: anywhere;
+}
+.review-checkpoint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.5;
+}
+.review-checkpoint > input {
+  margin: 3px 0 0;
+  flex: 0 0 auto;
+}
+.review-checkpoint > span {
+  min-width: 0;
+}
+.review-checkpoint small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.operation-review-dialog form {
+  padding: 0;
+}
+.operation-review-dialog form footer {
+  padding: 16px;
+  border-top: 1px solid var(--line);
+}
+/* Workflow definitions and receipts follow the shared flat dialog spacing. */
+.workflow-dialog {
+  width: min(900px, calc(100vw - 48px));
+}
+.project-file-notice {
+  flex-shrink: 0;
+  margin: 12px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+.project-file-notice span {
+  min-width: 0;
+  flex: 1 1 280px;
+  overflow-wrap: anywhere;
+}
+.project-file-notice button {
+  flex-shrink: 0;
+}
+.workflow-body {
+  display: grid;
+  gap: 24px;
+}
+.workflow-body section {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+.workflow-definition-content {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+.workflow-definition > summary {
+  cursor: pointer;
+  display: list-item;
+}
+.workflow-definition > summary strong {
+  margin-left: 6px;
+}
+.workflow-definition > summary .muted {
+  margin-left: 16px;
+}
+.workflow-body h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.workflow-body .settings-actions {
+  align-items: end;
+  flex-wrap: wrap;
+}
+.workflow-body .settings-actions label {
+  display: grid;
+  gap: 8px;
+}
+.workflow-body .project-control-row small {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.workflow-steps {
+  margin: 0;
+  padding-left: 24px;
+  display: grid;
+  gap: 16px;
+}
+.workflow-steps li {
+  min-width: 0;
+  padding-left: 6px;
+}
+.workflow-steps li > span {
+  margin-left: 12px;
+  color: var(--muted);
+}
+.workflow-run-choice {
+  text-align: left;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.workflow-run-choice[aria-pressed='true'] {
+  background: var(--selection);
+}
+.workflow-run-choice[aria-pressed='true'] span {
+  color: var(--selection-muted);
+}
+.evidence-cell {
+  background: var(--selection);
+  color: var(--ink);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.image-evidence-overlay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  transform-origin: center;
+}
+.image-evidence-overlay > div {
+  position: absolute;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--selection) 25%, transparent);
+}
+.workflow-run-choice span {
+  color: var(--muted);
+}
+.workflow-editor {
+  width: 100%;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.55;
+  resize: vertical;
+  min-height: 220px;
+  background: var(--field);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px 12px;
+  caret-color: var(--accent);
+}
+.workflow-editor:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.workflow-steps li > small {
+  display: block;
+  margin-top: 6px;
+}
+.workflow-receipt {
+  margin: 6px 0 0;
+}
+.relationships-body {
+  display: grid;
+  gap: 18px;
+}
+.relationship-row {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+}
+.relationship-type {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.relationship-files {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.relationship-files > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.relationship-files small,
+.relationship-row p {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.relationship-map {
+  max-height: 420px;
+  overflow: auto;
+}
+.relationship-map svg {
+  display: block;
+  font:
+    13px -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+.relationship-map .settings-actions button {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.relationship-map .settings-actions button small {
+  color: var(--muted);
+}
+.relationship-map-links {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.relationship-map-links li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.relationship-map-links li > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.relationship-map-links small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.watch-rule-notice {
+  top: auto;
+  bottom: 80px;
+  left: auto;
+  right: 24px;
+}
+.watch-rule-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.watch-rule-row small {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.watch-rule-row .project-control-row > div {
+  min-width: 0;
+}
+.watch-rule-row p {
+  overflow-wrap: anywhere;
+}
+.watch-rules details {
+  margin-top: 16px;
+}
+.watch-rule-form {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+}
+.watch-rule-form p {
+  max-width: 70ch;
+  margin: 0;
+}
+.relationship-note form {
+  display: grid;
+  gap: 14px;
+  padding: 14px 0 0;
+}
+.relationship-note textarea {
+  background: var(--field);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px 12px;
+  caret-color: var(--accent);
+  resize: vertical;
+  font: inherit;
+}
+.workflow-artifact {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}

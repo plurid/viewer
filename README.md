@@ -1,6 +1,6 @@
 # Viewer
 
-A macOS-first file manager in the Plurid family. Folders and read-only previews live in linked spatial planes; dock a plane for focused browsing. The active application is [`packages/viewer-electron/app`](packages/viewer-electron/app). `old_app` remains an archival reference.
+A macOS-first file manager in the Plurid family. Folders and read-only previews live in linked spatial planes; dock a plane for focused browsing. The active application is [`packages/viewer-electron/app`](packages/viewer-electron/app). The 2021 predecessor is summarized in [docs/old-app.md](docs/old-app.md).
 
 ## Run and build
 

@@ -1,6 +1,7 @@
 import { pathMapper, type FileChange } from '../../domain/changes';
 import { useCallback, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
 import type { FileEntry } from '../../domain/contracts';
+import { dialogOpen } from '../ui/modal';
 
 /** Lightweight view state outlives Plurid's detached components. Keys are host IDs. */
 export interface BrowseSession {
@@ -119,7 +120,7 @@ export function focusFiles(id: string): void {
   const until = performance.now() + 1500;
   const focus = () => {
     if (
-      document.querySelector('dialog[open]') ||
+      dialogOpen() ||
       document.activeElement?.matches(
         'input, textarea, select, [contenteditable], [role=separator]',
       )

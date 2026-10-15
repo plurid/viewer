@@ -40,11 +40,11 @@ it('matches the actual direct link and distinguishes identical paths in independ
 it('normalizes missing parent controls in old saved UI and retains an explicit hidden choice', () => {
   const ui = normalizePreferences();
   expect(ui.space.headerControls.parent).toBe(true);
-  const legacy = structuredClone(ui) as unknown as {
+  const withoutParent = structuredClone(ui) as unknown as {
     space: { headerControls: Record<string, boolean> };
   };
-  delete legacy.space.headerControls.parent;
-  expect(preferencesSchema.parse(legacy).space.headerControls.parent).toBe(true);
+  delete withoutParent.space.headerControls.parent;
+  expect(preferencesSchema.parse(withoutParent).space.headerControls.parent).toBe(true);
   expect(
     normalizePreferences({ space: { headerControls: { parent: false } } }).space.headerControls
       .parent,

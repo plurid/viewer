@@ -124,12 +124,12 @@ describe('spatial plane reuse', () => {
     const workspace = saved.workspaces[0];
     const tree = JSON.parse(Object.values(workspace.arrangement)[0]).space.tree as TreePlane[];
     const original = JSON.stringify(workspace);
-    const groups = repeatedPreviews(workspace, tree, 'legacy-preview-3', 'darwin');
+    const groups = repeatedPreviews(workspace, tree, 'reused-preview-3', 'darwin');
     expect(groups).toHaveLength(1);
-    expect(groups[0].keep.planeID).toContain('legacy-preview-3');
+    expect(groups[0].keep.planeID).toContain('reused-preview-3');
     expect(groups[0].close.map((node) => node.routeDivisions.plane.parameters.id)).toEqual([
-      'legacy-preview-1',
-      'legacy-preview-2',
+      'reused-preview-1',
+      'reused-preview-2',
     ]);
     expect(JSON.stringify(workspace)).toBe(original);
   });

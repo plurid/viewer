@@ -49,7 +49,9 @@ export function CollectionExplorer({ id }: { id: string }) {
     void (async () => {
       const items: FileEntry[] = [],
         errors: string[] = [];
-      if (collection.kind === 'query')
+      if (collection.kind === 'tag')
+        items.push(...(await window.viewer.taggedFiles(collection.tag ?? '', collection.sources)));
+      else if (collection.kind === 'query')
         for (const root of collection.sources) {
           const snapshot = await window.viewer.querySnapshot({
             query: collection.query ?? '',
@@ -96,6 +98,33 @@ export function CollectionExplorer({ id }: { id: string }) {
       live = false;
     };
   }, [collection, refresh]);
+  // A query collection is a smart folder: it follows the index and file changes.
+  const live = collection?.kind === 'query' || collection?.kind === 'tag';
+  useEffect(() => {
+    if (!live) return;
+    let last = 0,
+      timer: ReturnType<typeof setTimeout> | undefined;
+    const again = () => {
+      clearTimeout(timer);
+      // At most every two seconds while indexing runs.
+      timer = setTimeout(
+        () => {
+          last = Date.now();
+          setRefresh((value) => value + 1);
+        },
+        Math.max(0, 2000 - (Date.now() - last)),
+      );
+    };
+    const stop = window.viewer.onEvent((event) => {
+      if (event.type === 'index') again();
+    });
+    window.addEventListener('viewer:refresh', again);
+    return () => {
+      clearTimeout(timer);
+      stop();
+      window.removeEventListener('viewer:refresh', again);
+    };
+  }, [live]);
   const selected = useMemo(
     () => entries.filter((entry) => selection.includes(entry.path)),
     [entries, selection],
@@ -153,6 +182,10 @@ export function CollectionExplorer({ id }: { id: string }) {
       selecting.click(entry, event, entries);
       surface.current?.focus({ preventScroll: true });
     },
+    region: (found, base) => {
+      setActivePane(id);
+      selecting.region(found, base);
+    },
     open: (entry) => workspace.open(entry, id),
     context: (entry, event) => {
       event.preventDefault();
@@ -188,7 +221,11 @@ export function CollectionExplorer({ id }: { id: string }) {
       <div className="search-row">
         <strong>{collection.name}</strong>
         <span className="muted">
-          {collection.kind === 'query' ? collection.query : 'Explicit collection'}
+          {collection.kind === 'query'
+            ? collection.query
+            : collection.kind === 'tag'
+              ? 'Tagged “' + collection.tag + '”'
+              : 'Explicit collection'}
         </span>
         <span className="toolbar-spacer" />
         <button onClick={() => setRefresh((value) => value + 1)} disabled={busy}>
@@ -202,7 +239,7 @@ export function CollectionExplorer({ id }: { id: string }) {
         </button>
       </div>
       <FileTable paneID={id}>
-        {busy ? (
+        {busy && !entries.length ? (
           <Loading label="Reading collection…" />
         ) : entries.length ? (
           <ListView {...props} />
@@ -226,8 +263,10 @@ export function CollectionExplorer({ id }: { id: string }) {
         </span>
         <span>
           {collection.kind === 'query'
-            ? 'Snapshot of all indexed matches'
-            : 'References keep files in their original folders'}
+            ? 'Smart folder · follows indexed matches'
+            : collection.kind === 'tag'
+              ? 'Smart folder · follows Finder tags'
+              : 'References keep files in their original folders'}
         </span>
       </footer>
       {menu && (

@@ -351,7 +351,7 @@ describe('agent removal safety', () => {
     expect(f.execute).not.toHaveBeenCalled();
     expect(memory.remove).not.toHaveBeenCalled();
   });
-  it('ignores valid legacy execution grants even for custom aliases to Trash', async () => {
+  it('ignores valid saved execution grants even for custom aliases to Trash', async () => {
     const f = await fixture();
     memory.stores.set('/Memory/Viewer/execution-approvals-v1.json', [
       {

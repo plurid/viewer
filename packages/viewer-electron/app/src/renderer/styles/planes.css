@@ -1,0 +1,105 @@
+/* Plane chrome in the spatial workspace. */
+.plane-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 40px;
+  padding: 0 6px;
+  color: var(--ink);
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  container-type: inline-size;
+}
+.plane-controls .icon-button {
+  width: 28px;
+  height: 28px;
+}
+.plane-navigation {
+  display: flex;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.plane-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 56px;
+  flex: 1;
+  cursor: grab;
+  padding: 7px 4px;
+}
+.plane-heading > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.plane-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.plane-view-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  flex-shrink: 0;
+  height: 28px;
+}
+.plane-module-controls {
+  max-width: 64%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.plane-module-controls .preview-toolbar {
+  --preview-control-height: 28px;
+  padding: 0;
+  gap: 4px;
+  border: none;
+  min-height: 0;
+  white-space: nowrap;
+}
+.plane-module-controls .preview-toolbar > * {
+  flex-shrink: 0;
+}
+.plane-module-controls .preview-toolbar .toolbar-spacer {
+  display: none;
+}
+.plane-module-controls .preview-toolbar select {
+  max-width: 125px;
+  padding: 3px 5px;
+}
+.plane-module-controls .preview-toolbar input {
+  padding: 3px 5px;
+  max-width: 110px;
+}
+.plane-module-controls .preview-toolbar input.page-number {
+  width: 42px;
+}
+.plane-spatial-controls {
+  display: flex;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.plane-heading[data-dragging='false'] {
+  cursor: default;
+}
+@container (max-width: 540px) {
+  .plane-spatial-controls {
+    display: none;
+  }
+  .plane-navigation .plane-forward {
+    display: none;
+  }
+  .plane-module-controls {
+    max-width: 50%;
+  }
+  .plane-module-controls .preview-toolbar > .muted,
+  .plane-module-controls .preview-toolbar > .tabular,
+  .plane-module-controls .preview-toolbar > label {
+    display: none;
+  }
+}

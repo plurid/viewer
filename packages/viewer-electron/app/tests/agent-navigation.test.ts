@@ -431,10 +431,10 @@ describe('reviewed MCP workspace navigation', () => {
     await broker.clientRequest({ kind: 'revoke', id: navigator.client.id, revision: 1 });
     await expect(call('propose_open_path', { path: files })).rejects.toThrow('invalid');
     token = original;
-    const legacy = await call<{ requiresUserReview: boolean }>('propose_open_path', {
+    const shared = await call<{ requiresUserReview: boolean }>('propose_open_path', {
       path: files,
     });
-    expect(legacy.requiresUserReview).toBe(true);
+    expect(shared.requiresUserReview).toBe(true);
   });
   it('discovers live granted planes, redacts inaccessible workspaces and never exposes histories/layout', async () => {
     const workspaces =

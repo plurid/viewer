@@ -24,7 +24,13 @@ Excluded paths are hidden from queries immediately. Removing an indexed root als
 
 ## Saved searches
 
-Use **Open results as plane** to create a virtual root. **Save search…** adds a named query to Commands; Settings → Search manages saved queries. Folder scope, recursive scope and the document-text choice travel with the query. Results share the file command catalogue, clipboard, file information, action recipes and Space preview. Selection and keyboard navigation operate on the displayed page.
+Use **Open results as plane** to create a virtual root. **Save search…** adds a named query to Commands; Settings → Search manages saved queries. Folder scope, recursive scope and the document-text choice travel with the query. Results share the file command catalogue, clipboard, file information, action recipes and Space preview. Keyboard navigation works on the displayed page. When results span several pages, Select All takes a verified snapshot of up to 10,000 indexed matches. The selection is kept by path, so it stays the same when you move between pages. Over 10,000 matches, or while the location is still indexing, Select All covers only the current page and says why.
+
+## Smart folders
+
+**Save as smart folder** turns a search pane into a named query collection. Collection planes for query and tag collections are smart folders: they read their matches again when the index updates (at most every two seconds while indexing runs) and after file operations. They show the previous matches while refreshing.
+
+**Find files with tag…** asks for a Finder tag name and opens a smart folder of every file under the indexed locations (or Home) with that tag. It uses Spotlight's `kMDItemUserTags`, matching the exact name and ignoring case. Only files that still exist and that Viewer may read are listed. Spotlight is unavailable in the App Store build, so the command reports that there instead of showing an empty folder.
 
 Saved searches are dynamic queries, not copies of their results. Applying a file operation remaps open paths, selections, Favorites and Recent, and refreshes the index. The original root's preview ownership remains independent from other roots.
 

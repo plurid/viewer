@@ -224,3 +224,17 @@ describe('scoped preview resources', () => {
     await expect(resources.archive(grant.id)).rejects.toThrow();
   });
 });
+describe('preview work cancellation', () => {
+  it('aborts a preview’s background work when it releases its resource', async () => {
+    const file = path.join(root, 'report.txt');
+    await writeFile(file, 'report');
+    resources = new Resources();
+    const resource = await resources.grant(file);
+    const signal = resources.signal(resource.id);
+    expect(resources.signal(resource.id)).toBe(signal);
+    expect(signal.aborted).toBe(false);
+    resources.release(resource.id);
+    expect(signal.aborted).toBe(true);
+    expect(() => resources.signal(resource.id)).toThrow();
+  });
+});

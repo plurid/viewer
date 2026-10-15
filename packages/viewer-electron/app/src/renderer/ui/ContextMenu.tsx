@@ -4,6 +4,7 @@ import { useCommands, useCommandRevision } from '../commands/context';
 import { ContextMenuResults } from './ContextMenuResults';
 import { type CommandRequest, type ResolvedCommand } from '../commands/registry';
 import { report, useViewer } from '../state/store';
+import { dialogOpen } from './modal';
 
 /** Outside transformed planes, with a fixed target and keyboard-first search. */
 export function ContextMenu({
@@ -45,8 +46,7 @@ export function ContextMenu({
     window.addEventListener('pointerdown', dismiss);
     return () => {
       window.removeEventListener('pointerdown', dismiss);
-      if (!document.querySelector('dialog[open]') && previous?.isConnected)
-        previous.focus({ preventScroll: true });
+      if (!dialogOpen() && previous?.isConnected) previous.focus({ preventScroll: true });
     };
     // Placed once when opened; re-running would also move focus back on each change.
     // eslint-disable-next-line react-hooks/exhaustive-deps

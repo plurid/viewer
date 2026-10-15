@@ -26,6 +26,8 @@ const MAX_READ = 4 * 1024 * 1024;
 export class Resources {
   private grants = new Map<string, Grant>();
   private streams = new Map<string, Map<Readable, string>>();
+  /** Background work for a preview stops when the preview releases its resource. */
+  private aborts = new Map<string, AbortController>();
   private work = new PreviewWork();
   readonly archives = new Archives();
   constructor(private access: (files: readonly string[]) => Promise<void> = async () => {}) {}
@@ -87,7 +89,16 @@ export class Resources {
     });
     return resource;
   }
+  /** Aborted when the resource is released, so a closed preview's extraction stops. */
+  signal(id: string): AbortSignal {
+    this.get(id);
+    let abort = this.aborts.get(id);
+    if (!abort) this.aborts.set(id, (abort = new AbortController()));
+    return abort.signal;
+  }
   release(id: string): void {
+    this.aborts.get(id)?.abort();
+    this.aborts.delete(id);
     for (const stream of this.streams.get(id)?.keys() ?? []) stream.destroy();
     const grant = this.grants.get(id);
     if (grant?.file) this.archives.release(grant.file);

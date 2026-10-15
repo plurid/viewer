@@ -30,6 +30,7 @@ import {
   renameShortcut,
   renameWorkspace,
   report,
+  saveCollection,
   restoreWorkspace,
   setJobs,
   setOperationsOpen,
@@ -67,6 +68,7 @@ import { Trash } from './ui/Trash';
 import { openWorkspacePath } from './workspace/open-path';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 import { commandShortcutID } from '../domain/shortcuts';
+import { dialogOpen, overlayOpen } from './ui/modal';
 
 export function App() {
   const registry = useMemo(
@@ -113,6 +115,7 @@ function AppWindow() {
   const [palette, setPalette] = useState<'commands' | 'files' | 'workspaces' | null>(null);
   const [goTo, setGoTo] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [tagging, setTagging] = useState(false);
   const [terminalName, setTerminalName] = useState<string>();
   const terminalConfig = useViewer((state) => state.settings.settings.terminals);
   useEffect(() => {
@@ -231,6 +234,7 @@ function AppWindow() {
           spatialTool,
           goTo: () => setGoTo(true),
           connectServer: () => setConnecting(true),
+          findTagged: () => setTagging(true),
           openWith: setOpenWithPaths,
         }),
       ],
@@ -353,11 +357,7 @@ function AppWindow() {
       return;
     }
     if (editable(document.activeElement) && explorerCommandIDs.has(id)) return;
-    if (
-      document.querySelector('dialog[open], .context-menu') &&
-      !['palette', 'settings'].includes(id)
-    )
-      return;
+    if (overlayOpen() && !['palette', 'settings'].includes(id)) return;
     const context = registry.context(getState().activePane) || windowContext();
     if (id === 'paste' || id === 'paste-move') await refreshClipboard();
     await registry.invoke(id, {
@@ -416,7 +416,7 @@ function AppWindow() {
         };
         const deadline = performance.now() + 3000;
         const execute = () => {
-          if (document.querySelector('dialog[open]')) {
+          if (dialogOpen()) {
             if (performance.now() < deadline) requestAnimationFrame(execute);
             else {
               report('Close the open dialog and request the action again.');
@@ -529,7 +529,7 @@ function AppWindow() {
         !(event.target as Element).closest(
           'button, [role="button"], select, video, audio, .preview-host',
         ) &&
-        !document.querySelector('dialog[open], .context-menu')
+        !overlayOpen()
       ) {
         const context = registry.context(getState().activePane) || windowContext();
         if (context.selection.some((file) => !file.directory)) {
@@ -542,11 +542,7 @@ function AppWindow() {
           return;
         }
       }
-      if (
-        event.key === 'Escape' &&
-        tool &&
-        !document.querySelector('dialog[open], .context-menu')
-      ) {
+      if (event.key === 'Escape' && tool && !overlayOpen()) {
         spatialTool(null);
         event.preventDefault();
       }
@@ -559,8 +555,7 @@ function AppWindow() {
         return;
       if (editable(event.target) && !['palette', 'settings'].includes(id || '')) return;
       if (id && explorerCommandIDs.has(id)) {
-        if (!document.querySelector('dialog[open], .context-menu'))
-          routeFileKeyboard(getState().activePane, event);
+        if (!overlayOpen()) routeFileKeyboard(getState().activePane, event);
         return;
       }
       if (id) {
@@ -793,6 +788,24 @@ function AppWindow() {
             action="Connect"
             onClose={() => setConnecting(false)}
             onSubmit={(address) => window.viewer.connectServer(address.trim())}
+          />
+        )}
+        {tagging && (
+          <NameDialog
+            title="Find files with tag"
+            label="Tag"
+            action="Find"
+            onClose={() => setTagging(false)}
+            onSubmit={async (name) => {
+              const tag = name.trim();
+              const roots = getState().settings.settings.search.roots;
+              const sources = roots.length ? roots : [getState().bootstrap.home];
+              // Spotlight is asked first, so an unusable tag or build reports here.
+              await window.viewer.taggedFiles(tag, sources);
+              const id = crypto.randomUUID();
+              saveCollection({ id, name: tag, kind: 'tag', tag, sources });
+              controller.openCollection(id);
+            }}
           />
         )}
       </div>

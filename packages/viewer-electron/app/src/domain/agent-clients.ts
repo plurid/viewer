@@ -9,6 +9,15 @@ export const agentCapabilities = [
   'terminal-write',
 ] as const;
 export type AgentCapability = (typeof agentCapabilities)[number];
+/** The client behind the shared connection token in Settings → Agents. It works inside the
+ * Agents folders with every request reviewed; named clients carry their own folders and
+ * capabilities. */
+export const sharedClientID = 'shared';
+/** Stored grants and audit records name the shared client by this earlier ID too. */
+export const storedClientID = z
+  .string()
+  .max(200)
+  .transform((value) => (value === 'legacy' ? sharedClientID : value));
 export const agentClientInputSchema = z
   .object({
     name: z.string().trim().min(1).max(100),

@@ -5,6 +5,7 @@ import { report, setOperationsOpen, useViewer } from '../state/store';
 import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { baseName } from '../../domain/planes';
+import { dialogOpen } from '../ui/modal';
 
 export function OperationsPanel() {
   const jobs = useViewer((state) => state.jobs);
@@ -25,7 +26,7 @@ export function OperationsPanel() {
     const close = (event: PointerEvent) => {
       if (
         !panel.current?.contains(event.target as Node) &&
-        !document.querySelector('dialog[open]') &&
+        !dialogOpen() &&
         !(event.target as HTMLElement).closest('.operations-button')
       )
         setOperationsOpen(false);
@@ -33,8 +34,7 @@ export function OperationsPanel() {
     window.addEventListener('pointerdown', close);
     return () => {
       window.removeEventListener('pointerdown', close);
-      if (!document.querySelector('dialog[open]') && previous?.isConnected)
-        previous.focus({ preventScroll: true });
+      if (!dialogOpen() && previous?.isConnected) previous.focus({ preventScroll: true });
     };
   }, [open]);
   if (!open) return null;
@@ -72,7 +72,9 @@ export function OperationsPanel() {
                     ? 'rename'
                     : job.kind === 'move'
                       ? 'move'
-                      : 'copy'
+                      : job.kind === 'convert'
+                        ? 'image'
+                        : 'copy'
               }
             />
             <strong>{job.kind[0].toUpperCase() + job.kind.slice(1)}</strong>

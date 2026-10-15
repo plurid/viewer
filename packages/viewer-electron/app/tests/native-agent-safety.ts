@@ -65,8 +65,8 @@ await writeFile(
   path.join(profile, 'execution-approvals-v1.json'),
   JSON.stringify([
     {
-      id: 'legacy-execution',
-      clientID: 'legacy',
+      id: 'shared-execution',
+      clientID: 'shared',
       actionID: 'custom.cleanup',
       root: shared,
       capability: 'execute',
@@ -143,7 +143,7 @@ try {
   );
   assert.ok(!Array.isArray(reply) && 'token' in reply);
   const named = reply.token;
-  const legacy = JSON.parse(await settings.evaluate<string>('window.viewer.agentToken()'))
+  const sharedToken = JSON.parse(await settings.evaluate<string>('window.viewer.agentToken()'))
     .mcpServers.viewer.env.VIEWER_AGENT_TOKEN as string;
   const connection = JSON.parse(
     await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
@@ -274,12 +274,12 @@ try {
     captures.push(destination);
   }
   const proposal = await call<{ id: string; requiresUserReview: boolean }>(
-    legacy,
+    sharedToken,
     'propose_command',
     { commandID: 'custom.cleanup' },
   );
   assert.equal(proposal.requiresUserReview, true);
-  const captured = await call<AgentProposal>(legacy, 'get_proposal', { id: proposal.id });
+  const captured = await call<AgentProposal>(sharedToken, 'get_proposal', { id: proposal.id });
   assert.equal(captured.status, 'review');
   assert.equal(captured.removal, 'trash');
   assert.ok(captured.detail.includes(file) && captured.detail.includes(nested));
@@ -317,7 +317,7 @@ try {
     `Array.from(document.querySelectorAll('.dialog button')).find(b=>b.textContent.trim()==='Reject').click()`,
   );
   await until(
-    () => call<AgentProposal>(legacy, 'get_proposal', { id: proposal.id }),
+    () => call<AgentProposal>(sharedToken, 'get_proposal', { id: proposal.id }),
     (p) => p.status === 'rejected',
     'rejected review',
   );
@@ -330,7 +330,7 @@ try {
   assert.notEqual(second.id, proposal.id);
   await main.evaluate(`window.viewer.agentReview(${JSON.stringify(second.id)},false)`);
   evidence.push(
-    'Hidden manual confirmation and a valid saved legacy Trash-alias grant still require a fresh exact-path review; Reject preserves both items, and the next named request needs new approval.',
+    'Hidden manual confirmation and a valid saved shared-connection Trash-alias grant still require a fresh exact-path review; Reject preserves both items, and the next named request needs new approval.',
   );
 
   await metrics(main, 1440, 940);
@@ -392,12 +392,12 @@ try {
     return row?.querySelector('input')?.disabled && !row.querySelector('input').checked;})`);
   assert.ok(disabled);
   await settings.evaluate(
-    `const disclosure=Array.from(document.querySelectorAll('details')).find(d=>d.querySelector('summary')?.textContent==='Legacy shared connection');disclosure.open=true;`,
+    `const disclosure=Array.from(document.querySelectorAll('details')).find(d=>d.querySelector('summary')?.textContent==='Shared connection');disclosure.open=true;`,
   );
   await until(
     () => settings.evaluate<string>(`document.querySelector('.settings-page')?.textContent||''`),
     (text) => text.includes('Agent permissions'),
-    'legacy permissions',
+    'shared connection permissions',
   );
   await settings.evaluate(
     `Array.from(document.querySelectorAll('details')).find(d=>d.querySelector('summary')?.textContent==='Existing grants').open=true;document.querySelector('.settings-grant').scrollIntoView({block:'center'});`,
