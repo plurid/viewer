@@ -14,7 +14,7 @@ export function columnWidth(column: ListColumn, width: number): number {
   return Math.max(columnMinimum(column), Math.min(columnMaximum(column), Math.round(width)));
 }
 export function visibleListColumns(
-  preferences: UIPreferences['list'] & { order?: ListColumn[] },
+  preferences: Pick<UIPreferences['list'], 'visible'> & { order?: ListColumn[] },
 ): ListColumn[] {
   const columns = listColumns
     .filter((column) => column.id === 'name' || preferences.visible[column.id])

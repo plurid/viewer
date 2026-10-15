@@ -23,6 +23,8 @@ export interface PreviewContext {
   signal: AbortSignal;
   look: 'dark' | 'light';
   commands?: { header?: HTMLElement; register(commands: readonly PreviewCommand[]): () => void };
+  /** Opens a local file the preview refers to (a relative link) beside its plane. */
+  openRelated?(path: string): void;
   services: {
     thumbnail(file: string, size: number): Promise<string>;
     document(id: string): Promise<DocumentData>;

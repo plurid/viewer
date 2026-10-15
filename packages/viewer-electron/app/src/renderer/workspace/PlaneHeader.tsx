@@ -1,5 +1,4 @@
-import { useCallback, useState, type RefObject } from 'react';
-import type { PluridApplicationHandle } from '@plurid/plurid-react';
+import { useCallback, useState } from 'react';
 import type { PluridPlaneChromeContext, TreePlane } from '@plurid/plurid-data';
 import {
   activeWorkspace,
@@ -15,16 +14,14 @@ import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/primitives';
 import { ContextMenu } from '../ui/ContextMenu';
 import { setPreviewControlsSlot } from '../previews/controls';
+import { useWorkspace } from './context';
+import { baseName } from '../../domain/planes';
+import { hostID } from './tree';
 
-export function PlaneHeader({
-  context,
-  engine,
-}: {
-  context: PluridPlaneChromeContext;
-  engine: RefObject<PluridApplicationHandle | null>;
-}) {
+export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) {
+  const workspace = useWorkspace();
   const node = context.treePlane as TreePlane;
-  const id = node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
+  const id = hostID(node);
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id));
   const collection = useViewer((state) =>
     activeWorkspace(state).collections?.find(
@@ -137,8 +134,7 @@ export function PlaneHeader({
           if (event.button !== 0 || !dragging) return;
           // The engine evaluates this press on its native bubble listener. Select first,
           // keeping a deliberate multi-selection when this plane already belongs to it.
-          const api = engine.current;
-          if (api && !api.selection.get().includes(node.planeID)) api.selection.set([node.planeID]);
+          workspace.selectForDrag(id);
           setActivePane(id);
         }}
         title={pane?.path}
@@ -158,8 +154,8 @@ export function PlaneHeader({
             : pane?.type === 'search'
               ? pane.name
               : pane?.type === 'terminal'
-                ? 'Terminal · ' + (pane.path.split(/[\\/]/).pop() || pane.path)
-                : pane?.path.split(/[\\/]/).pop() || pane?.path || 'Plane'}
+                ? 'Terminal · ' + baseName(pane.path)
+                : (pane && baseName(pane.path)) || 'Plane'}
         </span>
       </span>
       {pane?.type === 'folder' ? (

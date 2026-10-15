@@ -1,16 +1,11 @@
 import type { RefObject } from 'react';
 import type { PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
+import { flattenTree, hostID } from './tree';
 
 const pending = new WeakMap<PluridApplicationHandle, () => void>();
 const generations = new WeakMap<PluridApplicationHandle, number>();
 const framed = new WeakMap<PluridApplicationHandle, { targets?: string[]; viewpoint: string }>();
-const hostID = (node: ReturnType<PluridApplicationHandle['tree']['get']>[number]) =>
-  node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
-const flatten = (
-  nodes: ReturnType<PluridApplicationHandle['tree']['get']>,
-): ReturnType<PluridApplicationHandle['tree']['get']> =>
-  nodes.flatMap((node) => [node, ...flatten(node.children ?? [])]);
 
 /** Fit after the live viewport and measured plane boxes settle; new input cancels the request. */
 export function frameWorkspace(
@@ -52,7 +47,7 @@ export function frameWorkspace(
       cancel();
       return;
     }
-    const nodes = flatten(api.tree.get()).filter(
+    const nodes = flattenTree(api.tree.get()).filter(
       (node) => (node.show || options.recover) && (!targets || targets.includes(hostID(node))),
     );
     if (options.recover && nodes.some((node) => !node.show)) {

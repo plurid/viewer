@@ -23,7 +23,7 @@ import {
 } from '../state/store';
 import { rootOwners } from './sessions';
 import { repeatedPreviews } from './recovery';
-import { flattenTree, hostID, parentPaneID, linkedPaneID } from './tree';
+import { flattenTree, hostID, paneRoute, parentPaneID, linkedPaneID } from './tree';
 import { frameWorkspace } from './framing';
 import type { WorkspaceController } from './context';
 import { openWorkspacePath } from './open-path';
@@ -40,7 +40,19 @@ export function useWorkspaceController({
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
-      subscribeLinks: (listener) => engine.current?.store.subscribe(listener) ?? (() => {}),
+      // Rows ask whether a linked plane exists; only tree changes can alter that, not
+      // the camera updates the engine store also publishes every frame.
+      subscribeLinks: (listener) => {
+        const api = engine.current;
+        if (!api) return () => {};
+        let tree = api.tree.get();
+        return api.store.subscribe(() => {
+          const next = api.tree.get();
+          if (next === tree) return;
+          tree = next;
+          listener();
+        });
+      },
       parentPaneID: (id) =>
         engine.current ? parentPaneID(engine.current.tree.get(), id) : undefined,
       linkedPaneID: (id, entry) =>
@@ -188,7 +200,7 @@ export function useWorkspaceController({
           api.pubsub.publish({
             topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
             data: {
-              route: `/terminals/${pane.id}`,
+              route: paneRoute('terminal', pane.id),
               parentPlaneID: parent.planeID,
               framing: 'none',
             },
@@ -281,7 +293,7 @@ export function useWorkspaceController({
           api.pubsub.publish({
             topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
             data: {
-              route: `/${entry.directory ? 'folders' : 'previews'}/${pane.id}`,
+              route: paneRoute(entry.directory ? 'folder' : 'preview', pane.id),
               parentPlaneID: parent!.planeID,
               link: options?.link,
               framing: 'none',
@@ -375,6 +387,52 @@ export function useWorkspaceController({
         api.selection.clear();
         frameWorkspace(engine, surface);
       },
+      arrangementHistory: () => {
+        const history = engine.current?.history.get();
+        return { canUndo: !!history?.canUndo, canRedo: !!history?.canRedo };
+      },
+      isDocked: () => !!engine.current?.camera.docked(),
+      hasRepeatedPreviews: () =>
+        !!engine.current &&
+        repeatedPreviews(
+          activeWorkspace(),
+          engine.current.tree.get(),
+          getState().activePane,
+          getState().bootstrap.platform,
+        ).length > 0,
+      transformTool: () => {
+        const mode = engine.current?.getSnapshot().configuration.space.transformMode;
+        return mode === 'ROTATION'
+          ? 'rotate'
+          : mode === 'SCALE'
+            ? 'scale'
+            : mode === 'TRANSLATION'
+              ? 'translate'
+              : null;
+      },
+      setTransformTool: (tool) =>
+        engine.current?.pubsub.publish({
+          topic: PLURID_PUBSUB_TOPIC.CONFIGURATION,
+          data: {
+            space: {
+              transformMode:
+                tool === 'rotate'
+                  ? 'ROTATION'
+                  : tool === 'scale'
+                    ? 'SCALE'
+                    : tool === 'translate'
+                      ? 'TRANSLATION'
+                      : 'ALL',
+            },
+          },
+        }),
+      selectForDrag: (id) => {
+        const api = engine.current;
+        const node = api && flattenTree(api.tree.get()).find((item) => hostID(item) === id);
+        if (api && node && !api.selection.get().includes(node.planeID))
+          api.selection.set([node.planeID]);
+      },
+      subscribeEngine: (listener) => engine.current?.store.subscribe(listener) ?? (() => {}),
       undo: () => {
         engine.current?.history.undo();
         if (engine.current) reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
@@ -384,7 +442,7 @@ export function useWorkspaceController({
         if (engine.current) reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
       },
     }),
-    [],
+    [engine, readyRef, surface],
   );
   return controller;
 }

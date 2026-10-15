@@ -3,9 +3,8 @@ import path from 'node:path';
 import { lookup } from 'mime-types';
 import type { FileEntry, FolderListing } from '../domain/contracts';
 
-export function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { errorMessage as message } from '../domain/errors';
+export { message };
 export function absolute(input: string): string {
   if (!input || input.includes('\0') || !path.isAbsolute(input))
     throw new Error('An absolute local path is required.');

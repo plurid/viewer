@@ -52,7 +52,7 @@ export class AgentClients {
               at: z.number(),
               clientID: z.string().max(200),
               tool: z.string().max(200),
-              status: z.enum(['completed', 'failed']),
+              status: z.enum(['completed', 'failed', 'rejected', 'cancelled']),
               detail: z.string().max(1000),
             })
             .strict(),

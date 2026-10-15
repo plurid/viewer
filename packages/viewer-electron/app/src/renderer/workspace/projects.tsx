@@ -99,6 +99,8 @@ export function ProjectFileNotice() {
       remove();
       void window.viewer.unwatch(subscriber).catch(report);
     };
+    // Re-watch only for another project file or revision, not for in-memory edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [space.id, project?.file, project?.revision]);
   const noticeID = problem
     ? 'problem:' + problem.message

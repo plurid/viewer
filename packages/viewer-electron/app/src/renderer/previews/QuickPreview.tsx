@@ -7,6 +7,7 @@ import { Dialog, IconButton } from '../ui/primitives';
 import { OpenDefaultButton } from '../ui/OpenDefaultButton';
 import { PreviewHost } from './PreviewHost';
 import type { PreviewModule } from './contracts';
+import { baseName } from '../../domain/planes';
 
 export const QuickPreview = memo(function QuickPreview({
   session,
@@ -62,7 +63,7 @@ export const QuickPreview = memo(function QuickPreview({
   );
   return (
     <Dialog
-      title={path.split(/[\\/]/).pop() || path}
+      title={baseName(path)}
       wide
       className="quick-preview-dialog"
       onClose={() => quickPreview(null)}

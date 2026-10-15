@@ -1,5 +1,5 @@
 import { nativeOpening } from './opening';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
 import { groupEntries, indexEntries, reconcileSelection, sortEntries } from '../../domain/files';
 import {
@@ -56,7 +56,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const [subtree, setSubtree] = useBrowseField(id, path, 'subtree');
   const input = useRef<HTMLInputElement>(null);
   const surface = useRef<HTMLDivElement>(null);
-  const selectionCache = { current: session.cache };
+  const selectionCache = session.cache;
   const fileDialogs = useFileDialogs();
   const [searchOpen, setSearchOpen] = useBrowseField(id, path, 'searchOpen');
   const [pathOpen, setPathOpen] = useBrowseField(id, path, 'pathOpen');
@@ -68,15 +68,17 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const showHidden = pane?.showHidden;
   const sort = pane?.sort;
   const descending = pane?.descending;
+  // Typing stays responsive in large folders; the filtered list follows a moment later.
+  const filter = useDeferredValue(query);
   const baseEntries = useMemo(() => {
-    const needle = query.toLocaleLowerCase();
+    const needle = filter.toLocaleLowerCase();
     return sort
       ? groupEntries(
           sortEntries(
             sources.filter(
               (entry) =>
                 (showHidden || !entry.hidden) &&
-                (subtree || !query || entry.name.toLocaleLowerCase().includes(needle)),
+                (subtree || !filter || entry.name.toLocaleLowerCase().includes(needle)),
             ),
             sort,
             descending ?? false,
@@ -85,7 +87,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           presentation.group,
         )
       : [];
-  }, [sources, showHidden, sort, descending, subtree, query, foldersFirst, presentation.group]);
+  }, [sources, showHidden, sort, descending, subtree, filter, foldersFirst, presentation.group]);
   const tree = useListNavigation(
     id,
     path,
@@ -96,9 +98,9 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const selected = useMemo(
     () =>
       selection
-        .map((path) => sourceIndex.paths.get(path) || selectionCache.current.get(path))
+        .map((path) => sourceIndex.paths.get(path) || selectionCache.get(path))
         .filter((entry): entry is FileEntry => !!entry),
-    [sourceIndex, selection],
+    [sourceIndex, selection, selectionCache],
   );
   const selectionSet = useMemo(() => new Set(selection), [selection]);
   const columns = useColumnNavigation(
@@ -108,6 +110,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     pane?.mode === 'columns' && !listing.loading && !listing.error,
     selecting,
   );
+  const chooseColumn = columns.choose;
   const dragNavigation = useMemo(() => folderDragNavigation(id), [id]);
   const drops = useFileDrop(
     () => (pane?.mode === 'columns' ? columns.directory() : path),
@@ -116,15 +119,17 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   useEffect(() => {
     if (listing.loading || listing.error) return;
     setSelection((value) => {
-      const next = reconcileSelection(value, selectionCache.current, path, listingIndex);
+      const next = reconcileSelection(value, selectionCache, path, listingIndex);
       return next.length === value.length && next.every((file, index) => file === value[index])
         ? value
         : next;
     });
-  }, [listingIndex, listing.loading, listing.error, path]);
+  }, [listingIndex, listing.loading, listing.error, path, selectionCache, setSelection]);
   useEffect(() => {
     const content = surface.current?.querySelector('.file-scroll');
     if (content) content.scrollTop = session.scroll;
+    // Restore once per load; following session.scroll would fight the person's scrolling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, listing.loading]);
   const opening = useViewer((state) => state.settings.settings.fileOpening);
   const open = useCallback(
@@ -151,10 +156,10 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     (entry: FileEntry, event: FileModifiers, scope = entries) => {
       setActivePane(id);
       surface.current?.focus({ preventScroll: true });
-      if (pane?.mode === 'columns') columns.choose(entry, event, scope);
+      if (pane?.mode === 'columns') chooseColumn(entry, event, scope);
       else selecting.click(entry, event, scope);
     },
-    [entries, id, selecting, pane?.mode, columns.choose],
+    [entries, id, selecting, pane?.mode, chooseColumn],
   );
   useEffect(() => {
     if (searchOpen) input.current?.focus();
@@ -308,7 +313,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       event.dataTransfer.setData(FILE_DRAG, JSON.stringify(files));
       event.dataTransfer.effectAllowed = 'copyMove';
       const shortcuts = files.flatMap((path) => {
-        const item = selectionCache.current.get(path) || sourceIndex.paths.get(path);
+        const item = selectionCache.get(path) || sourceIndex.paths.get(path);
         return item?.directory ? [{ path: item.path }] : [];
       });
       if (shortcuts.length)

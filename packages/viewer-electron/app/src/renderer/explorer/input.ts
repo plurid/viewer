@@ -1,5 +1,10 @@
 import type { ApplicationSettings } from '../../domain/services';
-import { defaultShortcuts, matchesShortcut, shortcutCommandID } from '../../domain/shortcuts';
+import {
+  alternateShortcuts,
+  defaultShortcuts,
+  matchesShortcut,
+  shortcutCommandID,
+} from '../../domain/shortcuts';
 import { editable } from '../commands/editing';
 import { fileControlOwnsKey, type FileKey } from './selection';
 type RoutedKey = FileKey &
@@ -18,6 +23,7 @@ export const explorerCommandIDs = new Set([
   'duplicate',
   'trash',
   'new-folder',
+  'new-folder-with-selection',
   'view-list',
   'view-grid',
   'view-columns',
@@ -40,7 +46,9 @@ export function keyCommand(event: RoutedKey, settings: ApplicationSettings): str
         .map((item) => ['custom.' + item.id, item.shortcut]),
     ),
   };
-  const id = Object.entries(bindings).find(([, value]) => matchesShortcut(value, event))?.[0];
+  const id = [...Object.entries(bindings), ...Object.entries(alternateShortcuts)].find(
+    ([, value]) => matchesShortcut(value, event),
+  )?.[0];
   if (id) return shortcutCommandID(id);
   if (
     (event.metaKey || event.ctrlKey) &&

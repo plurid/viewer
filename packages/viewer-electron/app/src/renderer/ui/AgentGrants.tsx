@@ -64,7 +64,12 @@ export function AgentGrants({
         <>
           <label className="settings-row">
             <span>
-              Read terminal output<small>Separate from file and metadata access.</small>
+              Read terminal output
+              <small>
+                Covers terminals started in this folder, including the last 128 KB of everything
+                shown there, even after changing to another folder. Separate from file and metadata
+                access.
+              </small>
             </span>
             <input
               type="checkbox"

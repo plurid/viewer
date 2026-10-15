@@ -3,6 +3,7 @@ import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import type { TerminalStart } from '../../domain/automation';
 import { report } from '../state/store';
+import { terminalTheme } from './theme';
 export interface TerminalSession {
   terminal: Terminal;
   fit: FitAddon;
@@ -16,6 +17,15 @@ export interface TerminalSession {
   attach(container: HTMLElement): void;
 }
 const sessions = new Map<string, Promise<TerminalSession>>();
+/** Terminals revealed by an agent's navigation wait for the person to start a shell. */
+const deferred = new Set<string>();
+export function deferTerminalStart(ids: Iterable<string>): void {
+  for (const id of ids) if (!sessions.has(id)) deferred.add(id);
+}
+export const terminalStartDeferred = (id: string) => deferred.has(id);
+export function allowTerminalStart(id: string): void {
+  deferred.delete(id);
+}
 let subscribed = false;
 function subscribe(): void {
   if (subscribed) return;
@@ -66,7 +76,7 @@ export function terminalSession(
         allowProposedApi: false,
         cursorBlink: true,
         convertEol: false,
-        theme: { background: '#25282e', foreground: '#eeeeef', cursor: '#9abfd1' },
+        theme: terminalTheme('dark'),
       });
       const fit = new FitAddon();
       const search = new SearchAddon();

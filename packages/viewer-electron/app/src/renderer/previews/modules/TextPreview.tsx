@@ -15,6 +15,8 @@ import type { PreviewContext } from '../contracts';
 import { Empty, Loading } from '../../ui/primitives';
 import { DelimitedTable } from '../DataTable';
 import { getState, report } from '../../state/store';
+import { relativeLinkTarget } from '../../../domain/planes';
+import { highlightedLines } from '../highlight';
 
 function JSONNode({ name, value, depth = 0 }: { name: string; value: unknown; depth?: number }) {
   const [open, setOpen] = useState(depth < 1);
@@ -85,6 +87,11 @@ function Code({
         svg: 'markup',
       } as Record<string, string>
     )[extension] || extension;
+  // Whole-document tokens for ordinary files; very large ones fall back to single lines.
+  const document = useMemo(() => {
+    const grammar = Prism.languages[language];
+    return grammar && text.length <= 1_000_000 ? highlightedLines(text, grammar) : null;
+  }, [text, language]);
   const virtual = useVirtualizer({
     count: lines.length,
     getScrollElement: () => scroll.current,
@@ -107,10 +114,13 @@ function Code({
       >
         {virtual.getVirtualItems().map((item) => {
           const line = lines[item.index];
+          const segments = document?.[item.index];
           const grammar = Prism.languages[language];
           // Highlighted HTML comes exclusively from Prism's escaping tokenizer, never from file HTML.
           const highlighted =
-            grammar && line.length < 10000 ? Prism.highlight(line, grammar, language) : null;
+            !segments && grammar && line.length < 10000
+              ? Prism.highlight(line, grammar, language)
+              : null;
           return (
             <div
               className={'code-line' + (item.index + 1 === targetLine ? ' evidence-line' : '')}
@@ -120,7 +130,19 @@ function Code({
               <span className="line-number" aria-hidden="true">
                 {item.index + 1}
               </span>
-              {highlighted ? (
+              {segments ? (
+                <code>
+                  {segments.map((segment, index) =>
+                    segment.className ? (
+                      <span key={index} className={segment.className}>
+                        {segment.text}
+                      </span>
+                    ) : (
+                      segment.text
+                    ),
+                  )}
+                </code>
+              ) : highlighted ? (
                 <code dangerouslySetInnerHTML={{ __html: highlighted }} />
               ) : (
                 <code>{line}</code>
@@ -234,7 +256,23 @@ export default function TextPreview(context: PreviewContext) {
             remarkPlugins={[remarkGfm]}
             skipHtml
             components={{
-              a: ({ children }) => <span className="markdown-link">{children}</span>,
+              // Only relative links to local files act, opening them beside this plane.
+              a: ({ children, href }) => {
+                const target =
+                  context.openRelated && relativeLinkTarget(context.resource.entry.path, href);
+                return target ? (
+                  <button
+                    type="button"
+                    className="markdown-link"
+                    title={target}
+                    onClick={() => context.openRelated?.(target)}
+                  >
+                    {children}
+                  </button>
+                ) : (
+                  <span className="markdown-link">{children}</span>
+                );
+              },
               img: ({ alt }) => <span className="muted">[Image: {alt || 'external image'}]</span>,
             }}
           >

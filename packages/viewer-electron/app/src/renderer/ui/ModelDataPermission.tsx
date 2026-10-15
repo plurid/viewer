@@ -16,13 +16,16 @@ export function useModelPermission(provider?: ModelProvider) {
     error: string;
   }>({ identity: '', permission: null, loading: false, error: '' });
   const sequence = useRef(0);
+  const providerID = provider?.id;
   useEffect(() => {
     let live = true;
     const load = async () => {
       const request = ++sequence.current;
-      setState({ identity, permission: null, loading: !!provider, error: '' });
+      setState({ identity, permission: null, loading: !!providerID, error: '' });
       try {
-        const permission = provider ? await window.viewer.providerPermissionGet(provider.id) : null;
+        const permission = providerID
+          ? await window.viewer.providerPermissionGet(providerID)
+          : null;
         if (live && request === sequence.current)
           setState({ identity, permission, loading: false, error: '' });
       } catch (error) {
@@ -32,13 +35,13 @@ export function useModelPermission(provider?: ModelProvider) {
     };
     void load();
     const unsubscribe = window.viewer.onEvent((event) => {
-      if (event.type === 'model-permission' && event.providerID === provider?.id) void load();
+      if (event.type === 'model-permission' && event.providerID === providerID) void load();
     });
     return () => {
       live = false;
       unsubscribe();
     };
-  }, [identity, provider?.id]);
+  }, [identity, providerID]);
   return state.identity === identity
     ? state
     : { identity, permission: null, loading: !!provider, error: '' };

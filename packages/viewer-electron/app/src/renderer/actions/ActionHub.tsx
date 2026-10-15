@@ -10,8 +10,9 @@ import { useModelPermission } from '../ui/ModelDataPermission';
 import { modelDataLabels, modelPermissionCovers } from '../../domain/model-permissions';
 import type { CheckpointEstimate } from '../../domain/change-plan';
 import { formatBytes } from '../../domain/files';
+import { baseName } from '../../domain/planes';
 const busy = (plan: ActionPlan) => ['planning', 'applying'].includes(plan.status);
-const name = (path: string) => path.split(/[\\/]/).pop() || path;
+const name = (path: string) => baseName(path);
 function destinationParts(path: string) {
   const separator = path.startsWith('/') ? '/' : path.includes('\\') ? '\\' : '/';
   const index = path.lastIndexOf(separator);
@@ -436,7 +437,9 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
   ];
   const checkpointKey = JSON.stringify(checkpointPaths);
   useEffect(() => {
-    if (!checkpoint || !checkpointPaths.length) {
+    // The serialized key keeps an unchanged selection from re-estimating every render.
+    const paths = JSON.parse(checkpointKey) as string[];
+    if (!checkpoint || !paths.length) {
       setEstimate(undefined);
       return;
     }
@@ -444,7 +447,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
     setEstimate(undefined);
     setCheckpointError('');
     void window.viewer
-      .checkpoints({ kind: 'estimate', paths: checkpointPaths })
+      .checkpoints({ kind: 'estimate', paths })
       .then((value) => {
         if (live && value && 'supported' in value) setEstimate(value);
       })

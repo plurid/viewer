@@ -1,11 +1,7 @@
 import { z } from 'zod';
 import type { ChangePlan } from './change-plan';
 import { sourceVersionSchema } from './inspection';
-const localPath = z
-  .string()
-  .min(1)
-  .max(32768)
-  .refine((value) => value.startsWith('/') && !value.includes('\0'));
+import { portablePath as localPath } from './schemas';
 export const operationIntentSchema = z
   .object({
     kind: z.enum(['copy', 'move', 'trash', 'rename', 'mkdir']),

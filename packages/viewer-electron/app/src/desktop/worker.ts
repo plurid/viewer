@@ -8,6 +8,7 @@ import { readDrawingGeometry } from './drawing-geometry';
 import type { DrawingGeometryOptions } from '../domain/drawing-geometry';
 import { sameSourceVersion, sourceVersion } from '../domain/inspection';
 import { workerPort } from './worker-port';
+import { errorMessage } from '../domain/errors';
 interface Request {
   id: string;
   method:
@@ -185,7 +186,7 @@ port.on('message', async (event) => {
   } catch (error) {
     port.postMessage({
       id: request.id,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
       code: (error as NodeJS.ErrnoException).code,
     });
   }

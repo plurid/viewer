@@ -18,13 +18,8 @@ import {
   normalizePreferences,
 } from '../domain/preferences';
 import { discardOwnTemporaryFile } from './removal';
+import { localPath, id } from './schemas';
 
-const localPath = z
-  .string()
-  .min(1)
-  .max(32768)
-  .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
-const id = z.string().min(1).max(200);
 const pane = z.discriminatedUnion('type', [
   z.object({ id, type: z.literal('collection'), path: localPath, collectionID: z.uuid() }),
   z.object({

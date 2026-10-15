@@ -1196,65 +1196,50 @@ async function verifyFoundations(): Promise<void> {
     });
   };
   await click(`[data-file-owner=${JSON.stringify(folderID)}] .file-scroll`);
-  await until(
+  // Agents see only allow-listed commands; executables and terminals are never offered.
+  const catalog = await until(
     () => agentCall<{ commands: { id: string }[] }>('list_commands'),
-    (catalog) => catalog.commands.some((command) => command.id === 'open-terminal-plane'),
+    (value) => value.commands.some((command) => command.id === 'refresh'),
     'agent command catalog uses the focused file context',
   );
-  const processProposal = await agentCall<{ id: string; requiresUserReview: boolean }>(
-    'propose_command',
-    { commandID: 'custom.inspect-path' },
+  for (const id of ['open-terminal-plane', 'custom.inspect-path'])
+    assert.ok(
+      !catalog.commands.some((command) => command.id === id),
+      `${id} is not offered to agents`,
+    );
+  await assert.rejects(
+    () => agentCall('propose_command', { commandID: 'custom.inspect-path' }),
+    /Agents cannot run shell scripts, executables or terminal profiles/,
   );
-  assert.equal(processProposal.requiresUserReview, true);
-  await until(
-    () =>
-      evaluate<boolean>(
-        'Array.from(document.querySelectorAll("dialog[open] button")).some(button=>button.textContent==="Run action")',
-      ),
-    Boolean,
-    'custom process proposal requires review',
+  await assert.rejects(
+    () => agentCall('propose_command', { commandID: 'open-terminal-plane' }),
+    /terminal execution is unavailable/,
   );
-  await evaluate(
-    'Array.from(document.querySelectorAll("dialog[open] button")).find(button=>button.textContent==="Run action").click()',
-  );
-  const processResult = await until(
-    () =>
-      agentCall<{ status: string; task?: { output: string } }>('get_proposal', {
-        id: processProposal.id,
-      }),
-    (result) => result.status === 'completed',
-    'agent process completion and bounded output',
-  );
-  assert.ok(processResult.task?.output.includes(fixture.files));
   const proposal = await agentCall<{ id: string; requiresUserReview: boolean }>('propose_command', {
-    commandID: 'open-terminal-plane',
+    commandID: 'refresh',
   });
   assert.equal(proposal.requiresUserReview, true);
   await until(
     () =>
       evaluate<boolean>(
-        'Array.from(document.querySelectorAll("dialog[open] button")).some(button=>button.textContent==="Run action")',
+        'Array.from(document.querySelectorAll("dialog[open] button")).some(button=>button.textContent==="Reject")',
       ),
     Boolean,
     'agent action review appears before execution',
   );
   await snapshot('desktop-native-agent-review.png');
+  // Approving would open the desktop's own confirmation, which hidden checks cannot answer.
   await evaluate(
-    'Array.from(document.querySelectorAll("dialog[open] button")).find(button=>button.textContent==="Run action").click()',
+    'Array.from(document.querySelectorAll("dialog[open] button")).find(button=>button.textContent==="Reject").click()',
   );
   await until(
     () => agentCall<{ status: string }>('get_proposal', { id: proposal.id }),
-    (result) => result.status === 'completed',
-    'agent action waits for the renderer acknowledgement',
-  );
-  assert.equal(
-    await evaluate<number>(`${rootNode()}.children.length`),
-    2,
-    'The approved terminal is created under its captured root',
+    (result) => result.status === 'rejected',
+    'a rejected agent action never runs',
   );
   await assert.rejects(
     () => agentCall('propose_config', { patches: [{ path: 'executionApprovals', value: [] }] }),
-    /Unknown setting/,
+    /Agents cannot change/,
   );
   await evaluate(
     'window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:"settings.folders",value:{}}],s.revision))',

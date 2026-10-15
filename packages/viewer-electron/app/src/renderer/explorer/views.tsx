@@ -185,7 +185,8 @@ export function ListView(props: FileViewProps) {
   const compact = props.presentation ? props.presentation.density === 'compact' : defaultCompact;
   const defaultList = useViewer((state) => state.saved.ui.list);
   const list = props.presentation?.list || defaultList;
-  const columns = useMemo(() => visibleListColumns(list), [list.visible, list.order]);
+  const { visible, order } = list;
+  const columns = useMemo(() => visibleListColumns({ visible, order }), [visible, order]);
   const groups = useMemo(() => {
     const groups = new Map<number, string>();
     let last = '';
@@ -387,10 +388,11 @@ function Column({
       props.select(entry, event, filtered);
     },
   };
+  const { register, unregister } = navigation;
   useEffect(() => {
-    if (!listing.loading && !listing.error) navigation.register(path, filtered);
-    return () => navigation.unregister(path);
-  }, [path, filtered, listing.loading, listing.error, navigation.register, navigation.unregister]);
+    if (!listing.loading && !listing.error) register(path, filtered);
+    return () => unregister(path);
+  }, [path, filtered, listing.loading, listing.error, register, unregister]);
   return (
     <BrowserColumn path={path} entries={filtered} onActivate={() => navigation.activate(path)}>
       {listing.loading ? (
@@ -407,6 +409,8 @@ function Column({
 }
 function ListViewCompact({ props }: { props: FileViewProps }) {
   const actions = useRowActions(props);
+  // One stable object, so memoized rows skip re-rendering when nothing they show changed.
+  const rowProps = useMemo(() => ({ ...actions, paneID: props.paneID }), [actions, props.paneID]);
   const defaultCompact = useViewer(
     (state) => state.settings.settings.browsing.density === 'compact',
   );
@@ -433,7 +437,7 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
               compact
               entry={props.entries[item.index]}
               selected={props.selectionSet.has(props.entries[item.index].path)}
-              props={{ ...actions, paneID: props.paneID }}
+              props={rowProps}
             />
           </div>
         ))}

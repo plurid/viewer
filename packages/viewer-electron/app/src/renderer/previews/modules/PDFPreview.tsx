@@ -9,7 +9,7 @@ import {
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
-import { pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
+import { pdfCanvasRatio, pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 
@@ -18,6 +18,7 @@ export default function PDFPreview(context: PreviewContext) {
   const { resource, signal, active } = context;
   const [pdf, setPDF] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = usePreviewState(context, 'pdf.page', 1);
+  const pageText = useRef(new WeakMap<object, Map<number, string>>());
   // The old pdf.zoom value was width-relative, even though its label said 100%.
   const [savedZoom, setZoom] = usePreviewState<PDFZoom>(context, 'pdf.view', 'page');
   const zoom = pdfZoom(savedZoom);
@@ -106,7 +107,7 @@ export default function PDFPreview(context: PreviewContext) {
         setScale(nextScale);
         const target = canvas.current!;
         const container = text.current!;
-        const ratio = Math.min(devicePixelRatio, 2);
+        const ratio = pdfCanvasRatio(viewport, devicePixelRatio);
         target.width = Math.ceil(viewport.width * ratio);
         target.height = Math.ceil(viewport.height * ratio);
         target.style.width = `${viewport.width}px`;
@@ -148,18 +149,23 @@ export default function PDFPreview(context: PreviewContext) {
     const timer = setTimeout(() => {
       void (async () => {
         const found: number[] = [];
+        // Page text is extracted once per document; later queries reuse it.
+        let pages = pageText.current.get(pdf);
+        if (!pages) pageText.current.set(pdf, (pages = new Map()));
         for (let index = 1; index <= Math.min(pdf.numPages, 1000); index++) {
           if (cancelled || signal.aborted) return;
-          const sheet = await pdf.getPage(index);
-          const content = await sheet.getTextContent();
-          if (
-            content.items
+          let text = pages.get(index);
+          if (text === undefined) {
+            const sheet = await pdf.getPage(index);
+            const content = await sheet.getTextContent();
+            text = content.items
               .map((item) => ('str' in item ? item.str : ''))
               .join(' ')
-              .toLocaleLowerCase()
-              .includes(query.toLocaleLowerCase())
-          )
-            found.push(index);
+              .toLocaleLowerCase();
+            sheet.cleanup();
+            pages.set(index, text);
+          }
+          if (text.includes(query.toLocaleLowerCase())) found.push(index);
         }
         if (!cancelled) {
           setMatches(found);
@@ -178,7 +184,7 @@ export default function PDFPreview(context: PreviewContext) {
       clearTimeout(timer);
       setSearching(false);
     };
-  }, [pdf, query, signal]);
+  }, [pdf, query, signal, setPage]);
   usePreviewCommands(
     context,
     useMemo(

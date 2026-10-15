@@ -3,6 +3,7 @@ import type { CapturedTarget } from '../../domain/automation';
 import { activeWorkspace, getState, navigate } from '../state/store';
 import { browseSession, updateBrowseSession } from './sessions';
 import type { WorkspaceController } from './context';
+import { deferTerminalStart } from '../terminals/sessions';
 
 /** Uses the same host records as the UI. This path never requests an OS grant. */
 export async function executeAgentNavigation(
@@ -46,6 +47,7 @@ export async function executeAgentNavigation(
       (destination.type === 'search' && destination.allLocations !== request.pane.allLocations)
     )
       throw new Error('The destination plane changed. Request a new proposal.');
+    if (destination.type === 'terminal') deferTerminalStart([destination.id]);
     controller.focusPane(destination.id);
     return;
   }
@@ -68,6 +70,9 @@ export async function executeAgentNavigation(
       )
     )
       throw new Error('The destination workspace changed. Request a new proposal.');
+    deferTerminalStart(
+      destination.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
+    );
     await switchTo(destination.id);
     return;
   }

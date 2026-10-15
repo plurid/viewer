@@ -1,10 +1,5 @@
 import { z } from 'zod';
-const localPath = z
-  .string()
-  .max(32768)
-  .refine(
-    (value) => (value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)) && !value.includes('\0'),
-  );
+import { portablePath as localPath } from '../domain/schemas';
 const sections = z.enum(['locations', 'favorites', 'recents']);
 const fields = z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size']);
 const boolean = z.boolean();

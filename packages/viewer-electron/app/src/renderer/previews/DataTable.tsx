@@ -222,12 +222,10 @@ export function DelimitedTable({
         { length: columns },
         (_, index) => rows[0]?.[index] || `Column ${index + 1}`,
       ),
-      rows: rows
-        .slice(1)
-        .map((cells, index) => ({
-          row: index + 2,
-          cells: cells.slice(0, columns).map((value, index) => ({ column: index + 1, value })),
-        })),
+      rows: rows.slice(1).map((cells, index) => ({
+        row: index + 2,
+        cells: cells.slice(0, columns).map((value, index) => ({ column: index + 1, value })),
+      })),
     };
   }, [text, delimiter]);
   return (

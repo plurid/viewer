@@ -1,9 +1,8 @@
-import { constants } from 'node:fs';
-import { createHash } from 'node:crypto';
-import { open, readdir, realpath } from 'node:fs/promises';
+import { readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { entry, absolute } from './filesystem';
 import { fileCoordination } from './file-coordination';
+import { contentHash } from './content-hash';
 import { compareEntries, type ComparisonResult, type ComparisonRow } from '../domain/comparison';
 import { sourceVersion, sameSourceVersion } from '../domain/inspection';
 import type { FileEntry } from '../domain/contracts';
@@ -17,14 +16,22 @@ export class Comparisons {
   async run(id: string, left: string, right: string, hashes = false): Promise<ComparisonResult> {
     if (this.running.has(id)) throw new Error('This comparison is already running.');
     if (this.running.size >= 2) throw new Error('Wait for another comparison to finish.');
-    await this.access([left, right]);
-    left = await realpath(absolute(left));
-    right = await realpath(absolute(right));
-    const before = await Promise.all([entry(left), entry(right)]);
-    if (before[0].directory !== before[1].directory)
-      throw new Error('Compare two folders or two files.');
+    // Registered before any await, so a cancellation that arrives early is not lost.
     const abort = new AbortController();
     this.running.set(id, abort);
+    let before: [FileEntry, FileEntry];
+    try {
+      await this.access([left, right]);
+      left = await realpath(absolute(left));
+      right = await realpath(absolute(right));
+      before = await Promise.all([entry(left), entry(right)]);
+      if (before[0].directory !== before[1].directory)
+        throw new Error('Compare two folders or two files.');
+      abort.signal.throwIfAborted();
+    } catch (error) {
+      this.running.delete(id);
+      throw error;
+    }
     const timer = setTimeout(
       () => abort.abort(new Error('Comparison exceeded its time budget.')),
       120000,
@@ -93,51 +100,7 @@ export class Comparisons {
       };
       const a = await scan(left),
         b = await scan(right);
-      const digest = async (item: FileEntry) => {
-        await this.access([item.path]);
-        return fileCoordination.run(
-          [{ path: item.path, mode: 'read' }],
-          async () => {
-            const handle = await open(
-              fileCoordination.path(item.path),
-              constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-            );
-            try {
-              const info = await handle.stat();
-              if (!info.isFile()) throw new Error('A regular file is required for hashing.');
-              const hash = createHash('sha256'),
-                buffer = Buffer.alloc(256 * 1024);
-              let offset = 0;
-              while (offset < info.size) {
-                abort.signal.throwIfAborted();
-                const { bytesRead } = await handle.read(
-                  buffer,
-                  0,
-                  Math.min(buffer.length, info.size - offset),
-                  offset,
-                );
-                if (!bytesRead) throw new Error('The file changed during hashing.');
-                hash.update(buffer.subarray(0, bytesRead));
-                offset += bytesRead;
-              }
-              const after = await handle.stat();
-              if (
-                info.mtimeMs !== after.mtimeMs ||
-                info.size !== after.size ||
-                info.ctimeMs !== after.ctimeMs
-              )
-                throw new Error('The file changed during hashing.');
-              await this.access([item.path]);
-              if (!sameSourceVersion(sourceVersion(item), sourceVersion(await entry(item.path))))
-                throw new Error('The source changed. Compare it again.');
-              return hash.digest('hex');
-            } finally {
-              await handle.close();
-            }
-          },
-          abort.signal,
-        );
-      };
+      const digest = (item: FileEntry) => contentHash(item, this.access, abort.signal);
       for (const key of [...new Set([...a.keys(), ...b.keys()])].sort()) {
         abort.signal.throwIfAborted();
         const row: ComparisonRow = {

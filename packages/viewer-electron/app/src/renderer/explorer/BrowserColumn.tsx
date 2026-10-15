@@ -3,6 +3,7 @@ import type { FileEntry } from '../../domain/contracts';
 import { browserColumnWidth } from '../../domain/folder-presentation';
 import { updateFolderPresentation, useFolderPresentation } from '../state/store';
 import { measureLocalX, type Point } from '../ui/projectedResize';
+import { baseName } from '../../domain/planes';
 /** The geometry adapter is shared with list/sidebar resizing; movement never writes React state. */
 export function BrowserColumn({
   path,
@@ -38,13 +39,13 @@ export function BrowserColumn({
       onPointerDown={onActivate}
     >
       <div className="column-title" title={path}>
-        {path.split(/[\\/]/).pop() || path}
+        {baseName(path)}
       </div>
       {children}
       <button
         className="browser-column-resizer"
         role="separator"
-        aria-label={`Resize ${path.split(/[\\/]/).pop()} browsing column`}
+        aria-label={`Resize ${baseName(path)} browsing column`}
         aria-orientation="vertical"
         aria-valuemin={160}
         aria-valuemax={1600}

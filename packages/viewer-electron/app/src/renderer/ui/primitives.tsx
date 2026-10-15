@@ -8,6 +8,7 @@ import {
   type KeyboardEventHandler,
 } from 'react';
 import { Icon, type IconName } from './Icon';
+import { errorMessage } from '../../domain/errors';
 
 export function IconButton({
   icon,
@@ -144,7 +145,7 @@ export function NameDialog({
             await onSubmit(name);
             onClose();
           } catch (error) {
-            setError(error instanceof Error ? error.message : String(error));
+            setError(errorMessage(error));
             setBusy(false);
           }
         }}

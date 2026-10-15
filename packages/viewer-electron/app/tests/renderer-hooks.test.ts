@@ -1,0 +1,206 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
+import type { FileEntry, DesktopEvent } from '../src/domain/contracts';
+import { useFolder } from '../src/renderer/explorer/useFolder';
+import { useContextPublish } from '../src/renderer/explorer/context-publish';
+import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
+import { initialize, receiveJob } from '../src/renderer/state/store';
+import type { OperationJob } from '../src/domain/contracts';
+import { DuplicateControls } from '../src/renderer/ui/Duplicates';
+import { TrashContents, groupSelection } from '../src/renderer/explorer/FileDialogs';
+import type { CommandContext } from '../src/renderer/commands/registry';
+
+let listeners: ((event: DesktopEvent) => void)[];
+let identity: string;
+const viewer = {
+  list: vi.fn(async (path: string) => ({ path, entries: [] as FileEntry[] })),
+  watch: vi.fn(async () => {}),
+  unwatch: vi.fn(async () => {}),
+  stat: vi.fn(async (path: string) => ({ path, identity }) as FileEntry),
+  contextPublish: vi.fn(async () => {}),
+  folderSizeStart: vi.fn(async (paths: string[]) => ({
+    id: 'size',
+    paths,
+    status: 'completed' as const,
+    bytes: 2048,
+    files: 12,
+    folders: 3,
+    skipped: 0,
+  })),
+  folderSizeCancel: vi.fn(async () => {}),
+  operate: vi.fn(async (): Promise<string> => 'job'),
+  duplicates: vi.fn(async () => ({
+    id: 'search',
+    roots: ['/Photos'],
+    scanned: 3,
+    coverage: 'complete' as const,
+    errors: [],
+    created: 0,
+    groups: [
+      {
+        hash: 'a'.repeat(64),
+        size: 2048,
+        files: [
+          { path: '/Photos/one.jpg', name: 'one.jpg', modified: 1, identity: '1:1', size: 2048 },
+          { path: '/Photos/two.jpg', name: 'two.jpg', modified: 2, identity: '1:2', size: 2048 },
+        ],
+      },
+    ],
+  })),
+  onEvent: (listener: (event: DesktopEvent) => void) => {
+    listeners.push(listener);
+    return () => {
+      listeners = listeners.filter((item) => item !== listener);
+    };
+  },
+};
+const emit = (event: DesktopEvent) => listeners.forEach((listener) => listener(event));
+// jsdom has no modal dialogs; opening one only needs the `open` attribute here.
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.setAttribute('open', '');
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  this.removeAttribute('open');
+};
+beforeEach(() => {
+  listeners = [];
+  identity = '1:100';
+  vi.useFakeTimers();
+  Object.assign(window, { viewer });
+  for (const mock of Object.values(viewer)) if (vi.isMockFunction(mock)) mock.mockClear();
+});
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+async function settle() {
+  await act(async () => {
+    await vi.runAllTimersAsync();
+  });
+}
+
+describe('shared folder listings', () => {
+  it('re-lists after an ancestor change only when the folder itself moved or was replaced', async () => {
+    const folder = '/Users/fixture/Documents/Project';
+    renderHook(() => useFolder(folder));
+    await settle();
+    expect(viewer.list).toHaveBeenCalledTimes(1);
+    // A write elsewhere in Home (a .DS_Store or shell history) changes nothing here.
+    emit({ type: 'folder-changed', path: '/Users/fixture' });
+    await settle();
+    expect(viewer.list).toHaveBeenCalledTimes(1);
+    // The folder was replaced by another one at the same path.
+    identity = '1:200';
+    emit({ type: 'folder-changed', path: '/Users/fixture/Documents' });
+    await settle();
+    expect(viewer.list).toHaveBeenCalledTimes(2);
+    // Its own change always re-lists.
+    emit({ type: 'folder-changed', path: folder });
+    await settle();
+    expect(viewer.list).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('published selection context', () => {
+  const workspace = { rootID: () => 'root' } as unknown as WorkspaceController;
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(WorkspaceContext.Provider, { value: workspace }, children);
+  it('describes no sources rather than a partial list for very large selections', async () => {
+    initialize({ home: '/', platform: 'darwin', locations: [], state: null, openPaths: [] });
+    const small = [{ path: '/a' }, { path: '/b' }];
+    const { rerender } = renderHook(({ selected }) => useContextPublish('pane', true, selected), {
+      wrapper,
+      initialProps: { selected: small },
+    });
+    expect(viewer.contextPublish).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sources: ['/a', '/b'] }),
+    );
+    const large = Array.from({ length: 2500 }, (_, index) => ({ path: `/f${index}` }));
+    rerender({ selected: large });
+    expect(viewer.contextPublish).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sources: [] }),
+    );
+  });
+});
+
+describe('Trash confirmation', () => {
+  it('shows the full contents of selected folders before confirming', async () => {
+    initialize({ home: '/', platform: 'darwin', locations: [], state: null, openPaths: [] });
+    const context = {
+      selection: [{ path: '/Users/fixture/Drafts', name: 'Drafts', directory: true }],
+    } as unknown as CommandContext;
+    const view = render(createElement(TrashContents, { context }));
+    await settle();
+    expect(viewer.folderSizeStart).toHaveBeenCalledWith(['/Users/fixture/Drafts']);
+    expect(view.container.textContent).toContain('12 files in 3 folders');
+  });
+});
+
+describe('new folder with selection', () => {
+  it('moves the chosen items into the folder that was actually created', async () => {
+    vi.useRealTimers();
+    initialize({ home: '/', platform: 'darwin', locations: [], state: null, openPaths: [] });
+    const created = {
+      id: 'mkdir-job',
+      revision: 1,
+      kind: 'mkdir',
+      status: 'completed',
+      sources: [],
+      destination: '/Work',
+      bytesDone: 0,
+      bytesTotal: 0,
+      itemsDone: 1,
+      itemsTotal: 1,
+      completed: [{ source: '', destination: '/Work/Items copy' }],
+      errors: [],
+      errorCount: 0,
+      undoable: true,
+    } as OperationJob;
+    viewer.operate.mockImplementationOnce(async () => {
+      setTimeout(() => receiveJob(created));
+      return 'mkdir-job';
+    });
+    const file = {
+      path: '/Work/a.txt',
+      name: 'a.txt',
+      parent: '/Work',
+      identity: '1:5',
+      modified: 3,
+      size: 4,
+    };
+    await groupSelection(
+      { directory: '/Work', selection: [file] } as unknown as CommandContext,
+      'Items',
+    );
+    expect(viewer.operate).toHaveBeenLastCalledWith({
+      kind: 'move',
+      sources: ['/Work/a.txt'],
+      destination: '/Work/Items copy',
+      expectedSources: [
+        { path: '/Work/a.txt', version: { identity: '1:5', modified: 3, size: 4 } },
+      ],
+    });
+  });
+});
+
+describe('duplicate finder dialog', () => {
+  it('chooses nothing at first and never lets every copy of a file be chosen', async () => {
+    vi.useRealTimers();
+    render(createElement(DuplicateControls));
+    act(() => {
+      window.dispatchEvent(new CustomEvent('viewer:duplicates', { detail: ['/Photos'] }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Find duplicates', { selector: 'button' }));
+    });
+    const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
+    expect(boxes.map((box) => box.checked)).toEqual([false, false]);
+    fireEvent.click(boxes[0]);
+    expect(boxes[0].checked).toBe(true);
+    expect(boxes[1].disabled).toBe(true);
+    fireEvent.click(boxes[1]);
+    expect(boxes[1].checked).toBe(false);
+  });
+});

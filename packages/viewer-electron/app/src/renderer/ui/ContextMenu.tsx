@@ -48,6 +48,8 @@ export function ContextMenu({
       if (!document.querySelector('dialog[open]') && previous?.isConnected)
         previous.focus({ preventScroll: true });
     };
+    // Placed once when opened; re-running would also move focus back on each change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const select = (command: ResolvedCommand) => {
     onClose();

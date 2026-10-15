@@ -31,6 +31,7 @@ export function Volumes({
     }
   }, []);
   useEffect(() => {
+    const requests = sequence;
     live.current = true;
     void refresh();
     const interval = setInterval(() => {
@@ -38,7 +39,8 @@ export function Volumes({
     }, 5000);
     return () => {
       live.current = false;
-      sequence.current++;
+      // Invalidate replies to requests started before closing.
+      requests.current++;
       clearInterval(interval);
     };
   }, [refresh]);

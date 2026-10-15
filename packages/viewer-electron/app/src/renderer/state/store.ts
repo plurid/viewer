@@ -46,6 +46,7 @@ import {
   type JSONValue,
   type ProjectLayout,
 } from '../../domain/project';
+import { errorMessage } from '../../domain/errors';
 
 interface ViewerState {
   settings: SettingsSnapshot;
@@ -216,6 +217,19 @@ export function initialize(bootstrap: Bootstrap): void {
   emit();
 }
 export const getState = () => current;
+/** Resolves once the job reaches a final status, as reported to this window. */
+export function settledJob(id: string): Promise<OperationJob> {
+  return new Promise((resolve) => {
+    const check = () => {
+      const job = current.jobs.find((job) => job.id === id);
+      if (!job || !['completed', 'failed', 'cancelled'].includes(job.status)) return;
+      listeners.delete(check);
+      resolve(job);
+    };
+    listeners.add(check);
+    check();
+  });
+}
 export function useViewer<T>(selector: (state: ViewerState) => T): T {
   return useSyncExternalStore(
     (listener) => {
@@ -228,7 +242,7 @@ export function useViewer<T>(selector: (state: ViewerState) => T): T {
   );
 }
 export function report(error: unknown): void {
-  update({ ...current, notice: error instanceof Error ? error.message : String(error) });
+  update({ ...current, notice: errorMessage(error) });
 }
 export function dismissNotice(): void {
   update({ ...current, notice: null });
@@ -754,8 +768,9 @@ function retainedPreviewStates(): SavedState['previewStates'] {
   return kept.length === entries.length ? states : Object.fromEntries(kept);
 }
 export async function flushState(flushEngine = true): Promise<void> {
-  clearTimeout(persistTimer);
   if (flushEngine) window.dispatchEvent(new Event('pagehide'));
+  // After the engine's synchronous flush: a save it scheduled is covered by this one.
+  clearTimeout(persistTimer);
   await flushPreferences();
   const saved = {
     ...current.saved,
@@ -1084,6 +1099,8 @@ export function useFolderPresentation(path: string): FolderPresentation {
   const override = useViewer((state) => state.settings.settings.folders[path]);
   const list = useViewer((state) => state.saved.ui.list);
   const project = useViewer((state) => activeWorkspace(state).project?.folders[path]);
+  // folderPresentation reads the store; the selections above are exactly its inputs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => folderPresentation(path), [path, browsing, override, list, project]);
 }
 export function updateFolderPresentation(path: string, patch: FolderOverride | null): void {
@@ -1152,7 +1169,7 @@ export function updateFolderPresentation(path: string, patch: FolderOverride | n
     void flushPreferences().catch(report);
   }, 80);
 }
-export function useFolderAsDefaults(path: string): void {
+export function applyFolderAsDefaults(path: string): void {
   const value = folderPresentation(path);
   const { list, mode, sort, descending, showHidden, density, foldersFirst, group, columnWidth } =
     value;

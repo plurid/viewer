@@ -9,6 +9,7 @@ import {
 import { Dialog, IconButton } from '../ui/primitives';
 import { SelectionSize, calculateSize } from './sizes';
 import { getState, report } from '../state/store';
+import { errorMessage } from '../../domain/errors';
 
 function InformationEditor({ entry }: { entry: FileEntry }) {
   const [original, setOriginal] = useState<Information>();
@@ -36,7 +37,7 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
         setSaved(false);
       })
       .catch((cause: unknown) => {
-        if (active) setError(cause instanceof Error ? cause.message : String(cause));
+        if (active) setError(errorMessage(cause));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -86,7 +87,7 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
           setDraft(value);
           setSaved(true);
         } catch (cause) {
-          setError(cause instanceof Error ? cause.message : String(cause));
+          setError(errorMessage(cause));
         } finally {
           setBusy(false);
         }

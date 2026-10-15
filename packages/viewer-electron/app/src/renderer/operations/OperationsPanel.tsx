@@ -4,6 +4,7 @@ import { formatBytes } from '../../domain/files';
 import { report, setOperationsOpen, useViewer } from '../state/store';
 import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
+import { baseName } from '../../domain/planes';
 
 export function OperationsPanel() {
   const jobs = useViewer((state) => state.jobs);
@@ -100,7 +101,7 @@ export function OperationsPanel() {
           </div>
           {job.collision && (
             <div className="collision">
-              <strong>“{job.collision.destination.split(/[\\/]/).pop()}” already exists.</strong>
+              <strong>“{baseName(job.collision.destination)}” already exists.</strong>
               <p>
                 {job.collision.replaceable === false
                   ? 'The existing item cannot be replaced because it contains the source or is a folder.'
@@ -144,7 +145,7 @@ export function OperationsPanel() {
           )}
           {job.errors.map((error, index) => (
             <p className="error" key={index}>
-              {error.path.split(/[\\/]/).pop()}: {error.message}
+              {baseName(error.path)}: {error.message}
             </p>
           ))}
           {job.recovery && (
@@ -194,8 +195,8 @@ export function OperationsPanel() {
         <Dialog title="Replace existing item?" onClose={() => setReplace(null)}>
           <div className="dialog-copy">
             <p>
-              “{replace.path.split(/[\\/]/).pop()}” will be sent to Trash once its replacement is
-              ready. If the replacement fails, Viewer puts it back when it can.
+              “{baseName(replace.path)}” will be sent to Trash once its replacement is ready. If the
+              replacement fails, Viewer puts it back when it can.
             </p>
             {replace.applyAll && <p>This applies to the remaining conflicts in this operation.</p>}
           </div>

@@ -2328,6 +2328,13 @@ select {
   color: var(--accent);
   text-decoration: underline;
 }
+button.markdown-link {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
 .markdown pre {
   background: var(--field);
   padding: 14px;
@@ -3874,6 +3881,44 @@ select {
 .collections-query-form {
   display: grid;
   gap: 16px;
+}
+.basket-list {
+  max-height: 320px;
+  overflow: auto;
+}
+.duplicates-body {
+  display: grid;
+  gap: 12px;
+}
+.duplicate-groups {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+}
+.duplicate-group {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.duplicate-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.duplicate-file > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.collections-body .basket-list .project-control-row > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .collections-body input:not([type='checkbox']) {
   width: 100%;

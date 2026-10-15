@@ -20,6 +20,7 @@ import { renameNames, type RenameInput } from '../../domain/batch-rename';
 import { localBookFields } from '../formats';
 import type { Operations } from '../operations';
 import { fileCoordination } from '../file-coordination';
+import { errorMessage } from '../../domain/errors';
 const output = z.object({
   rows: z
     .array(
@@ -281,7 +282,7 @@ export class ActionPlanner {
       .then(() => this.plan(plan, recipe, request, abort.signal))
       .catch(async (error) => {
         plan.status = abort.signal.aborted ? 'cancelled' : 'failed';
-        plan.error = error instanceof Error ? error.message : String(error);
+        plan.error = errorMessage(error);
         await this.publish(plan);
       })
       .finally(() => {
@@ -760,7 +761,7 @@ export class ActionPlanner {
           plan.status = 'completed';
           plan.undoable = selected.every((row) => !!row.source);
         } catch (error) {
-          plan.error = error instanceof Error ? error.message : String(error);
+          plan.error = errorMessage(error);
           // Restore only to free original paths; never overwrite a concurrent file.
           for (const row of selected)
             if (row.stagedPath && (await exists(row.stagedPath)) && row.source) {

@@ -26,6 +26,8 @@ export function FilePermissions({ error }: { error(message: string): void }) {
     return () => {
       live = false;
     };
+    // Loads once when the dialog opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const choose = async (path?: string) => {
     setBusy(path || 'choose');

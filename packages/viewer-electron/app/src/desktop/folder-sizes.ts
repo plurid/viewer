@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { FolderSizeTask } from '../domain/metadata';
 import { absolute } from './filesystem';
+import { errorMessage } from '../domain/errors';
 
 /** Read-only logical contents sizes. Never opens file contents or follows symbolic links. */
 export class FolderSizes {
@@ -127,7 +128,7 @@ export class FolderSizes {
       task.items = items;
     } catch (error) {
       task.status = signal.aborted ? 'cancelled' : 'failed';
-      if (!signal.aborted) task.error = error instanceof Error ? error.message : String(error);
+      if (!signal.aborted) task.error = errorMessage(error);
     } finally {
       this.active.delete(task.id);
       this.emit({ ...task });

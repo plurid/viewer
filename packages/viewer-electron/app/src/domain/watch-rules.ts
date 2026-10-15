@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import { sourceVersionSchema } from './inspection';
-const localPath = z
-  .string()
-  .min(1)
-  .max(32768)
-  .refine((value) => value.startsWith('/') && !value.includes('\0'), 'Use an absolute local path.');
+import { portablePath as localPath } from './schemas';
 /** Approval lives in private state, separately from editable workflow definitions. */
 export const watchRuleScopeSchema = z
   .object({

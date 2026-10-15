@@ -1,6 +1,7 @@
 import * as pty from 'node-pty';
 import type { TerminalEvent } from '../domain/automation';
 import { workerPort } from './worker-port';
+import { errorMessage } from '../domain/errors';
 interface Session {
   process: pty.IPty;
   pending: number;
@@ -93,7 +94,7 @@ port.on('message', (message) => {
     emit({
       type: 'error',
       id: request.id,
-      message: error instanceof Error ? error.message : String(error),
+      message: errorMessage(error),
     });
     if (!session) emit({ type: 'exit', id: request.id, code: 1 });
   }

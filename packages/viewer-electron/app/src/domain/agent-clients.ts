@@ -62,6 +62,6 @@ export interface AgentAudit {
   at: number;
   clientID: string;
   tool: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'rejected' | 'cancelled';
   detail: string;
 }

@@ -3,12 +3,8 @@ import { realpath } from 'node:fs/promises';
 import { z } from 'zod';
 import { DocumentStore } from './document-store';
 import type { TrashReceipt } from './macos-files';
+import { localPath } from './schemas';
 
-const localPath = z
-  .string()
-  .min(1)
-  .max(32768)
-  .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
 const document = z
   .object({
     version: z.literal(1),

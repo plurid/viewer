@@ -476,6 +476,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return operations.resolve(args[0] as string, args[1] as 'skip', args[2] as boolean);
     case 'undo':
       return operations.undo(args[0] as string);
+    case 'redo':
+      return operations.redo(args[0] as string);
     case 'resource':
       return resourceURL(await resources.grant(scoped(args[0] as string)));
     case 'read':

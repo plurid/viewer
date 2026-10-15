@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ApplicationChoices, NativeApplication } from '../../domain/metadata';
 import { Dialog, Loading } from './primitives';
 import { Icon } from './Icon';
+import { errorMessage } from '../../domain/errors';
 
 export function OpenWithDialog({ paths, onClose }: { paths: string[]; onClose(): void }) {
   const [choices, setChoices] = useState<ApplicationChoices>();
@@ -19,7 +20,7 @@ export function OpenWithDialog({ paths, onClose }: { paths: string[]; onClose():
       })
       .catch((error) => {
         if (live) {
-          setError(error instanceof Error ? error.message : String(error));
+          setError(errorMessage(error));
           setChoices({ supported: true, applications: [] });
         }
       });
@@ -43,7 +44,7 @@ export function OpenWithDialog({ paths, onClose }: { paths: string[]; onClose():
       await window.viewer.openWith(paths, application.id);
       onClose();
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      setError(errorMessage(error));
       setBusy(false);
     }
   };
@@ -58,7 +59,7 @@ export function OpenWithDialog({ paths, onClose }: { paths: string[]; onClose():
         onClose();
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      setError(errorMessage(error));
     } finally {
       setBusy(false);
     }

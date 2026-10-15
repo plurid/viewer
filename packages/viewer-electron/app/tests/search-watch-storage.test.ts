@@ -87,7 +87,7 @@ describe('search, subscriptions and persistence', () => {
     await writeFile(path.join(root, '.hidden', 'Résumé-secret.txt'), '');
     await symlink(root, path.join(root, 'nested', 'cycle'));
     const batches: SearchBatch[] = [];
-    const search = new Search((batch) => batches.push(batch));
+    const search = new Search((batch) => batches.push(batch), null);
     search.start({ id: 'search', root, query: 'résumé', showHidden: false });
     await vi.waitFor(() => expect(batches.at(-1)?.done).toBe(true));
     expect(batches.flatMap((batch) => batch.entries).map((entry) => entry.name)).toEqual([
@@ -100,7 +100,7 @@ describe('search, subscriptions and persistence', () => {
     const search = new Search((batch) => {
       batches.push(batch);
       if (!batch.done) search.cancel('search');
-    });
+    }, null);
     for (let index = 0; index < 100; index++)
       await writeFile(path.join(root, `match-${index}`), '');
     search.start({ id: 'search', root, query: 'match', showHidden: false });
@@ -214,5 +214,28 @@ describe('search, subscriptions and persistence', () => {
     expect(salvaged.recovery).toContain('1 saved workspace was damaged');
     const kept = (await readdir(root)).filter((name) => name.includes('unreadable'));
     expect(kept).toHaveLength(2);
+  });
+});
+describe('folder search with Spotlight', () => {
+  it('shows Spotlight matches first, then completes the walk without repeating them', async () => {
+    const folder = path.join(root, 'spotlight');
+    await mkdir(path.join(folder, 'nested'), { recursive: true });
+    await writeFile(path.join(folder, 'Report one.txt'), 'a');
+    await writeFile(path.join(folder, 'nested', 'report two.txt'), 'b');
+    await writeFile(path.join(folder, '.report hidden'), 'c');
+    const batches: SearchBatch[] = [];
+    const spotlight = vi.fn(async () => [
+      path.join(folder, 'Report one.txt'),
+      path.join(folder, '.report hidden'),
+      '/elsewhere/report.txt',
+      path.join(folder, 'unrelated.txt'),
+    ]);
+    const search = new Search((batch) => batches.push(batch), spotlight);
+    search.start({ id: 'spot', root: folder, query: 'report', showHidden: false });
+    await vi.waitFor(() => expect(batches.at(-1)?.done).toBe(true));
+    const names = batches.flatMap((batch) => batch.entries.map((item) => item.name));
+    expect(names[0]).toBe('Report one.txt');
+    expect(names.toSorted()).toEqual(['Report one.txt', 'report two.txt']);
+    await search.close();
   });
 });

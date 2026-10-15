@@ -9,7 +9,13 @@ import { defaultSettings } from '../domain/services';
 import { providerKinds } from '../domain/model-providers';
 import type { UIPreferences, Pane, FolderPane } from '../domain/contracts';
 import { normalizePreferences } from '../domain/preferences';
-import { defaultShortcuts, shortcutKey, validShortcut } from '../domain/shortcuts';
+import {
+  alternateShortcuts,
+  defaultShortcuts,
+  menuShortcuts,
+  shortcutKey,
+  validShortcut,
+} from '../domain/shortcuts';
 import fs from 'node:fs/promises';
 import { JsoncConfiguration, configChanges, overlaps } from './configuration';
 import {
@@ -17,11 +23,7 @@ import {
   customActionSchema,
   folderOverrideSchema,
 } from './automation-schema';
-const localPath = z
-  .string()
-  .max(32768)
-  .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
-const id = z.string().min(1).max(200);
+import { localPath, id } from './schemas';
 const recipe = z
   .object({
     id,
@@ -238,7 +240,8 @@ export const settingsSchema = z
         message: 'Choose an existing terminal profile.',
       });
     const shortcuts = [
-      ...Object.values({ ...defaultShortcuts, ...value.shortcuts }),
+      ...Object.values({ ...defaultShortcuts, ...menuShortcuts, ...value.shortcuts }),
+      ...Object.values(alternateShortcuts),
       ...value.recipes.map((item) => item.shortcut || ''),
       ...value.customActions.map((item) => item.shortcut || ''),
     ].filter(Boolean);

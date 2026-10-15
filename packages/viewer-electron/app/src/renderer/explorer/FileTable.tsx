@@ -40,10 +40,9 @@ export function FileTable({
   );
   const presentation = useFolderPresentation(folder?.type === 'folder' ? folder.path : '');
   const preferences = presentation.list;
-  const columns = useMemo(
-    () => visibleListColumns(preferences),
-    [preferences.visible, preferences.order],
-  );
+  const { visible, order } = preferences;
+  // Widths change while resizing; only visibility and order decide the columns.
+  const columns = useMemo(() => visibleListColumns({ visible, order }), [visible, order]);
   const table = useRef<HTMLDivElement>(null);
   const resize = useRef<{
     column: ListColumn;

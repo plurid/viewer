@@ -179,7 +179,6 @@ function FileFinder({
       listing.entries,
       search.entries,
       indexed.result,
-      scope,
       indexedMode,
       subtree,
       query,

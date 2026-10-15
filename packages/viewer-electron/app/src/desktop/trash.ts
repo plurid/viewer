@@ -17,6 +17,7 @@ import { trashName } from '../domain/trash';
 import { linuxMounts, trashRoots, type TrashRoot } from './trash-locations';
 import { macFiles } from './macos-files';
 import type { FileAccess } from './file-access';
+import { errorMessage } from '../domain/errors';
 
 const run = promisify(execFile);
 const limit = 4000;
@@ -294,7 +295,7 @@ export class Trash {
     } catch (error) {
       if (restored)
         throw new Error(
-          `${restored} ${restored === 1 ? 'item restored' : 'items restored'}. Remaining items were kept in Trash. ${error instanceof Error ? error.message : String(error)}`,
+          `${restored} ${restored === 1 ? 'item restored' : 'items restored'}. Remaining items were kept in Trash. ${errorMessage(error)}`,
         );
       throw error;
     } finally {
@@ -465,7 +466,7 @@ export class Trash {
         await dialog.showMessageBox(window, {
           type: 'error',
           message: `${title} could not be emptied`,
-          detail: error instanceof Error ? error.message : String(error),
+          detail: errorMessage(error),
           buttons: ['OK'],
         });
     } finally {

@@ -2,13 +2,7 @@ import { z } from 'zod';
 import { sourceVersionSchema, evidenceNavigationSchema } from './inspection';
 import type { FileEntry } from './contracts';
 import type { IndexedQuery } from './services';
-const localPath = z
-  .string()
-  .min(1)
-  .max(32768)
-  .refine(
-    (value) => (value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)) && !value.includes('\0'),
-  );
+import { portablePath as localPath } from './schemas';
 export const basketItemSchema = z
   .object({
     path: localPath,

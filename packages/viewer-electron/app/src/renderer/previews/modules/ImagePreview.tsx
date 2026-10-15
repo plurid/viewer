@@ -65,7 +65,7 @@ export default function ImagePreview(context: PreviewContext) {
     return () => {
       element.removeEventListener('wheel', wheel);
     };
-  }, [active, interactive, available]);
+  }, [active, interactive, available, setZoom]);
   usePreviewCommands(
     context,
     useMemo(
@@ -94,7 +94,7 @@ export default function ImagePreview(context: PreviewContext) {
           run: () => setZoom((value) => Math.max(0.1, value / 1.25)),
         },
       ],
-      [available, zoom],
+      [available, zoom, setPan, setZoom],
     ),
   );
   if (byteLimited || thumbnailFailed)

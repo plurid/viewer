@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   activeWorkspace,
   useViewer,
@@ -11,6 +12,43 @@ import { useWorkspace } from '../workspace/context';
 import { Dialog, Loading } from './primitives';
 import { prepareOperationReview } from './OperationReview';
 import type { Collection } from '../../domain/collections';
+/** Every basket reference stays reachable, however many there are. */
+function BasketList({ paths, busy }: { paths: string[]; busy: boolean }) {
+  const viewport = useRef<HTMLDivElement>(null);
+  const rows = useVirtualizer({
+    count: paths.length,
+    getScrollElement: () => viewport.current,
+    estimateSize: () => 40,
+    overscan: 8,
+  });
+  if (!paths.length) return null;
+  return (
+    <div ref={viewport} className="basket-list">
+      <div style={{ height: rows.getTotalSize(), position: 'relative' }}>
+        {rows.getVirtualItems().map((virtual) => {
+          const path = paths[virtual.index];
+          return (
+            <div
+              key={path}
+              className="project-control-row"
+              style={{
+                position: 'absolute',
+                width: '100%',
+                height: virtual.size,
+                transform: `translateY(${virtual.start}px)`,
+              }}
+            >
+              <span title={path}>{path}</span>
+              <button disabled={busy} onClick={() => removeFromBasket([path])}>
+                Remove
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 export function CollectionControls() {
   const space = useViewer(activeWorkspace),
     workspace = useWorkspace();
@@ -64,19 +102,7 @@ export function CollectionControls() {
             Clear basket
           </button>
         </div>
-        {basket.slice(0, 100).map((item) => (
-          <div className="project-control-row" key={item.path}>
-            <span>{item.path}</span>
-            <button disabled={busy} onClick={() => removeFromBasket([item.path])}>
-              Remove
-            </button>
-          </div>
-        ))}
-        {basket.length > 100 && (
-          <p className="muted">
-            Showing the first 100 references. Review includes all {basket.length} files.
-          </p>
-        )}
+        <BasketList paths={basket.map((item) => item.path)} busy={busy} />
         <div className="settings-actions">
           <button
             disabled={busy || !basket.length}

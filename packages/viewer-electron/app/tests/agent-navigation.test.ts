@@ -596,6 +596,11 @@ describe('reviewed MCP workspace navigation', () => {
       'outside the agent folder scope',
     );
   });
+  it('answers alike for missing and existing paths outside the agent folders', async () => {
+    const message = 'outside the agent’s authorized folders';
+    await expect(broker.authorize(secret)).rejects.toThrow(message);
+    await expect(broker.authorize(path.join(root, 'no such file'))).rejects.toThrow(message);
+  });
   it.each(['native', 'roots', 'disabled'])(
     'rechecks %s permission after review',
     async (change) => {

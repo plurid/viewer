@@ -59,8 +59,7 @@ vi.mock('../src/desktop/macos-files', async (original) => {
 });
 import { Operations } from '../src/desktop/operations';
 import { ProtectedPaths } from '../src/desktop/protected-paths';
-import { operationJournal } from '../src/desktop/operation-journal';
-import { DocumentStore } from '../src/desktop/document-store';
+import { OperationLog, operationJournal } from '../src/desktop/operation-journal';
 let root: string, destination: string, trash: string, operations: Operations;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-ops-');
@@ -105,15 +104,14 @@ describe('file operation queue', () => {
     const dataPath = path.join(root, 'private');
     const source = path.join(root, 'original.txt');
     await writeFile(source, 'original');
-    const save = DocumentStore.prototype.save;
-    vi.spyOn(DocumentStore.prototype, 'save').mockImplementation(function (
-      this: DocumentStore<unknown>,
-      value,
+    const record = OperationLog.prototype.record;
+    vi.spyOn(OperationLog.prototype, 'record').mockImplementation(function (
+      this: OperationLog,
+      receipt,
     ) {
-      const document = value as { records?: { job: OperationJob }[] };
-      if (document.records?.some(({ job }) => job.status === 'completed'))
+      if (receipt.job.status === 'completed')
         return Promise.reject(new Error('Generated final receipt write failure'));
-      return save.call(this, value);
+      return record.call(this, receipt);
     });
     operations = new Operations(
       async () => {},
@@ -191,10 +189,10 @@ describe('file operation queue', () => {
     );
     const copied = await run({ kind: 'copy', sources: [source], destination });
     await operations.close();
-    const journal = operationJournal(dataPath),
-      document = (await journal.load())!;
-    document.records[0].intent = { source: path.join(destination, 'original.txt') };
-    await journal.save(document);
+    const journal = new OperationLog(dataPath),
+      [receipt] = (await journal.load()).receipts;
+    receipt.intent = { source: path.join(destination, 'original.txt') };
+    await journal.compact(receipt);
     operations = new Operations(
       async () => {},
       () => {},
@@ -291,9 +289,9 @@ describe('file operation queue', () => {
     const copied = await run({ kind: 'copy', sources: [source], destination });
     expect(copied.undoable).toBe(true);
     await operations.close();
-    expect((await lstat(path.join(dataPath, 'operation-journal-v1.json'))).mode & 0o777).toBe(
-      0o600,
-    );
+    const logs = path.join(dataPath, 'operation-journal-v2');
+    expect((await lstat(logs)).mode & 0o777).toBe(0o700);
+    expect((await lstat(path.join(logs, copied.id + '.jsonl'))).mode & 0o777).toBe(0o600);
     operations = new Operations(remove, () => {}, undefined, undefined, undefined, dataPath);
     await operations.load();
     expect(operations.all().find((job) => job.id === copied.id)?.undoable).toBe(true);
@@ -370,7 +368,7 @@ describe('file operation queue', () => {
     );
     const source = path.join(root, 'source');
     await writeFile(source, 'must stay');
-    vi.spyOn(DocumentStore.prototype, 'save').mockRejectedValue(
+    vi.spyOn(OperationLog.prototype, 'record').mockRejectedValue(
       Object.assign(new Error('Disk is full'), { code: 'ENOSPC' }),
     );
     const job = await run({ kind: 'rename', sources: [source], name: 'renamed' });
@@ -718,14 +716,13 @@ describe('replace safety', () => {
     await writeFile(source, 'x');
     if (!(await caseInsensitive(source))) return;
     const staged: string[] = [];
-    const save = DocumentStore.prototype.save;
-    vi.spyOn(DocumentStore.prototype, 'save').mockImplementation(function (
-      this: DocumentStore<unknown>,
-      value,
+    const record = OperationLog.prototype.record;
+    vi.spyOn(OperationLog.prototype, 'record').mockImplementation(function (
+      this: OperationLog,
+      receipt,
     ) {
-      const records = (value as { records?: { intent?: { staging?: string } }[] }).records ?? [];
-      for (const record of records) if (record.intent?.staging) staged.push(record.intent.staging);
-      return save.call(this, value);
+      if (receipt.intent?.staging) staged.push(receipt.intent.staging);
+      return record.call(this, receipt);
     });
     operations = new Operations(
       async () => {},
@@ -795,5 +792,35 @@ describe('protected folders', () => {
     expect(await readFile(path.join(desktop, 'note.txt'), 'utf8')).toBe('inside is fine');
     const inside = await run({ kind: 'trash', sources: [path.join(desktop, 'note.txt')] });
     expect(inside.status).toBe('completed');
+  });
+});
+describe('file operation redo', () => {
+  it('redoes an undone move as a new job and only for the items Undo restored', async () => {
+    const source = path.join(root, 'draft.txt');
+    await writeFile(source, 'draft');
+    const moved = await run({ kind: 'move', sources: [source], destination });
+    await operations.undo(moved.id);
+    expect(operations.all().find((job) => job.id === moved.id)?.redoable).toBe(true);
+    const again = await waitFor(operations.redo(moved.id));
+    expect(again.status).toBe('completed');
+    expect(await readFile(path.join(destination, 'draft.txt'), 'utf8')).toBe('draft');
+    expect(() => operations.redo(moved.id)).toThrow('cannot be redone');
+    // A file replaced at the restored path after Undo is not acted on.
+    await operations.undo(again.id);
+    await trashFixtureEntry(source);
+    await writeFile(source, 'a different file now');
+    const refused = await waitFor(operations.redo(again.id));
+    expect(refused.errors[0]?.message).toContain('changed after review');
+    expect(await readFile(source, 'utf8')).toBe('a different file now');
+  });
+  it('ends the redo offer when another operation starts', async () => {
+    const source = path.join(root, 'note.txt');
+    await writeFile(source, 'note');
+    const copied = await run({ kind: 'copy', sources: [source], destination });
+    await operations.undo(copied.id);
+    expect(operations.all().find((job) => job.id === copied.id)?.redoable).toBe(true);
+    await run({ kind: 'mkdir', sources: [], destination, name: 'Other' });
+    expect(operations.all().find((job) => job.id === copied.id)?.redoable).toBe(false);
+    expect(() => operations.redo(copied.id)).toThrow('cannot be redone');
   });
 });

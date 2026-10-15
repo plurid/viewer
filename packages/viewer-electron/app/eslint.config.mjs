@@ -1,4 +1,5 @@
 import tseslint from 'typescript-eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
 // AGENTS.md: nothing is permanently deleted outside the reviewed removal module.
 const removalMessage =
   'Permanent removal is limited to src/desktop/removal.ts. Use the native Trash, a named function there, or tools/temporary.ts in tests and tools.';
@@ -24,6 +25,11 @@ export default tseslint.config(
   {
     files: ['tests/**/*.ts', 'tools/**/*.ts', '*.ts'],
     rules: { 'no-restricted-syntax': ['error', ...removal] },
+  },
+  {
+    files: ['src/renderer/**/*.ts', 'src/renderer/**/*.tsx', 'src/renderer.tsx'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'error' },
   },
   {
     files: ['src/desktop/removal.ts'],

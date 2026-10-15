@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pdfScale, pdfZoom } from '../src/renderer/previews/pdf-viewport';
+import { pdfCanvasRatio, pdfScale, pdfZoom } from '../src/renderer/previews/pdf-viewport';
 
 describe('PDF page fitting', () => {
   const portrait = { width: 816, height: 1056 };
@@ -35,5 +35,15 @@ describe('PDF page fitting', () => {
     for (const value of [undefined, null, '', '100%', 0, -1, 5, NaN, Infinity])
       expect(pdfZoom(value)).toBe('page');
     for (const value of ['page', 'width', 1.5]) expect(pdfZoom(value)).toBe(value);
+  });
+});
+describe('PDF canvas density', () => {
+  it('keeps the display ratio for ordinary pages and bounds zoomed pages', () => {
+    expect(pdfCanvasRatio({ width: 800, height: 1000 }, 2)).toBe(2);
+    expect(pdfCanvasRatio({ width: 800, height: 1000 }, 3)).toBe(2);
+    const zoomed = { width: 3264, height: 4224 };
+    const ratio = pdfCanvasRatio(zoomed, 2);
+    expect(zoomed.width * ratio * zoomed.height * ratio).toBeLessThanOrEqual(32_000_001);
+    expect(Math.max(zoomed.width, zoomed.height) * ratio).toBeLessThanOrEqual(8192);
   });
 });

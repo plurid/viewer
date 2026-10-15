@@ -6,6 +6,7 @@ import { absolute } from './filesystem';
 import { executablePath } from './terminal-launch';
 import { terminateTerminalGroup } from './terminal-groups';
 import { childEnvironment } from './process-environment';
+import { errorMessage } from '../domain/errors';
 export class Terminals {
   private closed = false;
   private worker?: OwnedWorker;
@@ -107,7 +108,7 @@ export class Terminals {
       this.worker = worker;
       let diagnostic = '';
       worker.thread?.on('error', (error: unknown) => {
-        diagnostic = error instanceof Error ? error.message : String(error);
+        diagnostic = errorMessage(error);
       });
       const capture = (data: Buffer) => {
         diagnostic = (diagnostic + data.toString()).slice(-2000);

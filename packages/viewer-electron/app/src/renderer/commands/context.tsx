@@ -30,7 +30,12 @@ export function useCommandSource(
       }),
     [registry, id],
   );
-  useEffect(() => {
-    registry.touch(id);
-  }, dependencies);
+  useEffect(
+    () => {
+      registry.touch(id);
+    },
+    // Callers list what their source reads; a change republishes its definitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    dependencies,
+  );
 }

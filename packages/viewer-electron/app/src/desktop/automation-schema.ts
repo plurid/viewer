@@ -67,48 +67,5 @@ export const customActionSchema = z
   })
   .strict()
   .refine((action) => action.when.min <= action.when.max, 'Selection minimum exceeds maximum.');
-export const folderOverrideSchema = z
-  .object({
-    mode: z.enum(['list', 'grid', 'columns', 'gallery']).optional(),
-    sort: z.enum(['name', 'modified', 'created', 'size', 'kind', 'extension']).optional(),
-    descending: z.boolean().optional(),
-    showHidden: z.boolean().optional(),
-    density: z.enum(['comfortable', 'compact']).optional(),
-    foldersFirst: z.boolean().optional(),
-    group: z.enum(['none', 'kind', 'modified']).optional(),
-    columnWidth: z.number().int().min(160).max(1600).optional(),
-    list: z
-      .object({
-        visible: z
-          .object({
-            modified: z.boolean().optional(),
-            created: z.boolean().optional(),
-            kind: z.boolean().optional(),
-            extension: z.boolean().optional(),
-            size: z.boolean().optional(),
-          })
-          .strict()
-          .optional(),
-        widths: z
-          .object({
-            name: z.number().min(0).max(1600),
-            modified: z.number().min(60).max(600),
-            created: z.number().min(60).max(600),
-            kind: z.number().min(60).max(600),
-            extension: z.number().min(60).max(600),
-            size: z.number().min(60).max(600),
-          })
-          .partial()
-          .strict()
-          .optional(),
-        wrapNames: z.boolean().optional(),
-        order: z
-          .array(z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size']))
-          .max(6)
-          .refine((items) => items[0] === 'name' && new Set(items).size === items.length)
-          .optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
+// One definition, shared with portable project files.
+export { folderOverrideSchema } from '../domain/project';

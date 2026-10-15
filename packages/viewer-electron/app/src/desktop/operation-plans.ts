@@ -113,6 +113,18 @@ export class OperationPlans {
               });
             }
           }
+          // Each row runs as its own job, so a rename onto another row's source would meet
+          // that file as a collision, where Replace would trash it.
+          const key = (file: string) => file.normalize('NFC').toLocaleLowerCase('en-US');
+          const sources = new Set(rows.flatMap((row) => (row.source ? [key(row.source)] : [])));
+          for (const row of rows)
+            if (row.kind === 'rename' && row.source && row.name) {
+              const target = key(path.join(path.dirname(row.source), row.name));
+              if (target !== key(row.source) && sources.has(target))
+                throw new Error(
+                  'These renames swap or chain names between planned files. Use a batch rename recipe, which stages them safely.',
+                );
+            }
           const plan: OperationPlan = {
             version: 1,
             id: randomUUID(),

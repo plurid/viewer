@@ -51,7 +51,18 @@ export interface WorkspaceController {
   arrange(axis: 'x' | 'y'): void;
   undo(): void;
   redo(): void;
+  /** Engine facts the window needs, without its handle or plane IDs. */
+  arrangementHistory(): { canUndo: boolean; canRedo: boolean };
+  isDocked(): boolean;
+  hasRepeatedPreviews(): boolean;
+  transformTool(): SpatialTool;
+  setTransformTool(tool: SpatialTool): void;
+  /** Selects a plane before the engine handles a drag of its title. */
+  selectForDrag(hostID: string): void;
+  /** Engine state changes: arrangement, camera, docking and transform mode. */
+  subscribeEngine(listener: () => void): () => void;
 }
+export type SpatialTool = 'rotate' | 'scale' | 'translate' | null;
 export const WorkspaceContext = createContext<WorkspaceController | null>(null);
 export function useWorkspace(): WorkspaceController {
   const value = useContext(WorkspaceContext);

@@ -87,7 +87,7 @@ services; MCP cannot enable a watch approval or directly apply its file changes.
 
 Command discovery filters the UI's captured catalog through the desktop agent safety policy. A command proposal opens review before invocation. Completion waits for the workspace acknowledgement or the actual file job outcome; failed/cancelled Trash jobs do not report success. Stopping the client cancels queued file removals. An already-running native Trash call may finish and remains recoverable. Origin changes or executor changes fail the proposal rather than retargeting it. Configuration proposals validate first, then apply a reviewed revision; they cannot change effective approvals. Recipe file changes still require their normal row review and Apply. No direct `apply`, `trash` or `delete` MCP tool is exposed.
 
-Every agent command requires fresh user review, including custom built-in aliases.
+Every agent command requires fresh user review, including custom built-in aliases. Settings → Agents lists each reviewed request's outcome (completed, failed, rejected or cancelled) with its title and items, alongside the tool calls.
 Saved execution grants never suppress that review. Approving a command or
 configuration proposal in the review panel is not enough: the desktop process
 then shows its own system confirmation, and only its affirmative button runs the

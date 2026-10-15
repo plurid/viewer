@@ -13,6 +13,7 @@ import { sameSourceVersion, sourceVersion } from '../domain/inspection';
 import type { OperationJob } from '../domain/contracts';
 import { formatBytes } from '../domain/files';
 import { outputProof } from './operation-journal';
+import { errorMessage } from '../domain/errors';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
@@ -431,7 +432,7 @@ export class AgentRequests {
         proposal.status = proposal.taskID ? 'running' : 'completed';
     } catch (error) {
       if (this.proposals.get(id)?.status !== 'cancelled') proposal.status = 'failed';
-      proposal.error = error instanceof Error ? error.message : String(error);
+      proposal.error = errorMessage(error);
       throw error;
     } finally {
       this.emit(proposal);

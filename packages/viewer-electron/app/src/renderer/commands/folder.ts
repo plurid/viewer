@@ -3,7 +3,7 @@ import { columnCommands } from './columns';
 import { copyPathCommand } from './copy-path';
 import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
-import { parentPath } from '../../domain/planes';
+import { parentPath, baseName } from '../../domain/planes';
 export { parentPath } from '../../domain/planes';
 import {
   favorite,
@@ -19,7 +19,7 @@ import type { CommandContext, CommandDefinition } from './registry';
 
 export interface FolderActions {
   open(entries: readonly FileEntry[], linked: boolean, another?: boolean): void;
-  dialog(kind: 'rename' | 'mkdir' | 'go-to', context: CommandContext): void;
+  dialog(kind: 'rename' | 'mkdir' | 'group' | 'go-to', context: CommandContext): void;
   trash(context: CommandContext): void | Promise<void>;
   info(context: CommandContext): void;
   openWith(context: CommandContext): void;
@@ -339,6 +339,19 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       run: (context) => actions.dialog('mkdir', context),
     },
     {
+      id: 'new-folder-with-selection',
+      label: 'New folder with selection…',
+      group: 'Folder',
+      icon: 'plus',
+      aliases: ['group', 'nfs', 'folder from selection'],
+      shortcut: '⌃⌘N',
+      when: (context) =>
+        folder(context) &&
+        context.selection.length > 0 &&
+        context.selection.every((file) => file.parent === context.directory),
+      run: (context) => actions.dialog('group', context),
+    },
+    {
       id: 'favorite',
       label: (context) =>
         getState().saved.favorites.some((item) => item.path === context.directory)
@@ -350,7 +363,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       when: folder,
       run: (context) => {
         const path = context.directory!;
-        favorite(path, path.split(/[\\/]/).pop() || path);
+        favorite(path, baseName(path));
       },
     },
     {

@@ -105,7 +105,8 @@ export default function EPUBPreview(context: PreviewContext) {
   }, [context.resource.id, context.services, context.signal]);
   const chapters = document?.chapters || [];
   const position = Math.min(chapter, Math.max(0, chapters.length - 1));
-  const nodes = useMemo(() => chapterNodes(chapters[position]?.html || ''), [chapters, position]);
+  const html = chapters[position]?.html || '';
+  const nodes = useMemo(() => chapterNodes(html), [html]);
   usePreviewCommands(
     context,
     useMemo(

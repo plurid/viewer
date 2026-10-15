@@ -59,8 +59,11 @@ export function useListNavigation(id: string, path: string, roots: FileEntry[], 
     visit(roots, 0);
     return { entries, depths };
   }, [roots, active, expanded, children]);
+  // Refresh selected entries' metadata; selection itself adds what it needs, so the
+  // cache does not grow with every visible row of a large folder.
   useEffect(() => {
-    for (const entry of entries) session.cache.set(entry.path, entry);
+    for (const entry of entries)
+      if (session.cache.has(entry.path)) session.cache.set(entry.path, entry);
   }, [entries, session]);
   const toggle = useCallback(
     (entry: FileEntry, open = !expanded.includes(entry.path)) => {
@@ -79,7 +82,7 @@ export function useListNavigation(id: string, path: string, roots: FileEntry[], 
       const next = items.filter((path) => visible.has(path));
       return next.length === items.length ? items : next;
     });
-  }, [entries, active]);
+  }, [entries, active, setExpanded]);
   return {
     entries,
     depths,

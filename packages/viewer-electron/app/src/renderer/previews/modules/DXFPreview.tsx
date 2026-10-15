@@ -9,8 +9,8 @@ import {
   type DrawingCanvas,
   type DrawingView,
 } from '../dxf/canvas';
-import type { Drawing, DrawingEntity } from '../dxf/math';
-import { DXF_MAX_BYTES } from '../dxf/math';
+import type { Drawing, DrawingEntity } from '../../../domain/dxf/math';
+import { DXF_MAX_BYTES } from '../../../domain/dxf/math';
 import {
   convertUnits,
   formatMeasure,
@@ -19,7 +19,7 @@ import {
   units,
   type Measurement,
   type Tool,
-} from '../dxf/units';
+} from '../../../domain/dxf/units';
 import type { DrawingResult } from '../dxf/dxf.worker';
 
 /** Extend the established preview header: the drawing leads, tools and evidence stay compact. */

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { applyEdits, modify, parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import { documentConfiguration } from './configuration-comments';
 import { discardOwnTemporaryFile } from './removal';
+import { errorMessage } from '../domain/errors';
 
 export interface ConfigChange {
   keys: string[];
@@ -66,7 +67,7 @@ export class JsoncConfiguration<T> {
       return value;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT' && !this.text) return;
-      this.diagnostics = [error instanceof Error ? error.message : String(error)];
+      this.diagnostics = [errorMessage(error)];
       return;
     }
   }

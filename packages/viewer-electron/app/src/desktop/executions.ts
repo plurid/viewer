@@ -7,6 +7,7 @@ import type { ApplicationSettings } from '../domain/services';
 import { entry, absolute } from './filesystem';
 import { executablePath } from './terminal-launch';
 import { childEnvironment } from './process-environment';
+import { errorMessage } from '../domain/errors';
 /** User-authored executables are subprocesses. Only the explicit shell executor interprets code. */
 export class Executions {
   private tasks = new Map<string, ExecutionTask>();
@@ -143,7 +144,7 @@ export class Executions {
       } catch (error) {
         if (task.status !== 'cancelled') {
           task.status = 'failed';
-          task.error = error instanceof Error ? error.message : String(error);
+          task.error = errorMessage(error);
         }
       }
       this.emit({ ...task });

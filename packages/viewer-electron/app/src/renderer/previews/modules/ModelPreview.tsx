@@ -34,7 +34,9 @@ interface ModelSession {
   active(value: boolean, interactive: boolean): void;
   measure(value: boolean): void;
   clearMeasure(): void;
+  background(look: 'dark' | 'light'): void;
 }
+const backgrounds = { dark: '#292d34', light: '#e9edf1' } as const;
 function disposeObject(object: THREE.Object3D): void {
   const materials = new Set<THREE.Material>(),
     textures = new Set<THREE.Texture>();
@@ -67,6 +69,7 @@ export default function ModelPreview(context: PreviewContext) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [contextLost, setContextLost] = useState(false);
   const [info, setInfo] = useState('');
   const [dimensions, setDimensions] = useState<number[]>([]);
   const [distance, setDistance] = useState<number>();
@@ -95,8 +98,8 @@ export default function ModelPreview(context: PreviewContext) {
   const [playing, setPlaying] = useState(false);
   const visibility = useRef({ active, interactive });
   visibility.current = { active, interactive };
-  const playback = useRef({ wire, animation, playing, measure, appearance });
-  playback.current = { wire, animation, playing, measure, appearance };
+  const playback = useRef({ wire, animation, playing, measure, appearance, look });
+  playback.current = { wire, animation, playing, measure, appearance, look };
   useEffect(() => {
     session.current?.active(active, interactive);
   }, [active, interactive]);
@@ -112,6 +115,12 @@ export default function ModelPreview(context: PreviewContext) {
   useEffect(() => {
     session.current?.measure(measure);
   }, [measure]);
+  // A theme change recolors the live scene instead of reloading the model.
+  useEffect(() => {
+    session.current?.background(look);
+  }, [look]);
+  const maxModelMB = context.limits?.maxModelMB ?? 256;
+  const previewStore = context.state;
   useEffect(() => {
     const element = stage.current;
     if (!element) return;
@@ -122,7 +131,7 @@ export default function ModelPreview(context: PreviewContext) {
     setDistance(undefined);
     setInfo('');
     setAnimations([]);
-    if (resource.entry.size > (context.limits?.maxModelMB ?? 256) * 1024 * 1024) {
+    if (resource.entry.size > maxModelMB * 1024 * 1024) {
       setError('This model exceeds the file limit in Settings.');
       setLoading(false);
       return;
@@ -138,7 +147,7 @@ export default function ModelPreview(context: PreviewContext) {
       runningAnimation = false,
       dirty = true;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(look === 'dark' ? '#292d34' : '#e9edf1');
+    scene.background = new THREE.Color(backgrounds[playback.current.look]);
     const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10000);
     if (
       cadFormats.includes(resource.entry.extension) ||
@@ -153,7 +162,7 @@ export default function ModelPreview(context: PreviewContext) {
       disposeObject(markings);
       markings.clear();
       points.length = 0;
-      context.state?.set('model.measurement', []);
+      previewStore?.set('model.measurement', []);
       setDistance(undefined);
       dirty = true;
       schedule();
@@ -178,18 +187,24 @@ export default function ModelPreview(context: PreviewContext) {
     );
     renderer.domElement.tabIndex = 0;
     const controls = new OrbitControls(camera, renderer.domElement);
-    const remembered = context.state?.get('model.camera') as
+    const remembered = previewStore?.get('model.camera') as
       { position?: number[]; target?: number[] } | undefined;
     let restoringView = true;
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
     controls.enabled = controlsInteractive;
+    // Orbiting changes the camera every frame; remember it at most every 250 ms.
+    let cameraTimer: ReturnType<typeof setTimeout> | undefined;
+    const rememberCamera = () => {
+      clearTimeout(cameraTimer);
+      cameraTimer = undefined;
+      previewStore?.set('model.camera', {
+        position: camera.position.toArray(),
+        target: controls.target.toArray(),
+      });
+    };
     controls.addEventListener('change', () => {
-      if (!restoringView && object)
-        context.state?.set('model.camera', {
-          position: camera.position.toArray(),
-          target: controls.target.toArray(),
-        });
+      if (!restoringView && object) cameraTimer ??= setTimeout(rememberCamera, 250);
       dirty = true;
       schedule();
     });
@@ -235,7 +250,7 @@ export default function ModelPreview(context: PreviewContext) {
       if (!point) return;
       if (points.length === 2) clearMeasure();
       addMeasurementPoint(point);
-      context.state?.set(
+      previewStore?.set(
         'model.measurement',
         points.map((point) => point.toArray()),
       );
@@ -274,6 +289,20 @@ export default function ModelPreview(context: PreviewContext) {
       dirty = true;
       schedule();
     };
+    // Chromium caps live WebGL contexts; with many 3D planes the oldest can be taken.
+    // Say so instead of leaving a blank view, and redraw once it is given back.
+    const contextLost = (event: Event) => {
+      event.preventDefault();
+      if (!disposed) setContextLost(true);
+    };
+    const contextRestored = () => {
+      if (disposed) return;
+      setContextLost(false);
+      dirty = true;
+      schedule();
+    };
+    renderer.domElement.addEventListener('webglcontextlost', contextLost);
+    renderer.domElement.addEventListener('webglcontextrestored', contextRestored);
     let lastFrame = performance.now();
     function schedule() {
       if (!disposed && renderActive && !frameRequest) frameRequest = requestAnimationFrame(render);
@@ -448,7 +477,7 @@ export default function ModelPreview(context: PreviewContext) {
       )
         throw new Error('This model has invalid geometry.');
       setDimensions(bounds.getSize(new THREE.Vector3()).toArray());
-      const retained = context.state?.get('model.measurement');
+      const retained = previewStore?.get('model.measurement');
       if (
         Array.isArray(retained) &&
         retained.length <= 2 &&
@@ -473,6 +502,11 @@ export default function ModelPreview(context: PreviewContext) {
       session.current = {
         frame,
         clearMeasure,
+        background: (look) => {
+          scene.background = new THREE.Color(backgrounds[look]);
+          dirty = true;
+          schedule();
+        },
         measure: (value) => {
           measuring = value;
           if (!value) clearMeasure();
@@ -524,6 +558,7 @@ export default function ModelPreview(context: PreviewContext) {
       }
     });
     return () => {
+      if (cameraTimer) rememberCamera();
       disposed = true;
       abort.abort();
       session.current = null;
@@ -543,11 +578,21 @@ export default function ModelPreview(context: PreviewContext) {
       renderer.domElement.removeEventListener('wheel', wheel);
       renderer.domElement.removeEventListener('pointerdown', down);
       renderer.domElement.removeEventListener('pointerup', pick);
+      renderer.domElement.removeEventListener('webglcontextlost', contextLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', contextRestored);
       renderer.dispose();
       renderer.forceContextLoss();
       renderer.domElement.remove();
     };
-  }, [resource.id, resource.url, resource.entry.extension, resource.entry.size, look, signal]);
+  }, [
+    resource.id,
+    resource.url,
+    resource.entry.extension,
+    resource.entry.size,
+    maxModelMB,
+    previewStore,
+    signal,
+  ]);
   usePreviewCommands(
     context,
     useMemo(
@@ -596,7 +641,7 @@ export default function ModelPreview(context: PreviewContext) {
           },
         })),
       ],
-      [loading, error, wire, playing, animations, measure, shadingOpen],
+      [loading, error, wire, playing, animations, measure, shadingOpen, setMeasure, setWire],
     ),
   );
   return (
@@ -692,6 +737,12 @@ export default function ModelPreview(context: PreviewContext) {
           </div>
         )}
       </div>
+      {contextLost && (
+        <p className="inline-warning" role="status">
+          The 3D view was paused to free graphics memory. Close other 3D previews or reopen this one
+          to show it again.
+        </p>
+      )}
       {warnings.length > 0 && (
         <p className="inline-warning">Missing companion assets: {warnings.join(', ')}</p>
       )}

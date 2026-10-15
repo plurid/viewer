@@ -11,6 +11,7 @@ import { imageDimensions, readImageDimensions } from './image-dimensions';
 import { Archives } from './archives';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
 import { fileCoordination } from './file-coordination';
+import { modelFormats } from '../domain/model-formats';
 
 interface Grant {
   resource: Resource;
@@ -78,7 +79,9 @@ export class Resources {
       resource,
       authority: actual,
       file: actual,
-      root: path.dirname(actual),
+      // Only 3D models load companion files (textures, materials) beside them; any
+      // other preview may read exactly its own file.
+      root: modelFormats.includes(resource.entry.extension) ? path.dirname(actual) : undefined,
       archiveChildren: new Set(),
       assets: new Set(),
     });
@@ -279,6 +282,9 @@ export class Resources {
         file = await realpath(resolved);
         if (!file.startsWith(grant.root + path.sep)) return new Response(null, { status: 403 });
       } else if (relative !== grant.resource.entry.name) return new Response(null, { status: 404 });
+      // The granted path must still be the same real file, not a substituted link.
+      else if (file && !grant.data && (await realpath(file)) !== file)
+        return new Response(null, { status: 403 });
       if (file) scope.add(file);
       if (file && file !== grant.file) {
         if ((grant.assets?.size ?? 0) >= 256 && !grant.assets?.has(file))

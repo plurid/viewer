@@ -6,6 +6,7 @@ import { useWorkspace } from '../workspace/context';
 import { terminalSession, type TerminalSession } from './sessions';
 import { FILE_DRAG } from '../explorer/file-drop';
 import { IconButton } from '../ui/primitives';
+import { terminalTheme } from './theme';
 const quote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
 export function TerminalPlane({ pane }: { pane: Pane }) {
   const container = useRef<HTMLDivElement>(null);
@@ -32,10 +33,7 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
       .then(async (session) => {
         if (!attached || !container.current) return;
         live.current = session;
-        session.terminal.options.theme =
-          getState().saved.look === 'dark'
-            ? { background: '#25282e', foreground: '#eeeeef', cursor: '#9abfd1' }
-            : { background: '#f5f6f8', foreground: '#25282e', cursor: '#40748d' };
+        session.terminal.options.theme = terminalTheme(getState().saved.look);
         session.attach(container.current);
         if (!session.started && !session.exited) {
           session.starting ??= window.viewer
@@ -80,14 +78,13 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
       live.current?.element.remove();
       live.current = undefined;
     };
+    // One PTY session per plane: its profile and folder are captured at creation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pane.id]);
   useEffect(() => {
     if (live.current) {
       live.current.terminal.options.scrollback = settings.scrollback;
-      live.current.terminal.options.theme =
-        look === 'dark'
-          ? { background: '#25282e', foreground: '#eeeeef', cursor: '#9abfd1' }
-          : { background: '#f5f6f8', foreground: '#25282e', cursor: '#40748d' };
+      live.current.terminal.options.theme = terminalTheme(look);
     }
   }, [settings.scrollback, look]);
   return (

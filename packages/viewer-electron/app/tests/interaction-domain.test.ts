@@ -183,3 +183,83 @@ describe('modified-date grouping', () => {
     expect(fileGroup({ modified: justAfterMidnight } as FileEntry, 'modified')).toBe('2026-01-01');
   });
 });
+describe('shortcut matching', () => {
+  it('matches Option and Shift punctuation combinations by physical key', async () => {
+    const { matchesShortcut } = await import('../src/domain/shortcuts');
+    const event = (key: string, code: string, alt = false, shift = false) => ({
+      metaKey: true,
+      ctrlKey: false,
+      altKey: alt,
+      shiftKey: shift,
+      key,
+      code,
+    });
+    expect(matchesShortcut('Cmd+Alt+C', event('ç', 'KeyC', true))).toBe(true);
+    expect(matchesShortcut('Cmd+Shift+.', event('>', 'Period', false, true))).toBe(true);
+    expect(matchesShortcut('Cmd+C', event('c', 'KeyC'))).toBe(true);
+    // Without Option or Shift the produced character decides, respecting other layouts.
+    expect(matchesShortcut('Cmd+A', event('q', 'KeyA'))).toBe(false);
+  });
+});
+describe('relative document links', () => {
+  it('resolves relative links beside the document and leaves others inert', async () => {
+    const { relativeLinkTarget } = await import('../src/domain/planes');
+    const doc = '/Users/fixture/Notes/Guide.md';
+    expect(relativeLinkTarget(doc, 'images/plan%20A.png')).toBe(
+      '/Users/fixture/Notes/images/plan A.png',
+    );
+    expect(relativeLinkTarget(doc, '../Other.md#section')).toBe('/Users/fixture/Other.md');
+    expect(relativeLinkTarget(doc, './Notes.md?raw=1')).toBe('/Users/fixture/Notes/Notes.md');
+    expect(relativeLinkTarget('/Guide.md', '../../x.md')).toBe('/x.md');
+    for (const href of [
+      'https://example.com',
+      'file:///etc/passwd',
+      '/etc/passwd',
+      '//host/x',
+      '#top',
+      'mailto:a@b',
+      '%E0%A4%A',
+    ])
+      expect(relativeLinkTarget(doc, href), href).toBeUndefined();
+  });
+});
+
+describe('server addresses', () => {
+  it('accepts file-sharing addresses only', async () => {
+    const { serverAddress } = await import('../src/domain/volumes');
+    expect(serverAddress(' smb://nas.local/Media ')).toBe('smb://nas.local/Media');
+    expect(serverAddress('afp://studio')).toBe('afp://studio');
+    for (const value of [
+      'https://example.com',
+      'file:///etc',
+      'javascript:alert(1)',
+      'smb://',
+      'nas',
+    ])
+      expect(() => serverAddress(value), value).toThrow();
+  });
+});
+describe('path names', () => {
+  it('names the last component, ignoring a trailing separator', async () => {
+    const { baseName } = await import('../src/domain/planes');
+    expect(baseName('/Users/fixture/Report.pdf')).toBe('Report.pdf');
+    expect(baseName('/Users/fixture/Folder/')).toBe('Folder');
+    expect(baseName('C:\\Data\\Notes.txt')).toBe('Notes.txt');
+    expect(baseName('/')).toBe('/');
+  });
+});
+describe('code highlighting', () => {
+  it('keeps a multi-line comment coloured on every line', async () => {
+    const Prism = (await import('prismjs')).default;
+    const { highlightedLines } = await import('../src/renderer/previews/highlight');
+    const lines = highlightedLines('let a = 1; /* one\ntwo */ let b;', Prism.languages.javascript);
+    expect(lines).toHaveLength(2);
+    expect(lines[1][0]).toEqual({ text: 'two */', className: 'token comment' });
+    expect(
+      lines
+        .flat()
+        .map((segment) => segment.text)
+        .join(''),
+    ).toBe('let a = 1; /* onetwo */ let b;');
+  });
+});

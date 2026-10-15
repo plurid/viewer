@@ -11,6 +11,22 @@ const input: AgentClientInput = {
   budgets: { maxReadBytes: 1048576, maxTasks: 2 },
 };
 describe('private agent client authority', () => {
+  it('keeps reviewed request outcomes, including rejections, across restarts', async () => {
+    const root = await temporaryRoot('viewer-client-');
+    try {
+      const clients = new AgentClients(root, async () => {});
+      await clients.audit('review:command', 'rejected', 'Move to Trash · 1 items: /a', 'legacy');
+      await clients.audit('review:command', 'cancelled', 'Rename', 'legacy');
+      await clients.close();
+      const reopened = new AgentClients(root, async () => {});
+      expect((await reopened.history()).map((entry) => entry.status)).toEqual([
+        'rejected',
+        'cancelled',
+      ]);
+    } finally {
+      await trashTemporary(root);
+    }
+  });
   it('stores only credential hashes, isolates concurrent actor contexts and rechecks revocation', async () => {
     const root = await temporaryRoot('viewer-client-');
     const clients = new AgentClients(root, async () => {});

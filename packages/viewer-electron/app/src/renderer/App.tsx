@@ -10,7 +10,6 @@ import { explorerCommandIDs, keyCommand } from './explorer/input';
 /** Native window chrome stays quiet; commands follow the active file, folder or preview. */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { type PluridApplicationHandle } from '@plurid/plurid-react';
-import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
 import type { FolderPane } from '../domain/contracts';
 import { selectedFiles } from './workspace/sessions';
 import {
@@ -38,7 +37,7 @@ import {
   refreshClipboard,
   useViewer,
 } from './state/store';
-import { WorkspaceContext } from './workspace/context';
+import { WorkspaceContext, type SpatialTool } from './workspace/context';
 import { WorkspaceSurface } from './workspace/WorkspaceSurface';
 import { Icon } from './ui/Icon';
 import { Dialog, ErrorBoundary, IconButton, NameDialog } from './ui/primitives';
@@ -47,6 +46,7 @@ import { InspectionControls } from './ui/Inspection';
 import { CheckpointControls } from './ui/Checkpoints';
 import { OperationReviewControls } from './ui/OperationReview';
 import { ComparisonControls } from './ui/Comparison';
+import { DuplicateControls } from './ui/Duplicates';
 import { CollectionControls } from './ui/Collections';
 import { WorkflowControls } from './ui/Workflows';
 import { RelationshipControls } from './ui/Relationships';
@@ -112,6 +112,7 @@ function AppWindow() {
 
   const [palette, setPalette] = useState<'commands' | 'files' | 'workspaces' | null>(null);
   const [goTo, setGoTo] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [terminalName, setTerminalName] = useState<string>();
   const terminalConfig = useViewer((state) => state.settings.settings.terminals);
   useEffect(() => {
@@ -132,40 +133,8 @@ function AppWindow() {
   const [showWorkspaceUndo, setShowWorkspaceUndo] = useState(false);
   const initialOpenHandled = useRef(false);
   const saved = useViewer((state) => state.saved);
+  const activePane = useViewer((state) => state.activePane);
   const space = useViewer(activeWorkspace);
-  const subscribeEngine = useCallback(
-    (listener: () => void) => engine.current?.store.subscribe(listener) ?? (() => {}),
-    [ready, space.id],
-  );
-  const mode = useSyncExternalStore(
-    subscribeEngine,
-    () => engine.current?.getSnapshot().configuration.space.transformMode ?? 'ALL',
-  );
-  const tool =
-    mode === 'ROTATION'
-      ? 'rotate'
-      : mode === 'SCALE'
-        ? 'scale'
-        : mode === 'TRANSLATION'
-          ? 'translate'
-          : null;
-  const spatialTool = useCallback((value: 'rotate' | 'scale' | 'translate' | null) => {
-    engine.current?.pubsub.publish({
-      topic: PLURID_PUBSUB_TOPIC.CONFIGURATION,
-      data: {
-        space: {
-          transformMode:
-            value === 'rotate'
-              ? 'ROTATION'
-              : value === 'scale'
-                ? 'SCALE'
-                : value === 'translate'
-                  ? 'TRANSLATION'
-                  : 'ALL',
-        },
-      },
-    });
-  }, []);
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
   const quick = useViewer((state) => state.quickPreview);
@@ -175,8 +144,8 @@ function AppWindow() {
     jobs.length +
     ':' +
     jobs
-      .filter((job) => job.undoable)
-      .map((job) => job.id)
+      .filter((job) => job.undoable || job.redoable)
+      .map((job) => job.id + (job.undoable ? 'u' : '') + (job.redoable ? 'r' : ''))
       .join(',');
   const operationsOpen = useViewer((state) => state.operationsOpen);
   const showOperations = useViewer(needsOperations);
@@ -188,21 +157,38 @@ function AppWindow() {
     return () => clearTimeout(timer);
   }, [deleted]);
   const controller = useWorkspaceController({ engine, surface, readyRef });
-  async function transitionWorkspace(change: () => Promise<void>) {
-    setReady(false);
-    spatialTool(null);
-    try {
-      await change();
-    } catch (error) {
-      setReady(!!engine.current);
-      throw error;
-    }
-  }
-  async function switchTo(id: string) {
-    if (id === getState().saved.activeWorkspace) return;
-    await transitionWorkspace(() => switchWorkspace(id));
-  }
-  const windowContext = (): CommandContext => {
+  const subscribeEngine = useCallback(
+    (listener: () => void) => controller.subscribeEngine(listener),
+    // The engine is a ref: readiness or a workspace switch means a new instance to subscribe to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [controller, ready, space.id],
+  );
+  const tool = useSyncExternalStore(subscribeEngine, controller.transformTool);
+  const spatialTool = useCallback(
+    (value: SpatialTool) => controller.setTransformTool(value),
+    [controller],
+  );
+  const transitionWorkspace = useCallback(
+    async (change: () => Promise<void>) => {
+      setReady(false);
+      spatialTool(null);
+      try {
+        await change();
+      } catch (error) {
+        setReady(!!engine.current);
+        throw error;
+      }
+    },
+    [spatialTool],
+  );
+  const switchTo = useCallback(
+    async (id: string) => {
+      if (id === getState().saved.activeWorkspace) return;
+      await transitionWorkspace(() => switchWorkspace(id));
+    },
+    [transitionWorkspace],
+  );
+  const windowContext = useCallback((): CommandContext => {
     const state = getState();
     const pane = activeWorkspace().panes.find((pane) => pane.id === state.activePane);
     return {
@@ -217,7 +203,7 @@ function AppWindow() {
       jobs: state.jobs,
       clipboard: state.clipboard,
     };
-  };
+  }, [controller]);
   useCommandSource(
     'window',
     {
@@ -232,7 +218,6 @@ function AppWindow() {
         ),
         ...windowCommands({
           workspace: controller,
-          engine,
           ready,
           tool,
           palette: setPalette,
@@ -245,6 +230,7 @@ function AppWindow() {
           restoreWorkspace: () => transitionWorkspace(restoreWorkspace),
           spatialTool,
           goTo: () => setGoTo(true),
+          connectServer: () => setConnecting(true),
           openWith: setOpenWithPaths,
         }),
       ],
@@ -332,20 +318,20 @@ function AppWindow() {
       off();
       clearTimeout(timer);
     };
-  }, [registry, controller, getState().activePane]);
+  }, [registry, controller, activePane, windowContext]);
   useEffect(() => {
-    const api = engine.current;
-    if (!ready || !api) return;
+    if (!ready) return;
     let previous = '';
-    return api.store.subscribe(() => {
-      const history = api.history.get();
-      const value = `${history.undoDepth}/${history.redoDepth}/${api.camera.docked()}`;
+    // Arrangement Undo/Redo and docking change which window commands apply.
+    return controller.subscribeEngine(() => {
+      const history = controller.arrangementHistory();
+      const value = `${history.canUndo}/${history.canRedo}/${controller.isDocked()}`;
       if (value !== previous) {
         previous = value;
         registry.touch();
       }
     });
-  }, [ready, registry]);
+  }, [ready, registry, controller]);
   useEffect(() => {
     trimTerminals(
       new Set(
@@ -505,7 +491,7 @@ function AppWindow() {
       remove();
       window.removeEventListener('focus', focus);
     };
-  }, [controller]);
+  }, [controller, registry, switchTo]);
   useEffect(() => {
     if (ready && !initialOpenHandled.current) {
       initialOpenHandled.current = true;
@@ -585,7 +571,7 @@ function AppWindow() {
     };
     window.addEventListener('keydown', keydown, true);
     return () => window.removeEventListener('keydown', keydown, true);
-  }, [tool]);
+  }, [tool, registry, spatialTool, windowContext]);
   const targetWorkspace = saved.workspaces.find(
     (workspace) => workspace.id === workspaceDialog?.id,
   );
@@ -599,6 +585,7 @@ function AppWindow() {
       <CheckpointControls />
       <OperationReviewControls />
       <ComparisonControls />
+      <DuplicateControls />
       <CollectionControls />
       <WorkflowControls />
       <RelationshipControls />
@@ -795,6 +782,17 @@ function AppWindow() {
               if (!entry.directory) throw new Error('Choose a folder.');
               await controller.openPath(entry.path);
             }}
+          />
+        )}
+        {connecting && (
+          <NameDialog
+            title="Connect to server"
+            label="Server address"
+            maxLength={2048}
+            initial="smb://"
+            action="Connect"
+            onClose={() => setConnecting(false)}
+            onSubmit={(address) => window.viewer.connectServer(address.trim())}
           />
         )}
       </div>

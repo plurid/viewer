@@ -1,5 +1,6 @@
 import { FolderSizes } from './folder-sizes';
 import { workerPort } from './worker-port';
+import { errorMessage } from '../domain/errors';
 
 // Independent of indexing, SQLite, document extraction and recursive watching.
 const port = workerPort;
@@ -17,7 +18,7 @@ port.on('message', (event) => {
   } catch (error) {
     port.postMessage({
       id: request.id,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(error),
       code: (error as NodeJS.ErrnoException).code,
     });
   }

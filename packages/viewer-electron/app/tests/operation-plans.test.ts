@@ -50,6 +50,23 @@ async function fixture() {
   };
 }
 describe('shared reviewed operation plans', () => {
+  it('refuses renames that swap names between planned files', async () => {
+    const f = await fixture();
+    const other = path.join(path.dirname(f.source), 'Other.txt');
+    await writeFile(other, 'Other');
+    await expect(
+      f.plans.request({
+        kind: 'prepare',
+        title: 'Swap',
+        intents: [
+          { kind: 'rename', sources: [f.source], name: 'Other.txt' },
+          { kind: 'rename', sources: [other], name: 'Source.txt' },
+        ],
+      }),
+    ).rejects.toThrow('swap or chain');
+    expect(await readFile(other, 'utf8')).toBe('Other');
+    await f.close();
+  });
   it('keeps review usable and queues no mutation if the applying receipt cannot be saved', async () => {
     const f = await fixture();
     const original = DocumentStore.prototype.save;

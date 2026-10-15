@@ -5,6 +5,7 @@ import { formatBytes } from '../../domain/files';
 import { parentPath } from '../../domain/planes';
 import { getState, report } from '../state/store';
 import { IconButton } from '../ui/primitives';
+import { errorMessage } from '../../domain/errors';
 
 type Measurement = { task: FolderSizeTask; stale: boolean };
 const measurements = new Map<string, Measurement>();
@@ -100,7 +101,7 @@ export function calculateSize(entries: readonly FileEntry[]): Promise<void> {
         receiveFolderSize({
           ...pending,
           status: 'failed',
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         });
       throw error;
     } finally {

@@ -1,4 +1,14 @@
-import { memo, lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  memo,
+  lazy,
+  Suspense,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { WorkspaceContext } from '../workspace/context';
 import type { Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
@@ -52,16 +62,26 @@ export const PreviewHost = memo(function PreviewHost({
   const [activated, setActivated] = useState(active);
   const registry = useCommands();
   const header = usePreviewControlsSlot(paneID);
+  const workspace = useContext(WorkspaceContext);
+  const openRelated = useMemo(
+    () =>
+      paneID && workspace
+        ? (file: string) => void workspace.openPath(file, { paneID, linked: true }).catch(report)
+        : undefined,
+    [paneID, workspace],
+  );
   useEffect(() => {
     if (active) setActivated(true);
   }, [active]);
+  const entry = resource?.entry;
   const viewState = useMemo(
-    () => previewState(paneID || path || supplied?.id || 'temporary', resource?.entry),
-    [paneID, path, supplied?.id, resource?.id],
+    () => previewState(paneID || path || supplied?.id || 'temporary', entry),
+    [paneID, path, supplied?.id, entry],
   );
   const limits = useViewer((state) => state.settings.settings.previews);
   const look = useViewer((state) => state.saved.look);
   // One controller per resource effect run: a new `supplied` object re-runs that effect.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const abort = useMemo(() => new AbortController(), [path, supplied, retry]);
   useEffect(
     () =>
@@ -198,6 +218,7 @@ export const PreviewHost = memo(function PreviewHost({
               commands={commands}
               state={viewState}
               limits={limits}
+              openRelated={openRelated}
             />
           </Suspense>
         </ErrorBoundary>

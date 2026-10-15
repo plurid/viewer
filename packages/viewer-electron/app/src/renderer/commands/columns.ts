@@ -4,7 +4,7 @@ import {
   changePreferences,
   folderPresentation,
   updateFolderPresentation,
-  useFolderAsDefaults,
+  applyFolderAsDefaults,
   getState,
 } from '../state/store';
 import type { CommandContext, CommandDefinition } from './registry';
@@ -45,7 +45,7 @@ export function columnCommands(): CommandDefinition[] {
       icon: 'settings',
       aliases: ['defaults', 'other folders'],
       when: (context) => !!context.folder,
-      run: (context) => useFolderAsDefaults(context.folder!.path),
+      run: (context) => applyFolderAsDefaults(context.folder!.path),
     },
     ...(['none', 'kind', 'modified'] as const).map((group): CommandDefinition => ({
       id: 'group.' + group,

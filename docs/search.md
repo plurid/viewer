@@ -29,3 +29,5 @@ Use **Open results as plane** to create a virtual root. **Save search…** adds 
 Saved searches are dynamic queries, not copies of their results. Applying a file operation remaps open paths, selections, Favorites and Recent, and refreshes the index. The original root's preview ownership remains independent from other roots.
 
 The benchmark in `tools/index-benchmark.ts` ingests synthetic metadata into a temporary disk database, without crawling user folders. It exercises 100,000 and 1,000,000 rows. Its timing scope and results are recorded in [performance.md](performance.md); they do not establish equivalent performance for network mounts, millions of extracted documents or every filter combination.
+
+In direct macOS builds, a folder name search first shows Spotlight (`mdfind -onlyin … -name`) matches, filtered by the same name and hidden-file rules, and then completes the list by walking the folder, skipping files already shown. Spotlight cannot tell an unindexed folder from one without matches, so the walk remains authoritative. The App Store build and other platforms only walk.

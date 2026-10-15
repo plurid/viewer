@@ -22,11 +22,23 @@ export const defaultShortcuts: Record<string, string> = {
   duplicate: 'Cmd+D',
   trash: 'Cmd+Backspace',
   'new-folder': 'Cmd+Shift+N',
+  'new-folder-with-selection': 'Ctrl+Cmd+N',
   'view-list': 'Cmd+1',
   'view-grid': 'Cmd+2',
   'view-columns': 'Cmd+3',
   'view-gallery': 'Cmd+4',
   'toggle-hidden': 'Cmd+Shift+.',
+};
+/** Second bindings kept for Finder habits, alongside the primary shortcut. */
+export const alternateShortcuts: Readonly<Record<string, string>> = { 'go-to': 'Cmd+Shift+G' };
+/** Menu accelerators handled only by the native menu: the renderer must not also run
+ * them (a second Undo would undo another job). Listed for remapping and conflicts. */
+export const menuShortcuts: Record<string, string> = {
+  'choose-folder': 'Cmd+Shift+O',
+  'undo-file': 'Cmd+Z',
+  'redo-file': 'Cmd+Shift+Z',
+  'undo-arrangement': 'Cmd+Alt+Z',
+  'redo-arrangement': 'Cmd+Alt+Shift+Z',
 };
 /** Shortcut keys kept for saved remaps whose command has a different ID. */
 const shortcutCommands: Readonly<Record<string, string>> = { 'toggle-hidden': 'hidden' };
@@ -67,9 +79,31 @@ export function validShortcut(value: string): boolean {
     )
   );
 }
+const codePunctuation: Readonly<Record<string, string>> = {
+  Period: '.',
+  Comma: ',',
+  Slash: '/',
+  Semicolon: ';',
+  Quote: "'",
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Minus: '-',
+  Equal: '=',
+  Backquote: '`',
+};
+/** The unmodified key on a US layout, from the physical key code. */
+function codeKey(code = ''): string | undefined {
+  return (
+    /^Key([A-Z])$/.exec(code)?.[1].toLowerCase() ??
+    /^Digit(\d)$/.exec(code)?.[1] ??
+    codePunctuation[code]
+  );
+}
 export function matchesShortcut(
   value: string,
-  event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'key'>,
+  event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'key'> &
+    Partial<Pick<KeyboardEvent, 'code'>>,
 ): boolean {
   const parts = shortcutParts(value);
   const key = parts.find((part) => !['cmd', 'ctrl', 'shift', 'alt'].includes(part));
@@ -79,7 +113,9 @@ export function matchesShortcut(
     event.ctrlKey === parts.includes('ctrl') &&
     event.altKey === parts.includes('alt') &&
     event.shiftKey === parts.includes('shift') &&
-    key === event.key.toLowerCase()
+    (key === event.key.toLowerCase() ||
+      // Option and Shift change the produced character (Option+C is "ç", Shift+. is ">").
+      ((event.altKey || event.shiftKey) && key === codeKey(event.code)))
   );
 }
 export function accelerator(value: string): string | undefined {

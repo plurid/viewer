@@ -3,10 +3,11 @@ import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import { lookup } from 'mime-types';
-import { defaultShortcuts, accelerator } from './domain/shortcuts';
+import { defaultShortcuts, accelerator, menuShortcuts } from './domain/shortcuts';
 import { runMCPClient } from './desktop/mcp-client';
 import { Desktop } from './desktop/bridge';
 import { WindowState, captureWindowFrame, restoreWindowFrame } from './desktop/window-state';
+import { errorMessage } from './domain/errors';
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -144,7 +145,9 @@ function menu(): void {
           },
           {
             label: 'Open Folder…',
-            accelerator: 'CmdOrCtrl+Shift+O',
+            accelerator: accelerator(
+              settings?.shortcuts['choose-folder'] ?? menuShortcuts['choose-folder'],
+            ),
             click: command('choose-folder'),
           },
           {
@@ -203,14 +206,14 @@ function menu(): void {
           {
             label: 'Undo',
             accelerator: accelerator(
-              settings?.shortcuts['undo-file'] ?? defaultShortcuts['undo-file'] ?? 'Cmd+Z',
+              settings?.shortcuts['undo-file'] ?? menuShortcuts['undo-file'],
             ),
             click: command('undo-file'),
           },
           {
             label: 'Redo',
             accelerator: accelerator(
-              settings?.shortcuts['redo-file'] ?? defaultShortcuts['redo-file'] ?? 'Cmd+Shift+Z',
+              settings?.shortcuts['redo-file'] ?? menuShortcuts['redo-file'],
             ),
             click: command('redo-file'),
           },
@@ -296,12 +299,16 @@ function menu(): void {
           },
           {
             label: 'Undo Arrangement',
-            accelerator: 'CmdOrCtrl+Alt+Z',
+            accelerator: accelerator(
+              settings?.shortcuts['undo-arrangement'] ?? menuShortcuts['undo-arrangement'],
+            ),
             click: command('undo-arrangement'),
           },
           {
             label: 'Redo Arrangement',
-            accelerator: 'CmdOrCtrl+Alt+Shift+Z',
+            accelerator: accelerator(
+              settings?.shortcuts['redo-arrangement'] ?? menuShortcuts['redo-arrangement'],
+            ),
             click: command('redo-arrangement'),
           },
           { label: 'Arrange Horizontally', click: command('arrange-horizontal') },
@@ -536,7 +543,7 @@ app
       try {
         await runMCPClient(app.getPath('userData'));
       } catch (error) {
-        process.stderr.write((error instanceof Error ? error.message : String(error)) + '\n');
+        process.stderr.write(errorMessage(error) + '\n');
         process.exitCode = 1;
       }
       quitting = true;
@@ -613,11 +620,7 @@ app
     // A startup failure must not leave a windowless process running silently.
     console.error(error);
     // Hidden verification runs never show windows; their logs carry the error.
-    if (!backgroundTest)
-      dialog.showErrorBox(
-        'Viewer could not start',
-        error instanceof Error ? error.message : String(error),
-      );
+    if (!backgroundTest) dialog.showErrorBox('Viewer could not start', errorMessage(error));
     app.exit(1);
   });
 app.on('activate', () => {

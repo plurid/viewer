@@ -38,6 +38,8 @@ import { looks } from './look';
 import { routeFileKeyboard } from '../explorer/selection';
 
 import { flattenTree, hostID } from './tree';
+import { allowTerminalStart, terminalStartDeferred } from '../terminals/sessions';
+import { paneRoute } from './tree';
 export { flattenTree, hostID } from './tree';
 const FolderScene = memo(function FolderScene({ id }: { id: string }) {
   return (
@@ -85,10 +87,20 @@ function TerminalContent() {
     activeWorkspace(state).panes.find((pane) => pane.id === plane.parameters.id),
   );
   const [started, setStarted] = useState(false);
-  if (pane?.type === 'terminal' && pane.startOnOpen === false && !started)
+  if (
+    pane?.type === 'terminal' &&
+    (pane.startOnOpen === false || terminalStartDeferred(pane.id)) &&
+    !started
+  )
     return (
       <Empty icon="terminal" title="Terminal ready" detail={pane.path}>
-        <button className="primary" onClick={() => setStarted(true)}>
+        <button
+          className="primary"
+          onClick={() => {
+            allowTerminalStart(pane.id);
+            setStarted(true);
+          }}
+        >
           Start terminal
         </button>
       </Empty>
@@ -144,15 +156,14 @@ export function WorkspaceSurface({
     });
     if (surface.current) observer.observe(surface.current);
     return () => observer.disconnect();
-  }, [surface]);
-  const view = useMemo(
-    () =>
-      (space.layout ? space.panes.map((pane) => pane.id) : space.roots).map((id) => {
-        const pane = space.panes.find((item) => item.id === id);
-        return `/${pane?.type === 'folder' ? 'folders' : pane?.type === 'search' ? 'searches' : pane?.type === 'terminal' ? 'terminals' : pane?.type === 'collection' ? 'collections' : 'previews'}/${id}`;
-      }),
-    [space.roots, space.layout],
-  );
+  }, [surface, engine]);
+  // The engine needs a stable `view` array: rebuild it only when a route changes.
+  const routes = (space.layout ? space.panes.map((pane) => pane.id) : space.roots)
+    .map((id) => paneRoute(space.panes.find((item) => item.id === id)?.type ?? 'preview', id))
+    .join('\n');
+  const view = useMemo(() => (routes ? routes.split('\n') : []), [routes]);
+  // A new epoch (workspace reset) needs a fresh adapter for the same workspace ID.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const storage = useMemo(() => storageAdapter(space.id), [space.id, space.epoch]);
   const configuration = useMemo<PluridPartialConfiguration>(
     () => ({
@@ -268,10 +279,8 @@ export function WorkspaceSurface({
   readyRef.current = handleReady;
   const onEngineReady = useCallback((api: PluridApi) => readyRef.current(api), []);
   const renderPlaneControls = useCallback(
-    (context: Parameters<typeof PlaneHeader>[0]['context']) => (
-      <PlaneHeader context={context} engine={engine} />
-    ),
-    [engine],
+    (context: Parameters<typeof PlaneHeader>[0]['context']) => <PlaneHeader context={context} />,
+    [],
   );
   const renderEmpty = useCallback(
     () => (

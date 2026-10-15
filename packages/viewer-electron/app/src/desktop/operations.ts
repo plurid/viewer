@@ -18,7 +18,6 @@ import {
   utimes,
 } from 'node:fs/promises';
 import path from 'node:path';
-import { ZodError } from 'zod';
 import type {
   CollisionDecision,
   OperationJob,
@@ -29,7 +28,7 @@ import { absolute, exists, message, validName, entry } from './filesystem';
 import { sourceVersion, sameSourceVersion } from '../domain/inspection';
 import { macFiles, type TrashReceipt, type ReceiptAccess } from './macos-files';
 import { createArchive, extractArchive } from './archive-jobs';
-import { operationJournal, outputProof, type OperationReceipt } from './operation-journal';
+import { OperationLog, outputProof, type OperationReceipt } from './operation-journal';
 import { privateStage } from './staging';
 import { fileCoordination } from './file-coordination';
 import { removeEmptyDirectory, unlinkVerified } from './removal';
@@ -93,6 +92,8 @@ interface Task {
   undo: UndoStep[];
   lastProgress: number;
   intent?: OperationReceipt['intent'];
+  /** The request Redo would start, pinned to the versions Undo restored. */
+  redo?: OperationRequest;
 }
 
 /** Make a published tree's directory entries durable before its sources on another
@@ -137,7 +138,7 @@ export class Operations {
   private exclusiveQueue: Promise<void> = Promise.resolve();
   private stopped = false;
   private idle: (() => void)[] = [];
-  private journal?: ReturnType<typeof operationJournal>;
+  private journal?: OperationLog;
   private loaded?: Promise<void>;
   constructor(
     private trash: (file: string) => Promise<void | TrashReceipt>,
@@ -150,7 +151,7 @@ export class Operations {
     private notice: (message: string) => void = () => {},
     private protection = new ProtectedPaths(),
   ) {
-    if (dataPath) this.journal = operationJournal(dataPath);
+    if (dataPath) this.journal = new OperationLog(dataPath);
   }
   load(): Promise<void> {
     // A transient read failure must not disable file operations until restart.
@@ -159,24 +160,15 @@ export class Operations {
       throw error;
     }));
   }
-  /** An unreadable journal is renamed aside for inspection, never deleted or replayed. */
-  private async readJournal() {
-    try {
-      return await this.journal?.load();
-    } catch (error) {
-      if (!this.journal || !(error instanceof SyntaxError || error instanceof ZodError))
-        throw error;
-      const kept = `${this.journal.file}.unreadable-${Date.now()}`;
-      await rename(this.journal.file, kept);
-      this.notice(
-        `Recent file operation history could not be read, so earlier Undo is unavailable. It was kept at ${kept}.`,
-      );
-      return null;
-    }
+  /** Unreadable records are renamed aside by the log, never deleted or replayed. */
+  private async readJournal(): Promise<OperationReceipt[]> {
+    if (!this.journal) return [];
+    const { receipts, notices } = await this.journal.load();
+    for (const notice of notices) this.notice(notice);
+    return receipts;
   }
   private async restore(): Promise<void> {
-    const document = await this.readJournal();
-    for (const receipt of document?.records ?? []) {
+    for (const receipt of await this.readJournal()) {
       if (this.tasks.has(receipt.job.id)) continue;
       const job = receipt.job;
       const interruptedUndo = !!receipt.intent && job.status === 'completed';
@@ -195,6 +187,8 @@ export class Operations {
         // item. Never replay that ambiguous receipt automatically.
         job.undoable = !interruptedUndo && !!receipt.undo.length;
       }
+      // Redo is offered only within the session that performed the Undo.
+      delete job.redoable;
       this.tasks.set(job.id, {
         job,
         request: receipt.request,
@@ -205,19 +199,24 @@ export class Operations {
       });
     }
   }
+  /** Each retained job appends only what changed since its last record. */
   private checkpoint(): Promise<void> {
-    return Promise.resolve()
-      .then(() =>
-        this.journal?.save({
-          version: 1,
-          records: [...this.tasks.values()]
-            .slice(-100)
-            .map(({ job, request, undo, intent }) => ({ job, request, undo, intent })),
-        }),
-      )
+    const journal = this.journal;
+    if (!journal) return Promise.resolve();
+    return Promise.all(
+      [...this.tasks.values()]
+        .slice(-100)
+        .map(({ job, request, undo, intent }) => journal.record({ job, request, undo, intent })),
+    )
+      .then(() => {})
       .catch((error) => {
         throw new ReceiptFailure(message(error));
       });
+  }
+  /** A finished job's log becomes one line; the uncompacted log stays valid on failure. */
+  private async compact(task: Task): Promise<void> {
+    const { job, request, undo, intent } = task;
+    await this.journal?.compact({ job, request, undo, intent }).catch(() => {});
   }
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
@@ -266,8 +265,16 @@ export class Operations {
     }
     return result.reverse();
   }
-  start(request: OperationRequest): string {
+  start(request: OperationRequest, redo = false): string {
     if (this.stopped) throw new Error('The file operation queue has closed.');
+    // A new operation ends earlier Redo offers, as in other applications.
+    if (!redo)
+      for (const task of this.tasks.values())
+        if (task.redo) {
+          task.redo = undefined;
+          task.job.redoable = false;
+          this.emit(task);
+        }
     if (request.kind === 'alias' && process.platform !== 'darwin')
       throw new Error('Finder aliases require macOS.');
     const sources = [...new Set(request.sources.map(absolute))];
@@ -340,7 +347,10 @@ export class Operations {
     if (this.tasks.size > 100)
       for (const [id, old] of this.tasks) {
         if (this.tasks.size <= 100) break;
-        if (['completed', 'failed', 'cancelled'].includes(old.job.status)) this.tasks.delete(id);
+        if (['completed', 'failed', 'cancelled'].includes(old.job.status)) {
+          this.tasks.delete(id);
+          void this.journal?.forget(id).catch(() => {});
+        }
       }
     return job.id;
   }
@@ -351,8 +361,10 @@ export class Operations {
     task.decision?.('cancel');
   }
   async quiesce(root: string): Promise<void> {
-    const related = (file: string) =>
-      file === root || file.startsWith(root.replace(/[\\/]$/, '') + path.sep);
+    // Stopping work is always safe, so other case and Unicode spellings match too.
+    const key = (file: string) => file.normalize('NFC').toLocaleLowerCase('en-US');
+    const base = key(root.replace(/[\\/]$/, ''));
+    const related = (file: string) => key(file) === base || key(file).startsWith(base + path.sep);
     for (const task of this.tasks.values())
       if (
         task.request.sources.some(related) ||
@@ -455,8 +467,29 @@ export class Operations {
       await this.checkpoint();
     }
     task.job.undoable = false;
+    // Redo may only act on the very items Undo put back.
+    const expectedSources: NonNullable<OperationRequest['expectedSources']> = [];
+    for (const file of task.request.sources)
+      try {
+        expectedSources.push({ path: file, version: sourceVersion(await entry(file)) });
+      } catch {
+        // A source that is absent after Undo (a created output) needs no pin.
+      }
+    task.redo = { ...task.request, expectedSources };
+    task.job.redoable = true;
     this.emit(task);
     await this.checkpoint();
+    await this.compact(task);
+  }
+  /** Starts an undone operation again as a new job, with every usual check. */
+  redo(id: string): string {
+    const task = this.tasks.get(id);
+    if (!task?.redo) throw new Error('This operation cannot be redone.');
+    const request = task.redo;
+    task.redo = undefined;
+    task.job.redoable = false;
+    this.emit(task);
+    return this.start(request, true);
   }
   private withStep<T>(step: UndoStep, work: () => Promise<T>): Promise<T> {
     return step.trash
@@ -1079,7 +1112,9 @@ export class Operations {
             }
             job.current = source || request.destination;
             task.intent = { source, destination: request.destination };
-            await this.checkpoint();
+            // Each intent is made durable immediately before the first change it covers;
+            // Trash is the only change that follows directly.
+            if (request.kind === 'trash') await this.checkpoint();
             this.progress(task);
             let destination: string | undefined;
             const move =
@@ -1113,7 +1148,6 @@ export class Operations {
               if (source === destination) throw new Error('Source and destination are the same.');
               await this.access([destination]);
               task.intent = { source, destination };
-              await this.checkpoint();
               if (source && destination.startsWith(source + path.sep))
                 throw new Error('A folder cannot be placed inside itself.');
               if (
@@ -1304,6 +1338,7 @@ export class Operations {
         task.intent = undefined;
         this.emit(task);
         await this.checkpoint();
+        await this.compact(task);
         currentTask = undefined;
       }
     } catch (error) {

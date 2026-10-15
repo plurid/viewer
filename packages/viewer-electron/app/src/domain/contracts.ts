@@ -33,6 +33,7 @@ import type { CapturedTarget, TerminalEvent, ExecutionTask, TerminalStart } from
 import type { FolderSizeTask, ApplicationChoices, NativeApplication } from './metadata';
 import type { FileChange } from './changes';
 import type { ComparisonRequest, ComparisonResult } from './comparison';
+import type { DuplicateRequest, DuplicateResult } from './duplicates';
 import type { OperationPlanRequest, OperationPlanReply } from './operation-plan';
 import type { CheckpointRequest, CheckpointReply } from './change-plan';
 import type { AgentClientRequest, AgentClientReply, AgentAudit } from './agent-clients';
@@ -242,6 +243,8 @@ export interface OperationJob {
   errorCount: number;
   collision?: Collision;
   undoable: boolean;
+  /** Set after Undo until another operation starts; Redo runs it again as a new job. */
+  redoable?: boolean;
   recovery?: { source: string; destination?: string; staging?: string };
 }
 export interface OperationProgress {
@@ -324,6 +327,8 @@ export interface ViewerAPI {
   workflow(request: WorkflowRequest): Promise<WorkflowReply>;
   querySnapshot(query: IndexedQuery): Promise<QuerySnapshot>;
   compare(request: ComparisonRequest): Promise<ComparisonResult | null>;
+  /** Reports identical files; it never removes anything. */
+  duplicates(request: DuplicateRequest): Promise<DuplicateResult | null>;
   operationPlan(request: OperationPlanRequest): Promise<OperationPlanReply>;
   checkpoints(request: CheckpointRequest): Promise<CheckpointReply>;
   inspect(file: string, content?: boolean, ocr?: boolean): Promise<InspectionResult>;
@@ -394,6 +399,8 @@ export interface ViewerAPI {
   chooseFolder(defaultPath?: string): Promise<string | null>;
   reveal(path: string): Promise<void>;
   openExternal(path: string): Promise<void>;
+  /** Asks macOS to mount a network share; it shows its own sign-in. */
+  connectServer(address: string): Promise<void>;
   nativeFilePanel(kind: 'preview' | 'share', paths: string[]): Promise<void>;
   applications(paths: string[]): Promise<ApplicationChoices>;
   chooseApplication(): Promise<NativeApplication | null>;
@@ -410,6 +417,8 @@ export interface ViewerAPI {
   cancelJob(id: string): Promise<void>;
   resolveCollision(id: string, decision: CollisionDecision, applyAll: boolean): Promise<void>;
   undo(id: string): Promise<void>;
+  /** Starts an undone operation again; resolves with the new job ID. */
+  redo(id: string): Promise<string>;
   resource(path: string): Promise<Resource>;
   read(id: string, limit?: number): Promise<ResourceRead>;
   release(id: string): Promise<void>;

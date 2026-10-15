@@ -1,5 +1,37 @@
 # Verification
 
+## October 15 follow-up
+
+**579 unit tests across 76 files pass** (2 skipped), run with `VIEWER_TEST_PRESERVE=1`. All four TypeScript targets, ESLint and formatting pass. The packaged app was not built or run.
+
+**Changes**
+- Operation receipts moved to append-only per-job logs, `operation-journal-v2/`; earlier journals migrate on first launch.
+- `eslint-plugin-react-hooks` 7.1.1 is enforced in renderer code. All 41 findings were fixed or documented with a reason.
+- DOM tests run under jsdom 30.1.1 with `@testing-library/react` 16.3.3. `vitest.config.ts` points `react` at the hoisted copy, because an older `node_modules` inside `app/` still holds pnpm store links.
+- IPC handlers receive schema-typed arguments, via `ApiCall` in `desktop/ipc-schemas.ts`, instead of casts.
+- New features: file Redo, folder contents in the Trash confirmation, New Folder with Selection, ⇧⌘G, relative Markdown links, Find duplicates, a Spotlight first pass in folder search, Connect to Server, and agent request outcomes in the activity log.
+- Fixes:
+  - Agent-revealed terminals wait for a start.
+  - Agent path checks no longer reveal whether a file exists.
+  - Single-file preview grants.
+  - Shortcut matching for Option and Shift.
+  - Menu-only shortcuts are included in the conflict check.
+  - No duplicate workspace saves.
+  - Bounded list caches.
+  - Throttled model camera saves.
+  - PDF canvas and text caching.
+  - A notice when a 3D view loses its WebGL context.
+  - Multi-line code highlighting.
+  - Early cancellation of comparisons.
+  - Engine handles confined to the workspace controller.
+
+**New regressions cover:**
+- Log replay, a torn final line, quarantine and migration.
+- Linear log writes, Redo, refused rename swaps, protected folders and DOM hooks.
+- The duplicate finder service and dialog, Spotlight deduplication, link resolution and server addresses.
+
+The agent section of `tests/electron-smoke.ts` now expects the current policy: executables and terminals are refused, and a review is rejected rather than approved, because approval opens the desktop confirmation.
+
 ## October 15 safety review
 
 A full review fixed file-operation, agent-boundary and persistence issues; see [file operations](file-operations.md) and [actions](actions.md). **554 unit tests across 73 files pass** (2 skipped), with `VIEWER_TEST_PRESERVE=1`. All four TypeScript targets, ESLint and formatting pass. `pnpm package`, `pnpm test:desktop` and the native acceptance scripts were not run for this change.

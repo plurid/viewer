@@ -3,6 +3,7 @@ import type { CommandContext } from './registry';
 import { Dialog } from '../ui/primitives';
 import { useViewer } from '../state/store';
 import { Icon } from '../ui/Icon';
+import { errorMessage } from '../../domain/errors';
 
 /** Selection is captured before choosing a destination; confirmation runs the operation. */
 export function DestinationDialog({
@@ -37,7 +38,7 @@ export function DestinationDialog({
             });
             onClose();
           } catch (error) {
-            setError(error instanceof Error ? error.message : String(error));
+            setError(errorMessage(error));
             setBusy(false);
           }
         }}

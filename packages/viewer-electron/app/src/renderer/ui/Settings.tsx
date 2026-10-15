@@ -6,7 +6,7 @@ import { FilePermissions } from './FilePermissions';
 import { PrivacyInformation } from './PrivacyInformation';
 import { providerKinds, providerPresets } from '../../domain/model-providers';
 import { saveSettingsChange, type SettingsChange } from './settings-edits';
-import { defaultShortcuts } from '../../domain/shortcuts';
+import { defaultShortcuts, menuShortcuts } from '../../domain/shortcuts';
 import {
   TerminalSettings,
   CustomActionSettings,
@@ -79,12 +79,13 @@ export function SettingsWindow() {
       }
     });
   }, []);
+  const look = snapshot?.look;
   useEffect(() => {
-    if (snapshot) {
-      document.documentElement.dataset.look = snapshot.look;
-      document.documentElement.style.colorScheme = snapshot.look;
+    if (look) {
+      document.documentElement.dataset.look = look;
+      document.documentElement.style.colorScheme = look;
     }
-  }, [snapshot?.look]);
+  }, [look]);
   const enqueue = (build: SettingsChange) => {
     setError('');
     writes.current = saveSettingsChange(
@@ -768,7 +769,7 @@ export function SettingsWindow() {
               Recipe shortcuts are configured in Actions. Use Cmd, Ctrl, Alt, Shift, and a key.
               Space remains quick preview.
             </p>
-            {Object.entries(defaultShortcuts)
+            {Object.entries({ ...defaultShortcuts, ...menuShortcuts })
               .map(([id, shortcut]) => [id, id.replaceAll('-', ' '), shortcut])
               .map(([id, label, shortcut]) => (
                 <label className="settings-row" key={id}>

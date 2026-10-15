@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { OpenWithDialog } from './OpenWithDialog';
 import { OpenDefaultButton } from './OpenDefaultButton';
+import { errorMessage } from '../../domain/errors';
 
 export function NativeOpenActions({ path }: { path: string }) {
   const paths = useMemo(() => [path], [path]);
@@ -12,7 +13,7 @@ export function NativeOpenActions({ path }: { path: string }) {
         <OpenDefaultButton
           path={path}
           onOpen={() => setError('')}
-          onError={(error) => setError(error instanceof Error ? error.message : String(error))}
+          onError={(error) => setError(errorMessage(error))}
         />
         <button onClick={() => setChooser(true)}>Open With…</button>
       </div>

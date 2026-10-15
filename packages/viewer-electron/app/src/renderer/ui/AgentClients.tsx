@@ -301,6 +301,9 @@ export function AgentClientSettings({ settings }: { settings: ApplicationSetting
                   <time>{new Date(entry.at).toLocaleString()}</time>
                   <span>
                     {entry.tool} · {entry.status}
+                    {entry.detail && entry.tool.startsWith('review:') && (
+                      <small className="muted"> {entry.detail}</small>
+                    )}
                   </span>
                 </li>
               ))}

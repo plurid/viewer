@@ -15,7 +15,10 @@ export function useColumnNavigation(
   const session = browseSession(id, path);
   const [trail, setTrail] = useBrowseField(id, path, 'columnTrail');
   const [, setDirectory] = useBrowseField(id, path, 'columnDirectory');
+  // Fresh per plane and folder: the keys reset these mutable holders on navigation.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const scopes = useMemo(() => new Map<string, FileEntry[]>(), [id, path]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const pending = useMemo(() => ({ current: undefined as string | undefined }), [id, path]);
   const reveal = useCallback(
     (entry: FileEntry) => {

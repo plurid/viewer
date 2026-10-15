@@ -16,6 +16,7 @@ import { ContextMenu } from './ContextMenu';
 import { Icon } from './Icon';
 import type { CommandRequest } from '../commands/registry';
 import { measureLocalX, type Point } from './projectedResize';
+import { baseName } from '../../domain/planes';
 
 const titles = { locations: 'Locations', favorites: 'Favorites', recents: 'Recent' };
 export const SIDEBAR_DRAG = 'application/x-viewer-sidebar';
@@ -79,9 +80,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   const groups = {
     locations,
     favorites: saved.favorites,
-    recents: saved.recents
-      .slice(0, 8)
-      .map((path) => ({ path, name: path.split(/[\\/]/).pop() || path })),
+    recents: saved.recents.slice(0, 8).map((path) => ({ path, name: baseName(path) })),
   };
   function context(
     section: SidebarSection,

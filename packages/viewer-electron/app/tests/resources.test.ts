@@ -170,6 +170,16 @@ describe('scoped preview resources', () => {
     await expect(resources.read(grant.id)).rejects.toThrow();
     expect((await resources.response(new Request(grant.url))).status).toBe(403);
   });
+  it('limits a non-model preview to its own file', async () => {
+    const folder = path.join(root, 'documents');
+    await mkdir(folder);
+    await writeFile(path.join(folder, 'report.txt'), 'shown');
+    await writeFile(path.join(folder, 'private.txt'), 'not shown');
+    const grant = await resources.grant(path.join(folder, 'report.txt'));
+    expect((await resources.response(new Request(grant.url))).status).toBe(200);
+    const sibling = grant.url.replace(/report\.txt$/, 'private.txt');
+    expect((await resources.response(new Request(sibling))).status).toBe(404);
+  });
   it('allows local companion assets and rejects scope escape and symlink escape', async () => {
     const folder = path.join(root, 'model');
     await mkdir(folder);

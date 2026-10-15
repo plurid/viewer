@@ -88,8 +88,13 @@ describe('layout-only changes', () => {
     const { readFile } = await import('node:fs/promises');
     const { defaultShortcuts, shortcutCommandID } = await import('../src/domain/shortcuts');
     const actions = {
-      engine: { current: null },
-      workspace: { newRootFolder: addRootFolder, parentPaneID: () => undefined },
+      workspace: {
+        newRootFolder: addRootFolder,
+        parentPaneID: () => undefined,
+        isDocked: () => false,
+        arrangementHistory: () => ({ canUndo: false, canRedo: false }),
+        hasRepeatedPreviews: () => false,
+      },
       ready: true,
       tool: null,
     } as unknown as WindowActions;
@@ -100,10 +105,9 @@ describe('layout-only changes', () => {
       .map(shortcutCommandID)
       .filter((id) => !registered.has(id));
     expect(missing).toEqual([]);
-    // Edit ▸ Redo has no file command yet; it still edits text through the text-edit route.
     const menu = [...(await readFile('src/main.ts', 'utf8')).matchAll(/command\('([^']+)'\)/g)]
       .map((match) => match[1])
-      .filter((id) => !registered.has(id) && id !== 'redo-file');
+      .filter((id) => !registered.has(id));
     expect(menu).toEqual([]);
   });
   it('creates a root from captured command ownership even if the active pane changes', async () => {
@@ -111,8 +115,13 @@ describe('layout-only changes', () => {
     const workspaceID = activeWorkspace().id;
     const other = addPane('/fixtures/other', 'folder', true);
     const actions = {
-      engine: { current: null },
-      workspace: { newRootFolder: addRootFolder, parentPaneID: () => undefined },
+      workspace: {
+        newRootFolder: addRootFolder,
+        parentPaneID: () => undefined,
+        isDocked: () => false,
+        arrangementHistory: () => ({ canUndo: false, canRedo: false }),
+        hasRepeatedPreviews: () => false,
+      },
       ready: true,
       tool: null,
     } as unknown as WindowActions;
@@ -209,8 +218,11 @@ describe('layout-only changes', () => {
     expect(getState().saved.ui.sidebar.labels['/fixtures/two']).toBe('Projects');
     const recents = [...getState().saved.recents];
     const actions = {
-      engine: { current: null },
-      workspace: {},
+      workspace: {
+        isDocked: () => false,
+        arrangementHistory: () => ({ canUndo: false, canRedo: false }),
+        hasRepeatedPreviews: () => false,
+      },
       ready: false,
       tool: null,
     } as unknown as WindowActions;

@@ -1,5 +1,3 @@
-import type { PluridApplicationHandle } from '@plurid/plurid-react';
-import type { RefObject } from 'react';
 import { reorder } from '../../domain/preferences';
 import {
   activeWorkspace,
@@ -15,13 +13,12 @@ import { actionCommands } from '../actions/commands';
 import { basketEntries, addToBasket } from '../state/store';
 import { sourceVersion } from '../../domain/inspection';
 import { copyPathCommand } from './copy-path';
-import { repeatedPreviews } from '../workspace/recovery';
 import type { CommandContext, CommandDefinition } from './registry';
 import { requestProject, type ProjectCommand } from '../workspace/projects';
+import { baseName } from '../../domain/planes';
 
 export interface WindowActions {
   workspace: WorkspaceController;
-  engine: RefObject<PluridApplicationHandle | null>;
   ready: boolean;
   palette(mode: 'commands' | 'files' | 'workspaces'): void;
   settings(): void;
@@ -32,6 +29,7 @@ export interface WindowActions {
   spatialTool(tool: 'rotate' | 'scale' | 'translate' | null): void;
   tool: 'rotate' | 'scale' | 'translate' | null;
   goTo(): void;
+  connectServer(): void;
   openWith(paths: string[]): void;
 }
 export function windowCommands(actions: WindowActions): CommandDefinition[] {
@@ -128,6 +126,24 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
         });
         addToBasket(
           snapshot.entries.map((entry) => ({ path: entry.path, version: sourceVersion(entry) })),
+        );
+      },
+    },
+    {
+      id: 'find-duplicates',
+      label: 'Find duplicates…',
+      group: 'Files',
+      icon: 'copy',
+      aliases: ['duplicates', 'identical files', 'reclaim space'],
+      when: (context) =>
+        !['workspace', 'sidebar'].includes(context.scope) &&
+        (!!context.directory || context.selection.some((file) => file.directory)),
+      run: (context) => {
+        const folders = context.selection.filter((file) => file.directory).map((file) => file.path);
+        window.dispatchEvent(
+          new CustomEvent('viewer:duplicates', {
+            detail: folders.length ? folders : context.directory ? [context.directory] : [],
+          }),
         );
       },
     },
@@ -393,6 +409,18 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       },
     },
     {
+      id: 'redo-file',
+      label: 'Redo file operation',
+      group: 'Files',
+      icon: 'right',
+      shortcut: '⇧⌘Z',
+      when: (context) => windowScope(context) && !!context.jobs?.some((job) => job.redoable),
+      run: async () => {
+        const job = getState().jobs.find((job) => job.redoable);
+        if (job) await window.viewer.redo(job.id);
+      },
+    },
+    {
       id: 'frame-all',
       label: 'Frame all planes',
       group: 'Space',
@@ -411,15 +439,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       aliases: ['duplicates', 'repeated', 'clean previews'],
       detail: 'Close redundant views · layout only · Undo arrangement restores them',
       when: (context) =>
-        windowScope(context) &&
-        actions.ready &&
-        !!actions.engine.current &&
-        repeatedPreviews(
-          space,
-          actions.engine.current.tree.get(),
-          state.activePane,
-          state.bootstrap.platform,
-        ).length > 0,
+        windowScope(context) && actions.ready && actions.workspace.hasRepeatedPreviews(),
       run: actions.workspace.consolidatePreviews,
     },
     {
@@ -463,7 +483,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     },
     {
       id: 'dock',
-      label: actions.engine.current?.camera.docked() ? 'Reveal space' : 'Dock plane',
+      label: actions.workspace.isDocked() ? 'Reveal space' : 'Dock plane',
       group: 'Plane',
       icon: 'dock',
       aliases: ['dk'],
@@ -487,7 +507,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       icon: 'left',
       aliases: ['ua'],
       shortcut: '⌥⌘Z',
-      when: (context) => windowScope(context) && !!actions.engine.current?.history.get().canUndo,
+      when: (context) => windowScope(context) && actions.workspace.arrangementHistory().canUndo,
       run: actions.workspace.undo,
     },
     {
@@ -497,7 +517,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       icon: 'right',
       aliases: ['ra'],
       shortcut: '⇧⌥⌘Z',
-      when: (context) => windowScope(context) && !!actions.engine.current?.history.get().canRedo,
+      when: (context) => windowScope(context) && actions.workspace.arrangementHistory().canRedo,
       run: actions.workspace.redo,
     },
     {
@@ -708,6 +728,15 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     when: (context) => windowScope(context) && actions.tool !== null,
     run: () => actions.spatialTool(null),
   });
+  commands.push({
+    id: 'connect-server',
+    label: 'Connect to server…',
+    group: 'Navigation',
+    icon: 'folder',
+    aliases: ['smb', 'network share', 'mount server'],
+    when: windowScope,
+    run: actions.connectServer,
+  });
   if (!space.panes.some((pane) => pane.id === state.activePane && pane.type === 'folder'))
     commands.push({
       id: 'go-to',
@@ -733,7 +762,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
   for (const pane of space.panes)
     commands.push({
       id: `plane:${pane.id}`,
-      label: pane.path.split(/[\\/]/).pop() || pane.path,
+      label: baseName(pane.path),
       group: 'Open planes',
       detail: pane.path,
       aliases: ['plane', 'switch'],
@@ -745,7 +774,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
   const destinations = [
     ...state.saved.favorites,
     ...state.bootstrap.locations,
-    ...state.saved.recents.map((path) => ({ path, name: path.split(/[\\/]/).pop() || path })),
+    ...state.saved.recents.map((path) => ({ path, name: baseName(path) })),
   ].filter((item, index, all) => all.findIndex((other) => other.path === item.path) === index);
   for (const item of destinations)
     commands.push({

@@ -397,6 +397,8 @@ export class AgentBroker {
       const decoder = new StringDecoder('utf8');
       let buffer = '';
       let requests = Promise.resolve();
+      // Bound queued requests per connection: reading pauses until earlier ones finish.
+      let pending = 0;
       stream.on('error', () => {});
       stream.on('data', (chunk) => {
         buffer += decoder.write(chunk);
@@ -408,6 +410,7 @@ export class AgentBroker {
         while ((index = buffer.indexOf('\n')) >= 0) {
           const line = buffer.slice(0, index);
           buffer = buffer.slice(index + 1);
+          if (++pending >= 16) stream.pause();
           requests = requests.then(async () => {
             let id: unknown = null;
             try {
@@ -422,6 +425,8 @@ export class AgentBroker {
                   error: error instanceof Error ? error.message : 'Agent request failed.',
                 }) + '\n',
               );
+            } finally {
+              if (--pending < 16 && stream.isPaused()) stream.resume();
             }
           });
         }
@@ -561,15 +566,28 @@ export class AgentBroker {
       throw new Error(
         'Private Viewer credentials, grants and recovery data are unavailable to generic agent file tools.',
       );
-    await this.extension?.access?.([file]);
-    const actual = await realpath(absolute(file));
+    const client = await this.clients.get();
+    const configured = client?.roots ?? this.settings().agents.roots;
+    const roots = await Promise.all(configured.map((root) => realpath(root).catch(() => '')));
+    let actual: string;
+    try {
+      await this.extension?.access?.([file]);
+      actual = await realpath(absolute(file));
+    } catch (error) {
+      // Outside the agent's folders, missing, denied and out-of-scope paths answer alike,
+      // so agents cannot probe the disk. Inside them, the actual reason is shown.
+      const lexical = absolute(file);
+      if (
+        [...roots, ...configured.map((root) => absolute(root))].some(
+          (root) => root && within(lexical, root),
+        )
+      )
+        throw error;
+      throw new Error('This file is outside the agent’s authorized folders.');
+    }
     const privateRoot = await realpath(this.dataPath).catch(() => path.resolve(this.dataPath));
     if (within(actual, privateRoot))
       throw new Error('Private Viewer data is unavailable to generic agent file tools.');
-    const client = await this.clients.get();
-    const roots = await Promise.all(
-      (client?.roots ?? this.settings().agents.roots).map((root) => realpath(root).catch(() => '')),
-    );
     if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
     const latest = await this.clients.get();
     if (client && latest?.revision !== client.revision)
@@ -829,7 +847,7 @@ export class AgentBroker {
       }
       await this.authorizeNavigation(request, target);
       value = extension.requests.navigation(request, target);
-      this.owned.set((value as { id: string }).id, this.clients.actor());
+      this.own((value as { id: string }).id);
       if (await this.clients.get()) {
         await extension.requests.review((value as { id: string }).id, true);
         value = { ...(value as object), requiresUserReview: false };
@@ -878,7 +896,7 @@ export class AgentBroker {
           };
         else {
           value = await extension.requests.command(command.id, catalog.target, command.label);
-          this.owned.set((value as { id: string }).id, this.clients.actor());
+          this.own((value as { id: string }).id);
         }
       }
     } else if (call.name === 'read_config') {
@@ -911,7 +929,7 @@ export class AgentBroker {
       if (call.name === 'validate_config') value = this.extension.config.preview(input.patches);
       else {
         value = this.extension.requests.configuration(input.patches);
-        this.owned.set((value as { id: string }).id, this.clients.actor());
+        this.own((value as { id: string }).id);
       }
     } else if (['read_terminal', 'write_terminal'].includes(call.name)) {
       if (!this.extension) throw new Error('Terminal API is unavailable.');
@@ -928,7 +946,7 @@ export class AgentBroker {
       } else {
         if (input.data === undefined) throw new Error('Provide terminal input.');
         value = await terminal.writeTerminal(input.id, input.data);
-        this.owned.set((value as { id: string }).id, this.clients.actor());
+        this.own((value as { id: string }).id);
       }
     } else if (call.name === 'get_proposal') {
       if (!this.extension) throw new Error('Proposal API is unavailable.');
@@ -1187,7 +1205,7 @@ export class AgentBroker {
           },
         };
         const id = await this.actions.start(request);
-        this.owned.set(id, this.clients.actor());
+        this.own(id);
         return { id, applyRequiresUserReview: true };
       });
     } else if (call.name === 'get_task' || call.name === 'cancel_task') {
@@ -1215,6 +1233,15 @@ export class AgentBroker {
     if (capability) await this.clients.require(capability);
     else await this.clients.get();
     return { content: [{ type: 'text', text: JSON.stringify(value) }] };
+  }
+  /** Records which client may read a proposal or task; bounded like the requests it tracks. */
+  private own(id: string): void {
+    this.owned.set(id, this.clients.actor());
+    if (this.owned.size <= 1000) return;
+    for (const key of this.owned.keys()) {
+      if (this.owned.size <= 500) break;
+      this.owned.delete(key);
+    }
   }
   /** The private socket folder holds only the socket; it is never removed recursively. */
   private async removeSocketDirectory(): Promise<void> {

@@ -1,11 +1,22 @@
 import type { TreePlane } from '@plurid/plurid-data';
-import type { FileEntry, Workspace } from '../../domain/contracts';
+import type { FileEntry, Pane, Workspace } from '../../domain/contracts';
 import { normalizedPanePath } from '../../domain/planes';
 export function flattenTree(tree: TreePlane[]): TreePlane[] {
   return tree.flatMap((node) => [node, ...flattenTree(node.children ?? [])]);
 }
 export function hostID(node: TreePlane): string {
   return node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id || '';
+}
+const routeKinds: Record<Pane['type'], string> = {
+  folder: 'folders',
+  search: 'searches',
+  terminal: 'terminals',
+  collection: 'collections',
+  preview: 'previews',
+};
+/** The engine route that renders a host pane; `hostID` maps a plane back to its pane. */
+export function paneRoute(type: Pane['type'], id: string): string {
+  return `/${routeKinds[type]}/${id}`;
 }
 export function parentPaneID(tree: readonly TreePlane[], id: string): string | undefined {
   for (const node of tree) {

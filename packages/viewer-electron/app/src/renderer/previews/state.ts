@@ -22,14 +22,9 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
       },
       set: (key, value) => {
         const before = previewValues(id, owner)['_sourceVersion'] as SourceVersion | undefined;
-        if (file)
-          savePreviewValue(
-            id,
-            '_sourceVersion',
-            sourceVersion(file),
-            owner,
-            !!before && !sameSourceVersion(before, sourceVersion(file)),
-          );
+        // Record the source version only when it changes; a new file resets its view.
+        if (file && !(before && sameSourceVersion(before, sourceVersion(file))))
+          savePreviewValue(id, '_sourceVersion', sourceVersion(file), owner, !!before);
         savePreviewValue(id, key, value, owner);
       },
     };

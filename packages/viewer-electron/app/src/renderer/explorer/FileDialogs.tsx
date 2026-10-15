@@ -1,14 +1,16 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CommandContext } from '../commands/registry';
 import type { FolderActions } from '../commands/folder';
 import { DestinationDialog } from '../commands/DestinationDialog';
 import { FileInformation } from './FileInformation';
 import { Dialog, NameDialog } from '../ui/primitives';
-import { getState, report } from '../state/store';
+import { getState, report, settledJob } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { OpenWithDialog } from '../ui/OpenWithDialog';
 import { RenameActions } from '../actions/RenameActions';
 import { sourceVersion } from '../../domain/inspection';
+import { formatBytes } from '../../domain/files';
+import { calculateSize, cancelFolderSize, useFolderSize } from './sizes';
 const moveToTrash = async (context: CommandContext) => {
   await window.viewer.operate({
     kind: 'trash',
@@ -20,6 +22,62 @@ const moveToTrash = async (context: CommandContext) => {
   });
 };
 
+/** What a Trash confirmation covers: selected folders are measured in the background
+ * (read-only, cancellable) so their full contents are visible before confirming. */
+export function TrashContents({ context }: { context: CommandContext }) {
+  const folders = context.selection.filter((file) => file.directory).length;
+  const paths = useMemo(
+    () => [...new Set(context.selection.map((file) => file.path))].sort(),
+    [context],
+  );
+  const size = useFolderSize(paths);
+  const initial = useRef(size);
+  useEffect(() => {
+    if (!folders) return;
+    const owned = !initial.current || initial.current.stale;
+    if (owned) void calculateSize(context.selection).catch(() => {});
+    return () => {
+      if (owned) void cancelFolderSize(paths).catch(() => {});
+    };
+  }, [context, folders, paths]);
+  if (!folders) return null;
+  const task = size?.task;
+  const counts = task
+    ? `${task.files.toLocaleString()} ${task.files === 1 ? 'file' : 'files'} in ${(task.folders || folders).toLocaleString()} ${(task.folders || folders) === 1 ? 'folder' : 'folders'}, ${formatBytes(task.bytes)}`
+    : '';
+  return (
+    <p className="dialog-copy muted" role="status">
+      {task?.status === 'running'
+        ? `Counting folder contents… ${counts}`
+        : task?.status === 'completed'
+          ? `Including folder contents: ${counts}${task.skipped ? ` (${task.skipped.toLocaleString()} unreadable)` : ''}.`
+          : `Selected folders are moved with everything inside them.`}
+    </p>
+  );
+}
+/** New Folder with Selection: two ordinary jobs, each with its own Undo. The move
+ * targets the folder actually created and only the items as they were chosen. */
+export async function groupSelection(context: CommandContext, name: string): Promise<void> {
+  const created = await settledJob(
+    await window.viewer.operate({
+      kind: 'mkdir',
+      name,
+      sources: [],
+      destination: context.directory,
+    }),
+  );
+  const folder = created.status === 'completed' ? created.completed[0]?.destination : undefined;
+  if (!folder) throw new Error(created.errors[0]?.message || 'The folder was not created.');
+  await window.viewer.operate({
+    kind: 'move',
+    sources: context.selection.map((file) => file.path),
+    destination: folder,
+    expectedSources: context.selection.map((file) => ({
+      path: file.path,
+      version: sourceVersion(file),
+    })),
+  });
+}
 function TrashConfirmation({ context, onClose }: { context: CommandContext; onClose(): void }) {
   const submitted = useRef(false);
   const confirm = () => {
@@ -56,6 +114,7 @@ function TrashConfirmation({ context, onClose }: { context: CommandContext; onCl
           : `${context.selection.length} items`}{' '}
         to the system Trash?
       </p>
+      <TrashContents context={context} />
       <footer>
         <button
           className="dialog-keyboard-action"
@@ -85,7 +144,7 @@ export function useFileDialogs(): {
 } {
   const workspace = useWorkspace();
   const [name, setName] = useState<{
-    kind: 'rename' | 'mkdir' | 'go-to';
+    kind: 'rename' | 'mkdir' | 'group' | 'go-to';
     context: CommandContext;
   }>();
   const [destination, setDestination] = useState<{
@@ -122,7 +181,9 @@ export function useFileDialogs(): {
                 ? 'Rename file'
                 : name.kind === 'mkdir'
                   ? 'New folder'
-                  : 'Go to folder'
+                  : name.kind === 'group'
+                    ? `New folder with ${name.context.selection.length} ${name.context.selection.length === 1 ? 'item' : 'items'}`
+                    : 'Go to folder'
             }
             label={name.kind === 'go-to' ? 'Folder path' : 'Name'}
             initial={
@@ -130,10 +191,12 @@ export function useFileDialogs(): {
                 ? name.context.selection[0]?.name
                 : name.kind === 'go-to'
                   ? name.context.directory
-                  : ''
+                  : name.kind === 'group'
+                    ? 'New Folder With Items'
+                    : ''
             }
             maxLength={name.kind === 'go-to' ? 32768 : 255}
-            action={name.kind === 'rename' ? 'Rename' : name.kind === 'mkdir' ? 'Create' : 'Go'}
+            action={name.kind === 'rename' ? 'Rename' : name.kind === 'go-to' ? 'Go' : 'Create'}
             secondaryAction={
               name.kind === 'rename'
                 ? (busy) => (
@@ -158,7 +221,8 @@ export function useFileDialogs(): {
                   paneID: name.context.paneID,
                   workspaceID: name.context.workspaceID,
                 });
-              } else
+              } else if (name.kind === 'group') await groupSelection(name.context, value);
+              else
                 await window.viewer.operate({
                   kind: name.kind === 'rename' ? 'rename' : 'mkdir',
                   name: value,
