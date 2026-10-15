@@ -20,6 +20,10 @@ The Trash confirmation lists selected folders' full contents (file and folder co
 
 Drag across blank space in list or grid view to select the items under the rectangle. Hold Shift or Command to add them to the current selection. The view scrolls when the pointer nears its top or bottom edge, and the click that ends the drag keeps the selection. Rows outside the visible window are selected too, by their measured positions.
 
+## Creating
+
+New file… (Folder menu) creates an empty file through the operation service, exclusively: a name that already exists can only keep both or be skipped, never replaced. Undo moves the new file to the Trash. New folder follows the same rule.
+
 ## Quick actions
 
 The Quick actions submenu works on selected images (JPEG, PNG, TIFF, HEIC, GIF, BMP, WebP):

@@ -95,7 +95,7 @@ const codePunctuation: Readonly<Record<string, string>> = {
 /** The unmodified key on a US layout, from the physical key code. */
 function codeKey(code = ''): string | undefined {
   return (
-    /^Key([A-Z])$/.exec(code)?.[1].toLowerCase() ??
+    /^Key([A-Z])$/.exec(code)?.[1]?.toLowerCase() ??
     /^Digit(\d)$/.exec(code)?.[1] ??
     codePunctuation[code]
   );

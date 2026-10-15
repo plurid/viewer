@@ -45,6 +45,7 @@ import type { ApiMethod, ApiResult, DesktopEvent, FileEntry } from '../domain/co
 import { absolute, entry, list } from './filesystem';
 import { spotlightTagged } from './spotlight';
 import { nativeImageConverter } from './native-image-convert';
+import { quickLookRender } from './quick-look-render';
 import { Operations } from './operations';
 import { Resources } from './resources';
 import { Search } from './search';
@@ -65,7 +66,7 @@ import { Workflows } from './workflows';
 import { WatchRules } from './watch-rules';
 import { Relationships } from './relationships';
 import { boundedRename } from './rename-preview';
-import { schemas, type ApiCall } from './ipc-schemas';
+import { methodWindows, schemas, type ApiHandlers } from './ipc-schemas';
 import { serverAddress } from '../domain/volumes';
 import { errorMessage } from '../domain/errors';
 
@@ -172,7 +173,7 @@ export class Desktop {
       emit({ type: 'folder-changed', path: path.dirname(file) });
       void this.files.update(file).catch(() => {});
     });
-    this.resources = new Resources(access);
+    this.resources = new Resources(access, (file) => quickLookRender(file));
     this.applications = new Applications(options.applications);
     this.settings = new SettingsService(
       dataPath,
@@ -410,53 +411,14 @@ export class Desktop {
             throw new Error('Unknown Viewer API method.');
           const name = method as ApiMethod;
           const role = this.windows.get(event.sender.id)!.role;
-          const settingsMethods: ApiMethod[] = [
-            'configOpen',
-            'configValidate',
-            'configTransfer',
-            'terminalApplication',
-            'agentGrants',
-            'agentClients',
-            'agentAudit',
-            'agentStop',
-            'agentGrant',
-            'settingsGet',
-            'settingsPatch',
-            'providerCredential',
-            'providerModels',
-            'providerPermissionGet',
-            'providerPermissionSet',
-            'fileAccessList',
-            'fileAccessRevoke',
-            'indexStatus',
-            'indexRebuild',
-            'chooseFolder',
-            'agentToken',
-            'textEdit',
-            'flushed',
-          ];
-          if (role === 'settings' && !settingsMethods.includes(name))
+          const allowed = methodWindows[name];
+          if (role === 'settings' && allowed === 'viewer')
             throw new Error('This API is unavailable in Settings.');
-          if (
-            role !== 'settings' &&
-            [
-              'providerCredential',
-              'agentToken',
-              'agentClients',
-              'agentAudit',
-              'agentStop',
-              'agentGrant',
-              'fileAccessRevoke',
-            ].includes(name)
-          )
+          if (role !== 'settings' && allowed === 'settings')
             throw new Error('Manage credentials in Settings.');
           return {
             ok: true,
-            // The schema for `name` produced these arguments, so the pair is an ApiCall.
-            value: await this.invoke(
-              { method: name, args: schemas[name].parse(args) } as ApiCall,
-              event.sender.id,
-            ),
+            value: await this.call(name, args, event.sender.id),
           };
         } catch (error) {
           return {
@@ -671,28 +633,28 @@ export class Desktop {
       this.emit({ type: 'agent-command', id, command, target, navigation });
     });
   }
-  private async invoke(call: ApiCall, senderID?: number): Promise<unknown> {
-    switch (call.method) {
-      case 'compare': {
-        const request = call.args[0];
+  /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
+  private createHandlers(): ApiHandlers {
+    return {
+      compare: (args) => {
+        const request = args[0];
         if (request.kind === 'cancel') {
           this.comparisons.cancel(request.id);
           return null;
         }
         return this.comparisons.run(request.id, request.left, request.right, request.hashes);
-      }
-      case 'duplicates': {
-        const request = call.args[0];
+      },
+      duplicates: (args) => {
+        const request = args[0];
         if (request.kind === 'cancel') {
           this.duplicates.cancel(request.id);
           return null;
         }
         return this.duplicates.run(request.id, request.roots);
-      }
-      case 'operationPlan':
-        return this.operationPlans.request(call.args[0]);
-      case 'checkpoints': {
-        const request = call.args[0];
+      },
+      operationPlan: (args) => this.operationPlans.request(args[0]),
+      checkpoints: async (args) => {
+        const request = args[0];
         if (request.kind === 'list') return this.checkpoints.list();
         if (request.kind === 'estimate') return this.checkpoints.estimate(request.paths);
         if (request.kind === 'remove') {
@@ -700,15 +662,14 @@ export class Desktop {
           return null;
         }
         return this.checkpoints.restore(request.id, request.destination, this.operations);
-      }
-      case 'inspect':
-        return this.files.inspect(call.args[0], call.args[1], call.args[2]);
-      case 'project': {
-        const request = call.args[0];
+      },
+      inspect: (args) => this.files.inspect(args[0], args[1], args[2]),
+      project: async (args, senderID) => {
+        const request = args[0];
         if (request.kind === 'read') return this.projects.read(request.file);
         if (request.kind === 'save')
           return this.projects.save(request.file, request.revision, request.definition);
-        const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
+        const result = await dialog.showOpenDialog(this.windows.get(senderID)!.window, {
           title: request.mode === 'open' ? 'Open Project Folder' : 'Create Project in Folder',
           buttonLabel: request.mode === 'open' ? 'Open Project' : 'Choose Folder',
           properties: ['openDirectory'],
@@ -718,29 +679,27 @@ export class Desktop {
         if (result.canceled || !result.filePaths[0]) return null;
         await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
         return path.join(result.filePaths[0], 'viewer.project.jsonc');
-      }
-      case 'commandsPublish':
+      },
+      commandsPublish: (args) => {
         this.commandCatalog = {
-          target: call.args[0],
-          commands: call.args[1],
+          target: args[0],
+          commands: args[1],
         };
-        this.workspaceCatalog = call.args[2];
+        this.workspaceCatalog = args[2];
         return;
-      case 'agentCommandResult': {
-        const request = this.agentCommands.get(call.args[0]);
+      },
+      agentCommandResult: (args, senderID) => {
+        const request = this.agentCommands.get(args[0]);
         if (!request || request.owner !== senderID)
           throw new Error('Action acknowledgement is no longer available.');
-        request.finish(call.args[1]);
+        request.finish(args[1]);
         return;
-      }
-      case 'agentReviewList':
-        return this.agentRequests.list();
-      case 'agentReview':
-        return this.agentRequests.review(call.args[0], call.args[1]);
-      case 'agentGrants':
-        return this.agentRequests.listGrants();
-      case 'agentClients': {
-        const request = call.args[0];
+      },
+      agentReviewList: () => this.agentRequests.list(),
+      agentReview: (args) => this.agentRequests.review(args[0], args[1]),
+      agentGrants: () => this.agentRequests.listGrants(),
+      agentClients: async (args) => {
+        const request = args[0];
         const reply = await this.agents.clientRequest(request);
         if (request.kind === 'create') {
           await this.agents.start();
@@ -771,29 +730,21 @@ export class Desktop {
           };
         }
         return reply;
-      }
-      case 'agentAudit':
-        return this.agents.clients.history(call.args[0]);
-      case 'agentStop':
-        return this.agents.stop(call.args[0]);
-      case 'agentGrant':
-        return this.agentRequests.grant(
-          call.args[0],
-          call.args[1],
-          call.args[2],
-          call.args[3],
-          call.args[4],
-        );
-      case 'configOpen': {
+      },
+      agentAudit: (args) => this.agents.clients.history(args[0]),
+      agentStop: (args) => this.agents.stop(args[0]),
+      agentGrant: (args) => {
+        return this.agentRequests.grant(args[0], args[1], args[2], args[3], args[4]);
+      },
+      configOpen: async () => {
         await this.settings.load();
         const error = await shell.openPath(this.settings.snapshot().config!.path);
         if (error) throw new Error(error);
         return;
-      }
-      case 'configValidate':
-        return this.settings.reload();
-      case 'configTransfer': {
-        if (call.args[0] === 'export') {
+      },
+      configValidate: () => this.settings.reload(),
+      configTransfer: async (args) => {
+        if (args[0] === 'export') {
           const { canceled, filePath, bookmark } = await dialog.showSaveDialog({
             title: 'Export configuration',
             defaultPath: 'config.jsonc',
@@ -818,38 +769,30 @@ export class Desktop {
           }
         }
         return this.settings.snapshot();
-      }
-      case 'terminalApplication':
-        return this.externalTerminals.application();
-      case 'terminalExternal':
-        await this.fileAccess.require([call.args[0]]);
-        return this.externalTerminals.open(call.args[0], call.args[1]);
-      case 'terminalStart':
-        return this.terminals.start(call.args[0], senderID!);
-      case 'terminalWrite':
-        return this.terminals.write(call.args[0], call.args[1], senderID!);
-      case 'terminalResize':
-        return this.terminals.resize(call.args[0], call.args[1], call.args[2], senderID!);
-      case 'terminalAck':
-        return this.terminals.ack(call.args[0], call.args[1], senderID!);
-      case 'terminalClose':
-        return this.terminals.stop(call.args[0], senderID!);
-      case 'customExecute':
-        return this.executions.start(call.args[0], call.args[1]);
-      case 'executionList':
-        return this.executions.list();
-      case 'executionCancel':
-        return this.executions.cancel(call.args[0]);
-      case 'openSettings':
-        return this.options.openSettings();
-      case 'settingsGet':
+      },
+      terminalApplication: () => this.externalTerminals.application(),
+      terminalExternal: async (args) => {
+        await this.fileAccess.require([args[0]]);
+        return this.externalTerminals.open(args[0], args[1]);
+      },
+      terminalStart: (args, senderID) => this.terminals.start(args[0], senderID),
+      terminalWrite: (args, senderID) => this.terminals.write(args[0], args[1], senderID),
+      terminalResize: (args, senderID) =>
+        this.terminals.resize(args[0], args[1], args[2], senderID),
+      terminalAck: (args, senderID) => this.terminals.ack(args[0], args[1], senderID),
+      terminalClose: (args, senderID) => this.terminals.stop(args[0], senderID),
+      customExecute: (args) => this.executions.start(args[0], args[1]),
+      executionList: () => this.executions.list(),
+      executionCancel: (args) => this.executions.cancel(args[0]),
+      openSettings: () => this.options.openSettings(),
+      settingsGet: async () => {
         await this.settings.load();
         await this.credentials.load();
         return this.settings.snapshot(this.credentials.ids());
-      case 'fileAccessList':
-        return this.fileAccess.list();
-      case 'fileAccessRevoke': {
-        const root = call.args[0];
+      },
+      fileAccessList: () => this.fileAccess.list(),
+      fileAccessRevoke: async (args) => {
+        const root = args[0];
         if (process.platform === 'darwin') macFiles().dismissFilePanels();
         if (this.fileAccess.scoped) this.nativeSelections.revoke(root);
         let resources: string[] = [];
@@ -876,25 +819,22 @@ export class Desktop {
         });
         this.emit({ type: 'file-access', path: root, resources });
         return;
-      }
-      case 'volumesList':
-        return process.platform === 'darwin' ? macFiles().volumes() : [];
-      case 'trashList':
-        return this.trash.list(call.args[0]);
-      case 'trashConfirmation':
-        return this.trash.confirmation(this.windows.get(senderID!)!.window, call.args[0]);
-      case 'trashPreview':
-        return this.trash.preview(call.args[0]);
-      case 'trashCopyPaths':
-        return this.trash.copyPaths(call.args[0]);
-      case 'trashRestore':
+      },
+      volumesList: () => (process.platform === 'darwin' ? macFiles().volumes() : []),
+      trashList: (args) => this.trash.list(args[0]),
+      trashConfirmation: (args, senderID) =>
+        this.trash.confirmation(this.windows.get(senderID)!.window, args[0]),
+      trashPreview: (args) => this.trash.preview(args[0]),
+      trashCopyPaths: (args) => this.trash.copyPaths(args[0]),
+      trashRestore: (args, senderID) => {
         return this.operations.exclusive(() =>
-          this.trash.restore(this.windows.get(senderID!)!.window, call.args[0], call.args[1]),
+          this.trash.restore(this.windows.get(senderID)!.window, args[0], args[1]),
         );
-      case 'trashAccess':
-        return this.trash.requestAccess(this.windows.get(senderID!)!.window, call.args[0]);
-      case 'volumeEject': {
-        const root = call.args[0];
+      },
+      trashAccess: (args, senderID) =>
+        this.trash.requestAccess(this.windows.get(senderID)!.window, args[0]),
+      volumeEject: async (args) => {
+        const root = args[0];
         const volume = (await macFiles().volumes()).find((volume) => volume.path === root);
         if (!volume?.ejectable || root === '/') throw new Error('Choose an ejectable volume.');
         let resources: string[] = [];
@@ -923,67 +863,59 @@ export class Desktop {
           this.emit({ type: 'file-access', path: root, resources });
         }
         return;
-      }
-      case 'settingsPatch':
+      },
+      settingsPatch: async (args) => {
         return {
-          ...(await this.settings.patch(call.args[0], call.args[1])),
+          ...(await this.settings.patch(args[0], args[1])),
           credentials: this.credentials.ids(),
         };
-      case 'providerCredential': {
+      },
+      providerCredential: async (args) => {
         const provider = this.settings
           .snapshot()
-          .settings.providers.find((item) => item.id === call.args[0]);
-        if (!call.args[1]) {
+          .settings.providers.find((item) => item.id === args[0]);
+        if (!args[1]) {
           if (provider) await this.modelPermissions.set(provider, null);
-          this.emit({ type: 'model-permission', providerID: call.args[0] });
+          this.emit({ type: 'model-permission', providerID: args[0] });
         }
         await this.credentials.set(
-          call.args[0],
-          call.args[1],
+          args[0],
+          args[1],
           provider ? providerBinding(provider) : undefined,
         );
         this.settings.announce();
         return;
-      }
-      case 'providerModels': {
+      },
+      providerModels: (args) => {
         const provider = this.settings
           .snapshot()
-          .settings.providers.find((provider) => provider.id === call.args[0]);
+          .settings.providers.find((provider) => provider.id === args[0]);
         if (!provider) throw new Error('Provider is unavailable.');
         return this.providers.models(provider);
-      }
-      case 'providerPermissionGet':
-      case 'providerPermissionSet': {
-        const provider = this.settings
-          .snapshot()
-          .settings.providers.find((item) => item.id === call.args[0]);
-        if (!provider) throw new Error('Provider is unavailable.');
-        if (call.method === 'providerPermissionGet') return this.modelPermissions.get(provider);
-        if (modelEndpoint(provider) !== modelEndpoint({ endpoint: call.args[1] }))
+      },
+      providerPermissionGet: ([id]) => this.modelPermissions.get(this.provider(id)),
+      providerPermissionSet: async ([id, endpoint, level]) => {
+        const provider = this.provider(id);
+        if (modelEndpoint(provider) !== modelEndpoint({ endpoint }))
           throw new Error(
             'The provider endpoint changed. Review its new address before allowing data access.',
           );
-        await this.modelPermissions.set(provider, call.args[2]);
+        await this.modelPermissions.set(provider, level);
         this.emit({ type: 'model-permission', providerID: provider.id });
-        return;
-      }
-      case 'indexedQuery':
-        return this.files.query(call.args[0]);
-      case 'querySnapshot':
-        return this.files.snapshot(call.args[0]);
-      case 'watchRules':
-        return this.watchRules.request(call.args[0]);
-      case 'relationships':
-        return this.relationships.request(call.args[0]);
-      case 'workflow': {
-        const request = call.args[0];
+      },
+      indexedQuery: (args) => this.files.query(args[0]),
+      querySnapshot: (args) => this.files.snapshot(args[0]),
+      watchRules: (args) => this.watchRules.request(args[0]),
+      relationships: (args) => this.relationships.request(args[0]),
+      workflow: async (args, senderID) => {
+        const request = args[0];
         if (request.kind !== 'choose')
           return this.workflows.request(
             request.kind === 'start'
               ? { ...request, context: { ...request.context, actor: 'user', clientID: undefined } }
               : request,
           );
-        const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
+        const result = await dialog.showOpenDialog(this.windows.get(senderID)!.window, {
           title: request.mode === 'create' ? 'Create Workflow in Folder' : 'Open Workflow',
           buttonLabel: request.mode === 'create' ? 'Choose Folder' : 'Open Workflow',
           properties: request.mode === 'create' ? ['openDirectory'] : ['openFile'],
@@ -1002,33 +934,29 @@ export class Desktop {
         return request.mode === 'create'
           ? path.join(result.filePaths[0], 'viewer.workflow.jsonc')
           : result.filePaths[0];
-      }
-      case 'indexStatus':
-        return this.files.status();
-      case 'indexRebuild':
+      },
+      indexStatus: () => this.files.status(),
+      indexRebuild: () => {
         this.indexConfiguration = '';
         return this.configureIndex(this.settings.snapshot().settings.search);
-      case 'actionStart':
+      },
+      actionStart: (args) => {
         return this.actions.start({
-          ...call.args[0],
-          context: { ...call.args[0].context, actor: 'user' },
+          ...args[0],
+          context: { ...args[0].context, actor: 'user' },
         });
-      case 'actionGet':
-        return this.actions.get(call.args[0]);
-      case 'actionList':
-        return this.actions.all();
-      case 'actionApply':
-        return this.actions.apply(call.args[0]);
-      case 'actionCancel':
-        this.actions.cancel(call.args[0]);
+      },
+      actionGet: (args) => this.actions.get(args[0]),
+      actionList: () => this.actions.all(),
+      actionApply: (args) => this.actions.apply(args[0]),
+      actionCancel: (args) => {
+        this.actions.cancel(args[0]);
         return;
-      case 'actionUndo':
-        return this.actions.undo(call.args[0]);
-      case 'actionRecover':
-        return this.actions.recovery(call.args[0]);
-      case 'actionExportSummary':
-        return this.actions.exportSummary(call.args[0], call.args[1]);
-      case 'agentToken':
+      },
+      actionUndo: (args) => this.actions.undo(args[0]),
+      actionRecover: (args) => this.actions.recovery(args[0]),
+      actionExportSummary: (args) => this.actions.exportSummary(args[0], args[1]),
+      agentToken: async () => {
         await this.agents.start();
         return JSON.stringify(
           {
@@ -1048,22 +976,24 @@ export class Desktop {
           null,
           2,
         );
-      case 'contextPublish':
-        this.context = { ...call.args[0], actor: 'user' };
+      },
+      contextPublish: (args) => {
+        this.context = { ...args[0], actor: 'user' };
         return;
-      case 'thumbnail': {
-        await this.fileAccess.require([call.args[0]]);
-        const thumbnail = await this.thumbnails.get(call.args[0], call.args[1]);
-        await this.fileAccess.require([call.args[0]]);
+      },
+      thumbnail: async (args) => {
+        await this.fileAccess.require([args[0]]);
+        const thumbnail = await this.thumbnails.get(args[0], args[1]);
+        await this.fileAccess.require([args[0]]);
         return thumbnail;
-      }
-      case 'document': {
-        const file = this.resources.documentSource(call.args[0]);
-        const document = await this.files.extract(file, this.resources.signal(call.args[0]), true);
-        this.resources.documentSource(call.args[0]);
+      },
+      document: async (args) => {
+        const file = this.resources.documentSource(args[0]);
+        const document = await this.files.extract(file, this.resources.signal(args[0]), true);
+        this.resources.documentSource(args[0]);
         return document;
-      }
-      case 'bootstrap': {
+      },
+      bootstrap: async () => {
         const home = this.home;
         await this.fileAccess.load();
         const stored = await this.storage.load();
@@ -1128,21 +1058,21 @@ export class Desktop {
           ],
           openPaths: paths,
         };
-      }
-      case 'list':
-        await this.fileAccess.require([call.args[0]]);
-        return list(call.args[0]);
-      case 'stat':
-        await this.fileAccess.require([call.args[0]]);
-        return entry(call.args[0]);
-      case 'fileInformation':
-        return this.information.get(call.args[0]);
-      case 'fileInformationUpdate':
-        return this.information.update(call.args[0], call.args[1], call.args[2]);
-      case 'chooseFolder': {
-        const result = await dialog.showOpenDialog(this.windows.get(senderID!)!.window, {
+      },
+      list: async (args) => {
+        await this.fileAccess.require([args[0]]);
+        return list(args[0]);
+      },
+      stat: async (args) => {
+        await this.fileAccess.require([args[0]]);
+        return entry(args[0]);
+      },
+      fileInformation: (args) => this.information.get(args[0]),
+      fileInformationUpdate: (args) => this.information.update(args[0], args[1], args[2]),
+      chooseFolder: async (args, senderID) => {
+        const result = await dialog.showOpenDialog(this.windows.get(senderID)!.window, {
           properties: ['openDirectory'],
-          defaultPath: call.args[0],
+          defaultPath: args[0],
           securityScopedBookmarks: this.fileAccess.scoped,
         });
         if (result.canceled || !result.filePaths[0]) return null;
@@ -1153,17 +1083,19 @@ export class Desktop {
         void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
         this.emit({ type: 'folder-changed', path: result.filePaths[0] });
         return result.filePaths[0];
-      }
-      case 'reveal':
-        await this.fileAccess.require([call.args[0]]);
-        shell.showItemInFolder(call.args[0]);
+      },
+      reveal: async (args) => {
+        await this.fileAccess.require([args[0]]);
+        shell.showItemInFolder(args[0]);
         return;
-      case 'connectServer':
+      },
+      connectServer: async (args) => {
         // Only file-sharing addresses: the system mounts them and asks for credentials.
-        await shell.openExternal(serverAddress(call.args[0]));
+        await shell.openExternal(serverAddress(args[0]));
         return;
-      case 'taggedFiles': {
-        const [tag, roots] = call.args;
+      },
+      taggedFiles: async (args) => {
+        const [tag, roots] = args;
         await this.fileAccess.require(roots);
         const found = new Set<string>();
         for (const root of roots)
@@ -1181,32 +1113,31 @@ export class Desktop {
             // Gone, or outside granted folders.
           }
         return entries;
-      }
-      case 'openExternal': {
-        await this.fileAccess.require([call.args[0]]);
-        const error = await shell.openPath(call.args[0]);
+      },
+      openExternal: async (args) => {
+        await this.fileAccess.require([args[0]]);
+        const error = await shell.openPath(args[0]);
         if (error) throw new Error(error);
         return;
-      }
-      case 'nativeFilePanel': {
-        const files = call.args[1];
+      },
+      nativeFilePanel: async (args) => {
+        const files = args[1];
         await this.fileAccess.require(files);
-        macFiles().filePanel(call.args[0], files);
+        macFiles().filePanel(args[0], files);
         return;
-      }
-      case 'folderSizeStart':
-        return this.files.sizeStart(call.args[0]);
-      case 'folderSizeGet':
-        return this.files.sizeGet(call.args[0]);
-      case 'folderSizeCancel':
-        return this.files.sizeCancel(call.args[0]);
-      case 'applications':
-        await this.fileAccess.require(call.args[0]);
-        return this.applications.list(call.args[0]);
-      case 'openWith':
-        await this.fileAccess.require(call.args[0]);
-        return this.applications.open(call.args[0], call.args[1]);
-      case 'chooseApplication': {
+      },
+      folderSizeStart: (args) => this.files.sizeStart(args[0]),
+      folderSizeGet: (args) => this.files.sizeGet(args[0]),
+      folderSizeCancel: (args) => this.files.sizeCancel(args[0]),
+      applications: async (args) => {
+        await this.fileAccess.require(args[0]);
+        return this.applications.list(args[0]);
+      },
+      openWith: async (args) => {
+        await this.fileAccess.require(args[0]);
+        return this.applications.open(args[0], args[1]);
+      },
+      chooseApplication: async () => {
         if (process.platform !== 'darwin')
           throw new Error('Application selection is not available on this platform yet.');
         const result = await dialog.showOpenDialog(this.window!, {
@@ -1220,80 +1151,86 @@ export class Desktop {
         await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
         await this.fileAccess.require([result.filePaths[0]]);
         return this.applications.register(result.filePaths[0]);
-      }
-      case 'watch': {
-        await this.fileAccess.require([call.args[0]]);
-        await this.watchers.add(call.args[0], call.args[1]);
+      },
+      watch: async (args) => {
+        await this.fileAccess.require([args[0]]);
+        await this.watchers.add(args[0], args[1]);
         try {
-          await this.fileAccess.require([call.args[0]]);
+          await this.fileAccess.require([args[0]]);
         } catch (error) {
-          await this.watchers.remove(call.args[1]);
+          await this.watchers.remove(args[1]);
           throw error;
         }
         return;
-      }
-      case 'unwatch':
-        return this.watchers.remove(call.args[0]);
-      case 'search':
-        await this.fileAccess.require([call.args[0].root]);
-        return this.search.start(call.args[0]);
-      case 'cancelSearch':
-        return this.search.cancel(call.args[0]);
-      case 'operate':
-        return this.operations.start(call.args[0]);
-      case 'jobs':
+      },
+      unwatch: (args) => this.watchers.remove(args[0]),
+      search: async (args) => {
+        await this.fileAccess.require([args[0].root]);
+        return this.search.start(args[0]);
+      },
+      cancelSearch: (args) => this.search.cancel(args[0]),
+      operate: (args) => this.operations.start(args[0]),
+      jobs: async () => {
         await this.operations.load();
         return this.operations.all();
-      case 'cancelJob':
-        return this.operations.cancel(call.args[0]);
-      case 'resolveCollision':
-        return this.operations.resolve(call.args[0], call.args[1], call.args[2]);
-      case 'undo':
-        return this.operations.undo(call.args[0]);
-      case 'redo':
-        return this.operations.redo(call.args[0]);
-      case 'resource':
-        return this.resources.grant(call.args[0]);
-      case 'read':
-        return this.resources.read(call.args[0], call.args[1]);
-      case 'release':
-        return this.resources.release(call.args[0]);
-      case 'archive':
-        return this.resources.archive(call.args[0]);
-      case 'archiveEntry':
-        return this.resources.archiveEntry(call.args[0], call.args[1]);
-      case 'save':
+      },
+      cancelJob: (args) => this.operations.cancel(args[0]),
+      resolveCollision: (args) => this.operations.resolve(args[0], args[1], args[2]),
+      undo: (args) => this.operations.undo(args[0]),
+      redo: (args) => this.operations.redo(args[0]),
+      resource: (args) => this.resources.grant(args[0]),
+      read: (args) => this.resources.read(args[0], args[1]),
+      release: (args) => this.resources.release(args[0]),
+      archive: (args) => this.resources.archive(args[0]),
+      archiveEntry: (args) => this.resources.archiveEntry(args[0], args[1]),
+      imageRendition: (args) => this.resources.rendition(args[0]),
+      printPDF: async (args) => {
+        if (process.platform !== 'darwin') throw new Error('Printing PDFs requires macOS.');
+        const file = await this.resources.printableFile(args[0]);
+        macFiles().printPDF(file, args[1]);
+        return;
+      },
+      save: (args) => {
         return this.storage.save({
-          ...call.args[0],
+          ...args[0],
           ui: this.settings.snapshot().ui,
           look: this.settings.snapshot().look,
           preferencesRevision: this.settings.snapshot().revision,
         } as Parameters<Storage['save']>[0]);
-      case 'flushed':
-        return this.flushes.get(call.args[0])?.();
-      case 'clipboardWrite':
-        return this.pasteboard.write(call.args[0], call.args[1]);
-      case 'clipboardRead':
-        return this.pasteboard.read();
-      case 'fileDropPaths':
-        return this.pasteboard.dropped(call.args[0]);
-      case 'copyPaths':
-        return this.pasteboard.copyText(call.args[0]);
-      case 'fileDragStart': {
-        const paths = call.args[0];
+      },
+      flushed: (args) => this.flushes.get(args[0])?.(),
+      clipboardWrite: (args) => this.pasteboard.write(args[0], args[1]),
+      clipboardRead: () => this.pasteboard.read(),
+      fileDropPaths: (args) => this.pasteboard.dropped(args[0]),
+      copyPaths: (args) => this.pasteboard.copyText(args[0]),
+      fileDragStart: async (args, senderID) => {
+        const paths = args[0];
         await this.fileAccess.require(paths);
-        const window = this.windows.get(senderID!)?.window;
+        const window = this.windows.get(senderID)?.window;
         if (!window || window.isDestroyed()) throw new Error('The file view has closed.');
+        const [first] = paths;
+        if (!first) return;
         // Native file objects carry all selected paths to Finder and other apps.
-        const icon = await app.getFileIcon(paths[0], { size: 'normal' });
-        window.webContents.startDrag({ file: paths[0], files: paths, icon });
+        const icon = await app.getFileIcon(first, { size: 'normal' });
+        window.webContents.startDrag({ file: first, files: paths, icon });
         return;
-      }
-      case 'textEdit': {
-        const command = call.args[0];
-        this.windows.get(senderID!)!.window.webContents[command]();
+      },
+      textEdit: (args, senderID) => {
+        const command = args[0];
+        this.windows.get(senderID)!.window.webContents[command]();
         return;
-      }
-    }
+      },
+    };
+  }
+  private provider(id: string) {
+    const provider = this.settings.snapshot().settings.providers.find((item) => item.id === id);
+    if (!provider) throw new Error('Provider is unavailable.');
+    return provider;
+  }
+  private handlerTable?: ApiHandlers;
+  /** Runs a method's handler with arguments its schema produced. */
+  private call<K extends ApiMethod>(method: K, args: unknown, senderID: number): unknown {
+    const handler: ApiHandlers[K] = (this.handlerTable ??= this.createHandlers())[method];
+    return handler(schemas[method].parse(args) as Parameters<ApiHandlers[K]>[0], senderID);
   }
 }

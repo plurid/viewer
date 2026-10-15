@@ -1,11 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CollisionDecision } from '../../domain/contracts';
+import type { CollisionDecision, OperationKind } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { report, setOperationsOpen, useViewer } from '../state/store';
 import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { baseName } from '../../domain/planes';
 import { dialogOpen } from '../ui/modal';
+
+const operationLabels: Record<OperationKind, string> = {
+  copy: 'Copy',
+  move: 'Move',
+  transfer: 'Transfer',
+  duplicate: 'Duplicate',
+  alias: 'Make alias',
+  rename: 'Rename',
+  mkdir: 'New folder',
+  mkfile: 'New file',
+  trash: 'Move to Trash',
+  compress: 'Compress',
+  extract: 'Extract',
+  convert: 'Quick action',
+};
 
 export function OperationsPanel() {
   const jobs = useViewer((state) => state.jobs);
@@ -77,7 +92,7 @@ export function OperationsPanel() {
                         : 'copy'
               }
             />
-            <strong>{job.kind[0].toUpperCase() + job.kind.slice(1)}</strong>
+            <strong>{operationLabels[job.kind]}</strong>
             <span className="muted">{job.status}</span>
             {['queued', 'running', 'collision'].includes(job.status) && (
               <IconButton

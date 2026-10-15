@@ -416,7 +416,7 @@ export class FileIndex {
     let tick = 0;
     while (cursor < queue.length && generation === this.generation) {
       const folder = queue[cursor++];
-      if (this.excluded(folder)) continue;
+      if (folder === undefined || this.excluded(folder)) continue;
       try {
         const directory = await opendir(folder);
         for await (const child of directory) {

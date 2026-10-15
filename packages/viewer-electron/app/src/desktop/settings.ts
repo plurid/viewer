@@ -260,7 +260,9 @@ export const settingsSchema = z
             : [];
       if (
         fields.length &&
-        [...item.template.matchAll(/\{([^{}]+)\}/g)].some((match) => !fields.includes(match[1]))
+        [...item.template.matchAll(/\{([^{}]+)\}/g)].some(
+          (match) => !fields.includes(match[1] ?? ''),
+        )
       )
         context.addIssue({
           code: 'custom',
@@ -420,7 +422,7 @@ export class SettingsService {
         for (const patch of patches) {
           const keys = patch.keys || patch.path.split('.');
           if (
-            !['settings', 'ui'].includes(keys[0]) ||
+            !['settings', 'ui'].includes(keys[0] ?? '') ||
             keys.some((key) => ['__proto__', 'prototype', 'constructor'].includes(key))
           )
             throw new Error('Unknown setting.');
@@ -470,7 +472,7 @@ export class SettingsService {
     for (const patch of patches) {
       const keys = patch.keys || patch.path.split('.');
       if (
-        !['settings', 'ui'].includes(keys[0]) ||
+        !['settings', 'ui'].includes(keys[0] ?? '') ||
         keys.some((key) => ['__proto__', 'prototype', 'constructor'].includes(key))
       )
         throw new Error('Unknown setting.');

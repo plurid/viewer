@@ -35,7 +35,9 @@ export const nativeImageConverter: ImageConverter = {
       }
       data = imagesToPDF(pages);
     } else {
-      const { image, width, height, scale } = decode(sources[0]);
+      const [source] = sources;
+      if (!source) throw new Error('Choose an image.');
+      const { image, width, height, scale } = decode(source);
       if (conversion === 'jpeg') data = image.toJPEG(92);
       else if (conversion === 'png') data = image.toPNG({ scaleFactor: scale });
       else {

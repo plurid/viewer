@@ -145,7 +145,7 @@ function wordContent(main: XMLNode): { content: OfficeContent; truncated: boolea
 function cellAddress(reference: string): { row: number; column: number } {
   const match = reference.match(/^([A-Z]{1,3})([1-9]\d{0,6})$/);
   if (!match) throw new Error('Invalid worksheet cell address.');
-  const column = [...match[1]].reduce((n, letter) => n * 26 + letter.charCodeAt(0) - 64, 0),
+  const column = [...(match[1] ?? '')].reduce((n, letter) => n * 26 + letter.charCodeAt(0) - 64, 0),
     row = Number(match[2]);
   if (row > 1048576 || column > 16384)
     throw new Error('Worksheet cell address exceeds Excel limits.');
@@ -186,9 +186,10 @@ export async function extractOffice(file: string, signal?: AbortSignal): Promise
     };
     const rootRelations = relationships(await read('_rels/.rels'));
     const mainRelations = rootRelations.filter((item) => typeIs(item.type, 'officeDocument'));
-    if (mainRelations.length !== 1 || mainRelations[0].external)
+    const [mainRelation] = mainRelations;
+    if (mainRelations.length !== 1 || !mainRelation || mainRelation.external)
       throw new Error('Office package has no local main document.');
-    const mainPath = partTarget('', mainRelations[0].target);
+    const mainPath = partTarget('', mainRelation.target);
     const types = await read('[Content_Types].xml');
     const expected =
       path.extname(file).toLowerCase() === '.docx'

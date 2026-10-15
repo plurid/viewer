@@ -31,14 +31,26 @@ export interface Drawing {
 }
 export const DXF_MAX_BYTES = 32 * 1024 * 1024;
 export const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+/** The length of an open path through `points`. */
+export function pathLength(points: readonly Point[]): number {
+  let total = 0;
+  for (let index = 1; index < points.length; index++) {
+    const a = points[index - 1],
+      b = points[index];
+    if (a && b) total += distance(a, b);
+  }
+  return total;
+}
 export function polygonArea(points: readonly Point[]): number {
   if (points.length < 3) return 0;
   // Translate to a local origin to avoid cancellation for drawings far from zero.
   const origin = points[0];
+  if (!origin) return 0;
   let sum = 0;
   for (let i = 0; i < points.length; i++) {
     const a = points[i],
       b = points[(i + 1) % points.length];
+    if (!a || !b) continue;
     sum += (a.x - origin.x) * (b.y - origin.y) - (b.x - origin.x) * (a.y - origin.y);
   }
   return Math.abs(sum) / 2;

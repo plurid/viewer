@@ -8,7 +8,7 @@ const fail = () => new Error('Malformed or unsupported Office XML.');
 function decode(text: string): string {
   return text.replace(/&([^;\s<&]{1,32});|&/g, (entity, name: string | undefined) => {
     const predefined: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
-    if (name && Object.hasOwn(predefined, name)) return predefined[name];
+    if (name && Object.hasOwn(predefined, name)) return predefined[name] ?? entity;
     if (name && /^#(?:[0-9]+|x[0-9a-fA-F]+)$/.test(name)) {
       const code = name.startsWith('#x') ? parseInt(name.slice(2), 16) : Number(name.slice(1));
       if (
@@ -43,7 +43,9 @@ export function officeXML(bytes: Uint8Array): XMLNode {
     nodes = 0;
   const append = (value: XMLNode | string) => {
     if (++nodes > 200000) throw new Error('Office XML structure exceeds the reader limit.');
-    stack[stack.length - 1].children.push(value);
+    const parent = stack.at(-1);
+    if (!parent) throw fail();
+    parent.children.push(value);
   };
   while (cursor < xml.length) {
     const next = xml.indexOf('<', cursor);
@@ -117,7 +119,9 @@ export function officeXML(bytes: Uint8Array): XMLNode {
     root.children.some((node) => typeof node === 'string' && node.trim())
   )
     throw fail();
-  return elements[0];
+  const [element] = elements;
+  if (!element) throw fail();
+  return element;
 }
 export const localName = (node: XMLNode) => node.name.split(':').at(-1)!;
 export const children = (node: XMLNode, name?: string): XMLNode[] =>

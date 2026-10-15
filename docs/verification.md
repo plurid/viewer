@@ -1,5 +1,34 @@
 # Verification
 
+## October 15 feature completion
+
+**607 unit tests across 84 files pass** (2 skipped). All five TypeScript targets pass, including `tsconfig.strict.json`, and ESLint and formatting pass. The renderer bundles, and the native addon compiles. The packaged app was not built or run.
+
+**Added:**
+- Quick Look renderings for TIFF, HEIC, PSD and camera RAW, decoded outside Viewer, in previews and grid thumbnails.
+- New File as an exclusive, undoable operation.
+- Open With document types (direct build) and a Help menu.
+- PDF page thumbnails, an outline, password-protected PDFs, and native printing through PDFKit, with the App Store print entitlement.
+- DjVu through `djvu-rs` 0.40.0 (MIT) in a renderer worker.
+
+**Changed:**
+- IPC handlers and window permissions are tables typed over every method.
+- `noUncheckedIndexedAccess` now covers `domain/`, `desktop/` and `main.ts`. One real edge case was fixed: drawing measurements with too few points. `resolveProjectPath` now treats an undefined workflow input as unbound.
+
+**New regressions cover:**
+- Renditions and their release; printable resources.
+- New File collisions and Undo.
+- Document types.
+- PDF outline resolution.
+- The IPC method table.
+- The DjVu worker against a synthetic page: size, render, text, page bounds, the pixel limit and invalid files.
+
+Physical checks still needed in the app:
+- The print sheet.
+- Quick Look renderings of real TIFF/HEIC/RAW files.
+- A real DjVu book.
+- Open With from Finder.
+
 ## October 15 organization and features
 
 **593 unit tests across 79 files pass** (2 skipped), run with `VIEWER_TEST_PRESERVE=1`. All four TypeScript targets, ESLint and formatting pass. The renderer bundles. The packaged app was not built or run.

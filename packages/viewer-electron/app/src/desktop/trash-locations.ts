@@ -64,7 +64,7 @@ export function linuxMounts(source: string): { path: string; name: string }[] {
   const values = new Map<string, { path: string; name: string }>();
   for (const line of source.split('\n')) {
     const [left, right] = line.split(' - ');
-    if (!right || ignored.has(right.split(' ')[0])) continue;
+    if (!left || !right || ignored.has(right.split(' ')[0] ?? '')) continue;
     const mount = left
       .split(' ')[4]
       ?.replace(/\\(040|011|012|134)/g, (_, octal: string) =>

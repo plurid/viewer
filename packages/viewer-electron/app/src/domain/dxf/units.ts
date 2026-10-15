@@ -51,10 +51,15 @@ export interface Measurement {
   points: Point[];
 }
 export function measurementValue(measurement: Measurement): number | undefined {
-  const p = measurement.points;
+  // A measurement still being placed can have fewer points than its tool needs.
+  const [a, b, c] = measurement.points;
   return measurement.tool === 'distance'
-    ? distance(p[0], p[1])
+    ? a && b
+      ? distance(a, b)
+      : undefined
     : measurement.tool === 'area'
-      ? polygonArea(p)
-      : angleAt(p[0], p[1], p[2]);
+      ? polygonArea(measurement.points)
+      : a && b && c
+        ? angleAt(a, b, c)
+        : undefined;
 }

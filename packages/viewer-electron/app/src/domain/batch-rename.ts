@@ -38,8 +38,9 @@ export function renameNames(input: RenameInput): string[] {
     return (options.template || input.template).replace(
       /\{([a-zA-Z][a-zA-Z0-9_-]*)\}/g,
       (_match, key: string) => {
-        if (!Object.hasOwn(fields, key)) throw new Error('Missing filename template field: ' + key);
-        return fields[key];
+        const value = Object.hasOwn(fields, key) ? fields[key] : undefined;
+        if (value === undefined) throw new Error('Missing filename template field: ' + key);
+        return value;
       },
     );
   });

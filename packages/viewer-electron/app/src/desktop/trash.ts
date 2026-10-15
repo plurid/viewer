@@ -184,8 +184,10 @@ export class Trash {
         });
         if (picked.canceled || window.isDestroyed() || this.#closed)
           return { restored: 0, cancelled: true };
-        if (picked.filePaths.length !== 1) throw new Error('Choose one destination folder.');
-        folder = await realpath(picked.filePaths[0]);
+        const [chosen] = picked.filePaths;
+        if (picked.filePaths.length !== 1 || !chosen)
+          throw new Error('Choose one destination folder.');
+        folder = await realpath(chosen);
         await this.access.remember(folder, true, picked.bookmarks?.[0]);
       }
       const targets = new Set<string>();
@@ -395,7 +397,8 @@ export class Trash {
       securityScopedBookmarks: this.access.scoped,
     });
     if (result.canceled) return;
-    if (result.filePaths.length !== 1 || path.resolve(result.filePaths[0]) !== root.path)
+    const [chosen] = result.filePaths;
+    if (result.filePaths.length !== 1 || !chosen || path.resolve(chosen) !== root.path)
       throw new Error('Choose the Trash folder shown in the picker. No other folder was granted.');
     await this.access.remember(root.path, true, result.bookmarks?.[0]);
     await this.access.require([root.path]);

@@ -315,5 +315,5 @@ export function newPlaneFolder(
   if (location === 'custom') return customPath || home;
   const name = location;
   const separator = home.includes('\\') ? '\\' : '/';
-  return home.replace(/[\\/]$/, '') + separator + name[0].toUpperCase() + name.slice(1);
+  return home.replace(/[\\/]$/, '') + separator + name.charAt(0).toUpperCase() + name.slice(1);
 }

@@ -27,6 +27,7 @@ import { BrowserColumn } from './BrowserColumn';
 import { FolderSizeValue } from './sizes';
 import { LinkedPlaneButton } from '../workspace/LinkedPlaneButton';
 import { rowsUnder, tilesUnder, useMarquee, type MarqueeSelect } from './marquee';
+import { renderedImageFormats } from '../../domain/rendered-images';
 
 export interface FileViewProps {
   paneID?: string;
@@ -265,17 +266,24 @@ export function ListView(props: FileViewProps) {
     </div>
   );
 }
+// Quick Look renders these thumbnails, including formats the renderer cannot decode.
+const thumbnailFormats = new Set<string>([
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'avif',
+  'gif',
+  'bmp',
+  ...renderedImageFormats,
+]);
 function Thumbnail({ entry }: { entry: FileEntry }) {
   const [url, setURL] = useState('');
   const [error, setError] = useState(false);
   useEffect(() => {
     setURL('');
     setError(false);
-    if (
-      !['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'bmp'].includes(entry.extension) ||
-      entry.size > 30 * 1024 * 1024
-    )
-      return;
+    if (!thumbnailFormats.has(entry.extension) || entry.size > 64 * 1024 * 1024) return;
     let live = true;
     void window.viewer
       .thumbnail(entry.path, getState().settings.settings.previews.thumbnailSize)

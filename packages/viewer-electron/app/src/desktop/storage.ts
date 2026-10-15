@@ -154,13 +154,14 @@ export function salvageState(
         activeWorkspace: (workspace as { id?: unknown }).id,
       }).success,
   ) as { id: string }[];
-  if (!kept.length) return;
+  const [first] = kept;
+  if (!first) return;
   const parsed = stateSchema.safeParse({
     ...saved,
     workspaces: kept,
     activeWorkspace: kept.some((workspace) => workspace.id === saved.activeWorkspace)
       ? saved.activeWorkspace
-      : kept[0].id,
+      : first.id,
   });
   if (!parsed.success) return;
   return {

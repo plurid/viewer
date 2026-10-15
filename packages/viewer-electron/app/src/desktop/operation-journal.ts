@@ -21,6 +21,7 @@ const kind = z.enum([
   'alias',
   'rename',
   'mkdir',
+  'mkfile',
   'trash',
   'compress',
   'extract',

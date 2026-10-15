@@ -192,13 +192,19 @@ export class FileCoordination {
           'The item moved while waiting for its file provider. Refresh the folder and retry.',
         );
       const originals = await claim.canonical;
-      for (let index = 0; index < paths.length; index++) {
-        const file = path.resolve(paths[index]);
-        if (file !== normalized[index].path && !(await sameItem(originals[index], file, native)))
+      for (const [index, returned] of paths.entries()) {
+        const file = path.resolve(returned);
+        const requested = normalized[index],
+          original = originals[index];
+        // Anything that cannot be matched to its request counts as moved.
+        if (
+          !requested ||
+          (file !== requested.path && !(original && (await sameItem(original, file, native))))
+        )
           throw new Error(
             'The item moved while waiting for its file provider. Refresh the folder and retry.',
           );
-        claim.resolved.set(normalized[index].path, file);
+        claim.resolved.set(requested.path, file);
       }
       abort.signal.throwIfAborted();
       return {

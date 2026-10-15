@@ -55,6 +55,7 @@ const paths = {
   wireframe: 'M3 3h18v18H3V3Zm0 0 18 18M3 21 21 3M12 3v18M3 12h18',
   warning: 'm12 3 10 18H2L12 3Zm0 6v5m0 3h.01',
   sidebar: 'M3 4h18v16H3V4Zm6 0v16M5 8h2m-2 4h2',
+  print: 'M6 9V3h12v6M6 18H3v-9h18v9h-3M6 14h12v7H6v-7Z',
   command:
     'M8 8h8v8H8V8ZM8 8H5a2 2 0 1 1 2-2v2m9 0V5a2 2 0 1 1 2 2h-2m0 9h3a2 2 0 1 1-2 2v-2m-9 0v3a2 2 0 1 1-2-2h2',
   settings:

@@ -27,7 +27,7 @@
   "main": ".vite/build/main.cjs",
   "scripts": {
     "start": "tsx tools/build-helpers.ts && electron-forge start",
-    "check": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && tsc -p tsconfig.renderer.json && tsc -p tsconfig.tools.json",
+    "check": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && tsc -p tsconfig.renderer.json && tsc -p tsconfig.tools.json && tsc -p tsconfig.strict.json",
     "lint": "eslint src tests tools *.ts",
     "format": "prettier --write src tests tools *.ts *.json *.mjs *.html",
     "format:check": "prettier --check src tests tools *.ts *.json *.mjs *.html",
@@ -78,6 +78,7 @@
     "@xterm/addon-search": "^0.16.0",
     "@xterm/xterm": "^6.0.0",
     "chokidar": "^5.0.0",
+    "djvu-rs": "0.40.0",
     "dxf-parser": "1.1.2",
     "fflate": "^0.8.2",
     "jsonc-parser": "^3.3.1",

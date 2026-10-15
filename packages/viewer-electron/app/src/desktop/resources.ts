@@ -30,7 +30,11 @@ export class Resources {
   private aborts = new Map<string, AbortController>();
   private work = new PreviewWork();
   readonly archives = new Archives();
-  constructor(private access: (files: readonly string[]) => Promise<void> = async () => {}) {}
+  constructor(
+    private access: (files: readonly string[]) => Promise<void> = async () => {},
+    /** Renders formats the renderer cannot decode; see `quick-look-render.ts`. */
+    private render?: (file: string) => Promise<{ data: Buffer; extension: string }>,
+  ) {}
   grant(file: string): Promise<Resource> {
     return this.work.track([file], (scope) => this.grantFile(file, scope));
   }
@@ -159,6 +163,14 @@ export class Resources {
     this.work.stop();
     await this.quiesce();
   }
+  /** The file behind a previewed PDF; entries inside archives are not files to print. */
+  async printableFile(id: string): Promise<string> {
+    const grant = this.get(id);
+    if (!grant.file || grant.resource.entry.extension !== 'pdf')
+      throw new Error('Only PDF files on disk can be printed.');
+    await this.access([grant.file]);
+    return grant.file;
+  }
   documentSource(id: string): string {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Nested document extraction is unavailable.');
@@ -236,9 +248,28 @@ export class Resources {
     await this.access([grant.file]);
     const data = await this.archives.read(grant.file, name);
     this.get(id); // A parent closed while its entry was loading cannot leave an orphan grant.
+    return this.dataChild(id, path.basename(name), `${grant.file} → ${name}`, data);
+  }
+  /** A preview of a file Chromium cannot decode, rendered by the system and held in memory. */
+  rendition(id: string): Promise<Resource> {
+    return this.work.track(this.paths(id), () => this.coordinated(id, () => this.renderFile(id)));
+  }
+  private async renderFile(id: string): Promise<Resource> {
+    const grant = this.get(id);
+    if (!grant.file) throw new Error('Rendered previews need a file on disk.');
+    if (!this.render) throw new Error('Rendered previews are unavailable here.');
+    await this.access([grant.file]);
+    const { data, extension } = await this.render(fileCoordination.path(grant.file));
+    // A preview closed while rendering cannot leave an orphan grant.
+    this.get(id);
+    const name = `${grant.resource.entry.name}.${extension}`;
+    return this.dataChild(id, name, grant.resource.entry.path, data);
+  }
+  /** Serves in-memory bytes derived from a granted file; released with that file's grant. */
+  private dataChild(id: string, basename: string, label: string, data: Buffer): Resource {
+    const grant = this.get(id);
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     const childID = randomUUID();
-    const basename = path.basename(name);
     const resource: Resource = {
       dimensions: imageDimensions(data),
       id: childID,
@@ -246,7 +277,7 @@ export class Resources {
       entry: {
         ...grant.resource.entry,
         name: basename,
-        path: `${grant.file} → ${name}`,
+        path: label,
         size: data.length,
         extension: path.extname(basename).slice(1).toLowerCase(),
         mime: lookup(basename) || 'application/octet-stream',

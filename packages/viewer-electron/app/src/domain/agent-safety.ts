@@ -25,6 +25,7 @@ const agentCommands = new Set([
   'make-alias',
   'rename',
   'new-folder',
+  'new-file',
   'new-folder-with-selection',
   'copy-to',
   'move-to',

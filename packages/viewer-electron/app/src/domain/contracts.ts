@@ -208,6 +208,7 @@ export type OperationKind =
   | 'alias'
   | 'rename'
   | 'mkdir'
+  | 'mkfile'
   | 'trash'
   | 'compress'
   | 'extract'
@@ -431,6 +432,10 @@ export interface ViewerAPI {
   release(id: string): Promise<void>;
   archive(id: string): Promise<ArchiveListing>;
   archiveEntry(id: string, name: string): Promise<Resource>;
+  /** A system-rendered image of a granted file Chromium cannot decode. */
+  imageRendition(id: string): Promise<Resource>;
+  /** Opens the system print sheet for a previewed PDF stored as a file. */
+  printPDF(id: string, password?: string): Promise<void>;
   save(state: SavedState): Promise<void>;
   flushed(token: string): Promise<void>;
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;

@@ -8,6 +8,7 @@ import {
   type Bounds,
   type DrawingEntity,
   type Drawing,
+  pathLength,
 } from './math';
 export { angleAt, distance, polygonArea } from './math';
 type Raw = IEntity & {
@@ -171,8 +172,8 @@ function drawingFrom(data: IDxf, source: string): Drawing {
   let beginsSection = false;
   const lines = source.split(/\r?\n/);
   for (let i = 0; i + 1 < lines.length; i += 2) {
-    const code = lines[i].trim(),
-      value = lines[i + 1].trim();
+    const code = lines[i]?.trim() ?? '',
+      value = lines[i + 1]?.trim() ?? '';
     if (code === '0' && value === 'SECTION') {
       beginsSection = true;
       continue;
@@ -315,8 +316,10 @@ function drawingFrom(data: IDxf, source: string): Drawing {
       points = curve(raw.center, major, ratio, start, delta);
       snap(raw.center, 'Center');
       if (!closed) {
-        snap(points[0], 'Endpoint');
-        snap(points[points.length - 1], 'Endpoint');
+        const [first] = points,
+          last = points.at(-1);
+        if (first) snap(first, 'Endpoint');
+        if (last) snap(last, 'Endpoint');
       } else
         for (let i = 0; i < 4; i++)
           snap(
@@ -357,7 +360,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
       for (let i = 0; i < count; i++) {
         const a = ordered[i],
           b = ordered[(i + 1) % ordered.length];
-        if (!validPoint(a) || !validPoint(b) || !Number.isFinite(a.bulge ?? 0))
+        if (!a || !b || !validPoint(a) || !validPoint(b) || !Number.isFinite(a.bulge ?? 0))
           throw new Error('A polyline has invalid vertices.');
         const arc = bulgeArc(a, b, a.bulge ?? 0);
         if (pointCount + points.length + arc.points.length > maxPoints)
@@ -367,15 +370,18 @@ function drawingFrom(data: IDxf, source: string): Drawing {
         curvedArea += arc.area;
         snap(a, 'Endpoint');
         snap(arc.points[Math.floor(arc.points.length / 2)] ?? a, 'Midpoint');
-        if (!a.bulge) snaps[snaps.length - 1].point = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const middle = snaps.at(-1);
+        if (!a.bulge && middle) middle.point = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       }
-      if (!closed) snap(ordered[ordered.length - 1], 'Endpoint');
-      if (closed) {
+      const end = ordered.at(-1);
+      if (!closed && end) snap(end, 'Endpoint');
+      const origin = ordered[0];
+      if (closed && origin) {
         let signed = 0;
-        const origin = ordered[0];
         for (let i = 0; i < ordered.length; i++) {
           const a = ordered[i],
             b = ordered[(i + 1) % ordered.length];
+          if (!a || !b) continue;
           signed += (a.x - origin.x) * (b.y - origin.y) - (b.x - origin.x) * (a.y - origin.y);
         }
         area = Math.abs(signed / 2 + curvedArea);
@@ -406,7 +412,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
       Math.abs(matrix[0] * matrix[2] + matrix[1] * matrix[3]) < 1e-8;
     if (length !== undefined && uniform) length *= scaleX;
     else if (!text) {
-      length = transformed.slice(1).reduce((sum, p, i) => sum + distance(p, transformed[i]), 0);
+      length = pathLength(transformed);
       approximate = true;
     }
     if (area !== undefined) area *= Math.abs(matrix[0] * matrix[3] - matrix[1] * matrix[2]);

@@ -37,11 +37,12 @@ export function decodeDefinition<T>(
     throw new Error(title + ' exceeds ' + limit / 1048576 + ' MiB.');
   const errors: ParseError[] = [];
   const value = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
-  if (errors.length)
+  const [error] = errors;
+  if (error)
     throw new Error(
-      printParseErrorCode(errors[0].error) +
+      printParseErrorCode(error.error) +
         ' at line ' +
-        text.slice(0, errors[0].offset).split('\n').length +
+        text.slice(0, error.offset).split('\n').length +
         '.',
     );
   return schema.parse(value);

@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.main.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["src/domain/**/*.ts", "src/desktop/**/*.ts", "src/main.ts", "forge.env.d.ts"]
+}

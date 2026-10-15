@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, symlink, writeFile } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { Resources } from '../src/desktop/resources';
@@ -236,5 +236,47 @@ describe('preview work cancellation', () => {
     resources.release(resource.id);
     expect(signal.aborted).toBe(true);
     expect(() => resources.signal(resource.id)).toThrow();
+  });
+});
+describe('rendered image previews', () => {
+  it('serves a system rendering as a child resource released with its file', async () => {
+    const file = path.join(root, 'Scan.tiff');
+    await writeFile(file, 'tiff bytes the renderer cannot decode');
+    const rendered = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    const render = vi.fn(async () => ({ data: rendered, extension: 'jpg' }));
+    resources = new Resources(async () => {}, render);
+    const resource = await resources.grant(file);
+    const rendition = await resources.rendition(resource.id);
+    expect(render).toHaveBeenCalledWith(await realpath(file));
+    expect(rendition.entry.name).toBe('Scan.tiff.jpg');
+    const response = await resources.response(new Request(rendition.url));
+    expect(response.headers.get('Content-Type')).toBe('image/jpeg');
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(rendered);
+    // Closing the preview releases the rendering too.
+    resources.release(resource.id);
+    expect((await resources.response(new Request(rendition.url))).status).toBe(404);
+  });
+  it('reports rendering as unavailable without a renderer', async () => {
+    const file = path.join(root, 'Photo.heic');
+    await writeFile(file, 'heic');
+    resources = new Resources();
+    await expect(resources.rendition((await resources.grant(file)).id)).rejects.toThrow(
+      'unavailable',
+    );
+  });
+});
+describe('printing previewed PDFs', () => {
+  it('prints only PDF files on disk', async () => {
+    const pdfFile = path.join(root, 'Report.pdf');
+    const textFile = path.join(root, 'Notes.txt');
+    await writeFile(pdfFile, '%PDF-1.4');
+    await writeFile(textFile, 'notes');
+    resources = new Resources();
+    expect(await resources.printableFile((await resources.grant(pdfFile)).id)).toBe(
+      await realpath(pdfFile),
+    );
+    await expect(resources.printableFile((await resources.grant(textFile)).id)).rejects.toThrow(
+      'Only PDF files',
+    );
   });
 });

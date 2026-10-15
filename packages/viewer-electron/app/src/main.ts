@@ -1,4 +1,14 @@
-import { nativeTheme, app, BrowserWindow, dialog, Menu, protocol, session, screen } from 'electron';
+import {
+  nativeTheme,
+  app,
+  BrowserWindow,
+  dialog,
+  Menu,
+  protocol,
+  session,
+  screen,
+  shell,
+} from 'electron';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
@@ -146,7 +156,7 @@ function menu(): void {
           {
             label: 'Open Folder…',
             accelerator: accelerator(
-              settings?.shortcuts['choose-folder'] ?? menuShortcuts['choose-folder'],
+              settings?.shortcuts['choose-folder'] ?? menuShortcuts['choose-folder'] ?? '',
             ),
             click: command('choose-folder'),
           },
@@ -206,14 +216,14 @@ function menu(): void {
           {
             label: 'Undo',
             accelerator: accelerator(
-              settings?.shortcuts['undo-file'] ?? menuShortcuts['undo-file'],
+              settings?.shortcuts['undo-file'] ?? menuShortcuts['undo-file'] ?? '',
             ),
             click: command('undo-file'),
           },
           {
             label: 'Redo',
             accelerator: accelerator(
-              settings?.shortcuts['redo-file'] ?? menuShortcuts['redo-file'],
+              settings?.shortcuts['redo-file'] ?? menuShortcuts['redo-file'] ?? '',
             ),
             click: command('redo-file'),
           },
@@ -242,7 +252,7 @@ function menu(): void {
           {
             label: 'Move Copied Items Here',
             accelerator: accelerator(
-              settings?.shortcuts['paste-move'] ?? defaultShortcuts['paste-move'],
+              settings?.shortcuts['paste-move'] ?? defaultShortcuts['paste-move'] ?? '',
             ),
             click: command('paste-move'),
           },
@@ -282,7 +292,7 @@ function menu(): void {
           {
             label: 'Show / Hide Hidden Files',
             accelerator: accelerator(
-              settings?.shortcuts['toggle-hidden'] ?? defaultShortcuts['toggle-hidden'],
+              settings?.shortcuts['toggle-hidden'] ?? defaultShortcuts['toggle-hidden'] ?? '',
             ),
             click: command('hidden'),
           },
@@ -300,14 +310,14 @@ function menu(): void {
           {
             label: 'Undo Arrangement',
             accelerator: accelerator(
-              settings?.shortcuts['undo-arrangement'] ?? menuShortcuts['undo-arrangement'],
+              settings?.shortcuts['undo-arrangement'] ?? menuShortcuts['undo-arrangement'] ?? '',
             ),
             click: command('undo-arrangement'),
           },
           {
             label: 'Redo Arrangement',
             accelerator: accelerator(
-              settings?.shortcuts['redo-arrangement'] ?? menuShortcuts['redo-arrangement'],
+              settings?.shortcuts['redo-arrangement'] ?? menuShortcuts['redo-arrangement'] ?? '',
             ),
             click: command('redo-arrangement'),
           },
@@ -347,6 +357,21 @@ function menu(): void {
         ],
       },
       { role: 'windowMenu' },
+      {
+        role: 'help',
+        submenu: [
+          { label: 'Commands…', click: command('palette') },
+          { type: 'separator' },
+          {
+            label: 'Report an Issue…',
+            click: () => void shell.openExternal('https://github.com/plurid/viewer/issues'),
+          },
+          {
+            label: 'Viewer Website',
+            click: () => void shell.openExternal('https://plurid.com/viewer'),
+          },
+        ],
+      },
     ]),
   );
 }

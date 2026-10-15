@@ -8,6 +8,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import store from './mac-app-store.json' with { type: 'json' };
 import { macChannel, storeConfiguration, storeInputs } from './tools/mas-configuration';
+import { documentTypes } from './tools/document-types';
 const require = createRequire(import.meta.url);
 const channel = macChannel(process.env.VIEWER_MAC_CHANNEL);
 const storeConfig = storeConfiguration.parse(store);
@@ -59,6 +60,9 @@ const config: ForgeConfig = {
       NSLocalNetworkUsageDescription:
         'Viewer connects to model endpoints you configure on your local network for model discovery and AI actions.',
       ...(inputs ? { ElectronTeamID: storeConfig.teamID } : {}),
+      // The App Store build would receive access to an opened file only, which Viewer's
+      // folder-based access does not handle yet, so only the direct build offers Open With.
+      ...(channel === 'direct' ? { CFBundleDocumentTypes: documentTypes } : {}),
     },
     ...(inputs ? { buildVersion: inputs.build } : {}),
     appCategoryType: 'public.app-category.utilities',

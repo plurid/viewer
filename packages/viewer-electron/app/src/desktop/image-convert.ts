@@ -42,7 +42,7 @@ export function rotateBitmap(
   for (let y = 0; y < height; y++)
     for (let x = 0; x < width; x++) {
       const target = clockwise ? x * height + (height - 1 - y) : (width - 1 - x) * height + y;
-      out[target] = view[y * width + x];
+      out[target] = view[y * width + x] ?? 0;
     }
   return rotated;
 }

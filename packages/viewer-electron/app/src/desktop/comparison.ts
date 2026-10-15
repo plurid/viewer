@@ -55,8 +55,8 @@ export class Comparisons {
           return found;
         }
         const queue = [{ file: root, depth: 0 }];
-        for (let index = 0; index < queue.length; index++) {
-          const { file, depth } = queue[index];
+        // Subfolders are appended while this loop runs; `for…of` visits them too.
+        for (const { file, depth } of queue) {
           abort.signal.throwIfAborted();
           try {
             await this.access([file]);
@@ -146,8 +146,9 @@ export class Comparisons {
       }
       await this.access([left, right]);
       if (before[0].directory)
-        for (const [index, root] of [left, right].entries())
-          if (!sameSourceVersion(sourceVersion(before[index]), sourceVersion(await entry(root)))) {
+        for (const [index, root] of [left, right].entries()) {
+          const prior = before[index];
+          if (prior && !sameSourceVersion(sourceVersion(prior), sourceVersion(await entry(root)))) {
             result.coverage = 'partial';
             result.errors.push({
               path: root,
@@ -155,6 +156,7 @@ export class Comparisons {
                 'Folder membership changed during comparison. Compare it again before reconciling.',
             });
           }
+        }
       return result;
     } finally {
       clearTimeout(timer);

@@ -64,7 +64,8 @@ export function declaredReferences(
     if (paths.length >= 200) return;
     let target = raw.trim().replace(/^<|>$/g, '');
     if (!target || /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(target)) return;
-    target = target.split('#')[0].split('?')[0];
+    // Drop a fragment or query: everything from the first `#` or `?`.
+    target = target.replace(/[#?][\s\S]*$/, '');
     try {
       target = decodeURIComponent(target);
     } catch {
@@ -93,18 +94,18 @@ export function declaredReferences(
       if (href.startsWith('<')) {
         const end = href.indexOf('>');
         if (end > 0) add(href.slice(1, end));
-      } else add(href.split(/\s/, 1)[0]);
+      } else add(href.split(/\s/, 1)[0] ?? '');
     }
   } else if (['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs'].includes(extension)) {
     for (const match of text.matchAll(
       /(?:\bfrom\s*|\bimport\s*|\brequire\s*\()(['"])([^'"\r\n]+)\1/g,
     ))
-      if (match[2].startsWith('.')) add(match[2]);
+      if (match[2]?.startsWith('.')) add(match[2]);
   } else if (extension === 'css') {
     for (const match of text.matchAll(/(?:url\(\s*|@import\s*)(['"]?)([^'"\s)]+)\1\s*\)?/g))
-      add(match[2]);
+      if (match[2]) add(match[2]);
   } else if (extension === 'obj') {
-    for (const match of text.matchAll(/^mtllib\s+(.+)$/gm)) add(match[1]);
+    for (const match of text.matchAll(/^mtllib\s+(.+)$/gm)) if (match[1]) add(match[1]);
   } else return { paths: [], supported: false, limited: false };
   return { paths: [...new Set(paths)], supported: true, limited: paths.length >= 200 };
 }

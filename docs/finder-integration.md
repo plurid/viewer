@@ -22,6 +22,10 @@ Finder tags and comments use their native binary plist extended attributes, not 
 
 Native Share and Quick Look require granted paths and are available only on macOS. Native preview state is dismissed during permission revocation and shutdown. Their physical UI, provider handoff and signed Store sandbox behavior still require acceptance; passing metadata and browser tests does not prove those panels.
 
+## Open With and Help
+
+The direct build declares document types, so Finder offers Viewer in Open With for folders, images, movies, audio, PDF, EPUB, text, Office documents, archives, DjVu, drawings and 3D models. Viewer registers as an alternate viewer and never becomes the default app for a type. The App Store build does not declare them yet: it would receive access to the opened file only, which Viewer's folder-based access does not handle. The Help menu has Commands…, Report an Issue… and Viewer Website, and macOS adds its menu search.
+
 ## Drag navigation
 
 Hold a file drag over a folder for 650ms to open it. List, grid and gallery use the same plane; columns append the folder to the visible trail. Temporary traversal preserves file selection and docking. Cancelling restores the original folder/presentation/history or column trail. A successful drop adds only the final navigated folder to ordinary history; intermediate folders do not enter Recents. Temporary history slots remain valid for persistence throughout the drag.
@@ -36,7 +40,7 @@ Copy Path in the Chrome fixture uses the browser clipboard API, writes exact new
 
 ## Remaining sequence
 
-Continue the everyday Finder work with tag filtering/sidebar integration, selection rectangles, Trash browsing, native window/tab restoration, richer search filters and native Services. Metadata ownership/admin workflows, bulk tagging and explicit default-app association changes remain gaps.
+Continue the everyday Finder work with a Tags section in the sidebar, Trash browsing, native window/tab restoration, richer search filters and native Services. Metadata ownership/admin workflows, bulk tagging and explicit default-app association changes remain gaps.
 
 Scoped MCP now supports reviewed workspace switching, plane focus, parameterized path opening and exact selection; see [agent-navigation.md](agent-navigation.md). The next five major feature groups are portable project workspaces, evidence-backed content search, comparison, workflows and dependency tracking. Saved searches, basic batch rename, terminals, CAD inspection and global JSONC already exist. Finder gaps listed above and native release qualification remain separate work.
 

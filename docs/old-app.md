@@ -48,18 +48,21 @@ This page records what that app did, how it compares with the current app, and w
 
 ## Ideas not yet carried over
 
-Ordered by likely value. None of these are planned yet.
+Carried over on 2026-10-15:
 
-1. **TIFF preview.** macOS decodes TIFF natively, so a desktop-side conversion to PNG for the image preview would avoid a decoder dependency.
-2. **Document types** (`CFBundleDocumentTypes`, role Viewer) so Viewer appears in Finder's Open With. The app already handles `open-file`.
-3. **New File** in folder menus, created exclusively, never replacing an existing name.
-4. **Help menu** with an issue link and the product page.
-5. **PDF thumbnails, outline and printing.**
-6. **DjVu** through a maintained decoder, in a worker, with the same resource scoping as other previews.
-7. **Enhanced image formats** (`.eimg` with text overlays; planned `evid`, `eaud`, `pluridoc` converters). Their sources live in `technologies/tools/enhanced-view`.
-8. **Touch Bar controls** for spatial tools. The 2021 icons are in `source/assets/` (rotate, scale, translate, up-down, left-right, with inverted variants).
-9. **Interface translation.**
-10. **Local streaming**, only if redesigned: loopback or explicit opt-in, a per-file random token, Range support and an obvious stop control.
+- TIFF previews, through Quick Look, together with HEIC, PSD and camera RAW.
+- Document types for Open With, in the direct build.
+- New File.
+- A Help menu.
+- PDF thumbnails, outline, printing and password-protected PDFs.
+- DjVu.
+
+Still open, ordered by likely value:
+
+1. **Enhanced image formats** (`.eimg` with text overlays; planned `evid`, `eaud`, `pluridoc` converters). Their sources live in `technologies/tools/enhanced-view`.
+2. **Touch Bar controls** for spatial tools. The 2021 icons are in `source/assets/` (rotate, scale, translate, up-down, left-right, with inverted variants).
+3. **Interface translation.**
+4. **Local streaming**, only if redesigned: loopback or explicit opt-in, a per-file random token, Range support and an obvious stop control.
 
 ## Unfinished and broken parts
 

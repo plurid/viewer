@@ -43,6 +43,12 @@ export default function ExamplePreview({ resource, services, signal }: PreviewCo
 
 Use `usePreviewState(context, key, initial)` for lightweight viewer state that should survive spatial culling, such as zoom, the current page or worksheet. Workspace-owned planes persist bounded JSON values in private state; temporary previews use a bounded session cache. Source-version changes reset viewer state while preserving notes. Do not retain a decoded model, GPU renderer or original image buffer there. Modules still release resources and stop media/animation on inactive/unmount paths. EPUB's local parser returns evidence and bounded chapter markup; the reader sanitizes markup before rendering it and never evaluates document scripts. DOCX/XLSX use shared worker extraction and the table/evidence adapter; see [Office previews](office-previews.md).
 
+## Built-in formats Chromium cannot decode
+
+- **Rendered images** (`rendered-image`) cover TIFF, HEIC/HEIF, PSD, camera RAW (DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2), JPEG 2000, OpenEXR, TGA and ICNS. Quick Look decodes the file in its own sandboxed system service. Viewer receives a bitmap of at most 4,096 pixels on the longest edge, holds it in memory as a child of the preview's resource, and frees it when the preview closes. Grid view thumbnails for these formats come from the same service.
+- **DjVu** (`djvu`) decodes with the MIT-licensed `djvu-rs` (Rust compiled to WebAssembly) in a worker inside the sandboxed renderer. Files over 256 MB and renders over 40 million pixels are refused. The render resolution follows the plane's size with the same limits as PDF pages, and search reads each page's text layer. Closing the preview terminates the worker.
+- **PDF** adds a page-thumbnail sidebar, which renders only visible pages, and an outline sidebar. Outline entries that only link to web addresses never open. Password-protected PDFs ask for the password, which stays in memory and is never saved with preview state. Print opens PDFKit's native print sheet for PDFs stored as files; documents whose permissions forbid printing are refused.
+
 ## Contextual controls and commands
 
 Use `PreviewToolbar` for primary controls. It places them in the plane's header when the host supplies a slot, or inline for a quick preview or gallery. Keep document-specific controls such as a timeline or data filter in the content. Register secondary or searchable actions with `usePreviewCommands`:

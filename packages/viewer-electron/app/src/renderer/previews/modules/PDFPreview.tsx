@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getDocument,
   GlobalWorkerOptions,
+  PasswordResponses,
   PixelsPerInch,
   TextLayer,
   type PDFDocumentProxy,
@@ -12,6 +13,10 @@ import { usePreviewState } from '../state';
 import { pdfCanvasRatio, pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { getState, report } from '../../state/store';
+import { PDFOutline, PDFThumbnails } from '../pdf/PDFSidebar';
+
+type PDFSidebar = 'none' | 'pages' | 'outline';
 
 GlobalWorkerOptions.workerSrc = workerURL;
 export default function PDFPreview(context: PreviewContext) {
@@ -25,6 +30,11 @@ export default function PDFPreview(context: PreviewContext) {
   const [scale, setScale] = useState(1);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [sidebar, setSidebar] = usePreviewState<PDFSidebar>(context, 'pdf.sidebar', 'none');
+  // The password lives only in this view's memory; it is never saved with preview state.
+  const password = useRef('');
+  const [unlock, setUnlock] = useState<{ update(password: string): void; incorrect: boolean }>();
+  const [entered, setEntered] = useState('');
   useEffect(() => {
     if (context.evidence?.anchor.kind === 'pdf') {
       setPage(context.evidence.anchor.page);
@@ -55,9 +65,18 @@ export default function PDFPreview(context: PreviewContext) {
       standardFontDataUrl: `${local}standard_fonts/`,
       wasmUrl: `${local}wasm/`,
     });
+    password.current = '';
+    setUnlock(undefined);
+    task.onPassword = (update: (password: string) => void, reason: number) => {
+      if (signal.aborted) return;
+      setEntered('');
+      setUnlock({ update, incorrect: reason === PasswordResponses.INCORRECT_PASSWORD });
+    };
     void task.promise
       .then((document) => {
-        if (!signal.aborted) setPDF(document);
+        if (signal.aborted) return;
+        setUnlock(undefined);
+        setPDF(document);
       })
       .catch((error) => {
         if (!signal.aborted) setError(error.message);
@@ -185,6 +204,13 @@ export default function PDFPreview(context: PreviewContext) {
       setSearching(false);
     };
   }, [pdf, query, signal, setPage]);
+  const printable = getState().bootstrap.platform === 'darwin';
+  const print = useMemo(
+    () => () => {
+      void window.viewer.printPDF(resource.id, password.current || undefined).catch(report);
+    },
+    [resource.id],
+  );
   usePreviewCommands(
     context,
     useMemo(
@@ -224,6 +250,27 @@ export default function PDFPreview(context: PreviewContext) {
           run: () => setZoom('width'),
         },
         {
+          id: 'pdf-pages',
+          label: sidebar === 'pages' ? 'Hide PDF pages' : 'Show PDF pages',
+          aliases: ['thumbnails'],
+          available: !!pdf,
+          run: () => setSidebar(sidebar === 'pages' ? 'none' : 'pages'),
+        },
+        {
+          id: 'pdf-outline',
+          label: sidebar === 'outline' ? 'Hide PDF outline' : 'Show PDF outline',
+          aliases: ['contents', 'table of contents', 'bookmarks'],
+          available: !!pdf,
+          run: () => setSidebar(sidebar === 'outline' ? 'none' : 'outline'),
+        },
+        {
+          id: 'pdf-print',
+          label: 'Print PDF…',
+          aliases: ['print'],
+          available: !!pdf && printable,
+          run: print,
+        },
+        {
           id: 'zoom-in',
           label: 'Zoom in',
           available: !!pdf && scale < 4,
@@ -236,10 +283,43 @@ export default function PDFPreview(context: PreviewContext) {
           run: () => setZoom(Math.max(0.1, Math.min(4, Math.round((scale / 1.25) * 100) / 100))),
         },
       ],
-      [pdf, page, scale, setPage, setZoom],
+      [pdf, page, scale, setPage, setZoom, sidebar, setSidebar, printable, print],
     ),
   );
   if (error) return <Empty icon="pdf" title="PDF could not be displayed" detail={error} />;
+  if (!pdf && unlock)
+    return (
+      <form
+        className="pdf-password"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!entered) return;
+          password.current = entered;
+          unlock.update(entered);
+        }}
+      >
+        <Empty
+          icon="pdf"
+          title="This PDF is protected by a password"
+          detail={
+            unlock.incorrect
+              ? 'That password is not correct. Try again.'
+              : 'The password opens it in this view only and is not saved.'
+          }
+        >
+          <input
+            type="password"
+            aria-label="PDF password"
+            autoComplete="off"
+            value={entered}
+            onChange={(event) => setEntered(event.target.value)}
+          />
+          <button type="submit" className="primary" disabled={!entered}>
+            Open
+          </button>
+        </Empty>
+      </form>
+    );
   if (!pdf) return <Loading label="Opening PDF…" />;
   return (
     <div className="pdf-viewer">
@@ -301,6 +381,19 @@ export default function PDFPreview(context: PreviewContext) {
             ))}
         </select>
         <IconButton icon="search" label="Search PDF" onClick={() => setSearchOpen(true)} />
+        <IconButton
+          icon="sidebar"
+          label={sidebar === 'pages' ? 'Hide pages' : 'Show pages'}
+          aria-pressed={sidebar === 'pages'}
+          onClick={() => setSidebar(sidebar === 'pages' ? 'none' : 'pages')}
+        />
+        <IconButton
+          icon="list"
+          label={sidebar === 'outline' ? 'Hide outline' : 'Show outline'}
+          aria-pressed={sidebar === 'outline'}
+          onClick={() => setSidebar(sidebar === 'outline' ? 'none' : 'outline')}
+        />
+        {printable && <IconButton icon="print" label="Print…" onClick={print} />}
       </PreviewToolbar>
       {searchOpen && (
         <div className="search-row">
@@ -337,10 +430,14 @@ export default function PDFPreview(context: PreviewContext) {
           ))}
         </div>
       )}
-      <div className="pdf-scroll" ref={scroll}>
-        <div className="pdf-sheet">
-          <canvas ref={canvas} />
-          <div className="textLayer" ref={text} />
+      <div className="pdf-body">
+        {sidebar === 'pages' && <PDFThumbnails pdf={pdf} page={page} onSelect={setPage} />}
+        {sidebar === 'outline' && <PDFOutline pdf={pdf} page={page} onSelect={setPage} />}
+        <div className="pdf-scroll" ref={scroll}>
+          <div className="pdf-sheet">
+            <canvas ref={canvas} />
+            <div className="textLayer" ref={text} />
+          </div>
         </div>
       </div>
     </div>

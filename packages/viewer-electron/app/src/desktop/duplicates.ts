@@ -58,8 +58,8 @@ export class Duplicates {
       const bySize = new Map<number, FileEntry[]>();
       const queue = canonical.map((file) => ({ file, depth: 0 }));
       const visited = new Set<string>();
-      for (let index = 0; index < queue.length; index++) {
-        const { file, depth } = queue[index];
+      // Subfolders are appended while this loop runs; `for…of` visits them too.
+      for (const { file, depth } of queue) {
         abort.signal.throwIfAborted();
         try {
           await this.access([file]);

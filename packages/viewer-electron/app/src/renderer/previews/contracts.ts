@@ -31,6 +31,7 @@ export interface PreviewContext {
     read(id: string, limit?: number): Promise<ResourceRead>;
     archive(id: string): Promise<ArchiveListing>;
     archiveEntry(id: string, name: string): Promise<Resource>;
+    rendition(id: string): Promise<Resource>;
     release(id: string): Promise<void>;
   };
 }

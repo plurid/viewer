@@ -2,7 +2,7 @@ import type { FileChange } from '../domain/changes';
 import type { TrashOrigin } from '../domain/trash';
 import type { ObservedOperationLink } from '../domain/relationships';
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, readdir, stat } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   CollisionDecision,
@@ -190,7 +190,7 @@ export class Operations {
       const targets = new Map(task.undo.map((step) => [step.from, step]));
       for (let index = task.job.completed.length - 1; index >= 0; index--) {
         const item = task.job.completed[index];
-        if (!item.source || !item.destination || item.source === item.destination) continue;
+        if (!item?.source || !item.destination || item.source === item.destination) continue;
         const source = sources.get(item.source),
           target = targets.get(item.destination);
         result.push({
@@ -253,14 +253,18 @@ export class Operations {
     if (request.name && ['copy', 'move', 'transfer'].includes(request.kind) && roots.length !== 1)
       throw new Error('A destination name requires a single source.');
     if (
-      ['copy', 'move', 'transfer', 'mkdir', 'compress', 'extract'].includes(request.kind) &&
+      ['copy', 'move', 'transfer', 'mkdir', 'mkfile', 'compress', 'extract'].includes(
+        request.kind,
+      ) &&
       !request.destination
     )
       throw new Error('Choose a destination folder.');
-    if (request.kind !== 'mkdir' && !roots.length) throw new Error('Select at least one file.');
+    if (!['mkdir', 'mkfile'].includes(request.kind) && !roots.length)
+      throw new Error('Select at least one file.');
     if (request.kind === 'rename' && (roots.length !== 1 || !request.name))
       throw new Error('Rename one file at a time.');
     if (request.kind === 'mkdir' && !request.name) throw new Error('Enter a folder name.');
+    if (request.kind === 'mkfile' && !request.name) throw new Error('Enter a file name.');
     if (
       request.kind === 'compress' &&
       (!request.name || !request.name.toLowerCase().endsWith('.zip'))
@@ -280,7 +284,7 @@ export class Operations {
     }
     // A PDF is one output from every source; other conversions create one file per image.
     const single =
-      ['mkdir', 'compress'].includes(request.kind) ||
+      ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
       (request.kind === 'convert' && request.conversion === 'pdf');
     const job: OperationJob = {
       id: randomUUID(),
@@ -661,7 +665,8 @@ export class Operations {
       throw error;
     });
     if (!existing) return { path: destination };
-    let replaceable = task.request.kind !== 'mkdir';
+    // Creating something new never replaces what is already there.
+    let replaceable = !['mkdir', 'mkfile'].includes(task.request.kind);
     if (source) {
       // Another spelling of the source itself must never be offered for Replace.
       if (sameItem(await lstat(source), existing)) {
@@ -693,8 +698,8 @@ export class Operations {
     if (decision === 'keep-both') return { path: await keepBothName(destination) };
     if (!replaceable)
       throw new Error(
-        task.request.kind === 'mkdir'
-          ? 'A new folder cannot replace an existing item. Choose Keep both.'
+        task.request.kind === 'mkdir' || task.request.kind === 'mkfile'
+          ? 'A new item cannot replace an existing one. Choose Keep both.'
           : 'The existing item contains the source, so it cannot be replaced. Choose Keep both or Skip.',
       );
     return { path: destination, replaces: existing };
@@ -813,7 +818,7 @@ export class Operations {
         job.status = 'running';
         this.emit(task);
         const single =
-          ['mkdir', 'compress'].includes(request.kind) ||
+          ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
           (request.kind === 'convert' && request.conversion === 'pdf');
         const items = single ? [''] : request.sources;
         for (const source of items) {
@@ -934,6 +939,18 @@ export class Operations {
                     },
                     task.abort.signal,
                   );
+                else if (request.kind === 'mkfile')
+                  await fileCoordination.run(
+                    [{ path: destination, mode: 'write' }],
+                    async (signal) => {
+                      signal?.throwIfAborted();
+                      this.check(task);
+                      await this.access([fileCoordination.path(destination!)]);
+                      // Exclusive creation: an item that appeared meanwhile is never touched.
+                      await (await open(fileCoordination.path(destination!), 'wx', 0o644)).close();
+                    },
+                    task.abort.signal,
+                  );
                 else if (request.kind === 'alias') {
                   const stage = await privateStage(
                     path.dirname(destination),
@@ -1042,6 +1059,7 @@ export class Operations {
                   'duplicate',
                   'alias',
                   'mkdir',
+                  'mkfile',
                   'compress',
                   'extract',
                   'convert',

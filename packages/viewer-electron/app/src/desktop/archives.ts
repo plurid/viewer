@@ -310,7 +310,7 @@ export class Archives {
           throw new Error('Malformed TAR entry size.');
         let checksum = 0;
         for (let index = 0; index < 512; index++)
-          checksum += index >= 148 && index < 156 ? 32 : header[index];
+          checksum += index >= 148 && index < 156 ? 32 : (header[index] ?? 0);
         if (parseInt(field(148, 8).trim(), 8) !== checksum)
           throw new Error('TAR header checksum is invalid.');
         const name =

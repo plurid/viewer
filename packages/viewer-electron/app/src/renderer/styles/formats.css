@@ -191,6 +191,82 @@
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+.pdf-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pdf-thumbnails,
+.pdf-outline,
+.pdf-sidebar-empty {
+  width: 168px;
+  flex: none;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+.pdf-thumbnails button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.pdf-thumbnails canvas {
+  background: white;
+  box-shadow: 0 1px 4px #0003;
+}
+.pdf-thumbnails button.selected canvas {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pdf-thumbnails button.selected {
+  color: var(--ink);
+}
+.pdf-outline ul {
+  margin: 0;
+  padding-inline-start: 12px;
+  list-style: none;
+}
+.pdf-outline > ul {
+  padding: 8px 6px;
+}
+.pdf-outline button {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+  justify-content: space-between;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  text-align: start;
+  font-size: 12px;
+}
+.pdf-outline button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pdf-outline button.selected {
+  background: var(--selection);
+}
+.pdf-outline-empty {
+  padding: 12px;
+  width: 168px;
+  flex: none;
+}
+.pdf-password {
+  height: 100%;
+}
+.pdf-password input {
+  width: 220px;
+}
 .pdf-scroll {
   flex: 1;
   min-height: 0;

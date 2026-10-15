@@ -84,17 +84,15 @@ export function actionArguments(
     return [
       argument.replace(/\{(directory|path|name|extension)\}/g, (_, field: string) => {
         if (field === 'directory') return target.directory;
-        if (selected.length !== 1)
+        const [item] = selected;
+        if (selected.length !== 1 || !item)
           throw new Error(`{${field}} needs one selected item or per-item execution.`);
-        return selected[0][field as 'path' | 'name' | 'extension'];
+        return item[field as 'path' | 'name' | 'extension'];
       }),
     ];
   });
 }
 export function terminalDirectory(directory: string, selected: FileEntry[]): string {
-  return selected.length === 1
-    ? selected[0].directory
-      ? selected[0].path
-      : selected[0].parent
-    : directory;
+  const [item] = selected;
+  return selected.length === 1 && item ? (item.directory ? item.path : item.parent) : directory;
 }

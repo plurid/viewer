@@ -147,6 +147,7 @@ export class FileServices {
       Array.from({ length: Math.min(8, snapshot.entries.length) }, async () => {
         while (cursor < snapshot.entries.length) {
           const item = snapshot.entries[cursor++];
+          if (!item) break;
           if (!sameSourceVersion(sourceVersion(item), sourceVersion(await entry(item.path))))
             throw new Error(
               'A matching file changed since indexing. Refresh the index and take a new snapshot.',

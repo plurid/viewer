@@ -44,11 +44,11 @@ export class JsoncConfiguration<T> {
     if (Buffer.byteLength(text) > 16 * 1024 * 1024) throw new Error('Configuration exceeds 16 MB.');
     const errors: ParseError[] = [];
     const value = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
-    if (errors.length) {
-      const error = errors[0];
+    const [error] = errors;
+    if (error) {
       const lines = text.slice(0, error.offset).split('\n');
       throw new Error(
-        `${printParseErrorCode(error.error)} at line ${lines.length}, column ${lines.at(-1)!.length + 1}.`,
+        `${printParseErrorCode(error.error)} at line ${lines.length}, column ${(lines.at(-1) ?? '').length + 1}.`,
       );
     }
     return this.validate(value);

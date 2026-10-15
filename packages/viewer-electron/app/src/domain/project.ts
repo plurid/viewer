@@ -280,9 +280,11 @@ export function projectReference(
 }
 export function resolveProjectPath(
   root: string,
-  target: ProjectPath,
+  target: ProjectPath | undefined,
   bindings: Record<string, string>,
 ): string | undefined {
+  // A reference to an input that is not defined resolves to nothing, like an unbound one.
+  if (!target) return;
   projectPathSchema.parse(target);
   const base = target.binding
     ? Object.hasOwn(bindings, target.binding)

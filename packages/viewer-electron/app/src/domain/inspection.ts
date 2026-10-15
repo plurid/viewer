@@ -133,6 +133,7 @@ export function originalMatch(
   if (match < 0) return;
   const start = positions[match],
     last = positions[match + term.length - 1];
+  if (start === undefined || last === undefined) return;
   const end = last + (text.codePointAt(last)! > 0xffff ? 2 : 1);
   return { start, end };
 }

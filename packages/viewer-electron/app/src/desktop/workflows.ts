@@ -437,18 +437,15 @@ export class Workflows {
       } else if (step.kind === 'compare') {
         const left = await this.references(run, [step.left]),
           right = await this.references(run, [step.right]);
-        if (left.length !== 1 || right.length !== 1)
+        const [first] = left,
+          [second] = right;
+        if (left.length !== 1 || right.length !== 1 || !first || !second)
           throw new Error('A compare step needs exactly one location on each side.');
         const id = randomUUID(),
           cancel = () => this.dependencies.comparisons.cancel(id);
         signal.addEventListener('abort', cancel, { once: true });
         try {
-          const result = await this.dependencies.comparisons.run(
-            id,
-            left[0],
-            right[0],
-            step.hashes,
-          );
+          const result = await this.dependencies.comparisons.run(id, first, second, step.hashes);
           record.artifact = workflowArtifact({ kind: 'comparison', result });
         } finally {
           signal.removeEventListener('abort', cancel);
@@ -459,7 +456,8 @@ export class Workflows {
       } else if (step.kind === 'copy') {
         const sources = await this.references(run, step.sources),
           destination = await this.references(run, [step.destination]);
-        if (destination.length !== 1 || !(await entry(destination[0])).directory)
+        const [folder] = destination;
+        if (destination.length !== 1 || !folder || !(await entry(folder)).directory)
           throw new Error('Choose one destination folder for the copy step.');
         await this.validate(record.sources);
         const plan = await this.dependencies.plans.request({

@@ -286,6 +286,7 @@ export function documentConfiguration(text: string): string {
     if (node.type !== 'object') return;
     for (const property of node.children || []) {
       const [key, value] = property.children!;
+      if (!key || !value) continue;
       const next = [...keys, String(key.value)];
       const lines = comments.get(next.join('.'));
       if (lines) {

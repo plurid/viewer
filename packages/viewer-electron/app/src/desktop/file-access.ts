@@ -150,7 +150,7 @@ export class FileAccess {
       (grants.length && revision !== this.nativeRevision)
     )
       throw new FileAccessRequired(
-        grants.find((grant) => this.blocked(grant.path))?.path ?? grants[0].path,
+        grants.find((grant) => this.blocked(grant.path))?.path ?? grants[0]?.path ?? '',
       );
     const incoming = new Map(this.incoming);
     for (const grant of grants) incoming.set(grant.path, grant);

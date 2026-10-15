@@ -79,6 +79,7 @@ export async function list(folder: string): Promise<FolderListing> {
     Array.from({ length: Math.min(24, names.length) }, async () => {
       while (cursor < names.length) {
         const name = names[cursor++];
+        if (name === undefined) break;
         try {
           entries.push(await entry(path.join(normalized, name)));
         } catch (error) {

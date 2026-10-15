@@ -1,6 +1,7 @@
 import type { FileEntry } from '../../domain/contracts';
 import type { PreviewModule } from './contracts';
 import { modelFormats } from '../../domain/model-formats';
+import { renderedImageFormats } from '../../domain/rendered-images';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
   formats.includes(entry.extension) ? 100 : 0;
@@ -103,6 +104,20 @@ export const previewModules: PreviewModule[] = [
     formats: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'svg'],
     detect: extension(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'svg']),
     load: () => import('./modules/ImagePreview'),
+  },
+  {
+    id: 'djvu',
+    label: 'DjVu document',
+    formats: ['djvu', 'djv'],
+    detect: extension(['djvu', 'djv']),
+    load: () => import('./modules/DjVuPreview'),
+  },
+  {
+    id: 'rendered-image',
+    label: 'Image',
+    formats: renderedImageFormats,
+    detect: extension(renderedImageFormats),
+    load: () => import('./modules/RenderedImagePreview'),
   },
   {
     id: 'media',

@@ -17,7 +17,7 @@ export function imageDimensions(bytes: Buffer): { width: number; height: number 
     let offset = 2;
     while (offset + 9 < bytes.length) {
       if (bytes[offset] !== 255) break;
-      const marker = bytes[offset + 1];
+      const marker = bytes[offset + 1] ?? 0;
       offset += 2;
       if (marker === 216 || marker === 1 || (marker >= 208 && marker <= 217)) continue;
       const length = bytes.readUInt16BE(offset);

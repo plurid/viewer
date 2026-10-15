@@ -144,7 +144,7 @@ export function useFileDialogs(): {
 } {
   const workspace = useWorkspace();
   const [name, setName] = useState<{
-    kind: 'rename' | 'mkdir' | 'group' | 'go-to';
+    kind: 'rename' | 'mkdir' | 'mkfile' | 'group' | 'go-to';
     context: CommandContext;
   }>();
   const [destination, setDestination] = useState<{
@@ -181,9 +181,11 @@ export function useFileDialogs(): {
                 ? 'Rename file'
                 : name.kind === 'mkdir'
                   ? 'New folder'
-                  : name.kind === 'group'
-                    ? `New folder with ${name.context.selection.length} ${name.context.selection.length === 1 ? 'item' : 'items'}`
-                    : 'Go to folder'
+                  : name.kind === 'mkfile'
+                    ? 'New file'
+                    : name.kind === 'group'
+                      ? `New folder with ${name.context.selection.length} ${name.context.selection.length === 1 ? 'item' : 'items'}`
+                      : 'Go to folder'
             }
             label={name.kind === 'go-to' ? 'Folder path' : 'Name'}
             initial={
@@ -193,7 +195,9 @@ export function useFileDialogs(): {
                   ? name.context.directory
                   : name.kind === 'group'
                     ? 'New Folder With Items'
-                    : ''
+                    : name.kind === 'mkfile'
+                      ? 'untitled.txt'
+                      : ''
             }
             maxLength={name.kind === 'go-to' ? 32768 : 255}
             action={name.kind === 'rename' ? 'Rename' : name.kind === 'go-to' ? 'Go' : 'Create'}
@@ -224,10 +228,11 @@ export function useFileDialogs(): {
               } else if (name.kind === 'group') await groupSelection(name.context, value);
               else
                 await window.viewer.operate({
-                  kind: name.kind === 'rename' ? 'rename' : 'mkdir',
+                  kind: name.kind,
                   name: value,
-                  sources: name.context.selection.map((file) => file.path),
-                  destination: name.kind === 'mkdir' ? name.context.directory : undefined,
+                  sources:
+                    name.kind === 'rename' ? name.context.selection.map((file) => file.path) : [],
+                  destination: name.kind === 'rename' ? undefined : name.context.directory,
                 });
             }}
           />

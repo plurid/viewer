@@ -180,10 +180,10 @@ export class ActionPlanner {
             if (journal.length > 4000000)
               throw new Error('Action recovery log exceeded its limit.');
             const lines = journal.split('\n');
-            for (let index = 0; index < lines.length; index++) {
-              if (!lines[index]) continue;
+            for (const [index, line] of lines.entries()) {
+              if (!line) continue;
               try {
-                const step = stepSchema.parse(JSON.parse(lines[index]));
+                const step = stepSchema.parse(JSON.parse(line));
                 const row = plan.rows.find((row) => row.id === step.row);
                 if (row) {
                   row.stagedPath = step.stagedPath;
@@ -338,9 +338,10 @@ export class ActionPlanner {
       else result.set(item.path, item);
     }
     let visited = 0;
-    for (let cursor = 0; cursor < folders.length; cursor++) {
+    // New subfolders are appended while this loop runs; `for…of` visits them too.
+    for (const current of folders) {
       signal.throwIfAborted();
-      const folder = await opendir(folders[cursor]);
+      const folder = await opendir(current);
       for await (const child of folder) {
         signal.throwIfAborted();
         if (++visited > 100000)
@@ -348,7 +349,7 @@ export class ActionPlanner {
             'The selected tree exceeds the action scan limit. Select a smaller folder.',
           );
         if (child.name.startsWith('.') || child.isSymbolicLink()) continue;
-        const item = await entry(path.join(folders[cursor], child.name));
+        const item = await entry(path.join(current, child.name));
         if (item.directory) {
           if (request.context.recursive ?? recipe.recursive) folders.push(item.path);
         } else if (item.kind === 'file') result.set(item.path, item);
@@ -404,9 +405,11 @@ export class ActionPlanner {
       const renamed = this.dependencies.rename
         ? await this.dependencies.rename(input, signal)
         : renameNames(input);
-      plan.rows = files.map((file, index) =>
-        this.row(file, path.join(file.parent, renamed[index])),
-      );
+      plan.rows = files.map((file, index) => {
+        const name = renamed[index];
+        if (name === undefined) throw new Error('The rename preview is incomplete.');
+        return this.row(file, path.join(file.parent, name));
+      });
     } else {
       const provider = this.dependencies
         .providers()

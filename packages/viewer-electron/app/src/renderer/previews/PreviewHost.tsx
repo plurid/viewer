@@ -36,6 +36,7 @@ const services: PreviewContext['services'] = {
   read: (id, limit) => window.viewer.read(id, limit),
   archive: (id) => window.viewer.archive(id),
   archiveEntry: (id, name) => window.viewer.archiveEntry(id, name),
+  rendition: (id) => window.viewer.imageRendition(id),
   release: (id) => window.viewer.release(id),
 };
 export const PreviewHost = memo(function PreviewHost({

@@ -138,6 +138,8 @@ export function storeEntitlements(
         '<key>com.apple.security.files.bookmarks.app-scope</key><true/>\n' +
         '<key>com.apple.security.network.client</key><true/>\n' +
         '<key>com.apple.security.network.server</key><true/>\n' +
+        // PDFKit's print sheet needs the sandbox's printing right.
+        '<key>com.apple.security.print</key><true/>\n' +
         '<key>com.apple.security.cs.allow-jit</key><true/>\n' +
         '<key>com.apple.application-identifier</key><string>' +
         xml(applicationIdentifier) +

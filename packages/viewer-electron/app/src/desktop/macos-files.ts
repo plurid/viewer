@@ -50,6 +50,8 @@ export interface MacFiles {
   trash(file: string, purpose?: string): Promise<TrashReceipt>;
   volumes(): Promise<NativeVolume[]>;
   eject(file: string): Promise<void>;
+  /** PDFKit's print sheet; refuses locked documents without their password. */
+  printPDF(file: string, password?: string): void;
 }
 let binding: MacFiles | undefined;
 export interface TrashReceipt {

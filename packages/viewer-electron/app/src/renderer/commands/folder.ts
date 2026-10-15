@@ -20,7 +20,7 @@ import type { CommandContext, CommandDefinition } from './registry';
 
 export interface FolderActions {
   open(entries: readonly FileEntry[], linked: boolean, another?: boolean): void;
-  dialog(kind: 'rename' | 'mkdir' | 'group' | 'go-to', context: CommandContext): void;
+  dialog(kind: 'rename' | 'mkdir' | 'mkfile' | 'group' | 'go-to', context: CommandContext): void;
   trash(context: CommandContext): void | Promise<void>;
   info(context: CommandContext): void;
   openWith(context: CommandContext): void;
@@ -381,6 +381,15 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       primary: (context) => !context.selection.length,
       when: folder,
       run: (context) => actions.dialog('mkdir', context),
+    },
+    {
+      id: 'new-file',
+      label: 'New file…',
+      group: 'Folder',
+      icon: 'file',
+      aliases: ['touch', 'create file', 'empty file'],
+      when: folder,
+      run: (context) => actions.dialog('mkfile', context),
     },
     {
       id: 'new-folder-with-selection',

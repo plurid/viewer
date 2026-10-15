@@ -582,14 +582,15 @@ export class AgentBroker {
               ? space.id === input.workspaceID
               : space.name.normalize('NFC') === input.name!.normalize('NFC'),
           ) || [];
-        if (matches.length !== 1)
+        const [match] = matches;
+        if (matches.length !== 1 || !match)
           throw new Error('Choose a unique workspace ID from list_workspaces.');
-        for (const pane of matches[0].panes) {
+        for (const pane of match.panes) {
           if (pane.type === 'search' && pane.allLocations)
             throw new Error('This workspace searches outside the agent folder scope.');
           await this.authorize(pane.path);
         }
-        request = { kind: 'switch-workspace', workspace: structuredClone(matches[0]) };
+        request = { kind: 'switch-workspace', workspace: structuredClone(match) };
       }
       await this.authorizeNavigation(request, target);
       value = extension.requests.navigation(request, target);

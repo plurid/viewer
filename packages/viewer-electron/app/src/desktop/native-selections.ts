@@ -75,6 +75,6 @@ export class NativeSelections {
       return board?.all || [...(board?.roots ?? [])].some((root) => contains(root, normalized));
     });
     if (selection.revision !== this.revision || denied)
-      throw new FileAccessRequired(denied ?? files[0]);
+      throw new FileAccessRequired(denied ?? files[0] ?? '');
   }
 }

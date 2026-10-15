@@ -209,7 +209,7 @@ async function extractCoordinated(
         opf.matchAll(
           new RegExp('<(?:dc:)?' + key + '\\b[^>]*>([\\s\\S]*?)<\\/(?:dc:)?' + key + '>', 'gi'),
         ),
-      ).map((item) => plainText(item[1]));
+      ).map((item) => plainText(item[1] ?? ''));
       if (values.length) {
         result.metadata[key] = values.join('; ');
         result.evidence.push({ source: 'publication:' + key, text: result.metadata[key] });
@@ -218,23 +218,26 @@ async function extractCoordinated(
     const attributes = (value: string) =>
       Object.fromEntries(
         Array.from(value.matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)).map((match) => [
-          match[1],
-          decode(match[2]),
+          match[1] ?? '',
+          decode(match[2] ?? ''),
         ]),
       );
     const items = new Map(
       Array.from(opf.matchAll(/<item\b([^>]+)\/?\s*>/g)).map((match) => {
-        const attr = attributes(match[1]);
+        const attr = attributes(match[1] ?? '');
         return [attr.id, attr.href];
       }),
     );
     const chapters = Array.from(opf.matchAll(/<itemref\b([^>]+)\/?\s*>/g))
       .slice(0, 300)
       .flatMap((match) => {
-        const href = items.get(attributes(match[1]).idref);
+        const href = items.get(attributes(match[1] ?? '').idref);
         if (!href) return [];
         const target = path.posix.normalize(
-          path.posix.join(path.posix.dirname(opfPath), decodeURIComponent(href.split('#')[0])),
+          path.posix.join(
+            path.posix.dirname(opfPath),
+            decodeURIComponent(href.replace(/#.*$/s, '')),
+          ),
         );
         if (target.startsWith('../') || !archive[target]) return [];
         const html = strFromU8(archive[target]);
