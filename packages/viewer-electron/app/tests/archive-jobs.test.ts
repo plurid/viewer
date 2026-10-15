@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { strToU8, zipSync, type Zippable } from 'fflate';
 import { createArchive, extractArchive, type ArchiveWork } from '../src/desktop/archive-jobs';
 import { Archives } from '../src/desktop/archives';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 const work = (): ArchiveWork => ({
   signal: new AbortController().signal,
@@ -12,10 +12,10 @@ const work = (): ArchiveWork => ({
   progress: () => {},
 });
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-archive-job-'));
+  root = await temporaryRoot('viewer-archive-job-');
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 it('streams folders and Unicode files into ZIP and safely extracts them', async () => {
   const source = path.join(root, 'Résumé'),

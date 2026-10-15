@@ -1,28 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  stat,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
-import os from 'node:os';
+import { chmod, mkdir, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { OperationJob } from '../src/domain/contracts';
 import { Checkpoints } from '../src/desktop/checkpoints';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 let root: string;
 const access = vi.fn(async (_paths: readonly string[]) => {});
 const coordination = { run: async <T>(_intents: unknown, work: () => Promise<T>) => work() };
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-checkpoints-'));
+  root = await temporaryRoot('viewer-checkpoints-');
   access.mockClear();
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('reviewed content checkpoints', () => {
   it('rejects a folder whose inventory changes while checkpoint files are being copied', async () => {
@@ -58,8 +48,8 @@ describe('reviewed content checkpoints', () => {
     const start = vi.fn(() => 'job');
     await expect(service.restore(record.id, destination, { start })).rejects.toThrow('changed');
     expect(start).not.toHaveBeenCalled();
-    await rm(path.join(snapshot, 'Unrecorded.txt'));
-    await rm(path.join(snapshot, 'Empty'), { recursive: true });
+    await trashFixtureEntry(path.join(snapshot, 'Unrecorded.txt'));
+    await trashFixtureEntry(path.join(snapshot, 'Empty'));
     await expect(service.restore(record.id, destination, { start })).rejects.toThrow('changed');
     expect(start).not.toHaveBeenCalled();
   });

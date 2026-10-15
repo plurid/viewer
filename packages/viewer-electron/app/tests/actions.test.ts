@@ -1,17 +1,14 @@
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import {
-  mkdtemp,
   mkdir,
   writeFile,
   readFile,
-  rm,
   readdir,
   rename,
   symlink,
   realpath,
   stat,
 } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { ActionPlanner } from '../src/desktop/actions/planner';
 import { Operations } from '../src/desktop/operations';
@@ -20,6 +17,7 @@ import { defaultSettings, type ActionPlan, type ApplicationSettings } from '../s
 import { epubFixture } from './fixtures';
 import { extractDocument } from '../src/desktop/formats';
 import type { FileServices } from '../src/desktop/file-services';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string,
   files: string,
   planner: ActionPlanner,
@@ -54,7 +52,7 @@ const create = () =>
     changed: () => {},
   });
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-actions-'));
+  root = await temporaryRoot('viewer-actions-');
   files = path.join(root, 'files');
   await mkdir(files);
   await writeFile(path.join(files, 'A.txt'), 'original A');
@@ -71,7 +69,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await planner.close();
   await operations.close();
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 async function batch(prefix = 'New ') {
   const id = await planner.start({

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, readdir, realpath, rm, statfs, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, readdir, realpath, statfs, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { createFixtures } from './fixtures';
@@ -10,6 +10,7 @@ import { ownedApp, until } from './owned-app';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import type { OperationJob, OperationRequest } from '../src/domain/contracts';
+import { trashTemporary } from '../tools/temporary';
 
 const binary = process.env.VIEWER_TEST_BINARY!,
   evidence = process.env.VIEWER_LOW_SPACE_EVIDENCE!;
@@ -259,6 +260,6 @@ try {
       await hdi(['detach', device]);
       mounted = false;
     }
-    if (!mounted) await rm(fixture.root, { recursive: true, force: true });
+    if (!mounted) await trashTemporary(fixture.root);
   }
 }

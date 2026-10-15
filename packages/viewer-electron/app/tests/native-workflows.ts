@@ -1,7 +1,6 @@
 /** Owned direct-build checks. Generated sources; these do not replace Store/native picker acceptance. */
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { ownedApp, until } from './owned-app';
@@ -10,8 +9,9 @@ import { sourceVersion } from '../src/domain/inspection';
 import { workflowDefinitionSchema, type WorkflowRun } from '../src/domain/workflows';
 import { panelDrawing } from './dxf-fixtures';
 import type { SavedState, OperationJob } from '../src/domain/contracts';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-workflow-'));
+const root = await temporaryRoot('viewer-native-workflow-');
 const profile = path.join(root, 'Profile'),
   destination = path.join(root, 'Destination'),
   output = path.resolve('out/workflow-acceptance');
@@ -381,5 +381,5 @@ try {
   for (const check of evidence) process.stdout.write('PASS ' + check + '\n');
 } finally {
   if (connection) await viewer.close(connection).catch(() => {});
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

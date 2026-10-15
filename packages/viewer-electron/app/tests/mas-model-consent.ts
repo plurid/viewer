@@ -1,7 +1,7 @@
 // Signed sandbox model-consent regression with a generated loopback endpoint, never a paid provider.
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { createFixtures } from './fixtures';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import { ownedApp, until } from './owned-app';
+import { trashTemporary } from '../tools/temporary';
 
 const bundle = process.env.VIEWER_TEST_MAS_BUNDLE!,
   evidence = process.env.VIEWER_MODEL_EVIDENCE!;
@@ -295,7 +296,7 @@ try {
   } finally {
     for (const socket of sockets) socket.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await rm(profile, { recursive: true, force: true });
-    await rm(fixture.root, { recursive: true, force: true });
+    await trashTemporary(profile);
+    await trashTemporary(fixture.root);
   }
 }

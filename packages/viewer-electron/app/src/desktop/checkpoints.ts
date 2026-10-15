@@ -1,13 +1,14 @@
 import type { OperationJob } from '../domain/contracts';
 import { randomUUID, createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { chmod, lstat, mkdir, open, opendir, rm } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, opendir } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { DocumentStore } from './document-store';
 import { fileCoordination } from './file-coordination';
 import { operationRoots, type Operations } from './operations';
 import type { CheckpointEstimate, CheckpointRecord } from '../domain/change-plan';
+import { removePrivateData } from './removal';
 const recordSchema = z
   .object({
     id: z.uuid(),
@@ -508,6 +509,6 @@ export class Checkpoints {
       for await (const child of directory)
         if (child.isDirectory()) pending.push(path.join(file, child.name));
     }
-    await rm(folder, { recursive: true, force: true });
+    await removePrivateData(this.directory, folder);
   }
 }

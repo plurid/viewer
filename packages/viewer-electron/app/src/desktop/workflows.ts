@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { rm } from 'node:fs/promises';
 import { z } from 'zod';
 import { DefinitionFiles } from './definition-files';
 import { DocumentStore } from './document-store';
@@ -26,6 +25,7 @@ import type { Comparisons } from './comparison';
 import type { FileServices } from './file-services';
 import type { fileCoordination } from './file-coordination';
 import type { ActionRecipe } from '../domain/services';
+import { removePrivateData } from './removal';
 
 const comments = `// Viewer workflow, version 1. Agents may edit this JSONC file.
 // Opening this definition never runs a step. Choose Run workflow explicitly.
@@ -119,7 +119,11 @@ export class Workflows {
         }
         this.runs.set(id, run);
       }
-    })());
+    })().catch((error: unknown) => {
+      // A failed read is retried by the next caller instead of disabling this service.
+      this.loaded = undefined;
+      throw error;
+    }));
   }
   private async save(run: WorkflowRun) {
     run.updated = Date.now();
@@ -229,7 +233,7 @@ export class Workflows {
       this.runs.delete(run.id);
       this.sizes.delete(run.id);
       await this.store(run.id).flush();
-      await rm(this.store(run.id).file, { force: true });
+      await removePrivateData(this.directory, this.store(run.id).file);
       this.stores.delete(run.id);
       return null;
     }

@@ -69,7 +69,11 @@ export class WatchRules {
     return (this.loaded ??= (async () => {
       await mkdir(this.directory, { recursive: true });
       for (const rule of (await this.store.load()) ?? []) this.rules.set(rule.id, rule);
-    })());
+    })().catch((error: unknown) => {
+      // A failed read is retried by the next caller instead of disabling this service.
+      this.loaded = undefined;
+      throw error;
+    }));
   }
   private save() {
     return this.store.save([...this.rules.values()]);

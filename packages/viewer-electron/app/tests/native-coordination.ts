@@ -1,14 +1,15 @@
 /** Real Cocoa claims and Worker cleanup; generated fixtures only. This does
  * not establish real cloud-provider hydration or signed picker authorization. */
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm, lstat } from 'node:fs/promises';
+import { writeFile, readFile, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { FileCoordination } from '../src/desktop/file-coordination';
 import { macFiles } from '../src/desktop/macos-files';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 if (process.platform !== 'darwin') throw new Error('Native coordination requires macOS.');
-const root = await mkdtemp('/private/tmp/viewer-coordination-native-');
+const root = await temporaryRoot('viewer-coordination-native-', '/private/tmp');
 const file = path.join(root, 'Generated.txt'),
   other = path.join(root, 'Independent.txt');
 const coordination = new FileCoordination(macFiles, 10000);
@@ -161,5 +162,5 @@ try {
 } finally {
   await worker?.terminate();
   await coordination.close();
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

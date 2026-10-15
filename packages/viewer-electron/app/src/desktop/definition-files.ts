@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { open, lstat, rename, rm } from 'node:fs/promises';
+import { open, lstat, rename, type FileHandle } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { parse, applyEdits, modify, printParseErrorCode, type ParseError } from 'jsonc-parser';
@@ -7,7 +7,26 @@ import type { ZodType } from 'zod';
 import { configChanges } from './configuration';
 import { fileCoordination } from './file-coordination';
 import { missingDefinitionCode, type DefinitionDocument } from '../domain/definitions';
+import { discardOwnTemporaryFile } from './removal';
+import { macFiles } from './macos-files';
 const revision = (text: string) => createHash('sha256').update(text).digest('hex');
+/** A saved definition keeps its Finder tags, comments, extended attributes and mode. */
+async function keepMetadata(file: string, output: FileHandle): Promise<void> {
+  const input = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW).catch(() => null);
+  if (!input) return;
+  try {
+    if (process.platform === 'darwin')
+      try {
+        await macFiles().copyMetadata(input.fd, output.fd);
+        return;
+      } catch {
+        // Keep at least the permissions below.
+      }
+    await output.chmod((await input.stat()).mode & 0o777);
+  } finally {
+    await input.close();
+  }
+}
 export function decodeDefinition<T>(
   text: string,
   schema: ZodType<T>,
@@ -149,6 +168,7 @@ export class DefinitionFiles<T> {
           const handle = await open(temporary, 'wx', 0o600);
           try {
             await handle.writeFile(text);
+            if (before) await keepMetadata(actual, handle);
             await handle.sync();
           } finally {
             await handle.close();
@@ -159,7 +179,7 @@ export class DefinitionFiles<T> {
             throw new Error('The ' + this.title.toLowerCase() + ' changed during this save.');
           await rename(temporary, actual);
         } finally {
-          await rm(temporary, { force: true });
+          await discardOwnTemporaryFile(temporary);
         }
         return { file, root: path.dirname(file), revision: revision(text), definition };
       });

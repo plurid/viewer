@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import os from 'node:os';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { AgentClients } from '../src/desktop/agent-clients';
 import type { AgentClientInput } from '../src/domain/agent-clients';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const input: AgentClientInput = {
   name: 'Research',
   roots: ['/tmp'],
@@ -12,7 +12,7 @@ const input: AgentClientInput = {
 };
 describe('private agent client authority', () => {
   it('stores only credential hashes, isolates concurrent actor contexts and rechecks revocation', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-client-'));
+    const root = await temporaryRoot('viewer-client-');
     const clients = new AgentClients(root, async () => {});
     try {
       const first = await clients.create(input),
@@ -49,11 +49,11 @@ describe('private agent client authority', () => {
       await cold.close();
     } finally {
       await clients.close();
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     }
   });
   it('uses revisioned private updates, denies invalid roots before saving and records bounded ordered activity', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-client-'));
+    const root = await temporaryRoot('viewer-client-');
     const clients = new AgentClients(root, async (roots) => {
       if (roots.includes('/denied')) throw new Error('Permission denied');
     });
@@ -82,7 +82,7 @@ describe('private agent client authority', () => {
       await clients.close();
     } finally {
       await clients.close();
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     }
   });
 });

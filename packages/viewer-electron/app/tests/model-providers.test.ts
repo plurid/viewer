@@ -1,7 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { Credentials, Providers } from '../src/desktop/providers';
 import {
   newModelProvider,
@@ -12,11 +9,12 @@ import {
 import { SettingsService } from '../src/desktop/settings';
 import { ModelPermissions } from '../src/desktop/model-permissions';
 import type { ModelProvider } from '../src/domain/services';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;
 let credentials: Credentials;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-models-'));
+  root = await temporaryRoot('viewer-models-');
   credentials = new Credentials(
     root,
     async (value) => Buffer.from(value),
@@ -24,7 +22,7 @@ beforeEach(async () => {
   );
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 
 const newKinds = ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter'] as const;

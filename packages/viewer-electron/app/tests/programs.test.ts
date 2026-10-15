@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -21,6 +20,7 @@ import {
   type CustomAction,
 } from '../src/domain/automation';
 import { entry } from '../src/desktop/filesystem';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 let root: string;
 let config: ReturnType<typeof defaultSettings>;
 const cleanup: (() => void)[] = [];
@@ -44,12 +44,12 @@ const target = (directory = root): CapturedTarget => ({
   selection: [],
 });
 beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'viewer-programs-'));
+  root = await temporaryRoot('viewer-programs-');
   config = defaultSettings(root);
 });
 afterEach(async () => {
   cleanup.splice(0).forEach((stop) => stop());
-  await fs.rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 
 describe('literal command execution', () => {
@@ -169,7 +169,7 @@ describe('literal command execution', () => {
     expect(actionAvailable(action, captured)).toBe(true);
     expect(actionAvailable(action, target())).toBe(false);
     config.customActions = [action];
-    await fs.unlink(file);
+    await trashFixtureEntry(file);
     await fs.writeFile(file, 'replacement data');
     const executions = new Executions(
       () => config,

@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { FileIndex } from '../src/desktop/index-core';
 import type { FileEntry } from '../src/domain/contracts';
 import { entry } from '../src/desktop/filesystem';
 import { collectionSchema, basketItemSchema } from '../src/domain/collections';
 import { sourceVersion } from '../src/domain/inspection';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 describe('cross-page collection snapshots', () => {
   it('captures every indexed match beyond the visible page and rejects oversized snapshots without returning a partial selection', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-query-snapshot-'));
+    const root = await temporaryRoot('viewer-query-snapshot-');
     const index = new FileIndex(':memory:');
     try {
       index.configure({ roots: [root], contentRoots: [], exclusions: [], paused: false });
@@ -43,11 +43,11 @@ describe('cross-page collection snapshots', () => {
       expect(() => index.snapshot({ root, query: 'Huge' })).toThrow('more than 10,000');
     } finally {
       await index.close();
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     }
   });
   it('stores explicit references and source versions without changing their original files', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-collections-'));
+    const root = await temporaryRoot('viewer-collections-');
     try {
       const a = path.join(root, 'A'),
         b = path.join(root, 'B');
@@ -69,7 +69,7 @@ describe('cross-page collection snapshots', () => {
       expect(collectionSchema.safeParse({ ...collection, kind: 'query' }).success).toBe(false);
       expect(basket.every((item) => !!item.version.identity)).toBe(true);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     }
   });
 });

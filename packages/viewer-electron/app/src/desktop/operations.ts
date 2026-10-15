@@ -11,13 +11,14 @@ import {
   open,
   readdir,
   readlink,
+  realpath,
   rename,
-  rmdir,
+  stat,
   symlink,
-  unlink,
   utimes,
 } from 'node:fs/promises';
 import path from 'node:path';
+import { ZodError } from 'zod';
 import type {
   CollisionDecision,
   OperationJob,
@@ -31,6 +32,7 @@ import { createArchive, extractArchive } from './archive-jobs';
 import { operationJournal, outputProof, type OperationReceipt } from './operation-journal';
 import { privateStage } from './staging';
 import { fileCoordination } from './file-coordination';
+import { removeEmptyDirectory, unlinkVerified } from './removal';
 
 interface UndoStep {
   from: string;
@@ -51,6 +53,36 @@ interface CopyFingerprint {
   children?: string[];
 }
 class ReceiptFailure extends Error {}
+/** The existing item a person chose to replace, captured when the collision was shown. */
+type Replaced = Stats;
+interface Target {
+  path: string;
+  replaces?: Replaced;
+}
+/** Identity of an item reached under any spelling: case or Unicode variants,
+ * symbolic-link ancestors and firmlinks all share its device and inode. */
+const sameItem = (a: Stats, b: Stats) => a.dev === b.dev && a.ino === b.ino;
+/** Whether the folder `ancestor` holds `file` at any depth, compared by identity. */
+async function holds(ancestor: Stats, file: string): Promise<boolean> {
+  if (!ancestor.isDirectory()) return false;
+  let current = await realpath(path.dirname(file));
+  for (;;) {
+    if (sameItem(await lstat(current), ancestor)) return true;
+    const parent = path.dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+/** A replaced item must still be the one shown in the collision prompt. Folder
+ * modification times change when entries are added or removed. */
+function unchanged(current: Stats, expected: Replaced): boolean {
+  return (
+    sameItem(current, expected) &&
+    current.mtimeMs === expected.mtimeMs &&
+    (current.isDirectory() ||
+      (current.size === expected.size && current.ctimeMs === expected.ctimeMs))
+  );
+}
 interface Task {
   job: OperationJob;
   request: OperationRequest;
@@ -60,6 +92,27 @@ interface Task {
   undo: UndoStep[];
   lastProgress: number;
   intent?: OperationReceipt['intent'];
+}
+
+/** Make a published tree's directory entries durable before its sources on another
+ * volume are removed. File contents were already synced as they were copied. */
+async function syncDirectories(root: string): Promise<void> {
+  if (process.platform === 'win32') return;
+  const parent = path.dirname(root);
+  const pending = [parent, root];
+  while (pending.length) {
+    const directory = pending.pop()!;
+    if (!(await lstat(directory)).isDirectory()) continue;
+    if (directory !== parent)
+      for (const child of await readdir(directory, { withFileTypes: true }))
+        if (child.isDirectory()) pending.push(path.join(directory, child.name));
+    const handle = await open(directory, constants.O_RDONLY | (constants.O_DIRECTORY || 0));
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  }
 }
 
 /** Selected ancestors carry their descendants; membership checks preserve source order. */
@@ -93,41 +146,62 @@ export class Operations {
     private access: (files: readonly string[]) => Promise<void> = async () => {},
     dataPath?: string,
     private receiptAccess: ReceiptAccess = async (_receipt, work) => work(),
+    private notice: (message: string) => void = () => {},
   ) {
     if (dataPath) this.journal = operationJournal(dataPath);
   }
   load(): Promise<void> {
-    return (this.loaded ??= (async () => {
-      const document = await this.journal?.load();
-      for (const receipt of document?.records ?? []) {
-        if (this.tasks.has(receipt.job.id)) continue;
-        const job = receipt.job;
-        const interruptedUndo = !!receipt.intent && job.status === 'completed';
-        if (receipt.intent || ['queued', 'running', 'collision'].includes(job.status)) {
-          job.status = 'failed';
-          job.collision = undefined;
-          job.current = undefined;
-          job.recovery = receipt.intent;
-          job.errors.push({
-            path: receipt.intent?.source || job.sources[0] || job.destination || '',
-            message:
-              'Interrupted operation. Completed items were kept. Review the recorded source, destination and any temporary transfer before retrying.',
-          });
-          job.errorCount = job.errors.length;
-          // An interrupted Undo may already have moved or removed its current
-          // item. Never replay that ambiguous receipt automatically.
-          job.undoable = !interruptedUndo && !!receipt.undo.length;
-        }
-        this.tasks.set(job.id, {
-          job,
-          request: receipt.request,
-          undo: receipt.undo,
-          abort: new AbortController(),
-          lastProgress: 0,
-          intent: receipt.intent,
+    // A transient read failure must not disable file operations until restart.
+    return (this.loaded ??= this.restore().catch((error) => {
+      this.loaded = undefined;
+      throw error;
+    }));
+  }
+  /** An unreadable journal is renamed aside for inspection, never deleted or replayed. */
+  private async readJournal() {
+    try {
+      return await this.journal?.load();
+    } catch (error) {
+      if (!this.journal || !(error instanceof SyntaxError || error instanceof ZodError))
+        throw error;
+      const kept = `${this.journal.file}.unreadable-${Date.now()}`;
+      await rename(this.journal.file, kept);
+      this.notice(
+        `Recent file operation history could not be read, so earlier Undo is unavailable. It was kept at ${kept}.`,
+      );
+      return null;
+    }
+  }
+  private async restore(): Promise<void> {
+    const document = await this.readJournal();
+    for (const receipt of document?.records ?? []) {
+      if (this.tasks.has(receipt.job.id)) continue;
+      const job = receipt.job;
+      const interruptedUndo = !!receipt.intent && job.status === 'completed';
+      if (receipt.intent || ['queued', 'running', 'collision'].includes(job.status)) {
+        job.status = 'failed';
+        job.collision = undefined;
+        job.current = undefined;
+        job.recovery = receipt.intent;
+        job.errors.push({
+          path: receipt.intent?.source || job.sources[0] || job.destination || '',
+          message:
+            'Interrupted operation. Completed items were kept. Review the recorded source, destination and any temporary transfer before retrying.',
         });
+        job.errorCount = job.errors.length;
+        // An interrupted Undo may already have moved or removed its current
+        // item. Never replay that ambiguous receipt automatically.
+        job.undoable = !interruptedUndo && !!receipt.undo.length;
       }
-    })());
+      this.tasks.set(job.id, {
+        job,
+        request: receipt.request,
+        undo: receipt.undo,
+        abort: new AbortController(),
+        lastProgress: 0,
+        intent: receipt.intent,
+      });
+    }
   }
   private checkpoint(): Promise<void> {
     return Promise.resolve()
@@ -198,6 +272,24 @@ export class Operations {
     // A selected descendant is already carried by its selected parent.
     const roots = operationRoots(sources);
     if (request.destination) request = { ...request, destination: absolute(request.destination) };
+    if (request.expectedSources) {
+      // Reviewed versions are matched by path; a spelling that matched no source
+      // would silently skip its check, so normalize and require a match.
+      const expectedSources = request.expectedSources.map((expected) => ({
+        ...expected,
+        path: absolute(expected.path),
+      }));
+      if (
+        expectedSources.some(
+          (expected) =>
+            !roots.some(
+              (root) => expected.path === root || expected.path.startsWith(root + path.sep),
+            ),
+        )
+      )
+        throw new Error('The reviewed items no longer match this operation. Prepare a new plan.');
+      request = { ...request, expectedSources };
+    }
     if (request.name !== undefined) validName(request.name);
     if (request.name && ['copy', 'move', 'transfer'].includes(request.kind) && roots.length !== 1)
       throw new Error('A destination name requires a single source.');
@@ -372,7 +464,8 @@ export class Operations {
         )
       : work();
   }
-  private async trashItem(task: Task, file: string): Promise<void> {
+  /** `replaced` pins a collision's existing item: anything else now at that path is kept. */
+  private async trashItem(task: Task, file: string, replaced?: Replaced): Promise<void> {
     const receipt = await fileCoordination.run(
       [{ path: file, mode: 'delete' }],
       async (signal) => {
@@ -381,6 +474,10 @@ export class Operations {
         const actual = fileCoordination.path(file);
         await this.access([actual]);
         signal?.throwIfAborted();
+        if (replaced && !unchanged(await lstat(actual), replaced))
+          throw new Error(
+            'The existing item changed after Replace was chosen, so it was kept. Retry to review it again.',
+          );
         for (const expected of task.request.expectedSources ?? []) {
           if (expected.path !== file && !expected.path.startsWith(file + path.sep)) continue;
           const current = fileCoordination.path(expected.path);
@@ -394,23 +491,76 @@ export class Operations {
       task.abort.signal,
     );
     if (!receipt) return;
-    await this.receiptAccess(receipt, async () => {
-      const proof = await outputProof(receipt.path);
-      if (!proof) return;
-      const info = await lstat(receipt.path);
-      task.undo.push({
-        from: receipt.path,
-        to: file,
-        trash: true,
-        bookmark: receipt.bookmark,
-        directory: receipt.directory,
-        proof,
-        identity: `${info.dev}:${info.ino}`,
-        modified: info.mtimeMs,
-        size: info.size,
+    try {
+      await this.receiptAccess(receipt, async () => {
+        const proof = await outputProof(receipt.path);
+        if (!proof) return;
+        const info = await lstat(receipt.path);
+        task.undo.push({
+          from: receipt.path,
+          to: file,
+          trash: true,
+          bookmark: receipt.bookmark,
+          directory: receipt.directory,
+          proof,
+          identity: `${info.dev}:${info.ino}`,
+          modified: info.mtimeMs,
+          size: info.size,
+        });
       });
-    });
+    } catch (error) {
+      // The item is already in the Trash. Report the missing Undo record rather
+      // than presenting a completed move as a failure.
+      task.job.errors.push({
+        path: file,
+        message:
+          `Moved to the Trash at ${receipt.path}, but Undo is unavailable: ${message(error)}`.slice(
+            0,
+            4000,
+          ),
+      });
+    }
     await this.checkpoint();
+  }
+  /** Put a replaced item back when its replacement could not be published. */
+  private async restoreReplaced(task: Task, destination: string): Promise<boolean> {
+    const step = task.undo.findLast((item) => item.trash && item.to === destination);
+    if (!step) return false;
+    try {
+      if (await exists(destination)) return false;
+      await this.withStep(step, () =>
+        process.platform === 'darwin'
+          ? macFiles().renameExclusive(
+              fileCoordination.path(step.from),
+              fileCoordination.path(step.to),
+              fileCoordination.purpose(),
+            )
+          : this.publish(step.from, step.to),
+      );
+    } catch {
+      return false;
+    }
+    task.undo.splice(task.undo.indexOf(step), 1);
+    return true;
+  }
+  /** Replace trashes the existing item only once its replacement is ready to publish. */
+  private async publishReplacing(
+    task: Task,
+    source: string,
+    destination: string,
+    replaced?: Replaced,
+  ): Promise<void> {
+    // Without Replace, the exclusive publication below refuses an existing destination.
+    if (replaced) await this.trashItem(task, destination, replaced);
+    try {
+      await this.publish(source, destination, task);
+    } catch (error) {
+      if (replaced && !(await this.restoreReplaced(task, destination)))
+        throw new Error(
+          `${message(error)} The replaced item is in the Trash; Undo in Recent file operations can restore it.`,
+        );
+      throw error;
+    }
   }
   exclusive<T>(
     work: (
@@ -527,7 +677,8 @@ export class Operations {
         }
       }
       try {
-        await unlink(source);
+        // The destination now holds the same inode or a verified copy.
+        await unlinkVerified(source);
       } catch (error) {
         throw new Error(
           `The destination is complete, but the original could not be removed: ${message(error)}`,
@@ -542,12 +693,17 @@ export class Operations {
     } catch (error) {
       const current = await lstat(destination).catch(() => null);
       if (current?.dev === reserved.dev && current.ino === reserved.ino)
-        await rmdir(destination).catch(() => undefined);
+        await removeEmptyDirectory(destination).catch(() => undefined);
       throw error;
     }
   }
   private async changeCase(source: string, destination: string, task?: Task): Promise<void> {
     const temporary = path.join(path.dirname(source), `.viewer-rename-${randomUUID()}`);
+    if (task) {
+      // Journal the hidden intermediate name first, so recovery can find it after a crash.
+      task.intent = { source, destination, staging: temporary };
+      await this.checkpoint();
+    }
     await this.publish(source, temporary, task);
     try {
       await this.publish(temporary, destination, task);
@@ -565,12 +721,25 @@ export class Operations {
     while (await exists(candidate)) candidate = `${stem} copy ${++suffix}${ext}`;
     return candidate;
   }
-  private async target(task: Task, source: string, destination: string): Promise<string | null> {
-    if (!(await exists(destination))) return destination;
+  private async target(task: Task, source: string, destination: string): Promise<Target | null> {
+    const existing = await lstat(destination).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (!existing) return { path: destination };
+    let replaceable = task.request.kind !== 'mkdir';
+    if (source) {
+      // Another spelling of the source itself must never be offered for Replace.
+      if (sameItem(await lstat(source), existing)) {
+        if (task.request.kind === 'copy') return { path: await this.unique(destination) };
+        throw new Error('Source and destination are the same item.');
+      }
+      if (await holds(existing, source)) replaceable = false;
+    }
     let decision = task.policy;
     if (!decision) {
       task.job.status = 'collision';
-      task.job.collision = { source, destination };
+      task.job.collision = { source, destination, ...(replaceable ? {} : { replaceable }) };
       const pending = new Promise<CollisionDecision>((resolve) => {
         task.decision = resolve;
       });
@@ -587,9 +756,14 @@ export class Operations {
       this.check(task);
     }
     if (decision === 'skip') return null;
-    if (decision === 'keep-both') return this.unique(destination);
-    await this.trashItem(task, destination);
-    return destination;
+    if (decision === 'keep-both') return { path: await this.unique(destination) };
+    if (!replaceable)
+      throw new Error(
+        task.request.kind === 'mkdir'
+          ? 'A new folder cannot replace an existing item. Choose Keep both.'
+          : 'The existing item contains the source, so it cannot be replaced. Choose Keep both or Skip.',
+      );
+    return { path: destination, replaces: existing };
   }
   private async copy(
     task: Task,
@@ -764,7 +938,7 @@ export class Operations {
     } catch (error) {
       const current = owned && (await lstat(target).catch(() => null));
       if (current && owned && current.dev === owned.dev && current.ino === owned.ino)
-        await unlink(target).catch(() => undefined);
+        await unlinkVerified(target).catch(() => undefined);
       throw error;
     } finally {
       await input.close();
@@ -776,16 +950,17 @@ export class Operations {
     source: string,
     destination: string,
     move: boolean,
+    replaced?: Replaced,
   ): Promise<boolean> {
-    if (move) {
+    if (move && (await lstat(source)).dev === (await stat(path.dirname(destination))).dev) {
       try {
-        await this.publish(source, destination, task);
+        await this.publishReplacing(task, source, destination, replaced);
         return true;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
       }
     }
-    const stage = await privateStage(path.dirname(destination), '.viewer-transfer-');
+    const stage = await privateStage(path.dirname(destination), '.viewer-transfer-', this.trash);
     const staging = stage.file;
     task.intent = { source, destination, staging };
     const fingerprints: CopyFingerprint[] = [];
@@ -794,11 +969,11 @@ export class Operations {
       await this.copy(task, source, staging, fingerprints);
       this.check(task);
       // Do not clobber a file created while the transfer was in flight.
-      if (await exists(destination))
+      if (!replaced && (await exists(destination)))
         throw new Error(
           'A file appeared at the destination during the transfer. Retry to choose a collision action.',
         );
-      await this.publish(staging, destination, task);
+      await this.publishReplacing(task, staging, destination, replaced);
       if (move) {
         for (const fingerprint of fingerprints) {
           const info = await lstat(fingerprint.file);
@@ -816,6 +991,9 @@ export class Operations {
               'Source changed during the move. The completed copy and the original have both been kept.',
             );
         }
+        // The copy's directory entries must be durable on its volume before any
+        // original is removed from the other volume.
+        await syncDirectories(destination);
         // Remove only the copied entries. A newly created child keeps its directory
         // nonempty, so it survives even if it appears after validation.
         for (const fingerprint of [...fingerprints].reverse()) {
@@ -837,8 +1015,8 @@ export class Operations {
                 throw new Error(
                   'Source changed during the move. The completed copy and remaining original items have been kept.',
                 );
-              if (current.isDirectory()) await rmdir(file);
-              else await unlink(file);
+              if (current.isDirectory()) await removeEmptyDirectory(file);
+              else await unlinkVerified(file);
             },
             task.abort.signal,
           );
@@ -846,8 +1024,27 @@ export class Operations {
       }
       return false;
     } finally {
-      await stage.dispose();
+      await this.disposeStage(task, stage);
     }
+  }
+  /** Cleanup never replaces an item's real outcome; kept partial content is reported. */
+  private async disposeStage(
+    task: Task,
+    stage: { file: string; dispose(): Promise<string | undefined> },
+  ): Promise<void> {
+    let kept: string | undefined;
+    try {
+      kept = await stage.dispose();
+    } catch (error) {
+      task.job.errors.push({ path: path.dirname(stage.file), message: message(error) });
+      return;
+    }
+    if (kept)
+      task.job.errors.push({
+        path: kept,
+        message:
+          'Partial temporary content could not be moved to the Trash, so it was kept here for inspection.',
+      });
   }
   private async run(): Promise<void> {
     if (this.running) return;
@@ -958,7 +1155,8 @@ export class Operations {
                   this.progress(task);
                   continue;
                 }
-                destination = resolved;
+                destination = resolved.path;
+                const replaced = resolved.replaces;
                 this.check(task);
                 await this.access([destination]);
                 task.intent = { source, destination };
@@ -975,7 +1173,11 @@ export class Operations {
                     task.abort.signal,
                   );
                 else if (request.kind === 'alias') {
-                  const stage = await privateStage(path.dirname(destination), '.viewer-alias-');
+                  const stage = await privateStage(
+                    path.dirname(destination),
+                    '.viewer-alias-',
+                    this.trash,
+                  );
                   task.intent = { source, destination, staging: stage.file };
                   try {
                     await this.checkpoint();
@@ -999,12 +1201,16 @@ export class Operations {
                       task.abort.signal,
                     );
                     this.check(task);
-                    await this.publish(stage.file, destination, task);
+                    await this.publishReplacing(task, stage.file, destination, replaced);
                   } finally {
-                    await stage.dispose();
+                    await this.disposeStage(task, stage);
                   }
                 } else if (request.kind === 'compress' || request.kind === 'extract') {
-                  const stage = await privateStage(path.dirname(destination), '.viewer-archive-');
+                  const stage = await privateStage(
+                    path.dirname(destination),
+                    '.viewer-archive-',
+                    this.trash,
+                  );
                   const staging = stage.file;
                   task.intent = { source, destination, staging };
                   try {
@@ -1023,11 +1229,11 @@ export class Operations {
                       await createArchive(request.sources, staging, work);
                     else await extractArchive(source, staging, work);
                     this.check(task);
-                    await this.publish(staging, destination, task);
+                    await this.publishReplacing(task, staging, destination, replaced);
                   } finally {
-                    await stage.dispose();
+                    await this.disposeStage(task, stage);
                   }
-                } else undoable = await this.transfer(task, source, destination, move);
+                } else undoable = await this.transfer(task, source, destination, move, replaced);
               }
               if (undoable && move) {
                 const info = await lstat(destination);

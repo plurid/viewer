@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const native = vi.hoisted(() => ({ thumbnail: vi.fn() }));
 vi.mock('electron', () => ({ nativeImage: { createThumbnailFromPath: native.thumbnail } }));
@@ -9,7 +9,7 @@ import { Thumbnails } from '../src/desktop/thumbnails';
 
 let root: string, first: string, second: string, thumbnails: Thumbnails;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-thumbnail-scopes-'));
+  root = await temporaryRoot('viewer-thumbnail-scopes-');
   first = path.join(root, 'first');
   second = path.join(root, 'second');
   await Promise.all([mkdir(first), mkdir(second)]);
@@ -25,7 +25,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await thumbnails.close();
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('thumbnail permission lifetime', () => {
   it('purges one folder while preserving an independent cached thumbnail', async () => {

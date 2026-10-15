@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile, rename, rm } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { Relationships } from '../src/desktop/relationships';
 import { Operations } from '../src/desktop/operations';
@@ -11,8 +10,9 @@ import {
   type FileRelation,
   type RelationshipsResult,
 } from '../src/domain/relationships';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-relations-')),
+  const root = await temporaryRoot('viewer-relations-'),
     profile = path.join(root, 'Profile'),
     destination = path.join(root, 'Destination');
   await mkdir(destination);
@@ -69,7 +69,7 @@ async function fixture() {
     close: async () => {
       await relationships.close();
       await operations.close();
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     },
   };
 }

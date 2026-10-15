@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { chmod, lstat, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FolderSizes } from '../src/desktop/folder-sizes';
 import { Applications } from '../src/desktop/applications';
 import type { FolderSizeTask } from '../src/domain/metadata';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 const owned: string[] = [];
 async function temporary() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-metadata-'));
+  const root = await temporaryRoot('viewer-metadata-');
   owned.push(root);
   return root;
 }
 afterEach(async () => {
-  await Promise.all(owned.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(owned.splice(0).map((root) => trashTemporary(root)));
 });
 async function measure(paths: string[], cancel = false) {
   let done!: (task: FolderSizeTask) => void;
@@ -188,7 +188,7 @@ describe('native application adapter', () => {
     const app = path.join(root, 'Fixture.app');
     await mkdir(app);
     const choice = await applications.register(app);
-    await rm(app, { recursive: true });
+    await trashFixtureEntry(app);
     await expect(applications.open([file], choice.id)).rejects.toThrow();
     expect(open).not.toHaveBeenCalled();
   });

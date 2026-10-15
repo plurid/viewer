@@ -1,14 +1,14 @@
 /** Real packaged watch service and renderer, generated files, no native picker or Store qualification claim. */
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, realpath, readFile, writeFile, readdir, rm } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, realpath, readFile, writeFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { ownedApp, until } from './owned-app';
 import { workflowDefinitionSchema, type WorkflowRun } from '../src/domain/workflows';
 import type { WatchRule } from '../src/domain/watch-rules';
 import type { SavedState } from '../src/domain/contracts';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
-const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'viewer-native-watch-')));
+const root = await realpath(await temporaryRoot('viewer-native-watch-'));
 const profile = path.join(root, 'Profile'),
   inbox = path.join(root, 'Inbox'),
   destination = path.join(root, 'Output');
@@ -234,5 +234,5 @@ try {
   process.stdout.write(evidence.map((line) => 'PASS ' + line).join('\n') + '\n');
 } finally {
   await viewer.close(connection).catch(() => {});
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

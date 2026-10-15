@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { Resources } from '../src/desktop/resources';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 let root: string, resources: Resources;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-resources-'));
+  root = await temporaryRoot('viewer-resources-');
   resources = new Resources();
 });
 afterEach(async () => {
   await resources.quiesce();
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('scoped preview resources', () => {
   it('revokes only the chosen root while independent text and media previews stay usable', async () => {
@@ -165,7 +165,7 @@ describe('scoped preview resources', () => {
     await writeFile(file, 'local');
     await writeFile(outside, 'private');
     const grant = await resources.grant(file);
-    await unlink(file);
+    await trashFixtureEntry(file);
     await symlink(outside, file);
     await expect(resources.read(grant.id)).rejects.toThrow();
     expect((await resources.response(new Request(grant.url))).status).toBe(403);

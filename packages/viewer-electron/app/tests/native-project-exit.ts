@@ -2,12 +2,12 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import type { SavedState } from '../src/domain/contracts';
 import type { ProjectAssociation } from '../src/domain/project';
 import { ownedApp, until } from './owned-app';
+import { temporaryRoot } from '../tools/temporary';
 
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-project-exit-'));
+const root = await temporaryRoot('viewer-project-exit-');
 const profile = path.join(root, 'profile'),
   folder = path.join(root, 'Project');
 await mkdir(profile);

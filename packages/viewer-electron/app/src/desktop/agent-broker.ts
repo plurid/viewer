@@ -9,7 +9,7 @@ import type {
 import type { AgentRequests } from './agent-requests';
 import type { SettingsService } from './settings';
 import { createServer, type Server, type Socket } from 'node:net';
-import { chmod, realpath, mkdtemp, rm, stat } from 'node:fs/promises';
+import { chmod, realpath, mkdtemp, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -32,6 +32,7 @@ import { parseDelimited } from '../domain/delimited';
 import type { RelationshipsResult, FileRelation } from '../domain/relationships';
 import { drawingGeometryOptionsSchema } from '../domain/drawing-geometry';
 import { agentCommandID, agentRemovalPolicy } from '../domain/agent-safety';
+import { discardOwnTemporaryFile, removeEmptyDirectory } from './removal';
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 const tools = [
@@ -418,8 +419,7 @@ export class AgentBroker {
       const server = this.server;
       this.server = undefined;
       if (server?.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
-      await rm(this.socketDirectory, { recursive: true, force: true });
-      this.socketDirectory = undefined;
+      await this.removeSocketDirectory();
       throw error;
     }
   }
@@ -1194,6 +1194,14 @@ export class AgentBroker {
     else await this.clients.get();
     return { content: [{ type: 'text', text: JSON.stringify(value) }] };
   }
+  /** The private socket folder holds only the socket; it is never removed recursively. */
+  private async removeSocketDirectory(): Promise<void> {
+    const directory = this.socketDirectory;
+    if (!directory) return;
+    this.socketDirectory = undefined;
+    await discardOwnTemporaryFile(path.join(directory, 'v.sock'));
+    await removeEmptyDirectory(directory).catch(() => {});
+  }
   async close(): Promise<void> {
     await this.clients.close();
     await this.starting?.catch(() => {});
@@ -1202,9 +1210,6 @@ export class AgentBroker {
       this.server ? this.server.close(() => resolve()) : resolve(),
     );
     this.server = undefined;
-    if (this.socketDirectory) {
-      await rm(this.socketDirectory, { recursive: true, force: true });
-      this.socketDirectory = undefined;
-    }
+    await this.removeSocketDirectory();
   }
 }

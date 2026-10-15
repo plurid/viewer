@@ -222,6 +222,8 @@ export type CollisionDecision = 'skip' | 'keep-both' | 'replace' | 'cancel';
 export interface Collision {
   source: string;
   destination: string;
+  /** False when the existing item contains the source, or a new folder would replace it. */
+  replaceable?: boolean;
 }
 export interface OperationJob {
   id: string;

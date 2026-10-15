@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtemp, mkdir, readFile, writeFile, readdir, rm, rename } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, readFile, writeFile, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { Workflows } from '../src/desktop/workflows';
 import { Comparisons } from '../src/desktop/comparison';
@@ -14,6 +13,7 @@ import {
   type WorkflowRun,
 } from '../src/domain/workflows';
 import type { OperationPlan } from '../src/domain/operation-plan';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const definition = () =>
   workflowDefinitionSchema.parse({
     version: 1,
@@ -45,7 +45,7 @@ const definition = () =>
     ],
   });
 async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-workflow-'));
+  const root = await temporaryRoot('viewer-workflow-');
   const profile = path.join(root, 'Profile'),
     destination = path.join(root, 'Destination');
   await mkdir(destination);
@@ -124,7 +124,7 @@ async function fixture() {
       await plans.close();
       await operations.close();
       await checkpoints.close();
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     },
   };
 }

@@ -65,9 +65,16 @@ export class AgentRequests {
     );
   }
   async load(): Promise<void> {
-    this.loaded ??= this.store.load().then((grants) => {
-      this.grants = grants || [];
-    });
+    this.loaded ??= this.store
+      .load()
+      .then((grants) => {
+        this.grants = grants || [];
+      })
+      .catch((error: unknown) => {
+        // A failed read is retried by the next caller instead of disabling this service.
+        this.loaded = undefined;
+        throw error;
+      });
     await this.loaded;
   }
   async listGrants(): Promise<ExecutionGrant[]> {

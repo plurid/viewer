@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { applyEdits, modify, parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import { documentConfiguration } from './configuration-comments';
+import { discardOwnTemporaryFile } from './removal';
 
 export interface ConfigChange {
   keys: string[];
@@ -107,11 +108,17 @@ export class JsoncConfiguration<T> {
       JSON.stringify(value, null, 2) + '\n',
     );
   }
-  private async atomic(file: string, text: string, expected?: string): Promise<void> {
+  private async atomic(link: string, text: string, expected?: string): Promise<void> {
+    // A symbolic link, for example into a dotfiles repository, stays a link: replace its target.
+    const file = await fs.realpath(link).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return link;
+      throw error;
+    });
     await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
     const temporary = file + '.' + randomUUID() + '.tmp';
+    const mode = ((await fs.stat(file).catch(() => null))?.mode ?? 0o600) & 0o777;
     try {
-      const handle = await fs.open(temporary, 'wx', 0o600);
+      const handle = await fs.open(temporary, 'wx', mode);
       try {
         await handle.writeFile(text);
         await handle.sync();
@@ -128,7 +135,7 @@ export class JsoncConfiguration<T> {
       }
       await fs.rename(temporary, file);
     } finally {
-      await fs.rm(temporary, { force: true });
+      await discardOwnTemporaryFile(temporary);
     }
   }
   watch(reload: () => void): void {

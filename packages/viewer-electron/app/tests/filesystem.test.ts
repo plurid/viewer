@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { absolute, entry, list, validName } from '../src/desktop/filesystem';
 import { selectedRange, sortEntries } from '../src/domain/files';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-fs-'));
+  root = await temporaryRoot('viewer-fs-');
 });
 afterEach(async () => {
   await chmod(root, 0o700);
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('local files', () => {
   it('preserves Unicode names, hidden files, and stable file identities', async () => {

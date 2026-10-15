@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import type { ApplicationSettings } from '../domain/services';
 import { absolute } from './filesystem';
 import { readApplications } from './applications';
+import { discardOwnTemporaryFile } from './removal';
 const exec = promisify(execFile);
 export const shellQuote = (value: string): string => "'" + value.replace(/'/g, "'\\''") + "'";
 export async function executablePath(value: string): Promise<string> {
@@ -231,7 +232,7 @@ export class ExternalTerminals {
       }
       await this.adapter.open(application.path, file);
     } catch (error) {
-      await fs.rm(file, { force: true });
+      await discardOwnTemporaryFile(file);
       throw error;
     }
   }

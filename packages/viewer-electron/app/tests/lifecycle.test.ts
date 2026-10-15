@@ -1,9 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../src/domain/services';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const native = vi.hoisted(() => ({
   flush: vi.fn<() => Promise<void>>(),
@@ -165,7 +164,7 @@ beforeEach(async () => {
   native.flush.mockReset().mockResolvedValue();
   native.dispose.mockReset().mockResolvedValue();
   native.flushSettings.mockReset().mockResolvedValue();
-  native.profile = await mkdtemp(path.join(os.tmpdir(), 'viewer-lifecycle-'));
+  native.profile = await temporaryRoot('viewer-lifecycle-');
   await import('../src/main');
   await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(1));
 });
@@ -175,7 +174,7 @@ afterEach(async () => {
   application.removeAllListeners();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  await rm(native.profile, { recursive: true, force: true });
+  await trashTemporary(native.profile);
 });
 describe('native window and application shutdown', () => {
   it('treats a load cancellation after closing a starting workspace as an expected close', async () => {

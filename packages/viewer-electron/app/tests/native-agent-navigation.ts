@@ -1,18 +1,18 @@
 /** Actual packaged stdio MCP client and rendered reviews in a hidden owned app. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { AgentProposal, AgentWorkspace } from '../src/domain/agent-requests';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const binary =
   process.env.VIEWER_TEST_BINARY ||
   path.resolve('out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-agent-'));
+const root = await temporaryRoot('viewer-native-agent-');
 const profile = path.join(root, 'profile'),
   shared = path.join(root, 'Shared'),
   nested = path.join(shared, 'Nested'),
@@ -337,6 +337,6 @@ try {
   try {
     await viewer.close(connection);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await trashTemporary(root);
   }
 }

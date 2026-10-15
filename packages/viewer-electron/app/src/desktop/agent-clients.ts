@@ -62,12 +62,16 @@ export class AgentClients {
     );
   }
   private load(): Promise<void> {
-    return (this.loaded ??= Promise.all([this.clients.load(), this.auditStore.load()]).then(
-      ([clients, audit]) => {
+    return (this.loaded ??= Promise.all([this.clients.load(), this.auditStore.load()])
+      .then(([clients, audit]) => {
         this.records = clients ?? [];
         this.audits = audit ?? [];
-      },
-    ));
+      })
+      .catch((error: unknown) => {
+        // A failed read is retried by the next caller instead of disabling this service.
+        this.loaded = undefined;
+        throw error;
+      }));
   }
   async list(): Promise<AgentClient[]> {
     await this.load();

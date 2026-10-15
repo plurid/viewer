@@ -1,20 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rename,
-  rm,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
-import os from 'node:os';
+import { lstat, mkdir, readFile, readdir, rename, symlink, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import type { OperationJob, OperationProgress, OperationRequest } from '../src/domain/contracts';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 const exdev = vi.hoisted(() => ({ source: '', race: '', noLinks: false }));
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof import('node:fs/promises')>();
@@ -72,7 +62,7 @@ import { operationJournal } from '../src/desktop/operation-journal';
 import { DocumentStore } from '../src/desktop/document-store';
 let root: string, destination: string, trash: string, operations: Operations;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-ops-'));
+  root = await temporaryRoot('viewer-ops-');
   destination = path.join(root, 'destination');
   trash = path.join(root, 'trash');
   await mkdir(destination);
@@ -90,7 +80,7 @@ afterEach(async () => {
   exdev.source = '';
   exdev.race = '';
   exdev.noLinks = false;
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 async function waitFor(
   id: string,
@@ -242,7 +232,7 @@ describe('file operation queue', () => {
     await writeFile(source, 'new work');
     await expect(operations.undo(job.id)).rejects.toThrow('already exists');
     expect(await readFile(source, 'utf8')).toBe('new work');
-    await rm(source);
+    await trashFixtureEntry(source);
     await operations.undo(job.id);
     expect(await readFile(source, 'utf8')).toBe('original');
   });
@@ -510,7 +500,7 @@ describe('file operation queue', () => {
     expect(job.undoable).toBe(true);
     await mkdir(source);
     await expect(operations.undo(job.id)).rejects.toThrow('already exists');
-    await rm(source, { recursive: true });
+    await trashFixtureEntry(source);
     await operations.undo(job.id);
     expect(await readFile(path.join(source, 'child.txt'), 'utf8')).toBe('child');
   });
@@ -582,5 +572,184 @@ describe('file operation queue', () => {
     expect(job.completed).toHaveLength(2);
     expect(job.errors).toHaveLength(1);
     expect(await readdir(trash)).toHaveLength(2);
+  });
+});
+describe('replace safety', () => {
+  const caseInsensitive = async (folder: string) =>
+    lstat(folder.toUpperCase().replace(root.toUpperCase(), root)).then(
+      () => true,
+      () => false,
+    );
+  const replaced = async (name: string) =>
+    (await readdir(trash)).filter((entry) => entry.startsWith(name));
+  it('never offers the source itself for Replace when its folder is reached through a link', async () => {
+    const folder = path.join(root, 'Folder');
+    await mkdir(folder);
+    const source = path.join(folder, 'item.txt');
+    await writeFile(source, 'only copy');
+    const link = path.join(root, 'Folder link');
+    await symlink(folder, link);
+    const moved = await run({ kind: 'move', sources: [source], destination: link });
+    expect(moved.status).toBe('failed');
+    expect(moved.errors[0]?.message).toContain('same item');
+    expect(await readFile(source, 'utf8')).toBe('only copy');
+    const copied = await run({ kind: 'copy', sources: [source], destination: link });
+    expect(copied.status, JSON.stringify(copied.errors)).toBe('completed');
+    expect(await readFile(path.join(folder, 'item copy.txt'), 'utf8')).toBe('only copy');
+    expect(await readdir(trash)).toEqual([]);
+  });
+  it('treats a case-variant folder spelling as the same item', async () => {
+    const folder = path.join(root, 'folder');
+    await mkdir(folder);
+    if (!(await caseInsensitive(folder))) return;
+    const source = path.join(folder, 'note.txt');
+    await writeFile(source, 'only copy');
+    const job = await run({
+      kind: 'move',
+      sources: [source],
+      destination: path.join(root, 'FOLDER'),
+    });
+    expect(job.errors[0]?.message).toContain('same item');
+    expect(await readFile(source, 'utf8')).toBe('only copy');
+    expect(await readdir(trash)).toEqual([]);
+  });
+  it('does not offer Replace for a folder that contains the source', async () => {
+    const inner = path.join(root, 'outer', 'outer');
+    await mkdir(inner, { recursive: true });
+    await writeFile(path.join(inner, 'keep.txt'), 'inner data');
+    const id = operations.start({ kind: 'move', sources: [inner], destination: root });
+    const pending = await waitFor(id, (job) => job.status === 'collision');
+    expect(pending.collision?.replaceable).toBe(false);
+    operations.resolve(id, 'replace', false);
+    const job = await waitFor(id);
+    expect(job.errors[0]?.message).toContain('contains the source');
+    expect(await readFile(path.join(inner, 'keep.txt'), 'utf8')).toBe('inner data');
+    expect(await readdir(trash)).toEqual([]);
+  });
+  it('keeps the existing item when its replacement cannot be produced', async () => {
+    const archive = path.join(root, 'Broken.zip');
+    await writeFile(archive, 'not a zip archive');
+    const existing = path.join(destination, 'Broken');
+    await mkdir(existing);
+    await writeFile(path.join(existing, 'work.txt'), 'keep me');
+    const id = operations.start({ kind: 'extract', sources: [archive], destination });
+    await waitFor(id, (job) => job.status === 'collision');
+    operations.resolve(id, 'replace', false);
+    const job = await waitFor(id);
+    expect(job.status).toBe('failed');
+    expect(await readFile(path.join(existing, 'work.txt'), 'utf8')).toBe('keep me');
+    expect(await replaced('Broken')).toEqual([]);
+  });
+  it('keeps an existing item that changed after Replace was chosen', async () => {
+    const source = path.join(root, 'report.txt');
+    await writeFile(source, 'incoming');
+    const existing = path.join(destination, 'report.txt');
+    await writeFile(existing, 'old');
+    const id = operations.start({ kind: 'copy', sources: [source], destination });
+    await waitFor(id, (job) => job.status === 'collision');
+    await writeFile(existing, 'a newer save made while the prompt was open');
+    operations.resolve(id, 'replace', false);
+    const job = await waitFor(id);
+    expect(job.errors[0]?.message).toContain('changed after Replace');
+    expect(await readFile(existing, 'utf8')).toBe('a newer save made while the prompt was open');
+    expect(await replaced('report')).toEqual([]);
+  });
+  it('does not let a new folder replace an existing item', async () => {
+    const existing = path.join(destination, 'Projects');
+    await mkdir(existing);
+    await writeFile(path.join(existing, 'plan.txt'), 'work');
+    const id = operations.start({ kind: 'mkdir', sources: [], destination, name: 'Projects' });
+    const pending = await waitFor(id, (job) => job.status === 'collision');
+    expect(pending.collision?.replaceable).toBe(false);
+    operations.resolve(id, 'replace', false);
+    await waitFor(id);
+    expect(await readFile(path.join(existing, 'plan.txt'), 'utf8')).toBe('work');
+    expect(await readdir(trash)).toEqual([]);
+  });
+  it('reports a completed Trash whose Undo record could not be kept', async () => {
+    const source = path.join(root, 'old.txt');
+    await writeFile(source, 'old');
+    operations = new Operations(
+      async (file) => {
+        const target = path.join(trash, 'old.txt');
+        await rename(file, target);
+        return { path: target, directory: false };
+      },
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async () => {
+        throw new Error('Generated bookmark failure');
+      },
+    );
+    const job = await run({ kind: 'trash', sources: [source] });
+    expect(job.status).toBe('completed');
+    expect(job.completed).toHaveLength(1);
+    expect(job.errors[0]?.message).toContain('Undo is unavailable');
+  });
+  it('sets an unreadable operation journal aside and keeps working', async () => {
+    const dataPath = path.join(root, 'private');
+    await mkdir(dataPath);
+    await writeFile(path.join(dataPath, 'operation-journal-v1.json'), '{ not json');
+    const notices: string[] = [];
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      dataPath,
+      undefined,
+      (notice) => notices.push(notice),
+    );
+    const source = path.join(root, 'after.txt');
+    await writeFile(source, 'works');
+    const job = await run({ kind: 'copy', sources: [source], destination });
+    expect(job.status).toBe('completed');
+    expect(notices).toHaveLength(1);
+    const kept = (await readdir(dataPath)).find((name) => name.includes('.unreadable-'));
+    expect(await readFile(path.join(dataPath, kept!), 'utf8')).toBe('{ not json');
+  });
+  it('journals the hidden intermediate of a case-only rename before using it', async () => {
+    const source = path.join(root, 'Case.txt');
+    await writeFile(source, 'x');
+    if (!(await caseInsensitive(source))) return;
+    const staged: string[] = [];
+    const save = DocumentStore.prototype.save;
+    vi.spyOn(DocumentStore.prototype, 'save').mockImplementation(function (
+      this: DocumentStore<unknown>,
+      value,
+    ) {
+      const records = (value as { records?: { intent?: { staging?: string } }[] }).records ?? [];
+      for (const record of records) if (record.intent?.staging) staged.push(record.intent.staging);
+      return save.call(this, value);
+    });
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      path.join(root, 'private'),
+    );
+    const job = await run({ kind: 'rename', sources: [source], name: 'case.txt' });
+    expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+    expect(staged.some((file) => path.basename(file).startsWith('.viewer-rename-'))).toBe(true);
+  });
+  it('rejects reviewed versions that no longer match the operation sources', () => {
+    expect(() =>
+      operations.start({
+        kind: 'trash',
+        sources: [path.join(root, 'a.txt')],
+        expectedSources: [
+          {
+            path: path.join(root, 'elsewhere.txt'),
+            version: { identity: '1:1', modified: 0, size: 0 },
+          },
+        ],
+      }),
+    ).toThrow('no longer match');
   });
 });

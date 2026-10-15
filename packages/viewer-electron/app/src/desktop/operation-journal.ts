@@ -58,7 +58,9 @@ const job = z
       .array(z.object({ path: z.string().max(32768), message: z.string().max(4000) }).strict())
       .max(10000),
     errorCount: count,
-    collision: z.object({ source: file, destination: file }).optional(),
+    collision: z
+      .object({ source: file, destination: file, replaceable: z.boolean().optional() })
+      .optional(),
     undoable: z.boolean(),
     recovery: z
       .object({

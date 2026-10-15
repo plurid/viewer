@@ -1,15 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  realpath,
-  rename,
-  rm,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, readFile, realpath, rename, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentNavigation, AgentWorkspaceSnapshot } from '../src/domain/agent-requests';
 import type { CapturedTarget } from '../src/domain/automation';
@@ -24,6 +14,7 @@ import { readDrawingGeometry } from '../src/desktop/drawing-geometry';
 import { panelDrawing } from './dxf-fixtures';
 import { officeFixture } from './office-fixtures';
 import { extractDocument } from '../src/desktop/formats';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string, files: string, secret: string, token: string;
 let settings: SettingsService, broker: AgentBroker, requests: AgentRequests;
@@ -65,7 +56,7 @@ beforeEach(async () => {
   actionTasks = [];
   relationshipRows = [];
   startAction.mockClear();
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-agent-navigation-'));
+  root = await temporaryRoot('viewer-agent-navigation-');
   files = path.join(root, 'Shared');
   secret = path.join(root, 'Private');
   await mkdir(files);
@@ -204,7 +195,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await broker.close();
   settings.close();
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 
 describe('reviewed MCP workspace navigation', () => {

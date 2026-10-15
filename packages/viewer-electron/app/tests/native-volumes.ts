@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { createFixtures } from './fixtures';
@@ -11,6 +11,7 @@ import { normalizePreferences } from '../src/domain/preferences';
 import { ownedApp, until } from './owned-app';
 import type { Volume } from '../src/domain/volumes';
 import type { ResourceRead } from '../src/domain/contracts';
+import { trashTemporary } from '../tools/temporary';
 type Entity = { 'mount-point'?: string; 'dev-entry': string };
 type Attach = { 'system-entities': Entity[] };
 type Inventory = { images: { 'image-path': string; 'system-entities': Entity[] }[] };
@@ -250,6 +251,6 @@ try {
       await hdi(['detach', device]);
       mounted = false;
     }
-    if (!mounted) await rm(fixture.root, { recursive: true, force: true });
+    if (!mounted) await trashTemporary(fixture.root);
   }
 }

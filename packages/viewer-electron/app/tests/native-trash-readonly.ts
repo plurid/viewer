@@ -1,12 +1,12 @@
 /** Owned native read-only checks. Never invokes Trash actions or approves deletion. */
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import os from 'node:os';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import type { SavedState } from '../src/domain/contracts';
 import type { TrashSnapshot } from '../src/domain/trash';
 import { ownedApp, until } from './owned-app';
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-trash-readonly-'));
+import { temporaryRoot } from '../tools/temporary';
+const root = await temporaryRoot('viewer-trash-readonly-');
 const profile = path.join(root, 'Profile'),
   files = path.join(root, 'Files');
 await Promise.all([profile, files].map((file) => mkdir(file, { recursive: true })));

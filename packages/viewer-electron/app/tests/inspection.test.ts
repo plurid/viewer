@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import {
   originalMatch,
   searchEvidence,
@@ -13,12 +12,13 @@ import { defaultSettings, type DocumentData } from '../src/domain/services';
 import { entry } from '../src/desktop/filesystem';
 import { inspectFile } from '../src/desktop/inspection';
 import { entity, dxf } from './dxf-fixtures';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-evidence-'));
+  root = await temporaryRoot('viewer-evidence-');
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('source evidence', () => {
   it('shares exact bounded drawing measurements with the viewer and never assumes missing units', async () => {

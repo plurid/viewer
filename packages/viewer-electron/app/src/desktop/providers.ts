@@ -21,9 +21,16 @@ export class Credentials {
     );
   }
   async load() {
-    this.loaded ??= this.store.load().then((value) => {
-      this.values = value || {};
-    });
+    this.loaded ??= this.store
+      .load()
+      .then((value) => {
+        this.values = value || {};
+      })
+      .catch((error: unknown) => {
+        // A failed read is retried by the next caller instead of disabling this service.
+        this.loaded = undefined;
+        throw error;
+      });
     await this.loaded;
   }
   set(id: string, value: string): Promise<void> {

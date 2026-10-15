@@ -2,28 +2,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   chmod,
   mkdir,
-  mkdtemp,
   readFile,
   readdir,
   rename,
-  rm,
   stat,
   symlink,
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import type { SearchBatch, SavedState, DesktopEvent } from '../src/domain/contracts';
 import { Search } from '../src/desktop/search';
 import { Watchers } from '../src/desktop/watchers';
 import { Storage } from '../src/desktop/storage';
 import { folderPane } from '../src/renderer/state/store';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-services-'));
+  root = await temporaryRoot('viewer-services-');
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('search, subscriptions and persistence', () => {
   const legacyState = (): SavedState => ({
@@ -154,7 +152,7 @@ describe('search, subscriptions and persistence', () => {
       await rename(file, renamed);
       await vi.waitFor(() => expect(changes()).toBeGreaterThan(previous), { timeout: 5000 });
       previous = changes();
-      await rm(renamed);
+      await trashFixtureEntry(renamed);
       await vi.waitFor(() => expect(changes()).toBeGreaterThan(previous), { timeout: 5000 });
       expect(events.filter((event) => event.type === 'watch-error')).toEqual([]);
     } finally {

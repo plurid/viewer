@@ -1,6 +1,5 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, rename } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, writeFile, readFile, symlink, rename } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
@@ -16,12 +15,13 @@ import { imageFixture } from './media-fixtures';
 import { entry } from '../src/desktop/filesystem';
 import type { FileEntry } from '../src/domain/contracts';
 import { shortcutKey, matchesShortcut } from '../src/domain/shortcuts';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-services-'));
+  root = await temporaryRoot('viewer-services-');
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 export function epubFixture() {
   return Buffer.from(

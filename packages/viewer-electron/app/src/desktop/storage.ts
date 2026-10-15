@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -17,6 +17,7 @@ import {
   normalizePaneSidebar,
   normalizePreferences,
 } from '../domain/preferences';
+import { discardOwnTemporaryFile } from './removal';
 
 const localPath = z
   .string()
@@ -142,6 +143,8 @@ const savedStateSchema = z
 export const stateSchema = z.preprocess(migratePlaneNavigation, savedStateSchema);
 export class Storage {
   private writes: Promise<void> = Promise.resolve();
+  /** Set when an unreadable state file could not be moved aside; it is never written over. */
+  private retained?: string;
   constructor(readonly file: string) {}
   async load(): Promise<{ state: SavedState | null; recovery?: string }> {
     await this.writes.catch(() => undefined);
@@ -156,7 +159,15 @@ export class Storage {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: null };
       const backup = `${this.file}.unreadable-${Date.now()}`;
-      await rename(this.file, backup).catch(() => undefined);
+      try {
+        await rename(this.file, backup);
+      } catch {
+        this.retained = this.file;
+        return {
+          state: null,
+          recovery: `Saved workspace could not be loaded or moved aside, so it was left at ${this.file}. Layout changes in this session will not be saved over it.`,
+        };
+      }
       return {
         state: null,
         recovery: `Saved workspace could not be loaded. A backup was kept at ${backup}.`,
@@ -190,6 +201,8 @@ export class Storage {
     return { state };
   }
   save(input: SavedState): Promise<void> {
+    // The load notice already said this session's layout is not saved over the kept file.
+    if (this.retained) return Promise.resolve();
     const state = stateSchema.parse(input);
     const text = JSON.stringify(state);
     if (text.length > 32 * 1024 * 1024) throw new Error('Workspace state exceeds the size limit.');
@@ -227,7 +240,7 @@ export class Storage {
           }
           await rename(temporary, this.file);
         } finally {
-          await rm(temporary, { force: true });
+          await discardOwnTemporaryFile(temporary);
         }
       });
     this.writes = write;

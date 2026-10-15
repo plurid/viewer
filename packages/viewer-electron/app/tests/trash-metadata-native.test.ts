@@ -2,10 +2,10 @@
  * removals, confirmation or cleanup. All fixtures remain available for review. */
 import { expect, it } from 'vitest';
 import { createRequire } from 'node:module';
-import { lstat, mkdir, mkdtemp, realpath, symlink, utimes, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, realpath, symlink, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import type { MacFiles } from '../src/desktop/macos-files';
+import { temporaryRoot } from '../tools/temporary';
 
 it.skipIf(process.platform !== 'darwin' || !process.env.VIEWER_TEST_MAC_BINDING)(
   'reads date-added separately from old modification times and skips links and missing files',
@@ -14,9 +14,7 @@ it.skipIf(process.platform !== 'darwin' || !process.env.VIEWER_TEST_MAC_BINDING)
       path.resolve(process.env.VIEWER_TEST_MAC_BINDING!),
     ) as MacFiles;
     const started = Date.now();
-    const root = await realpath(
-      await mkdtemp(path.join(os.tmpdir(), 'viewer-native-trash-metadata-')),
-    );
+    const root = await realpath(await temporaryRoot('viewer-native-trash-metadata-'));
     const file = path.join(root, 'Generated.txt'),
       folder = path.join(root, 'Generated folder'),
       link = path.join(root, 'Generated link');

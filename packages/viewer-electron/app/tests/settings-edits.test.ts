@@ -1,7 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { SettingsService } from '../src/desktop/settings';
 import type { CustomAction } from '../src/domain/automation';
 import type { SettingsPatch, SettingsSnapshot } from '../src/domain/services';
@@ -12,6 +9,7 @@ import {
   terminalProfilesEdit,
   type SettingsChange,
 } from '../src/renderer/ui/settings-edits';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let directory: string;
 let service: SettingsService;
@@ -28,7 +26,7 @@ const action: CustomAction = {
 };
 
 beforeEach(async () => {
-  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'viewer-settings-edits-'));
+  directory = await temporaryRoot('viewer-settings-edits-');
   service = new SettingsService(
     directory,
     directory,
@@ -40,7 +38,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   service.close();
-  await fs.rm(directory, { recursive: true, force: true });
+  await trashTemporary(directory);
 });
 
 function delayedWriter(failFirst = false) {

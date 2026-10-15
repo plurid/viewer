@@ -3,11 +3,11 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
+import { temporaryRoot } from '../tools/temporary';
 
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-trash-browser-'));
+const root = await temporaryRoot('viewer-trash-browser-');
 const profile = path.join(root, 'Profile'),
   files = path.join(root, 'Files');
 await mkdir(profile);

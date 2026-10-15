@@ -1,7 +1,7 @@
 /** Cold-restart checks of the packaged app, using hidden windows and an owned profile. */
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import { defaultSettings } from '../src/domain/services';
 import type { WindowFrame } from '../src/desktop/window-state';
 import { createFixtures } from './fixtures';
+import { trashTemporary } from '../tools/temporary';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const binary =
@@ -216,5 +217,5 @@ try {
   );
 } finally {
   await writeFile(path.join(captures, 'desktop-native-window-state.log'), log);
-  await rm(fixture.root, { recursive: true, force: true });
+  await trashTemporary(fixture.root);
 }

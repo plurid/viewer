@@ -4,10 +4,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, mkdtemp, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import { temporaryRoot } from '../tools/temporary';
 const run = promisify(execFile);
 if (process.platform !== 'darwin') throw new Error('This native guard check requires macOS.');
-const created = await mkdtemp(path.join(os.tmpdir(), 'viewer-trash-guard-'));
+const created = await temporaryRoot('viewer-trash-guard-');
 const root = await realpath(created),
   trash = path.join(root, '.Trash');
 await mkdir(trash, { mode: 0o700 });

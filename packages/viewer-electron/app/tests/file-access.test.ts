@@ -1,9 +1,9 @@
-import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileAccess } from '../src/desktop/file-access';
 import { Operations } from '../src/desktop/operations';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 
 let root: string;
 let data: string;
@@ -13,7 +13,7 @@ let access: FileAccess;
 let stops: ReturnType<typeof vi.fn<() => void>>[];
 let start: ReturnType<typeof vi.fn<(bookmark: string) => () => void>>;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-file-access-'));
+  root = await temporaryRoot('viewer-file-access-');
   [data, folder, other] = ['private', 'chosen', 'other'].map((name) => path.join(root, name));
   await Promise.all([data, folder, other].map((file) => mkdir(file)));
   stops = [];
@@ -26,7 +26,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await access.close();
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('native folder access', () => {
   it('allows a large native selection without persisting each item and releases it at Quit', async () => {
@@ -77,7 +77,7 @@ describe('native folder access', () => {
   });
   it('shows a removed saved location as unavailable and releases its diagnostic scope', async () => {
     await access.remember(folder, true, 'folder');
-    await rm(folder, { recursive: true });
+    await trashFixtureEntry(folder);
     expect(await access.list()).toEqual([{ path: folder, directory: true, status: 'unavailable' }]);
     expect(stops[0]).toHaveBeenCalledExactlyOnceWith();
     await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });

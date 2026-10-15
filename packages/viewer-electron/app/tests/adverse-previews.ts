@@ -1,7 +1,7 @@
 /** Packaged preview limits and recovery. Owns every input and application profile. */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, open, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { zipSync, strToU8 } from 'fflate';
@@ -9,6 +9,7 @@ import { createFixtures } from './fixtures';
 import { ownedApp, until } from './owned-app';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
+import { trashTemporary } from '../tools/temporary';
 
 const binary = process.env.VIEWER_TEST_BINARY!,
   evidence = process.env.VIEWER_ADVERSE_EVIDENCE!;
@@ -361,5 +362,5 @@ try {
   assert.equal(failed.length, 0, JSON.stringify(failed));
 } finally {
   if (app && !quit) await app.close(connection);
-  await rm(fixture.root, { recursive: true, force: true });
+  await trashTemporary(fixture.root);
 }

@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { expect, it, vi } from 'vitest';
 import { FileAccess } from '../src/desktop/file-access';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const canonical = vi.hoisted(() => ({
   file: '',
@@ -26,7 +26,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 it('does not approve a released scope after its canonical filesystem read finishes', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-access-race-'));
+  const root = await temporaryRoot('viewer-access-race-');
   const profile = path.join(root, 'private'),
     chosen = path.join(root, 'chosen');
   await mkdir(profile);
@@ -51,6 +51,6 @@ it('does not approve a released scope after its canonical filesystem read finish
     canonical.file = '';
     canonical.started = false;
     await access.close();
-    await rm(root, { recursive: true, force: true });
+    await trashTemporary(root);
   }
 });

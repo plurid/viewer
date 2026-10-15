@@ -2,17 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rename,
-  rm,
-  stat,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, stat, symlink, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,6 +19,7 @@ import type { TerminalEvent } from '../src/domain/automation';
 import type { Volume } from '../src/domain/volumes';
 import type { IndexedResult, IndexStatus, SettingsSnapshot } from '../src/domain/services';
 import { AwakeClock, QualificationInterrupted } from './awake-clock';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 
 assert.equal(process.platform, 'darwin', 'The signed MAS check requires macOS.');
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,7 +67,7 @@ const profile = path.join(
   'Data/Library/Application Support/Viewer',
   'mas-verification-' + randomUUID(),
 );
-const fixture = await mkdtemp('/private/tmp/viewer-mas-native-');
+const fixture = await temporaryRoot('viewer-mas-native-', '/private/tmp');
 const externalFile = path.join(fixture, 'Unselected.txt');
 await writeFile(externalFile, 'Generated unselected MAS verification file.', { mode: 0o600 });
 // Only generated files in this isolated app container are indexed. A large flat
@@ -762,7 +753,7 @@ try {
     (value) => value.entries.length === 0,
     'removal of the old index row',
   );
-  await rm(liveDirectory, { recursive: true });
+  await trashFixtureEntry(liveDirectory);
   await until(
     () => find('Live-watch-renamed'),
     (value) => value.entries.length === 0,
@@ -807,8 +798,8 @@ try {
       await new Promise<void>((resolve) => child.once('exit', () => resolve()));
     }
   }
-  if (passed) await rm(profile, { recursive: true, force: true });
+  if (passed) await trashTemporary(profile);
   else
     console.error('Owned failed-test profile retained for receipt/recovery inspection: ' + profile);
-  await rm(fixture, { recursive: true, force: true });
+  await trashTemporary(fixture);
 }

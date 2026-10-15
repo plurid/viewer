@@ -1,15 +1,15 @@
 /** Packaged per-client MCP authority using only an owned app and generated files. */
 import assert from 'node:assert/strict';
 import net from 'node:net';
-import { mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { ownedApp, until } from './owned-app';
 import type { AgentClient, AgentClientReply } from '../src/domain/agent-clients';
 import type { DrawingGeometryPage } from '../src/domain/drawing-geometry';
 import { panelDrawing } from './dxf-fixtures';
 import { officeFixture } from './office-fixtures';
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-clients-'));
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
+const root = await temporaryRoot('viewer-native-clients-');
 const profile = path.join(root, 'Profile'),
   shared = path.join(root, 'Shared'),
   secret = path.join(root, 'Secret');
@@ -257,5 +257,5 @@ try {
   evidence.forEach((item) => process.stdout.write('PASS ' + item + '\n'));
 } finally {
   await viewer.close(main);
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

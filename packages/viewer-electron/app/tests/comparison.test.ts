@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, mkdir, writeFile, utimes, symlink, rm } from 'node:fs/promises';
+import { mkdir, writeFile, utimes, symlink } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { Comparisons } from '../src/desktop/comparison';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 describe('bounded folder comparison', () => {
   it('distinguishes matching metadata from verified content and keeps child symlinks unknown', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-compare-'));
+    const root = await temporaryRoot('viewer-compare-');
     const left = path.join(root, 'Left'),
       right = path.join(root, 'Right');
     await Promise.all([mkdir(left), mkdir(right)]);
@@ -31,11 +31,11 @@ describe('bounded folder comparison', () => {
       // Even a unilateral symbolic link cannot become an automatically copyable row.
       expect(hashes.rows.find((row) => row.path === 'Loop')?.left?.kind).toBe('symlink');
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     }
   });
   it('marks absence unknown when a nested location cannot be inspected', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-compare-'));
+    const root = await temporaryRoot('viewer-compare-');
     const left = path.join(root, 'Left'),
       right = path.join(root, 'Right');
     await Promise.all([
@@ -59,7 +59,7 @@ describe('bounded folder comparison', () => {
       expect(result.rows.find((row) => row.path === 'Nested/File.txt')?.status).toBe('unknown');
       expect(result.errors.some((error) => error.message === 'Offline folder')).toBe(true);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     }
   });
 });

@@ -101,7 +101,11 @@ export function OperationsPanel() {
           {job.collision && (
             <div className="collision">
               <strong>“{job.collision.destination.split(/[\\/]/).pop()}” already exists.</strong>
-              <p>Replace sends the existing item to Trash.</p>
+              <p>
+                {job.collision.replaceable === false
+                  ? 'The existing item cannot be replaced because it contains the source or is a folder.'
+                  : 'Replace sends the existing item to Trash once its replacement is ready.'}
+              </p>
               <label>
                 <input
                   type="checkbox"
@@ -114,7 +118,7 @@ export function OperationsPanel() {
                 {[
                   ['skip', 'Skip'],
                   ['keep-both', 'Keep both'],
-                  ['replace', 'Replace'],
+                  ...(job.collision.replaceable === false ? [] : [['replace', 'Replace']]),
                 ].map(([decision, label]) => (
                   <button
                     key={decision}
@@ -190,8 +194,8 @@ export function OperationsPanel() {
         <Dialog title="Replace existing item?" onClose={() => setReplace(null)}>
           <div className="dialog-copy">
             <p>
-              “{replace.path.split(/[\\/]/).pop()}” will be sent to Trash before the replacement is
-              copied.
+              “{replace.path.split(/[\\/]/).pop()}” will be sent to Trash once its replacement is
+              ready. If the replacement fails, Viewer puts it back when it can.
             </p>
             {replace.applyAll && <p>This applies to the remaining conflicts in this operation.</p>}
           </div>

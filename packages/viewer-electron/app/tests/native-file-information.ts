@@ -1,16 +1,16 @@
 /** Hidden packaged integration; only generated files and an isolated profile. */
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import os from 'node:os';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { ownedApp, until } from './owned-app';
 import type { FileInformation } from '../src/domain/file-information';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const binary =
   process.env.VIEWER_TEST_BINARY ||
   path.resolve('out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-info-'));
+const root = await temporaryRoot('viewer-native-info-');
 const profile = path.join(root, 'profile'),
   file = path.join(root, 'Unicode ș 日本語.txt');
 await mkdir(profile);
@@ -207,5 +207,5 @@ try {
 } finally {
   await viewer.close(connection);
   execFileSync('/usr/bin/chflags', ['-R', 'nouchg', root]);
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

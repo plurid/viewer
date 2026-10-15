@@ -1,13 +1,13 @@
 /** Actual comparison/review/collection controls with generated files and an isolated profile. */
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ownedApp, until } from './owned-app';
 import type { SavedState, OperationJob } from '../src/domain/contracts';
 import { entry } from '../src/desktop/filesystem';
 import { sourceVersion } from '../src/domain/inspection';
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-collections-')),
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
+const root = await temporaryRoot('viewer-native-collections-'),
   profile = path.join(root, 'Profile'),
   left = path.join(root, 'Left'),
   right = path.join(root, 'Right');
@@ -214,5 +214,5 @@ try {
   evidence.forEach((item) => process.stdout.write('PASS ' + item + '\n'));
 } finally {
   if (connection) await viewer.close(connection);
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

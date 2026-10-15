@@ -89,7 +89,7 @@ describe('layout-only changes', () => {
     const other = addPane('/fixtures/other', 'folder', true);
     const actions = {
       engine: { current: null },
-      workspace: { newRootFolder: addRootFolder },
+      workspace: { newRootFolder: addRootFolder, parentPaneID: () => undefined },
       ready: true,
       tool: null,
     } as unknown as WindowActions;

@@ -728,6 +728,7 @@ export class Desktop {
       access,
       dataPath,
       (receipt, work) => this.fileAccess.withReceipt(receipt, work),
+      (message) => emit({ type: 'service-error', service: 'operations', message }),
     );
     this.operationPlans = new OperationPlans(dataPath, this.operations, this.checkpoints, access);
     this.actions = new ActionPlanner(dataPath, {

@@ -1,7 +1,8 @@
-import { mkdir, open, rename, rm } from 'node:fs/promises';
+import { mkdir, open, rename } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { discardOwnTemporaryFile } from './removal';
 /** Writes application-owned metadata only. Failed writes leave the old document intact. */
 export class DocumentStore<T> {
   private writes: Promise<void> = Promise.resolve();
@@ -76,7 +77,7 @@ export class DocumentStore<T> {
             }
           }
         } finally {
-          await rm(temporary, { force: true });
+          await discardOwnTemporaryFile(temporary);
         }
       });
     this.writes = task;

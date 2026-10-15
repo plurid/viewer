@@ -1,10 +1,10 @@
-import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { crc32, deflateSync, gzipSync } from 'node:zlib';
 import { zipSync, strToU8 } from 'fflate';
 import type { SavedState } from '../src/domain/contracts';
 import { audioFixture, imageFixture, videoFixture } from './media-fixtures';
+import { temporaryRoot } from '../tools/temporary';
 
 function pdf(): Buffer {
   const bodies = [
@@ -100,7 +100,7 @@ export async function createFixtures(): Promise<{
   files: string;
   state: SavedState;
 }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-verification-'));
+  const root = await temporaryRoot('viewer-verification-');
   const files = path.join(root, 'Studio');
   for (const name of ['Models', 'Documents', 'Images', 'Media', 'Data', 'Source', 'Transfers'])
     await mkdir(path.join(files, name), { recursive: true });

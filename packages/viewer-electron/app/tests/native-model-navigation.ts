@@ -1,19 +1,19 @@
 /** Owned native UI checks. Source STEP is read-only; all generated fixtures are preserved. */
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import os from 'node:os';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import type { SavedState } from '../src/domain/contracts';
 import { cadMeshes, type ImportedCad } from '../src/renderer/previews/model/cad-data';
 import { ownedApp, until } from './owned-app';
+import { temporaryRoot } from '../tools/temporary';
 const source =
   process.env.VIEWER_TEST_STEP_FILE ??
   '/Users/ly3xqhl8g9/Downloads/Neuer ZIP-komprimierter Ordner (2)/2026-10-08_16-38-44/00026295_T02.200.008_00A_Festteil.step';
 const original = await readFile(source),
   hash = createHash('sha256').update(original).digest('hex');
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-model-navigation-'));
+const root = await temporaryRoot('viewer-model-navigation-');
 const profile = path.join(root, 'Profile'),
   files = path.join(root, 'Files'),
   folder = path.join(files, 'Engineering');

@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { readDrawingGeometry } from '../src/desktop/drawing-geometry';
 import { drawingGeometryPage, drawingGeometryOptionsSchema } from '../src/domain/drawing-geometry';
 import { parseDrawing } from '../src/domain/dxf/geometry';
 import { entity, dxf, panelDrawing } from './dxf-fixtures';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-drawing-geometry-'));
+  root = await temporaryRoot('viewer-drawing-geometry-');
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('shared source-versioned drawing geometry', () => {
   it('returns exact panel bounds, measurements, declared units, source version and byte hash', async () => {

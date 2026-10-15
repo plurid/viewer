@@ -1,8 +1,9 @@
-import { mkdir, open, rename, rm } from 'node:fs/promises';
+import { mkdir, open, rename } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { BrowserWindow, Display, Rectangle } from 'electron';
 import { z } from 'zod';
+import { discardOwnTemporaryFile } from './removal';
 
 const rectangle = z.object({
   x: z.number().int().min(-1000000).max(1000000),
@@ -150,7 +151,7 @@ export class WindowState {
           await rename(temporary, this.file);
           this.persistedText = text;
         } finally {
-          await rm(temporary, { force: true });
+          await discardOwnTemporaryFile(temporary);
         }
       });
     return this.writes;

@@ -1,7 +1,6 @@
 /** Generated Office fixtures in an owned direct package. No native picker/Store qualification claim. */
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { SavedState } from '../src/domain/contracts';
@@ -10,8 +9,9 @@ import { sourceVersion } from '../src/domain/inspection';
 import { entry } from '../src/desktop/filesystem';
 import { ownedApp, until } from './owned-app';
 import { officeFixture, workbookSheet } from './office-fixtures';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-office-'));
+const root = await temporaryRoot('viewer-native-office-');
 const output = path.resolve('out/office-acceptance');
 await mkdir(output, { recursive: true });
 await writeFile(
@@ -388,5 +388,5 @@ try {
   );
   for (const check of evidence) console.log('PASS', check);
 } finally {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

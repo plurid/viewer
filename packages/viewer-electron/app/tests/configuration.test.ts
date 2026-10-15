@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
 import { SettingsService } from '../src/desktop/settings';
@@ -8,6 +7,7 @@ import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import type { FolderPane } from '../src/domain/contracts';
 import { documentConfiguration } from '../src/desktop/configuration-comments';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;
 const services: SettingsService[] = [];
@@ -19,11 +19,11 @@ const create = (emit = vi.fn()) => {
 const file = () => path.join(root, 'config.jsonc');
 const read = async () => parse(await fs.readFile(file(), 'utf8'));
 beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'viewer-config-'));
+  root = await temporaryRoot('viewer-config-');
 });
 afterEach(async () => {
   services.splice(0).forEach((service) => service.close());
-  await fs.rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 
 describe('authoritative JSONC configuration', () => {
@@ -46,6 +46,26 @@ describe('authoritative JSONC configuration', () => {
     const reloaded = create();
     await reloaded.load();
     expect(reloaded.snapshot().settings.browsing.confirmTrash).toBe(false);
+  });
+  it('keeps a symbolically linked config.jsonc as a link when saving', async () => {
+    const dotfiles = path.join(root, 'dotfiles');
+    await fs.mkdir(dotfiles);
+    const first = create();
+    await first.load();
+    first.close();
+    const target = path.join(dotfiles, 'viewer.jsonc');
+    await fs.rename(file(), target);
+    await fs.chmod(target, 0o644);
+    await fs.symlink(target, file());
+    const service = create();
+    await service.load();
+    await service.patch(
+      [{ path: 'settings.browsing.confirmTrash', value: false }],
+      service.snapshot().revision,
+    );
+    expect((await fs.lstat(file())).isSymbolicLink()).toBe(true);
+    expect((await fs.stat(target)).mode & 0o777).toBe(0o644);
+    expect(parse(await fs.readFile(target, 'utf8')).settings.browsing.confirmTrash).toBe(false);
   });
   it('adds guidance for newly introduced fields in an already-commented configuration', () => {
     const original = documentConfiguration(

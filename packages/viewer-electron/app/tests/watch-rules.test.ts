@@ -1,17 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  mkdtemp,
-  mkdir,
-  realpath,
-  rm,
-  writeFile,
-  readFile,
-  readdir,
-  rename,
-  symlink,
-} from 'node:fs/promises';
+import { mkdir, realpath, writeFile, readFile, readdir, rename, symlink } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { Workflows } from '../src/desktop/workflows';
 import { WatchRules } from '../src/desktop/watch-rules';
@@ -30,6 +19,7 @@ import type { WatchRule, WatchRuleScope } from '../src/domain/watch-rules';
 import type { ActionRecipe } from '../src/domain/services';
 import type { OperationPlan } from '../src/domain/operation-plan';
 import type { DirectoryWatch, watchDirectory } from '../src/desktop/directory-watch';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 async function settle<T>(read: () => Promise<T>, accept: (value: T) => boolean): Promise<T> {
   for (let i = 0; i < 100; i++) {
@@ -40,7 +30,7 @@ async function settle<T>(read: () => Promise<T>, accept: (value: T) => boolean):
   throw new Error('The generated watch rule did not settle.');
 }
 async function fixture(kind: 'copy' | 'inspect' | 'rename' = 'copy', content = false) {
-  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'viewer-watch-rule-')));
+  const root = await realpath(await temporaryRoot('viewer-watch-rule-'));
   const profile = path.join(root, 'Profile'),
     inbox = path.join(root, 'Inbox'),
     destination = path.join(root, 'Output');
@@ -222,7 +212,7 @@ async function fixture(kind: 'copy' | 'inspect' | 'rename' = 'copy', content = f
       await operations.close();
       await checkpoints.close();
       vi.useRealTimers();
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     },
   };
 }

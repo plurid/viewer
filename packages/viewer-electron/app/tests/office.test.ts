@@ -1,6 +1,5 @@
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
-import { mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
-import os from 'node:os';
+import { writeFile, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { extractDocument } from '../src/desktop/formats';
 import { inspectFile } from '../src/desktop/inspection';
@@ -9,12 +8,13 @@ import { entry } from '../src/desktop/filesystem';
 import { defaultSettings } from '../src/domain/services';
 import { columnName } from '../src/domain/office';
 import { officeFixture, workbookSheet } from './office-fixtures';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-office-'));
+  root = await temporaryRoot('viewer-office-');
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 const document = async (kind: 'word' | 'workbook', overrides: Record<string, string> = {}) => {
   const file = path.join(root, kind === 'word' ? 'Report.docx' : 'Measurements.xlsx');

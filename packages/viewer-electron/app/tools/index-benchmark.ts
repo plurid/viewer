@@ -1,11 +1,10 @@
 /** Synthetic index benchmark; never crawls or reads a user's filesystem. */
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { FileIndex } from '../src/desktop/index-core';
 import type { FileEntry } from '../src/domain/contracts';
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-index-benchmark-'));
+import { temporaryRoot, trashTemporary } from './temporary';
+const root = await temporaryRoot('viewer-index-benchmark-');
 const size = Math.min(1000000, Math.max(100, Number(process.argv[2] || 100000)));
 const index = await FileIndex.open(path.join(root, 'index.sqlite'));
 try {
@@ -62,5 +61,5 @@ try {
   );
 } finally {
   await index.close();
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

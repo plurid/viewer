@@ -1,13 +1,13 @@
 /** Packaged reviewed rename/checkpoint path and an adversarial worker deadline. */
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import type { SavedState, OperationJob } from '../src/domain/contracts';
 import type { ActionPlan } from '../src/domain/services';
 import type { CheckpointRecord } from '../src/domain/change-plan';
 import { ownedApp, until } from './owned-app';
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-review-'));
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
+const root = await temporaryRoot('viewer-native-review-');
 const profile = root + '/Profile',
   source = root + '/Source',
   restored = root + '/Restored';
@@ -191,5 +191,5 @@ try {
   );
 } finally {
   await viewer.close(connection);
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

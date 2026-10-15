@@ -1,13 +1,13 @@
 /** PDF viewport regressions in an owned direct package, using generated documents only. */
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-pdf-'));
+const root = await temporaryRoot('viewer-native-pdf-');
 const profile = path.join(root, 'Profile'),
   output = path.resolve('out/pdf-acceptance');
 await Promise.all([profile, output].map((file) => mkdir(file, { recursive: true })));
@@ -349,5 +349,5 @@ try {
   for (const check of checks) console.log('PASS', check);
 } finally {
   await viewer.close(connection);
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

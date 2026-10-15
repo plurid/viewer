@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile, rm, rename } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { OperationPlans } from '../src/desktop/operation-plans';
 import { Operations } from '../src/desktop/operations';
@@ -9,8 +8,9 @@ import { Checkpoints } from '../src/desktop/checkpoints';
 import type { OperationPlan } from '../src/domain/operation-plan';
 import { sourceVersion } from '../src/domain/inspection';
 import { entry } from '../src/desktop/filesystem';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-operation-plan-'));
+  const root = await temporaryRoot('viewer-operation-plan-');
   const dest = path.join(root, 'Destination');
   await mkdir(dest);
   const source = path.join(root, 'Source.txt');
@@ -45,7 +45,7 @@ async function fixture() {
       await plans.close();
       await operations.close();
       await checkpoints.close();
-      await rm(root, { recursive: true, force: true });
+      await trashTemporary(root);
     },
   };
 }

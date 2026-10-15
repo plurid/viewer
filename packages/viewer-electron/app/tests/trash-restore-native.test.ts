@@ -2,13 +2,13 @@
  * Trash, erasure, cleanup, or human approval simulation is involved. */
 import { expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { mkdir, mkdtemp, readFile, lstat, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, lstat, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import type { BrowserWindow } from 'electron';
 import type { FileAccess } from '../src/desktop/file-access';
 import type { MacFiles } from '../src/desktop/macos-files';
 import { Trash } from '../src/desktop/trash';
+import { temporaryRoot } from '../tools/temporary';
 
 vi.mock('electron', () => ({
   clipboard: { writeText: vi.fn() },
@@ -34,7 +34,7 @@ const window = { isDestroyed: () => false } as BrowserWindow;
 it.skipIf(process.platform !== 'darwin' || !process.env.VIEWER_TEST_MAC_BINDING)(
   'restores generated files, folders and a symlink without overwriting a colliding file',
   async () => {
-    const created = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-restore-'));
+    const created = await temporaryRoot('viewer-native-restore-');
     const home = await realpath(created),
       root = path.join(home, '.Trash'),
       destination = path.join(home, 'Destination');

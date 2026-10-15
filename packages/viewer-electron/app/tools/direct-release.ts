@@ -2,7 +2,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -118,7 +118,8 @@ async function main() {
       'Signed and notarized local installer: ' + dmg + '\nNo public publishing was performed.',
     );
   } finally {
-    await rm(stage, { recursive: true, force: true });
+    // The disk-image source stays beside the installer for review; nothing is deleted.
+    console.log('Disk image staging kept at ' + stage);
   }
 }
 await main().catch((error) => {

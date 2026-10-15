@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { chmod, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'node:path';
 import { Projects, decodeProject } from '../src/desktop/projects';
 import {
@@ -23,6 +24,7 @@ import {
   savePreviewValue,
   updateFolderPresentation,
 } from '../src/renderer/state/store';
+import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 
 const project = (): ProjectDefinition => ({
   version: 1,
@@ -59,14 +61,30 @@ const access = vi.fn(async (_files: readonly string[]) => {});
 // Unit coverage for storage/CAS. Native coordination is covered in packaged acceptance.
 const coordination = { run: async <T>(_intents: unknown, work: () => Promise<T>) => work() };
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-project-'));
+  root = await temporaryRoot('viewer-project-');
   access.mockClear();
 });
 afterEach(async () => {
   vi.unstubAllGlobals();
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 describe('portable project definitions', () => {
+  it('keeps permissions and extended attributes of a project file it saves', async () => {
+    const service = new Projects(access, coordination),
+      file = path.join(root, 'viewer.project.jsonc');
+    const created = await service.save(file, '', project());
+    await chmod(file, 0o644);
+    if (process.platform === 'darwin')
+      await promisify(execFile)('/usr/bin/xattr', ['-w', 'org.viewer.test', 'kept', file]);
+    await service.save(file, created.revision, { ...project(), name: 'Renamed' });
+    expect((await stat(file)).mode & 0o777).toBe(0o644);
+    if (process.platform === 'darwin')
+      expect(
+        (
+          await promisify(execFile)('/usr/bin/xattr', ['-p', 'org.viewer.test', file])
+        ).stdout.trim(),
+      ).toBe('kept');
+  });
   it('relocates local paths and keeps external paths behind named bindings', () => {
     expect(projectReference('/one/project', '/one/project/模型/a.stl', {})).toEqual({
       path: '模型/a.stl',
@@ -134,7 +152,7 @@ describe('portable project definitions', () => {
 });
 async function renameToLink(file: string) {
   const bytes = await readFile(file);
-  await rm(file);
+  await trashFixtureEntry(file);
   await writeFile(file + '.original', bytes);
   await symlink(file + '.original', file);
 }

@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import net from 'node:net';
@@ -19,6 +19,7 @@ import type {
   ViewerAPI,
 } from '../src/domain/contracts';
 import { stateSchema } from '../src/desktop/storage';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundle =
@@ -63,7 +64,7 @@ const source = path.join(
   'Library/Mobile Documents/com~apple~CloudDocs',
   'Viewer-QA-' + id,
 );
-const local = await mkdtemp('/private/tmp/viewer-native-acceptance-');
+const local = await temporaryRoot('viewer-native-acceptance-', '/private/tmp');
 const destination = path.join(local, 'Destination'),
   outside = path.join(local, 'Outside');
 const profile = path.join(
@@ -175,7 +176,7 @@ async function cleanup() {
       (await readFile(path.join(root, marker), 'utf8')) !== id
     )
       throw new Error('Generated folder ownership changed; manual cleanup is required: ' + root);
-    await rm(root, { recursive: true, force: true });
+    await trashTemporary(root);
   }
 }
 async function wait<T>(

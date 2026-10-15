@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { FileCoordination } from '../src/desktop/file-coordination';
 import type { FileAccessIntent } from '../src/desktop/macos-files';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
@@ -29,11 +29,11 @@ function binding() {
 let root: string;
 const services: FileCoordination[] = [];
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-coordination-'));
+  root = await temporaryRoot('viewer-coordination-');
 });
 afterEach(async () => {
   await Promise.all(services.splice(0).map((service) => service.close()));
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 function service(native: ReturnType<typeof binding>, timeout?: number) {
   const result = new FileCoordination(() => native, timeout);

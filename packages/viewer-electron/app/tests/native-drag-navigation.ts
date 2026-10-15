@@ -1,16 +1,16 @@
 /** Trusted Chromium drag events in a hidden owned app; not physical Finder drag acceptance. */
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import os from 'node:os';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ownedApp, until } from './owned-app';
 import type { Bootstrap, OperationJob, SavedState } from '../src/domain/contracts';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const binary =
   process.env.VIEWER_TEST_BINARY ||
   path.resolve('out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-drag-'));
+const root = await temporaryRoot('viewer-native-drag-');
 const profile = path.join(root, 'profile'),
   browse = path.join(root, 'Browse'),
   nested = path.join(browse, 'Nested'),
@@ -345,6 +345,6 @@ try {
   try {
     await viewer.close(connection);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await trashTemporary(root);
   }
 }

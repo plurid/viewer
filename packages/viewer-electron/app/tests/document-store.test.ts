@@ -1,15 +1,15 @@
-import { mkdtemp, readFile, rm, stat, symlink, truncate, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { readFile, stat, symlink, truncate, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DocumentStore } from '../src/desktop/document-store';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-documents-'));
+  root = await temporaryRoot('viewer-documents-');
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 const parse = (value: unknown): { version: 1; value: string } => {
   const record = value as { version: unknown; value: unknown };

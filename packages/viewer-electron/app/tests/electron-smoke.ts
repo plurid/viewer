@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, lstat, mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, readdir, readlink, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { createRequire } from 'node:module';
 import { zipSync, strToU8 } from 'fflate';
@@ -19,6 +19,7 @@ import { formatBytes } from '../src/domain/files';
 import { panelDrawing } from './dxf-fixtures';
 import { reactCommitProbe } from './react-commits';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
+import { trashTemporary, trashFixtureEntry } from '../tools/temporary';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Routine functional checks never show or activate the test app. Physical
@@ -2650,7 +2651,7 @@ async function verifyRefinements(): Promise<void> {
       ]).catch(() => {
         throw new Error('Could not restore the test clipboard.');
       });
-      await rm(restoreFile);
+      await trashFixtureEntry(restoreFile);
     }
   }
   const headerGap = await evaluate<number>(
@@ -3915,7 +3916,7 @@ async function verifyStoreFileServices(): Promise<void> {
     );
   } finally {
     await chmod(deniedPDF, 0o600);
-    await rm(deniedPDF);
+    await trashFixtureEntry(deniedPDF);
   }
   await verifyServiceWorkflows();
   const { stdout } = await execNative('/bin/ps', ['-axo', 'pid=,ppid=,command=']);
@@ -3972,7 +3973,7 @@ async function verifyStoreFileServices(): Promise<void> {
   } finally {
     await chmod(restricted, 0o700);
     await paletteCommand('Parent folder');
-    await rm(restricted, { recursive: true, force: true });
+    await trashTemporary(restricted);
   }
   await verifyBackgroundApp();
   assert.deepEqual(exceptions, []);
@@ -5698,5 +5699,5 @@ try {
     ]);
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
   }
-  await rm(fixture.root, { recursive: true, force: true });
+  await trashTemporary(fixture.root);
 }

@@ -13,8 +13,9 @@ import type { AgentProposal } from '../src/domain/agent-requests';
 import type { CustomAction } from '../src/domain/automation';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
+import { temporaryRoot } from '../tools/temporary';
 
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-agent-safety-'));
+const root = await temporaryRoot('viewer-agent-safety-');
 const profile = path.join(root, 'Profile'),
   shared = path.join(root, 'Shared');
 const nested = path.join(shared, 'Nested'),

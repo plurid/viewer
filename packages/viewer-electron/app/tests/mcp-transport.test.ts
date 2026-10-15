@@ -1,13 +1,13 @@
 import { it, expect, vi } from 'vitest';
 import { Duplex, PassThrough } from 'node:stream';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const { connect } = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock('node:net', () => ({ connect }));
 import { runMCPClient } from '../src/desktop/mcp-client';
 it('drains pending replies after stdio EOF and preserves split Unicode', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-mcp-transport-'));
+  const root = await temporaryRoot('viewer-mcp-transport-');
   try {
     await writeFile(path.join(root, 'agent-connection-v1.json'), '{"socket":"fixture"}');
     const socket = new Duplex({
@@ -42,11 +42,11 @@ it('drains pending replies after stdio EOF and preserves split Unicode', async (
     await runMCPClient(root, { input, output, token: 'fixture-token' });
     expect(JSON.parse(text)).toEqual({ jsonrpc: '2.0', id: 4, result: 'Résumé' });
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await trashTemporary(root);
   }
 });
 it('returns an explicit error for pending calls when the app disconnects', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-mcp-disconnect-'));
+  const root = await temporaryRoot('viewer-mcp-disconnect-');
   try {
     await writeFile(path.join(root, 'agent-connection-v1.json'), '{"socket":"fixture"}');
     const socket = new Duplex({
@@ -71,6 +71,6 @@ it('returns an explicit error for pending calls when the app disconnects', async
     input.end();
     expect(JSON.parse(text).error.message).toContain('disconnected');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await trashTemporary(root);
   }
 });

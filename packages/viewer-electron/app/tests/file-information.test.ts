@@ -1,25 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  chmod,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rename,
-  rm,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, rename, symlink, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import os from 'node:os';
 import path from 'node:path';
 import { FileInformationService, informationPatchSchema } from '../src/desktop/file-information';
 import { informationChanges } from '../src/domain/file-information';
 import { macFiles } from '../src/desktop/macos-files';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const roots: string[] = [];
 async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-info-'));
+  const root = await temporaryRoot('viewer-info-');
   roots.push(root);
   const file = path.join(root, 'Unicode ș 日本語.txt');
   await writeFile(file, 'Keep this content intact.');
@@ -30,7 +20,7 @@ afterEach(async () => {
     // The tests may have deliberately locked owned fixtures.
     if (process.platform === 'darwin') execFileSync('/usr/bin/chflags', ['-R', 'nouchg', root]);
     await chmod(root, 0o700);
-    await rm(root, { recursive: true, force: true });
+    await trashTemporary(root);
   }
 });
 describe('metadata input boundary', () => {

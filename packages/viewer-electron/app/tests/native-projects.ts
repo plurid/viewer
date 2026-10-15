@@ -1,14 +1,14 @@
 /** Packaged project controls and worker inspection, using a hidden owned app. */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import type { SavedState } from '../src/domain/contracts';
 import type { ProjectDefinition, ProjectDocument } from '../src/domain/project';
 import { ownedApp, until } from './owned-app';
 import { decodeProject } from '../src/desktop/projects';
-const root = await mkdtemp(path.join(os.tmpdir(), 'viewer-native-project-'));
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
+const root = await temporaryRoot('viewer-native-project-');
 const profile = path.join(root, 'profile'),
   directory = path.join(root, 'Project'),
   documents = path.join(directory, 'Documents');
@@ -271,5 +271,5 @@ try {
   );
 } finally {
   await viewer.close(connection);
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 }

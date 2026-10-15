@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, X509Certificate } from 'node:crypto';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -172,14 +172,24 @@ print(json.dumps(dict(
   run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', source]);
   const output = path.join(directory, 'out/mac-app-store', channel, arch);
   const app = path.join(output, 'Viewer.app');
+  // Keep an earlier build for review instead of deleting it (AGENTS.md).
+  const earlier = await lstat(output).catch(() => null);
+  if (earlier) {
+    const previous = output + '-previous-' + new Date().toISOString().replace(/[:.]/g, '-');
+    await rename(output, previous);
+    console.log('Kept the previous build at ' + previous);
+  }
   await mkdir(output, { recursive: true });
-  await rm(app, { recursive: true, force: true });
-  await cp(source, app, { recursive: true, verbatimSymlinks: true });
+  await cp(source, app, {
+    recursive: true,
+    verbatimSymlinks: true,
+    errorOnExist: true,
+    force: false,
+  });
   run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
   if (installer) {
     const filename = 'Viewer-' + inputs.build + '-macOS-' + arch + '.pkg';
     const pkg = path.join(output, filename);
-    await rm(pkg, { force: true });
     execFileSync(
       '/usr/bin/productbuild',
       ['--component', app, '/Applications', '--sign', installer.hash, pkg],

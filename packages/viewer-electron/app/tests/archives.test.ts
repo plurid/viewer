@@ -1,19 +1,19 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
 import { strToU8, zipSync } from 'fflate';
 import { Archives } from '../src/desktop/archives';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'viewer-archive-'));
+  root = await temporaryRoot('viewer-archive-');
 });
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await trashTemporary(root);
 });
 it.skipIf(process.platform === 'win32')(
   'refuses special archive sources without waiting for a FIFO writer',
