@@ -2,8 +2,10 @@ import {
   lazy,
   Suspense,
   memo,
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type RefObject,
@@ -241,6 +243,61 @@ export function WorkspaceSurface({
       unsubscribe();
     };
   }, [api, configuration, preferences, engine]);
+  // Stable callbacks: the engine memoizes plane chrome on their identity, so inline
+  // functions would re-render every plane header on each store change.
+  const handleReady = (api: PluridApi) => {
+    setApi(api);
+    onReady();
+    if (space.layout) {
+      requestAnimationFrame(() => {
+        try {
+          workspace.restoreLayout(space.layout!);
+        } catch (error) {
+          report(error);
+        }
+      });
+    } else if (!Object.keys(space.arrangement).length)
+      requestAnimationFrame(() => frameWorkspace(engine, surface));
+    else {
+      const active = space.activePane || space.roots[0];
+      if (active)
+        requestAnimationFrame(() => frameWorkspace(engine, surface, [active], { recover: true }));
+    }
+  };
+  const readyRef = useRef(handleReady);
+  readyRef.current = handleReady;
+  const onEngineReady = useCallback((api: PluridApi) => readyRef.current(api), []);
+  const renderPlaneControls = useCallback(
+    (context: Parameters<typeof PlaneHeader>[0]['context']) => (
+      <PlaneHeader context={context} engine={engine} />
+    ),
+    [engine],
+  );
+  const renderEmpty = useCallback(
+    () => (
+      <Empty title="No open planes" detail="Create a folder plane or choose a folder.">
+        <div className="empty-actions">
+          <button className="primary" disabled={!api} onClick={() => workspace.newRootFolder()}>
+            New folder plane
+          </button>
+          <button
+            disabled={!api}
+            onClick={() => {
+              void window.viewer
+                .chooseFolder()
+                .then((path) => {
+                  if (path) return workspace.openPath(path);
+                })
+                .catch(report);
+            }}
+          >
+            Open folder…
+          </button>
+        </div>
+      </Empty>
+    ),
+    [api, workspace],
+  );
   return (
     <div
       className="workspace-surface"
@@ -285,50 +342,9 @@ export function WorkspaceSurface({
         configuration={configuration}
         useLocalStorage
         storageAdapter={storage}
-        onReady={(api) => {
-          setApi(api);
-          onReady();
-          if (space.layout) {
-            requestAnimationFrame(() => {
-              try {
-                workspace.restoreLayout(space.layout!);
-              } catch (error) {
-                report(error);
-              }
-            });
-          } else if (!Object.keys(space.arrangement).length)
-            requestAnimationFrame(() => frameWorkspace(engine, surface));
-          else {
-            const active = space.activePane || space.roots[0];
-            if (active)
-              requestAnimationFrame(() =>
-                frameWorkspace(engine, surface, [active], { recover: true }),
-              );
-          }
-        }}
-        renderPlaneControls={(context) => <PlaneHeader context={context} engine={engine} />}
-        renderEmpty={() => (
-          <Empty title="No open planes" detail="Create a folder plane or choose a folder.">
-            <div className="empty-actions">
-              <button className="primary" disabled={!api} onClick={() => workspace.newRootFolder()}>
-                New folder plane
-              </button>
-              <button
-                disabled={!api}
-                onClick={() => {
-                  void window.viewer
-                    .chooseFolder()
-                    .then((path) => {
-                      if (path) return workspace.openPath(path);
-                    })
-                    .catch(report);
-                }}
-              >
-                Open folder…
-              </button>
-            </div>
-          </Empty>
-        )}
+        onReady={onEngineReady}
+        renderPlaneControls={renderPlaneControls}
+        renderEmpty={renderEmpty}
       />
     </div>
   );

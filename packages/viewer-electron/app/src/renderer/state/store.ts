@@ -178,9 +178,23 @@ export function initialize(bootstrap: Bootstrap): void {
       ),
     })),
   };
-  if (bootstrap.freshSession && saved.workspaces.length < 30) {
-    saved.workspaces = [...saved.workspaces, workspace];
-    saved.activeWorkspace = workspace.id;
+  if (bootstrap.freshSession) {
+    // Reuse an untouched fresh-session workspace instead of adding one on every launch.
+    const pristine = saved.workspaces.findLast(
+      (space) =>
+        space.name === workspace.name &&
+        !space.project &&
+        space.panes.length === 1 &&
+        space.panes[0].type === 'folder' &&
+        space.panes[0].path === bootstrap.home &&
+        space.roots.length === 1 &&
+        space.roots[0] === space.panes[0].id,
+    );
+    if (pristine) saved.activeWorkspace = pristine.id;
+    else if (saved.workspaces.length < 30) {
+      saved.workspaces = [...saved.workspaces, workspace];
+      saved.activeWorkspace = workspace.id;
+    }
   }
   const active = activeWorkspace({ saved } as ViewerState);
   current = {
@@ -723,12 +737,29 @@ export function storageAdapter(id: string) {
     },
   };
 }
+/** Preview state outlives its pane only while arrangement or workspace Undo can
+ * still bring that pane back; otherwise it would grow until saving fails. */
+function retainedPreviewStates(): SavedState['previewStates'] {
+  const states = current.saved.previewStates;
+  if (!states) return states;
+  const keep = new Set<string>();
+  const workspaces = [...current.saved.workspaces];
+  if (current.deletedWorkspace) workspaces.push(current.deletedWorkspace.workspace);
+  for (const space of workspaces) {
+    for (const pane of space.panes) keep.add(space.id + ':' + pane.id);
+    for (const id of closedPanes.get(space.id)?.keys() ?? []) keep.add(space.id + ':' + id);
+  }
+  const entries = Object.entries(states);
+  const kept = entries.filter(([key]) => keep.has(key));
+  return kept.length === entries.length ? states : Object.fromEntries(kept);
+}
 export async function flushState(flushEngine = true): Promise<void> {
   clearTimeout(persistTimer);
   if (flushEngine) window.dispatchEvent(new Event('pagehide'));
   await flushPreferences();
   const saved = {
     ...current.saved,
+    previewStates: retainedPreviewStates(),
     workspaces: current.saved.workspaces.map((space) =>
       dirtyArrangements.has(space.id)
         ? { ...space, arrangement: Object.fromEntries(adapters.get(space.id) ?? []) }
@@ -752,13 +783,13 @@ export function savePreviewValue(
   value: unknown,
   owner = activeWorkspace().id,
   resetView = false,
-): void {
+): boolean {
   if (
     !current.saved.workspaces
       .find((space) => space.id === owner)
       ?.panes.some((pane) => pane.id === paneID)
   )
-    return;
+    return false;
   const previous = previewValues(paneID, owner);
   const values = {
     ...(resetView
@@ -767,7 +798,8 @@ export function savePreviewValue(
     [key]: value,
   };
   const parsed = previewValuesSchema.safeParse(values);
-  if (!parsed.success) return;
+  // Callers that hold irreplaceable input (plane notes) report a refused save.
+  if (!parsed.success) return false;
   // Preview pan/zoom already has local React state. Avoid invalidating all commands
   // on every pointer move; the private session write uses the usual debounce.
   current = {
@@ -790,6 +822,7 @@ export function savePreviewValue(
   persistTimer = setTimeout(() => {
     void flushState(false).catch(report);
   }, 400);
+  return true;
 }
 export async function installProject(
   document: ProjectDocument,

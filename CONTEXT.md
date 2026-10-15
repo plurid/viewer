@@ -14,6 +14,8 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | Recipe              | A reusable extraction/rename/organization/summarization definition that produces a reviewed file-change proposal.                                |
 | Custom action       | Declarative built-in, recipe, terminal, executable or explicit shell invocation; `desktop/executions.ts`, `renderer/commands/programs.ts`.       |
 | Operation           | A journaled filesystem mutation with progress, conflicts and eligible Undo; existing desktop operation services remain authoritative.            |
+| Protected folder    | Disk root, Home, its standard folders and system locations that no request may trash, move, rename or replace, matched by identity; `desktop/protected-paths.ts`. |
+| Permanent removal   | Limited to named cases in `desktop/removal.ts` (own temporary files, empty folders, verified move sources, private app data); ESLint rejects other `rm`/`rmdir`/`unlink` calls. Tests use `tools/temporary.ts`. |
 | Configuration       | Versioned JSONC preferences with validation, comments, recovery and conflict handling; `desktop/configuration.ts`, `desktop/settings.ts`.        |
 | Execution grant     | A separately stored user approval for an exact custom action or terminal capability in a canonical folder; `desktop/agent-requests.ts`.          |
 | Terminal session    | A main-process-owned PTY plus a renderer-owned xterm screen, retained through culling; `desktop/terminals.ts`, `renderer/terminals/sessions.ts`. |

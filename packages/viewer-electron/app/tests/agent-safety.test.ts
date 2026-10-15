@@ -10,7 +10,7 @@ import type { AgentProposal, CommandDescriptor } from '../src/domain/agent-reque
 import { agentCommandID, agentRemovalPolicy } from '../src/domain/agent-safety';
 import { SettingsService } from '../src/desktop/settings';
 import { AgentRequests } from '../src/desktop/agent-requests';
-import { AgentBroker } from '../src/desktop/agent-broker';
+import { AgentBroker, redactedSettings } from '../src/desktop/agent-broker';
 import type { FileServices } from '../src/desktop/file-services';
 import type { ActionPlanner } from '../src/desktop/actions/planner';
 import type * as FileSystem from '../src/desktop/filesystem';
@@ -140,22 +140,23 @@ async function fixture(roots = ['/Granted']) {
   const execute = vi.fn(async (): Promise<void | { operationID: string }> => {}),
     write = vi.fn();
   const cancelOperation = vi.fn();
+  const confirm = vi.fn(async (_proposal: AgentProposal) => true);
   const requests: AgentRequests = new AgentRequests(
     '/Memory/Viewer',
     settings,
     () => {},
     execute,
-    { read: () => ({ cwd: '/Granted', output: 'Screen' }), write },
+    { read: () => ({ cwd: '/Granted', output: 'Screen' }) },
     undefined,
     {
       actor: () => broker.clients.actor(),
       check: (proposal) => broker.authorizeProposal(proposal),
       run: (clientID, work) => broker.clients.context.run(clientID, work),
-      executeAllowed: async () => true,
       cancelExecution: () => {},
       cancelOperation,
       operation: (id) => memory.operations.get(id),
     },
+    confirm,
   );
   const broker: AgentBroker = new AgentBroker(
     '/Memory/Viewer',
@@ -194,6 +195,7 @@ async function fixture(roots = ['/Granted']) {
     execute,
     write,
     cancelOperation,
+    confirm,
     requests,
     broker,
     created,
@@ -210,6 +212,26 @@ beforeEach(() => {
 });
 
 describe('agent removal safety', () => {
+  it('runs nothing on a renderer approval until the desktop confirmation is accepted', async () => {
+    const f = await fixture();
+    f.confirm.mockResolvedValueOnce(false);
+    const proposal = await f.call<{ id: string }>('propose_command', { commandID: 'trash' });
+    await expect(f.requests.review(proposal.id, true)).rejects.toThrow('not confirmed');
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.requests.get(proposal.id)?.status).toBe('review');
+    expect(f.confirm.mock.calls[0][0]).toMatchObject({ removal: 'trash' });
+    await f.requests.review(proposal.id, true);
+    expect(f.execute).toHaveBeenCalledOnce();
+  });
+  it('fails closed when no desktop confirmation is available', async () => {
+    const f = await fixture();
+    const requests = new AgentRequests('/Memory/Viewer', f.settings, () => {}, f.execute, {
+      read: () => ({ cwd: '/Granted', output: '' }),
+    });
+    const proposal = requests.configuration([{ path: 'settings.appearance', value: 'light' }]);
+    await expect(requests.review(proposal.id, true)).rejects.toThrow('confirmation is unavailable');
+    expect(f.execute).not.toHaveBeenCalled();
+  });
   it('reports the native removal job outcome rather than premature command success', async () => {
     const f = await fixture();
     const trash = vi.fn(async () => {
@@ -449,6 +471,44 @@ describe('agent removal safety', () => {
     expect(f.write).not.toHaveBeenCalled();
     expect(f.execute).not.toHaveBeenCalled();
     expect(memory.remove).not.toHaveBeenCalled();
+  });
+  it('redacts terminal environment values and shell scripts from agent configuration reads', async () => {
+    const f = await fixture();
+    const settings = structuredClone(f.config);
+    settings.terminals.profiles = [
+      {
+        id: 'shell',
+        name: 'Shell',
+        executable: '/bin/zsh',
+        args: [],
+        env: { API_TOKEN: 'secret' },
+      },
+    ];
+    settings.customActions = [
+      action({
+        kind: 'shell',
+        executable: '/bin/zsh',
+        script: 'curl -H "token: secret"',
+        perItem: false,
+      }),
+    ];
+    const visible = JSON.stringify(redactedSettings(settings));
+    expect(visible).not.toContain('secret');
+    expect(visible).toContain('API_TOKEN');
+  });
+  it('allows only bounded built-in commands and refuses clipboard paste', () => {
+    for (const id of ['trash', 'copy-path', 'view-list', 'recipe.books', 'rename'])
+      expect(agentCommandID(id, [])).toBe(id);
+    for (const id of ['paste', 'paste-move'])
+      expect(() => agentCommandID(id, [])).toThrow('clipboard');
+    for (const id of ['delete-workspace', 'restore', 'share', 'volumes', 'cut', 'open-config'])
+      expect(() => agentCommandID(id, []), id).toThrow('Agents cannot propose');
+    expect(agentCommandID('custom.cleanup', [action({ kind: 'recipe', recipeID: 'books' })])).toBe(
+      'custom.cleanup',
+    );
+    expect(() =>
+      agentCommandID('custom.cleanup', [action({ kind: 'builtin', command: 'paste' })]),
+    ).toThrow('clipboard');
   });
   it('advertises the immutable removal policy and excludes unsafe command/tool routes', async () => {
     const f = await fixture();

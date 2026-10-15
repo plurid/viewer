@@ -282,9 +282,8 @@ export function Trash({ onClose }: { onClose(): void }) {
       if (live.current && requested === folder.current) {
         setSnapshot(value);
         setError('');
-        const remaining = selectionState.current.selection.filter((id) =>
-          value.items.some((item) => item.id === id),
-        );
+        const present = new Set(value.items.map((item) => item.id));
+        const remaining = selectionState.current.selection.filter((id) => present.has(id));
         selectionState.current.selection = remaining;
         setSelected(remaining);
       }
@@ -333,7 +332,11 @@ export function Trash({ onClose }: { onClose(): void }) {
     [snapshot, query, sortKey, sort.descending, dateKind],
   );
   const files = useMemo(() => items.map(asFile), [items]);
-  const selectedItems = items.filter((item) => selected.includes(item.id));
+  const selectedIDs = useMemo(() => new Set(selected), [selected]);
+  const selectedItems = useMemo(
+    () => items.filter((item) => selectedIDs.has(item.id)),
+    [items, selectedIDs],
+  );
   const selectedItem = selectedItems.length === 1 ? selectedItems[0] : undefined;
   const rows = useVirtualizer({
     count: items.length,
@@ -439,8 +442,9 @@ export function Trash({ onClose }: { onClose(): void }) {
     );
   };
   const showPreview = (ids: string[]) => {
+    const wanted = new Set(ids);
     const chosen = items.filter(
-      (item) => ids.includes(item.id) && !item.directory && item.previewable !== false,
+      (item) => wanted.has(item.id) && !item.directory && item.previewable !== false,
     );
     if (chosen.length) setPreview({ items: chosen, index: 0 });
   };
@@ -449,7 +453,8 @@ export function Trash({ onClose }: { onClose(): void }) {
     setMenu(undefined);
     scroll.current?.focus({ preventScroll: true });
   };
-  const menuItems = items.filter((item) => menu?.ids.includes(item.id));
+  const menuIDs = new Set(menu?.ids);
+  const menuItems = menu ? items.filter((item) => menuIDs.has(item.id)) : [];
   const menuActions: MenuAction[] = menuItems.length
     ? [
         ...(menuItems.length === 1 && menuItems[0].directory
@@ -733,10 +738,10 @@ export function Trash({ onClose }: { onClose(): void }) {
                     return (
                       <div
                         role="option"
-                        aria-selected={selected.includes(item.id)}
+                        aria-selected={selectedIDs.has(item.id)}
                         id={`${rowID}-${item.id}`}
                         data-trash-id={item.id}
-                        className={`trash-row ${selected.includes(item.id) ? 'is-selected' : ''}`}
+                        className={`trash-row ${selectedIDs.has(item.id) ? 'is-selected' : ''}`}
                         key={item.id}
                         style={{
                           position: 'absolute',

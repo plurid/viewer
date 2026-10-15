@@ -96,7 +96,12 @@ export function fileGroup(entry: FileEntry, group: 'none' | 'kind' | 'modified')
       : entry.extension
         ? entry.extension.toUpperCase() + ' files'
         : 'Files';
-  return entry.modified ? new Date(entry.modified).toISOString().slice(0, 10) : 'Unknown date';
+  if (!entry.modified) return 'Unknown date';
+  // The person's calendar day, not the UTC one.
+  const date = new Date(entry.modified);
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part, index) => String(part).padStart(index ? 2 : 4, '0'))
+    .join('-');
 }
 export function groupEntries(
   entries: FileEntry[],

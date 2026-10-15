@@ -11,6 +11,8 @@ import type {
   ExecutionGrant,
 } from '../domain/agent-requests';
 import { Executions } from './executions';
+import { ExecutionConfirmations } from './execution-confirmations';
+import { ProtectedPaths } from './protected-paths';
 import { Terminals } from './terminals';
 import { ExternalTerminals } from './terminal-launch';
 import {
@@ -22,11 +24,13 @@ import {
   ipcMain,
   shell,
   type BrowserWindow,
+  type MessageBoxOptions,
 } from 'electron';
+import type { AgentProposal } from '../domain/agent-requests';
 import { FileServices } from './file-services';
 import { Applications } from './applications';
 import { SettingsService } from './settings';
-import { Credentials, Providers } from './providers';
+import { Credentials, Providers, providerBinding } from './providers';
 import { ModelPermissions } from './model-permissions';
 import { modelDataLevels, modelEndpoint, type ModelDataLevel } from '../domain/model-permissions';
 import { macFiles } from './macos-files';
@@ -679,6 +683,9 @@ export class Desktop {
       undefined,
       access,
     );
+    const confirmations = new ExecutionConfirmations(dataPath, (summary) =>
+      this.confirmNatively(summary.title, summary.detail, 'Run'),
+    );
     this.executions = new Executions(
       () => this.settings.snapshot().settings,
       (task) => {
@@ -686,6 +693,7 @@ export class Desktop {
         this.agentRequests?.execution(task);
       },
       access,
+      (action) => confirmations.require(action),
     );
     this.credentials = new Credentials(
       dataPath,
@@ -729,6 +737,7 @@ export class Desktop {
       dataPath,
       (receipt, work) => this.fileAccess.withReceipt(receipt, work),
       (message) => emit({ type: 'service-error', service: 'operations', message }),
+      new ProtectedPaths(this.home),
     );
     this.operationPlans = new OperationPlans(dataPath, this.operations, this.checkpoints, access);
     this.actions = new ActionPlanner(dataPath, {
@@ -798,10 +807,7 @@ export class Desktop {
         }
         await this.sendAgentCommand(resolved, target);
       },
-      {
-        read: (id) => this.terminals.agentRead(id),
-        write: (id, data) => this.terminals.agentWrite(id, data),
-      },
+      { read: (id) => this.terminals.agentRead(id) },
       async (request, target) => {
         await this.agents.authorizeNavigation(request, target);
         await this.sendAgentCommand('workspace-navigation', target, request);
@@ -810,14 +816,11 @@ export class Desktop {
         actor: () => this.agents.clients.actor(),
         check: (proposal) => this.agents.authorizeProposal(proposal),
         run: (clientID, work) => this.agents.clients.context.run(clientID, work),
-        executeAllowed: async () => {
-          const client = await this.agents.clients.get();
-          return !client || client.capabilities.includes('execute');
-        },
         cancelExecution: (id) => this.executions.cancel(id),
         cancelOperation: (id) => this.operations.cancel(id),
         operation: (id) => this.operations.all().find((job) => job.id === id),
       },
+      (proposal) => this.confirmAgentProposal(proposal),
     );
     this.agents = new AgentBroker(
       dataPath,
@@ -1055,6 +1058,55 @@ export class Desktop {
       result.status === 'rejected' ? [result.reason] : [],
     );
     if (errors.length) throw new AggregateError(errors, 'Desktop services failed to stop.');
+  }
+  /** The desktop process asks the person itself; the renderer cannot answer this dialog. */
+  private async confirmAgentProposal(proposal: AgentProposal): Promise<boolean> {
+    const files = proposal.target?.selection.map((file) => file.path) ?? [];
+    const listed = files.slice(0, 30).join('\n');
+    const more = files.length > 30 ? `\n…and ${files.length - 30} more, listed in the review.` : '';
+    const removal = proposal.removal === 'trash';
+    const options: MessageBoxOptions = {
+      type: 'warning',
+      title: 'Agent request',
+      message: removal
+        ? `Allow the agent to move ${files.length === 1 ? 'this item' : `these ${files.length} items`} to the Trash?`
+        : proposal.kind === 'configuration'
+          ? 'Allow the agent to change your configuration?'
+          : `Allow the agent to run “${proposal.title}”?`,
+      detail: (removal
+        ? listed +
+          more +
+          '\n\nFolders are moved with their contents. Nothing is permanently deleted.'
+        : proposal.detail + (files.length ? '\n\nItems:\n' + listed + more : '')
+      ).slice(0, 6000),
+      buttons: [
+        'Cancel',
+        removal ? 'Move to Trash' : proposal.kind === 'configuration' ? 'Change' : 'Run',
+      ],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    };
+    return this.showConfirmation(options);
+  }
+  private confirmNatively(message: string, detail: string, action: string): Promise<boolean> {
+    return this.showConfirmation({
+      type: 'warning',
+      message,
+      detail,
+      buttons: ['Cancel', action],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+  }
+  /** Button 1 is the only affirmative answer; closing or cancelling refuses. */
+  private async showConfirmation(options: MessageBoxOptions): Promise<boolean> {
+    const window = this.window && !this.window.isDestroyed() ? this.window : undefined;
+    const { response } = window
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options);
+    return response === 1;
   }
   private async sendAgentCommand(
     command: string,
@@ -1342,17 +1394,22 @@ export class Desktop {
           ...(await this.settings.patch(args[0] as SettingsPatch[], args[1] as number)),
           credentials: this.credentials.ids(),
         };
-      case 'providerCredential':
+      case 'providerCredential': {
+        const provider = this.settings
+          .snapshot()
+          .settings.providers.find((item) => item.id === args[0]);
         if (!args[1]) {
-          const provider = this.settings
-            .snapshot()
-            .settings.providers.find((item) => item.id === args[0]);
           if (provider) await this.modelPermissions.set(provider, null);
           this.emit({ type: 'model-permission', providerID: args[0] as string });
         }
-        await this.credentials.set(args[0] as string, args[1] as string);
+        await this.credentials.set(
+          args[0] as string,
+          args[1] as string,
+          provider ? providerBinding(provider) : undefined,
+        );
         this.settings.announce();
         return;
+      }
       case 'providerModels': {
         const provider = this.settings
           .snapshot()

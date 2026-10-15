@@ -141,6 +141,38 @@ const savedStateSchema = z
     'Invalid folder navigation history.',
   );
 export const stateSchema = z.preprocess(migratePlaneNavigation, savedStateSchema);
+/** Keeps every workspace that is valid on its own when another one is not, so one
+ * damaged pane cannot discard all saved workspaces. */
+export function salvageState(
+  original: unknown,
+): { state: SavedState; dropped: number } | undefined {
+  if (!original || typeof original !== 'object') return;
+  const saved = original as { workspaces?: unknown; activeWorkspace?: unknown };
+  if (!Array.isArray(saved.workspaces)) return;
+  const kept = saved.workspaces.filter(
+    (workspace) =>
+      !!workspace &&
+      typeof workspace === 'object' &&
+      stateSchema.safeParse({
+        ...saved,
+        workspaces: [workspace],
+        activeWorkspace: (workspace as { id?: unknown }).id,
+      }).success,
+  ) as { id: string }[];
+  if (!kept.length) return;
+  const parsed = stateSchema.safeParse({
+    ...saved,
+    workspaces: kept,
+    activeWorkspace: kept.some((workspace) => workspace.id === saved.activeWorkspace)
+      ? saved.activeWorkspace
+      : kept[0].id,
+  });
+  if (!parsed.success) return;
+  return {
+    state: { ...parsed.data, version: 4 },
+    dropped: saved.workspaces.length - kept.length,
+  };
+}
 export class Storage {
   private writes: Promise<void> = Promise.resolve();
   /** Set when an unreadable state file could not be moved aside; it is never written over. */
@@ -158,16 +190,22 @@ export class Storage {
       state = stateSchema.parse(original);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: null };
+      const salvaged = error instanceof z.ZodError ? salvageState(original) : undefined;
       const backup = `${this.file}.unreadable-${Date.now()}`;
       try {
         await rename(this.file, backup);
       } catch {
         this.retained = this.file;
         return {
-          state: null,
+          state: salvaged?.state ?? null,
           recovery: `Saved workspace could not be loaded or moved aside, so it was left at ${this.file}. Layout changes in this session will not be saved over it.`,
         };
       }
+      if (salvaged)
+        return {
+          state: salvaged.state,
+          recovery: `${salvaged.dropped} saved ${salvaged.dropped === 1 ? 'workspace was' : 'workspaces were'} damaged and could not be opened; the others were restored. The original file was kept at ${backup}.`,
+        };
       return {
         state: null,
         recovery: `Saved workspace could not be loaded. A backup was kept at ${backup}.`,

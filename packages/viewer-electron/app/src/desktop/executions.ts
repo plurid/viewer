@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import type { CapturedTarget, ExecutionTask } from '../domain/automation';
+import type { CapturedTarget, CustomAction, ExecutionTask } from '../domain/automation';
 import { actionArguments, actionAvailable } from '../domain/automation';
 import type { ApplicationSettings } from '../domain/services';
 import { entry, absolute } from './filesystem';
 import { executablePath } from './terminal-launch';
+import { childEnvironment } from './process-environment';
 /** User-authored executables are subprocesses. Only the explicit shell executor interprets code. */
 export class Executions {
   private tasks = new Map<string, ExecutionTask>();
@@ -23,6 +24,10 @@ export class Executions {
     private settings: () => ApplicationSettings,
     private emit: (task: ExecutionTask) => void,
     private access: (files: readonly string[]) => Promise<void> = async () => {},
+    /** Native first-run confirmation of each exact executor; without it nothing runs. */
+    private confirm: (action: CustomAction) => Promise<void> = async () => {
+      throw new Error('Action confirmation is unavailable, so nothing was run.');
+    },
   ) {}
   list(): ExecutionTask[] {
     return [...this.tasks.values()];
@@ -60,6 +65,8 @@ export class Executions {
     for (const file of target.selection)
       if ((await entry(file.path)).identity !== file.identity)
         throw new Error(`Selection changed: ${file.name}. Review the action again.`);
+    await this.confirm(action);
+    if (this.closed || cancelled()) throw new Error('Command cancelled before launch.');
     const executable = await executablePath(executor.executable);
     await this.access([target.directory, cwd, ...target.selection.map((file) => file.path)]);
     if (this.closed || cancelled())
@@ -103,6 +110,7 @@ export class Executions {
           await new Promise<void>((resolve, reject) => {
             const child = spawn(executable, args, {
               cwd,
+              env: childEnvironment(),
               shell: false,
               detached: process.platform !== 'win32',
               stdio: ['ignore', 'pipe', 'pipe'],

@@ -66,6 +66,11 @@ export function AgentReview() {
             </>
           )}
           <pre className="agent-proposal-detail">{proposal.detail}</pre>
+          {proposal.kind !== 'navigation' && (
+            <p className="muted">
+              Viewer asks you once more in a system dialog before anything runs.
+            </p>
+          )}
           {error && <p role="alert">{error}</p>}
         </div>
         <footer>

@@ -1,5 +1,5 @@
 import type { ApplicationSettings } from '../../domain/services';
-import { defaultShortcuts, matchesShortcut } from '../../domain/shortcuts';
+import { defaultShortcuts, matchesShortcut, shortcutCommandID } from '../../domain/shortcuts';
 import { editable } from '../commands/editing';
 import { fileControlOwnsKey, type FileKey } from './selection';
 type RoutedKey = FileKey &
@@ -22,7 +22,7 @@ export const explorerCommandIDs = new Set([
   'view-grid',
   'view-columns',
   'view-gallery',
-  'toggle-hidden',
+  'hidden',
 ]);
 export function keyCommand(event: RoutedKey, settings: ApplicationSettings): string | undefined {
   if (event.isComposing || event.repeat) return;
@@ -41,7 +41,7 @@ export function keyCommand(event: RoutedKey, settings: ApplicationSettings): str
     ),
   };
   const id = Object.entries(bindings).find(([, value]) => matchesShortcut(value, event))?.[0];
-  if (id) return id;
+  if (id) return shortcutCommandID(id);
   if (
     (event.metaKey || event.ctrlKey) &&
     !event.altKey &&

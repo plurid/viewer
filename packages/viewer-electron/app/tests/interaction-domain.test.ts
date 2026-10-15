@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FileEntry, Workspace } from '../src/domain/contracts';
-import { indexEntries, reconcileSelection } from '../src/domain/files';
+import { fileGroup, indexEntries, reconcileSelection } from '../src/domain/files';
 import { matchingPane, normalizedPanePath, parentPath } from '../src/domain/planes';
 import { rankFiles } from '../src/renderer/commands/registry';
 import { operationRoots } from '../src/desktop/operations';
@@ -175,5 +175,11 @@ describe('operation source pruning', () => {
       'C:\\ab',
       'C:\\a',
     ]);
+  });
+});
+describe('modified-date grouping', () => {
+  it('groups by the local calendar day', () => {
+    const justAfterMidnight = new Date(2026, 0, 1, 0, 30).getTime();
+    expect(fileGroup({ modified: justAfterMidnight } as FileEntry, 'modified')).toBe('2026-01-01');
   });
 });

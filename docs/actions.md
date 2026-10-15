@@ -88,19 +88,39 @@ services; MCP cannot enable a watch approval or directly apply its file changes.
 Command discovery filters the UI's captured catalog through the desktop agent safety policy. A command proposal opens review before invocation. Completion waits for the workspace acknowledgement or the actual file job outcome; failed/cancelled Trash jobs do not report success. Stopping the client cancels queued file removals. An already-running native Trash call may finish and remains recoverable. Origin changes or executor changes fail the proposal rather than retargeting it. Configuration proposals validate first, then apply a reviewed revision; they cannot change effective approvals. Recipe file changes still require their normal row review and Apply. No direct `apply`, `trash` or `delete` MCP tool is exposed.
 
 Every agent command requires fresh user review, including custom built-in aliases.
-Saved execution grants never suppress that review. A Trash request lists the exact
-paths and explains that selected folders include their contents. Its approval
+Saved execution grants never suppress that review. Approving a command or
+configuration proposal in the review panel is not enough: the desktop process
+then shows its own system confirmation, and only its affirmative button runs the
+request. A Trash request lists the exact paths, with each selected folder's item
+count and size. The folder contents are pinned when the request is made, and any
+later change inside them voids the approval; a folder with more than 10,000 items
+must be moved to the Trash by the person. Its approval
 cannot be replayed or reused for a later request. Changing the selected source or
 custom action requires a new proposal. Source versions are checked again inside
 the coordinated Trash operation; Trash failure never falls back to permanent
 deletion. Existing Trash contents, granted roots, Home, disk roots, system folders and private Viewer data
 cannot be trashed through the agent API.
 
+Agents may propose only an allow-listed set of built-in commands that act on the
+captured folder and selection, open a dialog the person completes, or change the
+view (`domain/agent-safety.ts`). Paste and Move Here are refused because they act
+on clipboard items outside the captured selection; new commands are refused until
+they are added deliberately. Configuration proposals may change only presentation
+and preview settings, folder views, recipes and saved searches: custom actions,
+terminal profiles, shortcuts, agent access, providers, file-opening rules, search
+scope, Trash confirmation and whole-section replacements stay with the person.
+`read_config` redacts terminal environment values and shell scripts.
+
 Agent shell scripts, executables, external-app commands, terminal profiles and terminal input are blocked
 because they can bypass Trash. They are excluded from agent command discovery;
 old clients and saved write/execution grants cannot re-enable them. Terminal
 output reading remains separately granted. Agent file Undo is unavailable because it can remove outputs outside the captured selection; users can review it in Recent file operations. Human-invoked custom commands and
-terminal use remain available in the app. Effective grants stay outside JSONC;
+terminal use remain available in the app. A shell or executable action asks for a
+system confirmation the first time each exact command runs, and again whenever it
+changes, so an imported or externally edited configuration cannot run code
+silently; confirmations are stored privately outside JSONC. A provider API key is
+bound to the provider type and endpoint it was entered for and is not sent after
+either changes. Effective grants stay outside JSONC;
 imported configuration cannot authorize itself. Disabling Agents rejects further
 requests and closes the server. Viewer must be running to supply context and
 review UI. Coding agents also follow the repository's [removal policy](../AGENTS.md).

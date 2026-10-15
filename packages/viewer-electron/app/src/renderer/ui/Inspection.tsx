@@ -10,7 +10,12 @@ export function InspectionControls() {
   const [content, setContent] = useState(false);
   const [ocr, setOCR] = useState(false);
   const [error, setError] = useState('');
-  const [note, setNote] = useState<{ paneID: string; owner: string; text: string }>();
+  const [note, setNote] = useState<{
+    paneID: string;
+    owner: string;
+    text: string;
+    error?: string;
+  }>();
   useEffect(() => {
     const inspect = (event: Event) => {
       const path = (event as CustomEvent<string>).detail;
@@ -62,16 +67,23 @@ export function InspectionControls() {
             aria-label="Notes"
             value={note.text}
             maxLength={100000}
-            onChange={(event) => setNote({ ...note, text: event.target.value })}
+            onChange={(event) => setNote({ ...note, text: event.target.value, error: undefined })}
           />
+          {note.error && <p role="alert">{note.error}</p>}
         </div>
         <footer>
           <button onClick={() => setNote(undefined)}>Cancel</button>
           <button
             className="primary"
             onClick={() => {
-              savePreviewValue(note.paneID, 'notes.text', note.text, note.owner);
-              setNote(undefined);
+              if (savePreviewValue(note.paneID, 'notes.text', note.text, note.owner))
+                setNote(undefined);
+              else
+                setNote({
+                  ...note,
+                  error:
+                    'These notes were not saved: this plane’s saved state would exceed its size limit, or the plane was closed. Shorten the notes or copy them elsewhere.',
+                });
             }}
           >
             Save notes

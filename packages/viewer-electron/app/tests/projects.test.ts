@@ -11,6 +11,7 @@ import {
   type ProjectDefinition,
 } from '../src/domain/project';
 import { Storage } from '../src/desktop/storage';
+import type { SavedState } from '../src/domain/contracts';
 import {
   activeWorkspace,
   flushState,
@@ -21,6 +22,7 @@ import {
   newWorkspace,
   previewValues,
   receiveSettings,
+  removePanes,
   savePreviewValue,
   updateFolderPresentation,
 } from '../src/renderer/state/store';
@@ -178,7 +180,10 @@ describe('project sessions', () => {
     receiveSettings({ ...getState().settings, revision: getState().settings.revision + 1 });
     expect(folderPresentation(root + '/Documents').mode).toBe('gallery');
     expect(previewValues('preview').zoom).toBe(1.4);
-    savePreviewValue('preview', 'camera', [1, 2, 3]);
+    expect(savePreviewValue('preview', 'camera', [1, 2, 3])).toBe(true);
+    // An oversized value is refused and reported, never silently dropped.
+    expect(savePreviewValue('preview', 'notes.text', 'n'.repeat(300000))).toBe(false);
+    expect(previewValues('preview')['notes.text']).toBeUndefined();
     await flushState(false);
     const saved = getState().saved;
     initialize({ home: root, platform: 'darwin', locations: [], state: saved, openPaths: [] });
@@ -186,6 +191,64 @@ describe('project sessions', () => {
     await newWorkspace('General');
     expect(folderPresentation(root + '/Documents').mode).toBe('list');
     await flushState(false);
+  });
+  it('drops preview state of panes that no Undo can restore, keeping live and closed ones', async () => {
+    const save = vi.fn(async (_state: SavedState) => {});
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), viewer: { save, settingsPatch: vi.fn() } });
+    initialize({ home: root, platform: 'darwin', locations: [], state: null, openPaths: [] });
+    await installProject(
+      { file: root + '/viewer.project.jsonc', root, revision: 'r', definition: project() },
+      { assets: root + '/Assets' },
+    );
+    const space = activeWorkspace().id;
+    initialize({
+      home: root,
+      platform: 'darwin',
+      locations: [],
+      openPaths: [],
+      state: {
+        ...getState().saved,
+        previewStates: {
+          ...getState().saved.previewStates,
+          [space + ':closed-long-ago']: { zoom: 2 },
+          ['deleted-workspace:preview']: { zoom: 3 },
+        },
+      },
+    });
+    await flushState(false);
+    const kept = Object.keys(save.mock.calls.at(-1)![0].previewStates ?? {});
+    expect(kept).toContain(space + ':preview');
+    expect(kept).not.toContain(space + ':closed-long-ago');
+    expect(kept).not.toContain('deleted-workspace:preview');
+    removePanes(['preview']);
+    await flushState(false);
+    // Arrangement Undo can still reopen the closed preview with its state.
+    expect(Object.keys(save.mock.calls.at(-1)![0].previewStates ?? {})).toContain(
+      space + ':preview',
+    );
+  });
+  it('reuses an untouched fresh-session workspace instead of adding one per launch', async () => {
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      viewer: { save: vi.fn(), settingsPatch: vi.fn() },
+    });
+    const launch = (state: SavedState | null) =>
+      initialize({
+        home: root,
+        platform: 'darwin',
+        locations: [],
+        state,
+        openPaths: [],
+        freshSession: true,
+      });
+    launch(null);
+    await newWorkspace('Kept work');
+    launch(getState().saved);
+    const count = getState().saved.workspaces.length;
+    launch(getState().saved);
+    launch(getState().saved);
+    expect(getState().saved.workspaces).toHaveLength(count);
+    expect(getState().saved.workspaces.map((space) => space.name)).toContain('Kept work');
   });
   it('backs up v3 before migrating to v4 without rewriting the original on read', async () => {
     const storage = new Storage(root + '/state.json');

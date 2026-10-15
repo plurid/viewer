@@ -1,5 +1,5 @@
 import { nativeOpening } from './opening';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import type { FileEntry, SearchPane } from '../../domain/contracts';
 import {
   activeWorkspace,
@@ -26,6 +26,7 @@ import { blankFileSpace, useFileKeyboard, useFileSelection } from './selection';
 import { routeExplorerInput } from './input';
 import { useCommands } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
+import { useContextPublish } from './context-publish';
 const emptyEntries: FileEntry[] = [];
 export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string }) {
   const pane = useViewer((state) => activeWorkspace(state).panes.find((pane) => pane.id === id)) as
@@ -112,20 +113,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
     },
     [selected, recipes, opening],
   );
-  useEffect(() => {
-    if (active !== id) return;
-    const rootID = workspace.rootID(id);
-    if (rootID)
-      void window.viewer
-        .contextPublish({
-          workspaceID: activeWorkspace().id,
-          paneID: id,
-          rootID,
-          sources: selected.map((file) => file.path),
-          actor: 'user',
-        })
-        .catch(report);
-  }, [active, id, selected, workspace]);
+  useContextPublish(id, active === id, selected);
   const handleKey = useFileKeyboard(id, (event) =>
     routeExplorerInput(event, {
       settings: getState().settings.settings,

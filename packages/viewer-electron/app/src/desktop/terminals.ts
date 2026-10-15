@@ -5,6 +5,7 @@ import type { ApplicationSettings } from '../domain/services';
 import { absolute } from './filesystem';
 import { executablePath } from './terminal-launch';
 import { terminateTerminalGroup } from './terminal-groups';
+import { childEnvironment } from './process-environment';
 export class Terminals {
   private closed = false;
   private worker?: OwnedWorker;
@@ -149,20 +150,11 @@ export class Terminals {
       });
     }
     this.sessions.set(request.id, { owner, request, cwd, output: '' });
-    const env = Object.fromEntries(
-      Object.entries({
-        ...process.env,
-        ...profile.env,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-      }).filter(
-        ([key, value]) =>
-          value !== undefined &&
-          !key.startsWith('ELECTRON_') &&
-          !key.startsWith('DYLD_') &&
-          key !== 'NODE_OPTIONS',
-      ),
-    ) as Record<string, string>;
+    const env = childEnvironment({
+      ...profile.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+    });
     this.worker.postMessage({
       kind: 'start',
       ...request,
@@ -271,11 +263,6 @@ export class Terminals {
     const session = this.sessions.get(id);
     if (!session) throw new Error('Terminal is no longer available.');
     return { cwd: session.cwd, output: session.output };
-  }
-  agentWrite(id: string, data: string): void {
-    const session = this.sessions.get(id);
-    if (!session) throw new Error('Terminal is no longer available.');
-    this.write(id, data, session.owner);
   }
   stopOwner(owner: number): void {
     for (const pending of this.pending.values())

@@ -83,6 +83,29 @@ describe('layout-only changes', () => {
     expect(activeWorkspace().roots).toHaveLength(3);
     expect(operate).not.toHaveBeenCalled();
   });
+  it('binds every default shortcut and menu command to a registered command', async () => {
+    const { folderCommands } = await import('../src/renderer/commands/folder');
+    const { readFile } = await import('node:fs/promises');
+    const { defaultShortcuts, shortcutCommandID } = await import('../src/domain/shortcuts');
+    const actions = {
+      engine: { current: null },
+      workspace: { newRootFolder: addRootFolder, parentPaneID: () => undefined },
+      ready: true,
+      tool: null,
+    } as unknown as WindowActions;
+    const registered = new Set(
+      [...windowCommands(actions), ...folderCommands({} as never)].map((command) => command.id),
+    );
+    const missing = Object.keys(defaultShortcuts)
+      .map(shortcutCommandID)
+      .filter((id) => !registered.has(id));
+    expect(missing).toEqual([]);
+    // Edit ▸ Redo has no file command yet; it still edits text through the text-edit route.
+    const menu = [...(await readFile('src/main.ts', 'utf8')).matchAll(/command\('([^']+)'\)/g)]
+      .map((match) => match[1])
+      .filter((id) => !registered.has(id) && id !== 'redo-file');
+    expect(menu).toEqual([]);
+  });
   it('creates a root from captured command ownership even if the active pane changes', async () => {
     const owner = activeWorkspace().panes[0];
     const workspaceID = activeWorkspace().id;

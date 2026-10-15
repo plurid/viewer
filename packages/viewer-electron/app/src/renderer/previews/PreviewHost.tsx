@@ -61,7 +61,8 @@ export const PreviewHost = memo(function PreviewHost({
   );
   const limits = useViewer((state) => state.settings.settings.previews);
   const look = useViewer((state) => state.saved.look);
-  const abort = useMemo(() => new AbortController(), [path, supplied?.id, retry]);
+  // One controller per resource effect run: a new `supplied` object re-runs that effect.
+  const abort = useMemo(() => new AbortController(), [path, supplied, retry]);
   useEffect(
     () =>
       window.viewer.onEvent((event) => {

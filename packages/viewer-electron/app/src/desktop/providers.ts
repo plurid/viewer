@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { ModelProvider } from '../domain/services';
 import { providerPresets, validProviderEndpoint } from '../domain/model-providers';
@@ -6,9 +7,17 @@ import { DocumentStore } from './document-store';
 import { ModelPermissionRequired, type ModelPermissions } from './model-permissions';
 import type { ModelDataLevel } from '../domain/model-permissions';
 const secretSchema = z.record(z.string(), z.string().max(20000));
+const bindingSchema = z.record(z.string(), z.string().regex(/^[0-9a-f]{64}$/));
+/** The provider type and endpoint a key was entered for. */
+export const providerBinding = (provider: Pick<ModelProvider, 'kind' | 'endpoint'>) =>
+  createHash('sha256')
+    .update(provider.kind + '\n' + provider.endpoint.replace(/\/+$/, ''))
+    .digest('hex');
 export class Credentials {
   private values: Record<string, string> = {};
+  private bindings: Record<string, string> = {};
   private store: DocumentStore<Record<string, string>>;
+  private bindingStore: DocumentStore<Record<string, string>>;
   private loaded?: Promise<void>;
   private writes: Promise<void> = Promise.resolve();
   constructor(
@@ -19,12 +28,16 @@ export class Credentials {
     this.store = new DocumentStore(path.join(dataPath, 'credentials-v1.json'), (value) =>
       secretSchema.parse(value),
     );
+    this.bindingStore = new DocumentStore(
+      path.join(dataPath, 'credential-bindings-v1.json'),
+      (value) => bindingSchema.parse(value),
+    );
   }
   async load() {
-    this.loaded ??= this.store
-      .load()
-      .then((value) => {
-        this.values = value || {};
+    this.loaded ??= Promise.all([this.store.load(), this.bindingStore.load()])
+      .then(([values, bindings]) => {
+        this.values = values || {};
+        this.bindings = bindings || {};
       })
       .catch((error: unknown) => {
         // A failed read is retried by the next caller instead of disabling this service.
@@ -33,19 +46,53 @@ export class Credentials {
       });
     await this.loaded;
   }
-  set(id: string, value: string): Promise<void> {
+  /** `binding` ties a new key to its provider type and endpoint; see `forProvider`. */
+  set(id: string, value: string, binding?: string): Promise<void> {
     const write = this.writes
       .catch(() => {})
       .then(async () => {
         await this.load();
         const next = { ...this.values };
-        if (value) next[id] = (await this.encrypt(value)).toString('base64');
-        else delete next[id];
+        const bindings = { ...this.bindings };
+        if (value) {
+          next[id] = (await this.encrypt(value)).toString('base64');
+          if (binding) bindings[id] = binding;
+          else delete bindings[id];
+        } else {
+          delete next[id];
+          delete bindings[id];
+        }
         await this.store.save(next);
         this.values = next;
+        await this.bindingStore.save(bindings);
+        this.bindings = bindings;
       });
     this.writes = write;
     return write;
+  }
+  /** A key is sent only to the provider type and endpoint it was entered for. Keys
+   * saved before bindings existed are bound on first use. */
+  async forProvider(provider: ModelProvider): Promise<string> {
+    const secret = await this.get(provider.id);
+    if (!secret) return '';
+    const expected = providerBinding(provider);
+    const bound = this.bindings[provider.id];
+    if (bound && bound !== expected)
+      throw new Error(
+        'This provider’s type or endpoint changed after its API key was saved. Enter the key again in Settings to use it there.',
+      );
+    if (!bound) {
+      const write = this.writes
+        .catch(() => {})
+        .then(async () => {
+          const bindings = { ...this.bindings, [provider.id]: expected };
+          await this.bindingStore.save(bindings);
+          this.bindings = bindings;
+        });
+      this.writes = write;
+      await write;
+    }
+    return secret;
   }
   async get(id: string): Promise<string> {
     await this.load();
@@ -111,7 +158,7 @@ export class Providers {
     const suggested = providerPresets[provider.kind].suggestedModels;
     // Z.ai publishes model IDs but no model-list API in its public API reference.
     if (suggested) return [...suggested];
-    const secret = await this.credentials.get(provider.id);
+    const secret = await this.credentials.forProvider(provider);
     if (!secret && !['local', 'openrouter'].includes(provider.kind))
       throw new Error('Add this provider’s API key in Settings.');
     const response = await this.request(url, {
@@ -167,7 +214,7 @@ export class Providers {
     if (!provider.model.trim()) throw new Error('Select a model in Settings.');
     const preset = providerPresets[provider.kind];
     const url = this.endpoint(provider, preset.protocol);
-    const secret = await this.credentials.get(provider.id);
+    const secret = await this.credentials.forProvider(provider);
     signal.throwIfAborted();
     if (provider.kind !== 'local' && !secret)
       throw new Error('Add this provider’s API key in Settings.');

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { reservedEnvironment } from './process-environment';
 const processString = z
   .string()
   .max(32768)
@@ -12,11 +13,7 @@ export const terminalProfileSchema = z
     env: z
       .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), processString)
       .refine(
-        (env) =>
-          !Object.keys(env).some(
-            (key) =>
-              key.startsWith('DYLD_') || key.startsWith('ELECTRON_') || key === 'NODE_OPTIONS',
-          ),
+        (env) => !Object.keys(env).some(reservedEnvironment),
         'Reserved process environment variable.',
       ),
   })

@@ -8,18 +8,42 @@ import type { SettingsPatch } from '../domain/services';
 import { DocumentStore } from './document-store';
 import type { SettingsService } from './settings';
 import { entry, absolute } from './filesystem';
-import { agentCommandID } from '../domain/agent-safety';
+import { agentCommandID, agentConfigurationPath } from '../domain/agent-safety';
 import { sameSourceVersion, sourceVersion } from '../domain/inspection';
 import type { OperationJob } from '../domain/contracts';
+import { formatBytes } from '../domain/files';
+import { outputProof } from './operation-journal';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
     .digest('hex');
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
+/** Counts a folder's contents for review, without following links. */
+async function folderContents(root: string): Promise<{ items: number; bytes: number } | null> {
+  let items = 0,
+    bytes = 0;
+  const pending = [root];
+  while (pending.length) {
+    const file = pending.pop()!;
+    const info = await fs.lstat(file);
+    if (file !== root) {
+      if (++items > 10000) return null;
+      if (info.isFile()) bytes += info.size;
+    }
+    if (info.isDirectory())
+      for (const name of await fs.readdir(file)) pending.push(path.join(file, name));
+  }
+  return { items, bytes };
+}
+/** Commands and configuration changes can alter files or later execution; navigation cannot. */
+export const needsNativeConfirmation = (proposal: AgentProposal) =>
+  proposal.kind === 'command' || proposal.kind === 'configuration';
 /** Effective approvals live outside editable configuration and bind to the exact executor. */
 export class AgentRequests {
   private proposals = new Map<string, AgentProposal & { fingerprint?: string }>();
+  /** Private content proofs of folders in pending Trash proposals, by proposal ID. */
+  private contents = new Map<string, Map<string, string>>();
   private grants: ExecutionGrant[] = [];
   private store: DocumentStore<ExecutionGrant[]>;
   private loaded?: Promise<void>;
@@ -34,20 +58,20 @@ export class AgentRequests {
     ) => Promise<
       void | { taskID: string; operationID?: never } | { operationID: string; taskID?: never }
     >,
-    private terminal: {
-      read(id: string): { cwd: string; output: string };
-      write(id: string, data: string): void;
-    },
+    /** Read-only: no route exists for agent terminal input (AGENTS.md). */
+    private terminal: { read(id: string): { cwd: string; output: string } },
     private navigate?: (request: AgentNavigation, target: CapturedTarget) => Promise<void>,
     private authority?: {
       actor(): string;
       check(proposal: AgentProposal): Promise<void>;
       run<T>(clientID: string, work: () => Promise<T>): Promise<T>;
-      executeAllowed(): Promise<boolean>;
       cancelExecution(id: string): void;
       cancelOperation?(id: string): void;
       operation?(id: string): OperationJob | undefined;
     },
+    /** A confirmation the desktop process shows itself. A renderer approval alone
+     * never runs a command or configuration change (AGENTS.md). */
+    private confirm?: (proposal: AgentProposal) => Promise<boolean>,
   ) {
     this.store = new DocumentStore(path.join(directory, 'execution-approvals-v1.json'), (value) =>
       z
@@ -168,6 +192,7 @@ export class AgentRequests {
       );
       if (!old) break;
       this.proposals.delete(old[0]);
+      this.contents.delete(old[0]);
     }
     const value = {
       ...proposal,
@@ -192,6 +217,28 @@ export class AgentRequests {
     const action = this.settings
       .snapshot()
       .settings.customActions.find((action) => 'custom.' + action.id === commandID);
+    // A folder's reviewed contents are pinned, not just the folder entry: anything
+    // added, removed or changed inside it afterwards voids the approval.
+    const contents = new Map<string, string>();
+    const lines: string[] = [];
+    for (const file of trash ? target.selection : []) {
+      if (!file.directory) {
+        lines.push(file.path);
+        continue;
+      }
+      const [summary, proof] = await Promise.all([
+        folderContents(file.path),
+        outputProof(file.path),
+      ]);
+      if (!summary || !proof)
+        throw new Error(
+          `${file.name} holds more than 10,000 items. Move it to the Trash yourself after reviewing it.`,
+        );
+      contents.set(file.path, proof);
+      lines.push(
+        `${file.path}  (folder: ${summary.items} ${summary.items === 1 ? 'item' : 'items'}, ${formatBytes(summary.bytes)})`,
+      );
+    }
     const proposal = this.add(
       {
         kind: 'command',
@@ -201,17 +248,19 @@ export class AgentRequests {
         target: structuredClone(target),
         detail: trash
           ? 'Move only these items to the system Trash:\n\n' +
-            target.selection.map((file) => file.path).join('\n') +
-            '\n\nSelected folders include their contents. Nothing is permanently deleted. This approval applies only to this request.'
+            lines.join('\n') +
+            '\n\nSelected folders include the contents counted above; any change to them cancels this approval. Nothing is permanently deleted. This approval applies only to this request.'
           : action
             ? JSON.stringify(action.executor, null, 2)
             : `Run ${title} for the captured selection.`,
       },
       action ? this.actionFingerprint(commandID) : undefined,
     );
+    if (contents.size) this.contents.set(proposal.id, contents);
     return { id: proposal.id, requiresUserReview: true };
   }
   configuration(patches: SettingsPatch[]): { id: string; requiresUserReview: true } {
+    for (const patch of patches) agentConfigurationPath(patch.keys ?? patch.path.split('.'));
     this.settings.preview(patches);
     const proposal = this.add({
       kind: 'configuration',
@@ -300,6 +349,24 @@ export class AgentRequests {
       this.emit(proposal);
       return;
     }
+    if (needsNativeConfirmation(proposal)) {
+      if (!this.confirm) throw new Error('Native confirmation is unavailable, so nothing was run.');
+      // Hold the proposal while the dialog is open so a second approval cannot race it.
+      proposal.status = 'running';
+      this.emit(proposal);
+      let confirmed = false;
+      try {
+        confirmed = await this.confirm(structuredClone(proposal));
+      } finally {
+        if (!confirmed && this.proposals.get(id) === proposal && proposal.status === 'running') {
+          proposal.status = 'review';
+          this.emit(proposal);
+        }
+      }
+      if (!confirmed) throw new Error('The request was not confirmed. Nothing was run.');
+      if (this.proposals.get(id) !== proposal || proposal.status !== 'running')
+        throw new Error('This agent task was stopped.');
+    }
     proposal.status = 'running';
     this.emit(proposal);
     try {
@@ -307,9 +374,11 @@ export class AgentRequests {
       const execute = async () => {
         if (this.proposals.get(id)?.status !== 'running')
           throw new Error('This agent task was stopped.');
-        if (proposal.kind === 'configuration')
+        if (proposal.kind === 'configuration') {
+          for (const patch of proposal.patches!)
+            agentConfigurationPath(patch.keys ?? patch.path.split('.'));
           await this.settings.patch(proposal.patches!, proposal.revision!);
-        else if (proposal.kind === 'terminal-write')
+        } else if (proposal.kind === 'terminal-write')
           throw new Error(
             'Agent terminal input is unavailable because it can permanently delete files.',
           );
@@ -335,6 +404,11 @@ export class AgentRequests {
             )
               throw new Error('Selection changed. Ask the agent for a new proposal.');
           }
+          for (const [folder, proof] of this.contents.get(id) ?? [])
+            if ((await outputProof(folder)) !== proof)
+              throw new Error(
+                `The contents of ${folder} changed after the request. Ask the agent for a new proposal.`,
+              );
           await this.authority?.check(proposal);
           if (this.proposals.get(id)?.status !== 'running')
             throw new Error('This agent task was stopped.');

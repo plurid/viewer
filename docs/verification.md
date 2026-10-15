@@ -1,5 +1,25 @@
 # Verification
 
+## October 15 safety review
+
+A full review fixed file-operation, agent-boundary and persistence issues; see [file operations](file-operations.md) and [actions](actions.md). **554 unit tests across 73 files pass** (2 skipped), with `VIEWER_TEST_PRESERVE=1`. All four TypeScript targets, ESLint and formatting pass. `pnpm package`, `pnpm test:desktop` and the native acceptance scripts were not run for this change.
+
+Test and tool cleanup no longer deletes anything permanently. `tools/temporary.ts` creates owned `viewer-…` folders and moves them to the user Trash after identity and location checks, keeping them on any doubt. `VIEWER_TEST_PRESERVE=1` keeps every folder and lists it in `$TMPDIR/viewer-kept-test-folders.log`; agents use it so removal waits for the owner. `tools/mas.ts` keeps an earlier build as `<arch>-previous-<time>`, and `tools/direct-release.ts` keeps its disk-image staging.
+
+New regressions cover:
+- Replace safety: same-item spellings through a symbolic link and a case variant, a destination containing the source, Replace ordering with a failed extraction, and a destination changed while the prompt was open.
+- New Folder Replace and protected folders.
+- Staging cleanup through Trash, keep-and-report, unreadable-journal quarantine and reporting of Trash receipt failures.
+- Journaling of case-only renames, and expected-source matching.
+- Symlinked `config.jsonc`, and project-file metadata preservation.
+- Agent approvals without desktop confirmation, the command and configuration allow-lists, folder-content pinning and configuration redaction.
+- First-run execution confirmation, and provider key binding.
+- Preview-state pruning, oversized-note refusal, fresh-session workspace reuse, shortcut/menu command consistency, local-date grouping and per-workspace state salvage.
+
+Each new Replace and journal regression was confirmed to fail against the previous `operations.ts`.
+
+`tests/electron-smoke.ts` still has agents approve an executable custom action and `open-terminal-plane`, both of which the agent policy already refused. It also predates the desktop confirmation dialog, so those sections need updating before the packaged smoke is run again.
+
 ## October 13 parameterized MCP navigation
 
 **391 tests across 51 files pass.** `pnpm check`, `pnpm lint`, `pnpm format:check` and `pnpm package` pass. The 25 new MCP/navigation regressions cover authentication, strict arguments, redacted live discovery, reviewed/rejected execution, literal Unicode selection, canonical scopes/symlink escape, stale or replaced sources, revoked native/agent access, disabled Agents, token rotation, unique workspace names, changed destinations, active columns, root versus linked placement, plane focus and empty-workspace continuation. Native filesystem/coordination tests require ordinary macOS execution; the restricted command sandbox produced native file-open failures, while the final suite with normal OS access passes.

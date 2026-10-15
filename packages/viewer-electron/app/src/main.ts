@@ -1,4 +1,4 @@
-import { nativeTheme, app, BrowserWindow, Menu, protocol, session, screen } from 'electron';
+import { nativeTheme, app, BrowserWindow, dialog, Menu, protocol, session, screen } from 'electron';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
@@ -527,76 +527,99 @@ app.on('open-file', (event, file) => {
   if (desktop) desktop.open([file]);
   else pendingPaths.push(file);
 });
-app.whenReady().then(async () => {
-  if (!ownsInstance || quitPending || quitting) return;
-  if (mcpMode) {
-    app.dock?.hide();
-    try {
-      await runMCPClient(app.getPath('userData'));
-    } catch (error) {
-      process.stderr.write((error instanceof Error ? error.message : String(error)) + '\n');
-      process.exitCode = 1;
+app
+  .whenReady()
+  .then(async () => {
+    if (!ownsInstance || quitPending || quitting) return;
+    if (mcpMode) {
+      app.dock?.hide();
+      try {
+        await runMCPClient(app.getPath('userData'));
+      } catch (error) {
+        process.stderr.write((error instanceof Error ? error.message : String(error)) + '\n');
+        process.exitCode = 1;
+      }
+      quitting = true;
+      app.quit();
+      return;
     }
-    quitting = true;
-    app.quit();
-    return;
-  }
-  windowState = new WindowState(path.join(app.getPath('userData'), 'window-state-v1.json'));
-  await windowState.load();
-  if (quitPending || quitting) return;
-  desktop = new Desktop(app.getPath('userData'), trusted, {
-    openSettings: openSettingsWindow,
-    settingsChanged: menu,
-    worker: path.join(__dirname, 'worker.cjs'),
-    fileBackend:
-      backgroundTest && process.env.VIEWER_TEST_FILE_THREADS === '1' ? 'thread' : undefined,
-    terminalWorker: path.join(__dirname, 'terminal-worker.cjs'),
-    ocr: app.isPackaged
-      ? path.join(process.resourcesPath, 'viewer-ocr')
-      : path.resolve('assets/viewer-ocr'),
-    applications: app.isPackaged
-      ? path.join(process.resourcesPath, 'viewer-applications')
-      : path.resolve('assets/viewer-applications'),
+    windowState = new WindowState(path.join(app.getPath('userData'), 'window-state-v1.json'));
+    await windowState.load();
+    if (quitPending || quitting) return;
+    desktop = new Desktop(app.getPath('userData'), trusted, {
+      openSettings: openSettingsWindow,
+      settingsChanged: menu,
+      worker: path.join(__dirname, 'worker.cjs'),
+      fileBackend:
+        backgroundTest && process.env.VIEWER_TEST_FILE_THREADS === '1' ? 'thread' : undefined,
+      terminalWorker: path.join(__dirname, 'terminal-worker.cjs'),
+      ocr: app.isPackaged
+        ? path.join(process.resourcesPath, 'viewer-ocr')
+        : path.resolve('assets/viewer-ocr'),
+      applications: app.isPackaged
+        ? path.join(process.resourcesPath, 'viewer-applications')
+        : path.resolve('assets/viewer-applications'),
+    });
+    protocol.handle('viewer-resource', (request) => desktop!.resources.response(request));
+    nativeTheme.on('updated', () => desktop?.settings.announce());
+    const applicationCSP = `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' viewer-resource: blob: data:; media-src 'self' viewer-resource: blob:; connect-src 'self' viewer-resource:${devURL ? ' ws://127.0.0.1:* http://127.0.0.1:* ws://localhost:* http://localhost:*' : ''}; worker-src 'self' blob:; font-src 'self' blob: data:; object-src 'none'; frame-src 'none'; base-uri 'none'`;
+    protocol.handle('viewer-app', async (request) => {
+      const url = new URL(request.url);
+      let relative: string;
+      try {
+        relative = decodeURIComponent(url.pathname);
+      } catch {
+        return new Response(null, { status: 400 });
+      }
+      const file = path.resolve(rendererRoot, '.' + relative);
+      if (url.hostname !== 'app' || !file.startsWith(rendererRoot + path.sep))
+        return new Response(null, { status: 403 });
+      try {
+        // The policy travels with the document itself, independent of webRequest hooks.
+        return new Response(await readFile(file), {
+          headers: {
+            'Content-Type': lookup(file) || 'application/octet-stream',
+            'Content-Security-Policy': applicationCSP,
+            'X-Content-Type-Options': 'nosniff',
+          },
+        });
+      } catch {
+        return new Response('Application asset is unavailable.', { status: 404 });
+      }
+    });
+    session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
+      callback(false),
+    );
+    session.defaultSession.setPermissionCheckHandler(() => false);
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
+      callback({
+        responseHeaders: trusted(details.url)
+          ? { ...details.responseHeaders, 'Content-Security-Policy': [applicationCSP] }
+          : details.responseHeaders,
+      }),
+    );
+    session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+      const url = new URL(details.url);
+      const allowed =
+        ['viewer-app:', 'viewer-resource:', 'devtools:', 'blob:', 'data:'].includes(url.protocol) ||
+        (!!devURL &&
+          ['http:', 'ws:'].includes(url.protocol) &&
+          ['127.0.0.1', 'localhost'].includes(url.hostname));
+      callback({ cancel: !allowed });
+    });
+    await createWindow();
+  })
+  .catch((error: unknown) => {
+    // A startup failure must not leave a windowless process running silently.
+    console.error(error);
+    // Hidden verification runs never show windows; their logs carry the error.
+    if (!backgroundTest)
+      dialog.showErrorBox(
+        'Viewer could not start',
+        error instanceof Error ? error.message : String(error),
+      );
+    app.exit(1);
   });
-  protocol.handle('viewer-resource', (request) => desktop!.resources.response(request));
-  nativeTheme.on('updated', () => desktop?.settings.announce());
-  protocol.handle('viewer-app', async (request) => {
-    const url = new URL(request.url);
-    const relative = decodeURIComponent(url.pathname);
-    const file = path.resolve(rendererRoot, '.' + relative);
-    if (url.hostname !== 'app' || !file.startsWith(rendererRoot + path.sep))
-      return new Response(null, { status: 403 });
-    try {
-      return new Response(await readFile(file), {
-        headers: { 'Content-Type': lookup(file) || 'application/octet-stream' },
-      });
-    } catch {
-      return new Response('Application asset is unavailable.', { status: 404 });
-    }
-  });
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
-    callback(false),
-  );
-  session.defaultSession.setPermissionCheckHandler(() => false);
-  const applicationCSP = `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' viewer-resource: blob: data:; media-src 'self' viewer-resource: blob:; connect-src 'self' viewer-resource:${devURL ? ' ws://127.0.0.1:* http://127.0.0.1:* ws://localhost:* http://localhost:*' : ''}; worker-src 'self' blob:; font-src 'self' blob: data:; object-src 'none'; frame-src 'none'; base-uri 'none'`;
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
-    callback({
-      responseHeaders: trusted(details.url)
-        ? { ...details.responseHeaders, 'Content-Security-Policy': [applicationCSP] }
-        : details.responseHeaders,
-    }),
-  );
-  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    const url = new URL(details.url);
-    const allowed =
-      ['viewer-app:', 'viewer-resource:', 'devtools:', 'blob:', 'data:'].includes(url.protocol) ||
-      (!!devURL &&
-        ['http:', 'ws:'].includes(url.protocol) &&
-        ['127.0.0.1', 'localhost'].includes(url.hostname));
-    callback({ cancel: !allowed });
-  });
-  await createWindow();
-});
 app.on('activate', () => {
   if (!mcpMode && desktop && !window && !quitPending && !quitting) void createWindow();
 });

@@ -66,10 +66,15 @@ import { Volumes } from './ui/Volumes';
 import { Trash } from './ui/Trash';
 import { openWorkspacePath } from './workspace/open-path';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
+import { commandShortcutID } from '../domain/shortcuts';
 
 export function App() {
   const registry = useMemo(
-    () => new CommandRegistry(rememberCommand, (id) => getState().settings.settings.shortcuts[id]),
+    () =>
+      new CommandRegistry(
+        rememberCommand,
+        (id) => getState().settings.settings.shortcuts[commandShortcutID(id)],
+      ),
     [],
   );
   return (
@@ -166,6 +171,13 @@ function AppWindow() {
   const quick = useViewer((state) => state.quickPreview);
   const density = useViewer((state) => state.settings.settings.browsing.density);
   const jobs = useViewer((state) => state.jobs);
+  const jobsSignature =
+    jobs.length +
+    ':' +
+    jobs
+      .filter((job) => job.undoable)
+      .map((job) => job.id)
+      .join(',');
   const operationsOpen = useViewer((state) => state.operationsOpen);
   const showOperations = useViewer(needsOperations);
   const deleted = useViewer((state) => state.deletedWorkspace);
@@ -245,7 +257,9 @@ function AppWindow() {
               (!invocation.folder || pane.path === invocation.folder.path),
           )),
     },
-    [saved, ready, tool, jobs, terminalName],
+    // Progress ticks replace `jobs` many times a second; commands only care whether
+    // jobs exist and which can be undone, and read those from the live context.
+    [saved, ready, tool, jobsSignature, terminalName],
   );
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;

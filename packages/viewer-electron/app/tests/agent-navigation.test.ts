@@ -122,13 +122,12 @@ beforeEach(async () => {
     settings,
     () => {},
     async () => {},
-    { read: () => ({ cwd: files, output: '' }), write: () => {} },
+    { read: () => ({ cwd: files, output: '' }) },
     navigate,
     {
       actor: () => broker.clients.actor(),
       check: (proposal) => broker.authorizeProposal(proposal),
       run: (id, work) => broker.clients.context.run(id, work),
-      executeAllowed: async () => true,
       cancelExecution: () => {},
     },
   );

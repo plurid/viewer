@@ -8,6 +8,54 @@ export const agentRemovalPolicy = Object.freeze({
 });
 
 const terminalCommands = new Set(['open-terminal', 'open-tmux', 'open-terminal-plane']);
+/** Built-in commands an agent may propose. Each acts only on the captured folder and
+ * selection, opens a dialog the person completes, or changes the view. Everything
+ * else is refused, including commands added later and clipboard-driven paste/move. */
+const agentCommands = new Set([
+  'trash',
+  'duplicate',
+  'compress',
+  'extract',
+  'make-alias',
+  'rename',
+  'new-folder',
+  'copy-to',
+  'move-to',
+  'copy-path',
+  'path',
+  'add-to-basket',
+  'calculate-size',
+  'info',
+  'tags',
+  'inspect-file',
+  'related-files',
+  'quick-preview',
+  'native-quick-look',
+  'select-all',
+  'invert-selection',
+  'refresh',
+  'hidden',
+  'search',
+  'find-file',
+  'go-to',
+  'back',
+  'forward',
+  'parent',
+  'linked',
+  'another-plane',
+  'frame-plane',
+  'frame-all',
+  'dock',
+  'arrange-horizontal',
+  'arrange-vertical',
+  'plane-notes',
+  'plane-sidebar',
+  'toggle-sidebar',
+  'wrap-file-names',
+  'reset-list-columns',
+  'reset-folder-view',
+]);
+const agentCommandPrefixes = ['view-', 'column.', 'group.', 'recipe.'];
 const externalCommands = new Set(['open-default', 'open-with', 'open-selection']);
 
 /** Resolve aliases before review; opaque code cannot promise recoverable file removal. */
@@ -26,6 +74,8 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
         throw new Error('Custom actions cannot call another custom action.');
       command = executor.command;
     }
+    // A recipe action only prepares a reviewed proposal.
+    if (executor.kind === 'recipe') return id;
   }
   if (terminalCommands.has(command))
     throw new Error('Agent terminal execution is unavailable because it can bypass Trash.');
@@ -41,5 +91,50 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
     );
   if (command === 'parent-plane' || command === 'view-open-plane')
     throw new Error('Use propose_focus_plane for an explicitly authorized destination plane.');
+  if (command === 'paste' || command === 'paste-move')
+    throw new Error(
+      'Paste acts on clipboard items outside the captured selection. Use Copy To or Move To instead.',
+    );
+  if (
+    !agentCommands.has(command) &&
+    !agentCommandPrefixes.some((prefix) => command.startsWith(prefix))
+  )
+    throw new Error(`Agents cannot propose “${command}”. Ask the person to run it themselves.`);
   return command;
+}
+
+/** Settings an agent may propose. Execution, removal confirmation, shortcuts, agent
+ * scope, providers, file-opening rules and search roots stay with the person, and so
+ * does replacing a whole section. Every allowed path is at least as deep as listed. */
+const agentConfigurable: readonly (readonly string[])[] = [
+  ['settings', 'appearance'],
+  ['settings', 'browsing', 'mode'],
+  ['settings', 'browsing', 'sort'],
+  ['settings', 'browsing', 'descending'],
+  ['settings', 'browsing', 'group'],
+  ['settings', 'browsing', 'columnWidth'],
+  ['settings', 'browsing', 'density'],
+  ['settings', 'browsing', 'foldersFirst'],
+  ['settings', 'browsing', 'showHidden'],
+  ['settings', 'browsing', 'newPlaneLocation'],
+  ['settings', 'browsing', 'newPlanePath'],
+  ['settings', 'browsing', 'emptyWorkspaceLocation'],
+  ['settings', 'browsing', 'emptyWorkspacePath'],
+  ['settings', 'folders'],
+  ['settings', 'previews'],
+  ['settings', 'recipes'],
+  ['settings', 'savedSearches'],
+  ['settings', 'settingsWindow'],
+  ['ui'],
+];
+export function agentConfigurationPath(keys: readonly string[]): void {
+  if (
+    !agentConfigurable.some(
+      (allowed) =>
+        keys.length >= allowed.length && allowed.every((key, index) => keys[index] === key),
+    )
+  )
+    throw new Error(
+      `Agents cannot change ${keys.join('.')}. Execution, Trash confirmation, shortcuts, agent access, providers, file opening and search scope change only in Settings.`,
+    );
 }

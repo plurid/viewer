@@ -28,6 +28,11 @@ export const defaultShortcuts: Record<string, string> = {
   'view-gallery': 'Cmd+4',
   'toggle-hidden': 'Cmd+Shift+.',
 };
+/** Shortcut keys kept for saved remaps whose command has a different ID. */
+const shortcutCommands: Readonly<Record<string, string>> = { 'toggle-hidden': 'hidden' };
+export const shortcutCommandID = (shortcutID: string) => shortcutCommands[shortcutID] ?? shortcutID;
+export const commandShortcutID = (commandID: string) =>
+  Object.keys(shortcutCommands).find((key) => shortcutCommands[key] === commandID) ?? commandID;
 const aliases: Record<string, string> = {
   command: 'cmd',
   cmdorctrl: 'cmd',

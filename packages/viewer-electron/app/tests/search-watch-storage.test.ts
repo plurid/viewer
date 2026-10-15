@@ -198,5 +198,21 @@ describe('search, subscriptions and persistence', () => {
     expect(recovered.state).toBeNull();
     expect(recovered.recovery).toContain('backup');
     expect((await readdir(root)).some((name) => name.includes('unreadable'))).toBe(true);
+    // One damaged workspace no longer discards the others.
+    const damaged = structuredClone(state.workspaces[0]);
+    damaged.id = 'damaged';
+    damaged.roots = ['missing-pane'];
+    const mixed = {
+      ...state,
+      workspaces: [damaged, state.workspaces[0]],
+      activeWorkspace: 'damaged',
+    };
+    await writeFile(storage.file, JSON.stringify(mixed));
+    const salvaged = await storage.load();
+    expect(salvaged.state?.workspaces.map((workspace) => workspace.id)).toEqual(['work']);
+    expect(salvaged.state?.activeWorkspace).toBe('work');
+    expect(salvaged.recovery).toContain('1 saved workspace was damaged');
+    const kept = (await readdir(root)).filter((name) => name.includes('unreadable'));
+    expect(kept).toHaveLength(2);
   });
 });

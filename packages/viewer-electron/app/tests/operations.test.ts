@@ -58,6 +58,7 @@ vi.mock('../src/desktop/macos-files', async (original) => {
   };
 });
 import { Operations } from '../src/desktop/operations';
+import { ProtectedPaths } from '../src/desktop/protected-paths';
 import { operationJournal } from '../src/desktop/operation-journal';
 import { DocumentStore } from '../src/desktop/document-store';
 let root: string, destination: string, trash: string, operations: Operations;
@@ -751,5 +752,48 @@ describe('replace safety', () => {
         ],
       }),
     ).toThrow('no longer match');
+  });
+});
+describe('protected folders', () => {
+  it('refuses to trash, move or replace Home and its standard folders for any request', async () => {
+    const home = path.join(root, 'home');
+    const desktop = path.join(home, 'Desktop'),
+      documents = path.join(home, 'Documents');
+    await mkdir(desktop, { recursive: true });
+    await mkdir(documents);
+    await writeFile(path.join(desktop, 'note.txt'), 'inside is fine');
+    operations = new Operations(
+      async (file) => {
+        await rename(file, path.join(trash, path.basename(file) + '-' + crypto.randomUUID()));
+      },
+      () => undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new ProtectedPaths(home),
+    );
+    const cases: [OperationRequest, string][] = [
+      [{ kind: 'trash', sources: [desktop] }, desktop],
+      [{ kind: 'trash', sources: [home] }, home],
+      [{ kind: 'move', sources: [documents], destination }, documents],
+      [{ kind: 'rename', sources: [documents], name: 'Old documents' }, documents],
+    ];
+    for (const [request, folder] of cases) {
+      const job = await run(request);
+      expect(job.errors[0]?.message, request.kind).toContain('protected folder');
+      expect((await lstat(folder)).isDirectory()).toBe(true);
+    }
+    const replacement = path.join(root, 'Desktop');
+    await mkdir(replacement);
+    const id = operations.start({ kind: 'copy', sources: [replacement], destination: home });
+    await waitFor(id, (job) => job.status === 'collision');
+    operations.resolve(id, 'replace', false);
+    expect((await waitFor(id)).errors[0]?.message).toContain('protected folder');
+    expect(await readFile(path.join(desktop, 'note.txt'), 'utf8')).toBe('inside is fine');
+    const inside = await run({ kind: 'trash', sources: [path.join(desktop, 'note.txt')] });
+    expect(inside.status).toBe('completed');
   });
 });

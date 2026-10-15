@@ -72,7 +72,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       group: 'Workspace',
       icon: 'file',
       aliases: ['pipeline', 'run workflow', 'workflow file'],
-      when: () => true,
+      when: (context) => !['workspace', 'sidebar'].includes(context.scope),
       run: (context) => {
         window.dispatchEvent(
           new CustomEvent('viewer:workflows', {
@@ -137,7 +137,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       group: 'Files',
       icon: 'columns',
       aliases: ['compare folders', 'diff', 'reconcile'],
-      when: () => true,
+      when: (context) => !['workspace', 'sidebar'].includes(context.scope),
       run: (context) => {
         window.dispatchEvent(
           new CustomEvent('viewer:compare', {
@@ -377,7 +377,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       group: 'Files',
       icon: 'copy',
       aliases: ['jobs', 'operations', 'progress'],
-      when: (context) => windowScope(context) && state.jobs.length > 0,
+      when: (context) => windowScope(context) && !!context.jobs?.length,
       run: () => setOperationsOpen(true, true),
     },
     {
@@ -386,7 +386,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
       group: 'Files',
       icon: 'left',
       shortcut: '⌘Z',
-      when: (context) => windowScope(context) && state.jobs.some((job) => job.undoable),
+      when: (context) => windowScope(context) && !!context.jobs?.some((job) => job.undoable),
       run: async () => {
         const job = getState().jobs.find((job) => job.undoable);
         if (job) await window.viewer.undo(job.id);

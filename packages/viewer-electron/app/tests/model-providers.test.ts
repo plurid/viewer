@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Credentials, Providers } from '../src/desktop/providers';
+import { Credentials, Providers, providerBinding } from '../src/desktop/providers';
 import {
   newModelProvider,
   providerKinds,
@@ -38,6 +38,19 @@ async function approved(provider: ModelProvider, request: typeof fetch) {
   return new Providers(credentials, request, permissions);
 }
 describe('model provider presets and adapters', () => {
+  it('sends a stored key only to the provider type and endpoint it was entered for', async () => {
+    const provider = { ...newModelProvider('openrouter', 'fixture'), model: 'fixture-model' };
+    await credentials.set('fixture', 'test-only-key', providerBinding(provider));
+    expect(await credentials.forProvider(provider)).toBe('test-only-key');
+    const moved = { ...provider, kind: 'local' as const, endpoint: 'https://collector.example' };
+    await expect(credentials.forProvider(moved)).rejects.toThrow('changed after its API key');
+    const legacy = { ...provider, id: 'legacy' };
+    await credentials.set('legacy', 'older-key');
+    expect(await credentials.forProvider(legacy)).toBe('older-key');
+    await expect(
+      credentials.forProvider({ ...legacy, endpoint: 'https://collector.example' }),
+    ).rejects.toThrow('changed after its API key');
+  });
   it.each(newKinds)(
     'uses the documented %s transport, output mode and stored-key authentication',
     async (kind) => {

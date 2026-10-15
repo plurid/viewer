@@ -33,6 +33,7 @@ import { operationJournal, outputProof, type OperationReceipt } from './operatio
 import { privateStage } from './staging';
 import { fileCoordination } from './file-coordination';
 import { removeEmptyDirectory, unlinkVerified } from './removal';
+import { ProtectedPaths } from './protected-paths';
 
 interface UndoStep {
   from: string;
@@ -147,6 +148,7 @@ export class Operations {
     dataPath?: string,
     private receiptAccess: ReceiptAccess = async (_receipt, work) => work(),
     private notice: (message: string) => void = () => {},
+    private protection = new ProtectedPaths(),
   ) {
     if (dataPath) this.journal = operationJournal(dataPath);
   }
@@ -551,7 +553,10 @@ export class Operations {
     replaced?: Replaced,
   ): Promise<void> {
     // Without Replace, the exclusive publication below refuses an existing destination.
-    if (replaced) await this.trashItem(task, destination, replaced);
+    if (replaced) {
+      await this.protection.check(destination, 'replaced');
+      await this.trashItem(task, destination, replaced);
+    }
     try {
       await this.publish(source, destination, task);
     } catch (error) {
@@ -1084,6 +1089,8 @@ export class Operations {
                 (await lstat(source)).dev === (await lstat(request.destination!)).dev);
             let undoable = false,
               caseOnly = false;
+            if (request.kind === 'trash') await this.protection.check(source, 'moved to the Trash');
+            else if (move) await this.protection.check(source, 'moved or renamed');
             if (request.kind === 'trash') await this.trashItem(task, source);
             else {
               destination = ['mkdir', 'compress'].includes(request.kind)

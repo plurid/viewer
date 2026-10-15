@@ -36,6 +36,7 @@ import { useColumnNavigation } from './column-navigation';
 import { FILE_DRAG, useFileDrop } from './file-drop';
 import { folderDragNavigation } from './folder-drag';
 import { blankFileSpace, useFileKeyboard, useFileSelection, type FileModifiers } from './selection';
+import { useContextPublish } from './context-publish';
 
 export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string }) {
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id)) as
@@ -206,20 +207,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     },
     [pane, selected, entries, searchOpen, recipes],
   );
-  useEffect(() => {
-    if (activeID !== id) return;
-    const rootID = workspace.rootID(id);
-    if (rootID)
-      void window.viewer
-        .contextPublish({
-          workspaceID: activeWorkspace().id,
-          paneID: id,
-          rootID,
-          sources: selected.map((file) => file.path),
-          actor: 'user',
-        })
-        .catch(report);
-  }, [activeID, id, path, selected, workspace]);
+  useContextPublish(id, activeID === id, selected, path);
   const command = (name: string) => {
     setMenu(null);
     void (async () => {

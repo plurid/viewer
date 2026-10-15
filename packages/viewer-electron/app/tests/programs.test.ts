@@ -73,6 +73,7 @@ describe('literal command execution', () => {
       () => config,
       () => {},
       access,
+      async () => {},
     );
     cleanup.push(() => executions.close());
     const starting = executions.start('fixture', target());
@@ -109,6 +110,8 @@ describe('literal command execution', () => {
     const executions = new Executions(
       () => config,
       () => {},
+      undefined,
+      async () => {},
     );
     cleanup.push(() => executions.close());
     const id = await executions.start('fixture', captured);
@@ -135,6 +138,8 @@ describe('literal command execution', () => {
     const executions = new Executions(
       () => config,
       () => {},
+      undefined,
+      async () => {},
     );
     cleanup.push(() => executions.close());
     await executions.start('fixture', target());
@@ -174,6 +179,8 @@ describe('literal command execution', () => {
     const executions = new Executions(
       () => config,
       () => {},
+      undefined,
+      async () => {},
     );
     cleanup.push(() => executions.close());
     await expect(executions.start('fixture', captured)).rejects.toThrow('Selection changed');
@@ -265,12 +272,34 @@ describe('agent review and execution grants', () => {
     );
     const execute = vi.fn(async (): Promise<void | { taskID: string }> => {});
     const write = vi.fn();
-    const requests = new AgentRequests(root, settings, () => {}, execute, {
-      read: () => ({ cwd: root, output: 'fixture screen' }),
-      write,
-    });
+    const requests = new AgentRequests(
+      root,
+      settings,
+      () => {},
+      execute,
+      { read: () => ({ cwd: root, output: 'fixture screen' }) },
+      undefined,
+      undefined,
+      async () => true,
+    );
     return { settings, execute, requests, write };
   }
+  it('pins a folder’s contents in an agent Trash request and voids it after a change', async () => {
+    const { execute, requests } = await setup();
+    const folder = path.join(root, 'Drafts');
+    await fs.mkdir(folder);
+    await fs.writeFile(path.join(folder, 'one.txt'), 'reviewed');
+    const proposal = await requests.command(
+      'trash',
+      { ...target(), selection: [await entry(folder)] },
+      'Move to Trash',
+    );
+    expect(requests.get(proposal.id).detail).toContain('(folder: 1 item');
+    // Editing a file inside leaves the folder entry itself unchanged.
+    await fs.appendFile(path.join(folder, 'one.txt'), ' and edited later');
+    await expect(requests.review(proposal.id, true)).rejects.toThrow('contents of');
+    expect(execute).not.toHaveBeenCalled();
+  });
   it('requires fresh review and refuses grants that could bypass removal approval', async () => {
     const { settings, execute, requests } = await setup();
     const first = await requests.command('custom.fixture', target(), 'Fixture');
@@ -312,8 +341,24 @@ describe('agent review and execution grants', () => {
     );
     expect(write).not.toHaveBeenCalled();
     expect(() => requests.configuration([{ path: 'executionApprovals', value: [] }])).toThrow(
-      'Unknown setting',
+      'Agents cannot change',
     );
+    for (const path of [
+      'settings',
+      'settings.browsing',
+      'settings.browsing.confirmTrash',
+      'settings.customActions',
+      'settings.terminals.profiles',
+      'settings.terminals.tmux.executable',
+      'settings.shortcuts',
+      'settings.agents.roots',
+      'settings.providers',
+      'settings.fileOpening.types',
+      'settings.search.contentRoots',
+    ])
+      expect(() => requests.configuration([{ path, value: null }]), path).toThrow(
+        'Agents cannot change',
+      );
     const proposal = requests.configuration([{ path: 'settings.appearance', value: 'light' }]);
     await requests.review(proposal.id, false);
     expect(requests.get(proposal.id).status).toBe('rejected');

@@ -294,6 +294,28 @@ const tools = [
     },
   },
 ];
+/** The person's Home folder; a Mac App Store build's os.homedir() is its container. */
+const realHome = () => (process.mas ? os.userInfo().homedir : os.homedir());
+/** Agents see the shape of execution settings, never secrets they may carry:
+ * terminal environment values and shell scripts often hold tokens. */
+export function redactedSettings(settings: ApplicationSettings): ApplicationSettings {
+  const hidden = '[redacted]';
+  return {
+    ...settings,
+    terminals: {
+      ...settings.terminals,
+      profiles: settings.terminals.profiles.map((profile) => ({
+        ...profile,
+        env: Object.fromEntries(Object.keys(profile.env).map((key) => [key, hidden])),
+      })),
+    },
+    customActions: settings.customActions.map((action) =>
+      action.executor.kind === 'shell'
+        ? { ...action, executor: { ...action.executor, script: hidden } }
+        : action,
+    ),
+  };
+}
 export class AgentBroker {
   private taskAdmissions: Promise<unknown> = Promise.resolve();
   private admitTask<T>(work: () => Promise<T>): Promise<T> {
@@ -489,15 +511,15 @@ export class AgentBroker {
   private async authorizeRemoval(files: readonly string[]): Promise<void> {
     const client = await this.clients.get();
     const roots = await Promise.all(
-      [...(client?.roots ?? this.settings().agents.roots), os.homedir()].map((root) =>
+      [...(client?.roots ?? this.settings().agents.roots), realHome()].map((root) =>
         realpath(absolute(root)).catch(() => absolute(root)),
       ),
     );
     for (const file of files) {
       const actual = await this.authorize(file);
       const trash =
-        within(actual, path.join(os.homedir(), '.Trash')) ||
-        within(actual, path.join(os.homedir(), '.local/share/Trash')) ||
+        within(actual, path.join(realHome(), '.Trash')) ||
+        within(actual, path.join(realHome(), '.local/share/Trash')) ||
         (process.platform === 'linux' &&
           process.env.XDG_DATA_HOME &&
           path.isAbsolute(process.env.XDG_DATA_HOME) &&
@@ -864,7 +886,7 @@ export class AgentBroker {
       const snapshot = this.extension.config.snapshot();
       value = {
         version: 1,
-        settings: snapshot.settings,
+        settings: redactedSettings(snapshot.settings),
         ui: snapshot.ui,
         revision: snapshot.revision,
       };

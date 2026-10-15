@@ -21,6 +21,7 @@ import { ContextMenu } from '../ui/ContextMenu';
 import type { CommandRequest } from '../commands/registry';
 import { Loading, Empty } from '../ui/primitives';
 import { sortEntries } from '../../domain/files';
+import { useContextPublish } from './context-publish';
 export function CollectionExplorer({ id }: { id: string }) {
   const active = useViewer((state) => state.activePane);
   const pane = useViewer((state) => activeWorkspace(state).panes.find((pane) => pane.id === id)) as
@@ -99,20 +100,7 @@ export function CollectionExplorer({ id }: { id: string }) {
     () => entries.filter((entry) => selection.includes(entry.path)),
     [entries, selection],
   );
-  useEffect(() => {
-    if (active !== id) return;
-    const rootID = workspace.rootID(id);
-    if (!rootID) return;
-    void window.viewer
-      .contextPublish({
-        workspaceID: activeWorkspace().id,
-        paneID: id,
-        rootID,
-        sources: selected.map((file) => file.path),
-        actor: 'user',
-      })
-      .catch(report);
-  }, [active, id, selected, workspace]);
+  useContextPublish(id, active === id, selected);
   const set = new Set(selection);
   useCommandSource(
     'collection:' + id,
