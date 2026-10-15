@@ -114,6 +114,7 @@ function Code({
       >
         {virtual.getVirtualItems().map((item) => {
           const line = lines[item.index];
+          if (line === undefined) return null;
           const segments = document?.[item.index];
           const grammar = Prism.languages[language];
           // Highlighted HTML comes exclusively from Prism's escaping tokenizer, never from file HTML.

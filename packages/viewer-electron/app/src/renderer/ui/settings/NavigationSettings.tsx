@@ -9,7 +9,7 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
       <h2>Sidebar sections</h2>
       {snapshot.ui.sidebar.order.map((section) => (
         <label className="settings-row" key={section}>
-          <span>{section[0].toUpperCase() + section.slice(1)}</span>
+          <span>{section.charAt(0).toUpperCase() + section.slice(1)}</span>
           <input
             type="checkbox"
             checked={!snapshot.ui.sidebar.collapsed.includes(section)}

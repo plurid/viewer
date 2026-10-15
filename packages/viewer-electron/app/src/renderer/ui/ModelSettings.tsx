@@ -204,7 +204,7 @@ export function ModelSettings({
             )}
             {models[provider.id]?.length ? (
               <p className="settings-note" role="status">
-                {models[provider.id].length} models available in the Model field.
+                {models[provider.id]?.length} models available in the Model field.
               </p>
             ) : null}
           </section>

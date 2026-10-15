@@ -200,6 +200,7 @@ export default function DXFPreview(context: PreviewContext) {
         : tool === 'angle'
           ? 'Pick first point, vertex, then last point'
           : 'Pick boundary points · Enter or double-click to finish · Escape cancels';
+  const latest = measurements.at(-1);
   return (
     <div
       className="dxf-viewer"
@@ -279,24 +280,23 @@ export default function DXFPreview(context: PreviewContext) {
                   {selected.area !== undefined ? ` · ${measure(selected.area, true)}` : ''}
                 </span>
               )}
-              {measurements.length > 0 && (
+              {latest && (
                 <span data-dxf-last-measurement>
                   <strong>
-                    {measurements[measurements.length - 1].tool === 'angle'
+                    {latest.tool === 'angle'
                       ? 'Angle'
-                      : measurements[measurements.length - 1].tool === 'area'
+                      : latest.tool === 'area'
                         ? 'Area'
                         : 'Distance'}
                   </strong>{' '}
                   ·{' '}
                   {(() => {
-                    const last = measurements[measurements.length - 1],
-                      value = measurementValue(last);
+                    const value = measurementValue(latest);
                     return value === undefined
                       ? 'Pick distinct points'
-                      : last.tool === 'angle'
+                      : latest.tool === 'angle'
                         ? `${value.toFixed(2)}°`
-                        : measure(value, last.tool === 'area');
+                        : measure(value, latest.tool === 'area');
                   })()}
                 </span>
               )}
@@ -393,8 +393,9 @@ export default function DXFPreview(context: PreviewContext) {
                     </span>
                     {item.tool === 'distance' && (
                       <small className="muted">
-                        ΔX {measure(Math.abs(item.points[1].x - item.points[0].x))} · ΔY{' '}
-                        {measure(Math.abs(item.points[1].y - item.points[0].y))}
+                        ΔX {measure(Math.abs((item.points[1]?.x ?? 0) - (item.points[0]?.x ?? 0)))}{' '}
+                        · ΔY{' '}
+                        {measure(Math.abs((item.points[1]?.y ?? 0) - (item.points[0]?.y ?? 0)))}
                       </small>
                     )}
                   </span>

@@ -27,6 +27,7 @@ function BasketList({ paths, busy }: { paths: string[]; busy: boolean }) {
       <div style={{ height: rows.getTotalSize(), position: 'relative' }}>
         {rows.getVirtualItems().map((virtual) => {
           const path = paths[virtual.index];
+          if (path === undefined) return null;
           return (
             <div
               key={path}

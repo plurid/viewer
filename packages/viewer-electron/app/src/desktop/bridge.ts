@@ -30,6 +30,8 @@ import { ModelPermissions } from './model-permissions';
 import { modelEndpoint } from '../domain/model-permissions';
 import { macFiles } from './macos-files';
 import { Thumbnails } from './thumbnails';
+import { AppIcons } from './app-icons';
+import { nativeAppIcon } from './native-app-icon';
 import { ActionPlanner } from './actions/planner';
 import { AgentBroker } from './agent-broker';
 import { Comparisons } from './comparison';
@@ -109,6 +111,8 @@ export class Desktop {
   readonly actions: ActionPlanner;
   readonly agents: AgentBroker;
   readonly thumbnails = new Thumbnails();
+  private appIcons = new AppIcons(nativeAppIcon);
+  private diagnosticReports = new Map<number, number[]>();
   // HOME becomes the container in App Sandbox. Sidebar/default paths describe
   // the actual user's folders; knowing those paths does not confer access.
   private readonly home = process.mas ? os.userInfo().homedir : os.homedir();
@@ -133,6 +137,8 @@ export class Desktop {
       applications: string;
       fileBackend?: 'process' | 'thread';
       settingsChanged?(): void;
+      /** Records a renderer failure in the local diagnostic log. */
+      diagnose?(detail: string): void;
     },
   ) {
     const emit = (event: DesktopEvent) => this.emit(event);
@@ -269,6 +275,7 @@ export class Desktop {
         void this.files.update(change.destination).catch(() => {});
       }
       this.thumbnails.clear();
+      this.appIcons.clear();
     };
     this.operations = new Operations(
       (file) =>
@@ -980,6 +987,23 @@ export class Desktop {
       contextPublish: (args) => {
         this.context = { ...args[0], actor: 'user' };
         return;
+      },
+      diagnosticReport: ([detail], senderID) => {
+        // A window in an error loop cannot flood the log: 30 reports a minute each.
+        const now = Date.now();
+        const recent = (this.diagnosticReports.get(senderID) ?? []).filter(
+          (at) => now - at < 60_000,
+        );
+        if (recent.length >= 30) return;
+        this.diagnosticReports.set(senderID, [...recent, now]);
+        this.options.diagnose?.(detail);
+      },
+      appIcon: async ([file, size]) => {
+        await this.fileAccess.require([file]);
+        const item = await entry(file);
+        if (!item.directory || item.extension !== 'app')
+          throw new Error('Icons are offered for applications only.');
+        return this.appIcons.get(item.path, size, item.modified);
       },
       thumbnail: async (args) => {
         await this.fileAccess.require([args[0]]);

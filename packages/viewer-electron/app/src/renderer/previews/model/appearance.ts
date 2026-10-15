@@ -4,7 +4,12 @@ export function cadMaterial(color?: readonly number[]): THREE.MeshStandardMateri
   return new THREE.MeshStandardMaterial({
     // OCCT's Quantity_Color components are already linear RGB.
     color: color
-      ? new THREE.Color().setRGB(color[0], color[1], color[2], THREE.LinearSRGBColorSpace)
+      ? new THREE.Color().setRGB(
+          color[0] ?? 0,
+          color[1] ?? 0,
+          color[2] ?? 0,
+          THREE.LinearSRGBColorSpace,
+        )
       : 0xb5c4cc,
     roughness: 0.55,
     metalness: 0.08,

@@ -47,9 +47,10 @@ export function addCollectionPane(collectionID: string): string {
   if (!collection) throw new Error('This collection is unavailable.');
   if (activeWorkspace().panes.length >= 200)
     throw new Error('Close a plane before opening another.');
+  const [source] = collection.sources;
+  if (!source) throw new Error('This collection has no locations.');
   const id = uuid(),
-    file =
-      collection.kind === 'explicit' ? parentPath(collection.sources[0]) : collection.sources[0];
+    file = collection.kind === 'explicit' ? parentPath(source) : source;
   changeWorkspace((space) => ({
     ...space,
     panes: [...space.panes, { id, type: 'collection', path: file, collectionID }],

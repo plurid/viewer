@@ -108,8 +108,9 @@ export function frameWorkspace(
         return;
     }
     const motion = { animate: !options.recover };
-    if (options.dock && targets?.length === 1) api.camera.dock(nodes[0].planeID, motion);
-    else if (targets?.length === 1) api.camera.frame({ planeID: nodes[0].planeID }, motion);
+    const [node] = nodes;
+    if (options.dock && targets?.length === 1 && node) api.camera.dock(node.planeID, motion);
+    else if (targets?.length === 1 && node) api.camera.frame({ planeID: node.planeID }, motion);
     else if (targets?.length)
       api.pubsub.publish({
         topic: PLURID_PUBSUB_TOPIC.SPACE_FRAME,

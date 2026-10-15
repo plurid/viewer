@@ -38,13 +38,15 @@ export function toolsCommands({
       aliases: ['pipeline', 'run workflow', 'workflow file'],
       when: (context) => !['workspace', 'sidebar'].includes(context.scope),
       run: (context) => {
+        const [only] = context.selection;
         window.dispatchEvent(
           new CustomEvent('viewer:workflows', {
             detail: {
               context,
               ...(context.selection.length === 1 &&
-              /(?:^|\.)workflow\.jsonc$/.test(context.selection[0].name)
-                ? { file: context.selection[0].path }
+              only &&
+              /(?:^|\.)workflow\.jsonc$/.test(only.name)
+                ? { file: only.path }
                 : {}),
             },
           }),

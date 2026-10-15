@@ -17,7 +17,7 @@ export function highlightedLines(text: string, grammar: Prism.Grammar): Highligh
     if (typeof stream === 'string') {
       stream.split('\n').forEach((part, index) => {
         if (index) lines.push([]);
-        if (part) lines[lines.length - 1].push({ text: part, className });
+        if (part) lines.at(-1)?.push({ text: part, className });
       });
     } else if (Array.isArray(stream)) for (const item of stream) visit(item, className);
     else {

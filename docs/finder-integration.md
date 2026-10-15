@@ -24,7 +24,11 @@ Native Share and Quick Look require granted paths and are available only on macO
 
 ## Open With and Help
 
-The direct build declares document types, so Finder offers Viewer in Open With for folders, images, movies, audio, PDF, EPUB, text, Office documents, archives, DjVu, drawings and 3D models. Viewer registers as an alternate viewer and never becomes the default app for a type. The App Store build does not declare them yet: it would receive access to the opened file only, which Viewer's folder-based access does not handle. The Help menu has Commands…, Report an Issue… and Viewer Website, and macOS adds its menu search.
+The direct build declares document types, so Finder offers Viewer in Open With for folders, images, movies, audio, PDF, EPUB, text, Office documents, archives, DjVu, drawings and 3D models. Viewer registers as an alternate viewer and never becomes the default app for a type. The App Store build does not declare them yet: it would receive access to the opened file only, which Viewer's folder-based access does not handle. The Help menu has Commands…, Report an Issue…, Viewer Website and Show Diagnostic Log, and macOS adds its menu search.
+
+Application bundles (`.app`) show their own icon in list, grid and column views, as in Finder. Small icons come from `NSWorkspace`; grid tiles use Quick Look's full-resolution rendering of the bundle. Icons are cached per app version in a bounded cache.
+
+The mouse's back and forward side buttons move through a folder plane's history; back with no earlier folder goes up to the parent. Close plane is ⌥⌘W; the engine's own close and reopen shortcuts are turned off so a closed plane never lingers in the saved workspace.
 
 ## Drag navigation
 

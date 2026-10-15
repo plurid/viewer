@@ -69,6 +69,7 @@ export function CollectionExplorer({ id }: { id: string }) {
           Array.from({ length: Math.min(8, collection.sources.length) }, async () => {
             while (cursor < collection.sources.length) {
               const file = collection.sources[cursor++];
+              if (file === undefined) break;
               try {
                 items.push(await window.viewer.stat(file));
               } catch (error) {

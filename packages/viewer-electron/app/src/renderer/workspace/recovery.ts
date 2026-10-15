@@ -48,8 +48,8 @@ export function repeatedPreviews(
   visit(tree);
   return [...groups.values()]
     .filter((group) => group.length > 1)
-    .map((group) => {
+    .flatMap((group) => {
       const keep = group.find((node) => hostID(node) === active) ?? group[0];
-      return { keep, close: group.filter((node) => node !== keep) };
+      return keep ? [{ keep, close: group.filter((node) => node !== keep) }] : [];
     });
 }

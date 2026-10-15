@@ -38,5 +38,7 @@ export function printingScale(buffer: ArrayBuffer): number {
     throw new Error(
       'This 3MF contains models with different units. Export them with a shared unit to preview.',
     );
-  return [...scales][0];
+  const [scale] = scales;
+  if (scale === undefined) throw new Error('No model was found in this 3MF file.');
+  return scale;
 }

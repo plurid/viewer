@@ -51,7 +51,7 @@ const FolderScene = memo(function FolderScene({ id }: { id: string }) {
 });
 function FolderContent() {
   const plane = usePluridPlane();
-  return <FolderScene id={plane.parameters.id} />;
+  return <FolderScene id={plane.parameters.id ?? ''} />;
 }
 function PreviewContent() {
   const plane = usePluridPlane();
@@ -115,11 +115,11 @@ function TerminalContent() {
 }
 function SearchContent() {
   const plane = usePluridPlane();
-  return <SearchExplorer id={plane.parameters.id} />;
+  return <SearchExplorer id={plane.parameters.id ?? ''} />;
 }
 function CollectionContent() {
   const plane = usePluridPlane();
-  return <CollectionExplorer id={plane.parameters.id} />;
+  return <CollectionExplorer id={plane.parameters.id ?? ''} />;
 }
 const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/terminals/:id', component: TerminalContent },
@@ -145,6 +145,7 @@ export function WorkspaceSurface({
   const [api, setApi] = useState<PluridApi | null>(null);
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
       const { width, height } = entry.contentRect;
       if (width > 0 && height > 0) {
         const next = { width: Math.round(width), height: Math.round(height) };
@@ -179,7 +180,20 @@ export function WorkspaceSurface({
         gestures: { wheel: 'plane', dragHandle: 'chrome' },
         bridge: { preset: 'reading', planeAngle: 90.1 },
         shortcuts: {
-          disabled: ['palette', 'copy', 'cut', 'paste', 'undo', 'redo', 'duplicateSelection'],
+          // The engine's own close/reopen keys change its tree without Viewer's workspace,
+          // which then keeps (and later restores) the closed plane. Viewer's Close plane
+          // (⌥⌘W) and Undo arrangement keep both in step.
+          disabled: [
+            'palette',
+            'copy',
+            'cut',
+            'paste',
+            'undo',
+            'redo',
+            'duplicateSelection',
+            'closePlane',
+            'openClosedPlane',
+          ],
         },
         culling: {
           enabled: true,

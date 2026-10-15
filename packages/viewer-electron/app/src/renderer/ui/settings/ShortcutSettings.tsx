@@ -13,7 +13,7 @@ export function ShortcutSettings({ editor }: { editor: SettingsEditor }) {
         remains quick preview.
       </p>
       {Object.entries({ ...defaultShortcuts, ...menuShortcuts })
-        .map(([id, shortcut]) => [id, id.replaceAll('-', ' '), shortcut])
+        .map(([id, shortcut]) => [id, id.replaceAll('-', ' '), shortcut] as const)
         .map(([id, label, shortcut]) => (
           <label className="settings-row" key={id}>
             <span>{label}</span>

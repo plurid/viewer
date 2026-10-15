@@ -63,9 +63,12 @@ export function arrangementCommands({
       when: (context) =>
         !!context.paneID &&
         context.selection.length === 1 &&
+        !!context.selection[0] &&
         !!actions.workspace.existingPaneID(context.paneID, context.selection[0]),
       run: (context) => {
-        const id = actions.workspace.existingPaneID(context.paneID!, context.selection[0]);
+        const [entry] = context.selection;
+        if (!entry) return;
+        const id = actions.workspace.existingPaneID(context.paneID!, entry);
         if (!id) throw new Error('This plane is no longer open.');
         actions.workspace.focusPane(id);
       },
@@ -86,6 +89,7 @@ export function arrangementCommands({
       group: 'Plane',
       icon: 'close',
       aliases: ['cl'],
+      shortcut: '⌥⌘W',
       when: paneScope,
       run: (context) => actions.workspace.closePane(context.paneID!),
     },
@@ -131,7 +135,7 @@ export function arrangementCommands({
   for (const tool of ['rotate', 'scale', 'translate'] as const)
     commands.push({
       id: `space-${tool}`,
-      label: `${tool[0].toUpperCase() + tool.slice(1)} space`,
+      label: `${tool.charAt(0).toUpperCase() + tool.slice(1)} space`,
       group: 'Space',
       icon: tool === 'rotate' ? 'refresh' : tool === 'scale' ? 'frame' : 'move',
       when: (context) => windowScope(context) && actions.ready && space.panes.length > 0,

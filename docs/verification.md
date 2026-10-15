@@ -1,5 +1,18 @@
 # Verification
 
+## October 15 polish
+
+**613 unit tests across 86 files pass** (2 skipped). All four TypeScript targets pass with `noUncheckedIndexedAccess` across all application code; ESLint and formatting pass.
+
+- **Renderer strict indexing:** 192 sites fixed. Virtualized rows skip a missing item instead of assuming it exists; places that cannot be empty say why.
+- **App icons:** `.app` bundles show their own icons. `AppIcons` caches them, with tests for sharing requests, refreshing after an app update, eviction and failures that are not cached.
+- **Engine shortcuts:** the plurid "route with no registered plane" warning came from the engine's own Option-W/Option-Shift-T, which closed planes behind Viewer's workspace. Those keys are disabled, and Close plane is ⌥⌘W.
+- **Mouse side buttons:** back and forward work in folder planes.
+- **Diagnostics:** a bounded local diagnostic log and local crash dumps (`crashReporter`, uploads off), with Help → Show Diagnostic Log. Failures are observed without changing error handling: `uncaughtExceptionMonitor`, process warnings, process-gone events, and rate-limited renderer reports.
+- **Development Dock icon:** the dev app shows Viewer's icon.
+
+Adopting the new plurid handle methods waits for a plurid release; npm still lists 0.0.0-40.
+
 ## October 15 feature completion
 
 **607 unit tests across 84 files pass** (2 skipped). All five TypeScript targets pass, including `tsconfig.strict.json`, and ESLint and formatting pass. The renderer bundles, and the native addon compiles. The packaged app was not built or run.

@@ -42,7 +42,7 @@ export function ContextMenuResults({
   const depth = searching ? 0 : Math.min(active.depth, levels.length - 1);
   const rows: MenuEntry[] = searching
     ? searchRows.map((command) => ({ kind: 'command', id: command.id, command }))
-    : entries(levels[depth]);
+    : entries(levels[depth] ?? []);
   const current = rows.find((row) => row.id === active.id) ?? rows[0];
   const cancelHover = () => {
     clearTimeout(timer.current);
@@ -133,8 +133,11 @@ export function ContextMenuResults({
               : event.key === 'End'
                 ? rows.length - 1
                 : (index + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
-          setActive({ depth, id: rows[next].id });
-          buttons.current.get(rowID(depth, rows[next].id))?.scrollIntoView({ block: 'nearest' });
+          const target = rows[next];
+          if (target) {
+            setActive({ depth, id: target.id });
+            buttons.current.get(rowID(depth, target.id))?.scrollIntoView({ block: 'nearest' });
+          }
           if (!searching) setOpened(opened.slice(0, depth));
         } else if (event.key === 'Enter' && current) {
           event.preventDefault();
@@ -188,7 +191,7 @@ export function ContextMenuResults({
             if (opened.length) {
               cancelHover();
               setOpened([]);
-              setActive({ depth: 0, id: opened[0] });
+              setActive({ depth: 0, id: opened[0] ?? '' });
             }
           }}
         />
@@ -196,7 +199,7 @@ export function ContextMenuResults({
       {!searching &&
         levels.slice(1).map((sections, index) => {
           const popupDepth = index + 1;
-          const branch = entries(levels[index]).find((entry) => entry.id === opened[index]);
+          const branch = entries(levels[index] ?? []).find((entry) => entry.id === opened[index]);
           return (
             <MenuList
               key={opened.slice(0, popupDepth).join('/')}
@@ -204,7 +207,7 @@ export function ContextMenuResults({
               depth={popupDepth}
               id={`${id}-list-${popupDepth}`}
               label={branch?.kind === 'submenu' ? branch.label : 'Actions'}
-              anchor={buttons.current.get(rowID(index, opened[index]))}
+              anchor={buttons.current.get(rowID(index, opened[index] ?? ''))}
               activeID={depth === popupDepth ? current?.id : opened[popupDepth]}
               openedID={opened[popupDepth]}
               buttons={buttons.current}

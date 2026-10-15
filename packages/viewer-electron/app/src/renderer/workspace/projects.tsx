@@ -501,7 +501,8 @@ export function ProjectControls() {
                 <button
                   onClick={() => {
                     try {
-                      workspace.restoreLayout(project.definition.arrangements[name]);
+                      const layout = project.definition.arrangements[name];
+                      if (layout) workspace.restoreLayout(layout);
                       setPanel(null);
                     } catch (error) {
                       setError((error as Error).message);

@@ -370,9 +370,8 @@ export function useWorkspaceController({
         } finally {
           api.store.dispatch(pluridStateModules.space.actions.historyEnd());
         }
-        controller.focusPane(
-          hostID(groups.find((group) => hostID(group.keep) === active)?.keep ?? groups[0].keep),
-        );
+        const keep = groups.find((group) => hostID(group.keep) === active)?.keep ?? groups[0]?.keep;
+        if (keep) controller.focusPane(hostID(keep));
       },
       arrange: (axis) => {
         const api = engine.current;

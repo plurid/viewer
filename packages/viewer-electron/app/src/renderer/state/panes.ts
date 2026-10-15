@@ -79,11 +79,12 @@ export function historyNavigate(id: string, delta: number): void {
   const pane = activeWorkspace().panes.find((item) => item.id === id);
   if (pane?.type !== 'folder') return;
   const index = pane.historyIndex + delta;
-  if (index >= 0 && index < pane.history.length)
+  const target = index >= 0 ? pane.history[index] : undefined;
+  if (target !== undefined)
     updatePane(id, {
-      path: pane.history[index],
+      path: target,
       historyIndex: index,
-      ...panePresentation(folderPresentation(pane.history[index])),
+      ...panePresentation(folderPresentation(target)),
     });
 }
 export function addPane(
@@ -179,8 +180,9 @@ export function reconcilePanes(ids: string[]): void {
       ...restored.filter((record) => record.root).map((record) => record.pane.id),
     ],
   }));
-  if (!activeWorkspace().panes.some((pane) => pane.id === getState().activePane))
-    setActivePane(restored[0].pane.id);
+  const [first] = restored;
+  if (first && !activeWorkspace().panes.some((pane) => pane.id === getState().activePane))
+    setActivePane(first.pane.id);
 }
 export function addSearchPane(
   query: string,

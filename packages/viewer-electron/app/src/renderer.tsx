@@ -5,6 +5,15 @@ import { App } from './renderer/App';
 import { initialize } from './renderer/state/store';
 import { Empty } from './renderer/ui/primitives';
 import './renderer/styles.css';
+// Failures reach the local diagnostic log; each window reports at most 50.
+let reports = 0;
+const diagnose = (value: unknown) => {
+  if (++reports > 50) return;
+  const detail = value instanceof Error ? (value.stack ?? value.message) : String(value);
+  void window.viewer?.diagnosticReport?.(detail.slice(0, 8000)).catch(() => {});
+};
+window.addEventListener('error', (event) => diagnose(event.error ?? event.message));
+window.addEventListener('unhandledrejection', (event) => diagnose(event.reason));
 const root = createRoot(document.getElementById('viewer')!);
 if (new URLSearchParams(location.search).get('window') === 'settings')
   root.render(<SettingsWindow />);

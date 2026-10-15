@@ -134,8 +134,9 @@ export function DataTable({
           }}
         >
           {virtual.getVirtualItems().map((item) => {
-            const row = body[item.index],
-              cells = new Map(row.cells.map((cell) => [cell.column, cell]));
+            const row = body[item.index];
+            if (!row) return null;
+            const cells = new Map(row.cells.map((cell) => [cell.column, cell]));
             return (
               <div
                 role="row"

@@ -8,16 +8,18 @@ import {
   session,
   screen,
   shell,
+  crashReporter,
 } from 'electron';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { lookup } from 'mime-types';
 import { defaultShortcuts, accelerator, menuShortcuts } from './domain/shortcuts';
 import { runMCPClient } from './desktop/mcp-client';
 import { Desktop } from './desktop/bridge';
 import { WindowState, captureWindowFrame, restoreWindowFrame } from './desktop/window-state';
 import { errorMessage } from './domain/errors';
+import { DiagnosticLog } from './desktop/diagnostics';
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -47,6 +49,34 @@ if (process.env.VIEWER_DATA_DIRECTORY) {
   mkdirSync(process.env.VIEWER_DATA_DIRECTORY, { recursive: true });
   app.setPath('userData', process.env.VIEWER_DATA_DIRECTORY);
 }
+// Native crash dumps stay on this Mac; nothing is uploaded.
+crashReporter.start({ uploadToServer: false, compress: true });
+const diagnostics = new DiagnosticLog(
+  path.join(app.getPath('userData'), 'Logs', 'diagnostics.log'),
+);
+const failure = (value: unknown) =>
+  value instanceof Error ? (value.stack ?? value.message) : String(value);
+// Monitors observe failures without changing how Node and Electron handle them.
+process.on(
+  'uncaughtExceptionMonitor',
+  (error, origin) =>
+    void diagnostics.record(
+      origin === 'unhandledRejection' ? 'main-rejection' : 'main-exception',
+      failure(error),
+    ),
+);
+process.on('warning', (warning) => {
+  if (warning.name === 'UnhandledPromiseRejectionWarning')
+    void diagnostics.record('main-rejection', failure(warning));
+});
+app.on('render-process-gone', (_event, _contents, details) => {
+  void diagnostics.record('renderer-gone', `${details.reason} (exit ${details.exitCode})`);
+});
+app.on('child-process-gone', (_event, details) => {
+  if (details.reason === 'clean-exit') return;
+  const name = details.serviceName || details.name || details.type;
+  void diagnostics.record('process-gone', `${name}: ${details.reason} (exit ${details.exitCode})`);
+});
 let window: BrowserWindow | null = null;
 let desktop: Desktop | null = null;
 let windowState: WindowState | undefined;
@@ -370,6 +400,20 @@ function menu(): void {
             label: 'Viewer Website',
             click: () => void shell.openExternal('https://plurid.com/viewer'),
           },
+          { type: 'separator' },
+          {
+            // A local file the person can attach to a support request if they choose.
+            label: 'Show Diagnostic Log',
+            click: () => {
+              if (existsSync(diagnostics.file)) shell.showItemInFolder(diagnostics.file);
+              else
+                void dialog.showMessageBox({
+                  type: 'info',
+                  message: 'No problems have been recorded.',
+                  detail: 'Viewer keeps a local log of errors here for support. It is never sent.',
+                });
+            },
+          },
         ],
       },
     ]),
@@ -583,6 +627,7 @@ app
     desktop = new Desktop(app.getPath('userData'), trusted, {
       openSettings: openSettingsWindow,
       settingsChanged: menu,
+      diagnose: (detail) => void diagnostics.record('renderer-error', detail),
       worker: path.join(__dirname, 'worker.cjs'),
       fileBackend:
         backgroundTest && process.env.VIEWER_TEST_FILE_THREADS === '1' ? 'thread' : undefined,

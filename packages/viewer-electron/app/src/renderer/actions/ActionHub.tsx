@@ -512,6 +512,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
               {rows.getVirtualItems().map((virtual) => {
                 const row = plan.rows[virtual.index],
                   edit = edits[virtual.index];
+                if (!row || !edit) return null;
                 const issue = edit.destination === row.destination ? row.issue : undefined;
                 const destination = destinationParts(edit.destination);
                 const fullPath = editingPath === row.id;

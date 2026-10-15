@@ -113,9 +113,11 @@ export class FileSelection {
               ? scope.length - 1
               : 0
             : Math.max(0, Math.min(scope.length - 1, current + (backwards ? -step : step)));
+    const target = scope[index];
+    if (!target) return;
     if (shift && !scope.some((entry) => entry.path === session.anchor))
-      session.anchor = scope[current >= 0 ? current : index].path;
-    this.click(scope[index], { shiftKey: shift, metaKey: false, ctrlKey: false }, scope);
+      session.anchor = (scope[current] ?? target).path;
+    this.click(target, { shiftKey: shift, metaKey: false, ctrlKey: false }, scope);
   }
   type(scope: readonly FileEntry[], text: string, now = performance.now()): FileEntry | undefined {
     const fold = (value: string) =>
@@ -156,9 +158,11 @@ export class FileSelection {
   /** Marquee selection: the entries under the rectangle, added to `base`. */
   region(entries: readonly FileEntry[], base: readonly string[] = []) {
     for (const entry of entries) this.session.cache.set(entry.path, entry);
-    if (entries.length) {
-      this.session.anchor = entries[0].path;
-      this.session.cursor = entries[entries.length - 1].path;
+    const first = entries[0],
+      last = entries.at(-1);
+    if (first && last) {
+      this.session.anchor = first.path;
+      this.session.cursor = last.path;
     }
     this.commit([...new Set([...base, ...entries.map((entry) => entry.path)])]);
   }

@@ -101,11 +101,12 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       when: (context) =>
         selected(context) &&
         context.selection.length === 1 &&
-        context.selection[0].directory &&
+        !!context.selection[0]?.directory &&
         context.selection[0].name.includes('.') &&
         getState().bootstrap.platform === 'darwin',
       run: async (context) => {
-        const entry = context.selection[0];
+        const [entry] = context.selection;
+        if (!entry) return;
         const info = await window.viewer.fileInformation(entry.path);
         if (!info.package) throw new Error('This folder is not a macOS package.');
         actions.open([entry], false);
@@ -123,7 +124,10 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
           kind: 'compress',
           sources: paths(context),
           destination: context.directory,
-          name: context.selection.length === 1 ? context.selection[0].name + '.zip' : 'Archive.zip',
+          name:
+            context.selection.length === 1 && context.selection[0]
+              ? context.selection[0].name + '.zip'
+              : 'Archive.zip',
         });
       },
     },
@@ -158,7 +162,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       aliases: ['pdf', 'combine images', 'make pdf'],
       when: (context) => images(context) && !!context.directory,
       run: async (context) => {
-        const first = context.selection[0].name.replace(/\.[^.]+$/, '');
+        const first = (context.selection[0]?.name ?? 'Images').replace(/\.[^.]+$/, '');
         await window.viewer.operate({
           kind: 'convert',
           conversion: 'pdf',
@@ -456,7 +460,10 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       icon: 'external',
       aliases: ['rv'],
       when: (context) => selected(context) && context.selection.length === 1,
-      run: (context) => window.viewer.reveal(context.selection[0].path),
+      run: async (context) => {
+        const [entry] = context.selection;
+        if (entry) await window.viewer.reveal(entry.path);
+      },
     },
     {
       id: 'search',
@@ -526,7 +533,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
   for (const mode of ['list', 'grid', 'columns', 'gallery'] as ViewMode[])
     commands.push({
       id: `view-${mode}`,
-      label: `${mode[0].toUpperCase()}${mode.slice(1)} view`,
+      label: `${mode.charAt(0).toUpperCase()}${mode.slice(1)} view`,
       group: 'View',
       icon: mode,
       when: folder,

@@ -113,7 +113,11 @@ export function sidebarCommands({
         changePreferences((ui) => {
           const order = [...ui.sidebar.order];
           const index = order.indexOf(context.sidebar!.section);
-          [order[index], order[index + direction]] = [order[index + direction], order[index]];
+          const a = order[index],
+            b = order[index + direction];
+          if (a === undefined || b === undefined) return ui;
+          order[index] = b;
+          order[index + direction] = a;
           return { ...ui, sidebar: { ...ui.sidebar, order } };
         }),
     });

@@ -31,7 +31,7 @@ export function ComparisonControls() {
       setError('');
       const files = (event as CustomEvent<string[]>).detail;
       if (files?.length) {
-        setLeft(files[0]);
+        setLeft(files[0] ?? '');
         setRight(files[1] ?? '');
       }
     };

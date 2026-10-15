@@ -65,7 +65,8 @@ export function CommandResults({
               : event.key === 'End'
                 ? rows.length - 1
                 : (index + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
-          setActiveID(rows[next].id);
+          const target = rows[next];
+          if (target) setActiveID(target.id);
           setKeyboardScroll((value) => value + 1);
         } else if (event.key === 'Enter' && rows[index]) {
           event.preventDefault();
@@ -115,7 +116,7 @@ export function CommandResults({
             )}
             {!query &&
               rowIndex > 0 &&
-              recent.includes(rows[rowIndex - 1].id) &&
+              recent.includes(rows[rowIndex - 1]?.id ?? '') &&
               !recent.includes(row.id) && <div className="command-divider" />}
             <button
               type="button"

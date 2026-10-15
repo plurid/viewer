@@ -253,7 +253,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       {pane.content &&
         selected.length === 1 &&
         (() => {
-          const hit = search.result?.evidence?.find((hit) => hit.path === selected[0].path);
+          const hit = search.result?.evidence?.find((hit) => hit.path === selected[0]?.path);
           return hit ? (
             <div className="search-evidence">
               <button

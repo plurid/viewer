@@ -538,3 +538,8 @@
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   pointer-events: none;
 }
+/* Application bundles show their own icon instead of the folder symbol. */
+.app-icon {
+  display: block;
+  object-fit: contain;
+}

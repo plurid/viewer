@@ -114,6 +114,8 @@ vi.mock('electron', () => ({
   },
   Menu: { buildFromTemplate: (value: unknown) => value, setApplicationMenu: vi.fn() },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
+  crashReporter: { start: vi.fn() },
+  shell: { openExternal: vi.fn(), showItemInFolder: vi.fn() },
   session: {
     defaultSession: {
       setPermissionRequestHandler: vi.fn(),

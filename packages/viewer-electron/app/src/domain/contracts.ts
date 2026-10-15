@@ -393,6 +393,10 @@ export interface ViewerAPI {
   agentToken(): Promise<string>;
   contextPublish(context: ActionContext): Promise<void>;
   thumbnail(path: string, size: number): Promise<string>;
+  /** Finder's icon for an application bundle, as a data URL. */
+  appIcon(path: string, size: 'small' | 'large'): Promise<string>;
+  /** Records a renderer failure in the local diagnostic log; nothing is sent anywhere. */
+  diagnosticReport(detail: string): Promise<void>;
   document(id: string): Promise<DocumentData>;
   list(path: string): Promise<FolderListing>;
   stat(path: string): Promise<FileEntry>;

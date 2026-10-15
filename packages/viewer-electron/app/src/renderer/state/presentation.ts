@@ -124,7 +124,7 @@ export function updateFolderPresentation(path: string, patch: FolderOverride | n
     for (const [key, value] of Object.entries(patch))
       pendingPreferences.set(
         '@' + JSON.stringify(['settings', 'folders', path, key]),
-        key === 'list' ? folders[path].list : value,
+        key === 'list' ? folders[path]?.list : value,
       );
   schedulePreferences();
 }

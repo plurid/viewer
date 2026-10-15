@@ -84,6 +84,7 @@ export default function ArchivePreview({ resource, services, signal, active }: P
         <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
           {virtual.getVirtualItems().map((item) => {
             const entry = entries[item.index];
+            if (!entry) return null;
             return (
               <button
                 className="archive-row"

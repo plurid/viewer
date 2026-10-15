@@ -28,6 +28,7 @@ import { FolderSizeValue } from './sizes';
 import { LinkedPlaneButton } from '../workspace/LinkedPlaneButton';
 import { rowsUnder, tilesUnder, useMarquee, type MarqueeSelect } from './marquee';
 import { renderedImageFormats } from '../../domain/rendered-images';
+import { AppIcon, isApplication } from './app-icon';
 
 export interface FileViewProps {
   paneID?: string;
@@ -54,9 +55,10 @@ const date = new Intl.DateTimeFormat(undefined, {
 });
 export function FileIcon({ entry, size = 18 }: { entry: FileEntry; size?: number }) {
   const family = fileFamily(entry);
+  const symbol = <Icon name={family as IconName} size={size} />;
   return (
     <span className={`file-icon family-${family}`}>
-      <Icon name={family as IconName} size={size} />
+      {isApplication(entry) ? <AppIcon entry={entry} size={size} fallback={symbol} /> : symbol}
       {entry.kind === 'symlink' && <Icon name="alias" size={11} className="symlink-mark" />}
     </span>
   );
@@ -202,7 +204,10 @@ export function ListView(props: FileViewProps) {
     }
     return groups;
   }, [props.entries, props.depths, props.presentation?.group]);
-  const getItemKey = useCallback((index: number) => props.entries[index].path, [props.entries]);
+  const getItemKey = useCallback(
+    (index: number) => props.entries[index]?.path ?? index,
+    [props.entries],
+  );
   const scroll = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
@@ -224,7 +229,8 @@ export function ListView(props: FileViewProps) {
   const marquee = useMarquee(
     scroll,
     content,
-    (rect) => rowsUnder(virtual.measurementsCache, rect).map((index) => props.entries[index]),
+    (rect) =>
+      rowsUnder(virtual.measurementsCache, rect).flatMap((index) => props.entries[index] ?? []),
     props.region,
     props.selection,
   );
@@ -239,29 +245,33 @@ export function ListView(props: FileViewProps) {
     >
       <div ref={content} style={{ height: virtual.getTotalSize(), position: 'relative' }}>
         {marquee.overlay}
-        {virtual.getVirtualItems().map((item) => (
-          <div
-            key={item.key}
-            data-index={item.index}
-            ref={list.wrapNames ? virtual.measureElement : undefined}
-            style={{
-              position: 'absolute',
-              width: '100%',
-              top: item.start,
-              height: list.wrapNames ? undefined : item.size,
-            }}
-          >
-            {groups.has(item.index) && (
-              <div className="file-group-label">{groups.get(item.index)}</div>
-            )}
-            <FileRow
-              entry={props.entries[item.index]}
-              selected={props.selectionSet.has(props.entries[item.index].path)}
-              props={rowProps}
-              columns={columns}
-            />
-          </div>
-        ))}
+        {virtual.getVirtualItems().map((item) => {
+          const entry = props.entries[item.index];
+          if (!entry) return null;
+          return (
+            <div
+              key={item.key}
+              data-index={item.index}
+              ref={list.wrapNames ? virtual.measureElement : undefined}
+              style={{
+                position: 'absolute',
+                width: '100%',
+                top: item.start,
+                height: list.wrapNames ? undefined : item.size,
+              }}
+            >
+              {groups.has(item.index) && (
+                <div className="file-group-label">{groups.get(item.index)}</div>
+              )}
+              <FileRow
+                entry={entry}
+                selected={props.selectionSet.has(entry.path)}
+                props={rowProps}
+                columns={columns}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -310,7 +320,9 @@ export function GridView(props: FileViewProps) {
   useEffect(() => {
     const element = scroll.current;
     if (!element) return;
-    const observer = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width));
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(entry.contentRect.width);
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -338,7 +350,7 @@ export function GridView(props: FileViewProps) {
         columns,
         content.current?.offsetWidth || width,
         props.entries.length,
-      ).map((index) => props.entries[index]),
+      ).flatMap((index) => props.entries[index] ?? []),
     props.region,
     props.selection,
   );
@@ -456,7 +468,7 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
   const scroll = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: props.entries.length,
-    getItemKey: (index) => props.entries[index].path,
+    getItemKey: (index) => props.entries[index]?.path ?? index,
     getScrollElement: () => scroll.current,
     estimateSize: () => (compact ? 30 : 36),
     overscan: 8,
@@ -469,16 +481,20 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
   return (
     <div ref={scroll} className="file-scroll" role="listbox" aria-label="Column files">
       <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
-        {virtual.getVirtualItems().map((item) => (
-          <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%' }}>
-            <FileRow
-              compact
-              entry={props.entries[item.index]}
-              selected={props.selectionSet.has(props.entries[item.index].path)}
-              props={rowProps}
-            />
-          </div>
-        ))}
+        {virtual.getVirtualItems().map((item) => {
+          const entry = props.entries[item.index];
+          if (!entry) return null;
+          return (
+            <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%' }}>
+              <FileRow
+                compact
+                entry={entry}
+                selected={props.selectionSet.has(entry.path)}
+                props={rowProps}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -532,7 +548,7 @@ export function GalleryView(props: FileViewProps) {
   const virtual = useVirtualizer({
     horizontal: true,
     count: props.entries.length,
-    getItemKey: (index) => props.entries[index].path,
+    getItemKey: (index) => props.entries[index]?.path ?? index,
     getScrollElement: () => scroll.current,
     estimateSize: () => 106,
     overscan: 4,
@@ -563,6 +579,7 @@ export function GalleryView(props: FileViewProps) {
         <div style={{ width: virtual.getTotalSize(), height: '100%', position: 'relative' }}>
           {virtual.getVirtualItems().map((item) => {
             const entry = props.entries[item.index];
+            if (!entry) return null;
             return (
               <div
                 className="gallery-item-container"

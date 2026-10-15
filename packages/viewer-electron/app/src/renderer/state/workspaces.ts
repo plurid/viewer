@@ -71,16 +71,18 @@ export function initialize(bootstrap: Bootstrap): void {
   };
   if (bootstrap.freshSession) {
     // Reuse an untouched fresh-session workspace instead of adding one on every launch.
-    const pristine = saved.workspaces.findLast(
-      (space) =>
+    const pristine = saved.workspaces.findLast((space) => {
+      const [only] = space.panes;
+      return (
         space.name === workspace.name &&
         !space.project &&
         space.panes.length === 1 &&
-        space.panes[0].type === 'folder' &&
-        space.panes[0].path === bootstrap.home &&
+        only?.type === 'folder' &&
+        only.path === bootstrap.home &&
         space.roots.length === 1 &&
-        space.roots[0] === space.panes[0].id,
-    );
+        space.roots[0] === only.id
+      );
+    });
     if (pristine) saved.activeWorkspace = pristine.id;
     else if (saved.workspaces.length < 30) {
       saved.workspaces = [...saved.workspaces, workspace];
@@ -159,9 +161,10 @@ export async function deleteWorkspace(id: string): Promise<void> {
     workspaces.push({ id: replacement, name: 'Workspace', panes: [], roots: [], arrangement: {} });
     adapters.set(replacement, new Map());
   }
+  // A replacement exists when the last workspace is deleted, so one always remains.
   const active =
     getState().saved.activeWorkspace === id
-      ? workspaces[Math.min(index, workspaces.length - 1)]
+      ? workspaces[Math.min(index, workspaces.length - 1)]!
       : activeWorkspace();
   update(
     {

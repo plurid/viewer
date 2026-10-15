@@ -16,15 +16,16 @@ export function trashMenuActions(
   ids: string[],
   handlers: TrashMenuHandlers,
 ): MenuAction[] {
+  const [only] = items.length === 1 ? items : [];
   return items.length
     ? [
-        ...(items.length === 1 && items[0].directory
+        ...(only?.directory
           ? [
               {
                 id: 'open-selection',
                 label: 'Open folder',
                 icon: 'folder' as const,
-                run: () => handlers.go(items[0].id),
+                run: () => handlers.go(only.id),
               },
             ]
           : []),
@@ -65,15 +66,15 @@ export function trashMenuActions(
           icon: 'copy',
           run: () => handlers.act(() => window.viewer.trashCopyPaths(ids)),
         },
-        ...(items.length === 1
+        ...(only
           ? [
-              ...(items[0].originalPath
+              ...(only.originalPath
                 ? [
                     {
                       id: 'open-original-folder',
                       label: 'Open original folder in plane',
                       icon: 'folder' as const,
-                      run: () => handlers.act(() => handlers.openOriginal(items[0])),
+                      run: () => handlers.act(() => handlers.openOriginal(only)),
                     },
                   ]
                 : []),
@@ -81,7 +82,7 @@ export function trashMenuActions(
                 id: 'info',
                 label: 'Get Info',
                 icon: 'info' as const,
-                run: () => handlers.information(items[0]),
+                run: () => handlers.information(only),
               },
             ]
           : []),

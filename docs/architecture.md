@@ -62,7 +62,7 @@ Preview modules receive an optional command capability with `register()` and a h
 
 Every IPC method has a schema, a handler and an allowed window in `desktop/ipc-schemas.ts` and `bridge.ts`: `ApiHandlers` and `methodWindows` are typed over every method, so a method without a handler or a window decision does not compile. Credentials, agent clients and folder revocation run only from Settings; file changes and workspace state only from the workspace window.
 
-`tsconfig.strict.json` adds `noUncheckedIndexedAccess` for `domain/`, `desktop/` and `main.ts`; `pnpm check` runs it. Renderer code joins it folder by folder.
+All application code (main, preload, renderer and domain) compiles with `noUncheckedIndexedAccess`: an index into an array or record may be missing, so code handles that case rather than assuming it. Tests and build tools do not use the flag yet.
 
 `SettingsService` is the authoritative revisioned preference document shared by the Viewer and modeless Settings windows. Patches merge independent field edits and reject stale overlapping edits. Renderer writes are serialized; native close/quit asks Settings to commit its focused field and drain queued writes before flushing metadata. The Settings IPC role cannot invoke file mutations or read file resources.
 

@@ -75,7 +75,7 @@ export function CatalogSettings({
                       data-enabled={checked}
                       aria-hidden="true"
                     >
-                      <Icon name={toolbarIcons[toolbarKey]} size={18} />
+                      <Icon name={toolbarIcons[toolbarKey] ?? 'more'} size={18} />
                       {toolbarKey === 'view' && <Icon name="down" size={9} />}
                     </span>
                     <span>{definition.label}</span>

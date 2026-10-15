@@ -273,7 +273,8 @@ export default function ModelPreview(context: PreviewContext) {
         );
         line.renderOrder = 10;
         markings.add(line);
-        setDistance(points[0].distanceTo(points[1]));
+        const [start, end] = points;
+        if (start && end) setDistance(start.distanceTo(end));
       }
       dirty = true;
       schedule();
@@ -385,7 +386,7 @@ export default function ModelPreview(context: PreviewContext) {
       } else if (ext === 'obj') {
         const source = await response.text();
         const loader = new OBJLoader(manager);
-        const library = /^mtllib\s+(.+)$/m.exec(source)?.[1].trim();
+        const library = /^mtllib\s+(.+)$/m.exec(source)?.[1]?.trim();
         if (library) {
           try {
             const mtlURL = manager.resolveURL(new URL(library, base).href);

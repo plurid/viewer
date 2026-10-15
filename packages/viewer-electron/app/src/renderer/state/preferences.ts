@@ -86,9 +86,10 @@ export function receiveSettings(snapshot: SettingsSnapshot): void {
     else object[keys.at(-1)!] = value;
   }
   const { ui, settings } = next;
-  for (const [path, override] of Object.entries(settings.folders))
-    if (same(override, getState().settings.settings.folders[path]))
-      settings.folders[path] = getState().settings.settings.folders[path];
+  for (const [path, override] of Object.entries(settings.folders)) {
+    const current = getState().settings.settings.folders[path];
+    if (current && same(override, current)) settings.folders[path] = current;
+  }
   for (const key of Object.keys(ui) as (keyof typeof ui)[])
     if (same(ui[key], getState().saved.ui[key]))
       Object.assign(ui, { [key]: getState().saved.ui[key] });

@@ -89,6 +89,7 @@ export default function PDFPreview(context: PreviewContext) {
     const element = scroll.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
       // ResizeObserver's content box already excludes padding and scrollbars.
       const { width, height } = entry.contentRect;
       setAvailable((before) =>
@@ -188,7 +189,8 @@ export default function PDFPreview(context: PreviewContext) {
         }
         if (!cancelled) {
           setMatches(found);
-          if (found.length) setPage(found[0]);
+          const [first] = found;
+          if (first) setPage(first);
           setSearching(false);
         }
       })().catch((error) => {

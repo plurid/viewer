@@ -22,7 +22,8 @@ export function TrashPreview({
   const [error, setError] = useState('');
   const [restoreError, setRestoreError] = useState('');
   const [busy, setBusy] = useState(false);
-  const item = items[index];
+  // Quick Look opens with at least one item, and stepping wraps within them.
+  const item = items[Math.min(index, items.length - 1)]!;
   useEffect(() => {
     let closed = false,
       owned: Resource | undefined;

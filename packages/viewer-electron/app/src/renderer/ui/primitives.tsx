@@ -190,6 +190,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: s
   static getDerivedStateFromError(error: Error) {
     return { error: error.message };
   }
+  componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+    const detail = `${error.stack ?? error.message}\n${info.componentStack ?? ''}`.slice(0, 8000);
+    void window.viewer?.diagnosticReport?.(detail).catch(() => {});
+  }
   render() {
     return this.state.error ? (
       <Empty icon="warning" title="This view could not load" detail={this.state.error}>

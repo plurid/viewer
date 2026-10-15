@@ -15,7 +15,8 @@ export const QuickPreview = memo(function QuickPreview({
   session: NonNullable<ReturnType<typeof getState>['quickPreview']>;
 }) {
   const workspace = useWorkspace();
-  const path = session.paths[session.index];
+  // Quick Look opens with at least one path, and stepping wraps within them.
+  const path = session.paths[session.index] ?? session.paths[0] ?? '';
   const footer = useCallback(
     (resource: Resource, module: PreviewModule) => (
       <footer className="quick-preview-footer">

@@ -45,7 +45,7 @@ export function DestinationDialog({
       >
         <p className="muted">
           {context.selection.length === 1
-            ? context.selection[0].name
+            ? (context.selection[0]?.name ?? '')
             : `${context.selection.length} selected items`}
         </p>
         <label className="field-label">

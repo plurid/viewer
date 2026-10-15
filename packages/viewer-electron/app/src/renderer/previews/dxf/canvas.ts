@@ -189,7 +189,8 @@ export function createDrawingCanvas(
     for (const entity of drawing.entities) {
       if (hidden.has(entity.layer) || !intersects(entity, p, best)) continue;
       if (entity.text || entity.points.length === 1) {
-        const delta = distance(p, entity.points[0]);
+        const [point] = entity.points;
+        const delta = point ? distance(p, point) : Infinity;
         if (delta < best) {
           best = delta;
           result = entity;
@@ -197,7 +198,10 @@ export function createDrawingCanvas(
         continue;
       }
       for (let i = 1; i < entity.points.length; i++) {
-        const delta = segmentDistance(p, entity.points[i - 1], entity.points[i]);
+        const a = entity.points[i - 1],
+          b = entity.points[i];
+        if (!a || !b) continue;
+        const delta = segmentDistance(p, a, b);
         if (delta < best) {
           best = delta;
           result = entity;
@@ -250,7 +254,8 @@ export function createDrawingCanvas(
       ctx!.stroke();
     }
     const value = measurementValue(measure);
-    if (value !== undefined)
+    const end = measure.points.at(-1);
+    if (value !== undefined && end)
       label(
         measure.tool === 'angle'
           ? `${value.toFixed(2)}°`
@@ -259,7 +264,7 @@ export function createDrawingCanvas(
               options.displayUnit,
               measure.tool === 'area',
             ),
-        measure.points[measure.points.length - 1],
+        end,
       );
     ctx!.setLineDash([]);
   }
@@ -330,7 +335,7 @@ export function createDrawingCanvas(
       ctx!.lineWidth = (selected === entity ? 2.5 : 1.25) / view.scale;
       if (entity.text) {
         ctx!.save();
-        ctx!.translate(entity.points[0].x, entity.points[0].y);
+        ctx!.translate(entity.points[0]?.x ?? 0, entity.points[0]?.y ?? 0);
         ctx!.rotate(entity.text.rotation);
         ctx!.scale(1, -1);
         ctx!.fillStyle = ctx!.strokeStyle;
@@ -339,7 +344,7 @@ export function createDrawingCanvas(
           .split('\n')
           .forEach((line, i) => ctx!.fillText(line, 0, i * entity.text!.height * 1.25));
         ctx!.restore();
-      } else if (entity.points.length === 1) {
+      } else if (entity.points.length === 1 && entity.points[0]) {
         const p = entity.points[0],
           size = 3 / view.scale;
         ctx!.beginPath();
@@ -483,11 +488,14 @@ export function createDrawingCanvas(
       schedule();
       return;
     }
-    if (draft.length && distance(draft[draft.length - 1], value) < 1e-9) return;
+    const last = draft.at(-1),
+      first = draft[0];
+    if (last && distance(last, value) < 1e-9) return;
     if (
       options.tool === 'area' &&
       draft.length >= 3 &&
-      distance(screen(draft[0]), screen(value)) <= 12
+      first &&
+      distance(screen(first), screen(value)) <= 12
     ) {
       finish();
       return;

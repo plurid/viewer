@@ -437,7 +437,11 @@ export function Trash({ onClose }: { onClose(): void }) {
                   } else if (event.key === ' ' && !event.metaKey && !event.ctrlKey) {
                     event.preventDefault();
                     showPreview(selected);
-                  } else if (event.key === 'Enter' && selectedItems.length === 1) {
+                  } else if (
+                    event.key === 'Enter' &&
+                    selectedItems.length === 1 &&
+                    selectedItems[0]
+                  ) {
                     event.preventDefault();
                     open(selectedItems[0]);
                   } else if (event.key === 'Escape' && selected.length) {
@@ -461,7 +465,9 @@ export function Trash({ onClose }: { onClose(): void }) {
                   style={{ height: rows.getTotalSize(), position: 'relative' }}
                 >
                   {rows.getVirtualItems().map((row) => {
-                    const item = items[row.index];
+                    const item = items[row.index],
+                      file = files[row.index];
+                    if (!item || !file) return null;
                     return (
                       <div
                         role="option"
@@ -480,13 +486,13 @@ export function Trash({ onClose }: { onClose(): void }) {
                         }}
                         onClick={(event) => {
                           scroll.current?.focus({ preventScroll: true });
-                          selection.click(files[row.index], event, files);
+                          selection.click(file, event, files);
                         }}
                         onDoubleClick={() => open(item)}
                         onContextMenu={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          selection.target(files[row.index]);
+                          selection.target(file);
                           setMenu({
                             x: event.clientX,
                             y: event.clientY,
@@ -495,7 +501,7 @@ export function Trash({ onClose }: { onClose(): void }) {
                         }}
                       >
                         <span className="trash-filename" title={item.name}>
-                          <FileIcon entry={files[row.index]} size={18} />
+                          <FileIcon entry={file} size={18} />
                           <span>{item.name}</span>
                           {item.directory && <Icon name="right" size={12} />}
                         </span>
