@@ -5,6 +5,7 @@ import { groupEntries, indexEntries, reconcileSelection, sortEntries } from '../
 import {
   activeWorkspace,
   getState,
+  historyNavigate,
   navigate,
   report,
   refreshClipboard,
@@ -20,6 +21,7 @@ import { Icon } from '../ui/Icon';
 import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
 import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
 import { useFolder } from './useFolder';
+import { mouseHistoryDirection, mouseHistoryTarget } from './mouse-navigation';
 import { useSearch } from './useSearch';
 import { ContextMenu } from '../ui/ContextMenu';
 import { useCommands, useCommandSource } from '../commands/context';
@@ -338,6 +340,22 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       aria-label={`Folder ${path}`}
       onFocus={() => setActivePane(id)}
       onPointerDown={() => setActivePane(id)}
+      // The mouse's side buttons go back and forward, as in Finder.
+      onMouseDown={(event) => {
+        if (mouseHistoryDirection(event.button)) event.preventDefault();
+      }}
+      onMouseUp={(event) => {
+        const direction = mouseHistoryDirection(event.button);
+        if (!direction) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setActivePane(id);
+        const current = activeWorkspace().panes.find((item) => item.id === id);
+        const target = current?.type === 'folder' && mouseHistoryTarget(current, direction);
+        if (!target) return;
+        if ('history' in target) historyNavigate(id, target.history);
+        else navigate(id, target.parent);
+      }}
       onKeyDownCapture={handleKey}
       onClick={(event) => {
         if (

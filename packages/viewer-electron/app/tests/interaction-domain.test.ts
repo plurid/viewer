@@ -263,3 +263,17 @@ describe('code highlighting', () => {
     ).toBe('let a = 1; /* onetwo */ let b;');
   });
 });
+describe('mouse side buttons', () => {
+  it('go back and forward through folder history, and up to the parent at its start', async () => {
+    const { mouseHistoryDirection, mouseHistoryTarget } =
+      await import('../src/renderer/explorer/mouse-navigation');
+    expect([0, 1, 2, 3, 4].map(mouseHistoryDirection)).toEqual([0, 0, 0, -1, 1]);
+    const pane = { path: '/Users/fixture/Docs', history: ['/Users/fixture/Docs'], historyIndex: 0 };
+    expect(mouseHistoryTarget(pane, -1)).toEqual({ parent: '/Users/fixture' });
+    expect(mouseHistoryTarget(pane, 1)).toBeUndefined();
+    const visited = { path: '/b', history: ['/a', '/b', '/c'], historyIndex: 1 };
+    expect(mouseHistoryTarget(visited, -1)).toEqual({ history: -1 });
+    expect(mouseHistoryTarget(visited, 1)).toEqual({ history: 1 });
+    expect(mouseHistoryTarget({ path: '/', history: ['/'], historyIndex: 0 }, -1)).toBeUndefined();
+  });
+});

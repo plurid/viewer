@@ -575,6 +575,8 @@ app
       app.quit();
       return;
     }
+    // Development runs the stock Electron.app; give the Dock Viewer's icon.
+    if (!app.isPackaged) app.dock?.setIcon(path.resolve('assets/icon.png'));
     windowState = new WindowState(path.join(app.getPath('userData'), 'window-state-v1.json'));
     await windowState.load();
     if (quitPending || quitting) return;
