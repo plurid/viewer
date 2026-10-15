@@ -1,6 +1,6 @@
 # Architecture
 
-The active application is `packages/viewer-electron/app`. The 2021 predecessor (`old_app`) and what it offered are recorded in [old-app.md](old-app.md); its files sit in `archive/` until removed.
+The active application is `packages/viewer-electron/app`. The 2021 predecessor (`old_app`) and what it offered are recorded in [old-app.md](old-app.md); its source is in git history at commit `bd198da`.
 
 `src/domain` owns serializable file, operation, preview, and workspace contracts. It has no Electron or React dependencies. `src/desktop` implements filesystem access, resource capabilities, shared watchers, cancellable search, transfer jobs, and atomic persistence. `src/preload.ts` exposes a fixed typed bridge; the sandboxed renderer never imports Node or Electron. Each IPC method validates its arguments, origin and sending main frame. Arbitrary channels, remote navigation and renderer network access are unavailable.
 

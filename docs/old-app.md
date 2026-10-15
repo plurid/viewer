@@ -1,8 +1,8 @@
 # The 2021 Viewer (old_app)
 
-Before the 2026 modernization, Viewer was a webpack-built Electron app with React, Redux Toolkit and `@plurid/plurid-react` 0.0.0-34. Its tracked source is in git at commit `bd198da` under `packages/viewer-electron/old_app` (recover with `git show bd198da:<path>` or `git checkout bd198da -- packages/viewer-electron/old_app`). Until it is removed, the working copy is in `archive/viewer-electron-2021/old_app`.
+Before the 2026 modernization, Viewer was a webpack-built Electron app with React, Redux Toolkit and `@plurid/plurid-react` 0.0.0-34. Its tracked source is in git at commit `bd198da` under `packages/viewer-electron/old_app` (recover with `git show bd198da:<path>` or `git checkout bd198da -- packages/viewer-electron/old_app`). The working copy was removed on 2026-10-15.
 
-This page records what that app did, how it compares with the current app, and which of its ideas are not yet carried over. The sample files in its `examples/` folder were git-ignored, so they exist only in the archive; see [Sample files](#sample-files).
+This page records what that app did, how it compares with the current app, and which of its ideas are not yet carried over. The sample files in its `examples/` folder were never committed and were removed with it; see [Sample files](#sample-files).
 
 ## Architecture
 
@@ -74,7 +74,7 @@ These were never working and need no porting:
 
 ## Sample files
 
-`examples/` (11 MB) was git-ignored, so deleting the archive loses it:
+`examples/` (11 MB) was git-ignored and was removed on 2026-10-15. It held:
 
 - `images/`:
   - `example.tiff` (HP sample from 1998), `example.bmp`, `example.ico`, `example.svg`, `example.webp`
@@ -84,7 +84,7 @@ These were never working and need no porting:
 - `texts/`: `example.pdf`, and two multi-page `.djvu` files.
 - `videos/video.mov`: a 2018 screen recording whose metadata names the Mac model and macOS build.
 
-Keep the TIFF, DjVu, `.eimg`, BMP and ICO samples if those formats get implemented. Their licenses are unknown, so check them before adding any to the repository as test fixtures.
+If TIFF, DjVu or `.eimg` support is implemented, use new samples with known licenses as test fixtures.
 
 ## Size
 

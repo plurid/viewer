@@ -34,9 +34,11 @@
 - The PDF cross-reference table and bitmap rotation.
 - Release aborting preview work.
 
+**Plurid:** in the sibling repository, the handle gained `persist.flush()`, `tree.set()` and `history.transaction()`, with regression tests in `plurid-react/source/containers/Application/__tests__/handle.test.tsx`. After a fresh plurid build, all 578 `plurid-react` tests across 88 suites pass, with coverage thresholds met; its TypeScript check reports no errors and ESLint passes on the changed files. Viewer adopts these APIs when a plurid release that includes them is installed (see `docs/architecture.md`).
+
 `noUncheckedIndexedAccess` was measured, not enabled: about 370 sites, mostly bounded loops in DXF geometry. Sampled desktop hits were already guarded.
 
-The 2021 predecessor is documented in `docs/old-app.md`; its files moved to `archive/`.
+The 2021 predecessor is documented in `docs/old-app.md`. Its files were removed, and its source is in git history at commit `bd198da`. Test folders kept by these runs (7,995) were moved to the Trash with approval.
 
 ## October 15 follow-up
 
