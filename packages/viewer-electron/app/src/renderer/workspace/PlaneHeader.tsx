@@ -5,8 +5,11 @@ import {
   refreshClipboard,
   report,
   setActivePane,
+  useFolderPresentation,
   useViewer,
 } from '../state/store';
+import { activeLens, useLenses } from '../state/lenses';
+import { lensMenuIDs } from '../commands/lenses';
 import { focusFiles } from './sessions';
 import { useCommands, useCommandRevision } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
@@ -18,6 +21,40 @@ import { useWorkspace } from './context';
 import { baseName } from '../../domain/planes';
 import { hostID } from './tree';
 
+/** Chooses and edits a folder's lenses; shown once the folder has one, and on the Map. */
+function LensButton({
+  path,
+  map,
+  open,
+  onOpen,
+}: {
+  path: string;
+  map: boolean;
+  open: boolean;
+  onOpen(event: React.MouseEvent<HTMLButtonElement>, ids: string[]): void;
+}) {
+  const { data } = useLenses(path);
+  const presentation = useFolderPresentation(path);
+  if (!data?.lenses.length && !map) return null;
+  const current = activeLens(data, {
+    group: map ? 'lens' : presentation.group,
+    lens: presentation.lens,
+  });
+  return (
+    <button
+      className="plane-view-button plane-lens-button"
+      aria-label={current ? `Lens: ${current.lens.name}` : 'Lenses'}
+      title={current ? `Lens: ${current.lens.name}` : 'Lenses'}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onClick={(event) => onOpen(event, lensMenuIDs(data))}
+    >
+      <Icon name="lens" size={15} />
+      {current && <span>{current.lens.name}</span>}
+      <Icon name="down" size={10} />
+    </button>
+  );
+}
 export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) {
   const workspace = useWorkspace();
   const node = context.treePlane as TreePlane;
@@ -33,7 +70,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
   const registry = useCommands();
   useCommandRevision(id);
   const [menu, setMenu] = useState<{
-    kind: 'view' | 'actions';
+    kind: 'view' | 'actions' | 'lens';
     anchor: HTMLButtonElement;
     x: number;
     y: number;
@@ -63,8 +100,11 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       })
       .catch(report);
   };
-  const openMenu = (event: React.MouseEvent<HTMLButtonElement>, ids?: string[]) => {
-    const kind = ids ? 'view' : 'actions';
+  const openMenu = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    ids?: string[],
+    kind: 'view' | 'actions' | 'lens' = ids ? 'view' : 'actions',
+  ) => {
     if (menu?.kind === kind) {
       setMenu(null);
       return;
@@ -167,13 +207,25 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
               aria-haspopup="dialog"
               aria-expanded={menu?.kind === 'view'}
               onClick={(event) =>
-                openMenu(event, ['view-list', 'view-grid', 'view-columns', 'view-gallery'])
+                openMenu(event, [
+                  'view-list',
+                  'view-grid',
+                  'view-columns',
+                  'view-gallery',
+                  'view-map',
+                ])
               }
             >
               <Icon name={pane.mode} size={17} />
               <Icon name="down" size={10} />
             </button>
           )}
+          <LensButton
+            path={pane.path}
+            map={pane.mode === 'map'}
+            open={menu?.kind === 'lens'}
+            onOpen={(event, ids) => openMenu(event, ids, 'lens')}
+          />
           {controls.search && (
             <IconButton
               icon="search"

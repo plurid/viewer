@@ -530,7 +530,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       run: actions.selectAll,
     },
   ];
-  for (const mode of ['list', 'grid', 'columns', 'gallery'] as ViewMode[])
+  for (const mode of ['list', 'grid', 'columns', 'gallery', 'map'] as ViewMode[])
     commands.push({
       id: `view-${mode}`,
       label: `${mode.charAt(0).toUpperCase()}${mode.slice(1)} view`,

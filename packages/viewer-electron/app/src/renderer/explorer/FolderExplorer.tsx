@@ -1,5 +1,14 @@
 import { nativeOpening } from './opening';
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
 import { groupEntries, indexEntries, reconcileSelection, sortEntries } from '../../domain/files';
 import {
@@ -39,6 +48,13 @@ import { FILE_DRAG, useFileDrop } from './file-drop';
 import { folderDragNavigation } from './folder-drag';
 import { blankFileSpace, useFileKeyboard, useFileSelection, type FileModifiers } from './selection';
 import { useContextPublish } from './context-publish';
+import { useLensGrouping } from './folder-sections';
+import { fixedSections, type ViewSection } from './sections';
+import { lensCommands, lensGroupMenuIDs } from '../commands/lenses';
+import { useLensDialogs } from './LensDialogs';
+import { MapView, type MapControls } from './map/MapView';
+import { activeLens } from '../state/lenses';
+import { resolveLens } from '../../domain/lenses';
 
 export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string }) {
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id)) as
@@ -72,24 +88,71 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const descending = pane?.descending;
   // Typing stays responsive in large folders; the filtered list follows a moment later.
   const filter = useDeferredValue(query);
-  const baseEntries = useMemo(() => {
+  const visible = useMemo(() => {
     const needle = filter.toLocaleLowerCase();
     return sort
-      ? groupEntries(
-          sortEntries(
-            sources.filter(
-              (entry) =>
-                (showHidden || !entry.hidden) &&
-                (subtree || !filter || entry.name.toLocaleLowerCase().includes(needle)),
-            ),
-            sort,
-            descending ?? false,
-            foldersFirst,
+      ? sortEntries(
+          sources.filter(
+            (entry) =>
+              (showHidden || !entry.hidden) &&
+              (subtree || !filter || entry.name.toLocaleLowerCase().includes(needle)),
           ),
-          presentation.group,
+          sort,
+          descending ?? false,
+          foldersFirst,
         )
       : [];
-  }, [sources, showHidden, sort, descending, subtree, filter, foldersFirst, presentation.group]);
+  }, [sources, showHidden, sort, descending, subtree, filter, foldersFirst]);
+  // Results from subfolders are not this folder's items, so a lens cannot group them.
+  const groupBy =
+    presentation.group === 'lens' && subtree && query.trim() ? 'none' : presentation.group;
+  const lensDialogs = useLensDialogs();
+  const sectionContext = useCallback(
+    (section: Pick<ViewSection, 'group' | 'label'>, event: MouseEvent) => {
+      setActivePane(id);
+      setMenu({
+        x: event.clientX,
+        y: event.clientY,
+        request: {
+          paneID: id,
+          scope: 'folder',
+          ids: lensGroupMenuIDs,
+          context: {
+            selection: [],
+            directory: path,
+            lensGroup: { id: section.group ?? null, label: section.label },
+          },
+        },
+      });
+    },
+    [id, path],
+  );
+  const lensGrouping = useLensGrouping(
+    path,
+    listing.entries,
+    visible,
+    { group: groupBy, lens: presentation.lens },
+    !!filter.trim(),
+    sectionContext,
+  );
+  const baseEntries = useMemo(
+    () => (groupBy === 'lens' ? (lensGrouping.entries ?? visible) : groupEntries(visible, groupBy)),
+    [groupBy, lensGrouping.entries, visible],
+  );
+  // The Map shows the chosen lens even when the list is grouped another way.
+  const mapDocument = activeLens(lensGrouping.view.data, {
+    group: 'lens',
+    lens: presentation.lens,
+  });
+  const commandLens = lensGrouping.document ?? mapDocument;
+  const commandResolved = useMemo(
+    () =>
+      commandLens === lensGrouping.document
+        ? lensGrouping.resolved
+        : commandLens && resolveLens(commandLens.lens, listing.entries),
+    [commandLens, lensGrouping.document, lensGrouping.resolved, listing.entries],
+  );
+  const mapControls = useRef<MapControls | null>(null);
   const tree = useListNavigation(
     id,
     path,
@@ -97,6 +160,15 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     pane?.mode === 'list' && !query && !listing.loading && !listing.error,
   );
   const entries = pane?.mode === 'list' ? tree.entries : baseEntries;
+  const sections = useMemo(
+    () =>
+      groupBy === 'lens'
+        ? lensGrouping.sections
+        : pane?.mode === 'map'
+          ? undefined
+          : fixedSections(entries, groupBy, tree.depths),
+    [groupBy, lensGrouping.sections, pane?.mode, entries, tree.depths],
+  );
   const selected = useMemo(
     () =>
       selection
@@ -188,8 +260,8 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
         clipboard: getState().clipboard,
         jobs: getState().jobs,
       }),
-      definitions: () =>
-        folderCommands({
+      definitions: () => [
+        ...folderCommands({
           open: (entries, linked, another) => {
             for (const entry of entries) open(entry, linked, another);
           },
@@ -207,12 +279,35 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           invertSelection: () =>
             selecting.invert(pane?.mode === 'columns' ? columns.scope() : entries),
         }),
+        ...lensCommands({
+          folder: () => path,
+          data: () => lensGrouping.view.data,
+          document: () => commandLens,
+          resolved: () => commandResolved,
+          prompt: lensDialogs.open,
+          selectGroup: (group) =>
+            selecting.all(
+              entries.filter(
+                (entry) => (commandResolved?.placements.get(entry.path)?.group ?? null) === group,
+              ),
+            ),
+        }),
+      ],
       valid: (invocation, live) =>
         invocation.workspaceID === live.workspaceID &&
         invocation.path === live.path &&
         !!live.folder,
     },
-    [pane, selected, entries, searchOpen, recipes],
+    [
+      pane,
+      selected,
+      entries,
+      searchOpen,
+      recipes,
+      lensGrouping.view.data,
+      commandLens,
+      commandResolved,
+    ],
   );
   useContextPublish(id, activeID === id, selected, path);
   const command = (name: string) => {
@@ -224,6 +319,24 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   };
   const handleKey = useFileKeyboard(id, (event) => {
     if (!pane) return;
+    // On the Map, Option-arrows nudge the selection; Command-[ and ] still go back and forward.
+    const direction = (
+      { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as const
+    )[event.key as 'ArrowLeft'];
+    if (
+      pane.mode === 'map' &&
+      direction &&
+      event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      selection.length &&
+      !editable(event.target)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      mapControls.current?.nudge(direction, event.shiftKey ? 64 : 8);
+      return;
+    }
     routeExplorerInput(event, {
       settings: getState().settings.settings,
       command,
@@ -251,9 +364,12 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       move: (key, range) => {
         const stride =
           pane.mode === 'grid' && ['ArrowUp', 'ArrowDown'].includes(key)
-            ? surface.current?.querySelector('.grid-row')?.childElementCount || 1
+            ? Number(
+                surface.current?.querySelector<HTMLElement>('.grid-scroll')?.dataset.columns,
+              ) || 1
             : 1;
-        if (pane.mode === 'columns') columns.move(key, range);
+        if (pane.mode === 'map') mapControls.current?.move(key, range);
+        else if (pane.mode === 'columns') columns.move(key, range);
         else
           selecting.move(
             entries,
@@ -287,6 +403,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     region: (found, base) => selecting.region(found, base),
     open,
     showHidden: pane.showHidden,
+    sections,
     context: (entry, event) => {
       event.preventDefault();
       selecting.target(entry);
@@ -514,6 +631,18 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             <ColumnsView path={path} navigation={columns} {...viewProps} />
           ) : pane.mode === 'gallery' ? (
             <GalleryView {...viewProps} />
+          ) : pane.mode === 'map' ? (
+            <MapView
+              {...viewProps}
+              path={path}
+              document={mapDocument}
+              listing={listing.entries}
+              controls={mapControls}
+              prompt={lensDialogs.open}
+              regionContext={(region, event) =>
+                sectionContext({ group: region.id, label: region.name }, event)
+              }
+            />
           ) : (
             <>
               <ListView {...viewProps} />
@@ -541,6 +670,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
         />
       )}
       {fileDialogs.content}
+      {lensDialogs.content}
     </div>
   );
 });

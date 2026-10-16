@@ -1,5 +1,45 @@
 # Verification
 
+## October 16 lenses
+
+**652 unit tests across 90 files pass** (2 skipped). All four TypeScript targets pass with `noUncheckedIndexedAccess`; ESLint and formatting pass. The renderer bundles. The packaged app was not built, and the lens UI has not been exercised in a running app yet.
+
+- **Lens model** (`tests/lenses-domain.test.ts`, 12 tests):
+  - The fixed file format writes the same bytes for the same lens, one item per line.
+  - Names outside the folder are refused; an item named `__proto__` is allowed.
+  - Duplicates, loops and missing parents are repaired instead of rejected.
+  - Edits replay on a newer file and skip targets that were removed.
+  - Undo restores only what an edit changed and keeps others' edits.
+  - Renames are matched by case and Unicode form, and Finder renames by identity, only when unambiguous.
+  - Manual places beat rules, the most specific rule wins, and Unsorted is last.
+  - Dates follow the local calendar.
+  - Globs stay fast on hostile patterns.
+- **Map layout** (`tests/lens-layout.test.ts`, 5 tests):
+  - Items never overlap, and stored places never move.
+  - Places are relative to their region, so moving a region carries its items.
+  - Nested regions stay inside fixed-width parents.
+  - Spatial neighbours are found by direction.
+  - 5,000 tiles are indexed with bounded viewport queries.
+- **Lens storage** (`tests/lenses-service.test.ts`, 13 tests, in temporary folders removed through the guarded Trash helper):
+  - Nothing is written until a lens is made; then a README and a 0644 lens file appear.
+  - Edits replay on a file changed elsewhere, and a conflicted file is never overwritten.
+  - A foreign `.viewer` folder (such as the 2021 app's data) and a symbolic link named `.viewer` are left alone.
+  - Read-only folders and Home keep their lenses on this Mac, and a lens can move into the folder once it is writable.
+  - Lens files go to the Trash.
+  - Renames made in Viewer and in Finder are followed, and a moved item stays listed as missing.
+  - Items missing for 30 days are dropped with the next edit.
+  - Lenses kept on this Mac follow a moved folder.
+  - Collapsed groups are remembered.
+- **Views** (`tests/lens-views.test.ts`, 7 tests):
+  - Empty and collapsed headings keep their order.
+  - Kind groups are counted.
+  - Collapsing hides nested groups.
+  - Only the folder's own items can be grouped.
+  - Edits show at once and save in one batch, and Undo and Redo work.
+  - The Map's DOM stays under 200 tiles for 5,000 items, and keyboard moves are spatial.
+  - A nudge saves a place relative to the item's group.
+- **Agents:** lens editing commands are outside the agent allow-list. Only `group.lens.*` (view grouping) and `view-map` are proposable.
+
 ## October 15 polish
 
 **613 unit tests across 86 files pass** (2 skipped). All four TypeScript targets pass with `noUncheckedIndexedAccess` across all application code; ESLint and formatting pass.

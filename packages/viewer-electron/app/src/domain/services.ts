@@ -31,7 +31,8 @@ export interface ApplicationSettings {
   checkpoints: { budgetBytes: number };
   appearance: 'system' | 'dark' | 'light';
   browsing: {
-    mode: ViewMode;
+    /** The default for folders without their own view; Map is chosen per folder. */
+    mode: Exclude<ViewMode, 'map'>;
     sort: SortKey;
     descending: boolean;
     group: 'none' | 'kind' | 'modified';

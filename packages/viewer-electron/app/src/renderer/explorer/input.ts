@@ -29,6 +29,7 @@ export const explorerCommandIDs = new Set([
   'view-grid',
   'view-columns',
   'view-gallery',
+  'view-map',
   'hidden',
 ]);
 export function keyCommand(event: RoutedKey, settings: ApplicationSettings): string | undefined {

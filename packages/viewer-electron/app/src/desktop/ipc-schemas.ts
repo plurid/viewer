@@ -9,6 +9,7 @@ import { agentClientInputSchema } from '../domain/agent-clients';
 import { watchRuleRequestSchema } from '../domain/watch-rules';
 import { workflowDefinitionSchema } from '../domain/workflows';
 import { projectDefinitionSchema } from '../domain/project';
+import { lensGroupIDSchema, lensOpSchema } from '../domain/lenses';
 import { stateSchema } from './storage';
 import { informationPatchSchema } from './file-information';
 import { localPath, id } from './schemas';
@@ -38,7 +39,7 @@ const workspaceSnapshotSchema = z.object({
               id,
               type: z.enum(['folder', 'preview', 'search', 'terminal', 'collection']),
               path: localPath,
-              mode: z.enum(['list', 'grid', 'columns', 'gallery']).optional(),
+              mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']).optional(),
               allLocations: z.boolean().optional(),
             }),
           )
@@ -168,6 +169,36 @@ export const schemas = {
     ]),
   ]),
   inspect: z.tuple([localPath, z.boolean().optional(), z.boolean().optional()]),
+  lens: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('list'), folder: localPath }).strict(),
+      z
+        .object({
+          kind: z.literal('create'),
+          folder: localPath,
+          name: z.string().trim().min(1).max(100),
+          ops: z.array(lensOpSchema).max(5000).optional(),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('apply'),
+          folder: localPath,
+          file: localPath,
+          ops: z.array(lensOpSchema).max(5000),
+        })
+        .strict(),
+      z.object({ kind: z.literal('trash'), folder: localPath, file: localPath }).strict(),
+      z.object({ kind: z.literal('share'), folder: localPath, file: localPath }).strict(),
+      z
+        .object({
+          kind: z.literal('collapse'),
+          lens: z.uuid(),
+          groups: z.array(lensGroupIDSchema).max(1000),
+        })
+        .strict(),
+    ]),
+  ]),
   project: z.tuple([
     z.discriminatedUnion('kind', [
       z
@@ -469,6 +500,7 @@ export const methodWindows = {
   checkpoints: 'viewer',
   inspect: 'viewer',
   project: 'viewer',
+  lens: 'viewer',
   commandsPublish: 'viewer',
   agentCommandResult: 'viewer',
   agentReviewList: 'viewer',

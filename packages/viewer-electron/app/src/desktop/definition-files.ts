@@ -98,6 +98,9 @@ export class DefinitionFiles<T> {
     private access: (files: readonly string[]) => Promise<void>,
     private coordination: Pick<typeof fileCoordination, 'run'> = fileCoordination,
     private limit = 8 * 1024 * 1024,
+    /** Writes the whole file in a fixed format, instead of editing the existing text, and
+     * gives new files ordinary sharing permissions. */
+    private format?: { serialize(definition: T): string; mode: number },
   ) {}
   private enqueue<R>(work: () => Promise<R>): Promise<R> {
     if (this.pending >= 32)
@@ -150,41 +153,95 @@ export class DefinitionFiles<T> {
               this.title +
               ' before saving.',
           );
-        let text = before;
-        if (text) {
-          for (const change of configChanges(
-            decodeDefinition(text, this.schema, this.title, this.limit),
-            definition,
-          ))
-            text = applyEdits(
-              text,
-              modify(text, change.keys, change.value, {
-                formattingOptions: { insertSpaces: true, tabSize: 2 },
-              }),
-            );
-        } else text = this.comments + JSON.stringify(definition, null, 2) + '\n';
-        decodeDefinition(text, this.schema, this.title, this.limit);
-        const temporary = actual + '.' + randomUUID() + '.tmp';
-        try {
-          const handle = await open(temporary, 'wx', 0o600);
-          try {
-            await handle.writeFile(text);
-            if (before) await keepMetadata(actual, handle);
-            await handle.sync();
-          } finally {
-            await handle.close();
-          }
-          signal?.throwIfAborted();
-          await this.access([actual, path.dirname(actual)]);
-          if ((await source(actual, this.title, this.limit)) !== before)
-            throw new Error('The ' + this.title.toLowerCase() + ' changed during this save.');
-          await rename(temporary, actual);
-        } finally {
-          await discardOwnTemporaryFile(temporary);
-        }
+        const text = this.text(before, definition);
+        await this.publish(actual, before, text, signal);
         return { file, root: path.dirname(file), revision: revision(text), definition };
       });
     });
+  }
+  /**
+   * Reads, changes and saves the file inside one coordinated write, so an edit applies to the
+   * latest version even when another window or person saved in between. A file that does not
+   * parse is never overwritten. `change` returns null to leave the file as it is.
+   */
+  update<R>(
+    file: string,
+    change: (current: T | null) => { definition: T; result: R } | null,
+  ): Promise<{ document: DefinitionDocument<T> | null; result?: R }> {
+    return this.enqueue(async () => {
+      await this.access([file, path.dirname(file)]);
+      return this.coordination.run([{ path: file, mode: 'write' }], async (signal) => {
+        const actual = fileCoordination.path(file);
+        await this.access([actual, path.dirname(actual)]);
+        const before = await source(actual, this.title, this.limit);
+        const current =
+          before === null ? null : decodeDefinition(before, this.schema, this.title, this.limit);
+        const next = change(current);
+        if (!next)
+          return {
+            document:
+              before === null || current === null
+                ? null
+                : {
+                    file,
+                    root: path.dirname(file),
+                    revision: revision(before),
+                    definition: current,
+                  },
+          };
+        const definition = this.schema.parse(next.definition);
+        const text = this.text(before, definition);
+        if (text !== before) await this.publish(actual, before, text, signal);
+        return {
+          document: { file, root: path.dirname(file), revision: revision(text), definition },
+          result: next.result,
+        };
+      });
+    });
+  }
+  private text(before: string | null, definition: T): string {
+    let text = before;
+    if (this.format) text = this.format.serialize(definition);
+    else if (text) {
+      for (const change of configChanges(
+        decodeDefinition(text, this.schema, this.title, this.limit),
+        definition,
+      ))
+        text = applyEdits(
+          text,
+          modify(text, change.keys, change.value, {
+            formattingOptions: { insertSpaces: true, tabSize: 2 },
+          }),
+        );
+    } else text = this.comments + JSON.stringify(definition, null, 2) + '\n';
+    decodeDefinition(text, this.schema, this.title, this.limit);
+    return text;
+  }
+  private async publish(
+    actual: string,
+    before: string | null,
+    text: string,
+    signal: AbortSignal | undefined,
+  ) {
+    const temporary = actual + '.' + randomUUID() + '.tmp';
+    try {
+      const handle = await open(temporary, 'wx', 0o600);
+      try {
+        await handle.writeFile(text);
+        if (before !== null) await keepMetadata(actual, handle);
+        else if (this.format) await handle.chmod(this.format.mode);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      signal?.throwIfAborted();
+      await this.access([actual, path.dirname(actual)]);
+      if ((await source(actual, this.title, this.limit)) !== before)
+        throw new Error('The ' + this.title.toLowerCase() + ' changed during this save.');
+      await rename(temporary, actual);
+    } finally {
+      await discardOwnTemporaryFile(temporary);
+    }
   }
   async flush() {
     await this.queue.catch(() => {});

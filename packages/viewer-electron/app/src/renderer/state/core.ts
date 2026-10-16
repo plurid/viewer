@@ -56,6 +56,10 @@ export function useViewer<T>(selector: (state: ViewerState) => T): T {
 export function report(error: unknown): void {
   update({ ...current, notice: errorMessage(error) });
 }
+/** A notice that is information, not an error. */
+export function announce(message: string): void {
+  update({ ...current, notice: message });
+}
 export function dismissNotice(): void {
   update({ ...current, notice: null });
 }

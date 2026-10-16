@@ -43,7 +43,7 @@ const pane = z.discriminatedUnion('type', [
     id,
     type: z.literal('folder'),
     path: localPath,
-    mode: z.enum(['list', 'grid', 'columns', 'gallery']),
+    mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']),
     sort: z.enum(['name', 'modified', 'created', 'size', 'kind', 'extension']),
     descending: z.boolean(),
     showHidden: z.boolean(),

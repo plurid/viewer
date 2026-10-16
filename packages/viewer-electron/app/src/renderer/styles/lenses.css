@@ -1,0 +1,325 @@
+/* Lens group headings in list, grid, columns and gallery views. */
+.file-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  min-height: 26px;
+  box-sizing: border-box;
+  background: var(--surface);
+}
+.file-group-label.is-lens {
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 12px;
+}
+.file-group-label.is-drop-target {
+  background: var(--selection);
+}
+.file-group-label .section-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-group-label .section-count {
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.section-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-inline-start: -4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+.section-disclosure:hover {
+  color: var(--ink);
+}
+.gallery-section {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  max-width: calc(100% - 8px);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The Map: regions and freely placed items, drawn at the lens's map units. */
+.map-view {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.map-scroll {
+  flex: 1;
+  overflow: auto;
+}
+.map-stage {
+  position: relative;
+}
+.map-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+.map-region {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+.map-region.depth-1 {
+  background: color-mix(in srgb, var(--raised) 70%, transparent);
+}
+.map-region.depth-2,
+.map-region.depth-3 {
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+}
+.map-region.is-unsorted {
+  border-style: dashed;
+  background: transparent;
+}
+.map-region.is-moving {
+  box-shadow: var(--shadow);
+  z-index: 2;
+}
+.map-region-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-inline: 12px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+}
+.map-region-header:active {
+  cursor: grabbing;
+}
+.map-region-header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-region-header small {
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.map-region-summary {
+  position: absolute;
+  inset: 32px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 48px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+}
+.map-region-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+.map-region-resize::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--subtle);
+  border-bottom: 1.5px solid var(--subtle);
+}
+.map-tile {
+  position: absolute;
+  z-index: 1;
+  width: 96px;
+  height: 88px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 6px;
+  user-select: none;
+}
+.map-tile:hover {
+  background: var(--raised);
+}
+.map-tile.is-selected {
+  background: var(--selection);
+  --muted: var(--selection-muted);
+}
+.map-tile.is-cursor {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.map-tile.is-dragging {
+  z-index: 3;
+  opacity: 0.85;
+  box-shadow: var(--shadow);
+}
+.map-tile-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 52px;
+}
+.map-tile-preview img {
+  max-width: 100%;
+  max-height: 52px;
+  object-fit: contain;
+  border-radius: 3px;
+}
+.detail-icons .map-tile-preview {
+  height: 100%;
+}
+.map-tile-name {
+  width: 100%;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.map-toolbar {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.map-zoom-value {
+  min-width: 48px;
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  font-variant-numeric: tabular-nums;
+}
+.map-readonly {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Lens dialogs. */
+.lens-group-choices {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow: auto;
+  padding: 4px 8px 12px;
+}
+.lens-group-choices button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: start;
+}
+.lens-group-choices button:hover,
+.lens-group-choices button:focus-visible {
+  background: var(--selection);
+}
+.lens-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 12px;
+  list-style: none;
+}
+.lens-rules li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lens-rules input:not([type='date']) {
+  flex: 1;
+  min-width: 0;
+}
+.lens-rule-dates {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.lens-rule-dates input[aria-label='Year'] {
+  width: 64px;
+}
+.lens-rule-match {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 12px;
+  color: var(--muted);
+}
+.lens-rules-dialog footer > button:first-child {
+  margin-right: auto;
+}
+.plane-lens-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+}
+.plane-lens-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}

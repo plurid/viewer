@@ -9,7 +9,9 @@ export interface FolderPresentation {
   showHidden: boolean;
   density: 'comfortable' | 'compact';
   foldersFirst: boolean;
-  group: 'none' | 'kind' | 'modified';
+  group: 'none' | 'kind' | 'modified' | 'lens';
+  /** The lens grouping this folder when `group` is `lens`. */
+  lens?: string;
   columnWidth: number;
   list: UIPreferences['list'] & { order?: ListColumn[] };
 }

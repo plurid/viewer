@@ -7,6 +7,7 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | File entry          | A filesystem path plus metadata and identity; `src/domain/contracts.ts`, `desktop/filesystem.ts`.                                                |
 | Explorer session    | One plane's selection, cursor, range anchor, history, column trail and scroll; `renderer/workspace/sessions.ts`.                                 |
 | Folder presentation | Shared path-keyed view, sort, metadata columns and browser width; `domain/folder-presentation.ts`, `renderer/state/store.ts`.                    |
+| Lens                | A folder-local grouping of its direct children, with remembered Map places, stored in the folder's `.viewer/lenses/`; it never moves files. `domain/lenses.ts`, `desktop/lenses.ts`, [lenses](docs/lenses.md). |
 | Plane               | A host record for a folder, search, preview or terminal; its engine route and geometry belong to the workspace adapter.                          |
 | Root                | An independent spatial branch. Reuse of a preview stays within that root; explicit new planes remain independent.                                |
 | Captured target     | Workspace/root/plane/directory plus selected entries and origin path, frozen before an asynchronous action; `domain/automation.ts`.              |

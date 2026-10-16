@@ -28,6 +28,7 @@ export const defaultShortcuts: Record<string, string> = {
   'view-grid': 'Cmd+2',
   'view-columns': 'Cmd+3',
   'view-gallery': 'Cmd+4',
+  'view-map': 'Cmd+5',
   'toggle-hidden': 'Cmd+Shift+.',
 };
 /** Second bindings kept for Finder habits, alongside the primary shortcut. */

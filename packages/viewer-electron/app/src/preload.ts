@@ -30,6 +30,7 @@ const api: ViewerAPI = {
   configValidate: () => invoke('configValidate'),
   configTransfer: (kind) => invoke('configTransfer', kind),
   project: (request) => invoke('project', request),
+  lens: (request) => invoke('lens', request),
   checkpoints: (request) => invoke('checkpoints', request),
   inspect: (file, content, ocr) => invoke('inspect', file, content, ocr),
   terminalApplication: () => invoke('terminalApplication'),

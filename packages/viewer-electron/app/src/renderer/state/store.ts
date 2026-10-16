@@ -3,6 +3,7 @@ export {
   activeWorkspace,
   changeWorkspace,
   dismissNotice,
+  announce,
   getState,
   report,
   useViewer,

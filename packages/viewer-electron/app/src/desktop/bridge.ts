@@ -63,6 +63,7 @@ import { confirmAgentProposal, confirmNatively } from './native-confirmation';
 import { fileCoordination } from './file-coordination';
 import { FileInformationService } from './file-information';
 import { Projects } from './projects';
+import { Lenses } from './lenses';
 import { Checkpoints } from './checkpoints';
 import { Workflows } from './workflows';
 import { WatchRules } from './watch-rules';
@@ -87,6 +88,7 @@ export class Desktop {
   readonly fileAccess: FileAccess;
   readonly information: FileInformationService;
   readonly projects: Projects;
+  readonly lenses: Lenses;
   readonly checkpoints: Checkpoints;
   readonly comparisons: Comparisons;
   readonly duplicates: Duplicates;
@@ -270,6 +272,7 @@ export class Desktop {
     const changed = (changes: FileChange[]) => {
       emit({ type: 'file-changes', changes });
       void this.settings.remapFolders(changes).catch(() => this.settings.announce());
+      void this.lenses.remap(changes).catch(() => {});
       for (const change of changes) {
         void this.files.update(change.source, true).catch(() => {});
         void this.files.update(change.destination).catch(() => {});
@@ -295,6 +298,17 @@ export class Desktop {
       new ProtectedPaths(this.home),
       nativeImageConverter,
     );
+    this.lenses = new Lenses(dataPath, access, {
+      home: this.home,
+      trash: async (file) => this.operations.start({ kind: 'trash', sources: [file] }),
+      trashOwn: (file) =>
+        process.platform === 'darwin'
+          ? macFiles()
+              .trash(file, fileCoordination.purpose())
+              .then(() => {})
+          : shell.trashItem(file),
+      changed: (folder) => emit({ type: 'lens-changed', folder }),
+    });
     this.operationPlans = new OperationPlans(dataPath, this.operations, this.checkpoints, access);
     this.actions = new ActionPlanner(dataPath, {
       access,
@@ -570,6 +584,7 @@ export class Desktop {
       this.thumbnails.close(),
       this.information.close(),
       this.projects.flush(),
+      this.lenses.close(),
       this.checkpoints.close(),
       this.operationPlans.close(),
       this.relationships.close(),
@@ -671,6 +686,18 @@ export class Desktop {
         return this.checkpoints.restore(request.id, request.destination, this.operations);
       },
       inspect: (args) => this.files.inspect(args[0], args[1], args[2]),
+      lens: async (args) => {
+        const request = args[0];
+        if (request.kind === 'list') return this.lenses.list(request.folder);
+        if (request.kind === 'create')
+          return this.lenses.create(request.folder, request.name, request.ops);
+        if (request.kind === 'apply')
+          return this.lenses.apply(request.folder, request.file, request.ops);
+        if (request.kind === 'trash') return this.lenses.trash(request.folder, request.file);
+        if (request.kind === 'share') return this.lenses.share(request.folder, request.file);
+        await this.lenses.collapse(request.lens, request.groups);
+        return null;
+      },
       project: async (args, senderID) => {
         const request = args[0];
         if (request.kind === 'read') return this.projects.read(request.file);

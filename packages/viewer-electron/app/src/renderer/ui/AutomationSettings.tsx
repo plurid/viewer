@@ -606,7 +606,7 @@ export function FolderOverrideSettings({ snapshot, save }: Props) {
               ])
             }
           >
-            {['list', 'grid', 'columns', 'gallery'].map((mode) => (
+            {['list', 'grid', 'columns', 'gallery', 'map'].map((mode) => (
               <option key={mode}>{mode}</option>
             ))}
           </select>

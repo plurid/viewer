@@ -49,9 +49,21 @@ export function setJobs(jobs: OperationJob[]): void {
   }
   for (const job of merged.values()) receiveJob(job);
 }
+const undoableSince = new Map<string, number>(),
+  redoableSince = new Map<string, number>();
+/** When this window saw the job become undoable or redoable, so Undo and Redo can pick the
+ * most recent action across file operations and lens edits. */
+export function undoableTime(id: string): number {
+  return undoableSince.get(id) ?? 0;
+}
+export function redoableTime(id: string): number {
+  return redoableSince.get(id) ?? 0;
+}
 export function receiveJob(job: OperationJob): void {
   const old = getState().jobs.find((item) => item.id === job.id);
   if (old && job.revision < old.revision) return;
+  if (job.undoable && !old?.undoable) undoableSince.set(job.id, Date.now());
+  if (job.redoable && !old?.redoable) redoableSince.set(job.id, Date.now());
   const jobs = [job, ...getState().jobs.filter((item) => item.id !== job.id)].slice(0, 100);
   update({
     ...getState(),

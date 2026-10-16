@@ -28,6 +28,7 @@ const api: ViewerAPI = {
   duplicates: (request) => invoke('duplicates', request),
   operationPlan: (request) => invoke('operationPlan', request),
   project: (request) => invoke('project', request),
+  lens: (request) => invoke('lens', request),
   checkpoints: (request) => invoke('checkpoints', request),
   inspect: (file, content, ocr) => invoke('inspect', file, content, ocr),
   commandsPublish: (target, commands, workspaces) =>

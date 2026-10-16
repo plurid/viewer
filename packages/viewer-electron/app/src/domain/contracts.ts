@@ -9,6 +9,7 @@ import type {
   ProjectRequest,
   ProjectReply,
 } from './project';
+import type { LensReply, LensRequest } from './lenses';
 import type { Collection, BasketItem, QuerySnapshot } from './collections';
 import type {
   SettingsSnapshot,
@@ -64,7 +65,7 @@ export interface FolderListing {
   parent: string;
   entries: FileEntry[];
 }
-export type ViewMode = 'list' | 'grid' | 'columns' | 'gallery';
+export type ViewMode = 'list' | 'grid' | 'columns' | 'gallery' | 'map';
 export type SortKey = 'name' | 'modified' | 'created' | 'size' | 'kind' | 'extension';
 export type ListColumn = SortKey;
 export interface FolderPane {
@@ -319,6 +320,7 @@ export type DesktopEvent =
   | { type: 'action'; plan: ActionPlan }
   | { type: 'file-changes'; changes: FileChange[] }
   | { type: 'folder-changed'; path: string }
+  | { type: 'lens-changed'; folder: string }
   | { type: 'watch-error'; path: string; message: string; code?: string }
   | { type: 'search'; batch: SearchBatch }
   | { type: 'job'; job: OperationJob }
@@ -339,6 +341,8 @@ export interface ViewerAPI {
   checkpoints(request: CheckpointRequest): Promise<CheckpointReply>;
   inspect(file: string, content?: boolean, ocr?: boolean): Promise<InspectionResult>;
   project(request: ProjectRequest): Promise<ProjectReply>;
+  /** Folder lenses: groups and places for a folder's items, which never move them. */
+  lens(request: LensRequest): Promise<LensReply>;
   commandsPublish(
     target: CapturedTarget,
     commands: CommandDescriptor[],

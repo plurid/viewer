@@ -104,13 +104,15 @@ export const previewValuesSchema = z
 // Shared presentation validation lives in the domain, including partial list fields.
 export const folderOverrideSchema = z
   .object({
-    mode: z.enum(['list', 'grid', 'columns', 'gallery']).optional(),
+    mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']).optional(),
     sort: z.enum(['name', 'modified', 'created', 'size', 'kind', 'extension']).optional(),
     descending: z.boolean().optional(),
     showHidden: z.boolean().optional(),
     density: z.enum(['comfortable', 'compact']).optional(),
     foldersFirst: z.boolean().optional(),
-    group: z.enum(['none', 'kind', 'modified']).optional(),
+    group: z.enum(['none', 'kind', 'modified', 'lens']).optional(),
+    /** The lens grouping this folder when `group` is `lens`. */
+    lens: z.uuid().optional(),
     columnWidth: z.number().int().min(160).max(1600).optional(),
     list: z
       .object({

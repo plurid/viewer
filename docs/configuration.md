@@ -35,7 +35,7 @@ Defaults live in `settings.browsing` and `ui.list`. A folder's overrides live in
 }
 ```
 
-Supported overrides include view, sort/direction, grouping, hidden files, folders-first ordering, density, list fields/order/widths/wrapping and browsing-column width. Overrides apply to the same path in every root and workspace. Selection, cursor, history, search/filter and scroll remain independent in each explorer. Known Viewer moves/renames remap overrides and inactive sessions; arbitrary external moves are not inferred from path alone.
+Supported overrides include view (including `map`, which is per folder only), sort/direction, grouping, hidden files, folders-first ordering, density, list fields/order/widths/wrapping and browsing-column width. `"group": "lens"` with `"lens": "<lens id>"` groups a folder by one of its [lenses](lenses.md); the lens itself lives in the folder's `.viewer/lenses/`, not in this file. Overrides apply to the same path in every root and workspace. Selection, cursor, history, search/filter and scroll remain independent in each explorer. Known Viewer moves/renames remap overrides and inactive sessions; arbitrary external moves are not inferred from path alone.
 
 List headers and searchable column actions control fields, ordering and widths. Browser-column edges resize with drag or Left/Right when the separator is focused; Shift changes the keyboard step, double-click fits filenames, and Option applies a width to the visible trail. Names retain full-text tooltips. **Use as default folder view** updates defaults; **Reset this folder’s view** removes that folder's overrides. Grouping currently renders in List view.
 

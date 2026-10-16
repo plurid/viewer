@@ -11,8 +11,8 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry, ListColumn } from '../../domain/contracts';
 import { visibleListColumns } from '../../domain/list-columns';
-import { getState, useFolderPresentation, useViewer } from '../state/store';
-import { fileFamily, fileGroup, formatBytes, sortEntries } from '../../domain/files';
+import { getState, report, useFolderPresentation, useViewer } from '../state/store';
+import { fileFamily, formatBytes, groupEntries, sortEntries } from '../../domain/files';
 import { Icon, type IconName } from '../ui/Icon';
 import { PreviewHost } from '../previews/PreviewHost';
 import { useFolder } from './useFolder';
@@ -26,9 +26,18 @@ import type { FolderPresentation } from '../../domain/folder-presentation';
 import { BrowserColumn } from './BrowserColumn';
 import { FolderSizeValue } from './sizes';
 import { LinkedPlaneButton } from '../workspace/LinkedPlaneButton';
-import { rowsUnder, tilesUnder, useMarquee, type MarqueeSelect } from './marquee';
+import { rowsUnder, useMarquee, type MarqueeSelect } from './marquee';
 import { renderedImageFormats } from '../../domain/rendered-images';
 import { AppIcon, isApplication } from './app-icon';
+import {
+  acceptsDrop,
+  droppedPaths,
+  fixedSections,
+  sectionRows,
+  type ViewSection,
+  type ViewSections,
+} from './sections';
+import { useLensGrouping } from './folder-sections';
 
 export interface FileViewProps {
   paneID?: string;
@@ -47,6 +56,8 @@ export interface FileViewProps {
   drag(entry: FileEntry, event: DragEvent): void;
   /** Marquee selection; views without it ignore drags on blank space. */
   region?: MarqueeSelect;
+  /** Group headings; entries are ordered to match. */
+  sections?: ViewSections;
 }
 const date = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -160,6 +171,75 @@ export const FileRow = memo(function FileRow({
     </div>
   );
 });
+/** A group heading. Lens groups collapse, take items dropped on them and have their own menu. */
+export function SectionHeader({
+  section,
+  sections,
+}: {
+  section: ViewSection;
+  sections: ViewSections;
+}) {
+  const [over, setOver] = useState(false);
+  const lens = section.group !== undefined;
+  const droppable = lens && !!sections.drop;
+  return (
+    <div
+      className={`file-group-label ${lens ? 'is-lens' : ''} ${over ? 'is-drop-target' : ''}`}
+      style={section.depth ? { paddingInlineStart: 16 + section.depth * 16 } : undefined}
+      data-lens-group={lens ? (section.group ?? '') : undefined}
+      onContextMenu={
+        sections.context
+          ? (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              sections.context!(section, event);
+            }
+          : undefined
+      }
+      onDragOver={
+        droppable
+          ? (event) => {
+              if (!acceptsDrop(event)) return;
+              event.preventDefault();
+              event.stopPropagation();
+              event.dataTransfer.dropEffect = 'link';
+              setOver(true);
+            }
+          : undefined
+      }
+      onDragLeave={droppable ? () => setOver(false) : undefined}
+      onDrop={
+        droppable
+          ? (event) => {
+              if (!acceptsDrop(event)) return;
+              event.preventDefault();
+              event.stopPropagation();
+              setOver(false);
+              void droppedPaths(event)
+                .then((paths) => sections.drop!(section, paths))
+                .catch(report);
+            }
+          : undefined
+      }
+    >
+      {lens && section.group !== null && sections.toggle ? (
+        <button
+          className="section-disclosure"
+          aria-expanded={!section.collapsed}
+          aria-label={`${section.collapsed ? 'Expand' : 'Collapse'} ${section.label}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            sections.toggle!(section);
+          }}
+        >
+          <Icon name={section.collapsed ? 'right' : 'down'} size={12} />
+        </button>
+      ) : null}
+      <span className="section-label">{section.label}</span>
+      {lens && <small className="section-count">{section.count.toLocaleString()}</small>}
+    </div>
+  );
+}
 function useRowActions(props: FileViewProps) {
   const current = useRef(props);
   current.current = props;
@@ -193,44 +273,49 @@ export function ListView(props: FileViewProps) {
   const list = props.presentation?.list || defaultList;
   const { visible, order } = list;
   const columns = useMemo(() => visibleListColumns({ visible, order }), [visible, order]);
-  const groups = useMemo(() => {
-    const groups = new Map<number, string>();
-    let last = '';
-    for (const [index, entry] of props.entries.entries()) {
-      if (props.depths?.get(entry.path)) continue;
-      const name = fileGroup(entry, props.presentation?.group || 'none');
-      if (name && name !== last) groups.set(index, name);
-      last = name;
-    }
-    return groups;
-  }, [props.entries, props.depths, props.presentation?.group]);
+  const rows = useMemo(
+    () => sectionRows(props.entries, props.sections, props.depths),
+    [props.entries, props.sections, props.depths],
+  );
+  const rowOf = useMemo(() => entryRows(rows), [rows]);
   const getItemKey = useCallback(
-    (index: number) => props.entries[index]?.path ?? index,
-    [props.entries],
+    (index: number) => {
+      const row = rows[index];
+      if (!row) return index;
+      return row.kind === 'header'
+        ? 'section:' + row.section.key
+        : (props.entries[row.index]?.path ?? index);
+    },
+    [rows, props.entries],
   );
   const scroll = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
-    count: props.entries.length,
+    count: rows.length,
     getItemKey,
     getScrollElement: () => scroll.current,
-    estimateSize: (index) => (compact ? 30 : 36) + (groups.has(index) ? 26 : 0),
+    estimateSize: (index) => (rows[index]?.kind === 'header' ? 30 : compact ? 30 : 36),
     overscan: 12,
   });
   useEffect(() => {
     // Wrapped measurements must not survive a return to fixed-height rows.
     virtual.measure();
-  }, [compact, list.wrapNames, groups, virtual]);
-  useFileReveal(scroll, props.entries, (index) => virtual.scrollToIndex(index, { align: 'auto' }));
+  }, [compact, list.wrapNames, rows, virtual]);
+  useFileReveal(scroll, props.entries, (index) =>
+    virtual.scrollToIndex(rowOf.get(index) ?? index, { align: 'auto' }),
+  );
   useEffect(() => {
     const index = props.entries.findIndex((entry) => entry.path === props.cursor);
-    if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });
-  }, [props.cursor, props.entries, virtual]);
+    if (index >= 0) virtual.scrollToIndex(rowOf.get(index) ?? index, { align: 'auto' });
+  }, [props.cursor, props.entries, rowOf, virtual]);
   const marquee = useMarquee(
     scroll,
     content,
     (rect) =>
-      rowsUnder(virtual.measurementsCache, rect).flatMap((index) => props.entries[index] ?? []),
+      rowsUnder(virtual.measurementsCache, rect).flatMap((index) => {
+        const row = rows[index];
+        return row?.kind === 'entry' ? (props.entries[row.index] ?? []) : [];
+      }),
     props.region,
     props.selection,
   );
@@ -246,7 +331,18 @@ export function ListView(props: FileViewProps) {
       <div ref={content} style={{ height: virtual.getTotalSize(), position: 'relative' }}>
         {marquee.overlay}
         {virtual.getVirtualItems().map((item) => {
-          const entry = props.entries[item.index];
+          const row = rows[item.index];
+          if (row?.kind === 'header')
+            return (
+              <div
+                key={item.key}
+                data-index={item.index}
+                style={{ position: 'absolute', width: '100%', top: item.start, height: item.size }}
+              >
+                <SectionHeader section={row.section} sections={props.sections!} />
+              </div>
+            );
+          const entry = row ? props.entries[row.index] : undefined;
           if (!entry) return null;
           return (
             <div
@@ -260,9 +356,6 @@ export function ListView(props: FileViewProps) {
                 height: list.wrapNames ? undefined : item.size,
               }}
             >
-              {groups.has(item.index) && (
-                <div className="file-group-label">{groups.get(item.index)}</div>
-              )}
               <FileRow
                 entry={entry}
                 selected={props.selectionSet.has(entry.path)}
@@ -276,6 +369,12 @@ export function ListView(props: FileViewProps) {
     </div>
   );
 }
+/** Each entry's row in a list that also holds headers. */
+function entryRows(rows: readonly ReturnType<typeof sectionRows>[number][]): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const [row, item] of rows.entries()) if (item.kind === 'entry') map.set(item.index, row);
+  return map;
+}
 // Quick Look renders these thumbnails, including formats the renderer cannot decode.
 const thumbnailFormats = new Set<string>([
   'jpg',
@@ -287,7 +386,7 @@ const thumbnailFormats = new Set<string>([
   'bmp',
   ...renderedImageFormats,
 ]);
-function Thumbnail({ entry }: { entry: FileEntry }) {
+export function Thumbnail({ entry }: { entry: FileEntry }) {
   const [url, setURL] = useState('');
   const [error, setError] = useState(false);
   useEffect(() => {
@@ -327,30 +426,70 @@ export function GridView(props: FileViewProps) {
     return () => observer.disconnect();
   }, []);
   const columns = Math.max(1, Math.floor(width / 142));
+  // Each group starts a new row under a full-width heading.
+  const rows = useMemo(() => {
+    const result: (
+      { kind: 'header'; section: ViewSection } | { kind: 'tiles'; start: number; end: number }
+    )[] = [];
+    let run: number[] = [];
+    const flush = () => {
+      for (let index = 0; index < run.length; index += columns)
+        result.push({
+          kind: 'tiles',
+          start: run[index]!,
+          end: run[Math.min(index + columns, run.length) - 1]! + 1,
+        });
+      run = [];
+    };
+    for (const row of sectionRows(props.entries, props.sections))
+      if (row.kind === 'header') {
+        flush();
+        result.push(row);
+      } else run.push(row.index);
+    flush();
+    return result;
+  }, [props.entries, props.sections, columns]);
+  const rowOf = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const [index, row] of rows.entries())
+      if (row.kind === 'tiles')
+        for (let item = row.start; item < row.end; item++) map.set(item, index);
+    return map;
+  }, [rows]);
   const virtual = useVirtualizer({
-    count: Math.ceil(props.entries.length / columns),
+    count: rows.length,
+    getItemKey: (index) => {
+      const row = rows[index];
+      return row?.kind === 'header' ? 'section:' + row.section.key : `tiles:${row?.start}`;
+    },
     getScrollElement: () => scroll.current,
-    estimateSize: () => 140,
+    estimateSize: (index) => (rows[index]?.kind === 'header' ? 34 : 140),
     overscan: 3,
   });
+  useEffect(() => {
+    virtual.measure();
+  }, [rows, virtual]);
   useFileReveal(scroll, props.entries, (index) =>
-    virtual.scrollToIndex(Math.floor(index / columns), { align: 'auto' }),
+    virtual.scrollToIndex(rowOf.get(index) ?? 0, { align: 'auto' }),
   );
   useEffect(() => {
     const index = props.entries.findIndex((entry) => entry.path === props.cursor);
-    if (index >= 0) virtual.scrollToIndex(Math.floor(index / columns), { align: 'auto' });
-  }, [props.cursor, props.entries, columns, virtual]);
+    if (index >= 0) virtual.scrollToIndex(rowOf.get(index) ?? 0, { align: 'auto' });
+  }, [props.cursor, props.entries, rowOf, virtual]);
   const marquee = useMarquee(
     scroll,
     content,
-    (rect) =>
-      tilesUnder(
-        virtual.measurementsCache,
-        rect,
-        columns,
-        content.current?.offsetWidth || width,
-        props.entries.length,
-      ).flatMap((index) => props.entries[index] ?? []),
+    (rect) => {
+      const tile = (content.current?.offsetWidth || width) / columns;
+      const first = Math.max(0, Math.floor(rect.left / tile)),
+        last = Math.min(columns - 1, Math.floor((rect.right - 0.01) / tile));
+      if (first > last) return [];
+      return rowsUnder(virtual.measurementsCache, rect).flatMap((index) => {
+        const row = rows[index];
+        if (row?.kind !== 'tiles') return [];
+        return props.entries.slice(row.start + first, Math.min(row.end, row.start + last + 1));
+      });
+    },
     props.region,
     props.selection,
   );
@@ -361,50 +500,64 @@ export function GridView(props: FileViewProps) {
       role="listbox"
       aria-label="Files"
       aria-multiselectable="true"
+      data-columns={columns}
       onPointerDown={marquee.onPointerDown}
     >
       <div ref={content} style={{ height: virtual.getTotalSize(), position: 'relative' }}>
         {marquee.overlay}
-        {virtual.getVirtualItems().map((row) => (
-          <div
-            className="grid-row"
-            key={row.key}
-            style={{
-              position: 'absolute',
-              width: '100%',
-              top: row.start,
-              gridTemplateColumns: `repeat(${columns}, 1fr)`,
-            }}
-          >
-            {props.entries.slice(row.index * columns, (row.index + 1) * columns).map((entry) => (
+        {virtual.getVirtualItems().map((item) => {
+          const row = rows[item.index];
+          if (!row) return null;
+          if (row.kind === 'header')
+            return (
               <div
-                role="option"
-                aria-selected={props.selectionSet.has(entry.path)}
-                className={`file-tile ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
-                key={entry.path}
-                title={entry.path}
-                data-file-path={entry.path}
-                data-directory-path={entry.directory ? entry.path : undefined}
-                onClick={(event) => props.select(entry, event)}
-                onDoubleClick={(event) =>
-                  props.open(entry, event.altKey || event.metaKey || event.ctrlKey)
-                }
-                onContextMenu={(event) => props.context(entry, event)}
-                draggable
-                onDragStart={(event) => props.drag(entry, event)}
+                key={item.key}
+                style={{ position: 'absolute', width: '100%', top: item.start, height: item.size }}
               >
-                <div className="tile-preview">
-                  <Thumbnail entry={entry} />
-                </div>
-                <span className="file-linked-label">
-                  <span>{entry.name}</span>
-                  <LinkedPlaneButton paneID={props.paneID} entry={entry} />
-                </span>
-                <small>{entry.directory ? 'Folder' : formatBytes(entry.size)}</small>
+                <SectionHeader section={row.section} sections={props.sections!} />
               </div>
-            ))}
-          </div>
-        ))}
+            );
+          return (
+            <div
+              className="grid-row"
+              key={item.key}
+              style={{
+                position: 'absolute',
+                width: '100%',
+                top: item.start,
+                gridTemplateColumns: `repeat(${columns}, 1fr)`,
+              }}
+            >
+              {props.entries.slice(row.start, row.end).map((entry) => (
+                <div
+                  role="option"
+                  aria-selected={props.selectionSet.has(entry.path)}
+                  className={`file-tile ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
+                  key={entry.path}
+                  title={entry.path}
+                  data-file-path={entry.path}
+                  data-directory-path={entry.directory ? entry.path : undefined}
+                  onClick={(event) => props.select(entry, event)}
+                  onDoubleClick={(event) =>
+                    props.open(entry, event.altKey || event.metaKey || event.ctrlKey)
+                  }
+                  onContextMenu={(event) => props.context(entry, event)}
+                  draggable
+                  onDragStart={(event) => props.drag(entry, event)}
+                >
+                  <div className="tile-preview">
+                    <Thumbnail entry={entry} />
+                  </div>
+                  <span className="file-linked-label">
+                    <span>{entry.name}</span>
+                    <LinkedPlaneButton paneID={props.paneID} entry={entry} />
+                  </span>
+                  <small>{entry.directory ? 'Folder' : formatBytes(entry.size)}</small>
+                </div>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -420,7 +573,7 @@ function Column({
 }) {
   const listing = useFolder(path);
   const presentation = useFolderPresentation(path);
-  const filtered = useMemo(
+  const sorted = useMemo(
     () =>
       sortEntries(
         listing.entries.filter((entry) => presentation.showHidden || !entry.hidden),
@@ -430,10 +583,25 @@ function Column({
       ),
     [listing.entries, presentation],
   );
+  // Each column follows its own folder's grouping, including its own lens.
+  const lens = useLensGrouping(path, listing.entries, sorted, presentation, false);
+  const filtered = useMemo(
+    () =>
+      presentation.group === 'lens'
+        ? (lens.entries ?? sorted)
+        : groupEntries(sorted, presentation.group),
+    [presentation.group, lens.entries, sorted],
+  );
+  const sections = useMemo(
+    () =>
+      presentation.group === 'lens' ? lens.sections : fixedSections(filtered, presentation.group),
+    [presentation.group, lens.sections, filtered],
+  );
   const columnProps = {
     ...props,
     entries: filtered,
     presentation,
+    sections,
     select: (entry: FileEntry, event: FileModifiers) => {
       props.select(entry, event, filtered);
     },
@@ -466,23 +634,49 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
   );
   const compact = props.presentation ? props.presentation.density === 'compact' : defaultCompact;
   const scroll = useRef<HTMLDivElement>(null);
+  const rows = useMemo(
+    () => sectionRows(props.entries, props.sections),
+    [props.entries, props.sections],
+  );
+  const rowOf = useMemo(() => entryRows(rows), [rows]);
   const virtual = useVirtualizer({
-    count: props.entries.length,
-    getItemKey: (index) => props.entries[index]?.path ?? index,
+    count: rows.length,
+    getItemKey: (index) => {
+      const row = rows[index];
+      if (!row) return index;
+      return row.kind === 'header'
+        ? 'section:' + row.section.key
+        : (props.entries[row.index]?.path ?? index);
+    },
     getScrollElement: () => scroll.current,
-    estimateSize: () => (compact ? 30 : 36),
+    estimateSize: (index) => (rows[index]?.kind === 'header' ? 30 : compact ? 30 : 36),
     overscan: 8,
   });
-  useFileReveal(scroll, props.entries, (index) => virtual.scrollToIndex(index, { align: 'auto' }));
+  useEffect(() => {
+    virtual.measure();
+  }, [rows, virtual]);
+  useFileReveal(scroll, props.entries, (index) =>
+    virtual.scrollToIndex(rowOf.get(index) ?? index, { align: 'auto' }),
+  );
   useEffect(() => {
     const index = props.entries.findIndex((entry) => entry.path === props.cursor);
-    if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });
-  }, [props.cursor, props.entries, virtual]);
+    if (index >= 0) virtual.scrollToIndex(rowOf.get(index) ?? index, { align: 'auto' });
+  }, [props.cursor, props.entries, rowOf, virtual]);
   return (
     <div ref={scroll} className="file-scroll" role="listbox" aria-label="Column files">
       <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
         {virtual.getVirtualItems().map((item) => {
-          const entry = props.entries[item.index];
+          const row = rows[item.index];
+          if (row?.kind === 'header')
+            return (
+              <div
+                key={item.key}
+                style={{ position: 'absolute', top: item.start, width: '100%', height: item.size }}
+              >
+                <SectionHeader section={row.section} sections={props.sections!} />
+              </div>
+            );
+          const entry = row ? props.entries[row.index] : undefined;
           if (!entry) return null;
           return (
             <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%' }}>
@@ -544,6 +738,17 @@ export function ColumnsView({
 }
 export function GalleryView(props: FileViewProps) {
   const selected = props.entries.find((entry) => entry.path === props.cursor);
+  const starts = useMemo(() => {
+    const map = new Map<number, ViewSection>();
+    let heading: ViewSection | undefined;
+    for (const row of sectionRows(props.entries, props.sections))
+      if (row.kind === 'header') heading = row.section;
+      else if (heading) {
+        map.set(row.index, heading);
+        heading = undefined;
+      }
+    return map;
+  }, [props.entries, props.sections]);
   const scroll = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     horizontal: true,
@@ -605,6 +810,11 @@ export function GalleryView(props: FileViewProps) {
                   <Thumbnail entry={entry} />
                   <span>{entry.name}</span>
                 </button>
+                {starts.has(item.index) && (
+                  <span className="gallery-section" title={starts.get(item.index)!.label}>
+                    {starts.get(item.index)!.label}
+                  </span>
+                )}
                 <LinkedPlaneButton paneID={props.paneID} entry={entry} />
               </div>
             );

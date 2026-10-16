@@ -16,6 +16,8 @@ export interface CommandContext {
   clipboard: { paths: string[]; cut: boolean } | null;
   jobs: readonly OperationJob[];
   sidebar?: { section: SidebarSection; path?: string; name?: string };
+  /** A lens group heading's menu: the group, or null for Unsorted. */
+  lensGroup?: { id: string | null; label: string };
 }
 export interface CommandDefinition {
   id: string;
