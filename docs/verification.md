@@ -39,6 +39,9 @@
   - The Map's DOM stays under 200 tiles for 5,000 items, and keyboard moves are spatial.
   - A nudge saves a place relative to the item's group.
 - **Agents:** lens editing commands are outside the agent allow-list. Only `group.lens.*` (view grouping) and `view-map` are proposable.
+- **plurid "route with no registered plane":** with the close/reopen keys disabled, the dev app still warned once per root opened. That is a false alarm in plurid: its check compared Viewer's view with the tree from the previous render, one commit behind the relayout that adds the root. `tests/plurid-roots.test.ts` shows the planes are present, both when a root is added and when a restored arrangement lacks one.
+  - Fixed in plurid's source (`containers/Application/View/index.tsx` reads the store), with `__tests__/viewRoutes.test.tsx`. That test fails without the change; plurid-react's 580 tests, typecheck and lint pass.
+  - Viewer keeps 0.0.0-40, which still prints the warning, until plurid is published.
 
 ## October 15 polish
 
@@ -46,7 +49,7 @@
 
 - **Renderer strict indexing:** 192 sites fixed. Virtualized rows skip a missing item instead of assuming it exists; places that cannot be empty say why.
 - **App icons:** `.app` bundles show their own icons. `AppIcons` caches them, with tests for sharing requests, refreshing after an app update, eviction and failures that are not cached.
-- **Engine shortcuts:** the plurid "route with no registered plane" warning came from the engine's own Option-W/Option-Shift-T, which closed planes behind Viewer's workspace. Those keys are disabled, and Close plane is ⌥⌘W.
+- **Engine shortcuts:** the engine's own Option-W/Option-Shift-T closed planes behind Viewer's workspace, which kept and later restored them; that produced the plurid "route with no registered plane" warning for a plane that really was gone. Those keys are disabled, and Close plane is ⌥⌘W. (The warning still appeared once per newly opened root; see October 16.)
 - **Mouse side buttons:** back and forward work in folder planes.
 - **Diagnostics:** a bounded local diagnostic log and local crash dumps (`crashReporter`, uploads off), with Help → Show Diagnostic Log. Failures are observed without changing error handling: `uncaughtExceptionMonitor`, process warnings, process-gone events, and rate-limited renderer reports.
 - **Development Dock icon:** the dev app shows Viewer's icon.
