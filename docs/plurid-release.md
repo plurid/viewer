@@ -11,23 +11,26 @@ does not fetch git refs, build, pack, or write files.
 
 ```sh
 pnpm release --dry-run --all
-pnpm release --pack /private/tmp/plurid-release-20261018-final
+pnpm release --pack
 ```
 
-The pack directory must be new. It contains a fresh source snapshot and package store, logs/output
+The script manages a new temporary workspace outside the checkout and remembers its location under
+ignored `.out/releases/`. It contains a fresh source snapshot and package store, logs/output
 from the verification commands, tested tarballs and `release.json` with source commit and integrity
 hashes. The pipeline checks build, types, unit tests, lint, modules, budgets, documentation, browser,
 performance, visual baselines and packed consumers. It retains all intermediates. A failed gate does
-not produce a verified release manifest; fix the source, commit it and choose a new directory.
+not produce a verified release manifest; fix the source, commit it and run `--pack` again.
 
-Publishing is a separate, explicit maintainer step. It requires green CI for the recorded source
+Publishing is an explicit maintainer step. It requires green CI for the recorded source
 commit, rechecks tarball hashes, publishes in dependency order with lifecycle scripts disabled, and
 confirms exact versions, integrity and `latest` tags. On partial publication, resume with the same
-directory; an existing version whose integrity differs stops the round.
+artifacts; an existing version whose integrity differs stops the round. Without an explicit path,
+the script reuses verified artifacts for this commit or builds and verifies them automatically when
+none exist. Running `--pack` first is optional for reviewing the artifacts before publication.
 
 ```sh
-pnpm release --publish /private/tmp/plurid-release-20261018-final
-pnpm release --verify-registry /private/tmp/plurid-release-20261018-final
+pnpm release --publish
+pnpm release --verify-registry
 ```
 
 Then, in Viewer:
