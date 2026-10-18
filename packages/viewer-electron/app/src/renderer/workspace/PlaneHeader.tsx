@@ -128,7 +128,12 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     });
   };
   return (
-    <div className="plane-controls" data-viewer-plane={id} onPointerDown={() => setActivePane(id)}>
+    <div
+      className="plane-controls"
+      data-viewer-plane={id}
+      data-scroll-selected={context.scrollSelected || undefined}
+      onPointerDown={() => setActivePane(id)}
+    >
       {controls.parent && available.some((item) => item.id === 'parent-plane') && (
         <IconButton
           icon="parent-plane"

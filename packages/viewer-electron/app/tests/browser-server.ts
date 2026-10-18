@@ -512,6 +512,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
 const server = await createServer({
   ...rendererConfig,
   configFile: false,
+  // Each preserved fixture keeps its own dependency build, including locally synced Plurid.
+  cacheDir: path.join(fixture.root, 'vite-cache'),
   server: { ...rendererConfig.server, host: '127.0.0.1', port: fixturePort, strictPort: true },
   plugins: [
     ...(rendererConfig.plugins || []),

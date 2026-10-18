@@ -26,6 +26,7 @@
   },
   "main": ".vite/build/main.cjs",
   "scripts": {
+    "plurid:sync": "tsx tools/sync-plurid.ts",
     "start": "tsx tools/build-helpers.ts && electron-forge start",
     "check": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && tsc -p tsconfig.renderer.json && tsc -p tsconfig.tools.json",
     "lint": "eslint src tests tools *.ts",

@@ -768,3 +768,55 @@ does not establish system Trash erasure/restoration, positive Full Disk Access o
 App Sandbox grants, physical assistive technology, Windows/Linux runtime or Mac
 App Store qualification. Every generated file, profile, capture and failed run
 remains preserved.
+
+## 2026-10-18 — Click to scroll spatial planes
+
+Viewer enables the new sibling Plurid `space.gestures.wheel: 'click-to-scroll'`
+policy and enforces it after configuration restoration. A click activates one
+content-scroll surface with a subtle header tint; hover continues workspace
+navigation. Background click and Escape release it. File selection, arrangement
+selection and command targeting remain separate. Docked pages scroll immediately;
+explicit navigation gestures still control the camera. Space/Quick Preview keeps
+its own interactive behavior outside the Plurid View.
+
+Verification against the local unpublished Plurid build:
+
+- Plurid React: **588 tests in 90 suites pass**, including eight new input
+  integration cases. They cover capture before native preview handlers, ordinary
+  click actions, wheel ownership across surfaces, scroll boundaries/editable
+  fields, Escape before host capture handlers, overlays, keyboard activation,
+  navigation overrides, live policy changes, hidden planes, docked pages,
+  single-owner programmatic docking/reveal, and external previews. The full
+  Plurid workspace type check passes; lint passes on changed input/API files.
+  ESM/CommonJS entry points for **13 packages** load and
+  React renders the same markup/styles through both.
+- Viewer: **59 tests across five affected files pass** (`plurid-roots`,
+  `workspaces`, `previews`, `agent-workspace`, `folder-pair`). Main, preload,
+  renderer and tooling type checks, lint and changed-file formatting pass.
+- Browser, 1280×900 and 780×560: initial hover moves the camera without selecting
+  a plane; a file click both selects the file and activates scrolling. An
+  overflowing folder scrolls from 0 to 130 px without changing the camera matrix,
+  and another wheel at the boundary holds it. Escape clears both file and scroll
+  selection. An unclicked spatial image/model navigates the camera; clicking
+  activates image zoom/OrbitControls while the camera stays unchanged. A Space
+  image preview zooms from 100% to 182% with no workspace movement. Browser error
+  logs are empty. Native CAD and terminal surfaces were not separately driven;
+  the shared capture route is covered with a native handler that stops bubbling.
+- Data, engine and React build with `clean: false`. The complete
+  `pnpm plurid:sync` workflow is verified, copies ten generated packages with
+  provenance, and retains existing artifacts. Viewer production bundles build
+  with `emptyOutDir: false`. Existing config-loader, CJS import-meta, browser
+  externalization and chunk-size warnings remain; the local client-marked React
+  build also reports client-directive bundling notices.
+
+The fixture server was stopped and every generated fixture, build and log was
+preserved. Registry versions remain pinned; reinstalling dependencies requires
+`pnpm plurid:sync` until these Plurid changes are published.
+
+The selected header was subsequently changed to a 10% accent tint at the owner's
+request. A bounded 1280×820 comparison checks active/inactive headers in
+[dark](../packages/viewer-electron/app/out/viewer-header-tint-dark-20261018.png) and
+[light](../packages/viewer-electron/app/out/viewer-header-tint-light-20261018.png)
+appearance, including switching the active plane and clearing/reselecting it.
+Both selected headers have no inset shadow; the normal separator remains. The
+desktop app was reopened with this treatment.

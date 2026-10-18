@@ -8,8 +8,15 @@ Use Node ≥22.13 and pnpm 11. Verified with Node 26.8.2 and pnpm 11.3.0 on Appl
 
 ```sh
 pnpm install
+pnpm plurid:sync
 pnpm start
 ```
+
+Click-to-scroll currently uses the unpublished source in the sibling `../plurid` checkout.
+Install that workspace's dependencies first, then run `pnpm plurid:sync` here after installing
+Viewer dependencies or changing Plurid. It builds data, engine and React with cleanup disabled
+and copies generated packages into Viewer's installation, retaining existing artifacts. No
+packages are published and the registry versions remain pinned until the next Plurid release.
 
 ```sh
 pnpm check         # strict types across main, preload, renderer, tests and tooling
@@ -33,6 +40,11 @@ The [Mac App Store build guide](docs/mac-app-store-build.md) describes the separ
 Physical frame-rate profiling is separate: `VIEWER_TEST_FOREGROUND=1 pnpm test:desktop` deliberately shows and activates the owned test app. Use it only when a foreground profiling session is explicitly wanted; hidden-window frame timings are not comparable. `VIEWER_TEST_SCENARIO=spatial pnpm test:desktop` runs the short toolbar/command/Escape regression in the background.
 
 ## File work
+
+Hovering a spatial plane keeps wheel/trackpad navigation in the workspace. Click its content
+or header to scroll inside that plane; a subtle header tint marks it. Click the background or
+press Escape to release it. Docked planes scroll immediately. Pinch, navigation modifiers and
+explicit navigation modes still move the workspace. Space/Quick Preview keeps its own scrolling.
 
 Browse local folders, external volumes and mounted network folders in virtualized list, grid, columns or gallery views. Folder double-click navigates within a plane. Option-double-click, **Open linked plane**, or a quick preview’s linked action opens a child plane. Opening an already open path reuses its preview within the originating root; another root gets an independent preview. **Open in another plane** creates an independent root, without a parent link. The workspace **+**, Command-N, **New folder plane** in Commands, the native File menu and plane actions create an independent root explorer with fresh navigation history and selection. Settings → Browsing chooses its starting folder: current folder, Home, Desktop, Documents, Downloads, Pictures, Movies, Music or a custom folder. The default follows the active folder, terminal working folder or preview’s parent, falling back to Home. The empty workspace offers **New folder plane** directly, alongside **Open folder…**, with its own separate starting-folder preference in Browsing. It defaults to Home and supports the standard locations or a custom folder; the populated-workspace preference remains Current folder by default. A sidebar shortcut offers **Open in new root plane** at that shortcut's folder. New planes face the camera by default; Settings also offers linked-pair framing or immediate docking. Space opens a quick preview, including after header navigation or framing. Command-Down/Command-O enters a selected folder and Command-Up returns to its parent; Command-1–4 changes that folder’s view. Folder views, sorts and column widths follow the path across roots; selection/history remain independent. Browser-column edges resize with drag or keys and fit names on double-click. Command-Return switches between focused and spatial views. Each plane has one compact header with frame/dock actions; narrower headers keep those actions in their searchable menu. The search button toggles its row and clears the query on close.
 

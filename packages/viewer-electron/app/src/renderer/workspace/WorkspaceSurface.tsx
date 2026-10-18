@@ -177,7 +177,7 @@ export function WorkspaceSurface({
         // restore a plane belonging to another workspace.
         docking: { url: false },
         clipboard: false,
-        gestures: { wheel: 'plane', dragHandle: 'chrome' },
+        gestures: { wheel: 'click-to-scroll', dragHandle: 'chrome' },
         bridge: { preset: 'reading', planeAngle: 90.1 },
         shortcuts: {
           // The engine's own close/reopen keys change its tree without Viewer's workspace,
@@ -240,6 +240,8 @@ export function WorkspaceSurface({
         elements.plane.controls.show === preferences.planeHeaders &&
         elements.plane.resizable === preferences.resizing &&
         elements.plane.backface === 'visible' &&
+        space.gestures?.wheel === configuration.space?.gestures?.wheel &&
+        space.gestures?.dragHandle === configuration.space?.gestures?.dragHandle &&
         space.navigation?.childFraming === 'plane' &&
         space.bridge?.planeAngle === 90.1 &&
         space.transformOrigin.show === preferences.origin

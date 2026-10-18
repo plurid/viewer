@@ -15,6 +15,9 @@
   width: 28px;
   height: 28px;
 }
+.plane-controls[data-scroll-selected] {
+  background: color-mix(in srgb, var(--raised), var(--accent) 10%);
+}
 .plane-navigation {
   display: flex;
   gap: 1px;

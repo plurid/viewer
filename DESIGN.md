@@ -302,6 +302,7 @@ The palette uses graphite neutrals in dark mode and pale neutral space with whit
 
 - **Workspace:** `space` sits behind planes; `surface` carries folder and preview contents, dialogs, searchable actions, and the operations popover.
 - **Raised and field surfaces:** `raised` separates contextual plane headers and hover states; `field` separates inputs, file headers, and content stages.
+- **Scroll-active header:** the plane receiving ordinary wheel input mixes 10% `accent` into its `raised` header background. Keep the normal separator and title/icon styling; the tint follows explicit content activation, separately from file or spatial selection.
 - **Text:** `ink` is the primary reading color; `muted` carries metadata and supporting labels; `subtle` carries placeholders and quieter status information.
 - **Dividers:** `line` defines shell boundaries and controls. Dense file/archive rows mix this source color with transparency for a quieter divider.
 
