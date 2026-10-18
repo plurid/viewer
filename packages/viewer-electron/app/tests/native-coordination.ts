@@ -119,31 +119,35 @@ try {
   await assert.rejects(lstat(temporary), { code: 'ENOENT' });
   results.push('Existing and new decomposed Unicode aliases preserve a case-only rename');
 
-  worker = new Worker(
-    `
+  // Repeated teardown catches a native callback released after Worker termination.
+  // Every iteration must release its real Cocoa claim without aborting the host.
+  for (let attempt = 0; attempt < 16; attempt++) {
+    worker = new Worker(
+      `
     const {workerData,parentPort}=require('node:worker_threads');
     const native=require(workerData.addon);
     native.coordinateStart('generated-worker-reader',[{path:workerData.file,mode:'read'}],'generated-worker-purpose')
       .then(()=>parentPort.postMessage('ready'),error=>{throw error});
   `,
-    { eval: true, workerData: { file, addon: path.resolve('assets/viewer-macos-files.node') } },
-  );
-  await new Promise<void>((resolve, reject) => {
-    worker!.once('error', reject);
-    worker!.once('message', () => resolve());
-  });
-  let afterWorker = false;
-  const queued = coordination.run([{ path: file, mode: 'write' }], async () => {
-    afterWorker = true;
-  });
-  await delay(100);
-  assert.equal(afterWorker, false);
-  await worker.terminate();
-  worker = undefined;
-  await queued;
-  assert.equal(afterWorker, true);
+      { eval: true, workerData: { file, addon: path.resolve('assets/viewer-macos-files.node') } },
+    );
+    await new Promise<void>((resolve, reject) => {
+      worker!.once('error', reject);
+      worker!.once('message', () => resolve());
+    });
+    let afterWorker = false;
+    const queued = coordination.run([{ path: file, mode: 'write' }], async () => {
+      afterWorker = true;
+    });
+    await delay(100);
+    assert.equal(afterWorker, false);
+    await worker.terminate();
+    worker = undefined;
+    await queued;
+    assert.equal(afterWorker, true);
+  }
   results.push(
-    'Worker termination releases its live native claim before an independent writer continues',
+    '16 Worker terminations release their live native claims before independent writers continue without aborting the host',
   );
 
   for (let i = 0; i < 100; i++)

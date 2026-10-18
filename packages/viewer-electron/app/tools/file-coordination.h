@@ -73,8 +73,14 @@ static void coordinationJS(napi_env env, napi_value, void *, void *data) {
 static void coordinationNotify(std::shared_ptr<FileCoordinationLease> lease, bool done,
                                NSString *error = nil, NSString *code = nil,
                                NSArray<NSString *> *paths = nil) {
+  if (!lease->notify) return;
   auto event = new FileCoordinationEvent{lease, done, error, code, paths};
-  if (napi_call_threadsafe_function(lease->notify, event, napi_tsfn_nonblocking) != napi_ok) delete event;
+  napi_status status = napi_call_threadsafe_function(lease->notify, event, napi_tsfn_nonblocking);
+  if (status != napi_ok) delete event;
+  // Worker teardown can close the TSFN while Cocoa finishes its accessor.
+  // napi_closing consumes this thread's acquisition; the handle may already be
+  // destroyed, so neither another notification nor Release may use it again.
+  if (status == napi_closing) lease->notify = nullptr;
 }
 static NSString *coordinationString(napi_env env, napi_value value) {
   size_t length = 0;
@@ -181,7 +187,10 @@ static napi_value coordinateStart(napi_env env, napi_callback_info info) {
             [error.domain isEqualToString:NSCocoaErrorDomain] && error.code == NSUserCancelledError ? @"ABORT_ERR" : @"FILE_COORDINATION_FAILED");
         // Synchronous coordination has returned: its claim really is released.
         coordinationNotify(lease, true);
-        napi_release_threadsafe_function(lease->notify, napi_tsfn_release);
+        if (lease->notify) {
+          napi_release_threadsafe_function(lease->notify, napi_tsfn_release);
+          lease->notify = nullptr;
+        }
       }
     }];
     return promise;

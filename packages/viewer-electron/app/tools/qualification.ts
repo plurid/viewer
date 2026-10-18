@@ -281,6 +281,7 @@ async function main() {
       VIEWER_COORDINATION_EVIDENCE: path.join(directory, 'native-coordination.json'),
     });
     for (const scenario of [
+      'published-plane-input',
       'file-workflows',
       'daily-file-work',
       'chrome',

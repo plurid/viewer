@@ -2174,9 +2174,19 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
     (count) => count === 1,
     'View submenu',
   );
-  assert.equal(
-    await evaluate('document.querySelectorAll(".context-submenu [data-menu-id^=view-]").length'),
-    4,
+  assert.deepEqual(
+    await evaluate(
+      'Array.from(document.querySelectorAll(".context-submenu [data-menu-id^=view-]"), element => element.dataset.menuId).sort()',
+    ),
+    [
+      'view-columns',
+      'view-gallery',
+      'view-grid',
+      'view-list',
+      'view-map',
+      'view-side-by-side',
+      'view-stacked',
+    ],
   );
   assert.equal(
     await evaluate(
@@ -2825,9 +2835,7 @@ async function verifyRefinements(): Promise<void> {
           );
         if (category === 'Space') {
           assert.equal(
-            await settingsEvaluate(
-              'document.querySelectorAll(".settings-toolbar-preview svg").length',
-            ),
+            await settingsEvaluate('document.querySelectorAll(".settings-toolbar-preview").length'),
             10,
           );
           await settingsEvaluate(
@@ -2957,6 +2965,157 @@ async function paletteCommand(label: string): Promise<void> {
     'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
   );
 }
+/** Additional release checks against the actual signed Electron bundle. Files remain untouched. */
+async function verifyPublishedPlaneInput(): Promise<void> {
+  const sourceID = fixture.state.workspaces[0].roots[0];
+  const plane = (id: string) =>
+    `[data-plurid-plane]:has([data-viewer-plane=${JSON.stringify(id)}])`;
+  const folders = () =>
+    evaluate<{
+      canvas: { x: number; y: number; width: number; height: number };
+      planes: { id: string; x: number; y: number; width: number; height: number }[];
+    }>(`(() => {
+    const bounds = el => { const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}; };
+    return {canvas:bounds(document.querySelector('.workspace-surface')),planes:Array.from(document.querySelectorAll('[data-plurid-plane]:has(.folder-plane)')).map(el=>({id:el.querySelector('[data-viewer-plane]').dataset.viewerPlane,...bounds(el)}))};
+  })()`);
+  const camera = () => evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  const near = (actual: number, expected: number, label: string) =>
+    assert.ok(Math.abs(actual - expected) < 2, `${label}: ${actual} vs ${expected}`);
+  const roots = (count: number) =>
+    until(folders, (value) => value.planes.length === count, `${count} folder planes`);
+  await paletteCommand('View side by side');
+  await roots(2);
+  await settleCamera();
+  let layout = await folders();
+  let ordered = layout.planes.toSorted((a, b) => a.x - b.x);
+  near(ordered[0].x, layout.canvas.x + 8, 'left inset');
+  near(ordered[1].x + ordered[1].width, layout.canvas.x + layout.canvas.width - 8, 'right inset');
+  near(ordered[0].width, ordered[1].width, 'equal side-by-side widths');
+  near(ordered[1].x - ordered[0].x - ordered[0].width, 12, 'side-by-side gap');
+  const peerID = ordered.find((item) => item.id !== sourceID)!.id;
+  await click(
+    `${plane(peerID)} .location[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
+  );
+  await until(
+    () =>
+      evaluate<string>(
+        `document.querySelector(${JSON.stringify(plane(peerID) + ' .plane-heading')}).title`,
+      ),
+    (value) => value.endsWith('/Documents'),
+    'independent peer navigation',
+  );
+  assert.equal(
+    await evaluate(
+      `document.querySelector(${JSON.stringify(plane(sourceID) + ' .plane-heading')}).title`,
+    ),
+    fixture.files,
+  );
+  await click(`${plane(peerID)} [aria-label="Close plane"]`);
+  await roots(1);
+  await paletteCommand('Full width');
+  await settleCamera();
+  layout = await folders();
+  near(layout.planes[0].width, layout.canvas.width - 16, 'remaining plane full width');
+  await paletteCommand('Undo arrangement');
+  await settleCamera();
+  near((await folders()).planes[0].width, ordered[0].width, 'Undo full width');
+  await paletteCommand('Undo arrangement');
+  await roots(2);
+  await paletteCommand('Undo arrangement');
+  await roots(1);
+  await paletteCommand('View stacked');
+  await roots(2);
+  await settleCamera();
+  layout = await folders();
+  ordered = layout.planes.toSorted((a, b) => a.y - b.y);
+  for (const item of ordered) near(item.width, layout.canvas.width - 16, 'stacked full width');
+  near(ordered[0].height, ordered[1].height, 'equal stacked heights');
+  near(ordered[1].y - ordered[0].y - ordered[0].height, 12, 'stacked gap');
+  const top = plane(ordered[0].id);
+  const scrollTop = () =>
+    evaluate<number>(
+      `document.querySelector(${JSON.stringify(top + ' .sidebar-scroll')}).scrollTop`,
+    );
+  const point = () =>
+    evaluate<{ x: number; y: number }>(
+      `(()=>{const r=document.querySelector(${JSON.stringify(top + ' .sidebar-scroll')}).getBoundingClientRect();return{x:r.x+60,y:r.y+80};})()`,
+    );
+  const wheel = async (deltaY: number, modifiers = 0) =>
+    command('Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      ...(await point()),
+      deltaX: 0,
+      deltaY,
+      modifiers,
+    });
+  await key('Escape', 'Escape');
+  let before = await camera();
+  const originalScroll = await scrollTop();
+  await wheel(-60);
+  await until(camera, (value) => value !== before, 'hover scroll moves camera');
+  await settleCamera();
+  assert.equal(
+    await scrollTop(),
+    originalScroll,
+    'Hover scroll must not scroll the unselected sidebar',
+  );
+  await click(`${top} .plane-heading`);
+  await until(
+    () =>
+      evaluate<boolean>(
+        `document.querySelector(${JSON.stringify(top + ' [data-viewer-plane]')}).dataset.scrollSelected==='true'`,
+      ),
+    Boolean,
+    'clicked plane owns scrolling',
+  );
+  before = await camera();
+  await wheel(90);
+  await until(scrollTop, (value) => value > originalScroll + 50, 'selected sidebar scrolls');
+  assert.equal(await camera(), before, 'Selected plane scroll must not move the camera');
+  await key('Escape', 'Escape');
+  const selectedScroll = await scrollTop();
+  before = await camera();
+  await wheel(30);
+  await until(camera, (value) => value !== before, 'Escape releases plane scrolling');
+  await settleCamera();
+  assert.equal(await scrollTop(), selectedScroll, 'Released sidebar must not keep scrolling');
+  await paletteCommand('Frame plane');
+  await settleCamera();
+  await click(`${top} .plane-heading`);
+  await paletteCommand('Fill workspace');
+  await settleCamera();
+  const note = path.join(fixture.files, 'README.md');
+  await click(`${top} ${fileSelector(note)}`);
+  await key(' ', 'Space');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector("dialog[open]")'),
+    Boolean,
+    'Space preview',
+  );
+  before = await camera();
+  const previewPoint = await evaluate<{ x: number; y: number }>(
+    `(()=>{const r=document.querySelector('dialog[open]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`,
+  );
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseWheel',
+    ...previewPoint,
+    deltaX: 0,
+    deltaY: 120,
+    modifiers: 8,
+  });
+  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  assert.equal(
+    await camera(),
+    before,
+    'Quick Preview must isolate navigation-modified wheel input',
+  );
+  await closePreview();
+  await snapshot('desktop-native-published-plane-input.png');
+  console.log(
+    'Published Plurid native checks passed: side-by-side and stacked full-width tiling, independent navigation, close/full-width and arrangement Undo, hover/selected/Escape wheel routing, and modal preview isolation.',
+  );
+}
+
 async function verifySpatialTools(): Promise<void> {
   await click('[aria-label="Rotate mode"]');
   assert.equal(
@@ -3567,9 +3726,19 @@ async function verifyServiceWorkflows(): Promise<void> {
     try { return await window.viewer.document(source.id); } finally { await window.viewer.release(source.id); }
   })()`);
   assert.ok(document.text.includes('Searchable PDF text'));
-  assert.ok(
+  assert.equal(
     document.evidence.some((item) => item.source.startsWith('OCR page')),
-    'Packaged local OCR helper must execute',
+    false,
+    'Ordinary document reading leaves OCR opt-in',
+  );
+  const inspected = await evaluate<{ evidence: { source: string; text: string }[] }>(
+    `window.viewer.inspect(${JSON.stringify(path.join(documents, 'Project brief.pdf'))}, true, true)`,
+  );
+  assert.ok(
+    inspected.evidence.some(
+      (item) => item.source.startsWith('OCR page') && item.text.includes('Viewer preview fixture'),
+    ),
+    'Explicit OCR uses the packaged local helper and returns recognized text',
   );
   await click(fileSelector(documents), 2);
   await until(text, (value) => value.includes('Book.epub'), 'book fixture listing');
@@ -4782,6 +4951,13 @@ async function verify(): Promise<void> {
     await verifyEntryAndPalette();
     await verifyAnchoredPreviews();
     await verifyBackgroundApp();
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'published-plane-input') {
+    await verifyPublishedPlaneInput();
+    await verifyBackgroundApp();
+    assert.deepEqual(await inventory(), untouched);
     assert.deepEqual(exceptions, []);
     return;
   }

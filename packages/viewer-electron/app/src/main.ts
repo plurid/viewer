@@ -21,6 +21,7 @@ import { WindowState, captureWindowFrame, restoreWindowFrame } from './desktop/w
 import { errorMessage } from './domain/errors';
 import { DiagnosticLog } from './desktop/diagnostics';
 import { planeAlignments, planeSizePresets } from './domain/plane-layout';
+import { applicationCSP } from './desktop/application-csp';
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -667,7 +668,6 @@ app
     });
     protocol.handle('viewer-resource', (request) => desktop!.resources.response(request));
     nativeTheme.on('updated', () => desktop?.settings.announce());
-    const applicationCSP = `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' viewer-resource: blob: data:; media-src 'self' viewer-resource: blob:; connect-src 'self' viewer-resource:${devURL ? ' ws://127.0.0.1:* http://127.0.0.1:* ws://localhost:* http://localhost:*' : ''}; worker-src 'self' blob:; font-src 'self' blob: data:; object-src 'none'; frame-src 'none'; base-uri 'none'`;
     protocol.handle('viewer-app', async (request) => {
       const url = new URL(request.url);
       let relative: string;
@@ -684,7 +684,7 @@ app
         return new Response(await readFile(file), {
           headers: {
             'Content-Type': lookup(file) || 'application/octet-stream',
-            'Content-Security-Policy': applicationCSP,
+            'Content-Security-Policy': applicationCSP(url.pathname, !!devURL),
             'X-Content-Type-Options': 'nosniff',
           },
         });
@@ -699,7 +699,10 @@ app
     session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
       callback({
         responseHeaders: trusted(details.url)
-          ? { ...details.responseHeaders, 'Content-Security-Policy': [applicationCSP] }
+          ? {
+              ...details.responseHeaders,
+              'Content-Security-Policy': [applicationCSP(new URL(details.url).pathname, !!devURL)],
+            }
           : details.responseHeaders,
       }),
     );

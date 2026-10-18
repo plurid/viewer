@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import store from './mac-app-store.json' with { type: 'json' };
 import { macChannel, storeConfiguration, storeInputs } from './tools/mas-configuration';
 import { documentTypes } from './tools/document-types';
+import { copyPDFRuntime } from './tools/pdf-runtime';
 const require = createRequire(import.meta.url);
 const channel = macChannel(process.env.VIEWER_MAC_CHANNEL);
 const storeConfig = storeConfiguration.parse(store);
@@ -46,7 +47,7 @@ const storeSigning = inputs
   : undefined;
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: { unpack: '**/node-pty/**' },
+    asar: { unpack: '**/{node-pty,@napi-rs}/**' },
     extraResource: [
       'assets/licenses',
       ...(process.platform === 'darwin'
@@ -91,9 +92,10 @@ const config: ForgeConfig = {
           'Use pnpm mas:dev / mas:package for the MAS runtime; normal packaging uses the direct channel.',
         );
     },
-    // Vite packages its bundles only. Keep external native modules available to
-    // Electron's rebuild and ASAR unpacking, including node-pty's spawn helper.
-    packageAfterCopy: async (_config, buildPath) => {
+    // Vite packages its bundles only. Preserve external PDF.js ESM and native
+    // modules for Node resolution, Electron's rebuild and ASAR unpacking.
+    packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {
+      await copyPDFRuntime(buildPath, platform, arch);
       for (const dependency of ['node-pty', 'node-addon-api']) {
         const source = path.dirname(require.resolve(dependency + '/package.json'));
         await fs.cp(source, path.join(buildPath, 'node_modules', dependency), { recursive: true });

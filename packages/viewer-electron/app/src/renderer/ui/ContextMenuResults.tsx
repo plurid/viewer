@@ -257,6 +257,9 @@ function MenuList({
   onScroll(): void;
 }) {
   const list = useRef<HTMLDivElement>(null);
+  const hasSubmenus = sections.some((section) =>
+    section.entries.some((entry) => entry.kind === 'submenu'),
+  );
   const [placement, setPlacement] = useState<{
     style: CSSProperties;
     side: 'left' | 'right';
@@ -271,8 +274,14 @@ function MenuList({
     const left = parent.left - popup.width + 2;
     // Continue in the parent's direction so nested flyouts do not cover the root menu.
     const preferLeft = parentElement.dataset.side === 'left';
+    // When possible, reserve room for the next level before choosing a direction.
+    // Otherwise a right-opening branch can immediately fold back over the root.
+    const rightExtent = right + popup.width * (hasSubmenus ? 2 : 1);
     const side =
-      (preferLeft && left >= 8) || right + popup.width > innerWidth - 8 ? 'left' : 'right';
+      (left >= 8 && (preferLeft || rightExtent > innerWidth - 8)) ||
+      right + popup.width > innerWidth - 8
+        ? 'left'
+        : 'right';
     setPlacement({
       side,
       style: {
@@ -281,7 +290,7 @@ function MenuList({
         visibility: 'visible',
       },
     });
-  }, [anchor]);
+  }, [anchor, hasSubmenus]);
   return (
     <div
       className={`command-results${depth ? ' context-submenu' : ''}`}

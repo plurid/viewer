@@ -95,7 +95,7 @@ async function extractCoordinated(
         ),
       );
     } catch {
-      // Forge bundles PDF.js and ships its assets alongside the renderer.
+      // Bundled test/embedded hosts may supply only the renderer's PDF assets.
       const directory =
         typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
       pdfRoot = path.join(directory, '../renderer/main_window/pdfjs');
