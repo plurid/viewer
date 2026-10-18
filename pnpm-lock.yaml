@@ -11,11 +11,11 @@ importers:
   packages/viewer-electron/app:
     dependencies:
       '@plurid/plurid-data':
-        specifier: 0.0.0-26
-        version: 0.0.0-26
+        specifier: 0.0.0-27
+        version: 0.0.0-27
       '@plurid/plurid-react':
-        specifier: 0.0.0-40
-        version: 0.0.0-40(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(redux@5.0.1)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))
+        specifier: 0.0.0-41
+        version: 0.0.0-41(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(redux@5.0.1)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))
       '@tanstack/react-virtual':
         specifier: ^3.13.0
         version: 3.14.14(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -716,39 +716,39 @@ packages:
   '@oxc-project/types@0.153.0':
     resolution: {integrity: sha512-jSNrRIyvPVLL5E1z/tS5zLAprosGz/FuI1PWwEOz59j3E4TTTzSpqKb/RDGqJhhW0QHYISGXxq582wGx6T11Tw==}
 
-  '@plurid/plurid-data@0.0.0-26':
-    resolution: {integrity: sha512-tYZeV5KzoEhWecXkeROhWtjVHrl7ItR6U9Aa2YXwnb+tK3Z6OBvlH/n1JIOBtOrZpX221Y4/eXWWBMA99gUp5w==}
-    engines: {node: '>=18', npm: '>=6'}
+  '@plurid/plurid-data@0.0.0-27':
+    resolution: {integrity: sha512-9ulvpYUtMsKK7rEZm+ZTH4A/yLRYGy6Gcp+L0YXYtqf0iYVBnpzY42S1qQvCumpkwR+iVqFNtGtILFXnZ9PTjg==}
+    engines: {node: '>=22'}
 
-  '@plurid/plurid-engine@0.0.0-23':
-    resolution: {integrity: sha512-GT6JjV7E/S4JWkW89aPksP4OH3UBuBkVVbrGKdpUOMiLhOS+BpzlaDrcyefCOd8FwnrK9w8L8NM3IsRXmJ+TdA==}
-    engines: {node: '>=18', npm: '>=6'}
+  '@plurid/plurid-engine@0.0.0-24':
+    resolution: {integrity: sha512-oARVzjGyrlpJHuwIABavvNrT7ofLGhDaAJZ0dZ766eP6eJDi1r13YQpdg7FZ+37BhmQJYYv3qc+wKILwTlYTTA==}
+    engines: {node: '>=22'}
 
-  '@plurid/plurid-functions-react@0.0.0-7':
-    resolution: {integrity: sha512-qG3l+MqlTSlgjyl2d5wHoZ1YCdLthm0BYqLcGq1I5JwzQbBy6Dnq16l/c2JQZ7arpjE8My4vAsbRlpfEQhi6bg==}
-    engines: {node: '>=18', npm: '>=8'}
+  '@plurid/plurid-functions-react@0.0.0-8':
+    resolution: {integrity: sha512-U7nTjJmGTGxjEV4h4g4OuAYxWfiXiKfSCEBYTeOj/tvhGWHOCm6T3NRT9aXi0H3tpnHMcDk7mk2qch07bMJsMQ==}
+    engines: {node: '>=22'}
     peerDependencies:
       react: '>=19'
 
-  '@plurid/plurid-functions@0.0.0-32':
-    resolution: {integrity: sha512-/33/yTyE5tAVCx8rX8Ij37KvvKY2S7mk3COHd0TFG4uH7dn80I6v28lNuovXCa0899+fY87yu0McvQ5QeF6IQA==}
-    engines: {node: '>=18', npm: '>=8'}
+  '@plurid/plurid-functions@0.0.0-33':
+    resolution: {integrity: sha512-FV132VeiSk8NhzwmjbPB3nGjZbD/2AumQW4RESIhsZhnlSRUwUg4jvAvTVyEJRdIMHCV+0PjEbc2F/JHvjceDQ==}
+    engines: {node: '>=22'}
 
-  '@plurid/plurid-icons-react@0.0.0-12':
-    resolution: {integrity: sha512-apX13PhE4eeFV1jd2KJtSIME+WF3jMQnAZcNrUDFYnHZVPamAC3w/PHzyy0IcNNfWrg8kkQGy5gB2Vv39jKZpA==}
-    engines: {node: '>=18', npm: '>=6'}
+  '@plurid/plurid-icons-react@0.0.0-13':
+    resolution: {integrity: sha512-uL5JKPb3jzWtdjbyWW54IHcqNqNhQgzNzwGmOVBvDy/zWWYCgrv3KOlTLq8A0QBlmFQZ3i90AquhQ0zuBUys8g==}
+    engines: {node: '>=22'}
     peerDependencies:
       react: '>=19'
       react-dom: '>=19'
       styled-components: '>=6'
 
-  '@plurid/plurid-pubsub@0.0.0-12':
-    resolution: {integrity: sha512-cth0U68sSoFQc8afGTTvco6hXclsyqeGUttwQ0EfhX6QQpYxLPd2JDW9waWZLipzJIc1pXo+jUfHfvavjYTWcA==}
-    engines: {node: '>=18', npm: '>=6'}
+  '@plurid/plurid-pubsub@0.0.0-13':
+    resolution: {integrity: sha512-K5eyLzN2QgxMb9EqKb7dWzjgK01Iz9PX44EDhEL9nipVvWd8pCPLywowWON9Zr10ZKgwwqMWBGCDGmEKUARImQ==}
+    engines: {node: '>=22'}
 
-  '@plurid/plurid-react@0.0.0-40':
-    resolution: {integrity: sha512-SJVaVu3F52ta99TOXRkPiu6CSJWCjrVawpdlIZ9320YOUDSXMPNtI1tdwfpAUcdZOfYdD3U2Uy/ot/F4p8UQgA==}
-    engines: {node: '>=18', npm: '>=6'}
+  '@plurid/plurid-react@0.0.0-41':
+    resolution: {integrity: sha512-GQdmMvJGV/cVlDASjeVmb5yOJuq/2R6JzMMXzPCe2OkV+kzqVwwpRxru+VmmoYT6WWQfMES6/MhPREcowbR/ew==}
+    engines: {node: '>=22'}
     peerDependencies:
       '@plurid/elementql-client-react': '>=0.0.0-1'
       react: '>=19'
@@ -758,13 +758,13 @@ packages:
       '@plurid/elementql-client-react':
         optional: true
 
-  '@plurid/plurid-themes@0.0.0-4':
-    resolution: {integrity: sha512-bwskNZ9Kq8t3wYeNSdDzy4nVKHrMdZua4s2YqYWt1Cziw3y2Qu6pq+jUEUNfKL6MyR1EM6+vPzMhEEEhfWRymQ==}
-    engines: {node: '>=18', npm: '>=6'}
+  '@plurid/plurid-themes@0.0.0-5':
+    resolution: {integrity: sha512-783q5dVSJYaq28PBx7hFUl7aN6+QfbNqMVqtlYfvabWrFuhm8zNhxDgaRWDKhsGNewbZ7vVQksPaMCrni5d7aQ==}
+    engines: {node: '>=22'}
 
-  '@plurid/plurid-ui-components-react@0.0.0-36':
-    resolution: {integrity: sha512-3jXlwUDXrPmJAKE16N4+m/1s6GVJvupeeVKBlAXzD4CnYX7OjQiPvscPtAHL2Ap1FkxKEb3/clW/UfZMxnJrUA==}
-    engines: {node: '>=18', npm: '>=6'}
+  '@plurid/plurid-ui-components-react@0.0.0-37':
+    resolution: {integrity: sha512-KiKMNiTUpy3PmDzfp4oUeHS4v8wflh3JAQEc5G3JQvHx3PsSVbK/HAc/tIhh41Pydsk2keTvMC4koUTc3j1hVw==}
+    engines: {node: '>=22'}
     peerDependencies:
       '@reduxjs/toolkit': '>=2'
       react: '>=19'
@@ -772,9 +772,9 @@ packages:
       react-redux: '>=9'
       styled-components: '>=6'
 
-  '@plurid/plurid-ui-state-react@0.0.0-15':
-    resolution: {integrity: sha512-III8yuZo/GGKyv0aFMXsIitV6kT2W6HaMVncXC3d6x45+KMrIG0QNCMfCQKh7QvVW9KUtJ3cUlBO18zW1hgncg==}
-    engines: {node: '>=18', npm: '>=8'}
+  '@plurid/plurid-ui-state-react@0.0.0-16':
+    resolution: {integrity: sha512-qIXbpWDXhwTkp+7llQw4ko5fBjMW/xL1eutsZiZ1LIp5s+UumSBtcrmSLapn1W1h1qdzRldY2GBwG0dBtW9r8w==}
+    engines: {node: '>=22'}
     peerDependencies:
       '@reduxjs/toolkit': '>=2'
 
@@ -3204,45 +3204,45 @@ snapshots:
 
   '@oxc-project/types@0.153.0': {}
 
-  '@plurid/plurid-data@0.0.0-26':
+  '@plurid/plurid-data@0.0.0-27':
     dependencies:
-      '@plurid/plurid-themes': 0.0.0-4
+      '@plurid/plurid-themes': 0.0.0-5
 
-  '@plurid/plurid-engine@0.0.0-23':
+  '@plurid/plurid-engine@0.0.0-24':
     dependencies:
-      '@plurid/plurid-data': 0.0.0-26
-      '@plurid/plurid-functions': 0.0.0-32
-      '@plurid/plurid-themes': 0.0.0-4
+      '@plurid/plurid-data': 0.0.0-27
+      '@plurid/plurid-functions': 0.0.0-33
+      '@plurid/plurid-themes': 0.0.0-5
 
-  '@plurid/plurid-functions-react@0.0.0-7(react@19.3.0)':
+  '@plurid/plurid-functions-react@0.0.0-8(react@19.3.0)':
     dependencies:
       react: 19.3.0
 
-  '@plurid/plurid-functions@0.0.0-32': {}
+  '@plurid/plurid-functions@0.0.0-33': {}
 
-  '@plurid/plurid-icons-react@0.0.0-12(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))':
+  '@plurid/plurid-icons-react@0.0.0-13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))':
     dependencies:
-      '@plurid/plurid-themes': 0.0.0-4
+      '@plurid/plurid-themes': 0.0.0-5
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       styled-components: 6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
 
-  '@plurid/plurid-pubsub@0.0.0-12':
+  '@plurid/plurid-pubsub@0.0.0-13':
     dependencies:
-      '@plurid/plurid-data': 0.0.0-26
-      '@plurid/plurid-themes': 0.0.0-4
+      '@plurid/plurid-data': 0.0.0-27
+      '@plurid/plurid-themes': 0.0.0-5
 
-  '@plurid/plurid-react@0.0.0-40(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(redux@5.0.1)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))':
+  '@plurid/plurid-react@0.0.0-41(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(redux@5.0.1)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))':
     dependencies:
       '@emotion/is-prop-valid': 1.4.0
-      '@plurid/plurid-data': 0.0.0-26
-      '@plurid/plurid-engine': 0.0.0-23
-      '@plurid/plurid-functions': 0.0.0-32
-      '@plurid/plurid-functions-react': 0.0.0-7(react@19.3.0)
-      '@plurid/plurid-icons-react': 0.0.0-12(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))
-      '@plurid/plurid-pubsub': 0.0.0-12
-      '@plurid/plurid-themes': 0.0.0-4
-      '@plurid/plurid-ui-components-react': 0.0.0-36(@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))
+      '@plurid/plurid-data': 0.0.0-27
+      '@plurid/plurid-engine': 0.0.0-24
+      '@plurid/plurid-functions': 0.0.0-33
+      '@plurid/plurid-functions-react': 0.0.0-8(react@19.3.0)
+      '@plurid/plurid-icons-react': 0.0.0-13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))
+      '@plurid/plurid-pubsub': 0.0.0-13
+      '@plurid/plurid-themes': 0.0.0-5
+      '@plurid/plurid-ui-components-react': 0.0.0-37(@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))
       '@reduxjs/toolkit': 2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
@@ -3252,25 +3252,25 @@ snapshots:
       - '@types/react'
       - redux
 
-  '@plurid/plurid-themes@0.0.0-4': {}
+  '@plurid/plurid-themes@0.0.0-5': {}
 
-  '@plurid/plurid-ui-components-react@0.0.0-36(@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))':
+  '@plurid/plurid-ui-components-react@0.0.0-37(@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))':
     dependencies:
       '@emotion/is-prop-valid': 1.4.0
-      '@plurid/plurid-functions': 0.0.0-32
-      '@plurid/plurid-functions-react': 0.0.0-7(react@19.3.0)
-      '@plurid/plurid-icons-react': 0.0.0-12(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))
-      '@plurid/plurid-themes': 0.0.0-4
-      '@plurid/plurid-ui-state-react': 0.0.0-15(@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0))
+      '@plurid/plurid-functions': 0.0.0-33
+      '@plurid/plurid-functions-react': 0.0.0-8(react@19.3.0)
+      '@plurid/plurid-icons-react': 0.0.0-13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(styled-components@6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0))
+      '@plurid/plurid-themes': 0.0.0-5
+      '@plurid/plurid-ui-state-react': 0.0.0-16(@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0))
       '@reduxjs/toolkit': 2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       react-redux: 9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1)
       styled-components: 6.5.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
 
-  '@plurid/plurid-ui-state-react@0.0.0-15(@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0))':
+  '@plurid/plurid-ui-state-react@0.0.0-16(@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0))':
     dependencies:
-      '@plurid/plurid-themes': 0.0.0-4
+      '@plurid/plurid-themes': 0.0.0-5
       '@reduxjs/toolkit': 2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)
 
   '@reduxjs/toolkit@2.13.0(react-redux@9.3.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)':

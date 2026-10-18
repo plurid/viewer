@@ -11,11 +11,11 @@ pnpm install
 pnpm start
 ```
 
-The October 18 Plurid release is prepared in the sibling `../plurid` repository. After publishing
-that coordinated release, run `pnpm plurid:update` here to pin data `0.0.0-27` and React `0.0.0-41`
-and resolve the registry lockfile. It checks all 13 versions before writing, uses a new temporary
-workspace, and preserves the current installation. Until publication, the existing pins remain
-in place and the new plane behavior requires the development overlay below.
+The October 18 Plurid release is published. Viewer pins data `0.0.0-27` and React `0.0.0-41`,
+with the coordinated dependency graph in the registry lockfile. `pnpm plurid:update` checks all
+13 release versions before resolving changes in a temporary workspace and preserves the current
+installation. Fresh registry installation, distribution byte checks, tests and production bundles
+pass; packaged/native release qualification remains pending.
 
 For local Plurid development only, install the sibling workspace's dependencies and run
 `pnpm plurid:sync`. It builds with cleanup disabled and copies generated distributions into

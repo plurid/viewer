@@ -1,5 +1,33 @@
 # Verification
 
+## October 18 published Plurid consumer
+
+The coordinated 13-package Plurid release is published and verified on `latest`. Viewer now pins
+data `0.0.0-27` and React `0.0.0-41`; the lockfile updates only the ten Plurid packages in its runtime
+graph. A fresh source snapshot of `30c4bf76b32369529cb0d0824f8cebcfffb9e3d2`, overlaid with these
+two proposed dependency files, was installed with a new package store and lifecycle scripts disabled.
+All work is retained at `/private/tmp/viewer-registry-20261018-ARfQqD`, including `provenance.json`,
+the original source archive, the workspace, package store and logs.
+
+`pnpm plurid:check` verified all ten installed packages against npm tarball integrity and exact
+distribution bytes. The 55 targeted Plurid/layout tests, all four TypeScript targets, lint and
+formatting pass. The full suite passes **690 tests across 93 files**, with two native binding tests
+skipped. Its first run failed because the source archive lacked the generated macOS helper; compiling
+`tools/macos-files.mm` into the candidate's assets resolved the native reproductions and full suite.
+Both runs and the compile log are retained. No application source change was needed.
+
+All seven Forge Vite production configurations build with output cleanup disabled. Build warnings
+include the existing OCCT browser externalizations and Plurid's `use client` directives in the client
+bundle. These are bundle checks; Electron/native packaging and signing were not performed.
+
+Browser checks use the fresh registry workspace and retained synthetic fixtures. At 2248×1193,
+side-by-side planes measure 1110×1046 with a 12px gap and 8px horizontal insets; stacked planes
+measure 2232×517. Fill workspace measures 2232×1046. Hover-wheel input moves the camera by 100px
+without scrolling the unselected plane; after a header click, the sidebar scrolls 90px while the
+camera stays fixed. Space/Quick Preview also keeps the camera fixed with navigation-modified wheel
+input. The filled plane was visually inspected. Packaged native input, physical trackpads, terminal/
+model/CAD previews, the final immutable candidate, soak and distribution gates remain pending.
+
 ## October 18 Plurid release preparation
 
 All 13 sibling Plurid package versions and peer minimums are prepared. React is `0.0.0-41`,

@@ -1,8 +1,10 @@
 # Plurid release handoff
 
-The October 18 source changes are prepared for data `0.0.0-27`, engine `0.0.0-24`,
-React `0.0.0-41` and the coordinated 13-package release. Publishing is performed by the maintainer.
-No package publication, release tag, public Viewer build or Store submission is part of this preparation.
+The maintainer published the coordinated October 18 release: all 13 packages are verified on npm's
+`latest` tag, including data `0.0.0-27`, engine `0.0.0-24` and React `0.0.0-41`. Viewer now pins
+that graph. Its fresh registry installation, distribution byte checks, tests and production bundles
+pass; see [verification](verification.md). The Plurid release tag remains local until consumer
+verification is reviewed. Public Viewer builds and Store submission remain separate release steps.
 
 In the sibling `plurid` checkout, review the prepared manifests and peer minimums. The workspace
 lockfile uses local links, so these version changes need no new lockfile entries. Commit the complete
@@ -21,12 +23,14 @@ hashes. The pipeline checks build, types, unit tests, lint, modules, budgets, do
 performance, visual baselines and packed consumers. It retains all intermediates. A failed gate does
 not produce a verified release manifest; fix the source, commit it and run `--pack` again.
 
-Publishing is an explicit maintainer step. It requires green CI for the recorded source
-commit, rechecks tarball hashes, publishes in dependency order with lifecycle scripts disabled, and
-confirms exact versions, integrity and `latest` tags. On partial publication, resume with the same
-artifacts; an existing version whose integrity differs stops the round. Without an explicit path,
-the script reuses verified artifacts for this commit or builds and verifies them automatically when
-none exist. Running `--pack` first is optional for reviewing the artifacts before publication.
+Publishing is an explicit maintainer step. It requires green CI, rechecks tarball hashes and submits
+the packages consecutively in dependency order with lifecycle scripts disabled. Registry visibility
+is checked for the whole release together after submission, including exact versions, integrity and
+`latest` tags. Retained publication receipts prevent accepted uploads from being submitted again
+while npm processes them. On partial publication, resume with the same artifacts; an existing version
+whose integrity differs stops the round. Without an explicit path, the script reuses verified
+artifacts for this commit (or a permitted publisher-only descendant) or builds and verifies them
+automatically when none exist. Running `--pack` first is optional for reviewing artifacts.
 
 ```sh
 pnpm release --publish
@@ -59,6 +63,8 @@ VIEWER_TEST_PRESERVE=1 pnpm test
 ```
 
 Choose new paths if those already exist. Keep the development installation and prior candidates.
+The full tests require `assets/viewer-macos-files.node` built from the candidate's source. Compile
+the native helpers before running them; a source archive with dependencies alone lacks this binding.
 Normal Forge packaging cleans build outputs; use a separately reviewed preservation-safe candidate
 build when operating under the workspace's Trash policy. `build-preserving.ts` inherits native
 dependencies and resources from its seed and is insufficient to prove a fresh registry candidate.
