@@ -8,15 +8,22 @@ Use Node ≥22.13 and pnpm 11. Verified with Node 26.8.2 and pnpm 11.3.0 on Appl
 
 ```sh
 pnpm install
-pnpm plurid:sync
 pnpm start
 ```
 
-Click-to-scroll currently uses the unpublished source in the sibling `../plurid` checkout.
-Install that workspace's dependencies first, then run `pnpm plurid:sync` here after installing
-Viewer dependencies or changing Plurid. It builds data, engine and React with cleanup disabled
-and copies generated packages into Viewer's installation, retaining existing artifacts. No
-packages are published and the registry versions remain pinned until the next Plurid release.
+The October 18 Plurid release is prepared in the sibling `../plurid` repository. After publishing
+that coordinated release, run `pnpm plurid:update` here to pin data `0.0.0-27` and React `0.0.0-41`
+and resolve the registry lockfile. It checks all 13 versions before writing, uses a new temporary
+workspace, and preserves the current installation. Until publication, the existing pins remain
+in place and the new plane behavior requires the development overlay below.
+
+For local Plurid development only, install the sibling workspace's dependencies and run
+`pnpm plurid:sync`. It builds with cleanup disabled and copies generated distributions into
+Viewer's installation. Qualification rejects this overlay. After updating and committing the
+registry pins, qualify from a fresh checkout and a fresh pnpm store, then run `pnpm plurid:check`.
+That check verifies the complete installed Plurid graph, rejects local links and source-sync stamps,
+and compares every distribution file to its registry tarball. See the
+[Plurid release handoff](docs/plurid-release.md) for the exact sequence.
 
 ```sh
 pnpm check         # strict types across main, preload, renderer, tests and tooling

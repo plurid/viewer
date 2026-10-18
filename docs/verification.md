@@ -1,5 +1,42 @@
 # Verification
 
+## October 18 Plurid release preparation
+
+All 13 sibling Plurid package versions and peer minimums are prepared. React is `0.0.0-41`,
+data `0.0.0-27`, engine `0.0.0-24`; the generator's packed pins follow kit `0.0.0-7`, React and
+server `0.0.0-20`. Publishing remains a maintainer action. See the [release handoff](plurid-release.md).
+
+Local verification on Node 26.8.2, pnpm 11.3.0 and Apple Silicon macOS passed:
+
+| Check | Evidence |
+| --- | --- |
+| Plurid preserving production builds | All 13 packages; `/private/tmp/plurid-release-build-20261018.log` |
+| Plurid tests and release planner/artifact checks | 1,199 package tests with configured coverage floors; 11 release-tooling regressions; `/private/tmp/plurid-release-tests-20261018.log`, `/private/tmp/plurid-release-tool-tests-final-20261018.log` |
+| Plurid types, lint, modules, budgets and generated docs | Workspace and harness checks; all entry points of 13 packages; ESM/CommonJS rendering parity (143 classes); 18 budgeted entries; generated tables current |
+| Plurid browser behavior | 182 cases, including eight native wheel/preview/isolation regressions; `/private/tmp/plurid-release-browser-all-20261018.log` |
+| Plurid performance and visual comparisons | 13 performance/virtualization cases run without other test/build jobs; 50 committed Darwin visual baselines; `/private/tmp/plurid-release-perf-20261018.log`, `/private/tmp/plurid-release-visual-20261018.log` |
+| Packed consumer | All 13 prepared tarballs install with lifecycle scripts disabled; ESM/CommonJS imports; 17 typed NodeNext entry points; generated app TypeScript 5/6 checks; production/dev hydration, desktop/mobile; `/private/tmp/plurid-release-smoke-20261018-preserving.log` |
+| Viewer source gates | Types, lint and formatting; 690 tests passed, two native binding tests skipped; `/private/tmp/viewer-plurid-release-tests-complete-20261018.log` |
+
+The full Viewer run exposed an existing marquee test's unawaited React `act` thenable. It now
+flushes a requested animation frame explicitly and awaits React; the complete rerun has no unhandled
+errors. Registry guard regressions cover stale transitive versions, source-sync stamps, package links,
+linked installation roots, unstamped overlays, retained chunks and corrupt tarball integrity.
+
+The release dry run preserved tracked files and git status. The local packed-consumer work is retained
+at `/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/plurid-smoke-jAUnUd`; its supplied tarballs are
+at `/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/plurid-prepared-tarballs-28U87K`. These came
+from the preserving development build. They establish consumer compatibility, not the final clean
+snapshot release manifest. The explicit release pipeline must run against the committed preparation;
+its CI gate includes the pinned Linux visual job.
+
+`pnpm plurid:update` was exercised and stopped on the unpublished engine `0.0.0-24` (HTTP 404),
+before changing Viewer's pins, lockfile or installation. After publication, it resolves genuine npm
+metadata in a separate workspace. Qualification compares the complete installed Plurid graph and
+distribution bytes to registry tarballs; the current source-synced development installation cannot
+satisfy that gate. No fresh registry-installed Viewer candidate, final packaged input regression,
+native acceptance, soak, notarization or public distribution was established by these checks.
+
 ## October 18 plane sizing and positioning
 
 Size & position adds Move plane, Resize plane, Fill workspace, independent full/half/third/two-thirds/quarter/three-quarters width and height, and edge/center alignment. The commands are available from plane headers, actions menus, Commands and the native View menu. They resize existing planes and retain independent folder sessions, neighbouring geometry, arrangement Undo/Redo and workspace persistence.

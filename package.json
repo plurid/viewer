@@ -5,6 +5,8 @@
   "engines": { "node": ">=22.13.0", "pnpm": ">=11" },
   "scripts": {
     "plurid:sync": "pnpm --filter viewer-electron plurid:sync",
+    "plurid:update": "pnpm --filter viewer-electron plurid:update",
+    "plurid:check": "pnpm --filter viewer-electron plurid:check",
     "start": "pnpm --filter viewer-electron start",
     "check": "pnpm --filter viewer-electron check",
     "lint": "pnpm --filter viewer-electron lint",

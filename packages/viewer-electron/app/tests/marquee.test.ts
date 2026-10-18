@@ -59,10 +59,15 @@ describe('marquee selection', () => {
     selection.region([], []);
     expect(commits.at(-1)).toEqual([]);
   });
-  it('selects by dragging over blank space and keeps the selection through the ending click', () => {
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
-      setTimeout(() => callback(0), 0),
-    );
+  it('selects by dragging over blank space and keeps the selection through the ending click', async () => {
+    let frame: FrameRequestCallback | undefined;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frame = callback;
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      frame = undefined;
+    });
     const select = vi.fn<MarqueeSelect>();
     const cleared = vi.fn();
     const entries = Array.from({ length: 10 }, (_, index) => entry('file-' + index));
@@ -109,18 +114,23 @@ describe('marquee selection', () => {
     expect(select).not.toHaveBeenCalled();
     pointer('pointerdown', 10, 40, true);
     pointer('pointermove', 60, 100);
-    return act(() => new Promise((resolve) => setTimeout(resolve, 5))).then(() => {
-      expect(container.querySelector('.file-marquee')).not.toBeNull();
-      expect(select).toHaveBeenLastCalledWith(
-        [entries[1], entries[2], entries[3]],
-        ['/fixtures/kept'],
-      );
-      pointer('pointerup', 60, 100);
-      fireEvent.click(scroll);
-      expect(cleared).not.toHaveBeenCalled();
-      expect(container.querySelector('.file-marquee')).toBeNull();
-      fireEvent.click(scroll);
-      expect(cleared).toHaveBeenCalledTimes(1);
+    // Flush the requested frame explicitly and await React before the test can finish/clean up.
+    await act(async () => {
+      expect(frame).toBeTypeOf('function');
+      const update = frame;
+      frame = undefined;
+      update?.(0);
     });
+    expect(container.querySelector('.file-marquee')).not.toBeNull();
+    expect(select).toHaveBeenLastCalledWith(
+      [entries[1], entries[2], entries[3]],
+      ['/fixtures/kept'],
+    );
+    pointer('pointerup', 60, 100);
+    fireEvent.click(scroll);
+    expect(cleared).not.toHaveBeenCalled();
+    expect(container.querySelector('.file-marquee')).toBeNull();
+    fireEvent.click(scroll);
+    expect(cleared).toHaveBeenCalledTimes(1);
   });
 });

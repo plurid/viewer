@@ -259,6 +259,7 @@ async function main() {
       });
     }
     const staticChecks = await Promise.all([
+      run('plurid-registry', ['exec', 'tsx', 'tools/plurid-registry.ts', '--registry']),
       run('types', ['check']),
       run('lint', ['lint']),
       run('format', ['format:check']),

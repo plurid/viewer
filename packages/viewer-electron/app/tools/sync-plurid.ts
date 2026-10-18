@@ -3,7 +3,8 @@ import { cpSync, existsSync, lstatSync, readFileSync, readdirSync, writeFileSync
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Use generated sibling packages until click-to-scroll is published. Keep old build files:
+// Optional local development overlay. Release qualification requires a clean registry install.
+// Keep old build files:
 // their removal requires separate approval under the workspace's Trash policy.
 const app = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = path.resolve(app, '../../../../plurid');
@@ -80,5 +81,5 @@ console.log(
   `Synced ${copied} generated Plurid packages from ${commit}${dirty ? ' (modified)' : ''}.`,
 );
 console.log(
-  'Viewer uses local unpublished Plurid code. Run this again after reinstalling packages.',
+  'Development overlay applied. This installation cannot qualify for release; use a fresh checkout and package store for registry verification.',
 );
