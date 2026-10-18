@@ -25,6 +25,10 @@ const icons: Record<string, IconName> = {
   Terminal: 'terminal',
   Actions: 'command',
   Plane: 'link',
+  'Size & position': 'resize',
+  Width: 'side-by-side',
+  Height: 'stacked',
+  Position: 'move',
   Space: 'model',
   Sidebar: 'sidebar',
   App: 'settings',
@@ -42,6 +46,7 @@ const order = [
   'Actions',
   'Quick actions',
   'Plane',
+  'Size & position',
   'App',
 ];
 const leaf = (command: ResolvedCommand): MenuEntry => ({
@@ -72,15 +77,24 @@ function branch(label: string, sections: MenuSection[]): MenuEntry {
   };
 }
 function viewSections(commands: ResolvedCommand[]): MenuSection[] {
-  const modes = commands.filter((item) => item.id.startsWith('view-'));
+  const arrangements = commands.filter((item) =>
+    ['view-side-by-side', 'view-stacked'].includes(item.id),
+  );
+  const arrangementIDs = new Set(arrangements.map((item) => item.id));
+  const modes = commands.filter(
+    (item) => item.id.startsWith('view-') && !arrangementIDs.has(item.id),
+  );
   const grouping = commands.filter((item) => item.id.startsWith('group.'));
   const columns = commands.filter(
     (item) =>
       item.id.startsWith('column.') || ['wrap-file-names', 'reset-list-columns'].includes(item.id),
   );
-  const captured = new Set([...modes, ...grouping, ...columns].map((item) => item.id));
+  const captured = new Set(
+    [...modes, ...arrangements, ...grouping, ...columns].map((item) => item.id),
+  );
   return [
     section(modes),
+    section(arrangements),
     {
       entries: [
         ...(grouping.length ? [branch('Group by', [section(grouping)])] : []),
@@ -88,6 +102,21 @@ function viewSections(commands: ResolvedCommand[]): MenuSection[] {
       ],
     },
     section(commands.filter((item) => !captured.has(item.id))),
+  ].filter((item) => item.entries.length);
+}
+
+function layoutSections(commands: ResolvedCommand[]): MenuSection[] {
+  return [
+    section(
+      commands.filter((item) => ['plane-move', 'plane-resize', 'plane-fill'].includes(item.id)),
+    ),
+    {
+      entries: (['Width', 'Height', 'Position'] as const).flatMap((label) => {
+        const prefix = `plane-${label === 'Position' ? 'align' : label.toLowerCase()}-`;
+        const rows = commands.filter((item) => item.id.startsWith(prefix));
+        return rows.length ? [branch(label, [section(rows)])] : [];
+      }),
+    },
   ].filter((item) => item.entries.length);
 }
 
@@ -128,6 +157,8 @@ export function contextMenuSections(
       items.some((item) => item.id.startsWith('view-'))
     )
       sections.push(...viewSections(items));
+    else if (items.length && items.every((item) => item.group === 'Size & position'))
+      sections.push(...layoutSections(items));
     else {
       const groups = groupCommands(items);
       for (const [label, rows] of groups) sections.push(section(rows, label));
@@ -145,6 +176,7 @@ export function contextMenuSections(
   const entries = names.map((label) => {
     const rows = grouped.get(label)!;
     if (label === 'View') return branch(label, viewSections(rows));
+    if (label === 'Size & position') return branch(label, layoutSections(rows));
     if (label === 'Files') {
       const open = rows.filter((item) =>
         ['open-default', 'linked', 'another-plane', 'reveal'].includes(item.id),

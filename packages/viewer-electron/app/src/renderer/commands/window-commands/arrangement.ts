@@ -132,6 +132,29 @@ export function arrangementCommands({
       run: () => actions.workspace.arrange('y'),
     },
   ];
+  for (const [id, label, axis, icon, splitAlias] of [
+    ['view-side-by-side', 'View side by side', 'x', 'side-by-side', 'vertical split'],
+    ['view-stacked', 'View stacked', 'y', 'stacked', 'horizontal split'],
+  ] as const)
+    commands.push({
+      id,
+      label,
+      group: 'View',
+      icon,
+      aliases: [splitAlias, `view ${splitAlias}`, 'dual pane', 'norton commander'],
+      when: (context) => paneScope(context) && !!context.folder && space.panes.length < 200,
+      run: (context) => {
+        if (!context.paneID || !context.folder) return;
+        actions.workspace.splitFolder(
+          {
+            workspaceID: context.workspaceID,
+            paneID: context.paneID,
+            path: context.folder.path,
+          },
+          axis,
+        );
+      },
+    });
   for (const tool of ['rotate', 'scale', 'translate'] as const)
     commands.push({
       id: `space-${tool}`,

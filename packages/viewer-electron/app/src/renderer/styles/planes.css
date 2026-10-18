@@ -87,6 +87,17 @@
 .plane-heading[data-dragging='false'] {
   cursor: default;
 }
+@container (max-width: 320px) {
+  .plane-navigation,
+  .plane-view-button,
+  .plane-search-button,
+  .plane-module-controls {
+    display: none;
+  }
+  .plane-heading {
+    min-width: 0;
+  }
+}
 @container (max-width: 540px) {
   .plane-spatial-controls {
     display: none;

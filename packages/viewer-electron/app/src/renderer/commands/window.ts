@@ -5,6 +5,7 @@ import { navigationCommands } from './window-commands/navigation';
 import { workspacesCommands } from './window-commands/workspaces';
 import { historyCommands } from './window-commands/history';
 import { arrangementCommands } from './window-commands/arrangement';
+import { planeLayoutCommands } from './window-commands/plane-layout';
 import { previewsCommands } from './window-commands/previews';
 import { sidebarCommands } from './window-commands/sidebar';
 import { catalogCommands } from './window-commands/catalog';
@@ -21,6 +22,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     ...workspacesCommands(scopes),
     ...historyCommands(scopes),
     ...arrangementCommands(scopes),
+    ...planeLayoutCommands(scopes),
     ...previewsCommands(scopes),
     ...sidebarCommands(scopes),
     ...catalogCommands(scopes),

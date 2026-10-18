@@ -1,7 +1,7 @@
 import type { PlanePlacement } from '../../domain/project';
 import { useMemo, useRef, type RefObject } from 'react';
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
-import { PLURID_PUBSUB_TOPIC, type TreePlane } from '@plurid/plurid-data';
+import { PLURID_PUBSUB_TOPIC, type TreePlane, type TreePlaneLocation } from '@plurid/plurid-data';
 import type { FileEntry } from '../../domain/contracts';
 import { sameSourceVersion, sourceVersion, type EvidenceNavigation } from '../../domain/inspection';
 import { matchingPane, normalizedPanePath } from '../../domain/planes';
@@ -16,6 +16,7 @@ import {
   installProject,
   consumeProjectLayout,
   updatePane,
+  changePreferences,
   report,
   reconcilePanes,
   removePanes,
@@ -24,7 +25,9 @@ import {
 import { rootOwners } from './sessions';
 import { repeatedPreviews } from './recovery';
 import { flattenTree, hostID, paneRoute, parentPaneID, linkedPaneID } from './tree';
-import { frameWorkspace } from './framing';
+import { cancelWorkspaceFraming, frameWorkspace } from './framing';
+import { folderPairArea, folderPairGeometry } from './folder-pair';
+import { frontPlaneDepth, planeLayoutGeometry } from './plane-layout';
 import type { WorkspaceController } from './context';
 import { openWorkspacePath } from './open-path';
 /** Owns host-plane identity and creation. Engine routes/IDs stay inside the adapter. */
@@ -234,6 +237,103 @@ export function useWorkspaceController({
             dock: getState().saved.ui.space.opening === 'dock',
           });
       },
+      splitFolder(target, axis) {
+        const api = engine.current;
+        const element = surface.current;
+        const space = activeWorkspace();
+        const folder = space.panes.find((pane) => pane.id === target.paneID);
+        if (
+          !api ||
+          !element ||
+          !readyRef.current ||
+          target.workspaceID !== space.id ||
+          folder?.type !== 'folder' ||
+          folder.path !== target.path
+        )
+          return;
+        if (space.panes.length >= 200)
+          throw new Error(
+            'This workspace has 200 planes. Close a plane or create another workspace.',
+          );
+        const previous = api.tree.get();
+        const nodes = flattenTree(previous);
+        const source = nodes.find((node) => hostID(node) === folder.id);
+        if (!source) throw new Error('The originating folder plane is no longer available.');
+        // Bring the pair in front of existing sheets, including a previous split.
+        // Bound every rotated corner so an older plane cannot cover either half.
+        const front = frontPlaneDepth(nodes);
+        const links = api.getSnapshot().space.links;
+        const geometry = folderPairGeometry(
+          { width: element.clientWidth, height: element.clientHeight },
+          folderPairArea(element),
+          { ...source.location, translateZ: front },
+          axis,
+        );
+        cancelWorkspaceFraming(api);
+        let copyID: string | undefined;
+        api.store.dispatch(pluridStateModules.space.actions.historyBegin());
+        try {
+          const copy = addPane(folder.path, 'folder', true);
+          copyID = copy.id;
+          updatePane(copy.id, {
+            sidebar: folder.sidebar ? { ...folder.sidebar } : undefined,
+          });
+          // The topic builds the root synchronously; this Plurid version's setView
+          // handle only schedules it. Read the live view so rapid invocations keep every root.
+          api.pubsub.publish({
+            topic: PLURID_PUBSUB_TOPIC.VIEW_SET_PLANES,
+            data: {
+              view: [
+                ...api
+                  .getSnapshot()
+                  .space.view.map((entry) => (typeof entry === 'string' ? entry : entry.plane)),
+                paneRoute('folder', copy.id),
+              ],
+            },
+          });
+          const added = api.tree.get().find((node) => hostID(node) === copy.id);
+          if (!added) throw new Error('The second folder plane could not open. Try again.');
+          const place = (node: TreePlane, location: TreePlaneLocation): TreePlane => ({
+            ...node,
+            width: geometry.width,
+            height: geometry.height,
+            location,
+            sizeMode: 'manual',
+            manuallyPositioned: true,
+            show: true,
+          });
+          const replace = (nodes: TreePlane[]): TreePlane[] =>
+            nodes.map((node) =>
+              node.planeID === source.planeID
+                ? place(node, geometry.first)
+                : node.children?.length
+                  ? { ...node, children: replace(node.children) }
+                  : node,
+            );
+          // setTree reconciles authored nodes against their old manual size/pose.
+          // An exact arrangement write also permits splitting an already pinned plane.
+          api.store.dispatch(
+            pluridStateModules.space.actions.restoreArrangement({
+              tree: [...replace(previous), place(added, geometry.second)],
+              links,
+            }),
+          );
+          api.pubsub.publish({ topic: PLURID_PUBSUB_TOPIC.ISOLATE_PLANE, data: { planeID: '' } });
+          setActivePane(folder.id);
+          // A docked plane follows geometry changes for a commit. Frame after that
+          // and the measured boxes settle, so the old dock cannot reclaim this camera.
+          frameWorkspace(engine, surface, [folder.id, copy.id], { camera: geometry.camera });
+        } catch (error) {
+          api.pubsub.publish({ topic: PLURID_PUBSUB_TOPIC.SET_TREE, data: { tree: previous } });
+          api.store.dispatch(
+            pluridStateModules.space.actions.restoreArrangement({ tree: previous, links }),
+          );
+          if (copyID) removePanes([copyID]);
+          throw error;
+        } finally {
+          api.store.dispatch(pluridStateModules.space.actions.historyEnd());
+        }
+      },
       open(
         entry: FileEntry,
         parentPaneID?: string,
@@ -372,6 +472,93 @@ export function useWorkspaceController({
         }
         const keep = groups.find((group) => hostID(group.keep) === active)?.keep ?? groups[0]?.keep;
         if (keep) controller.focusPane(hostID(keep));
+      },
+      layoutPlane(target, edit) {
+        const api = engine.current;
+        const element = surface.current;
+        const space = activeWorkspace();
+        if (
+          !api ||
+          !element ||
+          !readyRef.current ||
+          target.workspaceID !== space.id ||
+          !space.panes.some((pane) => pane.id === target.paneID)
+        )
+          return;
+        const previous = api.tree.get();
+        const nodes = flattenTree(previous);
+        const source = nodes.find((node) => hostID(node) === target.paneID);
+        if (!source) return;
+        const geometry = planeLayoutGeometry(
+          { width: element.clientWidth, height: element.clientHeight },
+          folderPairArea(element),
+          source,
+          api.camera.get(),
+          edit,
+          frontPlaneDepth(nodes),
+        );
+        const replace = (tree: TreePlane[]): TreePlane[] =>
+          tree.map((node) =>
+            node.planeID === source.planeID
+              ? {
+                  ...node,
+                  width: geometry.width,
+                  height: geometry.height,
+                  location: geometry.location,
+                  sizeMode: 'manual',
+                  manuallyPositioned: true,
+                  show: true,
+                }
+              : node.children?.length
+                ? { ...node, children: replace(node.children) }
+                : node,
+          );
+        cancelWorkspaceFraming(api);
+        api.store.dispatch(pluridStateModules.space.actions.historyBegin());
+        try {
+          api.store.dispatch(
+            pluridStateModules.space.actions.restoreArrangement({
+              tree: replace(previous),
+              links: api.getSnapshot().space.links,
+            }),
+          );
+          api.pubsub.publish({ topic: PLURID_PUBSUB_TOPIC.ISOLATE_PLANE, data: { planeID: '' } });
+        } finally {
+          api.store.dispatch(pluridStateModules.space.actions.historyEnd());
+        }
+        setActivePane(target.paneID);
+        frameWorkspace(engine, surface, [target.paneID], { camera: geometry.camera });
+      },
+      editPlane(target, mode) {
+        const api = engine.current;
+        if (
+          !api ||
+          !readyRef.current ||
+          target.workspaceID !== activeWorkspace().id ||
+          !activeWorkspace().panes.some((pane) => pane.id === target.paneID)
+        )
+          return;
+        const node = flattenTree(api.tree.get()).find((node) => hostID(node) === target.paneID);
+        if (!node) return;
+        if (api.camera.docked()) controller.layoutPlane(target, {});
+        else cancelWorkspaceFraming(api);
+        changePreferences((ui) => ({
+          ...ui,
+          space: {
+            ...ui.space,
+            planeHeaders: true,
+            ...(mode === 'move' ? { dragging: true } : { resizing: true }),
+          },
+        }));
+        controller.setTransformTool(null);
+        if (mode === 'resize')
+          api.pubsub.publish({
+            topic: PLURID_PUBSUB_TOPIC.CONFIGURATION,
+            data: { elements: { plane: { resizable: true } } },
+          });
+        api.pubsub.publish({ topic: PLURID_PUBSUB_TOPIC.SPACE_GRAB, data: { on: false } });
+        api.selection.set([node.planeID]);
+        setActivePane(target.paneID);
       },
       arrange: (axis) => {
         const api = engine.current;

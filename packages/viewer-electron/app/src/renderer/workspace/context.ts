@@ -1,6 +1,7 @@
 import type { EvidenceNavigation } from '../../domain/inspection';
 import type { ProjectLayout } from '../../domain/project';
 import type { CapturedTarget } from '../../domain/automation';
+import type { PlaneLayoutEdit, PlaneLayoutTarget } from '../../domain/plane-layout';
 import { createContext, useContext } from 'react';
 import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 export interface WorkspaceController {
@@ -22,6 +23,9 @@ export interface WorkspaceController {
     content?: boolean,
   ): void;
   newRootFolder(target?: NewRootFolderTarget): void;
+  splitFolder(target: { workspaceID: string; paneID: string; path: string }, axis: 'x' | 'y'): void;
+  layoutPlane(target: PlaneLayoutTarget, edit: PlaneLayoutEdit): void;
+  editPlane(target: PlaneLayoutTarget, mode: 'move' | 'resize'): void;
   open(
     entry: FileEntry,
     parentPaneID?: string,

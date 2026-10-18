@@ -1,5 +1,27 @@
 # Verification
 
+## October 18 plane sizing and positioning
+
+Size & position adds Move plane, Resize plane, Fill workspace, independent full/half/third/two-thirds/quarter/three-quarters width and height, and edge/center alignment. The commands are available from plane headers, actions menus, Commands and the native View menu. They resize existing planes and retain independent folder sessions, neighbouring geometry, arrangement Undo/Redo and workspace persistence.
+
+The preserving targeted runs pass **69 tests across six files**: 45 folder-pair/layout/command tests and 24 related workspace/navigation/selection tests. New cases cover expanding a remaining half after closing its partner, one-step Undo/Redo, three-root tiling with unchanged neighbours, stored geometry, docked sources, fraction gutters, manual selection and native corner resizing without camera changes, stale targets and concise grouped commands. All four TypeScript checks, ESLint, changed-file formatting and the preserving Electron/renderer production build pass. The UI detector reports no findings.
+
+Browser checks confirm native corner resizing and title dragging, filling the current plane, closing a side-by-side partner then applying Full width, keyboard fraction aliases, and composable right/bottom alignment. At 1456×879, a third-width/half-height plane measures 472×360px at the bottom-right inset. At 780×560, Fill workspace measures 764×413px with the bottom toolbar enabled. Menu and layout captures are retained in `packages/viewer-electron/app/out/plane-layout-20261018`. Native menu interaction and packaged distribution remain unverified.
+
+The compact pass caught header overflow at third/quarter widths. A 320px container rule now retains the title, Actions and Close while secondary shortcuts stay in menus. Recaptures confirm Actions/Close inside the 182px quarter and 246.7px third planes, with successful access to Size & position through Actions. The finish reviewer marked that finding resolved. The corrected renderer type check, lint, formatting and preserving build pass; console errors are absent. All eight desktop/compact captures are retained.
+
+## October 18 two-folder views
+
+`View side by side` and `View stacked` appear in Commands, folder View menus and the native View menu. Each creates a fresh independent root at the source folder and authors an equal, natural-scale pair with one arrangement Undo step.
+
+The preserving targeted run passes **56 tests across six files**, including **17 new folder-pair cases**. It covers both orientations, local selection/history/scroll, shared presentation, exact source paths despite new-plane preferences, linked descendants, rapid repeated splitting of pinned planes, failure rollback, one-step Undo/Redo, docked sources, persisted arrangements, stale targets and the plane limit. A regression covers focus-induced scrolling of engine containers without changing explorer sessions.
+
+`pnpm check`, `pnpm lint`, changed-file Prettier checks and the renderer production build pass. The Impeccable detector reports no findings. Browser checks against a synthetic profile cover the folder menu and split aliases, desktop and 780×560 layouts, independent folder navigation, dock-to-pair behavior, enabled/disabled spatial aids, dark/light themes and reload persistence. With spatial aids disabled, the compact stacked pair measures 764×238px per plane, with a 12px gap and 8px canvas insets. Browser console errors are absent.
+
+Owner follow-up exposed an unwanted right-hand strip reserved for the minimap and viewcube. A regression reproduced 788px of usable width in a 1000px canvas; it now verifies 984px with either visible or dock-hidden overlays. Both orientations use the full width, retaining the 8px inset and bottom toolbar space. The new commands inherit the ordinary View subtitle and use distinct two-column/two-row icons. The follow-up run passes **32 tests across two files**, type checks, lint, formatting and a preserving renderer build. Browser measurements confirm both orientations at 1456×935 and 780×560 with spatial aids enabled, and visual checks confirm the new icons and concise palette rows. Console errors are absent.
+
+Builds and synthetic fixtures are retained. The production renderer retains existing OCCT browser-externalization and large-chunk warnings. The Electron development app was reopened with the corrections. A packaged app was not built; native menu interaction remains unverified.
+
 ## October 16 lenses
 
 **652 unit tests across 90 files pass** (2 skipped). All four TypeScript targets pass with `noUncheckedIndexedAccess`; ESLint and formatting pass. The renderer bundles. The packaged app was not built, and the lens UI has not been exercised in a running app yet.

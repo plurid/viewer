@@ -20,6 +20,7 @@ import { Desktop } from './desktop/bridge';
 import { WindowState, captureWindowFrame, restoreWindowFrame } from './desktop/window-state';
 import { errorMessage } from './domain/errors';
 import { DiagnosticLog } from './desktop/diagnostics';
+import { planeAlignments, planeSizePresets } from './domain/plane-layout';
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -319,6 +320,31 @@ function menu(): void {
             click: command('toggle-sidebar'),
           },
           { label: 'Show / Hide Plane Navigation', click: command('plane-sidebar') },
+          { label: 'View Side by Side', click: command('view-side-by-side') },
+          { label: 'View Stacked', click: command('view-stacked') },
+          {
+            label: 'Size & Position',
+            submenu: [
+              { label: 'Move Plane', click: command('plane-move') },
+              { label: 'Resize Plane', click: command('plane-resize') },
+              { label: 'Fill Workspace', click: command('plane-fill') },
+              { type: 'separator' },
+              ...(['width', 'height'] as const).map((axis) => ({
+                label: axis === 'width' ? 'Width' : 'Height',
+                submenu: planeSizePresets.map((preset) => ({
+                  label: `${preset.label} ${axis}`,
+                  click: command(`plane-${axis}-${preset.id}`),
+                })),
+              })),
+              {
+                label: 'Position',
+                submenu: planeAlignments.map((alignment) => ({
+                  label: alignment.label,
+                  click: command(`plane-align-${alignment.id}`),
+                })),
+              },
+            ],
+          },
           {
             label: 'Show / Hide Hidden Files',
             accelerator: accelerator(

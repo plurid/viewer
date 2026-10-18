@@ -10,6 +10,7 @@ import {
 } from '../state/store';
 import { activeLens, useLenses } from '../state/lenses';
 import { lensMenuIDs } from '../commands/lenses';
+import { planeLayoutCommandIDs } from '../../domain/plane-layout';
 import { focusFiles } from './sessions';
 import { useCommands, useCommandRevision } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
@@ -70,7 +71,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
   const registry = useCommands();
   useCommandRevision(id);
   const [menu, setMenu] = useState<{
-    kind: 'view' | 'actions' | 'lens';
+    kind: 'view' | 'actions' | 'lens' | 'layout';
     anchor: HTMLButtonElement;
     x: number;
     y: number;
@@ -103,7 +104,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
   const openMenu = (
     event: React.MouseEvent<HTMLButtonElement>,
     ids?: string[],
-    kind: 'view' | 'actions' | 'lens' = ids ? 'view' : 'actions',
+    kind: 'view' | 'actions' | 'lens' | 'layout' = ids ? 'view' : 'actions',
   ) => {
     if (menu?.kind === kind) {
       setMenu(null);
@@ -213,6 +214,8 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
                   'view-columns',
                   'view-gallery',
                   'view-map',
+                  'view-side-by-side',
+                  'view-stacked',
                 ])
               }
             >
@@ -229,6 +232,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           {controls.search && (
             <IconButton
               icon="search"
+              className="plane-search-button"
               label={registry.context(id)?.searchOpen ? 'Close search' : 'Search this folder'}
               aria-pressed={!!registry.context(id)?.searchOpen}
               onClick={() => run('search')}
@@ -238,8 +242,17 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       ) : (
         <div className="plane-module-controls" ref={slot} />
       )}
-      {(controls.frame || controls.dock) && (
+      {(controls.frame || controls.dock || controls.actions) && (
         <div className="plane-spatial-controls">
+          {controls.actions && (
+            <IconButton
+              icon="resize"
+              label="Size & position"
+              aria-haspopup="dialog"
+              aria-expanded={menu?.kind === 'layout'}
+              onClick={(event) => openMenu(event, planeLayoutCommandIDs, 'layout')}
+            />
+          )}
           {controls.frame && (
             <IconButton icon="frame" label="Frame plane" onClick={() => run('frame-plane')} />
           )}
@@ -277,7 +290,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           request={menu.request}
           anchor={menu.anchor}
           onClose={() => setMenu(null)}
-          label="Plane actions"
+          label={menu.kind === 'layout' ? 'Size & position' : 'Plane actions'}
         />
       )}
     </div>
