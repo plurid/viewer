@@ -79,7 +79,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.fileOpening.types': [
     'Per-extension overrides without a leading dot, in lowercase; values are plane or native.',
-    'Example: "pdf": "plane", "mkv": "native". Office extensions default to native.',
+    'Example: "pdf": "plane", "mkv": "native". New settings preview docx and xlsx in planes.',
   ],
   'settings.customActions': [
     'User commands for the context menu, Command-K, native Actions menu and optional shortcuts.',
@@ -255,14 +255,23 @@ const descriptions: Record<string, string[]> = {
   ],
 };
 
+/** Reworded guidance: a documented file has its earlier line replaced in place, not repeated. */
+const revisedGuidance: [RegExp, string][] = [
+  [
+    /^([\t ]*\/\/ )New folder plane, the workspace \+ button and Cmd\+N create an independent root here\.(?=\r?$)/m,
+    '$1The workspace + button and Cmd+N create an independent root here when planes are already open.',
+  ],
+  [
+    /^([\t ]*\/\/ )Example: "pdf": "plane", "mkv": "native"\. Office extensions default to native\.(?=\r?$)/m,
+    '$1Example: "pdf": "plane", "mkv": "native". New settings preview docx and xlsx in planes.',
+  ],
+];
+
 /** Add guidance without reserializing values, user comments, formatting or trailing commas. */
 export function documentConfiguration(text: string): string {
   const documented = text.split(/\r?\n/).includes(guide);
   if (documented)
-    text = text.replace(
-      /^([\t ]*\/\/ )New folder plane, the workspace \+ button and Cmd\+N create an independent root here\.(?=\r?$)/m,
-      '$1The workspace + button and Cmd+N create an independent root here when planes are already open.',
-    );
+    for (const [earlier, current] of revisedGuidance) text = text.replace(earlier, current);
   const errors: ParseError[] = [];
   const root = parseTree(text, errors, { allowTrailingComma: true });
   if (!root || root.type !== 'object' || errors.length)

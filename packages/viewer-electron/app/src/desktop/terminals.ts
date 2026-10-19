@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import { launchWorker, type OwnedWorker } from './utility-client';
-import type { TerminalEvent, TerminalStart } from '../domain/automation';
+import type { TerminalEvent, TerminalProfile, TerminalStart } from '../domain/automation';
 import type { ApplicationSettings } from '../domain/services';
 import { absolute } from './filesystem';
 import { executablePath } from './terminal-launch';
@@ -36,6 +36,8 @@ export class Terminals {
     private settings: () => ApplicationSettings,
     private emit: (owner: number, event: TerminalEvent) => void,
     private access: (files: readonly string[]) => Promise<void> = async () => {},
+    /** Resolves once the person has confirmed this exact profile, or it needs no confirmation. */
+    private confirm: (profile: TerminalProfile) => Promise<void> = async () => {},
   ) {}
   start(request: TerminalStart, owner: number): Promise<void> {
     if (this.closed) return Promise.reject(new Error('Terminals have closed.'));
@@ -89,6 +91,10 @@ export class Terminals {
     );
     if (!profile)
       throw new Error('Terminal profile no longer exists. Choose a profile in Settings.');
+    // A profile from imported or edited configuration starts only once confirmed natively,
+    // including a saved terminal plane that would otherwise start on restore.
+    await this.confirm(profile);
+    if (this.closed || this.pending.get(request.id)?.cancelled) return;
     const executable = await executablePath(
       profile.executable ||
         process.env.SHELL ||

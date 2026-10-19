@@ -25,7 +25,7 @@ Profiles are editable in Settings and `settings.terminals.profiles`:
 }
 ```
 
-An empty executable resolves the user's login shell. Arguments are literal values. Profile IDs must be unique, and the default/custom-action profile must exist. Reserved Electron, dynamic-loader and Node process variables are rejected. Shells still run with the user's ordinary OS permissions.
+An empty executable resolves the user's login shell. Arguments are literal values. Profile IDs must be unique, and the default/custom-action profile must exist. Reserved Electron, dynamic-loader and Node process variables are rejected. Shells still run with the user's ordinary OS permissions. The login shell runs the user's own `$SHELL`; any other profile, a tmux program other than `tmux` with the default server, and an application chosen by `.app` path ask for native confirmation once, for that exact program, arguments and environment, before they first run. A saved terminal plane that would start on restore waits for the same confirmation, so imported or externally edited configuration cannot run code silently.
 
 ## tmux
 
@@ -41,4 +41,4 @@ The PTY and terminal screen remain alive when camera culling detaches the React 
 
 The native package includes and unpacks node-pty and its spawn helper. A successful renderer build alone does not verify terminal availability; the hidden desktop foundations test starts a real shell and checks output, interruption, geometry and independent root ownership.
 
-Agents need separate terminal read and write approval. Read access exposes bounded terminal output, which can contain secrets printed by commands. Write access can execute arbitrary shell input; folder scope identifies the session's launch directory and is not process containment. Manage these grants in Settings → Agents, outside editable JSONC. See [actions.md](actions.md).
+Agents can be granted terminal read access only. Read access exposes bounded terminal output, which can contain secrets printed by commands; folder scope identifies the session's launch directory and is not process containment. Terminal input is unavailable to agents, because shell input cannot enforce Trash-only removal. Manage read grants in Settings → Agents, outside editable JSONC. See [actions.md](actions.md).

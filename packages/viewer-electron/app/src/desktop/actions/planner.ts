@@ -3,15 +3,16 @@ import path from 'node:path';
 import { mkdir, open, opendir, readFile, realpath } from 'node:fs/promises';
 import { z } from 'zod';
 import type { FileEntry } from '../../domain/contracts';
-import type {
-  ActionApproval,
-  ActionPlan,
-  ActionRecipe,
-  ActionRequest,
-  DocumentData,
-  DocumentEvidence,
-  ModelProvider,
-  ProposedChange,
+import {
+  recipeReadsContent,
+  type ActionApproval,
+  type ActionPlan,
+  type ActionRecipe,
+  type ActionRequest,
+  type DocumentData,
+  type DocumentEvidence,
+  type ModelProvider,
+  type ProposedChange,
 } from '../../domain/services';
 import type { FileChange } from '../../domain/changes';
 import { absolute, entry, exists, validName } from '../filesystem';
@@ -419,7 +420,7 @@ export class ActionPlanner {
       const documents = new Map<string, DocumentData>();
       for (const file of files) {
         signal.throwIfAborted();
-        if (recipe.data !== 'names' || recipe.kind === 'book-name') {
+        if (recipeReadsContent(recipe)) {
           try {
             documents.set(file.path, await this.dependencies.extract(file.path, signal));
           } catch (error) {

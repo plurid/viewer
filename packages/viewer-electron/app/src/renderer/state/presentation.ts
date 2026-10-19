@@ -132,22 +132,24 @@ export function applyFolderAsDefaults(path: string): void {
   const value = folderPresentation(path);
   const { list, mode, sort, descending, showHidden, density, foldersFirst, group, columnWidth } =
     value;
+  const browsing = getState().settings.settings.browsing;
   void window.viewer
     .settingsPatch(
       [
         {
           path: 'settings.browsing',
           value: {
-            ...getState().settings.settings.browsing,
-            mode,
+            ...browsing,
+            // The Map and lens grouping belong to one folder: other folders keep their default.
+            mode: mode === 'map' ? browsing.mode : mode,
             sort,
             descending,
             showHidden,
             density,
             foldersFirst,
-            group,
+            group: group === 'lens' ? browsing.group : group,
             columnWidth,
-          },
+          } satisfies ApplicationSettings['browsing'],
         },
         { path: 'ui.list', value: list },
       ],

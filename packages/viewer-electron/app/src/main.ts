@@ -14,7 +14,12 @@ import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { existsSync, mkdirSync } from 'node:fs';
 import { lookup } from 'mime-types';
-import { defaultShortcuts, accelerator, menuShortcuts } from './domain/shortcuts';
+import {
+  defaultShortcuts,
+  accelerator,
+  menuShortcuts,
+  nativeMenuBindings,
+} from './domain/shortcuts';
 import { runMCPClient } from './desktop/mcp-client';
 import { Desktop } from './desktop/bridge';
 import { WindowState, captureWindowFrame, restoreWindowFrame } from './desktop/window-state';
@@ -109,11 +114,7 @@ const trusted = (url: string) => {
 let menuBindings = '';
 function menu(): void {
   const settings = desktop?.settings.snapshot().settings;
-  const bindings = JSON.stringify([
-    settings?.browsing.confirmTrash,
-    settings?.shortcuts,
-    settings?.recipes.map((recipe) => [recipe.id, recipe.name, recipe.shortcut]),
-  ]);
+  const bindings = nativeMenuBindings(settings);
   if (bindings === menuBindings) return;
   menuBindings = bindings;
   const command = (value: string) => () => {

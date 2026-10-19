@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import type { ApplicationSettings } from '../domain/services';
+import type { TerminalProfile } from '../domain/automation';
 import { absolute } from './filesystem';
 import { readApplications } from './applications';
 import { discardOwnTemporaryFile } from './removal';
@@ -46,6 +47,17 @@ export interface ExternalTerminalAdapter {
   open(application: string, file: string): Promise<void>;
   bundledCLI?(application: TerminalApplication): Promise<string | undefined>;
 }
+/** Each resolves once the person has confirmed that exact configured program natively. */
+export interface TerminalConfirmations {
+  profile(profile: TerminalProfile): Promise<void>;
+  tmux(executable: string, socket: string, env: Record<string, string>): Promise<void>;
+  application(application: string): Promise<void>;
+}
+const unconfirmed: TerminalConfirmations = {
+  profile: async () => {},
+  tmux: async () => {},
+  application: async () => {},
+};
 export class ExternalTerminals {
   private queue: Promise<unknown> = Promise.resolve();
   private closed = false;
@@ -84,6 +96,7 @@ export class ExternalTerminals {
       },
     },
     private access: (files: readonly string[]) => Promise<void> = async () => {},
+    private confirm: TerminalConfirmations = unconfirmed,
   ) {}
   async application(): Promise<TerminalApplication> {
     if (process.platform !== 'darwin')
@@ -103,8 +116,10 @@ export class ExternalTerminals {
         path.isAbsolute(configured) &&
         configured.endsWith('.app') &&
         (await fs.stat(configured)).isDirectory()
-      )
+      ) {
+        await this.confirm.application(configured);
         return { path: configured, name: path.basename(configured, '.app'), running: false };
+      }
       throw new Error(
         'The configured terminal application is unavailable. Choose another in Settings → Terminals.',
       );
@@ -147,6 +162,12 @@ export class ExternalTerminals {
     if (this.closed) throw new Error('External terminal handoff has closed.');
     const settings = this.settings().terminals;
     const profile = settings.profiles.find((profile) => profile.id === settings.profileID)!;
+    // Configured programs run only once confirmed natively. With tmux, the profile's
+    // environment applies but its program and arguments do not.
+    if (tmux) await this.confirm.tmux(settings.tmux.executable, settings.tmux.socket, profile.env);
+    else await this.confirm.profile(profile);
+    await this.access([cwd]);
+    if (this.closed) throw new Error('External terminal handoff has closed.');
     let executable = await executablePath(profile.executable || process.env.SHELL || '/bin/zsh');
     let args = profile.args;
     if (tmux) {

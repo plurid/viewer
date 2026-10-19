@@ -172,7 +172,17 @@ export function useWorkspaceController({
           if (placement.parent) tree.get(placement.parent)!.children!.push(node);
           else roots.push(node);
         }
-        api.store.dispatch(pluridStateModules.space.actions.setTree(roots));
+        // An exact arrangement write: setTree reconciles against the live tree and would
+        // keep every plane that is already pinned, including by an earlier restore, in place.
+        api.store.dispatch(
+          pluridStateModules.space.actions.restoreArrangement({
+            tree: roots,
+            links: api.getSnapshot().space.links,
+          }),
+        );
+        // Planes outside the arrangement have left the engine. Close their records before
+        // the roots change, so none lingers unseen and arrangement Undo restores it as it was.
+        reconcilePanes(flattenTree(roots).map(hostID));
         consumeProjectLayout(layout);
         if (layout.active) setActivePane(layout.active);
         const docked = layout.docked && tree.get(layout.docked);

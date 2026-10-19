@@ -45,7 +45,7 @@ List headers and searchable column actions control fields, ordering and widths. 
 
 ## Opening and shortcuts
 
-`settings.fileOpening.default` is `automatic`, `plane` or `native`. Automatic uses an available preview module, otherwise the OS association. `types` overrides individual lowercase extensions, for example `{ "pdf": "plane", "mkv": "native" }`. Office extensions start with native opening. Explicit **Open linked plane**, **Open in another plane**, **Open in …** and **Open With…** remain available regardless of automatic opening policy.
+`settings.fileOpening.default` is `automatic`, `plane` or `native`. Automatic uses an available preview module, otherwise the OS association. `types` overrides individual lowercase extensions, for example `{ "pdf": "plane", "mkv": "native" }`. New settings preview `docx` and `xlsx` in planes and open other Office extensions natively; a configuration saved before Office previews keeps native opening for every Office extension. Explicit **Open linked plane**, **Open in another plane**, **Open in …** and **Open With…** remain available regardless of automatic opening policy.
 
 `settings.shortcuts` maps command IDs to `Cmd+…` or `Ctrl+…`, with optional `Alt` and `Shift`; an empty string disables an override's binding. Settings → Shortcuts lists the defaults. Useful IDs include `copy-path` (Option-Command-C, newline-separated absolute paths as plain text), `open-selection`, `parent`, `back`, `forward`, `view-list`, `view-grid`, `view-columns`, `view-gallery`, `new-root-folder`, `open-terminal`, `open-tmux`, `open-terminal-plane` and `open-config`. Recipe and custom-action shortcuts join the same conflict checks. Text editing, dialogs and terminal input retain their own key handling.
 

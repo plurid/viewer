@@ -83,6 +83,17 @@ describe('authoritative JSONC configuration', () => {
     expect(documented.match(/Viewer configuration editing guide \(v1\)\./g)).toHaveLength(1);
     expect(documentConfiguration(documented)).toBe(documented);
   });
+  it('rewords earlier guidance in place instead of repeating it', () => {
+    const current = documentConfiguration(
+      '{"settings":{"fileOpening":{"default":"automatic","types":{"docx":"plane"}}}}',
+    );
+    const earlier = current.replace(
+      'New settings preview docx and xlsx in planes.',
+      'Office extensions default to native.',
+    );
+    expect(earlier).not.toBe(current);
+    expect(documentConfiguration(earlier)).toBe(current);
+  });
   it.each(['multiline', 'compact', 'crlf'])(
     'documents %s configuration without altering values or user comments',
     async (format) => {

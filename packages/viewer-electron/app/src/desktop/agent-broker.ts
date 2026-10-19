@@ -15,11 +15,12 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import type {
-  ActionContext,
-  ActionRequest,
-  ApplicationSettings,
-  IndexedQuery,
+import {
+  recipeReadsContent,
+  type ActionContext,
+  type ActionRequest,
+  type ApplicationSettings,
+  type IndexedQuery,
 } from '../domain/services';
 import type { FileServices } from './file-services';
 import type { ActionPlanner } from './actions/planner';
@@ -926,7 +927,7 @@ export class AgentBroker {
           .parse(args);
         for (const file of input.sources) await this.authorize(file);
         const recipe = this.settings().recipes.find((recipe) => recipe.id === input.recipeID);
-        if (recipe?.data !== 'names') await this.clients.require('content');
+        if (!recipe || recipeReadsContent(recipe)) await this.clients.require('content');
         const client = await this.clients.get();
         if (client) {
           const running = (await this.actions.all()).filter(
@@ -963,10 +964,8 @@ export class AgentBroker {
         !(plan.context.actor === 'agent' && plan.context.clientID === this.clients.actor())
       )
         throw new Error('This task belongs to another actor.');
-      if (
-        call.name === 'get_task' &&
-        this.settings().recipes.find((recipe) => recipe.id === plan.recipeID)?.data !== 'names'
-      )
+      const recipe = this.settings().recipes.find((recipe) => recipe.id === plan.recipeID);
+      if (call.name === 'get_task' && (!recipe || recipeReadsContent(recipe)))
         await this.clients.require('content');
       for (const file of plan.context.sources) await this.authorize(file);
       if (call.name === 'cancel_task') {

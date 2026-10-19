@@ -57,7 +57,7 @@ When updating from a build that encrypted its local agent token, generate fresh 
 
 The packaged executable's `--mcp` mode is a headless stdio client for the running Viewer instance; that instance owns the index, proposals and user review. The Unix socket has mode 0600 in an owned mode-0700 temporary directory, avoiding macOS path-length limits.
 
-The recipe tools remain `get_context`, `list_actions`, `read_metadata`, `search_files`, `run_action`, `get_task` and `cancel_task`. The shared command/configuration tools are `list_commands`, `explain_command`, `propose_command`, `read_config`, `validate_config`, `propose_config` and `get_proposal`; `read_terminal` requires a separate grant. Terminal input is unavailable. Canonical-path checks apply to file/terminal requests, including after permission revocation. Only tasks/proposals started by the current actor can be inspected. Settings → Agents can create named clients with separate tokens, folder roots, metadata/content/navigation/proposal/terminal-read capabilities and read/task budgets. Private storage retains client token hashes; credentials are shown only when created or rotated. Revocation immediately invalidates the credential. The compatibility token retains its existing shared roots and reviewed navigation behavior.
+The recipe tools remain `get_context`, `list_actions`, `read_metadata`, `search_files`, `run_action`, `get_task` and `cancel_task`. The shared command/configuration tools are `list_commands`, `explain_command`, `propose_command`, `read_config`, `validate_config`, `propose_config` and `get_proposal`; `read_terminal` requires a separate grant. Terminal input is unavailable. Canonical-path checks apply to file/terminal requests, including after permission revocation. Only tasks/proposals started by the current actor can be inspected. Settings → Agents can create named clients with separate tokens, folder roots, metadata/content/navigation/proposal/terminal-read capabilities and read/task budgets. `run_action` and `get_task` require the content capability for a recipe that reads document contents: any data level above names, and book naming, which always reads local publication metadata and text. Private storage retains client token hashes; credentials are shown only when created or rotated. Revocation immediately invalidates the credential. The compatibility token retains its existing shared roots and reviewed navigation behavior.
 
 Navigation tools are `list_workspaces`, `list_planes`, `propose_open_path`, `propose_selection`, `propose_focus_plane` and `propose_workspace_switch`. Discovery reads the live published workspace catalog and omits inaccessible paths and history/layout. A named navigation capability permits navigation within that client's/native folder grants without another review. Compatibility-token requests still require review. Both paths recheck grants and stale origins/destinations, preserve independent versus linked plane ownership and can continue from an empty workspace. See [agent-navigation.md](agent-navigation.md) for arguments and the agent interaction sequence.
 
@@ -117,8 +117,10 @@ old clients and saved write/execution grants cannot re-enable them. Terminal
 output reading remains separately granted. Agent file Undo is unavailable because it can remove outputs outside the captured selection; users can review it in Recent file operations. Human-invoked custom commands and
 terminal use remain available in the app. A shell or executable action asks for a
 system confirmation the first time each exact command runs, and again whenever it
-changes, so an imported or externally edited configuration cannot run code
-silently; confirmations are stored privately outside JSONC. A provider API key is
+changes; so do a terminal profile other than the login shell, a non-default tmux
+program or socket and a terminal application chosen by path. An imported or
+externally edited configuration therefore cannot run code silently; confirmations
+are stored privately outside JSONC. A provider API key is
 bound to the provider type and endpoint it was entered for and is not sent after
 either changes. Effective grants stay outside JSONC;
 imported configuration cannot authorize itself. Disabling Agents rejects further

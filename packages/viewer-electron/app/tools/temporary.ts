@@ -6,7 +6,15 @@
  * approval, and lists each kept path in `keptManifest`.
  */
 import { execFile } from 'node:child_process';
-import { appendFileSync, lstatSync, mkdtempSync, realpathSync, renameSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  renameSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -48,6 +56,8 @@ function keep(file: string, reason: string): void {
     // The warning above still names the kept folder.
   }
 }
+/** macOS ships /usr/bin/trash from version 14; Viewer also supports 13. */
+const trashAvailable = () => process.platform === 'darwin' && existsSync('/usr/bin/trash');
 function trashCommand(file: string): Promise<void> {
   return new Promise((resolve, reject) =>
     execFile('/usr/bin/trash', ['-s', file], (error, _stdout, stderr) =>
@@ -64,6 +74,17 @@ export async function temporaryRoot(prefix: string, parent = os.tmpdir()): Promi
   const info = lstatSync(root);
   owned.set(canonical(root), { dev: info.dev, ino: info.ino });
   return root;
+}
+
+/** Create `directory` exclusively, with any missing parents, and own it like a temporary
+ * root, so entries inside it can be removed as scenario steps. An app container profile is
+ * one such folder. Cleanup keeps it, because it lies outside the system temporary folder. */
+export async function ownedDirectory(directory: string): Promise<string> {
+  mkdirSync(path.dirname(directory), { recursive: true });
+  mkdirSync(directory);
+  const info = lstatSync(directory);
+  owned.set(canonical(directory), { dev: info.dev, ino: info.ino });
+  return directory;
 }
 
 /** Move a folder created by `temporaryRoot` to the Trash. It never deletes and
@@ -97,7 +118,7 @@ export async function trashTemporary(root: string | undefined): Promise<void> {
     return keep(root, 'outside the system temporary folder');
   owned.delete(actual);
   if (preserve()) return keep(root, 'VIEWER_TEST_PRESERVE=1');
-  if (process.platform !== 'darwin') return keep(root, 'no Trash command on this platform');
+  if (!trashAvailable()) return keep(root, 'no Trash command on this system');
   try {
     await trashCommand(actual);
   } catch (error) {
@@ -107,14 +128,14 @@ export async function trashTemporary(root: string | undefined): Promise<void> {
 }
 
 /** Remove one entry inside an owned folder as a test scenario step. The entry
- * goes to the Trash, or with VIEWER_TEST_PRESERVE=1 into a separate kept folder;
- * either way its path disappears. Failures throw, like `rm` without `force`. */
+ * goes to the Trash, or with VIEWER_TEST_PRESERVE=1 or without a Trash command into a
+ * separate kept folder; either way its path disappears. Failures throw, like `rm`. */
 export async function trashFixtureEntry(file: string): Promise<void> {
   const actual = canonical(file);
   lstatSync(actual);
   if (![...owned.keys()].some((root) => actual.startsWith(root + path.sep)))
     throw new Error(`Refusing to remove ${file}: it is outside this run's temporary folders.`);
-  if (preserve() || process.platform !== 'darwin') {
+  if (preserve() || !trashAvailable()) {
     const holder = await temporaryRoot('viewer-removed-');
     renameSync(actual, path.join(holder, path.basename(actual)));
     owned.delete(canonical(holder));

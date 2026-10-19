@@ -82,6 +82,8 @@ export function operationRoots(sources: readonly string[], paths = path): string
 }
 export class Operations {
   private tasks = new Map<string, Task>();
+  /** Jobs whose state changed since their last durable record. */
+  private dirty = new Set<Task>();
   private queue: Task[] = [];
   private running = false;
   private exclusiveQueue: Promise<void> = Promise.resolve();
@@ -139,24 +141,31 @@ export class Operations {
       }
       // Redo is offered only within the session that performed the Undo.
       delete job.redoable;
-      this.tasks.set(job.id, {
+      const task: Task = {
         job,
         request: receipt.request,
         undo: receipt.undo,
         abort: new AbortController(),
         lastProgress: 0,
         intent: receipt.intent,
-      });
+      };
+      this.tasks.set(job.id, task);
+      // An interrupted job's new status reaches its log with the next checkpoint.
+      this.dirty.add(task);
     }
   }
-  /** Each retained job appends only what changed since its last record. */
-  private checkpoint(): Promise<void> {
+  /** Records `task` and every job that changed since the last checkpoint, so a job is
+   * journaled however many others are queued. Each appends only what changed. */
+  private checkpoint(task?: Task): Promise<void> {
     const journal = this.journal;
+    if (task) this.dirty.add(task);
+    const changed = [...this.dirty];
+    this.dirty.clear();
     if (!journal) return Promise.resolve();
     return Promise.all(
-      [...this.tasks.values()]
-        .slice(-100)
-        .map(({ job, request, undo, intent }) => journal.record({ job, request, undo, intent })),
+      changed.map(({ job, request, undo, intent }) =>
+        journal.record({ job, request, undo, intent }),
+      ),
     )
       .then(() => {})
       .catch((error) => {
@@ -313,15 +322,20 @@ export class Operations {
     this.queue.push(task);
     this.emit(task);
     void this.run();
-    // Completed history is bounded. Never discard pending collision decisions.
-    if (this.tasks.size > 100)
+    // Completed history is bounded on its own: a large queued batch must not discard
+    // earlier Undo receipts, and pending work, including collision decisions, is never dropped.
+    if (this.tasks.size > 100) {
+      const finished = (old: Task) => ['completed', 'failed', 'cancelled'].includes(old.job.status);
+      let retained = [...this.tasks.values()].filter(finished).length;
       for (const [id, old] of this.tasks) {
-        if (this.tasks.size <= 100) break;
-        if (['completed', 'failed', 'cancelled'].includes(old.job.status)) {
-          this.tasks.delete(id);
-          void this.journal?.forget(id).catch(() => {});
-        }
+        if (retained <= 100) break;
+        if (!finished(old)) continue;
+        this.tasks.delete(id);
+        this.dirty.delete(old);
+        retained--;
+        void this.journal?.forget(id).catch(() => {});
       }
+    }
     return job.id;
   }
   cancel(id: string): void {
@@ -393,7 +407,7 @@ export class Operations {
     }
     for (const step of [...task.undo].reverse()) {
       task.intent = { source: step.from, destination: step.remove ? undefined : step.to };
-      await this.checkpoint();
+      await this.checkpoint(task);
       await this.withStep(step, () =>
         fileCoordination.run(
           step.remove
@@ -434,7 +448,7 @@ export class Operations {
       if (!step.remove) this.filesChanged([{ source: step.from, destination: step.to }]);
       task.undo.splice(task.undo.indexOf(step), 1);
       task.intent = undefined;
-      await this.checkpoint();
+      await this.checkpoint(task);
     }
     task.job.undoable = false;
     // Redo may only act on the very items Undo put back.
@@ -448,7 +462,7 @@ export class Operations {
     task.redo = { ...task.request, expectedSources };
     task.job.redoable = true;
     this.emit(task);
-    await this.checkpoint();
+    await this.checkpoint(task);
     await this.compact(task);
   }
   /** Starts an undone operation again as a new job, with every usual check. */
@@ -525,7 +539,7 @@ export class Operations {
           ),
       });
     }
-    await this.checkpoint();
+    await this.checkpoint(task);
   }
   /** Put a replaced item back when its replacement could not be published. */
   private async restoreReplaced(task: Task, destination: string): Promise<boolean> {
@@ -603,6 +617,7 @@ export class Operations {
     return task;
   }
   private emit(task: Task): void {
+    this.dirty.add(task);
     task.job.revision++;
     task.job.errorCount = task.job.errors.length;
     task.lastProgress = performance.now();
@@ -648,7 +663,7 @@ export class Operations {
     if (task) {
       // Journal the hidden intermediate name first, so recovery can find it after a crash.
       task.intent = { source, destination, staging: temporary };
-      await this.checkpoint();
+      await this.checkpoint(task);
     }
     await publish(source, temporary, this.access, task && this.transferJob(task));
     try {
@@ -724,7 +739,7 @@ export class Operations {
     task.intent = { source, destination, staging };
     const fingerprints: CopyFingerprint[] = [];
     try {
-      await this.checkpoint();
+      await this.checkpoint(task);
       await copyTree(this.transferJob(task), source, staging, fingerprints, this.access);
       this.check(task);
       // Do not clobber a file created while the transfer was in flight.
@@ -838,14 +853,16 @@ export class Operations {
             task.intent = { source, destination: request.destination };
             // Each intent is made durable immediately before the first change it covers;
             // Trash is the only change that follows directly.
-            if (request.kind === 'trash') await this.checkpoint();
+            if (request.kind === 'trash') await this.checkpoint(task);
             this.progress(task);
             let destination: string | undefined;
+            // A transfer moves only within one volume. Its destination folder is resolved, as
+            // the transfer itself resolves it, so a link to a folder on another volume copies.
             const move =
               request.kind === 'move' ||
               request.kind === 'rename' ||
               (request.kind === 'transfer' &&
-                (await lstat(source)).dev === (await lstat(request.destination!)).dev);
+                (await lstat(source)).dev === (await stat(request.destination!)).dev);
             let undoable = false,
               caseOnly = false;
             if (request.kind === 'trash') await this.protection.check(source, 'moved to the Trash');
@@ -927,7 +944,7 @@ export class Operations {
                 this.check(task);
                 await this.access([destination]);
                 task.intent = { source, destination };
-                await this.checkpoint();
+                await this.checkpoint(task);
                 if (request.kind === 'mkdir')
                   await fileCoordination.run(
                     [{ path: destination, mode: 'write' }],
@@ -959,7 +976,7 @@ export class Operations {
                   );
                   task.intent = { source, destination, staging: stage.file };
                   try {
-                    await this.checkpoint();
+                    await this.checkpoint(task);
                     await fileCoordination.run(
                       [
                         { path: source, mode: 'metadata' },
@@ -993,7 +1010,7 @@ export class Operations {
                   const staging = stage.file;
                   task.intent = { source, destination, staging };
                   try {
-                    await this.checkpoint();
+                    await this.checkpoint(task);
                     const work = {
                       signal: task.abort.signal,
                       access: this.access,
@@ -1022,7 +1039,7 @@ export class Operations {
                   const staging = stage.file + path.extname(destination);
                   task.intent = { source, destination, staging };
                   try {
-                    await this.checkpoint();
+                    await this.checkpoint(task);
                     const inputs = source ? [source] : request.sources;
                     await this.access([...inputs, staging]);
                     job.current = source || destination;
@@ -1094,7 +1111,7 @@ export class Operations {
             job.itemsDone++;
           }
           this.progress(task);
-          await this.checkpoint();
+          await this.checkpoint(task);
         }
         job.status = task.abort.signal.aborted
           ? 'cancelled'
@@ -1108,7 +1125,7 @@ export class Operations {
         if (task.intent) job.recovery = task.intent;
         task.intent = undefined;
         this.emit(task);
-        await this.checkpoint();
+        await this.checkpoint(task);
         await this.compact(task);
         currentTask = undefined;
       }

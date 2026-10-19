@@ -8,6 +8,7 @@ import {
   shellQuote,
   type ExternalTerminalAdapter,
 } from '../src/desktop/terminal-launch';
+import { Terminals } from '../src/desktop/terminals';
 import { Executions } from '../src/desktop/executions';
 import { AgentRequests } from '../src/desktop/agent-requests';
 import { SettingsService } from '../src/desktop/settings';
@@ -248,6 +249,85 @@ describe('external terminal adapters', () => {
     expect(calls.filter((args) => args.includes('new-window'))).toHaveLength(1);
     expect(calls.find((args) => args.includes('new-window'))).toContain('=viewer');
     expect(adapter.open).toHaveBeenCalledTimes(1);
+  });
+  it('hands a configured profile or tmux program to a terminal only once it is confirmed', async () => {
+    const refuse = async () => {
+      throw new Error('The action was not confirmed. Nothing was run.');
+    };
+    const confirm = { profile: vi.fn(refuse), tmux: vi.fn(refuse), application: vi.fn() };
+    const run = vi.fn(async () => '@1\n');
+    const open = vi.fn(async (_app: string, _file: string) => {});
+    const launches = path.join(root, 'launches');
+    const terminals = new ExternalTerminals(
+      launches,
+      () => config,
+      '',
+      { discover: async () => apps, run, open },
+      undefined,
+      confirm,
+    );
+    await expect(terminals.open(root)).rejects.toThrow('not confirmed');
+    await expect(terminals.open(root, true)).rejects.toThrow('not confirmed');
+    expect(confirm.profile).toHaveBeenCalledWith(config.terminals.profiles[0]);
+    expect(confirm.tmux).toHaveBeenCalledWith('tmux', '', {});
+    expect(run).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    await expect(fs.readdir(launches)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('confirms a terminal application chosen by path before opening it', async () => {
+    const custom = path.join(root, 'Custom Terminal.app');
+    await fs.mkdir(custom);
+    config.terminals.application = custom;
+    const confirm = { profile: vi.fn(), tmux: vi.fn(), application: vi.fn(async () => {}) };
+    const open = vi.fn(async (_app: string, _file: string) => {});
+    const terminals = new ExternalTerminals(
+      path.join(root, 'launches'),
+      () => config,
+      '',
+      { discover: async () => apps, run: vi.fn(), open },
+      undefined,
+      confirm,
+    );
+    await terminals.open(root);
+    expect(confirm.application).toHaveBeenCalledWith(custom);
+    expect(open.mock.calls[0]?.[0]).toBe(custom);
+  });
+});
+
+describe('embedded terminal planes', () => {
+  it('starts a configured profile only once it is confirmed, including on restore', async () => {
+    const build = {
+      id: 'build',
+      name: 'Build',
+      executable: '/bin/sh',
+      args: ['-c', 'make'],
+      env: {},
+    };
+    config.terminals.profiles.push(build);
+    const confirm = vi.fn(async () => {
+      throw new Error('The action was not confirmed. Nothing was run.');
+    });
+    // The worker is never launched, so its path is never used.
+    const terminals = new Terminals(
+      path.join(root, 'unlaunched-worker.cjs'),
+      () => config,
+      () => {},
+      undefined,
+      confirm,
+    );
+    const start = {
+      id: 'terminal-pane',
+      workspaceID: 'workspace',
+      rootID: 'root-one',
+      cwd: root,
+      profileID: 'build',
+      cols: 80,
+      rows: 24,
+    };
+    await expect(terminals.start(start, 1)).rejects.toThrow('not confirmed');
+    expect(confirm).toHaveBeenCalledWith(build);
+    expect(() => terminals.agentRead('terminal-pane')).toThrow('no longer available');
+    await terminals.close();
   });
 });
 

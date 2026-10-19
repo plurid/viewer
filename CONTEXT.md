@@ -5,10 +5,10 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | Term                | Meaning and owner                                                                                                                                |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | File entry          | A filesystem path plus metadata and identity; `src/domain/contracts.ts`, `desktop/filesystem.ts`.                                                |
-| Explorer session    | One plane's selection, cursor, range anchor, history, column trail and scroll; `renderer/workspace/sessions.ts`.                                 |
-| Folder presentation | Shared path-keyed view, sort, metadata columns and browser width; `domain/folder-presentation.ts`, `renderer/state/store.ts`.                    |
+| Explorer session    | One plane's selection, cursor, range anchor, column trail and scroll; `renderer/workspace/sessions.ts`. Navigation history belongs to the saved folder pane. |
+| Folder presentation | Shared path-keyed view, sort, metadata columns and browser width; `domain/folder-presentation.ts`, `renderer/state/presentation.ts`.             |
 | Lens                | A folder-local grouping of its direct children, with remembered Map places, stored in the folder's `.viewer/lenses/`; it never moves files. `domain/lenses.ts`, `desktop/lenses.ts`, [lenses](docs/lenses.md). |
-| Plane               | A host record for a folder, search, preview or terminal; its engine route and geometry belong to the workspace adapter.                          |
+| Plane               | A host record for a folder, search, collection, preview or terminal; its engine route and geometry belong to the workspace adapter.              |
 | Root                | An independent spatial branch. Reuse of a preview stays within that root; explicit new planes remain independent.                                |
 | Captured target     | Workspace/root/plane/directory plus selected entries and origin path, frozen before an asynchronous action; `domain/automation.ts`.              |
 | Command             | A contextual action with ID, availability, aliases and shortcut; `renderer/commands/registry.ts`. UI menus, keys and agent proposals invoke it.  |
@@ -18,7 +18,7 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | Protected folder    | Disk root, Home, its standard folders and system locations that no request may trash, move, rename or replace, matched by identity; `desktop/protected-paths.ts`. |
 | Permanent removal   | Limited to named cases in `desktop/removal.ts` (own temporary files, empty folders, verified move sources, private app data); ESLint rejects other `rm`/`rmdir`/`unlink` calls. Tests use `tools/temporary.ts`. |
 | Configuration       | Versioned JSONC preferences with validation, comments, recovery and conflict handling; `desktop/configuration.ts`, `desktop/settings.ts`.        |
-| Execution grant     | A separately stored user approval for an exact custom action or terminal capability in a canonical folder; `desktop/agent-requests.ts`.          |
+| Execution grant     | A separately stored user approval for an agent to read terminal output under a canonical folder; `desktop/agent-requests.ts`. Agent commands always need fresh approval. |
 | Terminal session    | A main-process-owned PTY plus a renderer-owned xterm screen, retained through culling; `desktop/terminals.ts`, `renderer/terminals/sessions.ts`. |
 | Native file permission | A private picker bookmark or native clipboard/drag session capability, canonicalized and released after dependent work drains; `desktop/file-access.ts`. |
 | Model data permission | Private user consent for an exact provider endpoint and data level, independently revocable; `desktop/model-permissions.ts`, `domain/model-permissions.ts`. |

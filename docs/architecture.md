@@ -40,19 +40,18 @@ File commands become serial jobs in the desktop process. Selected ancestors prun
 
 ## Plurid integration
 
-The implementation was informed by the sibling `technologies/tools/plurid` source and application patterns in `applications/containers/plurid-com/frontends/web/products/cores/dechat`. Viewer uses the direct named `PluridApplication`, typed public handles and the spawn-plane topic. Plurid React `0.0.0-40` and its data/engine graph remain pinned in the root lockfile. Click-to-scroll currently requires the unpublished sibling build: `pnpm plurid:sync` builds data/engine/React without cleanup, copies generated Plurid packages into the installed dependency graph, and records source provenance. Reinstalling dependencies requires another sync. The sibling's `tree.spawn` return type differs, so linked creation still uses `SPACE_SPAWN_PLANE` with parent identity and host-owned framing.
+The implementation was informed by the sibling `technologies/tools/plurid` source and application patterns in `applications/containers/plurid-com/frontends/web/products/cores/dechat`. Viewer uses the direct named `PluridApplication`, typed public handles and the spawn-plane topic. The registry release pinned by `tools/plurid-release.json` (React `0.0.0-41`, data `0.0.0-27`, engine `0.0.0-24`) includes click-to-scroll. For local Plurid development only, `pnpm plurid:sync` builds data/engine/React without cleanup, copies the generated packages into the installed dependency graph and records source provenance; qualification rejects that overlay, and reinstalling dependencies restores the registry packages. Linked creation uses `SPACE_SPAWN_PLANE` with parent identity and `framing: 'none'`, so framing stays host-owned.
 
 `WorkspaceSurface` sets `space.gestures.wheel: 'click-to-scroll'` and reapplies it after engine configuration restoration. Plurid captures wheel input before native preview and terminal handlers: hover navigates the workspace, while a primary click gives one plane its ordinary wheel input. The ephemeral engine UI owner is separate from Viewer's active command target, file selection, spatial multi-selection, persistence and arrangement history. Plane chrome receives `scrollSelected` for a subtle header tint. Background click/Escape release it; docking activates it. Explicit navigation gestures retain priority. Quick Preview lives outside the engine View and retains its own input and interactive defaults.
 
-The plurid source now has three handle APIs Viewer will adopt once a release that includes them is installed:
+The installed release also has two handle APIs Viewer has not adopted yet:
 
-| Viewer today | After upgrading plurid |
+| Viewer today | Available handle API |
 | --- | --- |
-| `renderer/state/persistence.ts` `flushState` dispatches a synthetic `pagehide` to force Plurid's save, which also runs every other `pagehide` listener | `handle.persist.flush()` |
-| `workspace/controller.ts` dispatches `pluridStateModules.space.actions.setTree` on the store | `handle.tree.set(tree)` |
+| `renderer/state/persistence.ts` `flushState` dispatches a synthetic `pagehide` to force Plurid's save, which also runs every other `pagehide` listener | `handle.persist.flush()`; `flushState` has no handle today, so the workspace adapter must pass one in |
 | `workspace/controller.ts` brackets changes with `historyBegin`/`historyEnd` dispatches | `handle.history.transaction(work)`, which also closes the step when the work throws |
 
-Each change is local to those two files, because engine handles stay inside the workspace controller.
+Authored arrangements (saved-layout restore, split, Size & position) are exact `restoreArrangement` writes. `setTree`, and `handle.tree.set` with it, reconciles against the live tree, which keeps every plane already pinned at its previous pose and size; a restore therefore did not move planes an earlier restore, drag or preset had pinned. Planes outside a restored arrangement are closed in both layers, so their records do not linger unseen, and arrangement Undo restores them.
 
 `Size & position` commands act on an existing captured workspace/plane, without creating roots. A shared catalog in `domain/plane-layout.ts` supplies fractions and alignments to the native menu and renderer registry. The controller authors manual geometry through the same exact arrangement restore and history brackets used for folder pairs. Fraction sizes include the common 12px tiling gutter; independent width, height and alignment operations compose in the camera's shared natural-scale grid. Other planes retain their authored geometry, and file sessions remain untouched. Move/Resize select one plane, enable the corresponding host preference, clear camera transform/grab modes, and use Plurid's existing title drag and resize handles. Presets release docking and pending automatic framing; ordinary storage and Undo/Redo retain the result.
 

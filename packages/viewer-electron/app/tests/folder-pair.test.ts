@@ -249,6 +249,53 @@ describe('existing plane sizing and positioning', () => {
   });
 });
 
+describe('saved arrangements', () => {
+  const placed = (id: string) =>
+    flattenTree(rendered!.handle.tree.get()).find((node) => hostID(node) === id);
+
+  it('restores every saved pose and size over planes that are already pinned', async () => {
+    addPane('/fixtures/two', 'folder', true);
+    const { controller } = await workspace();
+    const [first, second] = activeWorkspace().panes.map((pane) => pane.id);
+    const saved = controller.captureLayout();
+    // A size preset pins the plane at a new pose; so does a drag or an earlier restore.
+    await act(async () =>
+      controller.layoutPlane({ workspaceID: activeWorkspace().id, paneID: first! }, { x: 1 }),
+    );
+    expect(placed(first!)?.manuallyPositioned).toBe(true);
+    await act(async () => controller.restoreLayout(saved));
+    for (const placement of saved.placements)
+      expect(placed(placement.id)).toMatchObject({
+        location: placement.location,
+        width: placement.width,
+        height: placement.height,
+      });
+    // A second restore starts from planes the first one pinned.
+    await act(async () =>
+      controller.layoutPlane({ workspaceID: activeWorkspace().id, paneID: second! }, { x: 0 }),
+    );
+    await act(async () => controller.restoreLayout(saved));
+    expect(placed(second!)?.location).toEqual(
+      saved.placements.find((placement) => placement.id === second)?.location,
+    );
+  });
+
+  it('closes planes outside the arrangement and brings them back with arrangement Undo', async () => {
+    const { controller } = await workspace();
+    const saved = controller.captureLayout();
+    await act(async () => controller.splitFolder(target(), 'x'));
+    const [first, copy] = activeWorkspace().panes.map((pane) => pane.id);
+    await act(async () => controller.restoreLayout(saved));
+    expect(activeWorkspace().panes.map((pane) => pane.id)).toEqual([first]);
+    expect(activeWorkspace().roots).toEqual([first]);
+    expect(placed(copy!)).toBeUndefined();
+    await act(async () => controller.undo());
+    expect(activeWorkspace().panes.map((pane) => pane.id)).toEqual([first, copy]);
+    expect(activeWorkspace().roots).toEqual([first, copy]);
+    expect(placed(copy!)).toBeDefined();
+  });
+});
+
 const planes = [{ route: '/folders/:id', component: () => createElement('div', null, 'folder') }];
 const configuration = configurationWith({ elements: { plane: { width: 800, height: 480 } } });
 let rendered: RenderedPlurid | undefined;

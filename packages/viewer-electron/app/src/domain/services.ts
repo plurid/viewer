@@ -193,6 +193,11 @@ export interface ActionApproval {
   checkpoint?: boolean;
   rows: { id: string; destination: string; approved: boolean }[];
 }
+/** Whether a recipe reads document contents. Book naming always extracts local
+ * publication metadata and text, whatever data level it sends to a model. */
+export function recipeReadsContent(recipe: Pick<ActionRecipe, 'kind' | 'data'>): boolean {
+  return recipe.data !== 'names' || recipe.kind === 'book-name';
+}
 export const builtInRecipes: ActionRecipe[] = [
   {
     id: 'batch-rename',

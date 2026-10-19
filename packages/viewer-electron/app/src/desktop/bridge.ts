@@ -222,6 +222,9 @@ export class Desktop {
         );
       },
     );
+    const confirmations = new ExecutionConfirmations(dataPath, (summary) =>
+      confirmNatively(this.window, summary.title, summary.detail, 'Run'),
+    );
     this.terminals = new Terminals(
       options.terminalWorker,
       () => this.settings.snapshot().settings,
@@ -231,6 +234,7 @@ export class Desktop {
           window.webContents.send('viewer:event', { type: 'terminal', event });
       },
       access,
+      (profile) => confirmations.requireTerminal(profile),
     );
     this.externalTerminals = new ExternalTerminals(
       path.join(dataPath, 'terminal-launches'),
@@ -238,9 +242,11 @@ export class Desktop {
       options.applications,
       undefined,
       access,
-    );
-    const confirmations = new ExecutionConfirmations(dataPath, (summary) =>
-      confirmNatively(this.window, summary.title, summary.detail, 'Run'),
+      {
+        profile: (profile) => confirmations.requireTerminal(profile),
+        tmux: (executable, socket, env) => confirmations.requireTmux(executable, socket, env),
+        application: (application) => confirmations.requireTerminalApplication(application),
+      },
     );
     this.executions = new Executions(
       () => this.settings.snapshot().settings,

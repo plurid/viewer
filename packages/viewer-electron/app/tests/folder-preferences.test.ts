@@ -5,10 +5,12 @@ import { resolveFolderPresentation, browserColumnWidth } from '../src/domain/fol
 import { nativeOpening } from '../src/renderer/explorer/opening';
 import { keyCommand, routeExplorerInput } from '../src/renderer/explorer/input';
 import { browseSession, clearSessions, remapSessions } from '../src/renderer/workspace/sessions';
+import { settingsSchema } from '../src/desktop/settings';
 import {
   activeWorkspace,
   addRootFolder,
   addTerminalPane,
+  applyFolderAsDefaults,
   folderPresentation,
   flushState,
   getState,
@@ -66,6 +68,25 @@ afterEach(async () => {
 });
 
 describe('folder appearance and independent explorer sessions', () => {
+  it('makes a Map or lens-grouped folder the default view without its per-folder choices', () => {
+    const defaults = structuredClone(getState().settings.settings.browsing);
+    updateFolderPresentation('/fixtures', {
+      mode: 'map',
+      group: 'lens',
+      lens: crypto.randomUUID(),
+      sort: 'size',
+    });
+    applyFolderAsDefaults('/fixtures');
+    const browsing = vi
+      .mocked(window.viewer.settingsPatch)
+      .mock.calls.flatMap(([patches]) => patches)
+      .findLast((patch) => patch.path === 'settings.browsing')?.value;
+    expect(browsing).toMatchObject({ mode: defaults.mode, group: defaults.group, sort: 'size' });
+    // The desktop validates it as it does every settings write; Map and lens were rejected.
+    expect(
+      settingsSchema.safeParse({ ...getState().settings.settings, browsing }).error?.issues,
+    ).toBeUndefined();
+  });
   it('creates a root in a terminal’s working folder and respects the configured new-plane location', () => {
     const terminal = addTerminalPane('/fixtures/Downloads', 'login', false);
     expect(addRootFolder({ paneID: terminal.id })?.path).toBe('/fixtures/Downloads');

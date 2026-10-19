@@ -164,6 +164,11 @@ beforeEach(async () => {
     {
       cancel: vi.fn(),
       all: vi.fn(async () => structuredClone(actionTasks)),
+      get: vi.fn(async (id: string) => {
+        const task = actionTasks.find((item) => item.id === id);
+        if (!task) throw new Error('Task not found.');
+        return structuredClone(task);
+      }),
       start: startAction,
     } as unknown as ActionPlanner,
     {
@@ -277,6 +282,57 @@ describe('reviewed MCP workspace navigation', () => {
     await expect(
       call('run_action', { recipeID: 'batch-rename', sources: [files] }),
     ).rejects.toThrow('Review or stop');
+  });
+  it('requires content capability for book naming, which reads publications at any data level', async () => {
+    const books = settings.snapshot().settings.recipes.find((recipe) => recipe.id === 'book-name')!;
+    await settings.patch(
+      [
+        {
+          path: 'settings.recipes',
+          value: [
+            ...settings.snapshot().settings.recipes,
+            { ...books, id: 'local-books', name: 'Local books', data: 'names' },
+          ],
+        },
+      ],
+      settings.snapshot().revision,
+    );
+    const client = await broker.clients.create({
+      name: 'Planner',
+      roots: [files],
+      capabilities: ['propose'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = client.token;
+    const source = path.join(files, 'Résumé.txt');
+    await expect(
+      call('run_action', { recipeID: 'local-books', sources: [source] }),
+    ).rejects.toThrow('no content capability');
+    expect(startAction).not.toHaveBeenCalled();
+    // Its rows carry the extracted publication evidence, so reading the task is refused too.
+    const id = crypto.randomUUID();
+    actionTasks.push({
+      version: 1,
+      id,
+      revision: 1,
+      title: 'Local books',
+      recipeID: 'local-books',
+      context: {
+        workspaceID: 'origin',
+        rootID: 'folder',
+        paneID: 'folder',
+        sources: [source],
+        actor: 'agent',
+        clientID: client.client.id,
+      },
+      status: 'review',
+      rows: [],
+      undoable: false,
+    });
+    await expect(call('get_task', { id })).rejects.toThrow('no content capability');
+    expect(await call('run_action', { recipeID: 'batch-rename', sources: [source] })).toMatchObject(
+      { applyRequiresUserReview: true },
+    );
   });
   it('requires content capability for source-versioned original passages and enforces returned-data budgets', async () => {
     const first = path.join(files, 'Résumé.txt');

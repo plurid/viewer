@@ -1,3 +1,4 @@
+import type { ApplicationSettings } from './services';
 export const defaultShortcuts: Record<string, string> = {
   palette: 'Cmd+K',
   'find-file': 'Cmd+F',
@@ -42,6 +43,20 @@ export const menuShortcuts: Record<string, string> = {
   'undo-arrangement': 'Cmd+Alt+Z',
   'redo-arrangement': 'Cmd+Alt+Shift+Z',
 };
+/** Every setting the native menu renders; the menu is rebuilt only when this changes. */
+export function nativeMenuBindings(settings: ApplicationSettings | undefined): string {
+  return JSON.stringify([
+    settings?.browsing.confirmTrash,
+    settings?.shortcuts,
+    settings?.recipes.map((recipe) => [recipe.id, recipe.name, recipe.shortcut]),
+    settings?.customActions.map((action) => [
+      action.id,
+      action.name,
+      action.shortcut,
+      action.order,
+    ]),
+  ]);
+}
 /** Shortcut keys kept for saved remaps whose command has a different ID. */
 const shortcutCommands: Readonly<Record<string, string>> = { 'toggle-hidden': 'hidden' };
 export const shortcutCommandID = (shortcutID: string) => shortcutCommands[shortcutID] ?? shortcutID;

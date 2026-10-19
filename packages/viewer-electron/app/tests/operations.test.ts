@@ -1,15 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { lstat, mkdir, readFile, readdir, rename, symlink, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
+import type { Stats } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import type { OperationJob, OperationProgress, OperationRequest } from '../src/domain/contracts';
 import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
-const exdev = vi.hoisted(() => ({ source: '', race: '', noLinks: false }));
+const exdev = vi.hoisted(() => ({ source: '', race: '', noLinks: false, foreign: '' }));
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof import('node:fs/promises')>();
+  const paths = await import('node:path');
+  // Items whose real location is inside `exdev.foreign` report another device, as if
+  // that folder were a second volume.
+  const elsewhere = async (info: Stats, real: () => Promise<string>) => {
+    if (!exdev.foreign) return info;
+    const resolved = await real().catch(() => '');
+    if (resolved === exdev.foreign || resolved.startsWith(exdev.foreign + paths.sep)) info.dev += 1;
+    return info;
+  };
   return {
     ...actual,
+    lstat: async (file: string) =>
+      elsewhere(await actual.lstat(file), async () =>
+        paths.join(await actual.realpath(paths.dirname(file)), paths.basename(file)),
+      ),
+    stat: async (file: string) => elsewhere(await actual.stat(file), () => actual.realpath(file)),
     rename: async (source: string, destination: string) => {
       if (source === exdev.source) {
         exdev.source = '';
@@ -80,6 +104,7 @@ afterEach(async () => {
   exdev.source = '';
   exdev.race = '';
   exdev.noLinks = false;
+  exdev.foreign = '';
   await trashTemporary(root);
 });
 async function waitFor(
@@ -301,6 +326,56 @@ describe('file operation queue', () => {
     });
     expect(await readFile(source, 'utf8')).toBe('original');
   });
+  it('journals every job of a batch larger than the retained history', async () => {
+    const dataPath = path.join(root, 'private');
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      dataPath,
+    );
+    const sources: string[] = [];
+    for (let index = 0; index < 102; index++) {
+      const source = path.join(root, `file-${index}.txt`);
+      await writeFile(source, String(index));
+      sources.push(source);
+    }
+    // Queued together, as a reviewed plan starts one job per row; the first run first.
+    const ids = sources.map((source) =>
+      operations.start({ kind: 'copy', sources: [source], destination }),
+    );
+    for (const id of ids) await waitFor(id);
+    await operations.close();
+    operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      dataPath,
+    );
+    await operations.load();
+    const restored = new Map(operations.all().map((job) => [job.id, job]));
+    expect(ids.filter((id) => !restored.get(id)?.undoable)).toEqual([]);
+  }, 60_000);
+  it('keeps earlier completed jobs when a large batch is queued', async () => {
+    const first = path.join(root, 'first.txt');
+    await writeFile(first, 'first');
+    const earlier = await run({ kind: 'copy', sources: [first], destination });
+    const sources: string[] = [];
+    for (let index = 0; index < 101; index++) {
+      const source = path.join(root, `batch-${index}.txt`);
+      await writeFile(source, String(index));
+      sources.push(source);
+    }
+    const ids = sources.map((source) =>
+      operations.start({ kind: 'copy', sources: [source], destination }),
+    );
+    expect(operations.all().find((job) => job.id === earlier.id)?.undoable).toBe(true);
+    for (const id of ids) await waitFor(id);
+  }, 60_000);
   it('refuses removal Undo when a copied folder gains a new child', async () => {
     const source = path.join(root, 'folder');
     await mkdir(source);
@@ -455,6 +530,32 @@ describe('file operation queue', () => {
     expect(job.undoable).toBe(false);
     await expect(lstat(source)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await readFile(path.join(destination, 'file'), 'utf8')).toBe('cross volume');
+  });
+  it('copies when a transfer reaches a folder on another volume through a link', async () => {
+    const volume = path.join(root, 'other-volume');
+    await mkdir(volume);
+    const linked = path.join(root, 'volume-link');
+    await symlink(volume, linked);
+    exdev.foreign = await realpath(volume);
+    const source = path.join(root, 'report.txt');
+    await writeFile(source, 'original');
+    const job = await run({ kind: 'transfer', sources: [source], destination: linked });
+    expect(job.status).toBe('completed');
+    // As in Finder, a drop onto another volume copies, so the original stays.
+    expect(await readFile(source, 'utf8')).toBe('original');
+    expect(await readFile(path.join(volume, 'report.txt'), 'utf8')).toBe('original');
+    expect(job.undoable).toBe(true);
+  });
+  it('moves when a transfer reaches a folder on the same volume through a link', async () => {
+    const linked = path.join(root, 'destination-link');
+    await symlink(destination, linked);
+    const source = path.join(root, 'report.txt');
+    await writeFile(source, 'original');
+    const job = await run({ kind: 'transfer', sources: [source], destination: linked });
+    expect(job.status).toBe('completed');
+    await expect(lstat(source)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(path.join(destination, 'report.txt'), 'utf8')).toBe('original');
+    expect(job.undoable).toBe(true);
   });
   it.skipIf(process.platform !== 'darwin')(
     'preserves macOS metadata during cross-volume transfers before removing the original',

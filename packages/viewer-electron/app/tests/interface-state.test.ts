@@ -110,6 +110,34 @@ describe('layout-only changes', () => {
       .filter((id) => !registered.has(id));
     expect(menu).toEqual([]);
   });
+  it('rebuilds the native menu when a listed custom action changes, and only then', async () => {
+    const { nativeMenuBindings } = await import('../src/domain/shortcuts');
+    const { defaultSettings } = await import('../src/domain/services');
+    const settings = defaultSettings('/fixtures');
+    const action = {
+      id: 'zip-it',
+      name: 'Zip it',
+      aliases: [],
+      icon: 'command',
+      shortcut: '',
+      order: 0,
+      pinned: false,
+      when: { target: 'any' as const, extensions: [], min: 0, max: 10000 },
+      executor: { kind: 'builtin' as const, command: 'compress' },
+    };
+    const signatures = [nativeMenuBindings(settings)];
+    settings.customActions.push(action);
+    signatures.push(nativeMenuBindings(settings));
+    action.name = 'Compress selection';
+    signatures.push(nativeMenuBindings(settings));
+    action.shortcut = 'Cmd+Alt+Z';
+    signatures.push(nativeMenuBindings(settings));
+    action.order = 2;
+    signatures.push(nativeMenuBindings(settings));
+    expect(new Set(signatures).size).toBe(signatures.length);
+    settings.previews.thumbnailSize = 512;
+    expect(nativeMenuBindings(settings)).toBe(signatures.at(-1));
+  });
   it('creates a root from captured command ownership even if the active pane changes', async () => {
     const owner = activeWorkspace().panes[0];
     const workspaceID = activeWorkspace().id;

@@ -19,7 +19,13 @@ import type { TerminalEvent } from '../src/domain/automation';
 import type { Volume } from '../src/domain/volumes';
 import type { IndexedResult, IndexStatus, SettingsSnapshot } from '../src/domain/services';
 import { AwakeClock, QualificationInterrupted } from './awake-clock';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import {
+  ownedDirectory,
+  temporaryRoot,
+  trashTemporary,
+  trashFixtureEntry,
+} from '../tools/temporary';
+import { terminalConfirmation } from '../src/desktop/execution-confirmations';
 
 assert.equal(process.platform, 'darwin', 'The signed MAS check requires macOS.');
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -70,10 +76,24 @@ const profile = path.join(
 const fixture = await temporaryRoot('viewer-mas-native-', '/private/tmp');
 const externalFile = path.join(fixture, 'Unselected.txt');
 await writeFile(externalFile, 'Generated unselected MAS verification file.', { mode: 0o600 });
+// Owned like a temporary root, so scenario steps may remove entries inside it.
+await ownedDirectory(profile);
+// The disposable shell starts without anyone to confirm it, so only this run's own
+// profile records the first-run confirmation that a configured profile requires.
+const disposableShell = {
+  executable: '/bin/sh',
+  args: ['--noprofile', '--norc'],
+  env: { HISTFILE: '/dev/null', ENV: '' },
+};
+await writeFile(
+  path.join(profile, 'confirmed-actions-v1.json'),
+  JSON.stringify([terminalConfirmation(disposableShell)]),
+  { mode: 0o600, flag: 'wx' },
+);
 // Only generated files in this isolated app container are indexed. A large flat
 // directory also exercises plane watches, separately from recursive indexing.
 const stress = path.join(profile, 'watch-pressure');
-await mkdir(stress, { recursive: true });
+await mkdir(stress);
 for (let directory = 0; directory < 16; directory++) {
   const nested = path.join(stress, 'nested-' + directory);
   await mkdir(nested);
@@ -668,7 +688,7 @@ try {
     'Mounted volumes must be visible without a /Volumes picker grant.',
   );
   await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
-    {path:'settings.terminals.profiles',value:[{id:'mas-qa',name:'Disposable MAS shell',executable:'/bin/sh',args:['--noprofile','--norc'],env:{HISTFILE:'/dev/null',ENV:''}}]},
+    {path:'settings.terminals.profiles',value:[${JSON.stringify({ id: 'mas-qa', name: 'Disposable MAS shell', ...disposableShell })}]},
     {path:'settings.terminals.profileID',value:'mas-qa'}
   ],snapshot.revision))`);
   const terminalID = 'mas-pty-' + randomUUID();

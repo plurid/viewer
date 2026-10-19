@@ -48,7 +48,7 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Previews',
     label: 'Open files in',
     detail:
-      'Automatic previews supported formats in planes. Office documents open in their native app. File type overrides can be edited in config.jsonc.',
+      'Automatic previews supported formats in planes, including Word and Excel documents in new settings. File type overrides can be edited in config.jsonc.',
     kind: 'choice',
     choices: [
       ['automatic', 'Automatic'],

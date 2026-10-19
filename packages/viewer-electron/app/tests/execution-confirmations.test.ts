@@ -64,6 +64,46 @@ describe('first-run execution confirmations', () => {
     await confirmations.require(action({ kind: 'builtin', command: 'copy-path' }));
     expect(ask).toHaveBeenCalledOnce();
   });
+  it('starts the login shell without asking and confirms each configured terminal program once', async () => {
+    const ask = vi.fn(async () => true);
+    const confirmations = new ExecutionConfirmations(root, ask);
+    const login = { id: 'login', name: 'Login shell', executable: '', args: ['-l'], env: {} };
+    await confirmations.requireTerminal(login);
+    await confirmations.requireTmux('tmux', '', {});
+    expect(ask).not.toHaveBeenCalled();
+    const build = {
+      ...login,
+      id: 'build',
+      name: 'Build',
+      executable: '/bin/sh',
+      args: ['-c', 'make'],
+    };
+    await confirmations.requireTerminal(build);
+    // A renamed profile runs the same program, so it is not asked about again.
+    await confirmations.requireTerminal({ ...build, name: 'Renamed' });
+    expect(ask).toHaveBeenCalledOnce();
+    expect(ask.mock.calls[0]).toEqual([expect.objectContaining({ detail: '/bin/sh -c make' })]);
+    await confirmations.requireTerminal({ ...login, env: { TOKEN: 'generated' } });
+    await confirmations.requireTmux('/opt/tools/tmux', '', {});
+    await confirmations.requireTmux('tmux', '/private/tmp/shared.sock', {});
+    await confirmations.requireTerminalApplication('/Applications/Other Terminal.app');
+    expect(ask).toHaveBeenCalledTimes(5);
+    const reloaded = new ExecutionConfirmations(root, ask);
+    await reloaded.requireTerminal(build);
+    expect(ask).toHaveBeenCalledTimes(5);
+  });
+  it('refuses a declined terminal program', async () => {
+    const confirmations = new ExecutionConfirmations(root, async () => false);
+    await expect(
+      confirmations.requireTerminal({
+        id: 'build',
+        name: 'Build',
+        executable: '/bin/sh',
+        args: ['-c', 'make'],
+        env: {},
+      }),
+    ).rejects.toThrow('not confirmed');
+  });
   it('shows the full command line for executables', () => {
     expect(
       executionSummary(
