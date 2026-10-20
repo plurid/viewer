@@ -27,6 +27,7 @@ import {
 } from './image-convert';
 import { holds, sameItem, unchanged, type Replaced } from './item-identity';
 import {
+  aliasName,
   copyTree,
   keepBothName,
   publish,
@@ -513,7 +514,11 @@ export class Operations {
     try {
       await this.receiptAccess(receipt, async () => {
         const proof = await outputProof(receipt.path);
-        if (!proof) return;
+        // Too large to prove unchanged, so there is no Undo; said, as a missing bookmark is.
+        if (!proof)
+          throw new Error(
+            'it holds more than 10,000 items, too many to check before putting them back.',
+          );
         const info = await lstat(receipt.path);
         task.undo.push({
           from: receipt.path,
@@ -886,7 +891,7 @@ export class Operations {
                       : request.kind === 'duplicate'
                         ? await keepBothName(source)
                         : request.kind === 'alias'
-                          ? await keepBothName(source + ' alias')
+                          ? await aliasName(source)
                           : path.join(request.destination!, request.name ?? path.basename(source));
               if (source === destination) throw new Error('Source and destination are the same.');
               await this.access([destination]);

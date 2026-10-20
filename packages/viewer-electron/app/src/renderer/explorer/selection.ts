@@ -33,29 +33,38 @@ export function useFileKeyboard(id: string, handler: (event: FileKey) => void) {
 export function routeFileKeyboard(id: string, event: FileKey): void {
   keyboards.get(id)?.(event);
 }
+const previewKeys = [
+  'ArrowDown',
+  'ArrowUp',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+];
 export function fileControlOwnsKey(event: FileKey): boolean {
   if (!(event.target instanceof Element)) return false;
   if (event.target.closest('[role="separator"]')) return true;
-  if (event.target.closest('.preview-host')) {
-    if (
-      [
-        'ArrowDown',
-        'ArrowUp',
-        'ArrowLeft',
-        'ArrowRight',
-        'Home',
-        'End',
-        'PageUp',
-        'PageDown',
-      ].includes(event.key)
-    )
-      event.stopPropagation();
-    return true;
-  }
+  // A preview's keys are its own; `keepPreviewKeys` keeps them from the space once it has had them.
+  if (event.target.closest('.preview-host')) return true;
   return (
     [' ', 'Enter'].includes(event.key) &&
     !!event.target.closest('button:not([data-file-path]), [role="button"]')
   );
+}
+/**
+ * The ref of a preview inside a view: its navigation keys stop at its edge once the preview has had
+ * them, so neither the view nor the space moves on them. They were stopped while still capturing,
+ * before the preview had them: a focused drawing could not pan with the arrows or reframe with Home.
+ */
+export function keepPreviewKeys(element: HTMLElement | null): (() => void) | undefined {
+  if (!element) return;
+  const keydown = (event: KeyboardEvent) => {
+    if (previewKeys.includes(event.key)) event.stopPropagation();
+  };
+  element.addEventListener('keydown', keydown);
+  return () => element.removeEventListener('keydown', keydown);
 }
 
 /** The moving cursor is independent of the fixed range anchor and the ordered selected paths. */

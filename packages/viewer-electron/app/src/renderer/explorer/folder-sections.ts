@@ -61,6 +61,8 @@ export function useLensGrouping(
   document?: LensDocument;
   resolved?: ResolvedLens;
   entries?: FileEntry[];
+  /** Every visible item in lens order, collapsed groups' too. */
+  ordered?: FileEntry[];
   sections?: ViewSections;
 } {
   const view = useLenses(path);
@@ -96,5 +98,12 @@ export function useLensGrouping(
       context,
     };
   }, [grouped, document, collapsed, path, context]);
-  return { view, document, resolved, entries: grouped?.entries, sections };
+  return {
+    view,
+    document,
+    resolved,
+    entries: grouped?.entries,
+    ordered: grouped?.ordered,
+    sections,
+  };
 }

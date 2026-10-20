@@ -138,6 +138,13 @@ export async function keepBothName(destination: string): Promise<string> {
   while (await exists(candidate)) candidate = `${stem} copy ${++suffix}${ext}`;
   return candidate;
 }
+/** The Finder-style alias name that is free next to `source`: "Report.pdf alias", then "… alias 2". */
+export async function aliasName(source: string): Promise<string> {
+  let suffix = 1;
+  let candidate = `${source} alias`;
+  while (await exists(candidate)) candidate = `${source} alias ${++suffix}`;
+  return candidate;
+}
 /** Copies `source` to the new path `target`, recording a fingerprint of every
  * copied item so a move can verify its sources before removing them. */
 export async function copyTree(

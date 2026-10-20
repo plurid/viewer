@@ -21,7 +21,6 @@ import {
   needsOperations,
   newWorkspace,
   quickPreview,
-  stepQuickPreview,
   receiveJob,
   receiveSettings,
   receiveFileChanges,
@@ -162,9 +161,10 @@ function AppWindow() {
   const controller = useWorkspaceController({ engine, surface, readyRef });
   const subscribeEngine = useCallback(
     (listener: () => void) => controller.subscribeEngine(listener),
-    // The engine is a ref: readiness or a workspace switch means a new instance to subscribe to.
+    // The engine is a ref: readiness, a workspace switch or a new epoch (a project reload, which
+    // keeps the workspace and its readiness) means a new instance to subscribe to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [controller, ready, space.id],
+    [controller, ready, space.id, space.epoch],
   );
   const tool = useSyncExternalStore(subscribeEngine, controller.transformTool);
   const spatialTool = useCallback(
@@ -326,7 +326,8 @@ function AppWindow() {
   useEffect(() => {
     if (!ready) return;
     let previous = '';
-    // Arrangement Undo/Redo and docking change which window commands apply.
+    // Arrangement Undo/Redo and docking change which window commands apply. On the engine of the
+    // moment: a project reload remounts it, and this stayed on the old one's store.
     return controller.subscribeEngine(() => {
       const history = controller.arrangementHistory();
       const value = `${history.canUndo}/${history.canRedo}/${controller.isDocked()}`;
@@ -335,7 +336,7 @@ function AppWindow() {
         registry.touch();
       }
     });
-  }, [ready, registry, controller]);
+  }, [ready, registry, controller, space.id, space.epoch]);
   useEffect(() => {
     trimTerminals(
       new Set(
@@ -504,20 +505,7 @@ function AppWindow() {
   }, [saved.look]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (
-        getState().quickPreview &&
-        !editable(event.target) &&
-        !event.isComposing &&
-        !event.repeat &&
-        [' ', 'Escape', 'ArrowLeft', 'ArrowRight'].includes(event.key)
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-          stepQuickPreview(event.key === 'ArrowLeft' ? -1 : 1);
-        else quickPreview(null);
-        return;
-      }
+      // Quick Preview's own keys are its own (`QuickPreview`), answered after the focus has had them.
       if (
         event.key === ' ' &&
         !event.repeat &&

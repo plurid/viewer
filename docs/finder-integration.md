@@ -14,7 +14,7 @@ Finder tags and comments use their native binary plist extended attributes, not 
 
 ## Native commands
 
-- Make alias creates a genuine macOS bookmark file in an owned private staging directory, then publishes it exclusively through the operation service. Collision handling, progress, receipts and guarded cold Undo remain shared with other operations. The source remains intact.
+- Make alias creates a genuine macOS bookmark file in an owned private staging directory, then publishes it exclusively through the operation service. Collision handling, progress, receipts and guarded cold Undo remain shared with other operations. It is named as Finder names one, “Report.pdf alias” and then “Report.pdf alias 2”. The source remains intact.
 - Show Package Contents checks the native package flag before opening it as a folder.
 - Share opens the macOS sharing picker. The user chooses the destination/service.
 - Quick Look in macOS opens the system preview panel for the selected paths. Binary fallback previews also offer Quick Look and Open in Default App. This is an external system panel, not an embedded Office renderer.

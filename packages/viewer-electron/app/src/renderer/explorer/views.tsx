@@ -20,7 +20,7 @@ import { Empty, Loading } from '../ui/primitives';
 import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
 import { useFileReveal } from './anchors';
 import type { ColumnNavigation } from './column-navigation';
-import type { FileModifiers } from './selection';
+import { keepPreviewKeys, type FileModifiers } from './selection';
 
 import type { FolderPresentation } from '../../domain/folder-presentation';
 import { BrowserColumn } from './BrowserColumn';
@@ -33,6 +33,7 @@ import {
   acceptsDrop,
   droppedPaths,
   fixedSections,
+  gridRows,
   sectionRows,
   type ViewSection,
   type ViewSections,
@@ -426,29 +427,10 @@ export function GridView(props: FileViewProps) {
     return () => observer.disconnect();
   }, []);
   const columns = Math.max(1, Math.floor(width / 142));
-  // Each group starts a new row under a full-width heading.
-  const rows = useMemo(() => {
-    const result: (
-      { kind: 'header'; section: ViewSection } | { kind: 'tiles'; start: number; end: number }
-    )[] = [];
-    let run: number[] = [];
-    const flush = () => {
-      for (let index = 0; index < run.length; index += columns)
-        result.push({
-          kind: 'tiles',
-          start: run[index]!,
-          end: run[Math.min(index + columns, run.length) - 1]! + 1,
-        });
-      run = [];
-    };
-    for (const row of sectionRows(props.entries, props.sections))
-      if (row.kind === 'header') {
-        flush();
-        result.push(row);
-      } else run.push(row.index);
-    flush();
-    return result;
-  }, [props.entries, props.sections, columns]);
+  const rows = useMemo(
+    () => gridRows(props.entries, props.sections, columns),
+    [props.entries, props.sections, columns],
+  );
   const rowOf = useMemo(() => {
     const map = new Map<number, number>();
     for (const [index, row] of rows.entries())
@@ -726,6 +708,7 @@ export function ColumnsView({
       {selected && (
         <div
           className="column-preview"
+          ref={keepPreviewKeys}
           role="region"
           aria-label="File preview"
           data-preview-path={selected.path}
@@ -765,7 +748,7 @@ export function GalleryView(props: FileViewProps) {
   }, [selected, props.entries, virtual]);
   return (
     <div className="gallery-view">
-      <div className="gallery-preview">
+      <div className="gallery-preview" ref={keepPreviewKeys}>
         {selected && !selected.directory ? (
           <PreviewHost path={selected.path} />
         ) : (

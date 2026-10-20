@@ -1,7 +1,8 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 import type { Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { getState, quickPreview, report, stepQuickPreview } from '../state/store';
+import { editable } from '../commands/editing';
 import { useWorkspace } from '../workspace/context';
 import { Dialog, IconButton } from '../ui/primitives';
 import { OpenDefaultButton } from '../ui/OpenDefaultButton';
@@ -17,6 +18,27 @@ export const QuickPreview = memo(function QuickPreview({
   const workspace = useWorkspace();
   // Quick Look opens with at least one path, and stepping wraps within them.
   const path = session.paths[session.index] ?? session.paths[0] ?? '';
+  useEffect(() => {
+    // Space closes, Escape closes and the side arrows step, once the key has bubbled: what has the
+    // focus answers first. Taken at the window while capturing, they stepped a focused drawing to
+    // another file instead of panning it, and Escape in the shading panel closed Quick Preview.
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        editable(event.target) ||
+        event.isComposing ||
+        event.repeat ||
+        ![' ', 'Escape', 'ArrowLeft', 'ArrowRight'].includes(event.key)
+      )
+        return;
+      event.preventDefault();
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+        stepQuickPreview(event.key === 'ArrowLeft' ? -1 : 1);
+      else quickPreview(null);
+    };
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  }, []);
   const footer = useCallback(
     (resource: Resource, module: PreviewModule) => (
       <footer className="quick-preview-footer">

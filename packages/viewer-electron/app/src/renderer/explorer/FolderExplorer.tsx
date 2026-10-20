@@ -49,7 +49,7 @@ import { folderDragNavigation } from './folder-drag';
 import { blankFileSpace, useFileKeyboard, useFileSelection, type FileModifiers } from './selection';
 import { useContextPublish } from './context-publish';
 import { useLensGrouping } from './folder-sections';
-import { fixedSections, type ViewSection } from './sections';
+import { fixedSections, gridRows, gridStep, type ViewSection } from './sections';
 import { lensCommands, lensGroupMenuIDs } from '../commands/lenses';
 import { useLensDialogs } from './LensDialogs';
 import { MapView, type MapControls } from './map/MapView';
@@ -135,9 +135,15 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     !!filter.trim(),
     sectionContext,
   );
+  // The Map and the Gallery have no heading to expand, so a group collapsed in the list keeps its
+  // items there; they left the Map, and the Gallery lost the group's label as well.
+  const collapsing = pane?.mode !== 'map' && pane?.mode !== 'gallery';
   const baseEntries = useMemo(
-    () => (groupBy === 'lens' ? (lensGrouping.entries ?? visible) : groupEntries(visible, groupBy)),
-    [groupBy, lensGrouping.entries, visible],
+    () =>
+      groupBy === 'lens'
+        ? ((collapsing ? lensGrouping.entries : lensGrouping.ordered) ?? visible)
+        : groupEntries(visible, groupBy),
+    [groupBy, collapsing, lensGrouping.entries, lensGrouping.ordered, visible],
   );
   // The Map shows the chosen lens even when the list is grouped another way.
   const mapDocument = activeLens(lensGrouping.view.data, {
@@ -362,29 +368,32 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
                 )
             : undefined,
       move: (key, range) => {
-        const stride =
-          pane.mode === 'grid' && ['ArrowUp', 'ArrowDown'].includes(key)
-            ? Number(
-                surface.current?.querySelector<HTMLElement>('.grid-scroll')?.dataset.columns,
-              ) || 1
-            : 1;
+        const page = Math.max(
+          1,
+          Math.floor(
+            (surface.current?.querySelector('.file-scroll')?.clientHeight || 360) /
+              (surface.current?.querySelector('[data-file-path]')?.getBoundingClientRect().height ||
+                36),
+          ),
+        );
         if (pane.mode === 'map') mapControls.current?.move(key, range);
         else if (pane.mode === 'columns') columns.move(key, range);
-        else
-          selecting.move(
-            entries,
-            key,
-            range,
-            stride,
-            Math.max(
-              1,
-              Math.floor(
-                (surface.current?.querySelector('.file-scroll')?.clientHeight || 360) /
-                  (surface.current?.querySelector('[data-file-path]')?.getBoundingClientRect()
-                    .height || 36),
-              ),
-            ),
-          );
+        else if (
+          pane.mode === 'grid' &&
+          ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(key)
+        ) {
+          // By row and column, as the grid lays its groups out; a page is the rows that fit.
+          const current = entries.findIndex((entry) => entry.path === session.cursor);
+          const rowsAway =
+            (['ArrowUp', 'PageUp'].includes(key) ? -1 : 1) * (key.startsWith('Page') ? page : 1);
+          const columnCount =
+            Number(surface.current?.querySelector<HTMLElement>('.grid-scroll')?.dataset.columns) ||
+            1;
+          const target = gridStep(gridRows(entries, sections, columnCount), current, rowsAway);
+          const distance = target === undefined ? 1 : Math.abs(target - current);
+          if (target === current) return;
+          selecting.move(entries, key, range, distance, distance);
+        } else selecting.move(entries, key, range, 1, page);
       },
     });
   });

@@ -13,7 +13,14 @@ import {
   type LensOp,
   type LensRequest,
 } from '../src/domain/lenses';
-import { fixedSections, lensSections, sectionRows } from '../src/renderer/explorer/sections';
+import {
+  fixedSections,
+  gridRows,
+  gridStep,
+  lensSections,
+  sectionRows,
+  type ViewSections,
+} from '../src/renderer/explorer/sections';
 import { childNames } from '../src/renderer/explorer/folder-sections';
 import {
   editLens,
@@ -98,6 +105,44 @@ describe('section rows', () => {
     ]);
     const filtered = lensSections(base, resolved, [items[0]!], new Set(), true);
     expect(filtered.sections.list.map((item) => item.label)).toEqual(['2025']);
+  });
+  it('keeps a collapsed group’s items, in lens order, for the views that have no heading to expand', () => {
+    // The Map and the Gallery show `ordered`: a group collapsed in the list emptied it on the Map,
+    // and the Gallery lost its items and its label.
+    const items = [entry('Cobalt'), entry('Borel'), entry('Acme')];
+    const resolved = resolveLens(base, items);
+    const closed = lensSections(base, resolved, items, new Set(['gaaaaa']), false);
+    expect(closed.entries.map((item) => item.name)).toEqual(['Cobalt']);
+    expect(closed.ordered.map((item) => item.name)).toEqual(['Acme', 'Borel', 'Cobalt']);
+    expect(lensSections(base, resolved, items, new Set(), false).entries).toEqual(closed.ordered);
+  });
+  it('moves through a grouped grid by row and column, and by pages of rows', () => {
+    // Stepping by the column count crossed groups, which start rows of their own: below the first
+    // item of a two-item group was the third item of the next group.
+    const items = ['a1', 'a2', 'b1', 'b2', 'b3', 'b4', 'b5'].map((name) => entry(name));
+    const sections: ViewSections = {
+      list: [
+        { key: 'a', label: 'A', depth: 0, count: 2 },
+        { key: 'b', label: 'B', depth: 0, count: 5 },
+      ],
+      of: (item) => item.name[0],
+    };
+    const rows = gridRows(items, sections, 4);
+    expect(
+      rows.map((row) => (row.kind === 'header' ? row.section.label : [row.start, row.end])),
+    ).toEqual(['A', [0, 2], 'B', [2, 6], [6, 7]]);
+    expect(gridStep(rows, 0, 1)).toBe(2);
+    expect(gridStep(rows, 1, 1)).toBe(3);
+    expect(gridStep(rows, 5, 1)).toBe(6);
+    expect(gridStep(rows, 6, -1)).toBe(2);
+    expect(gridStep(rows, 2, -1)).toBe(0);
+    // the top and the bottom rows stay where they are
+    expect(gridStep(rows, 0, -1)).toBe(0);
+    expect(gridStep(rows, 6, 1)).toBe(6);
+    // a page is rows, not tiles
+    expect(gridStep(rows, 0, 2)).toBe(6);
+    expect(gridStep(rows, 3, -10)).toBe(1);
+    expect(gridStep(rows, 9, 1)).toBeUndefined();
   });
   it('groups only items directly inside the folder', () => {
     expect(childNames(folder, ['/Clients/Acme', '/Clients/Acme/x', '/Other/Borel'])).toEqual([

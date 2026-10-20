@@ -81,6 +81,16 @@ vi.mock('../src/desktop/macos-files', async (original) => {
     },
   };
 });
+// A folder named "many items" is over the proof's 10,000-item limit, without writing them all.
+vi.mock('../src/desktop/operation-journal', async (original) => {
+  const actual = await original<typeof import('../src/desktop/operation-journal')>();
+  const paths = await import('node:path');
+  return {
+    ...actual,
+    outputProof: async (file: string) =>
+      paths.basename(file) === 'many items' ? undefined : actual.outputProof(file),
+  };
+});
 import { Operations } from '../src/desktop/operations';
 import { ProtectedPaths } from '../src/desktop/protected-paths';
 import { OperationLog, operationJournal } from '../src/desktop/operation-journal';
@@ -303,6 +313,20 @@ describe('file operation queue', () => {
     await expect(lstat(path.join(destination, 'notes'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await readFile(source, 'utf8')).toBe('notes');
   });
+  it.runIf(process.platform === 'darwin')(
+    'names an alias as Finder does: “name alias”, then “name alias 2”',
+    async () => {
+      // The alias took a duplicate's keep-both name, which always adds " copy" and read ".pdf alias"
+      // as the extension: "Report copy.pdf alias".
+      const source = path.join(root, 'Report.pdf');
+      await writeFile(source, 'report');
+      const first = await run({ kind: 'alias', sources: [source] });
+      expect(first.status).toBe('completed');
+      expect(first.completed[0]?.destination).toBe(path.join(root, 'Report.pdf alias'));
+      const second = await run({ kind: 'alias', sources: [source] });
+      expect(second.completed[0]?.destination).toBe(path.join(root, 'Report.pdf alias 2'));
+    },
+  );
   it('keeps private receipts across restart and undoes only an unchanged copy', async () => {
     const dataPath = path.join(root, 'private');
     const remove = async (file: string) => {
@@ -788,6 +812,27 @@ describe('replace safety', () => {
     expect(job.status).toBe('completed');
     expect(job.completed).toHaveLength(1);
     expect(job.errors[0]?.message).toContain('Undo is unavailable');
+  });
+  it('says Undo is unavailable for a trashed folder too large to check before putting it back', async () => {
+    // Over 10,000 items the folder cannot be proven unchanged, so it has no Undo; the job completed
+    // without a word of it, as if Undo would bring the folder back.
+    const source = path.join(root, 'many items');
+    await mkdir(source);
+    await writeFile(path.join(source, 'one.txt'), 'one');
+    operations = new Operations(
+      async (file) => {
+        const target = path.join(trash, path.basename(file));
+        await rename(file, target);
+        return { path: target, directory: true };
+      },
+      () => {},
+    );
+    const job = await run({ kind: 'trash', sources: [source] });
+    expect(job.status).toBe('completed');
+    expect(job.completed).toHaveLength(1);
+    expect(job.errors).toHaveLength(1);
+    expect(job.errors[0]?.message).toContain('Undo is unavailable');
+    expect(job.errors[0]?.message).toContain('10,000');
   });
   it('sets an unreadable operation journal aside and keeps working', async () => {
     const dataPath = path.join(root, 'private');

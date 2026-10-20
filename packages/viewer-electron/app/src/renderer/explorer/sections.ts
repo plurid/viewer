@@ -57,6 +57,52 @@ export function sectionRows(
   return rows;
 }
 
+export type GridRow =
+  { kind: 'header'; section: ViewSection } | { kind: 'tiles'; start: number; end: number };
+/** A grid's rows: each group starts a new row under a full-width heading. */
+export function gridRows(
+  entries: readonly FileEntry[],
+  sections: ViewSections | undefined,
+  columns: number,
+): GridRow[] {
+  const result: GridRow[] = [];
+  let run: number[] = [];
+  const flush = () => {
+    for (let index = 0; index < run.length; index += columns)
+      result.push({
+        kind: 'tiles',
+        start: run[index]!,
+        end: run[Math.min(index + columns, run.length) - 1]! + 1,
+      });
+    run = [];
+  };
+  for (const row of sectionRows(entries, sections))
+    if (row.kind === 'header') {
+      flush();
+      result.push(row);
+    } else run.push(row.index);
+  flush();
+  return result;
+}
+/**
+ * The tile a vertical key reaches from `index` in a grid: the same column `rows` rows away (the
+ * last tile of a shorter row), or `index` itself at the top or the bottom. Stepping by the column
+ * count crossed groups, which start rows of their own, and a page moved as many tiles as rows fit.
+ */
+export function gridStep(
+  rows: readonly GridRow[],
+  index: number,
+  rowsAway: number,
+): number | undefined {
+  const tiles = rows.filter(
+    (row): row is Extract<GridRow, { kind: 'tiles' }> => row.kind === 'tiles',
+  );
+  const at = tiles.findIndex((row) => index >= row.start && index < row.end);
+  if (at < 0) return undefined;
+  const target = tiles[Math.max(0, Math.min(tiles.length - 1, at + rowsAway))]!;
+  return Math.min(target.start + index - tiles[at]!.start, target.end - 1);
+}
+
 /** Kind and date groups, in the order the sorted entries meet them. */
 export function fixedSections(
   entries: readonly FileEntry[],
@@ -88,6 +134,7 @@ function hiddenGroups(lens: Lens, collapsed: ReadonlySet<string>): Set<string> {
 /**
  * Orders visible entries by lens group, drops those inside collapsed groups, and describes the
  * headings: every group (so empty ones can receive items), and Unsorted when it has items.
+ * `ordered` keeps the collapsed groups' items, for the views that have no heading to expand.
  */
 export function lensSections(
   lens: Lens,
@@ -95,18 +142,21 @@ export function lensSections(
   visible: readonly FileEntry[],
   collapsed: ReadonlySet<string>,
   filtering: boolean,
-): { entries: FileEntry[]; sections: Omit<ViewSections, 'toggle' | 'drop' | 'context'> } {
+): {
+  entries: FileEntry[];
+  ordered: FileEntry[];
+  sections: Omit<ViewSections, 'toggle' | 'drop' | 'context'>;
+} {
   const hidden = hiddenGroups(lens, collapsed);
   const position = new Map(resolved.sections.map((section, index) => [section.id, index]));
   const groupOf = (entry: FileEntry) => resolved.placements.get(entry.path)?.group ?? null;
   const counts = new Map<string | null, number>();
   for (const entry of visible) counts.set(groupOf(entry), (counts.get(groupOf(entry)) ?? 0) + 1);
-  const entries = visible
-    .filter((entry) => {
-      const group = groupOf(entry);
-      return group === null || (!collapsed.has(group) && !hidden.has(group));
-    })
-    .toSorted((a, b) => position.get(groupOf(a))! - position.get(groupOf(b))!);
+  const ordered = visible.toSorted((a, b) => position.get(groupOf(a))! - position.get(groupOf(b))!);
+  const entries = ordered.filter((entry) => {
+    const group = groupOf(entry);
+    return group === null || (!collapsed.has(group) && !hidden.has(group));
+  });
   const list: ViewSection[] = [];
   for (const section of resolved.sections) {
     const count = counts.get(section.id) ?? 0;
@@ -121,7 +171,7 @@ export function lensSections(
       group: section.id,
     });
   }
-  return { entries, sections: { list, of: (entry) => sectionKey(groupOf(entry)) } };
+  return { entries, ordered, sections: { list, of: (entry) => sectionKey(groupOf(entry)) } };
 }
 
 /** Items dropped on a heading: dragged inside Viewer, or from Finder. */

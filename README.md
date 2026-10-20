@@ -107,13 +107,16 @@ Right-click or Command-K provides **Batch rename**, **Rename as book**, **Rename
 | Drawings    | ASCII DXF; pan/zoom, layers, snap, distance/angle/polygon-area measurement and entity inspection                                 |
 | 3D          | STEP/STP, IGES/IGS, STL, 3MF, PLY, GLB/glTF, OBJ with local MTL, FBX; orbit, wireframe, dimensions, surface distance, animations |
 | Images      | PNG, JPEG, GIF, WebP, AVIF, BMP, ICO, SVG; fit, zoom and pan                                                                     |
+| Rendered    | TIFF, HEIC/HEIF, PSD, camera RAW, JPEG 2000, OpenEXR, TGA and ICNS, decoded by Quick Look in its own sandboxed service           |
 | Audio/video | Chromium-supported codecs with native seeking and playback                                                                       |
 | PDF         | Worker rendering, pages, zoom, selectable text and document search                                                               |
 | EPUB        | Local publication metadata, chapter navigation, safe text reading and search                                                     |
+| DjVu        | Worker rendering through WebAssembly, pages and text-layer search                                                                |
+| Office      | DOCX text, headings and simple tables; XLSX worksheets with stored values and formulas, never evaluated                          |
 | Text/data   | Safe Markdown, code/text, expandable JSON and virtualized CSV/TSV tables                                                         |
 | Archives    | ZIP, TAR, TAR.GZ/TGZ indexing and entry previews without extraction                                                              |
 
-Formats outside this set receive file information and an external-app action. Office, additional ebooks, USD, HEIC/TIFF and creative formats are proposed next in the [preview roadmap](docs/preview-roadmap.md). DXF support and limits are documented in [drawing previews](docs/drawings.md); physical units, CAD conversion limits and surface measurements are documented in [model previews](docs/model-previews.md). A registered extension does not guarantee a file’s codec, compression or external asset requirements: failures stay visible and recoverable.
+Formats outside this set receive file information and an external-app action. Presentations, other Office formats, additional ebooks, USD and other creative formats are proposed next in the [preview roadmap](docs/preview-roadmap.md); Office coverage is in [Office previews](docs/office-previews.md). DXF support and limits are documented in [drawing previews](docs/drawings.md); physical units, CAD conversion limits and surface measurements are documented in [model previews](docs/model-previews.md). A registered extension does not guarantee a file’s codec, compression or external asset requirements: failures stay visible and recoverable.
 
 Preview limits are explicit: DXF files 32 MiB with bounded worker parsing/geometry; text reads 4 MiB; model source files 256 MiB; archive entries 32 MiB; TAR previews 128 MiB; gzip archive inputs 64 MiB; archive lists 20,000 entries. ZIP64, encrypted ZIPs, nested archive expansion, remote model assets and Draco/KTX2 model decoding are not included yet. Model companions must resolve inside the model’s local directory. PDF search covers the first 1,000 pages. Search returns up to 20,000 matches and visits up to 500,000 entries. Saved state allows 30 workspaces with 200 planes each.
 

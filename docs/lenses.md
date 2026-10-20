@@ -36,9 +36,9 @@ Folders Viewer cannot write keep their lenses in Viewer's data on this Mac inste
 
 ## Views
 
-**Group by** in a folder's view menu lists its lenses. Grouped list, grid, columns and gallery views show a heading per group: headings collapse, take items dropped on them (only items from this folder; nothing moves on disk), and have their own menu (select, rename, rules, new group inside, delete). Empty groups still show a heading so items can be dropped in. While filtering, empty groups are hidden; searching subfolders shows results ungrouped.
+**Group by** in a folder's view menu lists its lenses. Grouped list, grid and columns views show a heading per group: headings collapse, take items dropped on them (only items from this folder; nothing moves on disk), and have their own menu (select, rename, rules, new group inside, delete). Empty groups still show a heading so items can be dropped in. The gallery labels the first item of each group and shows a collapsed group's items, since it has no heading to expand. While filtering, empty groups are hidden; searching subfolders shows results ungrouped. Arrow keys in a grouped grid move by row and column, and Page Up/Down by the rows that fit.
 
-The **Map** view (⌘5) draws one lens freely: groups are regions, Unsorted is a dashed region, and every item stays where it was put.
+The **Map** view (⌘5) draws one lens freely: groups are regions, Unsorted is a dashed region, and every item stays where it was put. A group collapsed in another view keeps its items on the Map.
 
 - Drag items to place them; dropping into a region puts them in that group. Command-drag carries the files themselves to Finder or another plane.
 - Drag a region by its heading to move it, or into another region to nest it; drag its corner to resize it.

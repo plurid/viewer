@@ -36,9 +36,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// plurid 0.0.0-40 warns “route(s) with no registered plane” once for each root added here,
-// because its check reads a tree one commit behind. The planes are there, as these tests show;
-// the warning's fix is in plurid's source (containers/Application/View) for its next release.
+// plurid 0.0.0-40 warned “route(s) with no registered plane” once for each root added here,
+// because its check read a tree one commit behind; 0.0.0-41 reads the live tree and is quiet.
 describe('engine roots', () => {
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});

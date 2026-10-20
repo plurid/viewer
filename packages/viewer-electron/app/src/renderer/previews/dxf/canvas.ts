@@ -544,6 +544,9 @@ export function createDrawingCanvas(
   };
   const key = (event: KeyboardEvent) => {
     if (!canInteract()) return;
+    // Escape cancels a draft; with none it is the host's, which closes Quick Preview or leaves the
+    // plane. The drawing took every Escape, and a focused one could close neither.
+    if (event.key === 'Escape' && !draft.length) return;
     // A focused drawing owns its keys; Shift/arrows must not rotate the space.
     if (
       [
