@@ -31,6 +31,17 @@ export function receiveFileChanges(changes: FileChange[]): void {
               ? { ...pane, path: map(pane.path), history: pane.history.map(map) }
               : { ...pane, path: map(pane.path) },
           ),
+          // A project's folder views follow their folders, as its planes do.
+          ...(space.project
+            ? {
+                project: {
+                  ...space.project,
+                  folders: Object.fromEntries(
+                    Object.entries(space.project.folders).map(([path, view]) => [map(path), view]),
+                  ),
+                },
+              }
+            : {}),
         })),
         favorites: saved.favorites.map((item) => ({ ...item, path: map(item.path) })),
         recents: saved.recents.map(map),

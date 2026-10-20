@@ -83,6 +83,7 @@ export class AgentRequests {
             clientID: storedClientID.optional().default(sharedClientID),
             actionID: z.string(),
             root: z.string(),
+            chosen: z.string().optional(),
             fingerprint: z.string(),
             capability: z.enum(['execute', 'terminal-read', 'terminal-write']),
           }),
@@ -129,17 +130,18 @@ export class AgentRequests {
           throw new Error(
             'Agent actions require approval each time. Shell execution and terminal input cannot enforce Trash-only removal.',
           );
-        if (allow) {
-          root = await fs.realpath(absolute(root));
-          if (!(await fs.stat(root)).isDirectory())
-            throw new Error('Choose a folder for the grant.');
-        } else absolute(root);
+        // A grant covers the folder a chosen path resolves to. Revoking by that chosen path, a
+        // link or alias included, must remove it too; a folder that is gone resolves to itself.
+        const chosen = absolute(root);
+        root = allow ? await fs.realpath(chosen) : await fs.realpath(chosen).catch(() => chosen);
+        if (allow && !(await fs.stat(root)).isDirectory())
+          throw new Error('Choose a folder for the grant.');
         const next = this.grants.filter(
           (grant) =>
             !(
               grant.actionID === actionID &&
               (grant.clientID ?? sharedClientID) === clientID &&
-              grant.root === root &&
+              (grant.root === root || grant.root === chosen || grant.chosen === chosen) &&
               grant.capability === capability
             ),
         );
@@ -149,6 +151,7 @@ export class AgentRequests {
             clientID,
             actionID,
             root,
+            ...(chosen !== root ? { chosen } : {}),
             capability,
             fingerprint: '',
           });

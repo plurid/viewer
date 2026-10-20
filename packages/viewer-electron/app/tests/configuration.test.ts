@@ -224,6 +224,20 @@ describe('authoritative JSONC configuration', () => {
     expect(reopened.snapshot().settings.folders).toEqual({});
     expect(await fs.readFile(path.join(root, 'settings-v1.json'), 'utf8')).toBe(prior);
   });
+  it('starts from the defaults when settings-v1 cannot be read, and leaves that file as it is', async () => {
+    const texts = ['{"version": 1, "settings": {', '{"version": 1, "settings": {"browsing": 7}}'];
+    for (const [index, text] of texts.entries()) {
+      // A profile of its own for each earlier file, with no config.jsonc yet.
+      const profile = path.join(root, `profile-${index}`);
+      await fs.mkdir(profile);
+      await fs.writeFile(path.join(profile, 'settings-v1.json'), text);
+      const service = new SettingsService(profile, root, () => true, vi.fn());
+      services.push(service);
+      await service.load();
+      expect(service.snapshot().settings.browsing).toEqual(defaultSettings(root).browsing);
+      expect(await fs.readFile(path.join(profile, 'settings-v1.json'), 'utf8')).toBe(text);
+    }
+  });
   it('patches folder keys with dots and nested partial layout safely and rejects approval paths', async () => {
     const service = create();
     await service.load();

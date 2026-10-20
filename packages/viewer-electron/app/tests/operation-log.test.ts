@@ -118,6 +118,20 @@ describe('append-only operation log', () => {
     expect(restored.job.completed).toHaveLength(1);
     expect(restored.intent).toBeUndefined();
   });
+  it('keeps a log readable after a torn final line, at the launch after next too', async () => {
+    const log = new OperationLog(data);
+    await log.load();
+    const value = receipt();
+    await log.record(value);
+    await appendFile(logFile(value.job.id), '{"t":"intent","intent":{"sou');
+    // The next launch restores the job and records its new status.
+    const next = new OperationLog(data);
+    const [restored] = (await next.load()).receipts;
+    await next.record({ ...restored, job: { ...restored.job, status: 'failed', revision: 2 } });
+    const { receipts, notices } = await new OperationLog(data).load();
+    expect(notices).toEqual([]);
+    expect(receipts.map((item) => item.job.status)).toEqual(['failed']);
+  });
   it('sets aside a log with a damaged middle line and reports it', async () => {
     const log = new OperationLog(data);
     await log.load();

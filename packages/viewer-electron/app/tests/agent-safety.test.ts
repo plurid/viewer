@@ -472,6 +472,16 @@ describe('agent removal safety', () => {
     expect(f.execute).not.toHaveBeenCalled();
     expect(memory.remove).not.toHaveBeenCalled();
   });
+  it('revokes a terminal-read grant through the linked folder it was granted for', async () => {
+    const f = await fixture();
+    memory.aliases.set('/Linked', '/Granted');
+    await f.requests.grant('*', '/Linked', 'terminal-read', true);
+    expect(await f.requests.listGrants()).toMatchObject([
+      { root: '/Granted', chosen: '/Linked', capability: 'terminal-read' },
+    ]);
+    await f.requests.grant('*', '/Linked', 'terminal-read', false);
+    expect(await f.requests.listGrants()).toEqual([]);
+  });
   it('redacts terminal environment values and shell scripts from agent configuration reads', async () => {
     const f = await fixture();
     const settings = structuredClone(f.config);

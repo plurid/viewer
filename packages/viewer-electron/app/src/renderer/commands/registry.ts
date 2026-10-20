@@ -90,7 +90,8 @@ export class CommandRegistry {
   scopedSnapshot = (paneID: string) =>
     (this.revisions.get('window') || 0) +
     (this.revisions.get(`folder:${paneID}`) || 0) +
-    (this.revisions.get(`preview:${paneID}`) || 0);
+    (this.revisions.get(`preview:${paneID}`) || 0) +
+    (this.revisions.get(`collection:${paneID}`) || 0);
   touch = (source = 'window') => {
     this.revisions.set(source, (this.revisions.get(source) || 0) + 1);
     this.revision++;
@@ -110,6 +111,7 @@ export class CommandRegistry {
     return (
       this.sources.get(`folder:${paneID}`)?.context() ??
       this.sources.get(`preview:${paneID}`)?.context() ??
+      this.sources.get(`collection:${paneID}`)?.context() ??
       this.sources.get('window')?.context()
     );
   }

@@ -5,6 +5,13 @@ import { renderedImageFormats } from '../../domain/rendered-images';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
   formats.includes(entry.extension) ? 100 : 0;
+/** A dotfile is named by its format: `.env` and `.gitignore` have no extension, `.env.local` has `local`. */
+const dotfileFormat = ({ name, extension }: FileEntry) =>
+  name.startsWith('.env.')
+    ? 'env'
+    : name.startsWith('.') && !extension
+      ? name.slice(1).toLowerCase()
+      : '';
 const textFormats = [
   'txt',
   'md',
@@ -145,6 +152,7 @@ export const previewModules: PreviewModule[] = [
     formats: textFormats,
     detect: (entry) =>
       textFormats.includes(entry.extension) ||
+      textFormats.includes(dotfileFormat(entry)) ||
       ['LICENSE', 'README', 'Dockerfile', 'Makefile'].includes(entry.name)
         ? 100
         : entry.mime.startsWith('text/')

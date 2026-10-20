@@ -79,6 +79,16 @@ export class UtilityClient {
     if (this.closed)
       return Promise.reject(new Error('Background file services are shutting down.'));
     if (this.ready) return this.ready;
+    if (!this.child) this.launch();
+    // A failed initialization is tried again by the next call, on the same worker. Kept, it
+    // failed every call until the worker exited, which an idle worker never does.
+    const ready = (this.ready = this.options.initialize?.(this) ?? Promise.resolve());
+    ready.catch(() => {
+      if (this.ready === ready) this.ready = undefined;
+    });
+    return ready;
+  }
+  private launch(): void {
     const child = launchWorker(this.worker, this.options.name, this.options.backend);
     this.child = child;
     child.message((reply: Reply) => {
@@ -104,7 +114,6 @@ export class UtilityClient {
     child.thread?.on('error', () =>
       this.rejectPending('Background file services stopped. Retry the operation.'),
     );
-    return (this.ready = this.options.initialize?.(this) ?? Promise.resolve());
   }
   async call<T>(method: string, args: unknown[] = [], signal?: AbortSignal): Promise<T> {
     await this.start();

@@ -121,7 +121,9 @@ export function OperationsPanel() {
               <strong>“{baseName(job.collision.destination)}” already exists.</strong>
               <p>
                 {job.collision.replaceable === false
-                  ? 'The existing item cannot be replaced because it contains the source or is a folder.'
+                  ? job.kind === 'mkdir' || job.kind === 'mkfile'
+                    ? 'A new item cannot replace an existing one.'
+                    : 'The existing item contains the source, so it cannot be replaced.'
                   : 'Replace sends the existing item to Trash once its replacement is ready.'}
               </p>
               <label>

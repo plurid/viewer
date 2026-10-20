@@ -175,6 +175,17 @@ describe('contextual commands', () => {
     expect(ids).not.toContain('copy');
     expect(ids).toContain('new-folder');
   });
+  it('finds a collection plane by its pane, as folder and preview planes are found', () => {
+    const collection = { ...context, paneID: 'collection-pane' };
+    const before = registry.scopedSnapshot('collection-pane');
+    registry.register('collection:collection-pane', {
+      context: () => collection,
+      definitions: () => folderCommands(actions),
+      valid: () => true,
+    });
+    expect(registry.context('collection-pane')).toBe(collection);
+    expect(registry.scopedSnapshot('collection-pane')).toBeGreaterThan(before);
+  });
   it('searches short aliases and label prefixes before loose matches', () => {
     const rows = registry.list({ paneID: context.paneID });
     expect(rankCommands(rows, 'rn', [])[0].id).toBe('rename');

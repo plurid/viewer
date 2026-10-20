@@ -1,6 +1,6 @@
 # Indexed search
 
-The desktop runs SQLite FTS5 in a utility process. Filename, path, extension, kind, size and modification time are stored locally. Filename indexing starts at Home by default; Settings → Search controls locations, exclusions, pause and rebuild. Verification replaces Home with a generated fixture folder.
+The desktop runs SQLite FTS5 in a utility process (a worker thread in the Mac App Store build). Filename, path, extension, kind, size and modification time are stored locally. Filename indexing starts at Home by default; Settings → Search controls locations, exclusions, pause and rebuild. Verification replaces Home with a generated fixture folder.
 
 Command-F starts at the active folder. Subfolder search uses the background index when that location is indexed; unindexed folders retain streamed filesystem search. **All indexed locations** searches configured roots. **Document text** includes extracted text from explicitly granted locations. Search results are bounded to 150 per page, with at most 500 through the desktop query API.
 
@@ -20,7 +20,7 @@ Combine filters with literal text, such as `fire ext:epub`. Matching folds case 
 
 Enable Contents next to a location in Settings → Search to extract local text. The index uses bounded PDF/EPUB/plain-text extraction; index crawling does not invoke OCR. On-demand document actions may run the local macOS OCR helper. Indexing never sends text to a model provider. Revoking a content grant clears that location's stored body text even when indexing is paused, and a late extraction cannot put it back.
 
-Excluded paths are hidden from queries immediately. Removing an indexed root also removes its matching text grant. Its cached filename rows can remain in the local database, but queries and counts exclude that root; re-adding it reconciles them with current files. Rebuild refreshes the disposable search index and never modifies source files. An offline root preserves its cached rows and reports its state; cached results can be stale until the drive or mount returns.
+Excluded paths are hidden from queries immediately. Removing an indexed root also removes its matching text grant and its rows in the local database; re-adding it indexes it again. Rebuild refreshes the disposable search index and never modifies source files. An index database SQLite cannot read is renamed `files-v1.sqlite.unreadable-<time>`, with its journal files, and indexed again from the configured roots; a search after a failed start of the index service starts it again. An offline root preserves its cached rows and reports its state; cached results can be stale until the drive or mount returns.
 
 ## Saved searches
 

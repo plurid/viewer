@@ -6,8 +6,9 @@ import type { FileEntry, DesktopEvent } from '../src/domain/contracts';
 import { useFolder } from '../src/renderer/explorer/useFolder';
 import { useContextPublish } from '../src/renderer/explorer/context-publish';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
-import { initialize, receiveJob } from '../src/renderer/state/store';
+import { initialize, receiveJob, setOperationsOpen } from '../src/renderer/state/store';
 import type { OperationJob } from '../src/domain/contracts';
+import { OperationsPanel } from '../src/renderer/operations/OperationsPanel';
 import { DuplicateControls } from '../src/renderer/ui/Duplicates';
 import { TrashContents, groupSelection } from '../src/renderer/explorer/FileDialogs';
 import type { CommandContext } from '../src/renderer/commands/registry';
@@ -202,5 +203,46 @@ describe('duplicate finder dialog', () => {
     expect(boxes[1].disabled).toBe(true);
     fireEvent.click(boxes[1]);
     expect(boxes[1].checked).toBe(false);
+  });
+});
+
+describe('collision prompt', () => {
+  it('says why Replace is unavailable, as the desktop decides it', () => {
+    vi.useRealTimers();
+    initialize({ home: '/', platform: 'darwin', locations: [], state: null, openPaths: [] });
+    const collided = (id: string, kind: OperationJob['kind']) =>
+      ({
+        id,
+        revision: 1,
+        kind,
+        status: 'collision',
+        sources: ['/Work/Folder'],
+        destination: '/Work/Inside',
+        bytesDone: 0,
+        bytesTotal: 0,
+        itemsDone: 0,
+        itemsTotal: 1,
+        completed: [],
+        errors: [],
+        errorCount: 0,
+        undoable: false,
+        collision: {
+          source: '/Work/Folder',
+          destination: '/Work/Inside/Folder',
+          replaceable: false,
+        },
+      }) as OperationJob;
+    act(() => {
+      receiveJob(collided('new-folder', 'mkdir'));
+      receiveJob(collided('move-into-itself', 'move'));
+      setOperationsOpen(true);
+    });
+    render(createElement(OperationsPanel));
+    expect(screen.getByText('A new item cannot replace an existing one.')).toBeTruthy();
+    expect(
+      screen.getByText('The existing item contains the source, so it cannot be replaced.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/is a folder/)).toBeNull();
+    expect(screen.queryByText('Replace')).toBeNull();
   });
 });

@@ -56,7 +56,10 @@ export interface ExecutionGrant {
   id: string;
   clientID?: string;
   actionID: string;
+  /** The granted folder, links resolved. */
   root: string;
+  /** The folder as it was chosen, when that was a link or alias to `root`. */
+  chosen?: string;
   fingerprint: string;
   capability: 'execute' | 'terminal-read' | 'terminal-write';
 }

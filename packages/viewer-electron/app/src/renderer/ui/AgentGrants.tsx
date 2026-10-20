@@ -35,7 +35,8 @@ export function AgentGrants({
       (grant) =>
         (grant.clientID ?? sharedClientID) === clientID &&
         grant.actionID === id &&
-        grant.root === root &&
+        // A grant stores the resolved folder; a configured link or alias matches what was chosen.
+        (grant.root === root || grant.chosen === root) &&
         grant.capability === capability,
     );
   return (

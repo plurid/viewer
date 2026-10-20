@@ -284,6 +284,10 @@ export class OperationLog {
     }
     if (!start || !receipt) throw new Error('The record is empty.');
     const parsed = record.parse(receipt);
+    // A torn final line is skipped above, but the next append would follow its bytes and turn
+    // them into a complete, unreadable line. The record is rewritten whole first; if that fails,
+    // it still loads now.
+    if (lines.at(-1)) await this.rewrite(file, start.sequence, parsed).catch(() => {});
     this.written.set(parsed.job.id, {
       file,
       sequence: start.sequence,
@@ -373,16 +377,20 @@ export class OperationLog {
     return this.serial(async () => {
       const written = this.written.get(receipt.job.id);
       if (!written) return;
-      const temporary = `${written.file}.${randomUUID()}.tmp`;
-      try {
-        await this.writeCompact(temporary, written.sequence, receipt, 'wx');
-        await rename(temporary, written.file);
-        await syncDirectory(this.directory);
-      } finally {
-        await discardOwnTemporaryFile(temporary);
-      }
+      await this.rewrite(written.file, written.sequence, receipt);
       Object.assign(written, this.counts(receipt));
     });
+  }
+  /** Replaces a log with one complete line, atomically. */
+  private async rewrite(file: string, sequence: number, receipt: OperationReceipt): Promise<void> {
+    const temporary = `${file}.${randomUUID()}.tmp`;
+    try {
+      await this.writeCompact(temporary, sequence, receipt, 'wx');
+      await rename(temporary, file);
+      await syncDirectory(this.directory);
+    } finally {
+      await discardOwnTemporaryFile(temporary);
+    }
   }
   /** Drops a job that left the bounded history; logs are private application data. */
   forget(id: string): Promise<void> {

@@ -21,6 +21,7 @@ import {
   installProject,
   newWorkspace,
   previewValues,
+  receiveFileChanges,
   receiveSettings,
   removePanes,
   savePreviewValue,
@@ -190,6 +191,24 @@ describe('project sessions', () => {
     expect(previewValues('preview').camera).toEqual([1, 2, 3]);
     await newWorkspace('General');
     expect(folderPresentation(root + '/Documents').mode).toBe('list');
+    await flushState(false);
+  });
+  it('keeps a project folder view when Viewer moves or renames its folder', async () => {
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      viewer: { save: vi.fn(async () => {}), settingsPatch: vi.fn() },
+    });
+    initialize({ home: root, platform: 'darwin', locations: [], state: null, openPaths: [] });
+    await installProject(
+      { file: root + '/viewer.project.jsonc', root, revision: 'r', definition: project() },
+      { assets: root + '/Assets' },
+    );
+    expect(folderPresentation(root + '/Documents').mode).toBe('columns');
+    receiveFileChanges([{ source: root + '/Documents', destination: root + '/Papers' }]);
+    expect(activeWorkspace().panes.find((pane) => pane.id === 'folder')?.path).toBe(
+      root + '/Papers',
+    );
+    expect(folderPresentation(root + '/Papers').mode).toBe('columns');
     await flushState(false);
   });
   it('drops preview state of panes that no Undo can restore, keeping live and closed ones', async () => {

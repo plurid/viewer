@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { mkdir, writeFile, readFile, symlink, rename } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, readdir, symlink, rename } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
@@ -242,6 +242,22 @@ describe('authoritative settings', () => {
   });
 });
 describe('background filename and metadata index', () => {
+  it('keeps an unreadable index aside and starts a new one instead of failing every search', async () => {
+    const file = path.join(root, 'index.sqlite');
+    await writeFile(file, 'not a database, only text long enough to fill a database header');
+    const index = await FileIndex.open(file);
+    try {
+      expect(index.status().count).toBe(0);
+      expect(index.query({ query: 'anything' }).entries).toEqual([]);
+    } finally {
+      await index.close();
+    }
+    const kept = (await readdir(root)).filter((name) =>
+      name.startsWith('index.sqlite.unreadable-'),
+    );
+    expect(kept).toHaveLength(1);
+    expect(await readFile(path.join(root, kept[0]), 'utf8')).toContain('not a database');
+  });
   it('hides a restored cache until permission is configured without discarding authorized cached text', async () => {
     const file = path.join(root, 'index.sqlite');
     const document = path.join(root, 'Document.txt');

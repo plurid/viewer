@@ -69,7 +69,7 @@ import { Workflows } from './workflows';
 import { WatchRules } from './watch-rules';
 import { Relationships } from './relationships';
 import { boundedRename } from './rename-preview';
-import { methodWindows, schemas, type ApiHandlers } from './ipc-schemas';
+import { methodWindows, schemas, settingsEvents, type ApiHandlers } from './ipc-schemas';
 import { serverAddress } from '../domain/volumes';
 import { errorMessage } from '../domain/errors';
 
@@ -502,10 +502,7 @@ export class Desktop {
   }
   emit(event: DesktopEvent): void {
     for (const { window, role } of this.windows.values())
-      if (
-        !window.isDestroyed() &&
-        (role === 'viewer' || ['settings', 'index', 'service-error'].includes(event.type))
-      )
+      if (!window.isDestroyed() && (role === 'viewer' || settingsEvents.includes(event.type)))
         window.webContents.send('viewer:event', event);
   }
   open(paths: string[]): void {

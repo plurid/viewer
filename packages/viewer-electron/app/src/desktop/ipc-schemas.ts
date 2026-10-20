@@ -1,7 +1,7 @@
 /** Argument schemas for every IPC method. The bridge validates each call against these
  * before it reaches a handler, and `ApiCall` carries the inferred argument types. */
 import { z } from 'zod';
-import type { ApiMethod } from '../domain/contracts';
+import type { ApiMethod, DesktopEvent } from '../domain/contracts';
 import { modelDataLevels } from '../domain/model-permissions';
 import { operationPlanRequestSchema } from '../domain/operation-plan';
 import { sourceVersionSchema } from '../domain/inspection';
@@ -485,6 +485,16 @@ export const schemas = {
   fileAccessRevoke: z.tuple([localPath]),
   textEdit: z.tuple([z.enum(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])]),
 } satisfies Record<ApiMethod, z.ZodType>;
+/**
+ * The events Settings receives, for what it shows: settings, search status, service errors and
+ * each provider's model data permission. The workspace window receives every event.
+ */
+export const settingsEvents: readonly DesktopEvent['type'][] = [
+  'settings',
+  'index',
+  'service-error',
+  'model-permission',
+];
 /**
  * Which window may call each method. Credentials, agent clients and folder revocation belong
  * to Settings; the workspace window's file and workspace methods are unavailable there.

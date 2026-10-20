@@ -79,18 +79,21 @@ port.on('message', async (event) => {
     let value: unknown;
     if (request.method === 'init') {
       ocr = request.args[1] as string;
-      let ready = false;
-      index = await FileIndex.open(
-        request.args[0] as string,
-        (value) => {
-          if (ready) port.postMessage({ event: 'index', value: watchedStatus(value) });
-        },
-        async (file) => extractDocument(file),
-        { roots: [], contentRoots: [], exclusions: [], paused: false },
-      );
-      // Persisted index rows are private derived data. Before any query/status
-      // is served, limit them to the roots authorized in this session.
-      ready = true;
+      // A retried initialization keeps an index that already opened.
+      if (!index) {
+        let ready = false;
+        index = await FileIndex.open(
+          request.args[0] as string,
+          (value) => {
+            if (ready) port.postMessage({ event: 'index', value: watchedStatus(value) });
+          },
+          async (file) => extractDocument(file),
+          { roots: [], contentRoots: [], exclusions: [], paused: false },
+        );
+        // Persisted index rows are private derived data. Before any query/status
+        // is served, limit them to the roots authorized in this session.
+        ready = true;
+      }
       value = true;
     } else if (!index) throw new Error('File services are not ready.');
     else if (request.method === 'configure') {

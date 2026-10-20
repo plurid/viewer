@@ -1,7 +1,7 @@
 import type { QuerySnapshot } from '../domain/collections';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
-import { opendir, mkdir } from 'node:fs/promises';
+import { opendir, mkdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 import type { FileEntry } from '../domain/contracts';
 import type { DocumentData } from '../domain/services';
@@ -36,20 +36,25 @@ export class FileIndex {
   ) {
     this.config = initialScope;
     this.db = new DatabaseSync(file);
-    this.db.exec(
-      "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=2000; CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, root TEXT, name TEXT, extension TEXT, size INTEGER, modified REAL, hidden INTEGER, directory INTEGER, data TEXT, seen INTEGER); CREATE INDEX IF NOT EXISTS files_root ON files(root); CREATE INDEX IF NOT EXISTS files_ext ON files(extension); CREATE INDEX IF NOT EXISTS files_name ON files(name,path); CREATE VIRTUAL TABLE IF NOT EXISTS names USING fts5(name, content, path UNINDEXED, tokenize='trigram');",
-    );
-    this.db.exec(
-      'CREATE TABLE IF NOT EXISTS source_documents(path TEXT PRIMARY KEY, version TEXT NOT NULL, document TEXT NOT NULL)',
-    );
-    const version = Number(
-      (this.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-    );
-    if (version < 2) {
-      // Reconcile the disposable search index without touching any source file.
+    try {
       this.db.exec(
-        "BEGIN; CREATE TEMP TABLE previous_content AS SELECT path,content FROM names; CREATE INDEX previous_content_path ON previous_content(path); DELETE FROM names; INSERT INTO names(rowid,name,content,path) SELECT files.rowid,files.name,coalesce(previous_content.content,''),files.path FROM files LEFT JOIN previous_content ON files.path=previous_content.path; DROP TABLE previous_content; PRAGMA user_version=2; COMMIT;",
+        "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=2000; CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, root TEXT, name TEXT, extension TEXT, size INTEGER, modified REAL, hidden INTEGER, directory INTEGER, data TEXT, seen INTEGER); CREATE INDEX IF NOT EXISTS files_root ON files(root); CREATE INDEX IF NOT EXISTS files_ext ON files(extension); CREATE INDEX IF NOT EXISTS files_name ON files(name,path); CREATE VIRTUAL TABLE IF NOT EXISTS names USING fts5(name, content, path UNINDEXED, tokenize='trigram');",
       );
+      this.db.exec(
+        'CREATE TABLE IF NOT EXISTS source_documents(path TEXT PRIMARY KEY, version TEXT NOT NULL, document TEXT NOT NULL)',
+      );
+      const version = Number(
+        (this.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
+      );
+      if (version < 2) {
+        // Reconcile the disposable search index without touching any source file.
+        this.db.exec(
+          "BEGIN; CREATE TEMP TABLE previous_content AS SELECT path,content FROM names; CREATE INDEX previous_content_path ON previous_content(path); DELETE FROM names; INSERT INTO names(rowid,name,content,path) SELECT files.rowid,files.name,coalesce(previous_content.content,''),files.path FROM files LEFT JOIN previous_content ON files.path=previous_content.path; DROP TABLE previous_content; PRAGMA user_version=2; COMMIT;",
+        );
+      }
+    } catch (error) {
+      this.db.close();
+      throw error;
     }
   }
   static async open(
@@ -59,7 +64,20 @@ export class FileIndex {
     initialScope?: ApplicationSettings['search'],
   ) {
     await mkdir(path.dirname(file), { recursive: true });
-    return new FileIndex(file, emit, extract, initialScope);
+    try {
+      return new FileIndex(file, emit, extract, initialScope);
+    } catch (error) {
+      // SQLITE_CORRUPT or SQLITE_NOTADB. The index is derived from the folders, so a damaged one
+      // is kept aside with its journal and built again, instead of failing every search until
+      // it is removed by hand.
+      if (![11, 26].includes(((error as { errcode?: number }).errcode ?? 0) & 0xff)) throw error;
+      const kept = `${file}.unreadable-${Date.now()}`;
+      for (const suffix of ['', '-wal', '-shm'])
+        await rename(file + suffix, kept + suffix).catch((failure: NodeJS.ErrnoException) => {
+          if (!suffix || failure.code !== 'ENOENT') throw failure;
+        });
+      return new FileIndex(file, emit, extract, initialScope);
+    }
   }
   put(item: FileEntry, root: string, seen = Date.now(), content: string | DocumentData = ''): void {
     this.putMany([{ item, root, seen, content }]);

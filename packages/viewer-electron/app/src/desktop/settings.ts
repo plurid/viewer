@@ -337,7 +337,13 @@ export class SettingsService {
             revision: prior.revision || 0,
           };
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          // An unreadable earlier file stays where it is and settings start from the defaults;
+          // rethrown, it kept Viewer from starting at all.
+          if (
+            !(error instanceof SyntaxError || error instanceof z.ZodError) &&
+            (error as NodeJS.ErrnoException).code !== 'ENOENT'
+          )
+            throw error;
           if (seed) {
             this.document.ui = normalizePreferences(seed.ui);
             this.document.settings.appearance = seed.look;

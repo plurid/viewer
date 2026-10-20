@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import path from 'node:path';
 import type { FileEntry } from '../src/domain/contracts';
 import { choosePreview, registerPreview } from '../src/renderer/previews/registry';
 import { parseDelimited } from '../src/renderer/previews/parse';
@@ -38,6 +39,14 @@ describe('preview extension contract', () => {
     expect(fileFamily(typescript)).toBe('code');
     expect(choosePreview({ ...file('reference.svg'), mime: 'image/svg+xml' }).id).toBe('image');
     expect(choosePreview({ ...file('movie.mp4'), mime: 'video/mp4' }).id).toBe('media');
+  });
+  it('previews dotfiles by name, which the file system gives no extension', () => {
+    // As the desktop lists them: `path.extname('.env')` is empty.
+    const dotfile = (name: string) => ({ ...file(name), extension: path.extname(name).slice(1) });
+    for (const name of ['.env', '.gitignore', '.env.local', '.ENV'])
+      expect(choosePreview(dotfile(name)).id).toBe('text');
+    for (const name of ['.DS_Store', '.localized'])
+      expect(choosePreview(dotfile(name)).id).toBe('fallback');
   });
   it('routes every initial 3D format through the lazy model module', () => {
     for (const extension of [
