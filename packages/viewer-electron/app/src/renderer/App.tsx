@@ -11,6 +11,7 @@ import { explorerCommandIDs, keyCommand } from './explorer/input';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { type PluridApplicationHandle } from '@plurid/plurid-react';
 import type { FolderPane } from '../domain/contracts';
+import { agentDispatchRefusal } from '../domain/agent-safety';
 import { selectedFiles } from './workspace/sessions';
 import {
   activeWorkspace,
@@ -214,9 +215,8 @@ function AppWindow() {
       definitions: () => [
         ...programCommands(
           controller,
-          async (id, context) => {
-            await registry.invoke(id, { paneID: context.paneID, context });
-          },
+          // `false` when nothing of that ID ran: the custom action then says so
+          (id, context) => registry.invoke(id, { paneID: context.paneID, context }),
           terminalName,
         ),
         ...windowCommands({
@@ -417,6 +417,11 @@ function AppWindow() {
         };
         const deadline = performance.now() + 3000;
         const execute = () => {
+          const refusal = agentDispatchRefusal(event, getState().settings.settings.customActions);
+          if (refusal) {
+            finish(refusal);
+            return;
+          }
           if (dialogOpen()) {
             if (performance.now() < deadline) requestAnimationFrame(execute);
             else {
@@ -461,6 +466,7 @@ function AppWindow() {
             .invoke(event.command, {
               paneID: target.paneID,
               scope: target.selection.length ? 'files' : 'folder',
+              remember: false,
               context: {
                 workspaceID: target.workspaceID,
                 rootID: target.rootID,

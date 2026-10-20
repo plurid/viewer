@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { mkdir, open, opendir, readFile, realpath } from 'node:fs/promises';
+import { mkdir, open, opendir, readFile, realpath, rename } from 'node:fs/promises';
 import { z } from 'zod';
 import type { FileEntry } from '../../domain/contracts';
 import {
@@ -22,6 +22,7 @@ import { localBookFields } from '../formats';
 import type { Operations } from '../operations';
 import { fileCoordination } from '../file-coordination';
 import { errorMessage } from '../../domain/errors';
+import { removePrivateData } from '../removal';
 const output = z.object({
   rows: z
     .array(
@@ -75,6 +76,8 @@ interface Dependencies {
     schema: Record<string, unknown>,
     signal: AbortSignal,
     level: ActionRecipe['data'],
+    /** Who started it: an agent's action needs the data approved for agents too. */
+    actor: 'user' | 'agent',
   ): Promise<unknown>;
   operations: Pick<Operations, 'exclusive'>;
   emit(plan: ActionPlan): void;
@@ -170,40 +173,73 @@ export class ActionPlanner {
     );
   }
   async load(): Promise<void> {
-    this.loaded ??= this.store.load().then(async (plans) => {
-      for (const plan of plans || []) {
-        if (['planning', 'applying'].includes(plan.status)) {
-          if (plan.status === 'applying') {
-            const journal = await readFile(this.stepFile(plan.id), 'utf8').catch((error) => {
-              if (error.code === 'ENOENT') return '';
-              throw error;
-            });
-            if (journal.length > 4000000)
-              throw new Error('Action recovery log exceeded its limit.');
-            const lines = journal.split('\n');
-            for (const [index, line] of lines.entries()) {
-              if (!line) continue;
-              try {
-                const step = stepSchema.parse(JSON.parse(line));
-                const row = plan.rows.find((row) => row.id === step.row);
-                if (row) {
-                  row.stagedPath = step.stagedPath;
-                  row.completed = step.completed;
-                }
-              } catch (error) {
-                if (index !== lines.length - 1) throw error;
-              }
-            }
-          }
-          plan.status = 'recovery';
-          plan.error =
-            'Interrupted task. Review its recorded paths before restoring or continuing.';
-          plan.undoable = false;
-        }
-        this.plans.set(plan.id, plan);
-      }
+    // A failed read is tried again by the next call; kept, it disabled Actions until a restart,
+    // and every Actions call awaits it (2026-10-20).
+    this.loaded ??= this.restore().catch((error) => {
+      this.loaded = undefined;
+      throw error;
     });
     await this.loaded;
+  }
+  private async restore(): Promise<void> {
+    const applying = new Set<string>();
+    for (const plan of (await this.store.load()) || []) {
+      if (['planning', 'applying'].includes(plan.status)) {
+        plan.error = 'Interrupted task. Review its recorded paths before restoring or continuing.';
+        if (plan.status === 'applying') {
+          applying.add(plan.id);
+          // One unreadable log is set aside for inspection, as the operation log does; it
+          // rejected the whole load, and with it every plan (2026-10-20).
+          await this.recoverSteps(plan).catch(async (error: Error) => {
+            const kept = `${this.stepFile(plan.id)}.unreadable-${Date.now()}`;
+            const moved = await rename(this.stepFile(plan.id), kept).then(
+              () => true,
+              () => false,
+            );
+            plan.error =
+              'Interrupted task. Its recovery log could not be read' +
+              (moved ? `, so it was kept at ${kept}` : '') +
+              `. Check the recorded paths yourself before restoring or continuing. (${error.message})`;
+          });
+        }
+        plan.status = 'recovery';
+        plan.undoable = false;
+      }
+      this.plans.set(plan.id, plan);
+    }
+    await this.sweepSteps(applying);
+  }
+  private async recoverSteps(plan: ActionPlan): Promise<void> {
+    const journal = await readFile(this.stepFile(plan.id), 'utf8').catch((error) => {
+      if (error.code === 'ENOENT') return '';
+      throw error;
+    });
+    if (journal.length > 4000000) throw new Error('Action recovery log exceeded its limit.');
+    const lines = journal.split('\n');
+    for (const [index, line] of lines.entries()) {
+      if (!line) continue;
+      try {
+        const step = stepSchema.parse(JSON.parse(line));
+        const row = plan.rows.find((row) => row.id === step.row);
+        if (row) {
+          row.stagedPath = step.stagedPath;
+          row.completed = step.completed;
+        }
+      } catch (error) {
+        if (index !== lines.length - 1) throw error;
+      }
+    }
+  }
+  /** Only a plan recorded as applying reads its step log, on recovery; any other log is spent
+   * private data, which was never removed (2026-10-20). A set-aside log is kept. */
+  private async sweepSteps(applying: ReadonlySet<string>): Promise<void> {
+    const directory = await opendir(this.dataPath).catch(() => undefined);
+    if (!directory) return;
+    for await (const item of directory) {
+      const id = /^action-steps-(.+)\.jsonl$/.exec(item.name)?.[1];
+      if (!id || !item.isFile() || applying.has(id)) continue;
+      await removePrivateData(this.dataPath, path.join(this.dataPath, item.name)).catch(() => {});
+    }
   }
   private stepFile(id: string) {
     return path.join(this.dataPath, 'action-steps-' + id + '.jsonl');
@@ -486,6 +522,7 @@ export class ActionPlanner {
             z.toJSONSchema(output) as Record<string, unknown>,
             signal,
             recipe.data,
+            plan.context.actor,
           ),
         );
         const ids = new Set<string>();
@@ -790,6 +827,8 @@ export class ActionPlanner {
         } finally {
           if (changes.length) this.dependencies.changed(changes);
           await this.publish(plan);
+          // Recorded as settled, the plan no longer needs its step log (see sweepSteps).
+          await removePrivateData(this.dataPath, this.stepFile(plan.id)).catch(() => {});
         }
       })
       .finally(() => {

@@ -214,6 +214,17 @@ describe('layout-only changes', () => {
     expect(getState().jobs).toEqual([job]);
     expect(operate).not.toHaveBeenCalled();
   });
+  it('restores a deleted workspace once when Undo is asked for twice (2026-10-20)', async () => {
+    // A second Undo during the first one's flush restored it again: two workspaces with one ID,
+    // after which every state save failed.
+    const id = activeWorkspace().id;
+    await newWorkspace('Second');
+    await deleteWorkspace(id);
+    await Promise.all([restoreWorkspace(), restoreWorkspace()]);
+    const ids = getState().saved.workspaces.map((space) => space.id);
+    expect(ids.filter((value) => value === id)).toHaveLength(1);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
   it('replaces the last workspace with an empty one and restores without orphaning it', async () => {
     const id = activeWorkspace().id;
     await deleteWorkspace(id);

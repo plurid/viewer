@@ -283,3 +283,435 @@ describe('authoritative JSONC configuration', () => {
     expect(schema.properties.settings.properties.customActions).toBeDefined();
   });
 });
+
+// Renaming config.jsonc aside stands in for its removal: nothing is deleted.
+describe('a removed or unreadable config.jsonc (2026-10-20)', () => {
+  let moves = 0;
+  const moved = () => fs.rename(file(), `${file()}.moved-${++moves}`);
+  it('keeps the settings while config.jsonc is gone, and the next change writes it back with its comments', async () => {
+    // A removal was an error that refused every save; the next launch then started from the defaults.
+    const service = create();
+    await service.load();
+    await service.patch(
+      [{ path: 'settings.browsing.mode', value: 'columns' }],
+      service.snapshot().revision,
+    );
+    const text = await fs.readFile(file(), 'utf8');
+    await fs.writeFile(file(), text.replace('"settings": {', '// kept by me\n  "settings": {'));
+    await service.reload();
+    await moved();
+    await service.reload();
+    expect(service.snapshot().config!.diagnostics).toEqual([]);
+    expect(service.snapshot().config!.missing).toBe(true);
+    expect(service.snapshot().settings.browsing.mode).toBe('columns');
+    await service.patch(
+      [{ path: 'settings.appearance', value: 'dark' }],
+      service.snapshot().revision,
+    );
+    const written = await fs.readFile(file(), 'utf8');
+    expect(written).toContain('// kept by me');
+    expect(parse(written).settings.browsing.mode).toBe('columns');
+    expect(parse(written).settings.appearance).toBe('dark');
+    expect(service.snapshot().config!.missing).toBeFalsy();
+  });
+  it('writes a removed config.jsonc back on request, and reads one an editor recreated instead', async () => {
+    const service = create();
+    await service.load();
+    await moved();
+    await service.reload();
+    await service.restoreConfiguration();
+    expect(parse(await fs.readFile(file(), 'utf8')).version).toBe(1);
+    await moved();
+    await service.reload();
+    const config = parse(await fs.readFile(`${file()}.moved-${moves}`, 'utf8'));
+    config.settings.appearance = 'light';
+    const recreated = JSON.stringify(config);
+    await fs.writeFile(file(), recreated);
+    // the recreated file is read, not written over
+    expect((await service.restoreConfiguration()).settings.appearance).toBe('light');
+    expect(await fs.readFile(file(), 'utf8')).toBe(recreated);
+  });
+  it('restores a removed config.jsonc from its last valid copy at the next launch', async () => {
+    const service = create();
+    await service.load();
+    await service.patch(
+      [{ path: 'settings.browsing.mode', value: 'columns' }],
+      service.snapshot().revision,
+    );
+    service.close();
+    await moved();
+    const reopened = create();
+    await reopened.load();
+    expect(reopened.snapshot().settings.browsing.mode).toBe('columns');
+    expect(reopened.snapshot().config!.restored).toMatch(/last valid copy/);
+    expect(parse(await fs.readFile(file(), 'utf8')).settings.browsing.mode).toBe('columns');
+    expect(
+      JSON.parse(await fs.readFile(file() + '.last-valid', 'utf8')).settings.browsing.mode,
+    ).toBe('columns');
+  });
+  it('does not bring settings-v1 back once it was migrated', async () => {
+    const defaults = defaultSettings(root);
+    await fs.writeFile(
+      path.join(root, 'settings-v1.json'),
+      JSON.stringify({
+        version: 1,
+        revision: 4,
+        settings: { ...defaults, browsing: { ...defaults.browsing, mode: 'gallery' } },
+        ui: normalizePreferences(),
+      }),
+    );
+    const service = create();
+    await service.load();
+    expect(service.snapshot().settings.browsing.mode).toBe('gallery');
+    service.close();
+    await moved();
+    await fs.rename(file() + '.last-valid', file() + '.last-valid.moved-1');
+    const reopened = create();
+    await reopened.load();
+    expect(reopened.snapshot().settings.browsing.mode).toBe(defaults.browsing.mode);
+  });
+  it('never overwrites a last valid copy it could not read', async () => {
+    const service = create();
+    await service.load();
+    service.close();
+    await moved();
+    await fs.writeFile(file() + '.last-valid', 'not json');
+    const reopened = create();
+    await reopened.load();
+    const kept = (await fs.readdir(root)).filter((name) =>
+      name.startsWith('config.jsonc.last-valid.unreadable-'),
+    );
+    expect(kept).toHaveLength(1);
+    expect(await fs.readFile(path.join(root, kept[0]!), 'utf8')).toBe('not json');
+  });
+  it('says which copy it runs on when config.jsonc cannot be read', async () => {
+    const service = create();
+    await service.load();
+    service.close();
+    await fs.writeFile(file(), '{ broken');
+    const recovered = create();
+    await recovered.load();
+    expect(recovered.snapshot().config!.fallback).toBe('last-valid');
+    recovered.close();
+    await fs.writeFile(file() + '.last-valid', 'not json');
+    const defaults = create();
+    await defaults.load();
+    expect(defaults.snapshot().config!.fallback).toBe('defaults');
+    expect(await fs.readFile(file() + '.last-valid', 'utf8')).toBe('not json');
+  });
+});
+
+describe('settings the workspace window may change (2026-10-20)', () => {
+  it('lets it change its own preferences, and nothing that grants access, data or execution', async () => {
+    // Any settings.* path was accepted from the workspace renderer: it could widen agent folders or
+    // point a provider elsewhere.
+    const service = create();
+    await service.load();
+    const patch = (path: string, value: unknown, keys?: string[]) =>
+      service.patch(
+        [{ path, value, ...(keys ? { keys } : {}) }],
+        service.snapshot().revision,
+        'workspace',
+      );
+    await patch('settings.appearance', 'dark');
+    await patch('ui.recentCommands', ['open-selection']);
+    await patch('settings.browsing', { ...service.snapshot().settings.browsing, mode: 'columns' });
+    await patch('settings.savedSearches', []);
+    await patch('', { mode: 'list' }, ['settings', 'folders', path.join(root, 'with.dot')]);
+    for (const [path, value] of [
+      ['settings.agents.roots', ['/']],
+      ['settings.agents', { ...service.snapshot().settings.agents, enabled: true }],
+      ['settings.providers', []],
+      ['settings.recipes', []],
+      ['settings.customActions', []],
+      ['settings.terminals', service.snapshot().settings.terminals],
+      ['settings', service.snapshot().settings],
+    ] as const)
+      await expect(patch(path, value)).rejects.toThrow('Change this setting in Settings');
+    expect(service.snapshot().settings.browsing.mode).toBe('columns');
+    await service.patch(
+      [{ path: 'settings.agents.roots', value: [root] }],
+      service.snapshot().revision,
+    );
+    expect(service.snapshot().settings.agents.roots).toEqual([root]);
+  });
+});
+
+describe('references to missing items (2026-10-20)', () => {
+  const dangling = (settings: ReturnType<typeof defaultSettings>) => ({
+    ...settings,
+    customActions: [
+      {
+        id: 'run-missing',
+        name: 'Run missing',
+        aliases: [],
+        icon: 'command',
+        shortcut: '',
+        order: 0,
+        pinned: false,
+        when: { target: 'any', extensions: [], min: 0, max: 10000 },
+        executor: { kind: 'recipe', recipeID: 'missing' },
+      },
+    ],
+    recipes: [{ ...settings.recipes[0]!, providerID: 'nope' }],
+  });
+  it('loads a configuration that names a missing recipe or provider, and says so', async () => {
+    // Nothing checked them: a recipe action opened an empty dialog. Refusing the file instead would
+    // put Viewer on its defaults, so they are warnings, and a use fails visibly.
+    const service = create();
+    await service.load();
+    const config = await read();
+    config.settings = dangling(config.settings);
+    await fs.writeFile(file(), JSON.stringify(config));
+    await service.reload();
+    expect(service.snapshot().settings.customActions[0]!.id).toBe('run-missing');
+    const warnings = service.snapshot().config!.warnings!.join('\n');
+    expect(warnings).toContain('“missing”');
+    expect(warnings).toContain('“nope”');
+  });
+  it('refuses an agent’s change that adds one, but not one that leaves an earlier one alone', async () => {
+    const service = create();
+    await service.load();
+    const added = dangling(service.snapshot().settings).customActions;
+    expect(() => service.preview([{ path: 'settings.customActions', value: added }])).toThrow(
+      '“missing”',
+    );
+    const config = await read();
+    config.settings = dangling(config.settings);
+    await fs.writeFile(file(), JSON.stringify(config));
+    await service.reload();
+    expect(service.preview([{ path: 'settings.appearance', value: 'dark' }]).valid).toBe(true);
+  });
+});
+
+describe('comments inside lists (2026-10-20)', () => {
+  // A list was written whole on any change, so every comment inside it went, unchanged items too.
+  const set = async (keys: string[], value: unknown, formatted = true) => {
+    const text = await fs.readFile(file(), 'utf8');
+    await fs.writeFile(
+      file(),
+      applyEdits(
+        text,
+        modify(
+          text,
+          keys,
+          value,
+          formatted ? { formattingOptions: { insertSpaces: true, tabSize: 2 } } : {},
+        ),
+      ),
+    );
+  };
+  const exclusions = async (service: SettingsService) => {
+    await set(['settings', 'search', 'exclusions'], ['alpha-x', 'beta-x', 'gamma-x']);
+    const text = await fs.readFile(file(), 'utf8');
+    await fs.writeFile(
+      file(),
+      text
+        .replace('"alpha-x"', '// note-A\n      "alpha-x"')
+        .replace('"beta-x"', '// note-B\n      "beta-x"')
+        .replace('"gamma-x"', '// note-C\n      "gamma-x"'),
+    );
+    await service.reload();
+  };
+  const above = (text: string, comment: string, value: string) =>
+    new RegExp(`// note-${comment}\\s*"${value}"`).test(text);
+  it('keeps the comments of the items that stay when one is added', async () => {
+    const service = create();
+    await service.load();
+    await exclusions(service);
+    await service.patch(
+      [{ path: 'settings.search.exclusions', value: ['alpha-x', 'beta-x', 'gamma-x', 'delta-x'] }],
+      service.snapshot().revision,
+    );
+    const text = await fs.readFile(file(), 'utf8');
+    expect(
+      above(text, 'A', 'alpha-x') && above(text, 'B', 'beta-x') && above(text, 'C', 'gamma-x'),
+    ).toBe(true);
+    expect(parse(text).settings.search.exclusions).toEqual([
+      'alpha-x',
+      'beta-x',
+      'gamma-x',
+      'delta-x',
+    ]);
+  });
+  it('removes an item with its own comment, and only that', async () => {
+    const service = create();
+    await service.load();
+    await exclusions(service);
+    await service.patch(
+      [{ path: 'settings.search.exclusions', value: ['alpha-x', 'gamma-x'] }],
+      service.snapshot().revision,
+    );
+    const text = await fs.readFile(file(), 'utf8');
+    expect(text).not.toContain('// note-B');
+    expect(above(text, 'A', 'alpha-x') && above(text, 'C', 'gamma-x')).toBe(true);
+    expect(parse(text).settings.search.exclusions).toEqual(['alpha-x', 'gamma-x']);
+    await service.patch(
+      [{ path: 'settings.search.exclusions', value: ['alpha-x'] }],
+      service.snapshot().revision,
+    );
+    const last = await fs.readFile(file(), 'utf8');
+    expect(above(last, 'A', 'alpha-x')).toBe(true);
+    expect(parse(last).settings.search.exclusions).toEqual(['alpha-x']);
+  });
+  it('keeps a comment inside one action when another is renamed', async () => {
+    const service = create();
+    await service.load();
+    const action = (id: string, name: string) => ({
+      id,
+      name,
+      aliases: [],
+      icon: 'command',
+      shortcut: '',
+      order: 0,
+      pinned: false,
+      when: { target: 'any', extensions: [], min: 0, max: 10000 },
+      executor: { kind: 'builtin', command: 'copy-path' },
+    });
+    await set(['settings', 'customActions'], [action('a', 'First'), action('b', 'Second')]);
+    const text = await fs.readFile(file(), 'utf8');
+    const second = text.indexOf('"name": "Second"');
+    await fs.writeFile(
+      file(),
+      text.slice(0, second) + '// about the second action\n        ' + text.slice(second),
+    );
+    await service.reload();
+    await service.patch(
+      [
+        {
+          path: 'settings.customActions',
+          value: [action('a', 'Renamed'), action('b', 'Second')],
+        },
+      ],
+      service.snapshot().revision,
+    );
+    const saved = await fs.readFile(file(), 'utf8');
+    expect(saved).toMatch(/\/\/ about the second action\s*"name": "Second"/);
+    expect(parse(saved).settings.customActions.map((item: { name: string }) => item.name)).toEqual([
+      'Renamed',
+      'Second',
+    ]);
+  });
+  it('edits a list written on one line', async () => {
+    const service = create();
+    await service.load();
+    await set(
+      ['settings', 'customActions'],
+      [
+        {
+          id: 'a',
+          name: 'Inline',
+          aliases: ['ps', 'shell'],
+          icon: 'command',
+          shortcut: '',
+          order: 0,
+          pinned: false,
+          when: { target: 'any', extensions: [], min: 0, max: 10000 },
+          executor: { kind: 'builtin', command: 'copy-path' },
+        },
+      ],
+      false,
+    );
+    await service.reload();
+    const [action] = service.snapshot().settings.customActions;
+    for (const aliases of [['ps'], ['ps', 'sh', 'zsh'], ['zsh'], []])
+      await service.patch(
+        [{ path: 'settings.customActions', value: [{ ...action!, aliases }] }],
+        service.snapshot().revision,
+      );
+    expect(parse(await fs.readFile(file(), 'utf8')).settings.customActions[0].aliases).toEqual([]);
+  });
+});
+
+describe('importing a configuration (2026-10-20)', () => {
+  it('keeps the imported file’s own comments', async () => {
+    // Its values were patched into the current text, so its comments were dropped.
+    const service = create();
+    await service.load();
+    const exported = path.join(root, 'export.jsonc');
+    const text = (await fs.readFile(file(), 'utf8')).replace(
+      '"appearance":',
+      '// imported note\n    "appearance":',
+    );
+    await fs.writeFile(exported, text.replace('"appearance": "system"', '"appearance": "light"'));
+    const imported = await service.importConfiguration(exported);
+    expect(imported.settings.appearance).toBe('light');
+    expect(await fs.readFile(file(), 'utf8')).toContain('// imported note');
+  });
+  it('replaces a configuration that cannot be read, and keeps it beside', async () => {
+    const service = create();
+    await service.load();
+    const exported = path.join(root, 'export.jsonc');
+    await fs.copyFile(file(), exported);
+    await fs.writeFile(file(), '{ broken');
+    await service.reload();
+    await service.importConfiguration(exported);
+    expect(service.snapshot().config!.diagnostics).toEqual([]);
+    expect(await fs.readFile(file(), 'utf8')).toBe(await fs.readFile(exported, 'utf8'));
+    const kept = (await fs.readdir(root)).filter((name) =>
+      name.startsWith('config.jsonc.before-import-'),
+    );
+    expect(kept).toHaveLength(1);
+    expect(await fs.readFile(path.join(root, kept[0]!), 'utf8')).toBe('{ broken');
+  });
+  it('asks before an import changes providers, agents, programs or terminals', async () => {
+    const service = create();
+    await service.load();
+    const config = await read();
+    config.settings.providers = [
+      {
+        id: 'elsewhere',
+        name: 'Elsewhere',
+        kind: 'local',
+        endpoint: 'https://models.example',
+        model: 'm',
+        allowContent: false,
+      },
+    ];
+    const exported = path.join(root, 'export.jsonc');
+    await fs.writeFile(exported, JSON.stringify(config));
+    const confirm = vi.fn(async (_changes: string[]) => false);
+    await expect(service.importConfiguration(exported, confirm)).rejects.toThrow('cancelled');
+    expect(confirm.mock.calls[0]![0].join(' ')).toContain('model providers');
+    expect(service.snapshot().settings.providers).toEqual([]);
+    confirm.mockResolvedValue(true);
+    await service.importConfiguration(exported, confirm);
+    expect(service.snapshot().settings.providers[0]!.id).toBe('elsewhere');
+  });
+  it('leaves out guidance a person deleted from config.jsonc', async () => {
+    // Every save put back every guide line that was missing.
+    const service = create();
+    await service.load();
+    const lines = (await fs.readFile(file(), 'utf8')).split('\n');
+    const at = lines.findIndex((line) => line.includes('"appearance":'));
+    const deleted = lines[at - 1]!;
+    expect(deleted.trim().startsWith('//')).toBe(true);
+    lines.splice(at - 1, 1);
+    await fs.writeFile(file(), lines.join('\n'));
+    await service.reload();
+    await service.patch(
+      [{ path: 'settings.browsing.mode', value: 'columns' }],
+      service.snapshot().revision,
+    );
+    expect((await fs.readFile(file(), 'utf8')).split('\n')).not.toContain(deleted);
+  });
+});
+
+describe('reloading config.jsonc (2026-10-20)', () => {
+  it('announces a change once', async () => {
+    // It was announced by the read and again by the reload, so every window applied it twice.
+    const emit = vi.fn();
+    const service = create(emit);
+    await service.load();
+    service.close();
+    const config = await read();
+    config.settings.appearance = 'dark';
+    await fs.writeFile(file(), JSON.stringify(config));
+    emit.mockClear();
+    await service.reload();
+    expect(emit).toHaveBeenCalledOnce();
+    emit.mockClear();
+    await service.reload();
+    expect(emit).toHaveBeenCalledOnce();
+  });
+});

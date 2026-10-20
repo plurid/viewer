@@ -132,9 +132,31 @@ const agentConfigurable: readonly (readonly string[])[] = [
   ['settings', 'previews'],
   ['settings', 'recipes'],
   ['settings', 'savedSearches'],
-  ['settings', 'settingsWindow'],
   ['ui'],
 ];
+/**
+ * Why the workspace must not run an agent's command as it arrives, if it must not (2026-10-20).
+ * Main stops waiting after 25 seconds, and a window that ran it later (a hidden window draws no
+ * frames) did so after the agent was told it failed. A custom action runs as it was reviewed: the
+ * workspace ran its current definition, so a recipe action changed into a shell script since ran.
+ */
+export function agentDispatchRefusal(
+  event: { command: string; deadline: number; executor?: CustomAction['executor'] },
+  actions: readonly CustomAction[],
+  now = Date.now(),
+): string | undefined {
+  if (now > event.deadline)
+    return 'The request expired before the workspace could run it. Request it again.';
+  if (!event.command.startsWith('custom.')) return undefined;
+  const action = actions.find((item) => 'custom.' + item.id === event.command);
+  if (
+    !action ||
+    !event.executor ||
+    JSON.stringify(action.executor) !== JSON.stringify(event.executor)
+  )
+    return 'The action changed after it was reviewed. Ask the agent for a new proposal.';
+  return undefined;
+}
 export function agentConfigurationPath(keys: readonly string[]): void {
   if (
     !agentConfigurable.some(

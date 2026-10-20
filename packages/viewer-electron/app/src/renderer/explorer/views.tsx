@@ -1,6 +1,7 @@
 import {
   memo,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -28,6 +29,8 @@ import { FolderSizeValue } from './sizes';
 import { LinkedPlaneButton } from '../workspace/LinkedPlaneButton';
 import { rowsUnder, useMarquee, type MarqueeSelect } from './marquee';
 import { renderedImageFormats } from '../../domain/rendered-images';
+import { thumbnailByteLimit } from '../../domain/thumbnails';
+import { PreviewActivity } from '../previews/activity';
 import { AppIcon, isApplication } from './app-icon';
 import {
   acceptsDrop,
@@ -393,7 +396,7 @@ export function Thumbnail({ entry }: { entry: FileEntry }) {
   useEffect(() => {
     setURL('');
     setError(false);
-    if (!thumbnailFormats.has(entry.extension) || entry.size > 64 * 1024 * 1024) return;
+    if (!thumbnailFormats.has(entry.extension) || entry.size > thumbnailByteLimit) return;
     let live = true;
     void window.viewer
       .thumbnail(entry.path, getState().settings.settings.previews.thumbnailSize)
@@ -590,14 +593,14 @@ function Column({
   };
   const { register, unregister } = navigation;
   useEffect(() => {
-    if (!listing.loading && !listing.error) register(path, filtered);
+    if (!listing.loading && !listing.unavailable) register(path, filtered);
     return () => unregister(path);
-  }, [path, filtered, listing.loading, listing.error, register, unregister]);
+  }, [path, filtered, listing.loading, listing.unavailable, register, unregister]);
   return (
     <BrowserColumn path={path} entries={filtered} onActivate={() => navigation.activate(path)}>
       {listing.loading ? (
         <Loading />
-      ) : listing.error ? (
+      ) : listing.unavailable ? (
         <Empty title="Folder unavailable" detail={listing.error}>
           {needsFolderAccess(listing.errorCode) && <FolderAccessButton folder={path} />}
         </Empty>
@@ -681,6 +684,7 @@ export function ColumnsView({
   ...props
 }: FileViewProps & { path: string; navigation: ColumnNavigation }) {
   const scroll = useRef<HTMLDivElement>(null);
+  const activity = useContext(PreviewActivity);
   const selected =
     props.selection.length === 1
       ? navigation.scope().find((entry) => entry.path === props.selection[0] && !entry.directory)
@@ -713,13 +717,14 @@ export function ColumnsView({
           aria-label="File preview"
           data-preview-path={selected.path}
         >
-          <PreviewHost key={selected.path} path={selected.path} />
+          <PreviewHost key={selected.path} path={selected.path} {...activity} />
         </div>
       )}
     </div>
   );
 }
 export function GalleryView(props: FileViewProps) {
+  const activity = useContext(PreviewActivity);
   const selected = props.entries.find((entry) => entry.path === props.cursor);
   const starts = useMemo(() => {
     const map = new Map<number, ViewSection>();
@@ -750,7 +755,7 @@ export function GalleryView(props: FileViewProps) {
     <div className="gallery-view">
       <div className="gallery-preview" ref={keepPreviewKeys}>
         {selected && !selected.directory ? (
-          <PreviewHost path={selected.path} />
+          <PreviewHost path={selected.path} {...activity} />
         ) : (
           <Empty
             icon={selected?.directory ? 'folder' : 'image'}

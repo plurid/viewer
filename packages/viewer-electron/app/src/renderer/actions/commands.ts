@@ -1,5 +1,12 @@
 import { getState } from '../state/store';
 import type { CommandContext, CommandDefinition } from '../commands/registry';
+import type { ActionContext } from '../../domain/services';
+/** Who a plan was made for: a watch rule runs as the person, and was labelled “Your selection”
+ * (2026-10-20). */
+export function planOrigin(context: Pick<ActionContext, 'actor' | 'workspaceID'>): string {
+  if (context.actor === 'agent') return 'Agent proposal';
+  return context.workspaceID === 'watch-rule' ? 'Watch rule' : 'Your selection';
+}
 export function requestAction(recipeID: string, context: CommandContext): void {
   window.dispatchEvent(
     new CustomEvent('viewer:action-request', {
@@ -36,7 +43,14 @@ export function actionCommands(): CommandDefinition[] {
       icon: 'command' as const,
       aliases: ['ai', 'task', 'agent'],
       when: (context: CommandContext) => !!context.selection.length,
-      run: (context: CommandContext) => requestAction('rename', context),
+      // a recipe that exists: 'rename' could have been removed (2026-10-20)
+      run: (context: CommandContext) => {
+        const recipes = getState().settings.settings.recipes;
+        requestAction(
+          (recipes.find((recipe) => recipe.kind === 'rename') ?? recipes[0])?.id ?? 'rename',
+          context,
+        );
+      },
     },
   ];
 }

@@ -64,7 +64,13 @@ export class Workflows {
       access(files: readonly string[]): Promise<void>;
       files: Pick<FileServices, 'inspect'>;
       comparisons: Pick<Comparisons, 'run' | 'cancel'>;
-      plans: Pick<OperationPlans, 'request'>;
+      /** Everything but apply: a workflow prepares a plan, and the person applies it (2026-10-20). */
+      plans: {
+        request(
+          request: Exclude<Parameters<OperationPlans['request']>[0], { kind: 'apply' }>,
+          owner?: string,
+        ): ReturnType<OperationPlans['request']>;
+      };
       operations: Pick<Operations, 'all'>;
       actions: Pick<ActionPlanner, 'start' | 'get' | 'cancel'>;
       coordination?: Pick<typeof fileCoordination, 'run'>;

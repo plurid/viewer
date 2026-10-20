@@ -51,14 +51,15 @@ Output: `packages/viewer-electron/app/out/mac-app-store/mas-dev/<architecture>/V
 After the development sandbox and release gates pass, use distribution assets and an unused Store build number:
 
 ```sh
-export VIEWER_MAC_CHANNEL='mas'
 export VIEWER_MAS_IDENTITY='Apple Distribution: Propal Invest SRL (49W9L8Z9J5)'
 export VIEWER_MAS_INSTALLER_IDENTITY='3rd Party Mac Developer Installer: Propal Invest SRL (49W9L8Z9J5)'
 export VIEWER_MAS_PROFILE='/absolute/path/Viewer-AppStore.provisionprofile'
 export VIEWER_MAS_BUILD='2'
-pnpm mas:preflight
+VIEWER_MAC_CHANNEL=mas pnpm mas:preflight
 pnpm mas:package
 ```
+
+`mas:package` always builds the Store channel and `mas:dev` the development one; `mas:preflight` checks the channel `VIEWER_MAC_CHANNEL` names for that one command. A `VIEWER_MAC_CHANNEL` that conflicts with the command (for example `mas`, left exported, with `mas:dev`) stops the command instead of changing what it builds.
 
 The package command also validates the installer certificate's role/team, runs `productbuild`, checks the package signature and writes its SHA-256 checksum. Output is under `out/mac-app-store/mas/<architecture>/`. These commands do not upload, create a listing or submit for review.
 

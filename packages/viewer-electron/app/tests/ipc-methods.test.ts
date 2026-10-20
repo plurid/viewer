@@ -6,7 +6,15 @@ describe('IPC method table', () => {
     expect(Object.keys(methodWindows).sort()).toEqual(Object.keys(schemas).sort());
   });
   it('keeps credentials in Settings and file changes in the workspace window', () => {
-    for (const method of ['providerCredential', 'agentToken', 'agentClients', 'fileAccessRevoke'])
+    for (const method of [
+      'providerCredential',
+      'agentToken',
+      'agentClients',
+      'fileAccessRevoke',
+      // imports replace the whole configuration, agents and providers included (2026-10-20)
+      'configTransfer',
+      'configRestore',
+    ])
       expect(methodWindows[method as keyof typeof methodWindows]).toBe('settings');
     for (const method of ['operate', 'save', 'trashConfirmation', 'printPDF', 'clipboardWrite'])
       expect(methodWindows[method as keyof typeof methodWindows]).toBe('viewer');

@@ -105,7 +105,7 @@ describe('folder appearance and independent explorer sessions', () => {
     });
     const first = browseSession(root.id, '/fixtures/Downloads');
     first.selection = ['/fixtures/Downloads/One.txt'];
-    first.scroll = 230;
+    first.scroll = { list: 230 };
     navigate(root.id, '/fixtures/Documents');
     updatePane(root.id, { mode: 'columns' });
     browseSession(root.id, '/fixtures/Documents').selection = ['/fixtures/Documents/Two.txt'];

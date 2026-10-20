@@ -22,7 +22,8 @@ export function captureTarget(
 }
 export function programCommands(
   workspace: WorkspaceController,
-  invoke: (id: string, context: CommandContext) => Promise<void>,
+  /** `false` when no command of that ID is available here. */
+  invoke: (id: string, context: CommandContext) => Promise<boolean | void>,
   terminalName?: string,
 ): CommandDefinition[] {
   const folder = (context: CommandContext) => !!context.directory || !!context.folder;
@@ -89,9 +90,19 @@ export function programCommands(
           if (executor.kind === 'builtin') {
             if (executor.command.startsWith('custom.'))
               throw new Error('Custom actions cannot call another custom action.');
-            await invoke(executor.command, context);
-          } else if (executor.kind === 'recipe') requestAction(executor.recipeID, context);
-          else if (executor.kind === 'terminal')
+            // an unknown or unavailable command did nothing, silently (2026-10-20)
+            if ((await invoke(executor.command, context)) === false)
+              throw new Error(
+                `“${action.name}” runs “${executor.command}”, which is not a command available here.`,
+              );
+          } else if (executor.kind === 'recipe') {
+            // it opened Run action with no recipe, whose Create did nothing (2026-10-20)
+            if (!getState().settings.settings.recipes.some(({ id }) => id === executor.recipeID))
+              throw new Error(
+                `The recipe of “${action.name}” no longer exists. Choose another in Settings → Actions.`,
+              );
+            requestAction(executor.recipeID, context);
+          } else if (executor.kind === 'terminal')
             workspace.newTerminal(target(context), executor.profileID);
           else await window.viewer.customExecute(action.id, captureTarget(context, workspace));
         },

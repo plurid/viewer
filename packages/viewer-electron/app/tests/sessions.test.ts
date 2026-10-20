@@ -27,7 +27,8 @@ it('keeps independent selections and filters across detachment and an owned dire
   one.selection = [file.path];
   one.cache.set(file.path, file);
   one.query = 'Fire';
-  one.scroll = 170;
+  one.scroll = { list: 170 };
+  one.columnScroll.set('/Books/Chapter', 50);
   one.columnTrail = ['/Books/Chapter'];
   one.columnScope = '/Books/Chapter';
   one.columnDirectory = '/Books/Chapter';
@@ -37,7 +38,8 @@ it('keeps independent selections and filters across detachment and an owned dire
   remapSessions([{ source: '/Books', destination: '/Library' }]);
   expect(browseSession('one', '/Library')).toBe(one);
   expect(one.query).toBe('Fire');
-  expect(one.scroll).toBe(170);
+  expect(one.scroll).toEqual({ list: 170 });
+  expect(one.columnScroll.get('/Library/Chapter')).toBe(50);
   expect(one.columnTrail).toEqual(['/Library/Chapter']);
   expect(one.columnScope).toBe('/Library/Chapter');
   expect(one.columnDirectory).toBe('/Library/Chapter');

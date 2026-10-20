@@ -284,6 +284,73 @@ describe('background filename and metadata index', () => {
       await restored.close();
     }
   });
+  it('crawls again only the roots it could not read when its configuration is unchanged', async () => {
+    // Every folder pick configured the index anew (a pick can make a root readable), and every
+    // configuration crawled every root again from the start.
+    const present = path.join(root, 'Present'),
+      later = path.join(root, 'Later');
+    await mkdir(present);
+    await writeFile(path.join(present, 'a.txt'), 'a');
+    const statuses: string[][] = [];
+    const index = await FileIndex.open(path.join(root, 'index.sqlite'), (value) =>
+      statuses.push(value.roots.map((item) => item.status)),
+    );
+    try {
+      const scope = { roots: [present, later], contentRoots: [], exclusions: [], paused: false };
+      index.configure(scope);
+      await index.settled();
+      expect(index.status().roots.map((item) => item.status)).toEqual(['ready', 'offline']);
+      await mkdir(later);
+      await writeFile(path.join(later, 'b.txt'), 'b');
+      statuses.length = 0;
+      index.configure({ ...scope });
+      await index.settled();
+      expect(statuses.some(([first]) => first !== 'ready')).toBe(false);
+      expect(index.status().roots.map((item) => [item.status, item.count])).toEqual([
+        ['ready', 1],
+        ['ready', 1],
+      ]);
+      // a rebuild crawls everything
+      statuses.length = 0;
+      index.configure(scope, true);
+      await index.settled();
+      expect(statuses.some(([first]) => first === 'indexing')).toBe(true);
+    } finally {
+      await index.close();
+    }
+  });
+  it('extracts a document once, and again only when it changes or the index is rebuilt', async () => {
+    // Every crawl (each launch, each configuration) extracted every document under the content
+    // roots again.
+    const folder = path.join(root, 'Library');
+    await mkdir(folder);
+    await writeFile(path.join(folder, 'Notes.txt'), 'kept notes');
+    const extract = vi.fn(async (file: string) => 'distinctive ' + path.basename(file));
+    const index = await FileIndex.open(path.join(root, 'index.sqlite'), undefined, extract);
+    try {
+      const scope = { roots: [folder], contentRoots: [folder], exclusions: [], paused: false };
+      index.configure(scope);
+      await index.settled();
+      expect(extract).toHaveBeenCalledTimes(1);
+      index.configure({ ...scope, exclusions: ['node_modules'] });
+      await index.settled();
+      expect(extract).toHaveBeenCalledTimes(1);
+      expect(
+        index
+          .query({ query: 'distinctive', content: true })
+          .entries.map((item) => path.basename(item.path)),
+      ).toEqual(['Notes.txt']);
+      await writeFile(path.join(folder, 'Notes.txt'), 'changed notes, and longer');
+      index.configure(scope);
+      await index.settled();
+      expect(extract).toHaveBeenCalledTimes(2);
+      index.configure(scope, true);
+      await index.settled();
+      expect(extract).toHaveBeenCalledTimes(3);
+    } finally {
+      await index.close();
+    }
+  });
   it('keeps direct-folder scope distinct and reconciles old FTS row ownership', async () => {
     const file = path.join(root, 'old-index.sqlite');
     const old = new DatabaseSync(file);
@@ -402,6 +469,59 @@ describe('background filename and metadata index', () => {
       await index.update(link);
       expect(index.query({ query: 'alias' }).entries).toHaveLength(1);
       expect(index.query({ query: 'Unindexed' }).entries).toEqual([]);
+    } finally {
+      await index.close();
+    }
+  });
+  it('drops a removed file’s extracted text with its row (2026-10-20)', async () => {
+    // The crawl removed the file's rows and kept its text until the next configuration change.
+    const inside = path.join(root, 'inside');
+    await mkdir(inside);
+    const file = path.join(inside, 'a.txt');
+    await writeFile(file, 'kept text');
+    const index = new FileIndex(
+      ':memory:',
+      () => {},
+      vi.fn(async () => 'kept text'),
+    );
+    try {
+      const config = { roots: [inside], exclusions: [], contentRoots: [inside], paused: false };
+      index.configure(config);
+      await index.settled();
+      const db = (index as unknown as { db: DatabaseSync }).db;
+      const rows = () =>
+        (
+          db.prepare('SELECT count(*) AS count FROM source_documents WHERE path=?').get(file) as {
+            count: number;
+          }
+        ).count;
+      expect(rows()).toBe(1);
+      await rename(file, path.join(root, 'a.txt'));
+      index.configure(config, true);
+      await index.settled();
+      expect(rows()).toBe(0);
+    } finally {
+      await index.close();
+    }
+  });
+  it('reads kind:folders as folders, and refuses a kind it does not know (2026-10-20)', async () => {
+    // Any value but folder or directory meant files: kind:folders listed files.
+    await mkdir(path.join(root, 'Folder one'));
+    await writeFile(path.join(root, 'File one.txt'), 'x');
+    const index = new FileIndex(':memory:');
+    try {
+      index.configure({ roots: [root], exclusions: [], contentRoots: [], paused: false });
+      await index.settled();
+      for (const kind of ['folder', 'folders', 'directory', 'directories'])
+        expect(
+          index.query({ query: `one kind:${kind}` }).entries.every((entry) => entry.directory),
+          kind,
+        ).toBe(true);
+      for (const kind of ['file', 'files'])
+        expect(
+          index.query({ query: `one kind:${kind}` }).entries.every((entry) => !entry.directory),
+        ).toBe(true);
+      expect(() => index.query({ query: 'one kind:pictures' })).toThrow('kind:file or kind:folder');
     } finally {
       await index.close();
     }

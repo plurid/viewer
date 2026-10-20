@@ -10,12 +10,16 @@ import { folderCommands, type FolderActions } from '../src/renderer/commands/fol
 import { contextMenuSections, type MenuSection } from '../src/renderer/commands/menu';
 import { textEditFor } from '../src/renderer/commands/editing';
 import { copyPathCommand } from '../src/renderer/commands/copy-path';
+import { programCommands } from '../src/renderer/commands/programs';
+import { planOrigin } from '../src/renderer/actions/commands';
+import type { WorkspaceController } from '../src/renderer/workspace/context';
 import {
   activeWorkspace,
   flushState,
   getState,
   initialize,
   refreshClipboard,
+  receiveSettings,
   rememberCommand,
 } from '../src/renderer/state/store';
 
@@ -89,6 +93,21 @@ afterEach(async () => {
 });
 
 describe('contextual commands', () => {
+  it('keeps a command an agent ran out of Recent commands (2026-10-20)', async () => {
+    // An agent's commands ran through the person's path and were ranked first in the palette.
+    const chosen = vi.fn();
+    const own = new CommandRegistry(chosen);
+    const run = vi.fn();
+    own.register('window', {
+      context: () => context,
+      definitions: () => [{ id: 'probe', label: 'Probe', group: 'Test', when: () => true, run }],
+    });
+    expect(await own.invoke('probe', { remember: false })).toBe(true);
+    expect(run).toHaveBeenCalledOnce();
+    expect(chosen).not.toHaveBeenCalled();
+    await own.invoke('probe', {});
+    expect(chosen).toHaveBeenCalledWith('probe');
+  });
   it('offers native actions through captured selection and hides them on other platforms', async () => {
     const definitions = folderCommands(actions);
     for (const id of ['tags', 'make-alias', 'native-quick-look', 'share']) {
@@ -336,5 +355,72 @@ describe('contextual commands', () => {
     );
     expect(getState().clipboard).toBeNull();
     expect(operate).not.toHaveBeenCalled();
+  });
+});
+
+describe('custom actions that name a missing item (2026-10-20)', () => {
+  it('says the recipe is missing instead of opening an empty Run action dialog', async () => {
+    const settings = getState().settings;
+    receiveSettings({
+      ...settings,
+      revision: settings.revision + 1,
+      settings: {
+        ...settings.settings,
+        customActions: [
+          {
+            id: 'run-missing',
+            name: 'Run missing',
+            aliases: [],
+            icon: 'command',
+            shortcut: '',
+            order: 0,
+            pinned: false,
+            when: { target: 'any', extensions: [], min: 0, max: 10000 },
+            executor: { kind: 'recipe', recipeID: 'missing' },
+          },
+        ],
+      },
+    });
+    const workspace = {} as WorkspaceController;
+    const action = programCommands(workspace, async () => {}).find(
+      (command) => command.id === 'custom.run-missing',
+    )!;
+    await expect(action.run(context)).rejects.toThrow('no longer exists');
+    expect(window.dispatchEvent).not.toHaveBeenCalled();
+  });
+  it('says a built-in command it names is not available, instead of doing nothing', async () => {
+    const settings = getState().settings;
+    receiveSettings({
+      ...settings,
+      revision: settings.revision + 1,
+      settings: {
+        ...settings.settings,
+        customActions: [
+          {
+            id: 'run-unknown',
+            name: 'Run unknown',
+            aliases: [],
+            icon: 'command',
+            shortcut: '',
+            order: 0,
+            pinned: false,
+            when: { target: 'any', extensions: [], min: 0, max: 10000 },
+            executor: { kind: 'builtin', command: 'no-such-command' },
+          },
+        ],
+      },
+    });
+    const action = programCommands({} as WorkspaceController, async () => false).find(
+      (command) => command.id === 'custom.run-unknown',
+    )!;
+    await expect(action.run(context)).rejects.toThrow('not a command available here');
+  });
+});
+
+describe('where an action plan came from (2026-10-20)', () => {
+  it('names a watch rule’s run as its own, not the person’s selection', () => {
+    expect(planOrigin({ actor: 'user', workspaceID: 'watch-rule' })).toBe('Watch rule');
+    expect(planOrigin({ actor: 'agent', workspaceID: 'workspace' })).toBe('Agent proposal');
+    expect(planOrigin({ actor: 'user', workspaceID: 'workspace' })).toBe('Your selection');
   });
 });

@@ -1,4 +1,6 @@
-import { beforeEach, afterEach, describe, it, expect } from 'vitest';
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { DocumentStore } from '../src/desktop/document-store';
 import {
   mkdir,
   writeFile,
@@ -227,6 +229,55 @@ describe('reviewed file action transactions', () => {
     expect(await readFile(path.join(files, 'B.txt'), 'utf8')).toBe('original B');
     expect(await readFile(path.join(files, 'New A.txt'), 'utf8')).toBe('race');
     expect((await readdir(files)).some((file) => file.startsWith('.viewer-action'))).toBe(false);
+  });
+  it('keeps Actions working when a step log cannot be read (2026-10-20)', async () => {
+    // A corrupt middle line, or a log over its limit, rejected load(), which every Actions call
+    // awaits, and the rejection was kept: Actions stayed unavailable, after a restart too.
+    const plan = await batch();
+    plan.status = 'applying';
+    await writeFile(path.join(root, 'action-journal-v1.json'), JSON.stringify([plan]));
+    await writeFile(path.join(root, `action-steps-${plan.id}.jsonl`), 'not json\n{"row":"x"}\n');
+    await planner.close();
+    planner = create();
+    const recovered = await planner.get(plan.id);
+    expect(recovered.status).toBe('recovery');
+    expect(recovered.error).toContain('.unreadable-');
+    expect(
+      (await readdir(root)).some((name) =>
+        name.startsWith(`action-steps-${plan.id}.jsonl.unreadable-`),
+      ),
+    ).toBe(true);
+    expect((await batch()).status).toBe('review');
+  });
+  it('reads the task journal again after a failed read (2026-10-20)', async () => {
+    await planner.close();
+    vi.spyOn(DocumentStore.prototype, 'load').mockRejectedValueOnce(new Error('transient'));
+    planner = create();
+    await expect(planner.all()).rejects.toThrow('transient');
+    await expect(planner.all()).resolves.toEqual([]);
+    vi.restoreAllMocks();
+  });
+  it('removes a step log once its plan is recorded as settled (2026-10-20)', async () => {
+    // Step logs were never removed: private files keeping every source and destination path.
+    const plan = await batch();
+    await planner.apply(approve(plan));
+    expect((await planner.get(plan.id)).status).toBe('completed');
+    expect(await readdir(root)).not.toContain(`action-steps-${plan.id}.jsonl`);
+  });
+  it('removes at load the step logs no interrupted plan needs (2026-10-20)', async () => {
+    const orphan = `action-steps-${randomUUID()}.jsonl`;
+    await writeFile(path.join(root, orphan), '{"row":"x","completed":true}\n');
+    const plan = await batch();
+    plan.status = 'applying';
+    await writeFile(path.join(root, 'action-journal-v1.json'), JSON.stringify([plan]));
+    const needed = `action-steps-${plan.id}.jsonl`;
+    await writeFile(path.join(root, needed), '');
+    await planner.close();
+    planner = create();
+    await planner.load();
+    const names = await readdir(root);
+    expect(names).not.toContain(orphan);
+    expect(names).toContain(needed);
   });
   it('recovers a crash between publishing a destination and its completion checkpoint', async () => {
     const plan = await batch();

@@ -1,6 +1,6 @@
 import { pathMapper, type FileChange } from '../../domain/changes';
 import { useCallback, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
-import type { FileEntry } from '../../domain/contracts';
+import type { FileEntry, FolderPane } from '../../domain/contracts';
 import { dialogOpen } from '../ui/modal';
 
 /** Lightweight view state outlives Plurid's detached components. Keys are host IDs. */
@@ -13,7 +13,9 @@ export interface BrowseSession {
   pathOpen: boolean;
   anchor: string;
   cursor: string;
-  scroll: number;
+  /** Each mode's own offset, and each column's in Columns (see scroll-restore). */
+  scroll: Partial<Record<FolderPane['mode'], number>>;
+  columnScroll: Map<string, number>;
   expanded: string[];
   listChildren: Map<string, FileEntry[]>;
   columnTrail: string[];
@@ -45,7 +47,8 @@ export function browseSession(id: string, path: string): BrowseSession {
       pathOpen: false,
       anchor: '',
       cursor: '',
-      scroll: 0,
+      scroll: {},
+      columnScroll: new Map(),
       expanded: [],
       listChildren: new Map(),
       columnTrail: [],
@@ -169,6 +172,9 @@ export function remapSessions(changes: readonly FileChange[]): void {
       state.columnTrail = state.columnTrail.map((path) => map(path)).filter(Boolean);
       state.columnScope = map(state.columnScope);
       state.columnDirectory = map(state.columnDirectory);
+      state.columnScroll = new Map(
+        [...state.columnScroll].map(([column, offset]) => [map(column), offset]),
+      );
       state.listChildren = new Map(
         [...state.listChildren].map(([parent, entries]) => [
           map(parent),

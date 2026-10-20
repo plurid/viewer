@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FileEntry } from '../src/domain/contracts';
 import { emptyLens, resolveLens, type Lens } from '../src/domain/lenses';
 import {
+  dropRegion,
   layoutLens,
   MapIndex,
   mapTile,
@@ -116,5 +117,19 @@ describe('map layout', () => {
     expect(right.y).toBe(first.y);
     expect(right.x).toBeGreaterThan(first.x);
     expect(nearestTile(map, first.entry.path, 'up')).toBeUndefined();
+  });
+});
+describe('dropping tiles (2026-10-20)', () => {
+  it('places a drop beyond a bare map’s tiles on the map, and finds no group in a grouped map’s gaps', () => {
+    // A drop outside every region was silently ignored.
+    const bare = layout(base, names(3));
+    expect(dropRegion(bare, bare.width + 100, 10)?.id).toBeNull();
+    const grouped = layout(
+      { ...base, groups: [{ id: 'gaaaaa', name: 'Bolts', order: 0 }] },
+      names(3),
+    );
+    expect(dropRegion(grouped, grouped.width + 100, 10)).toBeUndefined();
+    const unsorted = grouped.regions.find((region) => region.id === null)!;
+    expect(dropRegion(grouped, unsorted.x + 4, unsorted.y + 4)?.id).toBeNull();
   });
 });

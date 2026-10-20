@@ -113,6 +113,24 @@ export function ProviderDataPermission({
           </button>
         )}
       </div>
+      {permission && (
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={!!permission.agents}
+            disabled={busy || loading}
+            onChange={(event) => {
+              const allow = event.target.checked;
+              setBusy(true);
+              void window.viewer
+                .providerPermissionAgents(provider.id, provider.endpoint, allow)
+                .catch((value: Error) => error(value.message))
+                .finally(() => setBusy(false));
+            }}
+          />
+          Actions agents start may send this data too
+        </label>
+      )}
       <p className="settings-note">
         Changing the endpoint or clearing the key revokes access and stops running requests.
       </p>

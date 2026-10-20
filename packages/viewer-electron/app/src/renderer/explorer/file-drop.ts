@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, type DragEvent } from 'react';
+import type { FileEntry } from '../../domain/contracts';
 import { report } from '../state/store';
 import { DragAutoScroll, SpringHover, type DragPoint } from './drag-navigation';
 
@@ -10,6 +11,37 @@ interface SpringFolders {
   finish(dropped?: boolean): void;
 }
 const scrollable = '.file-scroll, .file-table, .columns-view, .gallery-strip';
+/**
+ * A drag Viewer started itself, which reaches its own planes as a native drag with no Viewer data:
+ * the devices of its items, so a drop's cursor shows the move a same-device transfer performs, and
+ * the copy another device gets. Every such drag showed the copy cursor (2026-10-20). It ends with
+ * the drag, or once no plane has seen it for a moment.
+ */
+let started: { devices: ReadonlySet<string>; seen: number } | undefined;
+const devices = new Map<string, string>();
+const device = (identity: string) => identity.slice(0, identity.indexOf(':'));
+export function rememberDrag(entries: readonly FileEntry[]): void {
+  devices.clear();
+  started = entries.length
+    ? { devices: new Set(entries.map((entry) => device(entry.identity))), seen: performance.now() }
+    : undefined;
+}
+/** What a plain drop of Viewer's own drag on `folder` does, once that folder's device is known. */
+function startedEffect(folder: string): 'move' | 'copy' | undefined {
+  if (!started || performance.now() - started.seen > 1500) return undefined;
+  started.seen = performance.now();
+  if (!devices.has(folder)) {
+    devices.set(folder, '');
+    void window.viewer.stat(folder).then(
+      (entry) => devices.set(folder, device(entry.identity)),
+      () => devices.delete(folder),
+    );
+    return undefined;
+  }
+  const destination = devices.get(folder);
+  if (!destination) return undefined;
+  return [...started.devices].every((value) => value === destination) ? 'move' : 'copy';
+}
 export function useFileDrop(directory: () => string | undefined, navigation?: SpringFolders) {
   const live = useRef({ directory, navigation });
   live.current = { directory, navigation };
@@ -107,6 +139,10 @@ export function useFileDrop(directory: () => string | undefined, navigation?: Sp
   );
   useEffect(() => {
     const cancel = () => clear();
+    const ended = () => {
+      started = undefined;
+      cancel();
+    };
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && root.current) {
         event.preventDefault();
@@ -120,7 +156,7 @@ export function useFileDrop(directory: () => string | undefined, navigation?: Sp
     const hidden = () => {
       if (document.hidden) cancel();
     };
-    window.addEventListener('dragend', cancel);
+    window.addEventListener('dragend', ended);
     window.addEventListener('drop', outside, true);
     window.addEventListener('blur', cancel);
     window.addEventListener('keydown', escape, true);
@@ -134,7 +170,7 @@ export function useFileDrop(directory: () => string | undefined, navigation?: Sp
       root.current = null;
       pointer.current = undefined;
       navigation?.finish();
-      window.removeEventListener('dragend', cancel);
+      window.removeEventListener('dragend', ended);
       window.removeEventListener('drop', outside, true);
       window.removeEventListener('blur', cancel);
       window.removeEventListener('keydown', escape, true);
@@ -160,7 +196,7 @@ export function useFileDrop(directory: () => string | undefined, navigation?: Sp
         ? 'copy'
         : event.metaKey || event.dataTransfer.types.includes(FILE_DRAG)
           ? 'move'
-          : 'copy';
+          : (startedEffect(destination.path) ?? 'copy');
       pointer.current = { x: event.clientX, y: event.clientY };
       paint(destination.element);
       hover.hover(navigation ? destination.folder : undefined);
@@ -191,6 +227,7 @@ export function useFileDrop(directory: () => string | undefined, navigation?: Sp
         clear();
         return;
       }
+      started = undefined;
       const kind = event.altKey ? 'copy' : event.metaKey ? 'move' : 'transfer';
       try {
         const sources: unknown = event.dataTransfer.types.includes(FILE_DRAG)

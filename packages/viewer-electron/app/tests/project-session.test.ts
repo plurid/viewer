@@ -4,13 +4,17 @@ import type { ProjectAssociation } from '../src/domain/project';
 import { stateSchema } from '../src/desktop/storage';
 import {
   activeWorkspace,
+  addCollectionPane,
   addPane,
   associateProject,
   closeProject,
   flushState,
+  folderPresentation,
   getState,
   initialize,
   newWorkspace,
+  saveCollection,
+  updatePane,
   savePreviewValue,
   setActivePane,
   storageAdapter,
@@ -95,4 +99,24 @@ it('closes only the active association and is harmless in an ordinary workspace'
   expect(activeWorkspace()).toBe(unchanged);
   expect(projectRequest).not.toHaveBeenCalled();
   expect(operate).not.toHaveBeenCalled();
+});
+it('returns folder panes to the shared folder preferences when the project closes (2026-10-20)', () => {
+  // The rest of each folder's presentation reverted; its view, sort and hidden items kept the
+  // project's values.
+  const pane = addPane('/fixtures/A', 'folder', true);
+  associate();
+  updatePane(pane.id, { mode: 'grid' });
+  const shared = folderPresentation('/fixtures/A').mode;
+  closeProject();
+  const after = activeWorkspace().panes.find((item) => item.id === pane.id)!;
+  expect(after.type === 'folder' && after.mode).toBe(folderPresentation('/fixtures/A').mode);
+  expect(after.type === 'folder' && after.mode).not.toBe('grid');
+  expect(shared).toBe('grid');
+});
+it('makes an opened collection the active plane, as a search does (2026-10-20)', () => {
+  const id = '6f1d4b3a-8c2e-4f5a-9b7d-1e2f3a4b5c6d';
+  saveCollection({ id, name: 'C', kind: 'explicit', sources: ['/fixtures/a.txt'] });
+  const pane = addCollectionPane(id);
+  expect(getState().activePane).toBe(pane);
+  expect(activeWorkspace().activePane).toBe(pane);
 });

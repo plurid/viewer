@@ -31,7 +31,7 @@ Folders Viewer cannot write keep their lenses in Viewer's data on this Mac inste
 ## Renames and missing items
 
 - Renames and moves made in Viewer update lenses directly. An item moved to another folder stays listed in its lens as missing, so Undo or Put Back returns it to its group and place.
-- Renames made in Finder are recognized by the item's identity when exactly one new item matches; differences only in case or Unicode form are matched by name. Anything ambiguous stays missing rather than guessing.
+- Renames made in Finder are recognized by the item's identity when exactly one new item matches; differences only in case or Unicode form are matched by name. Anything ambiguous stays missing rather than guessing. A recognized rename is written to the lens file when the folder is opened, so a synced or versioned folder can show a change to `.viewer` after a rename made elsewhere.
 - Missing items are hidden. **Clean up missing items** forgets them; items missing for 30 days are forgotten with the next edit.
 
 ## Views
@@ -40,11 +40,11 @@ Folders Viewer cannot write keep their lenses in Viewer's data on this Mac inste
 
 The **Map** view (⌘5) draws one lens freely: groups are regions, Unsorted is a dashed region, and every item stays where it was put. A group collapsed in another view keeps its items on the Map.
 
-- Drag items to place them; dropping into a region puts them in that group. Command-drag carries the files themselves to Finder or another plane.
+- Drag items to place them; dropping into a region puts them in that group. On a map without groups, a drop in empty space places the items where they land; on a grouped map, a drop outside every group is announced and changes nothing. Command-drag carries the files themselves to Finder or another plane.
 - Drag a region by its heading to move it, or into another region to nest it; drag its corner to resize it.
 - Double-click empty space to create a group there.
 - Arrow keys move to the nearest item in that direction; Option-arrows nudge the selection by 8, Option-Shift-arrows by 64. Command-[ and Command-] still go back and forward.
-- Pinch or Command-scroll zooms around the pointer; below 50% items show icons only, and below 30% each group shows its count.
+- Pinch or Command-scroll zooms around the pointer; below 50% items show icons only, and below 30% each group shows its count, with the item at the cursor and the selected items still shown as icons, so the keyboard can open them.
 - In a folder without a lens, the Map arranges items automatically. The first drag creates a lens named “Map” and says so; ⌘Z removes it again.
 
 ## Undo

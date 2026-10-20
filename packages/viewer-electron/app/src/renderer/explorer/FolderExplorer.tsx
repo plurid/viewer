@@ -30,6 +30,7 @@ import { Icon } from '../ui/Icon';
 import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
 import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
 import { useFolder } from './useFolder';
+import { recordScroll, useScrollRestore } from './scroll-restore';
 import { mouseHistoryDirection, mouseHistoryTarget } from './mouse-navigation';
 import { useSearch } from './useSearch';
 import { ContextMenu } from '../ui/ContextMenu';
@@ -44,7 +45,7 @@ import { SelectionSize } from './sizes';
 import { useFileDialogs } from './FileDialogs';
 import { FileTable } from './FileTable';
 import { useColumnNavigation } from './column-navigation';
-import { FILE_DRAG, useFileDrop } from './file-drop';
+import { FILE_DRAG, rememberDrag, useFileDrop } from './file-drop';
 import { folderDragNavigation } from './folder-drag';
 import { blankFileSpace, useFileKeyboard, useFileSelection, type FileModifiers } from './selection';
 import { useContextPublish } from './context-publish';
@@ -163,7 +164,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     id,
     path,
     baseEntries,
-    pane?.mode === 'list' && !query && !listing.loading && !listing.error,
+    pane?.mode === 'list' && !query && !listing.loading && !listing.unavailable,
   );
   const entries = pane?.mode === 'list' ? tree.entries : baseEntries;
   const sections = useMemo(
@@ -187,7 +188,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     id,
     path,
     entries,
-    pane?.mode === 'columns' && !listing.loading && !listing.error,
+    pane?.mode === 'columns' && !listing.loading && !listing.unavailable,
     selecting,
   );
   const chooseColumn = columns.choose;
@@ -197,20 +198,15 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     dragNavigation,
   );
   useEffect(() => {
-    if (listing.loading || listing.error) return;
+    if (listing.loading || listing.unavailable) return;
     setSelection((value) => {
       const next = reconcileSelection(value, selectionCache, path, listingIndex);
       return next.length === value.length && next.every((file, index) => file === value[index])
         ? value
         : next;
     });
-  }, [listingIndex, listing.loading, listing.error, path, selectionCache, setSelection]);
-  useEffect(() => {
-    const content = surface.current?.querySelector('.file-scroll');
-    if (content) content.scrollTop = session.scroll;
-    // Restore once per load; following session.scroll would fight the person's scrolling.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, listing.loading]);
+  }, [listingIndex, listing.loading, listing.unavailable, path, selectionCache, setSelection]);
+  useScrollRestore(surface, session, pane?.mode, !listing.loading && !listing.unavailable);
   const opening = useViewer((state) => state.settings.settings.fileOpening);
   const open = useCallback(
     (entry: FileEntry, linked = false, another = false) => {
@@ -436,6 +432,9 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       const files = selectionSet.has(entry.path) ? selection : [entry.path];
       if (event.isTrusted) {
         event.preventDefault();
+        rememberDrag(
+          files.flatMap((path) => selectionCache.get(path) || sourceIndex.paths.get(path) || []),
+        );
         void window.viewer.fileDragStart(files).catch(report);
         return;
       }
@@ -459,8 +458,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       ref={surface}
       data-file-owner={id}
       onScrollCapture={(event) => {
-        if ((event.target as HTMLElement).classList.contains('file-scroll'))
-          session.scroll = (event.target as HTMLElement).scrollTop;
+        if (pane) recordScroll(session, pane.mode, event.target as HTMLElement);
       }}
       tabIndex={0}
       aria-label={`Folder ${path}`}
@@ -608,7 +606,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
         >
           {listing.loading && !subtree ? (
             <Loading label="Reading folder…" />
-          ) : listing.error && !query ? (
+          ) : listing.unavailable && !query ? (
             <Empty
               icon="warning"
               title={

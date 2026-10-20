@@ -41,6 +41,8 @@ export class AgentClients {
   constructor(
     directory: string,
     private access: (paths: readonly string[]) => Promise<void>,
+    /** The shared connection's capabilities. */
+    private shared?: () => Promise<readonly AgentCapability[]>,
   ) {
     this.clients = new DocumentStore(path.join(directory, 'agent-clients-v1.json'), (value) =>
       z.array(storedClient).max(100).parse(value),
@@ -90,6 +92,13 @@ export class AgentClients {
     return publicClient(client);
   }
   async require(capability: AgentCapability, id = this.actor()): Promise<AgentClient | undefined> {
+    // the shared connection's are the person's approval (`AgentAccess`); it held every one (2026-10-20)
+    if (id === sharedClientID && this.shared && !(await this.shared()).includes(capability))
+      throw new Error(
+        'The shared connection has no ' +
+          capability +
+          ' capability. Allow it in Settings → Agents.',
+      );
     const client = await this.get(id);
     if (client && !client.capabilities.includes(capability))
       throw new Error('This agent client has no ' + capability + ' capability.');

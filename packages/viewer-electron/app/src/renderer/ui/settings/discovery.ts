@@ -24,7 +24,8 @@ export function settingsDiscovery(settings: ApplicationSettings, query: string) 
     },
     {
       category: 'Agents',
-      terms: 'mcp token client authorization folders scope agent configuration',
+      terms:
+        'allow local agent clients mcp token client authorization folders scope agent configuration',
     },
     { category: 'Terminals', terms: 'shell profiles environment tmux iterm external terminal' },
     { category: 'Configuration', terms: 'jsonc config file validate changes import export reset' },

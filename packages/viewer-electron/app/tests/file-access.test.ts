@@ -51,6 +51,16 @@ describe('native folder access', () => {
       code: 'FILE_ACCESS_REQUIRED',
     });
   });
+  it('lets a file chosen for one export or import be used this session only (2026-10-20)', async () => {
+    // Each was saved as a folder permission, and at 128 of them new folders were refused.
+    const file = path.join(other, 'import.jsonc');
+    await writeFile(file, '{}');
+    await access.allowOnce(file, 'once');
+    await access.require([file]);
+    expect(
+      await stat(path.join(data, 'file-access-v1.json')).catch(() => undefined),
+    ).toBeUndefined();
+  });
   it('revokes native session selections under a root and denies overlapping late imports', async () => {
     const file = path.join(other, 'Generated.txt');
     await writeFile(file, 'fixture');

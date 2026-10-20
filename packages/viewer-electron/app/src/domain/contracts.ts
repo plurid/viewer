@@ -30,14 +30,26 @@ import type {
   AgentWorkspaceSnapshot,
   ExecutionGrant,
 } from './agent-requests';
-import type { CapturedTarget, TerminalEvent, ExecutionTask, TerminalStart } from './automation';
+import type {
+  CapturedTarget,
+  CustomAction,
+  TerminalEvent,
+  ExecutionTask,
+  TerminalStart,
+} from './automation';
 import type { FolderSizeTask, ApplicationChoices, NativeApplication } from './metadata';
 import type { FileChange } from './changes';
 import type { ComparisonRequest, ComparisonResult } from './comparison';
 import type { DuplicateRequest, DuplicateResult } from './duplicates';
 import type { OperationPlanRequest, OperationPlanReply } from './operation-plan';
 import type { CheckpointRequest, CheckpointReply } from './change-plan';
-import type { AgentClientRequest, AgentClientReply, AgentAudit } from './agent-clients';
+import type {
+  AgentAccessRequest,
+  AgentAccessState,
+  AgentClientRequest,
+  AgentClientReply,
+  AgentAudit,
+} from './agent-clients';
 import type { ModelDataPermission, ModelDataLevel } from './model-permissions';
 import type { FileInformation, FileInformationPatch } from './file-information';
 import type { Volume } from './volumes';
@@ -225,6 +237,9 @@ export interface OperationRequest {
   conversion?: ImageConversion;
   /** Source versions captured in a reviewed plan; checked again when queued work starts. */
   expectedSources?: { path: string; version: SourceVersion }[];
+  /** A reviewed folder's contents (`outputProof`), set by the desktop for an agent's approved Trash;
+   * checked again inside the claim that moves the folder. */
+  expectedContents?: { path: string; proof: string }[];
 }
 export type CollisionDecision = 'skip' | 'keep-both' | 'replace' | 'cancel';
 export interface Collision {
@@ -309,6 +324,10 @@ export type DesktopEvent =
       command: string;
       target: CapturedTarget;
       navigation?: AgentNavigation;
+      /** Epoch milliseconds: main stops waiting just after. */
+      deadline: number;
+      /** A custom action's executor as it was reviewed. */
+      executor?: CustomAction['executor'];
     }
   | { type: 'terminal'; event: TerminalEvent }
   | { type: 'execution'; task: ExecutionTask }
@@ -365,6 +384,14 @@ export interface ViewerAPI {
   configOpen(): Promise<void>;
   configValidate(): Promise<SettingsSnapshot>;
   configTransfer(kind: 'import' | 'export'): Promise<SettingsSnapshot>;
+  /** Writes a removed config.jsonc back from the settings in effect. */
+  configRestore(): Promise<SettingsSnapshot>;
+  /** Lets actions agents start send a provider's approved data too, or no longer; Settings only. */
+  providerPermissionAgents(id: string, endpoint: string, allow: boolean): Promise<void>;
+  /** Remembers the Settings window's category, privately. */
+  settingsCategory(category: string): Promise<void>;
+  /** The shared agent connection's approved access; Settings only. */
+  agentAccess(request: AgentAccessRequest): Promise<AgentAccessState>;
   terminalApplication(): Promise<{ name: string; path: string; running: boolean }>;
   terminalExternal(cwd: string, tmux: boolean): Promise<void>;
   terminalStart(request: TerminalStart): Promise<void>;

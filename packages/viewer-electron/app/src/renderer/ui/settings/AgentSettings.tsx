@@ -1,17 +1,63 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type {
+  AgentAccessRequest,
+  AgentAccessState,
+  AgentCapability,
+} from '../../../domain/agent-clients';
 import { AgentClientSettings } from '../AgentClients';
 import { AgentGrants } from '../AgentGrants';
 import { IconButton } from '../primitives';
 import type { SettingsEditor } from './editor';
 
+/** What the shared connection may do; its navigation is always reviewed. */
+const sharedCapabilities: [AgentCapability, string][] = [
+  ['metadata', 'Names, sizes, dates and available tools'],
+  ['content', 'Search document text and run actions that read it'],
+  ['navigation', 'Propose opening folders and files, for your review'],
+  ['propose', 'Propose commands and changes, for your review'],
+  ['terminal-read', 'Read terminal output, where granted'],
+];
+
 /** Named agent clients, and the shared connection with its folders and MCP configuration. */
 export function AgentSettings({ editor }: { editor: SettingsEditor }) {
-  const { snapshot, patch, error: setError } = editor;
+  const { snapshot, error: setError } = editor;
   const settings = snapshot.settings;
   const [agentConfig, setAgentConfig] = useState('');
+  // The switch and folders are the person's approval, kept by the desktop: config.jsonc only
+  // narrows them, so what it asks for beyond them waits here (2026-10-20).
+  const [access, setAccess] = useState<AgentAccessState>();
+  const change = (request: AgentAccessRequest) => {
+    void window.viewer
+      .agentAccess(request)
+      .then(setAccess)
+      .catch((error: Error) => setError(error.message));
+  };
+  useEffect(() => {
+    void window.viewer
+      .agentAccess({ kind: 'state' })
+      .then(setAccess)
+      .catch((error: Error) => setError(error.message));
+  }, [snapshot.revision, setError]);
   return (
     <>
-      <AgentClientSettings settings={settings} />
+      <label className="settings-row">
+        <span>
+          Allow local agent clients
+          <small>Turning agents on is confirmed in a system dialog.</small>
+        </span>
+        <input
+          type="checkbox"
+          checked={!!access?.enabled}
+          disabled={!access}
+          onChange={(event) => change({ kind: 'enable', enabled: event.target.checked })}
+        />
+      </label>
+      {access?.pending.enable && (
+        <p className="settings-note">
+          config.jsonc turns agents on; they stay off until you allow it here.
+        </p>
+      )}
+      <AgentClientSettings settings={settings} enabled={!!access?.enabled} />
       <details>
         <summary>Shared connection</summary>
         <p className="settings-note">
@@ -19,37 +65,51 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
           your review in this app.
         </p>
         <h2>Authorized folders</h2>
-        {settings.agents.roots.map((root) => (
+        {access?.roots.map((root) => (
           <div className="settings-location" key={root}>
             <span>{root}</span>
             <IconButton
               icon="close"
               label="Remove agent folder access"
-              onClick={() =>
-                patch(
-                  'settings.agents.roots',
-                  settings.agents.roots.filter((item) => item !== root),
-                )
-              }
+              onClick={() => change({ kind: 'remove-folder', root })}
             />
           </div>
         ))}
+        {access?.pending.roots.map((root) => (
+          <div className="settings-location" key={root}>
+            <span>
+              {root}
+              <small>Requested in config.jsonc</small>
+            </span>
+            <button onClick={() => change({ kind: 'allow', roots: [root] })}>Allow…</button>
+          </div>
+        ))}
         <div className="settings-actions">
-          <button
-            onClick={() => {
-              void window.viewer
-                .chooseFolder()
-                .then((root) => {
-                  if (root && !settings.agents.roots.includes(root))
-                    patch('settings.agents.roots', [...settings.agents.roots, root]);
-                })
-                .catch((error) => setError(error.message));
-            }}
-          >
+          <button disabled={!access} onClick={() => change({ kind: 'add-folder' })}>
             Authorize folder…
           </button>
         </div>
-        <AgentGrants settings={settings} />
+        <h2>What the connection may do</h2>
+        {sharedCapabilities.map(([capability, label]) => (
+          <label className="settings-row" key={capability}>
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              checked={!!access?.capabilities.includes(capability)}
+              disabled={!access}
+              onChange={(event) =>
+                access &&
+                change({
+                  kind: 'capabilities',
+                  capabilities: event.target.checked
+                    ? [...access.capabilities, capability]
+                    : access.capabilities.filter((item) => item !== capability),
+                })
+              }
+            />
+          </label>
+        ))}
+        <AgentGrants settings={settings} roots={access?.roots ?? []} />
         <h2>Connect a client</h2>
         <p className="settings-note">
           Keep Viewer open for proposal review. Regenerating the token disconnects previous
@@ -57,7 +117,7 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
         </p>
         <div className="settings-actions">
           <button
-            disabled={!settings.agents.enabled || !settings.agents.roots.length}
+            disabled={!access?.enabled || !access.roots.length}
             onClick={() => {
               void window.viewer
                 .agentToken()

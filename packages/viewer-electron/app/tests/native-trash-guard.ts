@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
+import { createRequire } from 'node:module';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
@@ -29,7 +30,14 @@ await run(
     '-fobjc-arc',
     '-O1',
     '-I',
-    path.join(os.homedir(), '.electron-gyp', '44.7.0', 'include/node'),
+    // the headers of the Electron this app builds against, as build-helpers.ts finds them: a fixed
+    // version went stale with every Electron update (2026-10-20)
+    path.join(
+      os.homedir(),
+      '.electron-gyp',
+      createRequire(import.meta.url)('electron/package.json').version,
+      'include/node',
+    ),
     '-framework',
     'Foundation',
     '-framework',

@@ -57,6 +57,8 @@ export class AgentRequests {
     private execute: (
       id: string,
       target: CapturedTarget,
+      /** The approved folders' content proofs, rechecked as a Trash move runs. */
+      contents?: ReadonlyMap<string, string>,
     ) => Promise<
       void | { taskID: string; operationID?: never } | { operationID: string; taskID?: never }
     >,
@@ -181,6 +183,9 @@ export class AgentRequests {
   list(): AgentProposal[] {
     return [...this.proposals.values()];
   }
+  has(id: string): boolean {
+    return this.proposals.has(id);
+  }
   get(id: string): AgentProposal {
     const value = this.proposals.get(id);
     if (!value) throw new Error('Proposal no longer exists.');
@@ -227,7 +232,12 @@ export class AgentRequests {
     const contents = new Map<string, string>();
     const lines: string[] = [];
     for (const file of trash ? target.selection : []) {
-      if (!file.directory) {
+      // what the item is, read from the disk: the selection's `directory` came from the window,
+      // so a folder sent as a file was listed, and approved, as one path (2026-10-20)
+      const actual = await entry(file.path);
+      if (actual.identity !== file.identity)
+        throw new Error('Selection changed. Ask the agent for a new proposal.');
+      if (!actual.directory) {
         lines.push(file.path);
         continue;
       }
@@ -382,6 +392,8 @@ export class AgentRequests {
         if (proposal.kind === 'configuration') {
           for (const patch of proposal.patches!)
             agentConfigurationPath(patch.keys ?? patch.path.split('.'));
+          // checked again as it applies: what it names may have gone since it was proposed
+          this.settings.preview(proposal.patches!);
           await this.settings.patch(proposal.patches!, proposal.revision!);
         } else if (proposal.kind === 'terminal-write')
           throw new Error(
@@ -417,7 +429,11 @@ export class AgentRequests {
           await this.authority?.check(proposal);
           if (this.proposals.get(id)?.status !== 'running')
             throw new Error('This agent task was stopped.');
-          const result = await this.execute(proposal.commandID!, proposal.target!);
+          const result = await this.execute(
+            proposal.commandID!,
+            proposal.target!,
+            this.contents.get(id),
+          );
           if (result?.taskID) proposal.taskID = result.taskID;
           if (result?.operationID) {
             proposal.operationID = result.operationID;

@@ -17,7 +17,7 @@ This page records what that app did, how it compares with the current app, and w
 | 2021 feature | Current app |
 |---|---|
 | Spaces as tabs (add, switch, remove; rename never saved) | Workspaces with new, rename, delete, undo delete and switching |
-| Files plane: list, blocks, columns (empty), gallery (placeholder) | List, grid, columns and gallery views (⌘1–⌘4) |
+| Files plane: list, blocks, columns (empty), gallery (placeholder) | List, grid, columns, gallery and Map views (⌘1–⌘5) |
 | Back/forward history, editable path field | Back/forward, Go to Folder (⌘L, ⇧⌘G) |
 | Favorites and Recent sidebar (Recent never filled) | Locations, Favorites and Recent, reorderable |
 | Search field (stored, never filtered) | Folder filter, indexed search, content search, Spotlight first pass |

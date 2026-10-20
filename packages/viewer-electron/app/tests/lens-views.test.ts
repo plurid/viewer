@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { createElement, createRef } from 'react';
 import type { FileEntry } from '../src/domain/contracts';
 import {
@@ -31,6 +31,7 @@ import {
   useLenses,
 } from '../src/renderer/state/lenses';
 import { MapView, type MapControls } from '../src/renderer/explorer/map/MapView';
+import { revealFile } from '../src/renderer/explorer/anchors';
 
 const folder = '/Clients';
 const entry = (name: string, extra: Partial<FileEntry> = {}): FileEntry => ({
@@ -319,5 +320,84 @@ describe('lens editing', () => {
       ops: LensOp[];
     };
     expect(apply.ops).toEqual([{ kind: 'place', name: 'Acme', group: 'gaaaaa', at: [208, 16] }]);
+  });
+  const mapProps = (items: FileEntry[], extra: Record<string, unknown> = {}) => ({
+    path: folder,
+    listing: items,
+    entries: items,
+    selection: [] as string[],
+    selectionSet: new Set<string>(),
+    select: vi.fn(),
+    open: vi.fn(),
+    context: vi.fn(),
+    drag: vi.fn(),
+    showHidden: false,
+    controls: { current: null as MapControls | null },
+    prompt: vi.fn(),
+    regionContext: vi.fn(),
+    ...extra,
+  });
+  it('keeps the cursor’s tile on a Map zoomed out to its summary, so Open finds it (2026-10-20)', async () => {
+    // Below 30% the Map drew no tiles, so opening a file from the keyboard polled for its tile
+    // and failed: "The originating file is no longer visible in this view."
+    vi.useRealTimers();
+    const items = [entry('Acme'), entry('Borel')];
+    const view = render(
+      createElement(
+        'div',
+        { 'data-file-owner': 'p-zoom' },
+        createElement(MapView, mapProps(items, { paneID: 'p-zoom', cursor: items[1]!.path })),
+      ),
+    );
+    for (let step = 0; step < 6; step++)
+      fireEvent.click(view.getByRole('button', { name: 'Zoom out' }));
+    expect(view.container.querySelector('.map-content')?.classList.contains('detail-summary')).toBe(
+      true,
+    );
+    await expect(revealFile('p-zoom', items[1]!.path)).resolves.toBeTruthy();
+    expect(view.container.querySelectorAll('[role=option]')).toHaveLength(1);
+  });
+  it('creates one lens for the first edits on a Map without one (2026-10-20)', async () => {
+    // Each edit before the new lens arrived created another: “Map 2”, “Map 3”.
+    window.viewer.lens = vi.fn(async (request: LensRequest) => {
+      requests.push(request);
+      return request.kind === 'create' ? new Promise(() => {}) : null;
+    }) as typeof window.viewer.lens;
+    const items = [entry('Acme')];
+    const controls = { current: null as MapControls | null };
+    render(
+      createElement(
+        MapView,
+        mapProps(items, {
+          path: '/Unlensed',
+          selection: [items[0]!.path],
+          selectionSet: new Set([items[0]!.path]),
+          controls,
+        }),
+      ),
+    );
+    act(() => {
+      controls.current!.nudge('right', 8);
+      controls.current!.nudge('right', 8);
+    });
+    expect(requests.filter((request) => request.kind === 'create')).toHaveLength(1);
+  });
+  it('extends a Shift selection in Map order, the order its tiles are read in (2026-10-20)', () => {
+    const items = Array.from({ length: 12 }, (_, index) => entry(`client-${index}`));
+    const controls = { current: null as MapControls | null };
+    const select = vi.fn();
+    render(createElement(MapView, mapProps(items, { cursor: items[0]!.path, select, controls })));
+    act(() => controls.current!.move('ArrowDown', true));
+    const scope = select.mock.calls[0]?.[2] as FileEntry[] | undefined;
+    expect(scope?.map((item) => item.path)).toHaveLength(items.length);
+    expect(scope?.[0]?.path).toBe(items[0]!.path);
+  });
+  it('scrolls the Map to a cursor moved from outside it, as type-to-select does (2026-10-20)', () => {
+    const items = Array.from({ length: 500 }, (_, index) => entry(`client-${index}`));
+    const view = render(createElement(MapView, mapProps(items, { cursor: items[0]!.path })));
+    const scroller = view.container.querySelector<HTMLElement>('.map-scroll')!;
+    const scrolled = vi.spyOn(scroller, 'scrollTop', 'set');
+    view.rerender(createElement(MapView, mapProps(items, { cursor: items.at(-1)!.path })));
+    expect(scrolled).toHaveBeenCalled();
   });
 });

@@ -229,6 +229,7 @@ it('opens native UI with the sealed inventory and exposes no emptying method', a
     'close',
     'preview',
     'copyPaths',
+    'chooseRestoreFolder',
     'restore',
     'requestAccess',
     'confirmation',
@@ -481,6 +482,25 @@ it('restores an entire nested folder without selecting its child twice', async (
   });
   expect(mock.move).toHaveBeenCalledOnce();
   expect(mock.files.get(home + '/Documents/Nested/Child.txt')?.ino).toBe(4);
+});
+it('restores into a folder chosen before the operations lock, without a picker of its own (2026-10-20)', async () => {
+  // The picker ran inside the lock, so every queued file operation waited while it was open.
+  add(home + '/Documents', true, 50);
+  const trash = service(),
+    top = await trash.list();
+  mock.open.mockResolvedValue({ canceled: false, filePaths: [home + '/Documents'] });
+  const folder = await trash.chooseRestoreFolder(window);
+  expect(folder).toBe(home + '/Documents');
+  expect(access.remember).toHaveBeenCalledOnce();
+  mock.open.mockClear();
+  expect(await trash.restore(window, [top.items[0].id], { folder: folder! })).toEqual({
+    restored: 1,
+    cancelled: false,
+  });
+  expect(mock.open).not.toHaveBeenCalled();
+  expect(mock.files.get(home + '/Documents/Notes.txt')?.ino).toBe(2);
+  mock.open.mockResolvedValue({ canceled: true, filePaths: [] });
+  expect(await trash.chooseRestoreFolder(window)).toBeUndefined();
 });
 it('refuses a symlink destination and never falls back to deleting after a failed move', async () => {
   add(home + '/Documents', true, 50);

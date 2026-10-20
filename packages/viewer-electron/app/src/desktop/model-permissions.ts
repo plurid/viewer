@@ -22,6 +22,7 @@ const schema = z
             kind: z.enum(providerKinds),
             endpoint: z.url().max(4000),
             level: z.enum(modelDataLevels),
+            agents: z.boolean().optional(),
           })
           .strict(),
       )
@@ -30,9 +31,11 @@ const schema = z
   .strict();
 export class ModelPermissionRequired extends Error {
   readonly code = 'MODEL_DATA_PERMISSION_REQUIRED';
-  constructor() {
+  constructor(agent = false) {
     super(
-      'Allow this provider to receive the selected data before running the action. Review model data permissions in Settings → Models.',
+      agent
+        ? 'Allow agents to send this data to the provider in Settings → Models before an agent runs this action.'
+        : 'Allow this provider to receive the selected data before running the action. Review model data permissions in Settings → Models.',
     );
   }
 }
@@ -121,6 +124,36 @@ export class ModelPermissions {
     this.writes = work;
     return work;
   }
+  /** Lets actions agents start send the approved data too, or no longer. */
+  allowAgents(provider: ModelProvider, allow: boolean): Promise<void> {
+    if (this.closed || !this.current(provider))
+      return Promise.reject(new ModelPermissionRequired());
+    const work = this.writes
+      .catch(() => {})
+      .then(async () => {
+        await this.load();
+        const existing = this.permissions.find(
+          (item) =>
+            item.providerID === provider.id &&
+            item.kind === provider.kind &&
+            item.endpoint === modelEndpoint(provider),
+        );
+        if (!existing) throw new ModelPermissionRequired();
+        const document = schema.parse({
+          version: 1,
+          permissions: this.permissions.map((item) =>
+            item === existing ? { ...item, agents: allow } : item,
+          ),
+        });
+        await this.store.save(document);
+        this.permissions = document.permissions;
+        if (!allow)
+          for (const [controller, active] of this.active)
+            if (active.id === provider.id) controller.abort();
+      });
+    this.writes = work;
+    return work;
+  }
   reconcile(): Promise<void> {
     if (this.closed) return Promise.resolve();
     const next = new Map(
@@ -175,6 +208,7 @@ export class ModelPermissions {
     level: ModelDataLevel,
     signal: AbortSignal,
     work: (signal: AbortSignal) => Promise<T>,
+    actor: 'user' | 'agent' = 'user',
   ): Promise<T> {
     await this.writes.catch(() => {});
     const permission = await this.get(provider);
@@ -184,9 +218,11 @@ export class ModelPermissions {
       this.closed ||
       this.blocked.has(provider.id) ||
       !this.current(provider) ||
-      !modelPermissionCovers(permission, provider, level)
+      !modelPermissionCovers(permission, provider, level, actor)
     )
-      throw new ModelPermissionRequired();
+      throw new ModelPermissionRequired(
+        actor === 'agent' && modelPermissionCovers(permission, provider, level),
+      );
     const controller = new AbortController();
     this.active.set(controller, structuredClone(provider));
     try {

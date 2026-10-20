@@ -1,6 +1,8 @@
 import type { ActionRecipe } from '../../../domain/services';
 import { builtInRecipes } from '../../../domain/services';
 import { Field } from '../SettingField';
+import { ReferencedRemove } from '../AutomationSettings';
+import { referencesTo } from '../../../domain/references';
 import { Icon } from '../Icon';
 import type { SettingsEditor } from './editor';
 
@@ -157,8 +159,9 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
                 Duplicate recipe
               </button>
               {!builtInRecipes.some((item) => item.id === recipe.id) && (
-                <button
-                  onClick={() =>
+                <ReferencedRemove
+                  users={referencesTo(settings, 'recipe', recipe.id)}
+                  onRemove={() =>
                     patch(
                       'settings.recipes',
                       settings.recipes.filter((item) => item.id !== recipe.id),
@@ -166,7 +169,7 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
                   }
                 >
                   Remove recipe
-                </button>
+                </ReferencedRemove>
               )}
             </div>
           </div>

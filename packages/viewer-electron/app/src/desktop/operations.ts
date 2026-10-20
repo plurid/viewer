@@ -90,6 +90,10 @@ export class Operations {
   private exclusiveQueue: Promise<void> = Promise.resolve();
   private stopped = false;
   private idle: (() => void)[] = [];
+  /** The queued job in progress and exclusive work in progress, which quiesce waits for. */
+  private active?: Task;
+  private exclusiveActive = false;
+  private settled: (() => void)[] = [];
   private journal?: OperationLog;
   private loaded?: Promise<void>;
   constructor(
@@ -124,7 +128,11 @@ export class Operations {
     for (const receipt of await this.readJournal()) {
       if (this.tasks.has(receipt.job.id)) continue;
       const job = receipt.job;
-      const interruptedUndo = !!receipt.intent && job.status === 'completed';
+      // A forward job clears its intent before its last record, so an intent beside a finished
+      // status is an Undo's, whichever way the job itself ended (2026-10-20: only a completed
+      // job's was recognised, and a cancelled job offered its interrupted Undo again).
+      const interruptedUndo =
+        !!receipt.intent && ['completed', 'failed', 'cancelled'].includes(job.status);
       if (receipt.intent || ['queued', 'running', 'collision'].includes(job.status)) {
         job.status = 'failed';
         job.collision = undefined;
@@ -241,15 +249,15 @@ export class Operations {
     // A selected descendant is already carried by its selected parent.
     const roots = operationRoots(sources);
     if (request.destination) request = { ...request, destination: absolute(request.destination) };
-    if (request.expectedSources) {
-      // Reviewed versions are matched by path; a spelling that matched no source
-      // would silently skip its check, so normalize and require a match.
-      const expectedSources = request.expectedSources.map((expected) => ({
+    // Reviewed versions and contents are matched by path; a spelling that matched no source
+    // would silently skip its check, so normalize and require a match.
+    const pinned = <T extends { path: string }>(reviewed: T[]): T[] => {
+      const normalized = reviewed.map((expected) => ({
         ...expected,
         path: absolute(expected.path),
       }));
       if (
-        expectedSources.some(
+        normalized.some(
           (expected) =>
             !roots.some(
               (root) => expected.path === root || expected.path.startsWith(root + path.sep),
@@ -257,8 +265,12 @@ export class Operations {
         )
       )
         throw new Error('The reviewed items no longer match this operation. Prepare a new plan.');
-      request = { ...request, expectedSources };
-    }
+      return normalized;
+    };
+    if (request.expectedSources)
+      request = { ...request, expectedSources: pinned(request.expectedSources) };
+    if (request.expectedContents)
+      request = { ...request, expectedContents: pinned(request.expectedContents) };
     if (request.name !== undefined) validName(request.name);
     if (request.name && ['copy', 'move', 'transfer'].includes(request.kind) && roots.length !== 1)
       throw new Error('A destination name requires a single source.');
@@ -350,13 +362,35 @@ export class Operations {
     const key = (file: string) => file.normalize('NFC').toLocaleLowerCase('en-US');
     const base = key(root.replace(/[\\/]$/, ''));
     const related = (file: string) => key(file) === base || key(file).startsWith(base + path.sep);
-    for (const task of this.tasks.values())
-      if (
-        task.request.sources.some(related) ||
-        (task.request.destination && related(task.request.destination))
-      )
-        this.cancel(task.job.id);
-    await this.exclusive(async () => {});
+    const involves = (task: Task) =>
+      task.request.sources.some(related) ||
+      (!!task.request.destination && related(task.request.destination));
+    for (const task of this.tasks.values()) if (involves(task)) this.cancel(task.job.id);
+    // Cancelled work that has not started touches nothing (each item checks its abort first), and
+    // an unrelated job keeps to its own paths, even while its collision prompt is open: only a
+    // related job in progress, and exclusive work, are waited for. Waiting for the whole queue
+    // held an Eject or a revoke behind any unanswered prompt (2026-10-20).
+    while (this.exclusiveActive || (this.active && involves(this.active)))
+      await new Promise<void>((resolve) => this.settled.push(resolve));
+  }
+  /** Wakes quiesce whenever the work in progress changes. */
+  private settle(): void {
+    for (const resolve of this.settled.splice(0)) resolve();
+  }
+  /** An item put back from the Trash takes its Trash step with it, so Undo is no longer offered
+   * for it and the Trash stops showing it as Viewer's (2026-10-20: Undo stayed offered and
+   * failed with a raw ENOENT). */
+  async trashRestored(file: string): Promise<void> {
+    const key = (value: string) => value.normalize('NFC');
+    for (const task of this.tasks.values()) {
+      const kept = task.undo.filter((step) => !(step.trash && key(step.from) === key(file)));
+      if (kept.length === task.undo.length) continue;
+      task.undo = kept;
+      if (['completed', 'failed', 'cancelled'].includes(task.job.status))
+        task.job.undoable = !!kept.length;
+      this.emit(task);
+      await this.checkpoint(task);
+    }
   }
   resolve(id: string, decision: CollisionDecision, applyAll: boolean): void {
     const task = this.tasks.get(id);
@@ -460,7 +494,9 @@ export class Operations {
       } catch {
         // A source that is absent after Undo (a created output) needs no pin.
       }
-    task.redo = { ...task.request, expectedSources };
+    // An agent approval's contents pins are not carried over: Redo is the person's own, pinned to
+    // what Undo put back.
+    task.redo = { ...task.request, expectedSources, expectedContents: undefined };
     task.job.redoable = true;
     this.emit(task);
     await this.checkpoint(task);
@@ -504,6 +540,16 @@ export class Operations {
           await this.access([current]);
           if (!sameSourceVersion(expected.version, sourceVersion(await entry(current))))
             throw new Error('The source changed after review. This item was not moved to Trash.');
+        }
+        // A folder's version misses nested edits; the contents a person reviewed are compared here,
+        // where nothing else can change them before the move. Compared only at approval, a Trash
+        // queued behind other work ran on whatever the folder held by then (2026-10-20).
+        for (const expected of task.request.expectedContents ?? []) {
+          if (expected.path !== file && !expected.path.startsWith(file + path.sep)) continue;
+          const current = fileCoordination.path(expected.path);
+          await this.access([current]);
+          if ((await outputProof(current)) !== expected.proof)
+            throw new Error('The contents changed after review. This item was not moved to Trash.');
         }
         signal?.throwIfAborted();
         return this.trash(actual);
@@ -573,6 +619,7 @@ export class Operations {
     source: string,
     destination: string,
     replaced?: Replaced,
+    guard?: () => Promise<void>,
   ): Promise<void> {
     // Without Replace, the exclusive publication below refuses an existing destination.
     if (replaced) {
@@ -580,7 +627,7 @@ export class Operations {
       await this.trashItem(task, destination, replaced);
     }
     try {
-      await publish(source, destination, this.access, this.transferJob(task));
+      await publish(source, destination, this.access, this.transferJob(task), guard);
     } catch (error) {
       if (replaced && !(await this.restoreReplaced(task, destination)))
         throw new Error(
@@ -605,12 +652,15 @@ export class Operations {
         while (this.running) await new Promise<void>((resolve) => this.idle.push(resolve));
         if (this.stopped) throw new Error('The operation service is closed.');
         this.running = true;
+        this.exclusiveActive = true;
         try {
           return await work((source, destination, guard, signal) =>
             publish(source, destination, this.access, undefined, guard, signal),
           );
         } finally {
           this.running = false;
+          this.exclusiveActive = false;
+          this.settle();
           for (const resolve of this.idle.splice(0)) resolve();
           void this.run();
         }
@@ -679,6 +729,18 @@ export class Operations {
       throw error;
     }
   }
+  /** The reviewed versions of `source` and what it holds: checked as its item starts, again once a
+   * collision is decided and inside the claim that publishes it. Checked only at the start, a source
+   * edited while its collision prompt was open was copied or moved (2026-10-20). */
+  private async checkPins(task: Task, source: string): Promise<void> {
+    for (const expected of task.request.expectedSources ?? []) {
+      if (expected.path !== source && !expected.path.startsWith(source + path.sep)) continue;
+      const current = fileCoordination.path(expected.path);
+      await this.access([current]);
+      if (!sameSourceVersion(expected.version, sourceVersion(await entry(current))))
+        throw new Error('The source changed after review. Prepare a new plan.');
+    }
+  }
   private async target(task: Task, source: string, destination: string): Promise<Target | null> {
     const existing = await lstat(destination).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null;
@@ -731,9 +793,11 @@ export class Operations {
     move: boolean,
     replaced?: Replaced,
   ): Promise<boolean> {
+    // The reviewed source is checked again inside the claim that publishes it (see checkPins).
+    const guard = () => this.checkPins(task, source);
     if (move && (await lstat(source)).dev === (await stat(path.dirname(destination))).dev) {
       try {
-        await this.publishReplacing(task, source, destination, replaced);
+        await this.publishReplacing(task, source, destination, replaced, guard);
         return true;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
@@ -752,7 +816,7 @@ export class Operations {
         throw new Error(
           'A file appeared at the destination during the transfer. Retry to choose a collision action.',
         );
-      await this.publishReplacing(task, staging, destination, replaced);
+      await this.publishReplacing(task, staging, destination, replaced, guard);
       if (move) {
         for (const fingerprint of fingerprints) {
           const info = await lstat(fingerprint.file);
@@ -834,6 +898,8 @@ export class Operations {
       while (this.queue.length) {
         const task = this.queue.shift()!;
         currentTask = task;
+        this.active = task;
+        this.settle();
         const { job, request } = task;
         job.status = 'running';
         this.emit(task);
@@ -847,13 +913,7 @@ export class Operations {
             await this.access(
               [source, request.destination].filter((file): file is string => !!file),
             );
-            for (const expected of request.expectedSources ?? []) {
-              if (expected.path !== source && !expected.path.startsWith(source + path.sep))
-                continue;
-              await this.access([expected.path]);
-              if (!sameSourceVersion(expected.version, sourceVersion(await entry(expected.path))))
-                throw new Error('The source changed after review. Prepare a new plan.');
-            }
+            await this.checkPins(task, source);
             job.current = source || request.destination;
             task.intent = { source, destination: request.destination };
             // Each intent is made durable immediately before the first change it covers;
@@ -947,6 +1007,8 @@ export class Operations {
                 destination = resolved.path;
                 const replaced = resolved.replaces;
                 this.check(task);
+                // A collision prompt can stay open indefinitely (2026-10-20).
+                await this.checkPins(task, source);
                 await this.access([destination]);
                 task.intent = { source, destination };
                 await this.checkpoint(task);
@@ -1133,6 +1195,8 @@ export class Operations {
         await this.checkpoint(task);
         await this.compact(task);
         currentTask = undefined;
+        this.active = undefined;
+        this.settle();
       }
     } catch (error) {
       for (const task of this.tasks.values())
@@ -1151,6 +1215,8 @@ export class Operations {
       this.queue.length = 0;
     } finally {
       this.running = false;
+      this.active = undefined;
+      this.settle();
       for (const resolve of this.idle.splice(0)) resolve();
     }
   }

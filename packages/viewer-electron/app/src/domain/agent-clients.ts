@@ -74,3 +74,23 @@ export interface AgentAudit {
   status: 'completed' | 'failed' | 'rejected' | 'cancelled';
   detail: string;
 }
+/** The shared connection's access: what config.jsonc asks for, as far as the person approved it. */
+export interface AgentAccessState {
+  /** In effect: config.jsonc asks for it and the person approved it. */
+  enabled: boolean;
+  /** The approved folders, as config.jsonc names them. */
+  roots: string[];
+  /** Every folder either side names: agents cannot move one of them to the Trash. */
+  protectedRoots: string[];
+  /** What config.jsonc asks for beyond the approval, waiting in Settings → Agents. */
+  pending: { enable: boolean; roots: string[] };
+  /** What the shared connection may do; every capability until the person narrows it. */
+  capabilities: AgentCapability[];
+}
+export type AgentAccessRequest =
+  | { kind: 'state' }
+  | { kind: 'enable'; enabled: boolean }
+  | { kind: 'add-folder' }
+  | { kind: 'allow'; roots: string[] }
+  | { kind: 'remove-folder'; root: string }
+  | { kind: 'capabilities'; capabilities: AgentCapability[] };

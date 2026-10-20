@@ -130,3 +130,26 @@ describe('native window placement', () => {
     },
   );
 });
+
+describe('the Settings window’s placement (2026-10-20)', () => {
+  // Its size and category were written into config.jsonc on every resize and category switch,
+  // under any editor that had the file open; a window over 2000 × 1600 was never remembered.
+  const settings = { width: 900, height: 640, minWidth: 760, minHeight: 540 };
+  it('opens at its own default size, or the one it had, with its own minimum', () => {
+    const fresh = restoreWindowFrame(null, [primary], primary, settings);
+    expect([fresh.bounds.width, fresh.bounds.height]).toEqual([900, 640]);
+    expect([fresh.minWidth, fresh.minHeight]).toEqual([760, 540]);
+    const large = { ...ordinary, bounds: { ...ordinary.bounds, width: 1700, height: 900 } };
+    expect(restoreWindowFrame(large, [primary], primary, settings).bounds).toEqual(large.bounds);
+  });
+  it('keeps the last category with the frame, across a later resize', async () => {
+    const file = path.join(directory, 'settings-window-v1.json');
+    const store = new WindowState(file);
+    store.remember({ ...ordinary, category: 'agents' });
+    store.remember(ordinary);
+    await store.flush();
+    const restarted = new WindowState(file);
+    await restarted.load();
+    expect(restarted.value?.category).toBe('agents');
+  });
+});

@@ -89,7 +89,7 @@ const descriptions: Record<string, string[]> = {
     'Empty extensions permits any type; otherwise every selected file must match a lowercase extension.',
     'executor kinds: builtin {command}, recipe {recipeID}, terminal {profileID},',
     'executable {executable,args,perItem}, or shell {executable,script,perItem}.',
-    'Example executor: {"kind":"terminal","profileID":"login"}. References must name existing items.',
+    'Example executor: {"kind":"terminal","profileID":"login"}. A missing recipe or profile is a warning; the action fails.',
     'Executable args support {directory}, {path}, {name}, {extension}; a whole {paths} arg expands the batch.',
     'path/name/extension need one selected item or perItem:true. Arguments are literal, not shell source.',
     'Shell scripts receive directory as $1 and selected paths as $2 onward; quote those variables.',
@@ -184,10 +184,10 @@ const descriptions: Record<string, string[]> = {
     'Approvals are separate from JSONC. Adding approval fields here cannot authorize execution or permanent deletion.',
   ],
   'settings.agents.enabled': [
-    'Enable the local MCP server. false closes it and rejects further client requests.',
+    'true asks for the local MCP server: it starts once allowed in Settings > Agents. false closes it at once.',
   ],
   'settings.agents.roots': [
-    'Absolute folders available to agents after canonical-path checks; [] grants no folders.',
+    'Absolute folders agents may use once allowed in Settings > Agents; removing one here applies at once.',
   ],
   'settings.agents.allowLayout': [
     'Reserved layout preference; it does not authorize command or terminal execution.',
@@ -203,7 +203,7 @@ const descriptions: Record<string, string[]> = {
     'Omit root for all indexed roots. content:true still requires permission in search.contentRoots.',
   ],
   'settings.settingsWindow': [
-    'Remembered Settings window size and last category. Usually leave these UI-managed values alone.',
+    'No longer used: Viewer keeps the Settings window size and category privately. Safe to delete.',
   ],
   ui: [
     'Shared UI preferences. Folder-specific presentation belongs in settings.folders, not workspace state.',
@@ -265,10 +265,30 @@ const revisedGuidance: [RegExp, string][] = [
     /^([\t ]*\/\/ )Example: "pdf": "plane", "mkv": "native"\. Office extensions default to native\.(?=\r?$)/m,
     '$1Example: "pdf": "plane", "mkv": "native". New settings preview docx and xlsx in planes.',
   ],
+  [
+    /^([\t ]*\/\/ )Example executor: \{"kind":"terminal","profileID":"login"\}\. References must name existing items\.(?=\r?$)/m,
+    '$1Example executor: {"kind":"terminal","profileID":"login"}. A missing recipe or profile is a warning; the action fails.',
+  ],
+  [
+    /^([\t ]*\/\/ )Remembered Settings window size and last category\. Usually leave these UI-managed values alone\.(?=\r?$)/m,
+    '$1No longer used: Viewer keeps the Settings window size and category privately. Safe to delete.',
+  ],
+  [
+    /^([\t ]*\/\/ )Enable the local MCP server\. false closes it and rejects further client requests\.(?=\r?$)/m,
+    '$1true asks for the local MCP server: it starts once allowed in Settings > Agents. false closes it at once.',
+  ],
+  [
+    /^([\t ]*\/\/ )Absolute folders available to agents after canonical-path checks; \[\] grants no folders\.(?=\r?$)/m,
+    '$1Absolute folders agents may use once allowed in Settings > Agents; removing one here applies at once.',
+  ],
 ];
 
-/** Add guidance without reserializing values, user comments, formatting or trailing commas. */
-export function documentConfiguration(text: string): string {
+/**
+ * Add guidance without reserializing values, user comments, formatting or trailing commas. In a
+ * documented file, `added` limits it to the properties a write added: every save put back every
+ * guide line a person had deleted (2026-10-20). Without `added`, every missing line is added.
+ */
+export function documentConfiguration(text: string, added?: ReadonlySet<string>): string {
   const documented = text.split(/\r?\n/).includes(guide);
   if (documented)
     for (const [earlier, current] of revisedGuidance) text = text.replace(earlier, current);
@@ -307,8 +327,12 @@ export function documentConfiguration(text: string): string {
           above.push(line.trim());
         }
         // New fields still get guidance when an already-documented config is patched.
+        const isAdded =
+          !added || next.some((_, index) => added.has(next.slice(0, index + 1).join('.')));
         const missingLines = documented
-          ? lines.filter((line) => !above.includes('// ' + line))
+          ? isAdded
+            ? lines.filter((line) => !above.includes('// ' + line))
+            : []
           : lines;
         if (!missingLines.length) {
           visit(value, next);

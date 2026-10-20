@@ -23,6 +23,7 @@ import {
   mapRegionChrome,
   mapTile,
   nearestTile,
+  dropRegion,
   placeIn,
   regionAt,
   snap,
@@ -53,6 +54,9 @@ type Gesture =
 const cameras = new Map<string, { zoom: number; left: number; top: number }>();
 const margin = 480;
 const draft = emptyLens('00000000-0000-4000-8000-000000000000', 'Map');
+/** A lens being created for a folder that has none. Edits made before the Map receives it edit it:
+ * each created another (“Map 2”, “Map 3”), auto-repeated nudges included (2026-10-20). */
+const creating = new Map<string, Promise<LensDocument>>();
 const directions: Record<string, MapDirection> = {
   ArrowLeft: 'left',
   ArrowRight: 'right',
@@ -99,6 +103,10 @@ export const MapView = memo(function MapView({
   }, [lens, listing, props.entries]);
   const layout = useMemo(() => layoutLens(lens, resolved), [lens, resolved]);
   const index = useMemo(() => new MapIndex(layout), [layout]);
+  // Reading order, top to bottom and left to right: a Shift range follows it, as the eye does;
+  // it followed the list's order, which the Map does not show (2026-10-20).
+  const ordered = useMemo(() => layout.tiles.toSorted((a, b) => a.y - b.y || a.x - b.x), [layout]);
+  const scope = useMemo(() => ordered.map((tile) => tile.entry), [ordered]);
   const key = `${props.paneID}:${path}`;
   const [zoom, setZoom] = useState(() => cameras.get(key)?.zoom ?? 1);
   const [viewport, setViewport] = useState<LensRect>([0, 0, 1600, 1200]);
@@ -169,6 +177,9 @@ export const MapView = memo(function MapView({
     };
   }, []);
 
+  useEffect(() => {
+    if (document) creating.delete(path);
+  }, [document, path]);
   const commit = (ops: LensOp[], label: string, spoken: string) => {
     if (!ops.length) return;
     setMessage(spoken);
@@ -176,7 +187,17 @@ export const MapView = memo(function MapView({
       editLens(path, document.file, ops, label);
       return;
     }
-    void createLens(path, 'Map', ops, label)
+    const pending = creating.get(path);
+    if (pending) {
+      void pending.then(
+        (created) => editLens(path, created.file, ops, label),
+        () => {},
+      );
+      return;
+    }
+    const created = createLens(path, 'Map', ops, label);
+    creating.set(path, created);
+    void created
       .then((created) => {
         updateFolderPresentation(path, { lens: created.lens.id });
         announce(
@@ -185,7 +206,10 @@ export const MapView = memo(function MapView({
             : 'Created the lens “Map” in this folder’s .viewer folder. Your files did not move. ⌘Z undoes it.',
         );
       })
-      .catch(report);
+      .catch((error) => {
+        creating.delete(path);
+        report(error);
+      });
   };
   /** Follows the pointer in map units; measured once per gesture, so rotated planes work. */
   const track = (
@@ -254,8 +278,13 @@ export const MapView = memo(function MapView({
       (delta, point, moved) => {
         setGesture(null);
         if (!moved) return;
-        const target = regionAt(layout, point.x, point.y);
-        if (!target) return;
+        // Outside every region on a map with groups, a drop has no group to join: said, rather
+        // than ignored (2026-10-20).
+        const target = dropRegion(layout, point.x, point.y);
+        if (!target) {
+          announce('Drop items onto a group, or onto Unsorted, to place them.');
+          return;
+        }
         const ops = [...paths].flatMap((item): LensOp[] => {
           const moving = layout.byPath.get(item);
           return moving
@@ -408,10 +437,12 @@ export const MapView = memo(function MapView({
   useFileReveal(scroll, props.entries, (position) =>
     reveal(layout.byPath.get(props.entries[position]?.path ?? '')),
   );
+  // The cursor is followed wherever it moves from, as the list and grid follow it: type-to-select
+  // left the Map where it was (2026-10-20).
+  useEffect(() => reveal(layout.byPath.get(props.cursor ?? '')), [props.cursor]); // eslint-disable-line react-hooks/exhaustive-deps
   controls.current = {
     move: (key, range) => {
       const direction = directions[key];
-      const ordered = layout.tiles.toSorted((a, b) => a.y - b.y || a.x - b.x);
       const tile = direction
         ? nearestTile(layout, props.cursor, direction)
         : key === 'Home'
@@ -420,7 +451,7 @@ export const MapView = memo(function MapView({
             ? ordered.at(-1)
             : undefined;
       if (!tile) return;
-      props.select(tile.entry, { shiftKey: range, metaKey: false, ctrlKey: false });
+      props.select(tile.entry, { shiftKey: range, metaKey: false, ctrlKey: false }, scope);
       reveal(tile);
     },
     nudge: (direction, step) => {
@@ -564,48 +595,56 @@ export const MapView = memo(function MapView({
                 </div>
               );
             })}
-            {detail !== 'summary' &&
-              shown.map((tile) => {
-                const dragged = gesture?.kind === 'tiles' && gesture.paths.has(tile.entry.path);
-                const carried =
-                  offset(tile.group) ?? (dragged ? { x: gesture.dx, y: gesture.dy } : undefined);
-                const selected = props.selectionSet.has(tile.entry.path);
-                return (
-                  <div
-                    key={tile.entry.path}
-                    className={`map-tile ${selected ? 'is-selected' : ''} ${dragged ? 'is-dragging' : ''} ${props.cursor === tile.entry.path ? 'is-cursor' : ''}`}
-                    role="option"
-                    aria-selected={selected}
-                    aria-label={tile.entry.name}
-                    title={tile.entry.path}
-                    data-file-path={tile.entry.path}
-                    data-directory-path={tile.entry.directory ? tile.entry.path : undefined}
-                    style={{ left: tile.x + (carried?.x ?? 0), top: tile.y + (carried?.y ?? 0) }}
-                    onPointerDown={(event) => onTilePointerDown(event, tile)}
-                    onPointerUp={(event) => {
-                      event.currentTarget.draggable = false;
-                    }}
-                    onClick={(event) => props.select(tile.entry, event)}
-                    onDoubleClick={(event) =>
-                      props.open(tile.entry, event.altKey || event.metaKey || event.ctrlKey)
-                    }
-                    onContextMenu={(event) => props.context(tile.entry, event)}
-                    onDragStart={(event) => props.drag(tile.entry, event)}
-                    onDragEnd={(event) => {
-                      event.currentTarget.draggable = false;
-                    }}
-                  >
-                    <div className="map-tile-preview">
-                      {detail === 'full' ? (
-                        <Thumbnail entry={tile.entry} />
-                      ) : (
-                        <FileIcon entry={tile.entry} size={36} />
-                      )}
-                    </div>
-                    {detail === 'full' && <span className="map-tile-name">{tile.entry.name}</span>}
+            {shown.map((tile) => {
+              // At summary detail the regions show counts; the cursor and the selection stay, as
+              // icons, so Open and Reveal find their tile (2026-10-20: below 30% zoom, Open from the
+              // keyboard failed, “no longer visible in this view”).
+              if (
+                detail === 'summary' &&
+                props.cursor !== tile.entry.path &&
+                !props.selectionSet.has(tile.entry.path)
+              )
+                return null;
+              const dragged = gesture?.kind === 'tiles' && gesture.paths.has(tile.entry.path);
+              const carried =
+                offset(tile.group) ?? (dragged ? { x: gesture.dx, y: gesture.dy } : undefined);
+              const selected = props.selectionSet.has(tile.entry.path);
+              return (
+                <div
+                  key={tile.entry.path}
+                  className={`map-tile ${selected ? 'is-selected' : ''} ${dragged ? 'is-dragging' : ''} ${props.cursor === tile.entry.path ? 'is-cursor' : ''}`}
+                  role="option"
+                  aria-selected={selected}
+                  aria-label={tile.entry.name}
+                  title={tile.entry.path}
+                  data-file-path={tile.entry.path}
+                  data-directory-path={tile.entry.directory ? tile.entry.path : undefined}
+                  style={{ left: tile.x + (carried?.x ?? 0), top: tile.y + (carried?.y ?? 0) }}
+                  onPointerDown={(event) => onTilePointerDown(event, tile)}
+                  onPointerUp={(event) => {
+                    event.currentTarget.draggable = false;
+                  }}
+                  onClick={(event) => props.select(tile.entry, event, scope)}
+                  onDoubleClick={(event) =>
+                    props.open(tile.entry, event.altKey || event.metaKey || event.ctrlKey)
+                  }
+                  onContextMenu={(event) => props.context(tile.entry, event)}
+                  onDragStart={(event) => props.drag(tile.entry, event)}
+                  onDragEnd={(event) => {
+                    event.currentTarget.draggable = false;
+                  }}
+                >
+                  <div className="map-tile-preview">
+                    {detail === 'full' ? (
+                      <Thumbnail entry={tile.entry} />
+                    ) : (
+                      <FileIcon entry={tile.entry} size={36} />
+                    )}
                   </div>
-                );
-              })}
+                  {detail === 'full' && <span className="map-tile-name">{tile.entry.name}</span>}
+                </div>
+              );
+            })}
             {marquee.overlay}
           </div>
         </div>

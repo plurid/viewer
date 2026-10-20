@@ -22,10 +22,24 @@ const inside = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 export class FileIndex {
   private db: DatabaseSync;
+  /**
+   * Each stamp is later than the last, even within one millisecond: a crawl compares its stamp
+   * with the rows', and one in the same millisecond as the crawl before could not tell that crawl's
+   * rows from its own, so a file that had gone stayed (2026-10-20). Still the clock's, so the stamps
+   * kept on disk order with a new session's.
+   */
+  private stamped = 0;
+  private stamp(): number {
+    return (this.stamped = Math.max(Date.now(), this.stamped + 1));
+  }
   private roots: IndexStatus['roots'] = [];
   private generation = 0;
   private count?: number;
   private config?: ApplicationSettings['search'];
+  /** The configuration the last `configure` applied (not the initial scope), to tell a repeat. */
+  private applied?: string;
+  /** A rebuild extracts every document again; any other crawl keeps text stored for its version. */
+  private rebuilding = false;
   private active?: Promise<void>;
   private updates: Promise<void> = Promise.resolve();
   constructor(
@@ -79,7 +93,12 @@ export class FileIndex {
       return new FileIndex(file, emit, extract, initialScope);
     }
   }
-  put(item: FileEntry, root: string, seen = Date.now(), content: string | DocumentData = ''): void {
+  put(
+    item: FileEntry,
+    root: string,
+    seen = this.stamp(),
+    content: string | DocumentData = '',
+  ): void {
     this.putMany([{ item, root, seen, content }]);
   }
   ingest(items: FileEntry[], root: string): void {
@@ -87,11 +106,12 @@ export class FileIndex {
       this.putMany(
         items
           .slice(start, start + 100)
-          .map((item) => ({ item, root, seen: Date.now(), content: '' })),
+          .map((item) => ({ item, root, seen: this.stamp(), content: '' })),
       );
   }
+  /** `content` undefined: a document unchanged since its text was stored, which stays as it is. */
   private putMany(
-    items: { item: FileEntry; root: string; seen: number; content: string | DocumentData }[],
+    items: { item: FileEntry; root: string; seen: number; content?: string | DocumentData }[],
   ): void {
     const drop = this.db.prepare(
       'DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)',
@@ -105,7 +125,7 @@ export class FileIndex {
     this.db.exec('BEGIN');
     try {
       for (const { item, root, seen, content } of items) {
-        drop.run(item.path);
+        if (content !== undefined) drop.run(item.path);
         file.run(
           item.path,
           root,
@@ -118,6 +138,7 @@ export class FileIndex {
           JSON.stringify(item),
           seen,
         );
+        if (content === undefined) continue;
         const original: DocumentData =
           typeof content === 'string'
             ? {
@@ -232,8 +253,13 @@ export class FileIndex {
             params.push(...ext);
           }
           if (key === 'kind') {
+            // any value but folder or directory meant files, so kind:folders listed files (2026-10-20)
+            const kind = value.toLowerCase();
+            const folder = /^(folders?|director(y|ies))$/.test(kind);
+            if (!folder && !/^files?$/.test(kind))
+              throw new Error('Kind filters use kind:file or kind:folder.');
             where.push('files.directory=?');
-            params.push(value === 'folder' || value === 'directory' ? 1 : 0);
+            params.push(folder ? 1 : 0);
           }
           if (key === 'path') {
             where.push('instr(files.path,?)>0');
@@ -363,7 +389,17 @@ export class FileIndex {
       rule.startsWith('/') ? inside(file, rule) : file.split('/').includes(rule),
     );
   }
-  configure(config: ApplicationSettings['search']): void {
+  configure(config: ApplicationSettings['search'], rebuild = false): void {
+    // An unchanged configuration crawls again only the roots it could not read, which a folder pick
+    // may have made readable: every pick configured the index anew, and every configuration crawled
+    // every root from the start. A rebuild crawls everything and extracts every document again.
+    const applied = JSON.stringify(config);
+    if (!rebuild && applied === this.applied) {
+      this.retryOffline();
+      return;
+    }
+    this.applied = applied;
+    this.rebuilding = rebuild;
     this.config = config;
     // Revoked folder authority must remove names and metadata as well as body text.
     const deniedPaths: string[] = [],
@@ -406,7 +442,36 @@ export class FileIndex {
         this.emit(this.status());
         if (config.paused) return;
         for (const root of this.roots) await this.crawl(root, generation);
+        // the rebuild is done: a later crawl of a changed folder keeps what it extracted
+        if (generation === this.generation) this.rebuilding = false;
       });
+  }
+  /** Crawls again, in the current configuration, the roots that could not be read. */
+  private retryOffline(): void {
+    if (this.config?.paused) return;
+    const generation = this.generation;
+    this.active = (this.active ?? Promise.resolve())
+      .catch(() => {})
+      .then(async () => {
+        for (const root of this.roots) {
+          if (generation !== this.generation) return;
+          if (root.status !== 'offline') continue;
+          root.status = 'indexing';
+          root.count = 0;
+          root.errors = 0;
+          this.emit(this.status());
+          await this.crawl(root, generation);
+        }
+      });
+  }
+  /** Whether the document's text, and its search row, are stored for its current version. */
+  private extracted(item: FileEntry): boolean {
+    const row = this.db
+      .prepare(
+        'SELECT source_documents.version AS version FROM source_documents JOIN files ON files.path=source_documents.path JOIN names ON names.rowid=files.rowid WHERE source_documents.path=?',
+      )
+      .get(item.path) as { version: string } | undefined;
+    return row?.version === JSON.stringify(sourceVersion(item));
   }
   async settled(): Promise<void> {
     await this.active;
@@ -420,7 +485,7 @@ export class FileIndex {
       item: FileEntry;
       root: string;
       seen: number;
-      content: string | DocumentData;
+      content?: string | DocumentData;
     }[] = [];
     const flush = () => {
       if (buffer.length) {
@@ -428,7 +493,7 @@ export class FileIndex {
         buffer.length = 0;
       }
     };
-    const seen = Date.now();
+    const seen = this.stamp();
     const queue = [absolute(root.path)];
     let cursor = 0;
     let tick = 0;
@@ -443,14 +508,19 @@ export class FileIndex {
           if (this.excluded(file)) continue;
           try {
             const item = await entry(file);
-            let content: string | DocumentData = '';
+            let content: string | DocumentData | undefined = '';
             if (
               !item.directory &&
               item.kind === 'file' &&
               item.size <= 16000000 &&
               this.config?.contentRoots.some((root) => inside(file, root))
             )
-              content = (await this.extract?.(file).catch(() => '')) ?? '';
+              // A document whose text is stored for this version keeps it: every crawl (each
+              // launch, each configuration) extracted every document under the content roots again.
+              content =
+                !this.rebuilding && this.extracted(item)
+                  ? undefined
+                  : ((await this.extract?.(file).catch(() => '')) ?? '');
             item.hidden ||= path
               .relative(ownerRoot, file)
               .split('/')
@@ -499,6 +569,8 @@ export class FileIndex {
         .prepare('DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)')
         .run(file.path);
       this.db.prepare('DELETE FROM files WHERE path=?').run(file.path);
+      // its extracted text too, as `remove` does: it stayed until the next configuration (2026-10-20)
+      this.db.prepare('DELETE FROM source_documents WHERE path=?').run(file.path);
     }
     this.count = undefined;
     root.status = 'ready';
@@ -532,7 +604,7 @@ export class FileIndex {
           )
             content = (await this.extract?.(file).catch(() => '')) ?? '';
           if (generation !== this.generation) return;
-          this.putMany([{ item, root, seen: Date.now(), content }]);
+          this.putMany([{ item, root, seen: this.stamp(), content }]);
           if (item.directory && item.kind !== 'symlink')
             await this.crawl(
               { path: file, status: 'indexing', count: 0, errors: 0 },

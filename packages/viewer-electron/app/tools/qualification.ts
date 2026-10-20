@@ -269,7 +269,9 @@ async function main() {
     await run('build-dependency-audit', ['audit', '--json']);
     await run('licenses', ['exec', 'tsx', 'tools/licenses.ts']);
     if (staticChecks.some((passed) => !passed)) return;
-    if (build && !(await run('direct-build', ['package']))) return;
+    // each build names its channel: one left exported must not turn either into the other
+    if (build && !(await run('direct-build', ['package'], { VIEWER_MAC_CHANNEL: 'direct' })))
+      return;
     const direct = await freeze(
       'direct',
       path.join(root, `out/Viewer-darwin-${process.arch}/Viewer.app`),
@@ -336,7 +338,7 @@ async function main() {
           result: 'blocked',
           reason: 'Provide development signing identity, matching macOS profile and build number.',
         });
-      else if (!build || (await run('mas-build', ['mas:dev']))) {
+      else if (!build || (await run('mas-build', ['mas:dev'], { VIEWER_MAC_CHANNEL: 'mas-dev' }))) {
         const candidate = await freeze(
           'mas-dev',
           path.join(root, `out/mac-app-store/mas-dev/${process.arch}/Viewer.app`),

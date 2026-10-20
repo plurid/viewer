@@ -27,6 +27,7 @@ import type { ActionPlanner } from './actions/planner';
 import { entry, absolute } from './filesystem';
 import { DocumentStore } from './document-store';
 import { AgentClients } from './agent-clients';
+import { AgentAccess } from './agent-access';
 import {
   sharedClientID,
   type AgentCapability,
@@ -44,7 +45,8 @@ const within = (file: string, root: string) =>
 /** The person's Home folder; a Mac App Store build's os.homedir() is its container. */
 const realHome = () => (process.mas ? os.userInfo().homedir : os.homedir());
 /** Agents see the shape of execution settings, never secrets they may carry:
- * terminal environment values and shell scripts often hold tokens. */
+ * terminal environment values, shell scripts and program arguments (`--token=…`, which were
+ * shown as they were until 2026-10-20) often hold tokens. */
 export function redactedSettings(settings: ApplicationSettings): ApplicationSettings {
   const hidden = '[redacted]';
   return {
@@ -53,13 +55,19 @@ export function redactedSettings(settings: ApplicationSettings): ApplicationSett
       ...settings.terminals,
       profiles: settings.terminals.profiles.map((profile) => ({
         ...profile,
+        args: profile.args.map(() => hidden),
         env: Object.fromEntries(Object.keys(profile.env).map((key) => [key, hidden])),
       })),
     },
     customActions: settings.customActions.map((action) =>
       action.executor.kind === 'shell'
         ? { ...action, executor: { ...action.executor, script: hidden } }
-        : action,
+        : action.executor.kind === 'executable'
+          ? {
+              ...action,
+              executor: { ...action.executor, args: action.executor.args.map(() => hidden) },
+            }
+          : action,
     ),
   };
 }
@@ -71,6 +79,8 @@ export class AgentBroker {
     return task;
   }
   readonly clients: AgentClients;
+  /** The shared connection's switch and folders: config.jsonc's, as far as the person approved them. */
+  readonly access: AgentAccess;
   private server?: Server;
   private starting?: Promise<void>;
   private socketDirectory?: string;
@@ -93,17 +103,15 @@ export class AgentBroker {
       access?(files: readonly string[]): Promise<void>;
       workspaceState?(): Promise<AgentWorkspaceSnapshot | undefined>;
       relationships?(file: string, content: boolean): Promise<RelationshipsResult>;
+      agentAccess?: AgentAccess;
     },
   ) {
-    this.clients = new AgentClients(dataPath, async (paths) => {
-      await this.extension?.access?.(paths);
-      for (const root of paths) {
-        const actual = await realpath(absolute(root));
-        if (!(await stat(actual)).isDirectory()) throw new Error('Choose a folder for the client.');
-        if (within(actual, await realpath(dataPath).catch(() => path.resolve(dataPath))))
-          throw new Error('Private Viewer data cannot be an agent folder.');
-      }
-    });
+    this.access = extension?.agentAccess ?? new AgentAccess(dataPath, () => this.settings().agents);
+    this.clients = new AgentClients(
+      dataPath,
+      (paths) => this.checkFolders(paths),
+      () => this.access.capabilities(),
+    );
     this.connection = new DocumentStore(path.join(dataPath, 'agent-connection-v1.json'), (value) =>
       z.object({ socket: z.string(), pid: z.number() }).parse(value),
     );
@@ -116,10 +124,22 @@ export class AgentBroker {
         .parse(value),
     );
   }
+  /** A folder an agent may be given: a folder, readable, outside Viewer's private data. */
+  async checkFolders(paths: readonly string[]): Promise<void> {
+    await this.extension?.access?.(paths);
+    for (const root of paths) {
+      const actual = await realpath(absolute(root));
+      if (!(await stat(actual)).isDirectory()) throw new Error('Choose a folder for the client.');
+      if (within(actual, await realpath(this.dataPath).catch(() => path.resolve(this.dataPath))))
+        throw new Error('Private Viewer data cannot be an agent folder.');
+    }
+  }
   async start(): Promise<void> {
     if (this.starting) return this.starting;
-    if (this.server || !this.settings().agents.enabled) return;
-    this.starting = this.startNow().finally(() => {
+    if (this.server) return;
+    this.starting = (async () => {
+      if ((await this.access.state()).enabled) await this.startNow();
+    })().finally(() => {
       this.starting = undefined;
     });
     return this.starting;
@@ -245,7 +265,7 @@ export class AgentBroker {
             ? 'terminal-write'
             : 'propose';
       await this.clients.require(capability);
-      if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
+      if (!(await this.access.state()).enabled) throw new Error('Agent access is disabled.');
       if (proposal.target?.directory && proposal.target.paneID !== 'none')
         await this.authorize(proposal.target.directory);
       for (const file of proposal.target?.selection ?? []) await this.authorize(file.path);
@@ -263,7 +283,7 @@ export class AgentBroker {
   private async authorizeRemoval(files: readonly string[]): Promise<void> {
     const client = await this.clients.get();
     const roots = await Promise.all(
-      [...(client?.roots ?? this.settings().agents.roots), realHome()].map((root) =>
+      [...(client?.roots ?? (await this.access.state()).protectedRoots), realHome()].map((root) =>
         realpath(absolute(root)).catch(() => absolute(root)),
       ),
     );
@@ -308,13 +328,14 @@ export class AgentBroker {
     }
   }
   async authorize(file: string): Promise<string> {
-    if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
+    const access = await this.access.state();
+    if (!access.enabled) throw new Error('Agent access is disabled.');
     if (within(absolute(file), path.resolve(this.dataPath)))
       throw new Error(
         'Private Viewer credentials, grants and recovery data are unavailable to generic agent file tools.',
       );
     const client = await this.clients.get();
-    const configured = client?.roots ?? this.settings().agents.roots;
+    const configured = client?.roots ?? access.roots;
     const roots = await Promise.all(configured.map((root) => realpath(root).catch(() => '')));
     let actual: string;
     try {
@@ -335,7 +356,7 @@ export class AgentBroker {
     const privateRoot = await realpath(this.dataPath).catch(() => path.resolve(this.dataPath));
     if (within(actual, privateRoot))
       throw new Error('Private Viewer data is unavailable to generic agent file tools.');
-    if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
+    if (!(await this.access.state()).enabled) throw new Error('Agent access is disabled.');
     const latest = await this.clients.get();
     if (client && latest?.revision !== client.revision)
       throw new Error('Client folder permissions changed. Try again.');
@@ -355,7 +376,7 @@ export class AgentBroker {
         (request.kind === 'open-path' && request.placement === 'linked')
       )
         throw new Error('Focus a folder plane first.');
-      if (!this.settings().agents.enabled) throw new Error('Agent access is disabled.');
+      if (!(await this.access.state()).enabled) throw new Error('Agent access is disabled.');
     } else await this.authorize(target.directory);
     if (request.kind === 'open-path') await this.authorize(request.path);
     else if (request.kind === 'focus-plane') {
@@ -379,7 +400,7 @@ export class AgentBroker {
     }
   }
   async handle(token: unknown, request: unknown): Promise<unknown> {
-    if (!this.settings().agents.enabled || typeof token !== 'string' || token.length !== 64)
+    if (typeof token !== 'string' || token.length !== 64 || !(await this.access.state()).enabled)
       throw new Error('Agent access is disabled or its token is invalid.');
     const shared =
       Buffer.byteLength(token) === Buffer.byteLength(this.token) &&
@@ -388,7 +409,7 @@ export class AgentBroker {
     if (!actor) throw new Error('Agent access is disabled or its token is invalid.');
     return this.clients.context.run(actor, async () => {
       const client = await this.clients.get();
-      const policy = JSON.stringify(this.settings().agents);
+      const policy = this.policy();
       const active = this.activeCalls.get(actor) ?? 0;
       if (active >= (client?.budgets.maxTasks ?? 20))
         throw new Error('This client has reached its concurrent request budget.');
@@ -408,7 +429,7 @@ export class AgentBroker {
         const latest = await this.clients.get();
         if (
           (client && latest?.revision !== client.revision) ||
-          policy !== JSON.stringify(this.settings().agents)
+          (await policy) !== (await this.policy())
         )
           throw new Error('Agent permissions changed while this request was running. Try again.');
         if (tool?.success)
@@ -424,6 +445,11 @@ export class AgentBroker {
         this.activeCalls.set(actor, (this.activeCalls.get(actor) ?? 1) - 1);
       }
     });
+  }
+  /** What a request ran under: a change while it ran fails it. */
+  private async policy(): Promise<string> {
+    const { enabled, roots } = await this.access.state();
+    return JSON.stringify({ enabled, roots, allowLayout: this.settings().agents.allowLayout });
   }
   private async handleAuthenticated(request: unknown): Promise<unknown> {
     const message = z.object({ method: z.string(), params: z.unknown().optional() }).parse(request);
@@ -596,7 +622,11 @@ export class AgentBroker {
       await this.authorizeNavigation(request, target);
       value = extension.requests.navigation(request, target);
       this.own((value as { id: string }).id);
-      if (await this.clients.get()) {
+      // A named client's navigation runs at once, but a project file opened installs a whole
+      // workspace from it: the person reviews that (2026-10-20).
+      const project =
+        request.kind === 'open-path' && path.basename(request.path) === 'viewer.project.jsonc';
+      if (!project && (await this.clients.get())) {
         await extension.requests.review((value as { id: string }).id, true);
         value = { ...(value as object), requiresUserReview: false };
       }
@@ -896,7 +926,7 @@ export class AgentBroker {
       const client = await this.clients.get();
       const result = await this.files.query({
         ...input,
-        content: client ? client.capabilities.includes('content') : true,
+        content: (client?.capabilities ?? (await this.access.capabilities())).includes('content'),
       } as IndexedQuery);
       const entries = [];
       for (const item of result.entries) {
@@ -984,9 +1014,12 @@ export class AgentBroker {
   private own(id: string): void {
     this.owned.set(id, this.clients.actor());
     if (this.owned.size <= 1000) return;
+    // what is gone goes first; a proposal still kept stays its client's (2026-10-20: the oldest half
+    // went, and an agent could no longer read its own proposal under review). Tasks are read by the
+    // client recorded on them.
     for (const key of this.owned.keys()) {
       if (this.owned.size <= 500) break;
-      this.owned.delete(key);
+      if (!this.extension?.requests.has(key)) this.owned.delete(key);
     }
   }
   /** The private socket folder holds only the socket; it is never removed recursively. */

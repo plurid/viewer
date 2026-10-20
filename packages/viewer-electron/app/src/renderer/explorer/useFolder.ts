@@ -1,10 +1,14 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import type { FileEntry } from '../../domain/contracts';
+import { needsFolderAccess } from '../../domain/file-access';
 interface Dataset {
   entries: FileEntry[];
   loading: boolean;
+  /** What went wrong, for a message: the listing or the watch. */
   error: string;
   errorCode?: string;
+  /** No listing to show: the folder could not be read, is gone or needs access. */
+  unavailable: boolean;
 }
 interface Subscription {
   state: Dataset;
@@ -15,13 +19,15 @@ interface Subscription {
   refresh?: () => void;
   /** This folder's own identity, to tell an ancestor's unrelated change from a move. */
   identity?: string;
+  /** A failed watch, until the watch starts again: a listing that loads after it keeps it said. */
+  watchError?: { message: string; code?: string };
 }
 const datasets = new Map<string, Subscription>();
 function dataset(path: string): Subscription {
   let value = datasets.get(path);
   if (!value) {
     value = {
-      state: { entries: [], loading: true, error: '' },
+      state: { entries: [], loading: true, error: '', unavailable: false },
       listeners: new Set(),
       dirty: false,
     };
@@ -32,6 +38,7 @@ function dataset(path: string): Subscription {
 function notify(value: Subscription) {
   value.listeners.forEach((listener) => listener());
 }
+const gone = (code?: string) => ['ENOENT', 'ENOTDIR', 'ENODEV', 'ENXIO'].includes(code ?? '');
 function load(path: string): void {
   const value = dataset(path);
   if (value.request) {
@@ -41,14 +48,26 @@ function load(path: string): void {
   value.request = window.viewer
     .list(path)
     .then((listing) => {
-      value.state = { entries: listing.entries, loading: false, error: '' };
+      value.state = {
+        entries: listing.entries,
+        loading: false,
+        error: value.watchError?.message ?? '',
+        errorCode: value.watchError?.code,
+        unavailable: false,
+      };
     })
     .catch((error) => {
+      // A reload that fails keeps the listing it had, under its error, unless the folder is gone
+      // or needs access again. It emptied the view, and a passing failure (a network volume's
+      // timeout) left it empty until the next change in the folder.
+      const listed = !value.state.loading && !value.state.unavailable;
+      const keep = listed && !gone(error.code) && !needsFolderAccess(error.code);
       value.state = {
-        entries: [],
+        entries: keep ? value.state.entries : [],
         loading: false,
         error: String(error.message || error),
         errorCode: error.code,
+        unavailable: !keep,
       };
     })
     .finally(() => {
@@ -77,10 +96,12 @@ export function useFolder(path: string) {
           return (watchRequest = window.viewer
             .watch(path, subscriber)
             .then(() => {
+              value.watchError = undefined;
               if (stopped) void window.viewer.unwatch(subscriber);
             })
             .catch((error) => {
               watchFailed = true;
+              value.watchError = { message: String(error.message), code: error.code };
               if (!stopped) {
                 value.state = {
                   ...value.state,
@@ -119,10 +140,14 @@ export function useFolder(path: string) {
           }
           if (event.type === 'watch-error' && event.path === path) {
             watchFailed = true;
+            value.watchError = {
+              message: `Folder watching is unavailable: ${event.message}`,
+              code: event.code ?? value.state.errorCode,
+            };
             value.state = {
               ...value.state,
-              error: `Folder watching is unavailable: ${event.message}`,
-              errorCode: event.code ?? value.state.errorCode,
+              error: value.watchError.message,
+              errorCode: value.watchError.code,
             };
             notify(value);
           }

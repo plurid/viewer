@@ -74,7 +74,8 @@ export class FileServices {
       });
     this.measurement = this.createMeasurement();
   }
-  configure(value: ApplicationSettings['search']): Promise<void> {
+  /** `rebuild`: crawl every root and extract every document again, whatever is stored. */
+  configure(value: ApplicationSettings['search'], rebuild = false): Promise<void> {
     this.revision++;
     const work = this.configurations
       .catch(() => {})
@@ -106,7 +107,7 @@ export class FileServices {
           exclusions: [...new Set([...value.exclusions, this.dataPath])],
         };
         this.unavailable = unavailable;
-        await this.index.call('configure', [effective]);
+        await this.index.call('configure', rebuild ? [effective, true] : [effective]);
         this.configuration = effective;
       });
     this.configurations = work;

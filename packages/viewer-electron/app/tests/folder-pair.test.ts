@@ -103,7 +103,7 @@ describe('existing plane sizing and positioning', () => {
     const id = target().paneID;
     const session = browseSession(id, target().path);
     session.selection = ['/fixtures/selected.txt'];
-    session.scroll = 120;
+    session.scroll = { list: 120 };
     const planeID = rendered!.handle.tree.get()[0]!.planeID;
     await act(async () => rendered!.handle.camera.dock(planeID, { animate: false }));
     clock = installFrameClock();
@@ -118,7 +118,7 @@ describe('existing plane sizing and positioning', () => {
     expect(rendered!.handle.camera.get()).toMatchObject({ yaw: 0, pitch: 0, roll: 0, scale: 1 });
     expect(rendered!.handle.camera.docked()).toBe('');
     expect(browseSession(id, target().path)).toBe(session);
-    expect(session).toMatchObject({ selection: ['/fixtures/selected.txt'], scroll: 120 });
+    expect(session).toMatchObject({ selection: ['/fixtures/selected.txt'], scroll: { list: 120 } });
   });
 
   it.each([
@@ -436,7 +436,7 @@ describe('folder pair workspace integration', () => {
       });
       const session = browseSession(folder.id, '/fixtures/project');
       session.selection = ['/fixtures/project/image.png'];
-      session.scroll = 240;
+      session.scroll = { gallery: 240 };
       const settings = structuredClone(getState().settings);
       settings.revision++;
       settings.settings.browsing.newPlaneLocation = 'home';
@@ -458,7 +458,7 @@ describe('folder pair workspace integration', () => {
       });
       expect(browseSession(copy.id, copy.path).selection).toEqual([]);
       expect(browseSession(folder.id, '/fixtures/project')).toBe(session);
-      expect(session.scroll).toBe(240);
+      expect(session.scroll).toEqual({ gallery: 240 });
       await act(async () => rendered!.rerender({ planes, configuration, view: routes() }));
       const [first, second] = rendered!.handle.tree.get();
       expect(first).toMatchObject({ sizeMode: 'manual', manuallyPositioned: true, show: true });

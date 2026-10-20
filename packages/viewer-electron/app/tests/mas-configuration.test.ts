@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import store from '../mac-app-store.json' with { type: 'json' };
 import {
   macChannel,
+  storeChannel,
   provisioningDeviceID,
   storeConfiguration,
   storeEntitlements,
@@ -62,6 +63,20 @@ describe('Store release boundaries', () => {
         'mas-dev',
       ),
     ).toThrow('numeric');
+  });
+  it('builds the channel its command names, and refuses a conflicting VIEWER_MAC_CHANNEL (2026-10-20)', () => {
+    // A VIEWER_MAC_CHANNEL=mas left exported made mas:dev a distribution build.
+    expect(storeChannel('dev', {})).toBe('mas-dev');
+    expect(storeChannel('distribution', {})).toBe('mas');
+    expect(storeChannel('preflight', {})).toBe('mas-dev');
+    expect(storeChannel('preflight', { VIEWER_MAC_CHANNEL: 'mas' })).toBe('mas');
+    expect(storeChannel('dev', { VIEWER_MAC_CHANNEL: 'mas-dev' })).toBe('mas-dev');
+    for (const [command, value] of [
+      ['dev', 'mas'],
+      ['distribution', 'mas-dev'],
+      ['dev', 'direct'],
+    ])
+      expect(() => storeChannel(command!, { VIEWER_MAC_CHANNEL: value })).toThrow('conflicts');
   });
   it('requires a current, explicit macOS profile from the right team and channel', () => {
     expect(validateStoreProfile(profile, config, 'mas-dev')).toBe(profile.applicationIdentifier);

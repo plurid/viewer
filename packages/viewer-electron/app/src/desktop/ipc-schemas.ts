@@ -5,7 +5,7 @@ import type { ApiMethod, DesktopEvent } from '../domain/contracts';
 import { modelDataLevels } from '../domain/model-permissions';
 import { operationPlanRequestSchema } from '../domain/operation-plan';
 import { sourceVersionSchema } from '../domain/inspection';
-import { agentClientInputSchema } from '../domain/agent-clients';
+import { agentCapabilities, agentClientInputSchema } from '../domain/agent-clients';
 import { watchRuleRequestSchema } from '../domain/watch-rules';
 import { workflowDefinitionSchema } from '../domain/workflows';
 import { projectDefinitionSchema } from '../domain/project';
@@ -267,6 +267,23 @@ export const schemas = {
   configOpen: z.tuple([]),
   configValidate: z.tuple([]),
   configTransfer: z.tuple([z.enum(['import', 'export'])]),
+  configRestore: z.tuple([]),
+  settingsCategory: z.tuple([z.string().max(40)]),
+  agentAccess: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('state') }).strict(),
+      z.object({ kind: z.literal('enable'), enabled: z.boolean() }).strict(),
+      z.object({ kind: z.literal('add-folder') }).strict(),
+      z.object({ kind: z.literal('allow'), roots: z.array(localPath).max(100) }).strict(),
+      z.object({ kind: z.literal('remove-folder'), root: localPath }).strict(),
+      z
+        .object({
+          kind: z.literal('capabilities'),
+          capabilities: z.array(z.enum(agentCapabilities)).max(agentCapabilities.length),
+        })
+        .strict(),
+    ]),
+  ]),
   terminalApplication: z.tuple([]),
   terminalExternal: z.tuple([localPath, z.boolean()]),
   terminalStart: z.tuple([
@@ -344,6 +361,7 @@ export const schemas = {
   providerModels: z.tuple([id]),
   providerPermissionGet: z.tuple([id]),
   providerPermissionSet: z.tuple([id, z.url().max(4000), z.enum(modelDataLevels).nullable()]),
+  providerPermissionAgents: z.tuple([id, z.url().max(4000), z.boolean()]),
   indexStatus: z.tuple([]),
   indexedQuery: z.tuple([indexedQuerySchema]),
   indexRebuild: z.tuple([]),
@@ -522,7 +540,10 @@ export const methodWindows = {
   agentGrant: 'settings',
   configOpen: 'both',
   configValidate: 'both',
-  configTransfer: 'both',
+  configTransfer: 'settings',
+  configRestore: 'settings',
+  settingsCategory: 'settings',
+  agentAccess: 'settings',
   terminalApplication: 'both',
   terminalExternal: 'viewer',
   terminalStart: 'viewer',
@@ -540,6 +561,7 @@ export const methodWindows = {
   providerModels: 'both',
   providerPermissionGet: 'both',
   providerPermissionSet: 'both',
+  providerPermissionAgents: 'settings',
   indexStatus: 'both',
   indexedQuery: 'viewer',
   indexRebuild: 'both',

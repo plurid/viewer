@@ -12,7 +12,7 @@ import {
 } from 'electron';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { lookup } from 'mime-types';
 import {
   defaultShortcuts,
@@ -27,6 +27,7 @@ import { errorMessage } from './domain/errors';
 import { DiagnosticLog } from './desktop/diagnostics';
 import { planeAlignments, planeSizePresets } from './domain/plane-layout';
 import { applicationCSP } from './desktop/application-csp';
+import { debuggingAllowed } from './desktop/debugging';
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -49,12 +50,31 @@ const renderTest = process.env.VIEWER_RENDER_TEST === '1';
 const backgroundTest =
   renderTest && process.env.VIEWER_BACKGROUND_TEST === '1' && !!process.env.VIEWER_DATA_DIRECTORY;
 if (backgroundTest && process.platform === 'darwin') app.setActivationPolicy('accessory');
+const defaultUserData = app.getPath('userData');
 // An optional, main-process-only profile supports portable installations and isolated QA.
 if (process.env.VIEWER_DATA_DIRECTORY) {
   if (!path.isAbsolute(process.env.VIEWER_DATA_DIRECTORY))
     throw new Error('VIEWER_DATA_DIRECTORY must be an absolute path.');
   mkdirSync(process.env.VIEWER_DATA_DIRECTORY, { recursive: true });
   app.setPath('userData', process.env.VIEWER_DATA_DIRECTORY);
+}
+const resolved = (directory: string) => {
+  try {
+    return realpathSync(directory);
+  } catch {
+    return path.resolve(directory);
+  }
+};
+if (
+  !debuggingAllowed({
+    packaged: app.isPackaged,
+    argv: process.argv,
+    dataDirectory: process.env.VIEWER_DATA_DIRECTORY && resolved(process.env.VIEWER_DATA_DIRECTORY),
+    defaultUserData: resolved(defaultUserData),
+  })
+) {
+  console.error('Viewer does not start with a remote debugging switch on your own profile.');
+  process.exit(1);
 }
 // Native crash dumps stay on this Mac; nothing is uploaded.
 crashReporter.start({ uploadToServer: false, compress: true });
@@ -87,6 +107,8 @@ app.on('child-process-gone', (_event, details) => {
 let window: BrowserWindow | null = null;
 let desktop: Desktop | null = null;
 let windowState: WindowState | undefined;
+/** The Settings window's frame and last category: private, never config.jsonc (2026-10-20). */
+let settingsWindowState: WindowState | undefined;
 let settingsWindow: BrowserWindow | null = null;
 let settingsClosing: Promise<void> | undefined;
 const mcpMode = process.argv.includes('--mcp');
@@ -542,12 +564,18 @@ async function openSettingsWindow(): Promise<void> {
     return;
   }
   await desktop.settings.load();
-  const dimensions = desktop.settings.snapshot().settings.settingsWindow;
+  // the size config.jsonc held stands until the window has a frame of its own
+  const legacy = desktop.settings.snapshot().settings.settingsWindow;
+  const restored = restoreWindowFrame(
+    settingsWindowState?.value ?? null,
+    screen.getAllDisplays(),
+    screen.getPrimaryDisplay(),
+    { width: legacy?.width ?? 900, height: legacy?.height ?? 640, minWidth: 760, minHeight: 540 },
+  );
   const created = new BrowserWindow({
-    width: dimensions.width,
-    height: dimensions.height,
-    minWidth: 760,
-    minHeight: 540,
+    ...restored.bounds,
+    minWidth: restored.minWidth,
+    minHeight: restored.minHeight,
     title: 'Settings',
     backgroundColor: '#272a30',
     show: false,
@@ -586,29 +614,23 @@ async function openSettingsWindow(): Promise<void> {
   created.webContents.on('will-navigate', (event, url) => {
     if (!trusted(url)) event.preventDefault();
   });
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  created.on('resize', () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (created.isDestroyed()) return;
-      const [width, height] = created.getSize();
-      void desktop?.settings
-        .patch(
-          [
-            { path: 'settings.settingsWindow.width', value: width },
-            { path: 'settings.settingsWindow.height', value: height },
-          ],
-          desktop.settings.snapshot().revision,
-        )
-        .catch(console.error);
-    }, 250);
-  });
+  const placed = () => {
+    if (created.isDestroyed() || created.isMinimized()) return;
+    settingsWindowState?.remember(
+      captureWindowFrame(created, screen.getDisplayMatching(created.getBounds())),
+    );
+  };
+  created.on('resize', placed);
+  created.on('move', placed);
   created.on('closed', () => {
-    clearTimeout(timer);
     settingsWindow = null;
+    void settingsWindowState
+      ?.flush()
+      .catch((error) => console.error('Settings window placement save failed', error));
   });
   const url = new URL(devURL || 'viewer-app://app/index.html');
   url.searchParams.set('window', 'settings');
+  url.searchParams.set('category', settingsWindowState?.value?.category ?? legacy?.category ?? '');
   try {
     await created.loadURL(url.toString());
   } catch (error) {
@@ -630,6 +652,9 @@ app.on('open-file', (event, file) => {
   event.preventDefault();
   if (desktop) desktop.open([file]);
   else pendingPaths.push(file);
+  // with every window closed, the file waited for a later Dock click (2026-10-20); a window opens
+  // for it, as `activate` would open one
+  if (!mcpMode && desktop && !window && !quitPending && !quitting) void createWindow();
 });
 app
   .whenReady()
@@ -651,9 +676,21 @@ app
     if (!app.isPackaged) app.dock?.setIcon(path.resolve('assets/icon.png'));
     windowState = new WindowState(path.join(app.getPath('userData'), 'window-state-v1.json'));
     await windowState.load();
+    settingsWindowState = new WindowState(
+      path.join(app.getPath('userData'), 'settings-window-v1.json'),
+    );
+    await settingsWindowState.load();
     if (quitPending || quitting) return;
     desktop = new Desktop(app.getPath('userData'), trusted, {
       openSettings: openSettingsWindow,
+      settingsCategory: (category) => {
+        if (!settingsWindow || settingsWindow.isDestroyed()) return;
+        const frame = captureWindowFrame(
+          settingsWindow,
+          screen.getDisplayMatching(settingsWindow.getBounds()),
+        );
+        settingsWindowState?.remember(frame && { ...frame, category });
+      },
       settingsChanged: menu,
       diagnose: (detail) => void diagnostics.record('renderer-error', detail),
       worker: path.join(__dirname, 'worker.cjs'),

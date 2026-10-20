@@ -101,6 +101,10 @@ const record = z
           .array(z.object({ path: file, version: sourceVersionSchema }).strict())
           .max(10000)
           .optional(),
+        expectedContents: z
+          .array(z.object({ path: file, proof: z.string().length(64) }).strict())
+          .max(10000)
+          .optional(),
       })
       .strict(),
     // Replace adds a Trash step beside each item's own step.

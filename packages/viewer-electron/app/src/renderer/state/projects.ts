@@ -127,7 +127,29 @@ export function associateProject(project: ProjectAssociation): void {
 /** Detach only the definition. The workspace, engine, previews and files stay open. */
 export function closeProject(): void {
   if (!activeWorkspace().project) return;
-  changeWorkspace((space) => ({ ...space, project: undefined }));
+  // Folder panes take their view, sort and hidden items from the shared folder preferences again,
+  // as the rest of each folder's presentation does: they kept the project's (2026-10-20).
+  changeWorkspace((space) => {
+    const next = { ...space, project: undefined };
+    return {
+      ...next,
+      panes: space.panes.map((pane) =>
+        pane.type === 'folder'
+          ? {
+              ...pane,
+              ...panePresentation(
+                scopedPresentation(
+                  pane.path,
+                  getState().settings.settings,
+                  getState().saved.ui,
+                  next,
+                ),
+              ),
+            }
+          : pane,
+      ),
+    };
+  });
 }
 export function consumeProjectLayout(layout: ProjectLayout): void {
   savePatch({

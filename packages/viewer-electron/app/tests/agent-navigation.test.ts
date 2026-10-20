@@ -455,6 +455,23 @@ describe('reviewed MCP workspace navigation', () => {
       'read budget',
     );
   });
+  it('asks the person before a named client opens a project file, which installs a workspace (2026-10-20)', async () => {
+    // A named client's navigation runs at once; a project file's opens a whole workspace from it.
+    const project = path.join(files, 'viewer.project.jsonc');
+    await writeFile(project, '{}');
+    const navigator = await broker.clients.create({
+      name: 'Navigator',
+      roots: [files],
+      capabilities: ['navigation'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = navigator.token;
+    const proposal = await call<{ id: string; requiresUserReview: boolean }>('propose_open_path', {
+      path: project,
+    });
+    expect(proposal.requiresUserReview).toBe(true);
+    expect(navigate).not.toHaveBeenCalled();
+  });
   it('navigates with a named client grant, keeps proposals owned and rejects other clients and revoked credentials', async () => {
     const navigator = await broker.clients.create({
       name: 'Navigator',
@@ -690,5 +707,44 @@ describe('reviewed MCP workspace navigation', () => {
     token = await broker.credential();
     await expect(call('get_proposal', { id: selected.id })).rejects.toThrow('another actor');
     expect(await realpath(file)).toBe(await broker.authorize(file));
+  });
+  it('takes no folder or switch from config.jsonc that the person did not approve (2026-10-20)', async () => {
+    // A config.jsonc edit or an Import widened the shared token's folders with no prompt.
+    const file = path.join(secret, 'Ledger.txt');
+    await writeFile(file, 'Private.');
+    await broker.authorize(path.join(files, 'Résumé.txt'));
+    await settings.patch(
+      [{ path: 'settings.agents.roots', value: [files, secret] }],
+      settings.snapshot().revision,
+    );
+    await expect(broker.authorize(file)).rejects.toThrow('outside the agent’s authorized folders');
+    await broker.access.approve({ add: [secret] });
+    expect(await broker.authorize(file)).toBe(await realpath(file));
+    await settings.patch(
+      [{ path: 'settings.agents.enabled', value: false }],
+      settings.snapshot().revision,
+    );
+    await expect(broker.authorize(file)).rejects.toThrow('disabled');
+  });
+  it('lets an agent read its own proposal however many requests came after it (2026-10-20)', async () => {
+    // The ownership record kept its newest half: an older proposal still under review was lost.
+    const selected = await call<{ id: string }>('propose_selection', {
+      paths: [path.join(files, 'Résumé.txt')],
+    });
+    for (let index = 0; index < 1000; index++)
+      (broker as unknown as { own(id: string): void }).own(`finished-${index}`);
+    expect((await call<{ id: string }>('get_proposal', { id: selected.id })).id).toBe(selected.id);
+  });
+  it('holds the shared connection to the capabilities the person left it (2026-10-20)', async () => {
+    // The shared token held every capability, document contents included, and nothing narrowed it.
+    const sources = [path.join(files, 'Résumé.txt')];
+    await broker.access.approve({ capabilities: ['metadata', 'navigation', 'propose'] });
+    expect((await broker.access.state()).capabilities).toEqual([
+      'metadata',
+      'navigation',
+      'propose',
+    ]);
+    await expect(call('run_action', { recipeID: 'rename', sources })).rejects.toThrow('no content');
+    expect(startAction).not.toHaveBeenCalled();
   });
 });

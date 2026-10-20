@@ -41,7 +41,8 @@ export function SettingsWindow() {
       .settingsGet()
       .then((value) => {
         accept(value);
-        const saved = value.settings.settingsWindow.category;
+        // the desktop passes the last category in, kept with the window's frame (2026-10-20)
+        const saved = new URLSearchParams(window.location.search).get('category') ?? '';
         setCategory(
           categories.find((category) => category.toLowerCase() === saved.toLowerCase()) ||
             'Browsing',
@@ -85,7 +86,7 @@ export function SettingsWindow() {
   const selected = (value: string) => {
     setCategory(value);
     setQuery('');
-    patch('settings.settingsWindow.category', value.toLowerCase());
+    void window.viewer.settingsCategory(value.toLowerCase()).catch(() => {});
   };
   if (!snapshot)
     return (

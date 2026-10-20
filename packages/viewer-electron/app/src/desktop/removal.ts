@@ -2,7 +2,9 @@
  * The only module that removes filesystem entries without the native Trash;
  * ESLint rejects `rm`, `rmdir` and `unlink` elsewhere. Each function names the
  * one narrow case it serves. Anything a person could want back goes to the
- * Trash instead (AGENTS.md).
+ * Trash instead (AGENTS.md). One exception runs outside Viewer: a terminal
+ * launcher script removes itself with `/bin/rm` as Terminal runs it
+ * (`terminal-launch.ts`); those never run are removed at startup.
  */
 import { rm, rmdir, unlink } from 'node:fs/promises';
 import path from 'node:path';

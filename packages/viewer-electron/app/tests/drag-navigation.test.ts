@@ -68,7 +68,7 @@ describe('spring-loaded folder ownership', () => {
     const initial = activeWorkspace().panes[0];
     const session = browseSession(id, '/home');
     session.selection = ['/home/original.txt'];
-    session.scroll = 150;
+    session.scroll = { list: 150 };
     const drag = folderDragNavigation(id);
     await drag.open('/home/Nested', () => true);
     expect(activeWorkspace().panes[0]).toMatchObject({ path: '/home/Nested', mode: 'grid' });
@@ -85,7 +85,7 @@ describe('spring-loaded folder ownership', () => {
     expect(activeWorkspace().panes[0]).toEqual(initial);
     expect(browseSession(id, '/home')).toBe(session);
     expect(session.selection).toEqual(['/home/original.txt']);
-    expect(session.scroll).toBe(150);
+    expect(session.scroll).toEqual({ list: 150 });
   });
   it('commits only the final folder to history on drop', async () => {
     const id = activeWorkspace().panes[0].id;

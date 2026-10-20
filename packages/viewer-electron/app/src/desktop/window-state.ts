@@ -17,6 +17,8 @@ const schema = z.object({
   maximized: z.boolean(),
   fullscreen: z.boolean(),
   display: z.object({ id: z.number().int(), workArea: rectangle }),
+  /** The Settings window's last category: kept with its frame, not in config.jsonc (2026-10-20). */
+  category: z.string().max(40).optional(),
 });
 export type WindowFrame = z.infer<typeof schema>;
 type Monitor = Pick<Display, 'id' | 'workArea'>;
@@ -25,11 +27,12 @@ export function restoreWindowFrame(
   saved: WindowFrame | null,
   displays: readonly Monitor[],
   primary: Monitor,
+  sizes = { width: 1440, height: 940, minWidth: 780, minHeight: 560 },
 ) {
   const remembered = saved && displays.find((display) => display.id === saved.display.id);
   const area = (remembered || primary).workArea;
-  const minWidth = Math.min(780, area.width);
-  const minHeight = Math.min(560, area.height);
+  const minWidth = Math.min(sizes.minWidth, area.width);
+  const minHeight = Math.min(sizes.minHeight, area.height);
   const previous = saved && remembered ? saved.bounds : null;
   const filled =
     previous &&
@@ -41,10 +44,10 @@ export function restoreWindowFrame(
     );
   const width = filled
     ? area.width
-    : Math.min(area.width, Math.max(minWidth, saved?.bounds.width ?? 1440));
+    : Math.min(area.width, Math.max(minWidth, saved?.bounds.width ?? sizes.width));
   const height = filled
     ? area.height
-    : Math.min(area.height, Math.max(minHeight, saved?.bounds.height ?? 940));
+    : Math.min(area.height, Math.max(minHeight, saved?.bounds.height ?? sizes.height));
   const x = previous
     ? previous.x + area.x - saved!.display.workArea.x
     : area.x + Math.round((area.width - width) / 2);
@@ -118,8 +121,12 @@ export class WindowState {
     }
   }
   remember(frame: WindowFrame | null): void {
-    if (!frame || JSON.stringify(frame) === JSON.stringify(this.value)) return;
-    this.value = schema.parse(frame);
+    if (!frame) return;
+    // a frame without a category keeps the one remembered
+    const category = frame.category ?? this.value?.category;
+    const next = schema.parse(category ? { ...frame, category } : frame);
+    if (JSON.stringify(next) === JSON.stringify(this.value)) return;
+    this.value = next;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = undefined;

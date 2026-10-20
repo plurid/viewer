@@ -184,6 +184,13 @@ export async function restoreWorkspace(): Promise<void> {
   const deleted = getState().deletedWorkspace;
   if (!deleted) return;
   await flushState();
+  // A second Undo that began during this flush finds it restored: it restored it again, and the
+  // duplicate workspace ID made every later state save fail (2026-10-20).
+  if (
+    getState().deletedWorkspace !== deleted ||
+    getState().saved.workspaces.some((space) => space.id === deleted.workspace.id)
+  )
+    return;
   const workspaces = getState().saved.workspaces.filter(
     (space) => !(space.id === deleted.replacement && !space.panes.length),
   );

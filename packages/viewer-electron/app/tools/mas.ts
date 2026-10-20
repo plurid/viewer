@@ -4,6 +4,7 @@ import { cp, lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  storeChannel,
   storeConfiguration,
   provisioningDeviceID,
   storeEntitlements,
@@ -15,8 +16,7 @@ import {
 
 const directory = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const command = process.argv[2] ?? 'preflight';
-const channel: StoreChannel =
-  command === 'distribution' || process.env.VIEWER_MAC_CHANNEL === 'mas' ? 'mas' : 'mas-dev';
+const channel: StoreChannel = storeChannel(command, process.env);
 const run = (executable: string, args: string[], input?: Buffer) =>
   execFileSync(executable, args, { encoding: 'utf8', input, maxBuffer: 4_000_000 });
 

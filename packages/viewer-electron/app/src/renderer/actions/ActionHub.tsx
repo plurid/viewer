@@ -11,6 +11,7 @@ import { modelDataLabels, modelPermissionCovers } from '../../domain/model-permi
 import type { CheckpointEstimate } from '../../domain/change-plan';
 import { formatBytes } from '../../domain/files';
 import { baseName } from '../../domain/planes';
+import { planOrigin } from './commands';
 const busy = (plan: ActionPlan) => ['planning', 'applying'].includes(plan.status);
 const name = (path: string) => baseName(path);
 function destinationParts(path: string) {
@@ -122,8 +123,7 @@ export function ActionHub() {
                   <div className="task-context">
                     <button onClick={() => setSelected(undefined)}>All tasks</button>
                     <span>
-                      {plan.context.sources.length} selected ·{' '}
-                      {plan.context.actor === 'agent' ? 'Agent proposal' : 'Your selection'}
+                      {plan.context.sources.length} selected · {planOrigin(plan.context)}
                     </span>
                     <span>{plan.status}</span>
                   </div>
@@ -223,6 +223,11 @@ function ConfigureTask({
               setOptions({ template: next?.template });
             }}
           >
+            {!recipe && (
+              <option value={chosen} disabled>
+                Choose an action
+              </option>
+            )}
             {settings.recipes.map((recipe) => (
               <option key={recipe.id} value={recipe.id}>
                 {recipe.name}
@@ -230,6 +235,11 @@ function ConfigureTask({
             ))}
           </select>
         </label>
+        {!recipe && (
+          <p className="error" role="alert">
+            The recipe “{chosen}” no longer exists. Choose another action.
+          </p>
+        )}
         <p className="muted">
           {context.sources.length} selected · {context.sources.slice(0, 2).map(name).join(', ')}
           {context.sources.length > 2 && ', …'}

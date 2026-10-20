@@ -1,4 +1,5 @@
 import { nativeImage } from 'electron';
+import { thumbnailByteLimit } from '../domain/thumbnails';
 import { realpath } from 'node:fs/promises';
 import { entry } from './filesystem';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
@@ -16,7 +17,7 @@ export class Thumbnails {
   }
   private async read(file: string, size: number, scope: PreviewScope): Promise<string> {
     const item = await entry(file);
-    if (item.directory || item.kind !== 'file' || item.size > 64000000) return '';
+    if (item.directory || item.kind !== 'file' || item.size > thumbnailByteLimit) return '';
     const actual = await realpath(file);
     scope.add(actual);
     const key = actual + ':' + item.identity + ':' + item.modified + ':' + size;
@@ -34,7 +35,7 @@ export class Thumbnails {
           async (signal) => {
             signal?.throwIfAborted();
             scope.check();
-            if ((await entry(fileCoordination.path(actual))).size > 64000000) return '';
+            if ((await entry(fileCoordination.path(actual))).size > thumbnailByteLimit) return '';
             const image = await nativeImage.createThumbnailFromPath(fileCoordination.path(actual), {
               width: size,
               height: size,

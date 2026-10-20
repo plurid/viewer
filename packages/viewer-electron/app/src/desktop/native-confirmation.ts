@@ -18,8 +18,9 @@ export async function confirmAgentProposal(
       : proposal.kind === 'configuration'
         ? 'Allow the agent to change your configuration?'
         : `Allow the agent to run “${proposal.title}”?`,
+    // a removal shows what was reviewed: each folder with the contents counted in it
     detail: (removal
-      ? listed + more + '\n\nFolders are moved with their contents. Nothing is permanently deleted.'
+      ? proposal.detail
       : proposal.detail + (files.length ? '\n\nItems:\n' + listed + more : '')
     ).slice(0, 6000),
     buttons: [

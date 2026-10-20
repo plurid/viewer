@@ -45,6 +45,48 @@ function safeName(name: string): boolean {
     !/^(?:[\\/]|[a-z]:)/i.test(name) && !name.split(/[\\/]/).includes('..') && !name.includes('\0')
   );
 }
+/** Bytes 0x80–0xFF of CP437, the encoding of a ZIP name whose UTF-8 flag is clear. */
+const CP437 =
+  'ÇüéâäàåçêëèïîìÄÅ' +
+  'ÉæÆôöòûùÿÖÜ¢£¥₧ƒ' +
+  'áíóúñÑªº¿⌐¬½¼¡«»' +
+  '░▒▓│┤╡╢╖╕╣║╗╝╜╛┐' +
+  '└┴┬├─┼╞╟╚╔╩╦╠═╬╧' +
+  '╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀' +
+  'αßΓπΣσµτΦΘΩδ∞φε∩' +
+  '≡±≥≤⌠⌡÷≈°∙·√ⁿ²■' +
+  // 0xFF, the no-break space, spelled out: as a literal it is invisible
+  String.fromCharCode(0xa0);
+const strictUTF8 = new TextDecoder('utf-8', { fatal: true });
+/**
+ * A ZIP entry's name as its archiver wrote it: UTF-8 under the format's flag (bit 11) or in an
+ * Info-ZIP Unicode Path field whose checksum matches the stored name; otherwise CP437, the format's
+ * default, unless the bytes are valid UTF-8, as macOS's archiver writes them without the flag.
+ * Every name was read as UTF-8, so a DOS or Windows archive listed its accented names garbled.
+ */
+export function zipName(raw: Buffer, flags: number, extra: Buffer): string {
+  if (flags & 0x0800) return raw.toString('utf8');
+  for (let at = 0; at + 4 <= extra.length;) {
+    const tag = extra.readUInt16LE(at),
+      size = extra.readUInt16LE(at + 2);
+    if (
+      tag === 0x7075 &&
+      size >= 5 &&
+      at + 4 + size <= extra.length &&
+      extra[at + 4] === 1 &&
+      extra.readUInt32LE(at + 5) === crc32(raw)
+    )
+      return extra.subarray(at + 9, at + 4 + size).toString('utf8');
+    at += 4 + size;
+  }
+  try {
+    return strictUTF8.decode(raw);
+  } catch {
+    return Array.from(raw, (byte) =>
+      byte < 0x80 ? String.fromCharCode(byte) : CP437[byte - 0x80],
+    ).join('');
+  }
+}
 function pax(data: Buffer): Record<string, string> {
   const fields: Record<string, string> = Object.create(null);
   for (let cursor = 0; cursor < data.length;) {
@@ -231,7 +273,11 @@ export class Archives {
           const nameLength = directory.readUInt16LE(cursor + 28),
             extra = directory.readUInt16LE(cursor + 30),
             comment = directory.readUInt16LE(cursor + 32);
-          const name = directory.subarray(cursor + 46, cursor + 46 + nameLength).toString('utf8');
+          const name = zipName(
+            directory.subarray(cursor + 46, cursor + 46 + nameLength),
+            flags,
+            directory.subarray(cursor + 46 + nameLength, cursor + 46 + nameLength + extra),
+          );
           const fileType = (directory.readUInt32LE(cursor + 38) >>> 16) & 0xf000;
           if (
             !safeName(name) ||

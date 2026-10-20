@@ -34,6 +34,28 @@ export function macChannel(value?: string): 'direct' | StoreChannel {
   if (value === 'mas-dev' || value === 'mas') return value;
   throw new Error('VIEWER_MAC_CHANNEL must be direct, mas-dev, or mas.');
 }
+/**
+ * The channel a Store command builds (2026-10-20). `dev` builds the development channel and
+ * `distribution` the Store's, whatever the environment says: a `VIEWER_MAC_CHANNEL=mas` left exported
+ * made `mas:dev` a distribution build. A conflicting value is refused rather than followed.
+ * `preflight` checks the channel `VIEWER_MAC_CHANNEL` names, the development one by default.
+ */
+export function storeChannel(command: string, env: NodeJS.ProcessEnv): StoreChannel {
+  const requested = env.VIEWER_MAC_CHANNEL ? macChannel(env.VIEWER_MAC_CHANNEL) : undefined;
+  const channel: StoreChannel =
+    command === 'distribution'
+      ? 'mas'
+      : command === 'dev'
+        ? 'mas-dev'
+        : requested === 'mas'
+          ? 'mas'
+          : 'mas-dev';
+  if (requested && requested !== channel)
+    throw new Error(
+      `VIEWER_MAC_CHANNEL=${requested} conflicts with this command, which builds ${channel}. Unset it, or set it for one command only.`,
+    );
+  return channel;
+}
 export function storeInputs(env: NodeJS.ProcessEnv, channel: StoreChannel) {
   const identity = env.VIEWER_MAS_IDENTITY?.trim();
   const profile = env.VIEWER_MAS_PROFILE?.trim();

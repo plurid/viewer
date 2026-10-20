@@ -7,7 +7,11 @@ import { createHash } from 'node:crypto';
 import type { FileEntry, OperationJob } from '../src/domain/contracts';
 import type { CapturedTarget, CustomAction } from '../src/domain/automation';
 import type { AgentProposal, CommandDescriptor } from '../src/domain/agent-requests';
-import { agentCommandID, agentRemovalPolicy } from '../src/domain/agent-safety';
+import {
+  agentCommandID,
+  agentDispatchRefusal,
+  agentRemovalPolicy,
+} from '../src/domain/agent-safety';
 import { SettingsService } from '../src/desktop/settings';
 import { AgentRequests } from '../src/desktop/agent-requests';
 import { AgentBroker, redactedSettings } from '../src/desktop/agent-broker';
@@ -506,6 +510,33 @@ describe('agent removal safety', () => {
     expect(visible).not.toContain('secret');
     expect(visible).toContain('API_TOKEN');
   });
+  it('hides the arguments of programs and terminal profiles too (2026-10-20)', async () => {
+    // read_config returned them verbatim to any client with the metadata capability.
+    const f = await fixture();
+    const settings = structuredClone(f.config);
+    settings.terminals.profiles = [
+      {
+        id: 'shell',
+        name: 'Shell',
+        executable: '/bin/zsh',
+        args: ['-c', 'export T=SECRET'],
+        env: {},
+      },
+    ];
+    settings.customActions = [
+      action({
+        kind: 'executable',
+        executable: '/usr/bin/tool',
+        args: ['--token=SECRET', '{paths}'],
+        perItem: false,
+      }),
+    ];
+    const redacted = redactedSettings(settings);
+    expect(JSON.stringify(redacted)).not.toContain('SECRET');
+    expect(redacted.terminals.profiles[0]!.args).toHaveLength(2);
+    const executor = redacted.customActions[0]!.executor;
+    expect(executor.kind === 'executable' && executor.args).toHaveLength(2);
+  });
   it('allows only bounded built-in commands and refuses clipboard paste', () => {
     for (const id of ['trash', 'copy-path', 'view-list', 'recipe.books', 'rename'])
       expect(agentCommandID(id, [])).toBe(id);
@@ -554,5 +585,70 @@ describe('agent removal safety', () => {
       agentCommandID('custom.cleanup', [action({ kind: 'builtin', command: 'custom.cleanup' })]),
     ).toThrow('another custom action');
     expect(f.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('an agent command as the workspace receives it (2026-10-20)', () => {
+  const custom = (executor: CustomAction['executor']) =>
+    ({
+      id: 'tidy',
+      name: 'Tidy',
+      aliases: [],
+      icon: 'command',
+      shortcut: '',
+      order: 0,
+      pinned: false,
+      when: { target: 'any', extensions: [], min: 0, max: 10000 },
+      executor,
+    }) as CustomAction;
+  const reviewed = { kind: 'recipe', recipeID: 'rename' } as const;
+  it('is refused once main has stopped waiting for it', () => {
+    // A hidden window ran it later, after the agent had been told it failed.
+    expect(agentDispatchRefusal({ command: 'copy-path', deadline: 1000 }, [], 2000)).toMatch(
+      'expired',
+    );
+    expect(
+      agentDispatchRefusal({ command: 'copy-path', deadline: 3000 }, [], 2000),
+    ).toBeUndefined();
+  });
+  it('runs a custom action only as it was reviewed', () => {
+    // The workspace ran its current definition: a recipe action changed into a shell script ran.
+    const event = { command: 'custom.tidy', deadline: 3000, executor: reviewed };
+    expect(agentDispatchRefusal(event, [custom(reviewed)], 2000)).toBeUndefined();
+    expect(
+      agentDispatchRefusal(
+        event,
+        [custom({ kind: 'shell', executable: '/bin/zsh', script: 'pwd', perItem: false })],
+        2000,
+      ),
+    ).toMatch('changed after it was reviewed');
+    expect(
+      agentDispatchRefusal({ ...event, executor: undefined }, [custom(reviewed)], 2000),
+    ).toMatch('changed after it was reviewed');
+  });
+});
+
+describe('recipe bindings an agent cannot change (2026-10-20)', () => {
+  it('refuses a proposal that changes a recipe’s shortcut, provider or raises its data', async () => {
+    // A whole-recipes patch carried them, and the person saw only JSON in the confirmation.
+    const service = new SettingsService(
+      '/Memory/Viewer',
+      '/Home',
+      () => true,
+      () => {},
+    );
+    const recipes = service.snapshot().settings.recipes;
+    const change = (edit: Partial<(typeof recipes)[number]>) =>
+      service.preview([
+        {
+          path: 'settings.recipes',
+          value: recipes.map((recipe, index) => (index ? recipe : { ...recipe, ...edit })),
+        },
+      ]);
+    expect(() => change({ shortcut: 'Cmd+Alt+R' })).toThrow('stay with you');
+    expect(() => change({ providerID: 'elsewhere' })).toThrow('stay with you');
+    if (recipes[0]!.data !== 'full-text')
+      expect(() => change({ data: 'full-text' })).toThrow('stay with you');
+    expect(change({ name: 'Renamed by agent' }).valid).toBe(true);
   });
 });

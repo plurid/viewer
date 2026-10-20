@@ -8,7 +8,7 @@ import type { ApplicationSettings } from '../domain/services';
 import type { TerminalProfile } from '../domain/automation';
 import { absolute } from './filesystem';
 import { readApplications } from './applications';
-import { discardOwnTemporaryFile } from './removal';
+import { discardOwnTemporaryFile, removePrivateData } from './removal';
 const exec = promisify(execFile);
 export const shellQuote = (value: string): string => "'" + value.replace(/'/g, "'\\''") + "'";
 export async function executablePath(value: string): Promise<string> {
@@ -98,6 +98,21 @@ export class ExternalTerminals {
     private access: (files: readonly string[]) => Promise<void> = async () => {},
     private confirm: TerminalConfirmations = unconfirmed,
   ) {}
+  /**
+   * A launcher removes itself when Terminal runs it (its `/bin/rm`, the one removal outside
+   * `removal.ts`); one Terminal never ran kept the profile's environment there (2026-10-20). Those an
+   * earlier session wrote go at startup; this session's are left to run.
+   */
+  async sweep(privateRoot: string): Promise<void> {
+    const started = Date.now() - process.uptime() * 1000;
+    for (const name of await fs.readdir(this.directory).catch(() => [] as string[])) {
+      if (!name.endsWith('.command')) continue;
+      const file = path.join(this.directory, name);
+      const info = await fs.lstat(file).catch(() => null);
+      if (info?.isFile() && info.mtimeMs < started - 60_000)
+        await removePrivateData(privateRoot, file).catch(() => {});
+    }
+  }
   async application(): Promise<TerminalApplication> {
     if (process.platform !== 'darwin')
       throw new Error(

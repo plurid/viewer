@@ -13,8 +13,8 @@ function Branch({
 }) {
   const listing = useFolder(path);
   useEffect(() => {
-    if (!listing.loading) receive(path, listing.error ? [] : listing.entries);
-  }, [path, listing.entries, listing.loading, listing.error, receive]);
+    if (!listing.loading) receive(path, listing.unavailable ? [] : listing.entries);
+  }, [path, listing.entries, listing.loading, listing.unavailable, receive]);
   return null;
 }
 export function useListNavigation(id: string, path: string, roots: FileEntry[], active: boolean) {

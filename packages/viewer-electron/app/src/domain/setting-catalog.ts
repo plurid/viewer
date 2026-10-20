@@ -260,12 +260,6 @@ export const settingCatalog: SettingDefinition[] = [
     label: 'Pause background indexing',
     kind: 'boolean',
   },
-  {
-    path: 'settings.agents.enabled',
-    category: 'Agents',
-    label: 'Allow local agent clients',
-    kind: 'boolean',
-  },
 ];
 export function settingValue(value: unknown, path: string): unknown {
   let current = value;

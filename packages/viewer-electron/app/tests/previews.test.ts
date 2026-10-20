@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import type { FileEntry } from '../src/domain/contracts';
 import { choosePreview, registerPreview } from '../src/renderer/previews/registry';
+import { previewState } from '../src/renderer/previews/state';
 import { parseDelimited } from '../src/renderer/previews/parse';
 import { lookup } from 'mime-types';
 import { fileFamily } from '../src/domain/files';
@@ -93,5 +94,24 @@ describe('preview extension contract', () => {
       ['a', 'b'],
       ['1', '2'],
     ]);
+  });
+});
+describe('session preview state (2026-10-20)', () => {
+  it('resets a temporary preview’s view when its file changes, keeping notes', () => {
+    // Quick Preview, Gallery and Columns kept a file's DXF measurements, PDF page and sheet across
+    // versions, though a workspace preview plane resets them.
+    const version = (modified: number) =>
+      ({ path: '/fixture/plan.dxf', identity: '1:7', modified, size: 10 }) as FileEntry;
+    const first = previewState('/fixture/plan.dxf', version(1));
+    first.set('dxf.measurements', ['m']);
+    first.set('notes.text', 'kept');
+    const same = previewState('/fixture/plan.dxf', version(1));
+    expect(same.get('dxf.measurements')).toEqual(['m']);
+    const changed = previewState('/fixture/plan.dxf', version(2));
+    expect(changed.get('dxf.measurements')).toBeUndefined();
+    expect(changed.get('notes.text')).toBe('kept');
+    changed.set('dxf.page', 2);
+    expect(previewState('/fixture/plan.dxf', version(2)).get('dxf.measurements')).toBeUndefined();
+    expect(previewState('/fixture/plan.dxf', version(2)).get('dxf.page')).toBe(2);
   });
 });

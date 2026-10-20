@@ -154,10 +154,36 @@ export class Trash {
     for (const item of items) await this.#verify(item);
     clipboard.writeText(items.map((item) => item.file).join('\n'));
   }
+  /** "Restore to…": the folder, chosen before the move takes the file operations lock. Chosen inside
+   * it, the picker held every queued file operation while it was open (2026-10-20). */
+  async chooseRestoreFolder(window: BrowserWindow): Promise<string | undefined> {
+    if (this.#closed || this.#busy || window.isDestroyed())
+      throw new Error('Trash is busy. Try again.');
+    this.#busy = true;
+    try {
+      return await this.#pick(window);
+    } finally {
+      this.#busy = false;
+    }
+  }
+  async #pick(window: BrowserWindow): Promise<string | undefined> {
+    const picked = await dialog.showOpenDialog(window, {
+      title: 'Restore to…',
+      message: 'Choose a destination. Existing files will be kept.',
+      properties: ['openDirectory', 'dontAddToRecent'],
+      securityScopedBookmarks: this.access.scoped,
+    });
+    if (picked.canceled || window.isDestroyed() || this.#closed) return undefined;
+    const [chosen] = picked.filePaths;
+    if (picked.filePaths.length !== 1 || !chosen) throw new Error('Choose one destination folder.');
+    const folder = await realpath(chosen);
+    await this.access.remember(folder, true, picked.bookmarks?.[0]);
+    return folder;
+  }
   async restore(
     window: BrowserWindow,
     itemIDs: string[],
-    destination: 'original' | 'choose',
+    destination: 'original' | 'choose' | { folder: string },
   ): Promise<TrashRestoreResult> {
     if (this.#closed || this.#busy || window.isDestroyed())
       throw new Error('Trash is busy. Try again.');
@@ -176,20 +202,9 @@ export class Trash {
       );
       let folder: string | undefined;
       if (destination === 'choose') {
-        const picked = await dialog.showOpenDialog(window, {
-          title: 'Restore to…',
-          message: 'Choose a destination. Existing files will be kept.',
-          properties: ['openDirectory', 'dontAddToRecent'],
-          securityScopedBookmarks: this.access.scoped,
-        });
-        if (picked.canceled || window.isDestroyed() || this.#closed)
-          return { restored: 0, cancelled: true };
-        const [chosen] = picked.filePaths;
-        if (picked.filePaths.length !== 1 || !chosen)
-          throw new Error('Choose one destination folder.');
-        folder = await realpath(chosen);
-        await this.access.remember(folder, true, picked.bookmarks?.[0]);
-      }
+        folder = await this.#pick(window);
+        if (!folder) return { restored: 0, cancelled: true };
+      } else if (destination !== 'original') folder = await realpath(destination.folder);
       const targets = new Set<string>();
       const plan: { item: BackingItem; target: string; parentIdentity: string }[] = [];
       // Preflight every destination before the first move. Never replace, merge,

@@ -44,6 +44,9 @@ export interface CommandRequest {
   sources?: readonly string[];
   global?: boolean;
   ids?: readonly string[];
+  /** False for a command the person did not choose, such as an agent's: it stays out of Recent
+   * commands, where it ranked first in the palette (2026-10-20). */
+  remember?: boolean;
 }
 export interface ResolvedCommand {
   id: string;
@@ -158,7 +161,7 @@ export class CommandRegistry {
     }
     return commands;
   }
-  async run(command: ResolvedCommand): Promise<boolean> {
+  async run(command: ResolvedCommand, remember = true): Promise<boolean> {
     const source = this.sources.get(command.source);
     if (!source) return false;
     const live = source.context();
@@ -173,13 +176,13 @@ export class CommandRegistry {
     };
     if (!definition?.when(context)) return false;
     await definition.run(context);
-    if (definition.remember !== false) this.chosen(definition.id);
+    if (remember && definition.remember !== false) this.chosen(definition.id);
     this.touch(command.source);
     return true;
   }
   async invoke(id: string, request: CommandRequest): Promise<boolean> {
     const command = this.list(request).find((item) => item.id === id);
-    return command ? this.run(command) : false;
+    return command ? this.run(command, request.remember !== false) : false;
   }
 }
 

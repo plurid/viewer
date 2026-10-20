@@ -197,11 +197,16 @@ export class Providers {
     schema: Record<string, unknown>,
     signal: AbortSignal,
     level: ModelDataLevel = 'full-text',
+    actor: 'user' | 'agent' = 'user',
   ): Promise<unknown> {
     this.endpoint(provider, providerPresets[provider.kind].protocol);
     if (!this.permissions) throw new ModelPermissionRequired();
-    return this.permissions.run(provider, level, signal, (authorized) =>
-      this.generateAuthorized(provider, instructions, input, schema, authorized),
+    return this.permissions.run(
+      provider,
+      level,
+      signal,
+      (authorized) => this.generateAuthorized(provider, instructions, input, schema, authorized),
+      actor,
     );
   }
   private async generateAuthorized(

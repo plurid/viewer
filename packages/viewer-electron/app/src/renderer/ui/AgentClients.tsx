@@ -30,11 +30,19 @@ const descriptions = {
 const defaults: AgentClientInput = {
   name: '',
   roots: [],
-  capabilities: ['metadata', 'navigation'],
+  // a new client reads; navigating the workspace for the person is a capability given to it
+  capabilities: ['metadata'],
   budgets: { maxReadBytes: 4 * 1024 * 1024, maxTasks: 4 },
 };
 
-export function AgentClientSettings({ settings }: { settings: ApplicationSettings }) {
+export function AgentClientSettings({
+  settings,
+  enabled,
+}: {
+  settings: ApplicationSettings;
+  /** Agents are on: config.jsonc asks for it and the person approved it. */
+  enabled: boolean;
+}) {
   const [clients, setClients] = useState<AgentClient[]>([]);
   const [editing, setEditing] = useState<AgentClient>();
   const [draft, setDraft] = useState<AgentClientInput>(defaults);
@@ -251,7 +259,7 @@ export function AgentClientSettings({ settings }: { settings: ApplicationSetting
             type="submit"
             disabled={
               busy ||
-              !settings.agents.enabled ||
+              !enabled ||
               !draft.name.trim() ||
               !draft.roots.length ||
               !draft.capabilities.length

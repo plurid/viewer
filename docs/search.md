@@ -9,7 +9,7 @@ Command-F starts at the active folder. Subfolder search uses the background inde
 | Filter | Example |
 | --- | --- |
 | Extension | `ext:pdf,epub` |
-| Files/folders | `kind:file`, `kind:folder` |
+| Files/folders | `kind:file`, `kind:folder` (plurals and `kind:directory` too; any other kind is an error) |
 | Path substring | `path:Books`, `path:"Research papers"` |
 | Byte size | `size:>10mb`, `size:<500kb` |
 | Modified date | `modified:>2025-01-01` |
@@ -20,7 +20,7 @@ Combine filters with literal text, such as `fire ext:epub`. Matching folds case 
 
 Enable Contents next to a location in Settings → Search to extract local text. The index uses bounded PDF/EPUB/plain-text extraction; index crawling does not invoke OCR. On-demand document actions may run the local macOS OCR helper. Indexing never sends text to a model provider. Revoking a content grant clears that location's stored body text even when indexing is paused, and a late extraction cannot put it back.
 
-Excluded paths are hidden from queries immediately. Removing an indexed root also removes its matching text grant and its rows in the local database; re-adding it indexes it again. Rebuild refreshes the disposable search index and never modifies source files. An index database SQLite cannot read is renamed `files-v1.sqlite.unreadable-<time>`, with its journal files, and indexed again from the configured roots; a search after a failed start of the index service starts it again. An offline root preserves its cached rows and reports its state; cached results can be stale until the drive or mount returns.
+Excluded paths are hidden from queries immediately. Removing an indexed root also removes its matching text grant and its rows in the local database; re-adding it indexes it again. A crawl keeps the text already extracted for a document that has not changed (same identity, size and modification time), so a launch or a settings change does not extract every document again. Choosing a folder does not restart indexing: an unchanged configuration only crawls again the roots that could not be read. Rebuild crawls every root and extracts every document again; it refreshes the disposable search index and never modifies source files. An index database SQLite cannot read is renamed `files-v1.sqlite.unreadable-<time>`, with its journal files, and indexed again from the configured roots; a search after a failed start of the index service starts it again. An offline root preserves its cached rows and reports its state; cached results can be stale until the drive or mount returns. A location the Store edition is not permitted to read also shows as offline, but its rows and text are removed until access is granted again.
 
 ## Saved searches
 

@@ -141,6 +141,35 @@ describe('portable project definitions', () => {
     expect(saved.revision).not.toBe(read.revision);
     expect((await readdir(root)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   });
+  it('keeps a comment beside a plane when another plane changes (2026-10-20)', async () => {
+    // The planes list was written whole, so its comments went with any change.
+    const service = new Projects(access, coordination),
+      file = path.join(root, 'viewer.project.jsonc');
+    await service.save(file, '', project());
+    const initial = await readFile(file, 'utf8');
+    const terminal = initial.indexOf('"id": "terminal"');
+    await writeFile(
+      file,
+      initial.slice(0, terminal) +
+        '// the shell beside the model\n        ' +
+        initial.slice(terminal),
+    );
+    const read = await service.read(file);
+    const changed = project();
+    changed.planes[1] = {
+      ...changed.planes[1]!,
+      state: { zoom: 2 },
+    } as (typeof changed.planes)[number];
+    await service.save(file, read.revision, changed);
+    expect(await readFile(file, 'utf8')).toMatch(
+      /\/\/ the shell beside the model\s*"id": "terminal"/,
+    );
+  });
+  it('creates a new project file readable by others, as an editor would (2026-10-20)', async () => {
+    const file = path.join(root, 'viewer.project.jsonc');
+    await new Projects(access, coordination).save(file, '', project());
+    expect((await stat(file)).mode & 0o777).toBe(0o644);
+  });
   it('requires access for every read/save and rejects symlink substitution', async () => {
     const file = path.join(root, 'viewer.project.jsonc');
     const service = new Projects(access, coordination);

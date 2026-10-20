@@ -24,6 +24,8 @@ import {
   folderOverrideSchema,
 } from './automation-schema';
 import { localPath, id } from './schemas';
+import { referenceIssues } from '../domain/references';
+import { modelDataLevels } from '../domain/model-permissions';
 const recipe = z
   .object({
     id,
@@ -202,13 +204,16 @@ export const settingsSchema = z
           .strict(),
       )
       .max(100),
+    // no longer used: the Settings window keeps its frame and category privately (2026-10-20);
+    // accepted so existing files stay valid
     settingsWindow: z
       .object({
         width: z.number().min(760).max(2000),
         height: z.number().min(540).max(1600),
         category: z.string().max(40),
       })
-      .strict(),
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -276,6 +281,35 @@ export const settingsSchema = z
         message: 'A shortcut is assigned to more than one action.',
       });
   });
+/** What an import changes that Viewer may run, reach or send: confirmed before it applies (2026-10-20). */
+export function importChanges(current: ApplicationSettings, next: ApplicationSettings): string[] {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const programs = (settings: ApplicationSettings) =>
+    settings.customActions.filter(({ executor }) =>
+      ['shell', 'executable'].includes(executor.kind),
+    );
+  return [
+    !same(current.agents, next.agents) &&
+      'agent access (turning agents on or adding folders still waits for your approval in Settings → Agents)',
+    !same(current.providers, next.providers) && 'model providers and their addresses',
+    !same(programs(current), programs(next)) && 'actions that run programs or shell scripts',
+    !same(current.terminals, next.terminals) && 'terminal profiles and programs',
+  ].filter((change): change is string => !!change);
+}
+/**
+ * What the workspace window changes: its own preferences and views. It could patch any setting, so a
+ * compromised workspace renderer could widen agent folders, add a provider or an action (2026-10-20);
+ * the rest is changed in Settings.
+ */
+const workspacePaths = [
+  ['ui'],
+  ['settings', 'folders'],
+  ['settings', 'appearance'],
+  ['settings', 'browsing'],
+  ['settings', 'savedSearches'],
+];
+const workspaceMayPatch = (keys: readonly string[]) =>
+  workspacePaths.some((prefix) => prefix.every((key, index) => keys[index] === key));
 const configSchema = z
   .object({
     $schema: z.literal('config.schema.json').default('config.schema.json'),
@@ -291,6 +325,9 @@ export class SettingsService {
   private store: JsoncConfiguration<z.infer<typeof configSchema>>;
   private loaded?: Promise<void>;
   private seedPending = false;
+  /** The copy in effect while config.jsonc cannot be read: its last valid copy, or the defaults. */
+  private fallback?: 'last-valid' | 'defaults';
+  private restored?: string;
   constructor(
     private dataPath: string,
     home: string,
@@ -311,13 +348,34 @@ export class SettingsService {
     this.loaded ??= (async () => {
       await fs.mkdir(this.dataPath, { recursive: true, mode: 0o700 });
       const value = await this.store.read();
+      const last = value || this.store.diagnostics.length ? {} : await this.store.lastValid();
       if (value) this.document = { ...value, revision: 0 };
       else if (this.store.diagnostics.length) {
         const recovery = await this.store.recovery();
         if (recovery) this.document = { ...recovery, revision: 0 };
+        this.fallback = recovery ? 'last-valid' : 'defaults';
+      } else if (last.value) {
+        // config.jsonc is missing and its last valid copy is not: the file was removed. The copy is
+        // the person's settings; a removed file was a first run, which wrote the defaults over the
+        // last valid copy too (2026-10-20).
+        this.document = { ...last.value, revision: 0 };
+        this.restored = 'config.jsonc was missing: Viewer restored it from its last valid copy.';
+        await this.write();
       } else {
         this.seedPending = true;
+        // never replace a copy that was not read: it is kept under a name of its own
+        if (last.unreadable) await this.store.keepUnreadableLastValid();
+        // settings-v1 is migrated once: its backup says it was, and then it is older than whatever
+        // config.jsonc held since (it came back whenever config.jsonc went missing)
+        const migrated = await fs
+          .access(path.join(this.dataPath, 'settings-v1.migration-backup.json'))
+          .then(
+            () => true,
+            () => false,
+          );
         try {
+          if (migrated)
+            throw Object.assign(new Error('settings-v1 was migrated before.'), { code: 'ENOENT' });
           const text = await fs.readFile(path.join(this.dataPath, 'settings-v1.json'), 'utf8');
           const prior = JSON.parse(text);
           await fs
@@ -388,27 +446,34 @@ export class SettingsService {
         path: this.store.file,
         diagnostics: this.store.diagnostics,
         changes: this.store.changes,
+        ...(this.store.missing ? { missing: true } : {}),
+        ...(this.restored ? { restored: this.restored } : {}),
+        ...(this.fallback && this.store.diagnostics.length ? { fallback: this.fallback } : {}),
+        warnings: referenceIssues(this.document.settings as ApplicationSettings),
       },
     };
   }
-  private async readChanges(): Promise<void> {
+  /** `true` when it announced a change. */
+  private async readChanges(): Promise<boolean> {
     const value = await this.store.read();
-    if (!value) return;
+    if (!value) return false;
     const { revision, ...before } = this.document;
     const changes = configChanges(before, value);
-    if (!changes.length) return;
+    if (!changes.length) return false;
     this.document = { ...value, revision: revision + 1 };
     for (const change of changes)
       this.fields.set(JSON.stringify(change.keys), this.document.revision);
     this.emit(this.snapshot());
+    return true;
   }
   reload(): Promise<SettingsSnapshot> {
     const task = this.queue
       .catch(() => {})
       .then(async () => {
         await this.load();
-        await this.readChanges();
-        this.emit(this.snapshot());
+        // the diagnostics of a file that could not be read are announced here; a change, once (it was
+        // announced by the read and again here, 2026-10-20)
+        if (!(await this.readChanges())) this.emit(this.snapshot());
         return this.snapshot();
       });
     this.queue = task.then(
@@ -417,7 +482,11 @@ export class SettingsService {
     );
     return task;
   }
-  patch(patches: SettingsPatch[], revision: number): Promise<SettingsSnapshot> {
+  patch(
+    patches: SettingsPatch[],
+    revision: number,
+    scope?: 'workspace',
+  ): Promise<SettingsSnapshot> {
     const task = this.queue
       .catch(() => {})
       .then(async () => {
@@ -432,6 +501,8 @@ export class SettingsService {
             keys.some((key) => ['__proto__', 'prototype', 'constructor'].includes(key))
           )
             throw new Error('Unknown setting.');
+          if (scope === 'workspace' && !workspaceMayPatch(keys))
+            throw new Error('Change this setting in Settings.');
           if (
             [...this.fields].some(
               ([field, changed]) => changed > revision && overlaps(JSON.parse(field), keys),
@@ -496,28 +567,88 @@ export class SettingsService {
       else object[key] = patch.value;
     }
     const { revision: _revision, ...config } = next;
-    configSchema.parse(config);
+    const parsed = configSchema.parse(config);
+    // An agent edits a recipe, not what binds it to the person: its shortcut, its model provider,
+    // or more data than it sent. A whole-recipes patch carried them (2026-10-20).
+    const recipes = new Map(this.document.settings.recipes.map((recipe) => [recipe.id, recipe]));
+    for (const recipe of parsed.settings.recipes) {
+      const before = recipes.get(recipe.id);
+      if (
+        (recipe.shortcut || '') !== (before?.shortcut || '') ||
+        (recipe.providerID ?? '') !== (before?.providerID ?? '') ||
+        (before && modelDataLevels.indexOf(recipe.data) > modelDataLevels.indexOf(before.data))
+      )
+        throw new Error(
+          `A recipe’s shortcut, model provider and data stay with you: change “${recipe.name}” in Settings → Actions.`,
+        );
+    }
+    // an agent's change may leave an earlier reference to a missing item; it may not add one
+    const earlier = new Set(referenceIssues(this.document.settings as ApplicationSettings));
+    const added = referenceIssues(parsed.settings as ApplicationSettings).filter(
+      (issue) => !earlier.has(issue),
+    );
+    if (added.length) throw new Error(added.join(' '));
     return {
       valid: true,
       changes: configChanges(this.document, next).map((change) => change.keys.join('.')),
     };
   }
+  /** Writes a removed config.jsonc back from the settings in effect (a no-op while it is there). */
+  restoreConfiguration(): Promise<SettingsSnapshot> {
+    const task = this.queue
+      .catch(() => {})
+      .then(async () => {
+        await this.load();
+        await this.readChanges();
+        if (this.store.missing) await this.write();
+        const result = this.snapshot();
+        this.emit(result);
+        return result;
+      });
+    this.queue = task.then(
+      () => {},
+      () => {},
+    );
+    return task;
+  }
   async exportConfiguration(file: string): Promise<void> {
     await fs.copyFile(this.store.file, file);
   }
-  async importConfiguration(file: string): Promise<SettingsSnapshot> {
+  /** `confirm` is asked first when the import changes what Viewer may run, reach or send. */
+  async importConfiguration(
+    file: string,
+    confirm?: (changes: string[]) => Promise<boolean>,
+  ): Promise<SettingsSnapshot> {
     const text = await fs.readFile(file, 'utf8');
     const errors: ParseError[] = [];
     const { parse } = await import('jsonc-parser');
     const config = configSchema.parse(parse(text, errors, { allowTrailingComma: true }));
     if (errors.length) throw new Error('Import contains invalid JSONC.');
-    return this.patch(
-      [
-        { path: 'settings', value: config.settings },
-        { path: 'ui', value: config.ui },
-      ],
-      this.document.revision,
+    await this.load();
+    const changes = importChanges(
+      this.document.settings as ApplicationSettings,
+      config.settings as ApplicationSettings,
     );
+    if (changes.length && confirm && !(await confirm(changes)))
+      throw new Error('The import was cancelled. Nothing changed.');
+    const task = this.queue
+      .catch(() => {})
+      .then(async () => {
+        const value = await this.store.replace(text);
+        const { revision, ...before } = this.document;
+        this.document = { ...value, revision: revision + 1 };
+        this.fallback = undefined;
+        for (const change of configChanges(before, value))
+          this.fields.set(JSON.stringify(change.keys), this.document.revision);
+        const result = this.snapshot();
+        this.emit(result);
+        return result;
+      });
+    this.queue = task.then(
+      () => {},
+      () => {},
+    );
+    return task;
   }
   async remapFolders(changes: readonly FileChange[]): Promise<void> {
     await this.load();

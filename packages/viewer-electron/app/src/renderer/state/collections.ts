@@ -9,6 +9,7 @@ import {
 } from '../../domain/collections';
 import { sourceVersion } from '../../domain/inspection';
 import { activeWorkspace, changeWorkspace, uuid } from './core';
+import { setActivePane } from './panes';
 
 export function addToBasket(items: BasketItem[]): void {
   const existing = activeWorkspace().basket ?? [];
@@ -51,10 +52,13 @@ export function addCollectionPane(collectionID: string): string {
   if (!source) throw new Error('This collection has no locations.');
   const id = uuid(),
     file = collection.kind === 'explicit' ? parentPath(source) : source;
+  // The opened collection is the active plane, as a new search is (2026-10-20).
   changeWorkspace((space) => ({
     ...space,
     panes: [...space.panes, { id, type: 'collection', path: file, collectionID }],
     roots: [...space.roots, id],
+    activePane: id,
   }));
+  setActivePane(id);
   return id;
 }

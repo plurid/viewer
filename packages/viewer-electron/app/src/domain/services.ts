@@ -83,7 +83,8 @@ export interface ApplicationSettings {
     recursive?: boolean;
     content?: boolean;
   }[];
-  settingsWindow: { width: number; height: number; category: string };
+  /** No longer used: read once, as the Settings window's first size and category. */
+  settingsWindow?: { width: number; height: number; category: string };
 }
 export interface SettingsSnapshot {
   revision: number;
@@ -91,7 +92,19 @@ export interface SettingsSnapshot {
   ui: UIPreferences;
   look: 'dark' | 'light';
   credentials: string[];
-  config?: { path: string; diagnostics: string[]; changes: string[] };
+  config?: {
+    path: string;
+    diagnostics: string[];
+    changes: string[];
+    /** config.jsonc was removed while Viewer ran: the settings stay, the next change writes it back. */
+    missing?: boolean;
+    /** Said once, after a removed config.jsonc was restored from its last valid copy. */
+    restored?: string;
+    /** What is in effect while config.jsonc cannot be read. */
+    fallback?: 'last-valid' | 'defaults';
+    /** References to missing items (`referenceIssues`): kept, and failing when used. */
+    warnings?: string[];
+  };
 }
 export interface SettingsPatch {
   path: string;
@@ -305,7 +318,6 @@ export function defaultSettings(home: string): ApplicationSettings {
     agents: { enabled: false, roots: [], allowLayout: false },
     shortcuts: {},
     savedSearches: [],
-    settingsWindow: { width: 900, height: 640, category: 'browsing' },
   };
 }
 export function newPlaneFolder(

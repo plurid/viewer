@@ -27,7 +27,7 @@ import { Applications } from './applications';
 import { SettingsService } from './settings';
 import { Credentials, Providers, providerBinding } from './providers';
 import { ModelPermissions } from './model-permissions';
-import { modelEndpoint } from '../domain/model-permissions';
+import { modelDataLabels, modelEndpoint } from '../domain/model-permissions';
 import { macFiles } from './macos-files';
 import { Thumbnails } from './thumbnails';
 import { AppIcons } from './app-icons';
@@ -38,7 +38,7 @@ import { Comparisons } from './comparison';
 import { Duplicates } from './duplicates';
 import { OperationPlans } from './operation-plans';
 import { sourceVersion } from '../domain/inspection';
-import { sharedClientID, type AgentClient } from '../domain/agent-clients';
+import { sharedClientID, type AgentAccessRequest, type AgentClient } from '../domain/agent-clients';
 import type { ActionContext, ApplicationSettings } from '../domain/services';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -60,6 +60,7 @@ import { FileAccess } from './file-access';
 import { NativeSelections } from './native-selections';
 import { Pasteboard } from './pasteboard';
 import { confirmAgentProposal, confirmNatively } from './native-confirmation';
+import { AgentAccess } from './agent-access';
 import { fileCoordination } from './file-coordination';
 import { FileInformationService } from './file-information';
 import { Projects } from './projects';
@@ -122,7 +123,10 @@ export class Desktop {
   private context?: ActionContext;
   private indexConfiguration = '';
   private openPaths: string[] = [];
-  private agentCommands = new Map<string, { finish(error?: string): void; owner: number }>();
+  private agentCommands = new Map<
+    string,
+    { finish(error?: string): void; owner: number; command: string }
+  >();
   private agentsEnabled?: boolean;
   private agentsConfiguration: Promise<void> = Promise.resolve();
   private flushes = new Map<string, () => void>();
@@ -139,6 +143,8 @@ export class Desktop {
       applications: string;
       fileBackend?: 'process' | 'thread';
       settingsChanged?(): void;
+      /** Remembers the Settings window's category with its frame. */
+      settingsCategory?(category: string): void;
       /** Records a renderer failure in the local diagnostic log. */
       diagnose?(detail: string): void;
     },
@@ -164,6 +170,8 @@ export class Desktop {
         emit({ type: 'folder-changed', path: path.dirname(source) });
         emit({ type: 'folder-changed', path: path.dirname(destination) });
         void this.resources.clear(source);
+        // put back from the Trash browser, it takes its Viewer Trash receipt, and its Undo, along
+        void this.operations.trashRestored(source);
       },
     });
     const access = (files: readonly string[]) => this.fileAccess.require(files);
@@ -189,22 +197,30 @@ export class Desktop {
       () => nativeTheme.shouldUseDarkColors,
       (snapshot) => {
         this.options.settingsChanged?.();
-        void this.modelPermissions.reconcile().catch(() =>
-          emit({
-            type: 'service-error',
-            service: 'models',
-            message:
-              'Model data access was stopped, but the permission change could not be saved. Try again in Settings → Models.',
-          }),
-        );
+        // On the defaults, which stand in for an unreadable config.jsonc and its last valid copy,
+        // the providers are not the person's: reconciling deleted every model-data approval
+        // (2026-10-20). Approvals wait for a readable file.
+        if (snapshot.config?.fallback !== 'defaults')
+          void this.modelPermissions.reconcile().catch(() =>
+            emit({
+              type: 'service-error',
+              service: 'models',
+              message:
+                'Model data access was stopped, but the permission change could not be saved. Try again in Settings → Models.',
+            }),
+          );
         emit({ type: 'settings', snapshot: { ...snapshot, credentials: this.credentials.ids() } });
-        void this.configureAgents(snapshot.settings.agents.enabled).catch(() =>
-          emit({
-            type: 'service-error',
-            service: 'agents',
-            message: 'Agent server could not start. Check Settings → Agents.',
-          }),
-        );
+        // config.jsonc narrows the approved access at once; it cannot widen it
+        void this.agents.access
+          .narrow()
+          .then(() => this.configureAgents())
+          .catch(() =>
+            emit({
+              type: 'service-error',
+              service: 'agents',
+              message: 'Agent server could not start. Check Settings → Agents.',
+            }),
+          );
         void this.configureIndex(snapshot.settings.search).catch(() =>
           emit({
             type: 'index',
@@ -248,6 +264,8 @@ export class Desktop {
         application: (application) => confirmations.requireTerminalApplication(application),
       },
     );
+    // launchers an earlier session wrote that Terminal never ran
+    void this.externalTerminals.sweep(dataPath).catch(() => {});
     this.executions = new Executions(
       () => this.settings.snapshot().settings,
       (task) => {
@@ -282,8 +300,11 @@ export class Desktop {
       for (const change of changes) {
         void this.files.update(change.source, true).catch(() => {});
         void this.files.update(change.destination).catch(() => {});
+        // only what changed: every batch cleared every thumbnail, and stopped those being made
+        // elsewhere (2026-10-20); the cache keys already carry each file's identity and date
+        void this.thumbnails.clear(change.source);
+        void this.thumbnails.clear(change.destination);
       }
-      this.thumbnails.clear();
       this.appIcons.clear();
     };
     this.operations = new Operations(
@@ -370,7 +391,7 @@ export class Desktop {
         emit({ type: 'agent-proposal', proposal });
         this.auditProposal(proposal);
       },
-      async (command, target) => {
+      async (command, target, contents) => {
         const resolved = agentCommandID(command, this.settings.snapshot().settings.customActions);
         if (resolved === 'trash') {
           return {
@@ -381,6 +402,9 @@ export class Desktop {
                 path: file.path,
                 version: sourceVersion(file),
               })),
+              // a folder's contents are checked again as the move runs, not only at approval:
+              // a nested edit while it waited in the queue moved the changed folder (2026-10-20)
+              expectedContents: [...(contents ?? [])].map(([path, proof]) => ({ path, proof })),
             }),
           };
         }
@@ -413,6 +437,11 @@ export class Desktop {
         config: this.settings,
         access,
         workspaceState: async () => this.workspaceCatalog,
+        // nothing is requested while config.jsonc and its last valid copy cannot be read
+        agentAccess: new AgentAccess(dataPath, () => {
+          const snapshot = this.settings.snapshot();
+          return snapshot.config?.fallback === 'defaults' ? undefined : snapshot.settings.agents;
+        }),
         relationships: async (file, content) => {
           const result = await this.relationships.request({ kind: 'read', file, content });
           if (!result || !('relations' in result))
@@ -457,25 +486,130 @@ export class Desktop {
       },
     );
   }
-  private async configureIndex(config: ApplicationSettings['search']): Promise<void> {
+  private async configureIndex(
+    config: ApplicationSettings['search'],
+    rebuild = false,
+  ): Promise<void> {
+    // the defaults' one location, Home, would purge every other location's rows and text
+    if (this.settings.snapshot().config?.fallback === 'defaults') return;
     const key = JSON.stringify(config);
     if (key === this.indexConfiguration) return;
     this.indexConfiguration = key;
     try {
-      await this.files.configure(config);
+      await this.files.configure(config, rebuild);
     } catch (error) {
       this.indexConfiguration = '';
       throw error;
     }
   }
-  private configureAgents(enabled: boolean): Promise<void> {
-    if (this.agentsEnabled === enabled) return this.agentsConfiguration;
-    this.agentsEnabled = enabled;
+  private async chooseFolder(senderID: number, defaultPath?: string): Promise<string | null> {
+    const result = await dialog.showOpenDialog(this.windows.get(senderID)!.window, {
+      properties: ['openDirectory'],
+      defaultPath,
+      securityScopedBookmarks: this.fileAccess.scoped,
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
+    await this.fileAccess.require([result.filePaths[0]]);
+    // Granting a configured index root can unblock its watcher/indexer.
+    this.indexConfiguration = '';
+    void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
+    this.emit({ type: 'folder-changed', path: result.filePaths[0] });
+    return result.filePaths[0];
+  }
+  /**
+   * Settings → Agents changes the approval itself (`AgentAccess`) and mirrors it into config.jsonc.
+   * Turning agents on and allowing a folder config.jsonc asks for are confirmed here, natively; the
+   * folder panel is the confirmation of a folder the person chooses. Turning off and removing apply
+   * first, so a config.jsonc that cannot be saved never keeps agents on.
+   */
+  private async changeAgentAccess(request: AgentAccessRequest, senderID: number): Promise<void> {
+    const access = this.agents.access;
+    const window = this.windows.get(senderID)?.window;
+    const agents = () => this.settings.snapshot().settings.agents;
+    const mirror = (value: Partial<ApplicationSettings['agents']>) =>
+      this.settings.patch(
+        [{ path: 'settings.agents', value: { ...agents(), ...value } }],
+        this.settings.snapshot().revision,
+      );
+    if (request.kind === 'state') return;
+    if (request.kind === 'capabilities') {
+      const current = await access.capabilities();
+      const added = request.capabilities.filter((capability) => !current.includes(capability));
+      if (
+        added.length &&
+        !(await confirmNatively(
+          window,
+          'Allow the shared agent connection more?',
+          `Clients with Viewer’s agent token will also have: ${added.join(', ')}.`,
+          'Allow',
+        ))
+      )
+        return;
+      await access.approve({ capabilities: request.capabilities });
+      return;
+    }
+    if (request.kind === 'enable' && !request.enabled) {
+      await access.approve({ enabled: false });
+      if (agents().enabled) await mirror({ enabled: false });
+    } else if (request.kind === 'remove-folder') {
+      await access.approve({ remove: [request.root] });
+      if (agents().roots.includes(request.root))
+        await mirror({ roots: agents().roots.filter((root) => root !== request.root) });
+    } else if (request.kind === 'enable') {
+      const { roots } = await access.state();
+      if (
+        !(await confirmNatively(
+          window,
+          'Allow local agent clients to use Viewer?',
+          (roots.length
+            ? 'Clients with Viewer’s agent token can read and search these folders and propose changes for your review:\n\n' +
+              roots.join('\n')
+            : 'No folder is authorized yet: add one in Settings → Agents.') +
+            '\n\nYou can turn this off at any time.',
+          'Allow',
+        ))
+      )
+        return;
+      if (!agents().enabled) await mirror({ enabled: true });
+      await access.approve({ enabled: true });
+    } else if (request.kind === 'allow') {
+      const { pending } = await access.state();
+      const roots = request.roots.filter((root) => pending.roots.includes(root));
+      if (!roots.length) return;
+      if (
+        !(await confirmNatively(
+          window,
+          `Allow agents to use ${roots.length === 1 ? 'this folder' : `these ${roots.length} folders`}?`,
+          'config.jsonc asks for them. Clients with Viewer’s agent token can read and search them and propose changes for your review:\n\n' +
+            roots.join('\n'),
+          'Allow',
+        ))
+      )
+        return;
+      await access.approve({ add: roots });
+    } else {
+      const root = await this.chooseFolder(senderID);
+      if (!root) return;
+      await this.agents.checkFolders([root]);
+      if (!agents().roots.includes(root)) await mirror({ roots: [...agents().roots, root] });
+      await access.approve({ add: [root] });
+    }
+    await this.configureAgents();
+  }
+  /** Starts or stops the agent server for the access in effect when its turn comes: computed by
+   * each caller, a settings change and an approval could land in either order (2026-10-20). */
+  private configureAgents(): Promise<void> {
     const task = this.agentsConfiguration
       .catch(() => {})
-      .then(() => (enabled ? this.agents.start() : this.agents.close()));
+      .then(async () => {
+        const { enabled } = await this.agents.access.state();
+        if (this.agentsEnabled === enabled) return;
+        this.agentsEnabled = enabled;
+        await (enabled ? this.agents.start() : this.agents.close());
+      });
     this.agentsConfiguration = task.catch((error) => {
-      if (this.agentsEnabled === enabled) this.agentsEnabled = undefined;
+      this.agentsEnabled = undefined;
       throw error;
     });
     return this.agentsConfiguration;
@@ -648,6 +782,7 @@ export class Desktop {
       timer.unref();
       this.agentCommands.set(id, {
         owner: window.webContents.id,
+        command,
         finish: (error) => {
           clearTimeout(timer);
           this.agentCommands.delete(id);
@@ -655,7 +790,19 @@ export class Desktop {
           else resolve();
         },
       });
-      this.emit({ type: 'agent-command', id, command, target, navigation });
+      const action = this.settings
+        .snapshot()
+        .settings.customActions.find((item) => 'custom.' + item.id === command);
+      this.emit({
+        type: 'agent-command',
+        id,
+        command,
+        target,
+        navigation,
+        // a second short of the wait below, so the window never starts what was reported failed
+        deadline: Date.now() + 24000,
+        ...(action ? { executor: action.executor } : {}),
+      });
     });
   }
   /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
@@ -780,7 +927,8 @@ export class Desktop {
         return;
       },
       configValidate: () => this.settings.reload(),
-      configTransfer: async (args) => {
+      configRestore: () => this.settings.restoreConfiguration(),
+      configTransfer: async (args, senderID) => {
         if (args[0] === 'export') {
           const { canceled, filePath, bookmark } = await dialog.showSaveDialog({
             title: 'Export configuration',
@@ -788,7 +936,7 @@ export class Desktop {
             securityScopedBookmarks: this.fileAccess.scoped,
           });
           if (!canceled && filePath) {
-            await this.fileAccess.remember(filePath, false, bookmark);
+            await this.fileAccess.allowOnce(filePath, bookmark);
             await this.fileAccess.require([filePath]);
             await this.settings.exportConfiguration(filePath);
           }
@@ -800,9 +948,18 @@ export class Desktop {
             securityScopedBookmarks: this.fileAccess.scoped,
           });
           if (!canceled && filePaths[0]) {
-            await this.fileAccess.remember(filePaths[0], false, bookmarks?.[0]);
+            await this.fileAccess.allowOnce(filePaths[0], bookmarks?.[0]);
             await this.fileAccess.require([filePaths[0]]);
-            return this.settings.importConfiguration(filePaths[0]);
+            return this.settings.importConfiguration(filePaths[0], (changes) =>
+              confirmNatively(
+                this.windows.get(senderID)?.window,
+                'Import this configuration?',
+                'It changes ' +
+                  changes.join('; ') +
+                  '.\n\nThe current config.jsonc is kept beside it as config.jsonc.before-import-….',
+                'Import',
+              ),
+            );
           }
         }
         return this.settings.snapshot();
@@ -818,10 +975,16 @@ export class Desktop {
         this.terminals.resize(args[0], args[1], args[2], senderID),
       terminalAck: (args, senderID) => this.terminals.ack(args[0], args[1], senderID),
       terminalClose: (args, senderID) => this.terminals.stop(args[0], senderID),
-      customExecute: (args) => this.executions.start(args[0], args[1]),
+      customExecute: (args) => {
+        // never on an agent's request: its approval was for a recipe or a command, not a program
+        if ([...this.agentCommands.values()].some(({ command }) => command === 'custom.' + args[0]))
+          throw new Error('Agents cannot run programs or shell scripts.');
+        return this.executions.start(args[0], args[1]);
+      },
       executionList: () => this.executions.list(),
       executionCancel: (args) => this.executions.cancel(args[0]),
       openSettings: () => this.options.openSettings(),
+      settingsCategory: ([category]) => this.options.settingsCategory?.(category),
       settingsGet: async () => {
         await this.settings.load();
         await this.credentials.load();
@@ -863,9 +1026,14 @@ export class Desktop {
         this.trash.confirmation(this.windows.get(senderID)!.window, args[0]),
       trashPreview: (args) => this.trash.preview(args[0]),
       trashCopyPaths: (args) => this.trash.copyPaths(args[0]),
-      trashRestore: (args, senderID) => {
+      trashRestore: async (args, senderID) => {
+        const window = this.windows.get(senderID)!.window;
+        // the folder is chosen before the operations queue is held: a panel left open blocked it
+        const folder =
+          args[1] === 'choose' ? await this.trash.chooseRestoreFolder(window) : undefined;
+        if (args[1] === 'choose' && !folder) return { restored: 0, cancelled: true };
         return this.operations.exclusive(() =>
-          this.trash.restore(this.windows.get(senderID)!.window, args[0], args[1]),
+          this.trash.restore(window, args[0], folder ? { folder } : 'original'),
         );
       },
       trashAccess: (args, senderID) =>
@@ -901,9 +1069,13 @@ export class Desktop {
         }
         return;
       },
-      settingsPatch: async (args) => {
+      settingsPatch: async (args, senderID) => {
         return {
-          ...(await this.settings.patch(args[0], args[1])),
+          ...(await this.settings.patch(
+            args[0],
+            args[1],
+            this.windows.get(senderID)?.role === 'settings' ? undefined : 'workspace',
+          )),
           credentials: this.credentials.ids(),
         };
       },
@@ -931,13 +1103,46 @@ export class Desktop {
         return this.providers.models(provider);
       },
       providerPermissionGet: ([id]) => this.modelPermissions.get(this.provider(id)),
-      providerPermissionSet: async ([id, endpoint, level]) => {
+      providerPermissionSet: async ([id, endpoint, level], senderID) => {
         const provider = this.provider(id);
         if (modelEndpoint(provider) !== modelEndpoint({ endpoint }))
           throw new Error(
             'The provider endpoint changed. Review its new address before allowing data access.',
           );
+        // A renderer could store this approval by itself, and with it send document text to any
+        // https host it had configured (2026-10-20): the person grants it here, natively.
+        if (
+          level &&
+          !(await confirmNatively(
+            this.windows.get(senderID)?.window,
+            `Allow Viewer to send ${modelDataLabels[level]} to ${provider.name}?`,
+            `Actions using this provider send your instructions and that data to:\n${modelEndpoint(provider)}\n\nYou can revoke this in Settings → Models.`,
+            'Allow',
+          ))
+        )
+          throw new Error('Model data access was not allowed.');
         await this.modelPermissions.set(provider, level);
+        this.emit({ type: 'model-permission', providerID: provider.id });
+      },
+      providerPermissionAgents: async ([id, endpoint, allow], senderID) => {
+        const provider = this.provider(id);
+        if (modelEndpoint(provider) !== modelEndpoint({ endpoint }))
+          throw new Error(
+            'The provider endpoint changed. Review its new address before allowing data access.',
+          );
+        const permission = await this.modelPermissions.get(provider);
+        if (
+          allow &&
+          permission &&
+          !(await confirmNatively(
+            this.windows.get(senderID)?.window,
+            `Let actions agents start send ${modelDataLabels[permission.level]} to ${provider.name}?`,
+            `An agent's request to run an action then sends your files' data to:\n${modelEndpoint(provider)}\n\nYou can turn this off in Settings → Models.`,
+            'Allow',
+          ))
+        )
+          throw new Error('Agent access to model data was not allowed.');
+        await this.modelPermissions.allowAgents(provider, allow);
         this.emit({ type: 'model-permission', providerID: provider.id });
       },
       indexedQuery: (args) => this.files.query(args[0]),
@@ -975,7 +1180,7 @@ export class Desktop {
       indexStatus: () => this.files.status(),
       indexRebuild: () => {
         this.indexConfiguration = '';
-        return this.configureIndex(this.settings.snapshot().settings.search);
+        return this.configureIndex(this.settings.snapshot().settings.search, true);
       },
       actionStart: (args) => {
         return this.actions.start({
@@ -1078,7 +1283,7 @@ export class Desktop {
         await this.actions.load();
         await this.watchRules.start();
         this.options.settingsChanged?.();
-        await this.configureAgents(this.settings.snapshot().settings.agents.enabled);
+        await this.configureAgents();
         const paths = this.openPaths.splice(0);
         this.ready = true;
         const freshSession =
@@ -1123,20 +1328,10 @@ export class Desktop {
       },
       fileInformation: (args) => this.information.get(args[0]),
       fileInformationUpdate: (args) => this.information.update(args[0], args[1], args[2]),
-      chooseFolder: async (args, senderID) => {
-        const result = await dialog.showOpenDialog(this.windows.get(senderID)!.window, {
-          properties: ['openDirectory'],
-          defaultPath: args[0],
-          securityScopedBookmarks: this.fileAccess.scoped,
-        });
-        if (result.canceled || !result.filePaths[0]) return null;
-        await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
-        await this.fileAccess.require([result.filePaths[0]]);
-        // Granting a configured index root can unblock its watcher/indexer.
-        this.indexConfiguration = '';
-        void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
-        this.emit({ type: 'folder-changed', path: result.filePaths[0] });
-        return result.filePaths[0];
+      chooseFolder: (args, senderID) => this.chooseFolder(senderID, args[0]),
+      agentAccess: async ([request], senderID) => {
+        await this.changeAgentAccess(request, senderID);
+        return this.agents.access.state();
       },
       reveal: async (args) => {
         await this.fileAccess.require([args[0]]);

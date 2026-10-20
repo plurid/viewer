@@ -129,6 +129,12 @@ export class FileAccess {
     this.mutations = work;
     return work;
   }
+  /** A file chosen in a panel for one use, an export or an import: for this session only. Each was
+   * saved as a folder permission, and at 128 of them new folders were refused (2026-10-20). */
+  allowOnce(file: string, bookmark: string | undefined): Promise<void> {
+    if (!this.scoped || !bookmark) return Promise.resolve();
+    return this.receiveNative([{ path: file, directory: false, bookmark }]);
+  }
   /** Native clipboard/drop capabilities last for this desktop session. They
    * must not fill the small persistent picker list or silently grant a parent. */
   async receiveNative(files: readonly Grant[]): Promise<void> {

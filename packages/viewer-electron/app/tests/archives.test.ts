@@ -3,9 +3,9 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { gzipSync } from 'node:zlib';
+import { crc32, gzipSync } from 'node:zlib';
 import { strToU8, zipSync } from 'fflate';
-import { Archives } from '../src/desktop/archives';
+import { Archives, zipName } from '../src/desktop/archives';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;
@@ -83,6 +83,96 @@ it('refreshes an index when the archive changes and validates entry integrity', 
   changed[offset] ^= 1;
   await writeFile(file, changed);
   await expect(archives.read(file, 'second.txt')).rejects.toThrow('checksum');
+});
+/** A stored ZIP whose names are the given bytes, as an archiver on another platform writes them. */
+function storedZip(entries: { name: Buffer; data: Buffer; flags?: number; extra?: Buffer }[]) {
+  const locals: Buffer[] = [],
+    centrals: Buffer[] = [];
+  let offset = 0;
+  for (const { name, data, flags = 0, extra = Buffer.alloc(0) } of entries) {
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(flags, 6);
+    local.writeUInt32LE(crc32(data), 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    locals.push(local, name, data);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(flags, 8);
+    central.writeUInt32LE(crc32(data), 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(extra.length, 30);
+    central.writeUInt32LE(offset, 42);
+    centrals.push(central, name, extra);
+    offset += 30 + name.length + data.length;
+  }
+  const directory = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, end]);
+}
+/** The Info-ZIP Unicode Path extra field (0x7075): the name in UTF-8, for the stored name `raw`. */
+function unicodePath(raw: Buffer, name: string, checksum = crc32(raw)) {
+  const value = Buffer.from(name, 'utf8');
+  const field = Buffer.alloc(9);
+  field.writeUInt16LE(0x7075, 0);
+  field.writeUInt16LE(5 + value.length, 2);
+  field.writeUInt8(1, 4);
+  field.writeUInt32LE(checksum, 5);
+  return Buffer.concat([field, value]);
+}
+it('reads ZIP names in the encoding their archiver wrote', async () => {
+  // Every name was read as UTF-8, so a ZIP from DOS or Windows tools (CP437, the format's default)
+  // listed its accented names garbled.
+  const file = path.join(root, 'names.zip');
+  const data = Buffer.from('x');
+  const cp437 = Buffer.from([0x52, 0x82, 0x73, 0x75, 0x6d, 0x82, 0x2e, 0x74, 0x78, 0x74]);
+  const placeholder = Buffer.from('_____.txt');
+  await writeFile(
+    file,
+    storedZip([
+      // the format's default: no UTF-8 flag, CP437 bytes
+      { name: cp437, data },
+      // macOS's archiver: UTF-8 bytes without the flag
+      { name: Buffer.from('Café.txt'), data },
+      // the UTF-8 flag
+      { name: Buffer.from('naïve.txt'), data, flags: 0x0800 },
+      // a Windows tool: a CP437 stand-in, and the real name in the Unicode Path field
+      { name: placeholder, data, extra: unicodePath(placeholder, 'Ελλάδα.txt') },
+      // a Unicode Path field written for another name is not this name's
+      { name: Buffer.from('plain.txt'), data, extra: unicodePath(placeholder, 'other.txt') },
+    ]),
+  );
+  expect((await new Archives().list(file)).entries.map((entry) => entry.name)).toEqual([
+    'Résumé.txt',
+    'Café.txt',
+    'naïve.txt',
+    'Ελλάδα.txt',
+    'plain.txt',
+  ]);
+  // every high byte of CP437 has its character
+  const high = zipName(
+    Buffer.from(Array.from({ length: 128 }, (_, index) => 0x80 + index)),
+    0,
+    Buffer.alloc(0),
+  );
+  expect([high.length, high[0], high[0x61], high[0x7f]]).toEqual([
+    128,
+    'Ç',
+    'ß',
+    String.fromCharCode(0xa0),
+  ]);
 });
 it('rejects damaged TAR headers rather than displaying invented files', async () => {
   const file = path.join(root, 'bad.tar');

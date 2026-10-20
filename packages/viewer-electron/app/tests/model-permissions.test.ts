@@ -47,6 +47,23 @@ describe('private model data authority', () => {
     ).rejects.toThrow('Allow this provider');
     expect(request).not.toHaveBeenCalled();
   });
+  it('lets an agent-started action send data only when agents were approved too (2026-10-20)', async () => {
+    // A recipe an agent started reused the approval the person gave for their own actions.
+    await permissions.set(provider, 'full-text');
+    await expect(
+      permissions.run(provider, 'names', signal(), async () => 'secret', 'agent'),
+    ).rejects.toThrow('agents');
+    await permissions.allowAgents(provider, true);
+    expect(
+      await permissions.run(provider, 'full-text', signal(), async () => 'allowed', 'agent'),
+    ).toBe('allowed');
+    expect((await new ModelPermissions(root, () => current).get(provider))?.agents).toBe(true);
+    // a level approved anew is the person's alone until agents are allowed again
+    await permissions.set(provider, 'excerpts');
+    await expect(
+      permissions.run(provider, 'names', signal(), async () => 'secret', 'agent'),
+    ).rejects.toThrow('agents');
+  });
   it('requires approval for each requested data level', async () => {
     await permissions.set(provider, 'names');
     expect(await permissions.run(provider, 'names', signal(), async () => 'allowed')).toBe(

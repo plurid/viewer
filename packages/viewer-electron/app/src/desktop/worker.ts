@@ -40,12 +40,18 @@ const watchedStatus = (value: IndexStatus): IndexStatus => ({
     watchFailures.has(root.path) ? { ...root, status: 'offline', errors: root.errors + 1 } : root,
   ),
 });
-async function configureNow(value: ApplicationSettings['search']) {
+async function configureNow(value: ApplicationSettings['search'], rebuild = false) {
+  // The same configuration again (every folder pick sends one): the index crawls only the roots it
+  // could not read, and the watchers stay unless one of them failed.
+  if (!rebuild && !watchFailures.size && JSON.stringify(value) === JSON.stringify(config)) {
+    index!.configure(value);
+    return;
+  }
   const retired = watcher?.stop();
   watcher = undefined;
   watchFailures.clear();
   config = value;
-  index!.configure(config);
+  index!.configure(config, rebuild);
   await retired;
   if (value.paused || !value.roots.length) {
     watcher = undefined;
@@ -65,8 +71,8 @@ async function configureNow(value: ApplicationSettings['search']) {
     },
   );
 }
-function configure(value: ApplicationSettings['search']): Promise<void> {
-  const work = configurationQueue.catch(() => {}).then(() => configureNow(value));
+function configure(value: ApplicationSettings['search'], rebuild = false): Promise<void> {
+  const work = configurationQueue.catch(() => {}).then(() => configureNow(value, rebuild));
   configurationQueue = work.then(
     () => {},
     () => {},
@@ -97,7 +103,7 @@ port.on('message', async (event) => {
       value = true;
     } else if (!index) throw new Error('File services are not ready.');
     else if (request.method === 'configure') {
-      await configure(request.args[0] as ApplicationSettings['search']);
+      await configure(request.args[0] as ApplicationSettings['search'], request.args[1] === true);
       value = true;
     } else if (request.method === 'query') {
       const result = index.query(request.args[0] as IndexedQuery);

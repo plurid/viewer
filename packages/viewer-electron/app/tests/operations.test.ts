@@ -93,7 +93,9 @@ vi.mock('../src/desktop/operation-journal', async (original) => {
 });
 import { Operations } from '../src/desktop/operations';
 import { ProtectedPaths } from '../src/desktop/protected-paths';
-import { OperationLog, operationJournal } from '../src/desktop/operation-journal';
+import { OperationLog, operationJournal, outputProof } from '../src/desktop/operation-journal';
+import { entry } from '../src/desktop/filesystem';
+import { sourceVersion } from '../src/domain/inspection';
 let root: string, destination: string, trash: string, operations: Operations;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-ops-');
@@ -968,5 +970,129 @@ describe('file operation redo', () => {
     await run({ kind: 'mkdir', sources: [], destination, name: 'Other' });
     expect(operations.all().find((job) => job.id === copied.id)?.redoable).toBe(false);
     expect(() => operations.redo(copied.id)).toThrow('cannot be redone');
+  });
+});
+describe('reviewed work that waits (2026-10-20)', () => {
+  /** A copy held at its collision prompt, which keeps the queue's current job busy. */
+  async function held(name = 'held.txt') {
+    const file = path.join(root, name);
+    await writeFile(file, 'new');
+    await writeFile(path.join(destination, name), 'old');
+    const id = operations.start({ kind: 'copy', sources: [file], destination });
+    await waitFor(id, (job) => job.status === 'collision');
+    return id;
+  }
+  it.each(['copy', 'move'] as const)(
+    'checks the reviewed source again once its collision is decided (%s)',
+    async (kind) => {
+      // A collision prompt can stay open indefinitely, and the source was checked only as its
+      // item started: a file edited meanwhile was copied or moved.
+      const source = path.join(root, 'a.txt');
+      await writeFile(source, 'reviewed');
+      await writeFile(path.join(destination, 'a.txt'), 'existing');
+      const version = sourceVersion(await entry(source));
+      const id = operations.start({
+        kind,
+        sources: [source],
+        destination,
+        expectedSources: [{ path: source, version }],
+      });
+      await waitFor(id, (job) => job.status === 'collision');
+      await writeFile(source, 'edited after the review');
+      operations.resolve(id, 'keep-both', false);
+      const job = await waitFor(id);
+      expect(job.errors[0]?.message).toContain('changed after review');
+      expect(await readdir(destination)).toEqual(['a.txt']);
+      expect(await readFile(source, 'utf8')).toBe('edited after the review');
+    },
+  );
+  it.each(['cancelled', 'failed'] as const)(
+    'does not offer again an Undo interrupted on a %s job',
+    async (status) => {
+      // A forward job clears its intent before its last record, so an intent beside a finished
+      // status is an Undo's; only a completed job's was recognised.
+      const dataPath = path.join(root, 'private'),
+        source = path.join(root, 'original.txt');
+      await writeFile(source, 'original');
+      const restore = () =>
+        new Operations(
+          async () => {},
+          () => {},
+          undefined,
+          undefined,
+          undefined,
+          dataPath,
+        );
+      operations = restore();
+      const copied = await run({ kind: 'copy', sources: [source], destination });
+      await operations.close();
+      const journal = new OperationLog(dataPath),
+        [receipt] = (await journal.load()).receipts;
+      receipt.job.status = status;
+      receipt.intent = { source: path.join(destination, 'original.txt') };
+      await journal.compact(receipt);
+      operations = restore();
+      await operations.load();
+      expect(operations.all()[0]).toMatchObject({ undoable: false });
+      await expect(operations.undo(copied.id)).rejects.toThrow('cannot be undone');
+    },
+  );
+  it("checks a reviewed folder's contents again inside the Trash it waited to run", async () => {
+    // The agent's approval compared the folder's contents once. Queued behind other work, the
+    // Trash ran later with the folder entry's version only, which a nested edit does not change.
+    const folder = path.join(root, 'Folder');
+    await mkdir(path.join(folder, 'inner'), { recursive: true });
+    await writeFile(path.join(folder, 'inner', 'a.txt'), 'a');
+    const holder = await held();
+    const id = operations.start({
+      kind: 'trash',
+      sources: [folder],
+      expectedSources: [{ path: folder, version: sourceVersion(await entry(folder)) }],
+      expectedContents: [{ path: folder, proof: (await outputProof(folder))! }],
+    });
+    await writeFile(path.join(folder, 'inner', 'new.txt'), 'added after the approval');
+    operations.resolve(holder, 'skip', false);
+    const job = await waitFor(id);
+    expect(job.status).toBe('failed');
+    expect(job.errors[0]?.message).toContain('changed after review');
+    expect((await lstat(folder)).isDirectory()).toBe(true);
+    expect(await readdir(trash)).toEqual([]);
+  });
+  it('drops the Trash Undo of an item put back from the Trash', async () => {
+    // Restored from the Trash browser, the item kept its job's Trash step: Undo stayed offered and
+    // failed with a raw ENOENT, and the Trash still showed it as Viewer's.
+    operations = new Operations(
+      async (file) => {
+        const directory = (await lstat(file)).isDirectory(),
+          target = path.join(trash, crypto.randomUUID());
+        await rename(file, target);
+        return { path: target, directory };
+      },
+      () => {},
+    );
+    const source = path.join(root, 'restored.txt');
+    await writeFile(source, 'original');
+    const job = await run({ kind: 'trash', sources: [source] });
+    expect(job.undoable).toBe(true);
+    const [origin] = await operations.trashOrigins();
+    await rename(origin!.file, source);
+    await operations.trashRestored(origin!.file);
+    expect(operations.all().find((item) => item.id === job.id)?.undoable).toBe(false);
+    expect(await operations.trashOrigins()).toEqual([]);
+  });
+  it('lets an Eject or a revoke through while an unrelated job waits at its prompt', async () => {
+    // quiesce waited for the whole queue, so an unanswered prompt anywhere held it.
+    const holder = await held();
+    const outcome = await Promise.race([
+      operations.quiesce(path.join(root, 'elsewhere')).then(() => 'done'),
+      new Promise((resolve) => setTimeout(() => resolve('blocked'), 300)),
+    ]);
+    expect(outcome).toBe('done');
+    expect(operations.all().find((job) => job.id === holder)?.status).toBe('collision');
+  });
+  it('still waits for a related job, which it cancels', async () => {
+    const holder = await held();
+    await operations.quiesce(root);
+    expect(operations.all().find((job) => job.id === holder)?.status).toBe('cancelled');
   });
 });

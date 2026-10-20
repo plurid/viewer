@@ -10,6 +10,7 @@ import {
 import type { SettingsChange } from './settings-edits';
 import { Field } from './SettingField';
 import { IconButton } from './primitives';
+import { referencesTo } from '../../domain/references';
 import { ProviderDataPermission } from './ModelDataPermission';
 
 export function ModelSettings({
@@ -91,7 +92,12 @@ export function ModelSettings({
               <h2>{provider.name}</h2>
               <IconButton
                 icon="close"
-                label={`Remove ${provider.name} provider`}
+                label={
+                  referencesTo(snapshot.settings, 'provider', provider.id).length
+                    ? `${provider.name} is used by ${referencesTo(snapshot.settings, 'provider', provider.id).join(', ')}: change them to remove it`
+                    : `Remove ${provider.name} provider`
+                }
+                disabled={!!referencesTo(snapshot.settings, 'provider', provider.id).length}
                 onClick={() =>
                   save((current) => [
                     {

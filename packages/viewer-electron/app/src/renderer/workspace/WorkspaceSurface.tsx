@@ -27,6 +27,8 @@ import { SearchExplorer } from '../explorer/SearchExplorer';
 import { CollectionExplorer } from '../explorer/CollectionExplorer';
 import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
+import { PreviewActivity } from '../previews/activity';
+import { PreviewFrame } from './preview-frame';
 import { Empty } from '../ui/primitives';
 import { Sidebar } from '../ui/Sidebar';
 import { PlaneHeader } from './PlaneHeader';
@@ -49,25 +51,37 @@ const FolderScene = memo(function FolderScene({ id }: { id: string }) {
     </div>
   );
 });
-function FolderContent() {
-  const plane = usePluridPlane();
-  return <FolderScene id={plane.parameters.id ?? ''} />;
-}
-function PreviewContent() {
-  const plane = usePluridPlane();
+/** Whether the space lets a plane's content take pointer input (no grab mode, every transform). */
+function useInteractive(): boolean {
   const api = usePluridApi();
-  const record = useViewer((state) =>
-    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
-  );
-  const interactive = useSyncExternalStore(
+  return useSyncExternalStore(
     api.store.subscribe,
     () =>
       !api.getSnapshot().ui.grabMode &&
       api.getSnapshot().configuration.space.transformMode === 'ALL',
   );
+}
+function FolderContent() {
+  const plane = usePluridPlane();
+  const interactive = useInteractive();
+  const active = plane.shown && plane.culled === 'visible';
+  // A folder's embedded previews follow its plane, as a preview plane does (see PreviewActivity).
+  const activity = useMemo(() => ({ active, interactive }), [active, interactive]);
+  return (
+    <PreviewActivity.Provider value={activity}>
+      <FolderScene id={plane.parameters.id ?? ''} />
+    </PreviewActivity.Provider>
+  );
+}
+function PreviewContent() {
+  const plane = usePluridPlane();
+  const record = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  const interactive = useInteractive();
   if (!record) return <Empty title="Preview is unavailable" />;
   return (
-    <div className="preview-plane" onPointerDownCapture={() => setActivePane(record.id)}>
+    <PreviewFrame activate={() => setActivePane(record.id)}>
       <PreviewHost
         path={record.path}
         evidence={record.type === 'preview' ? record.evidence : undefined}
@@ -75,7 +89,7 @@ function PreviewContent() {
         active={plane.shown && plane.culled === 'visible'}
         interactive={interactive}
       />
-    </div>
+    </PreviewFrame>
   );
 }
 const LazyTerminalPlane = lazy(() =>

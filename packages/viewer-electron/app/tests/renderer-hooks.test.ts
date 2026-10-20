@@ -12,6 +12,10 @@ import { OperationsPanel } from '../src/renderer/operations/OperationsPanel';
 import { DuplicateControls } from '../src/renderer/ui/Duplicates';
 import { TrashContents, groupSelection } from '../src/renderer/explorer/FileDialogs';
 import type { CommandContext } from '../src/renderer/commands/registry';
+import { Thumbnail } from '../src/renderer/explorer/views';
+import { rememberDrag, useFileDrop } from '../src/renderer/explorer/file-drop';
+import { recordScroll, useScrollRestore } from '../src/renderer/explorer/scroll-restore';
+import { browseSession } from '../src/renderer/workspace/sessions';
 
 let listeners: ((event: DesktopEvent) => void)[];
 let identity: string;
@@ -244,5 +248,130 @@ describe('collision prompt', () => {
     ).toBeTruthy();
     expect(screen.queryByText(/is a folder/)).toBeNull();
     expect(screen.queryByText('Replace')).toBeNull();
+  });
+});
+describe('thumbnails (2026-10-20)', () => {
+  it('asks the desktop only for files under the byte limit it applies itself', () => {
+    // The renderer allowed 64 MiB, the desktop 64,000,000 bytes: one wasted request per file between.
+    initialize({ home: '/', platform: 'darwin', locations: [], state: null, openPaths: [] });
+    const thumbnail = vi.fn(async () => '');
+    Object.assign(window, { viewer: { ...viewer, thumbnail } });
+    const png = (size: number) =>
+      ({
+        path: `/Photos/${size}.png`,
+        name: `${size}.png`,
+        parent: '/Photos',
+        extension: 'png',
+        kind: 'file',
+        directory: false,
+        size,
+        modified: 1,
+        created: 1,
+        hidden: false,
+        mime: 'image/png',
+        identity: `1:${size}`,
+      }) as FileEntry;
+    render(createElement(Thumbnail, { entry: png(65_000_000) }));
+    expect(thumbnail).not.toHaveBeenCalled();
+    render(createElement(Thumbnail, { entry: png(63_000_000) }));
+    expect(thumbnail).toHaveBeenCalledOnce();
+  });
+});
+describe('drop effect of a drag Viewer started (2026-10-20)', () => {
+  it('shows the move a same-device drop performs, and the copy another device gets', async () => {
+    // Native drags carry no Viewer data, so every drag showed the copy cursor though a drop on the
+    // same volume moves.
+    vi.useRealTimers();
+    const stat = vi.fn(
+      async (path: string) =>
+        ({ path, identity: path.startsWith('/Volumes/Other') ? '9:1' : '5:1' }) as FileEntry,
+    );
+    Object.assign(window, { viewer: { ...viewer, stat } });
+    const { result } = renderHook(() => useFileDrop(() => '/Work'));
+    const over = (destination: string) => {
+      const root = document.createElement('div');
+      const folder = document.createElement('div');
+      folder.dataset.directoryPath = destination;
+      root.append(folder);
+      document.body.append(root);
+      const event = {
+        dataTransfer: { types: ['Files'], dropEffect: 'none' },
+        currentTarget: root,
+        target: folder,
+        altKey: false,
+        metaKey: false,
+        clientX: 1,
+        clientY: 1,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      };
+      result.current.onDragOver(event as never);
+      root.remove();
+      return event.dataTransfer.dropEffect;
+    };
+    rememberDrag([{ path: '/Work/a.txt', identity: '5:100' } as FileEntry]);
+    over('/Work/Inside');
+    await vi.waitFor(() => expect(stat).toHaveBeenCalledWith('/Work/Inside'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(over('/Work/Inside')).toBe('move');
+    over('/Volumes/Other/Folder');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(over('/Volumes/Other/Folder')).toBe('copy');
+  });
+});
+describe('scroll memory (2026-10-20)', () => {
+  // One value was shared by every view mode, restored into the first column whichever column was
+  // scrolled, and Back or Forward to a cached folder restored nothing.
+  const scrolled = (top: number, column?: string) => {
+    const element = document.createElement('div');
+    element.className = 'file-scroll';
+    Object.defineProperty(element, 'scrollTop', { value: top, writable: true });
+    if (!column) return element;
+    const holder = document.createElement('div');
+    holder.dataset.folderPath = column;
+    holder.append(element);
+    return element;
+  };
+  const surface = (...children: HTMLElement[]) => {
+    const element = document.createElement('div');
+    for (const child of children) element.append(child.parentElement ?? child);
+    return { current: element };
+  };
+  it('keeps each mode’s own offset', () => {
+    const session = browseSession('scroll-modes', '/Work');
+    recordScroll(session, 'list', scrolled(900));
+    const grid = scrolled(0);
+    const view = renderHook(({ mode }) => useScrollRestore(surface(grid), session, mode, true), {
+      initialProps: { mode: 'grid' as const },
+    });
+    expect(grid.scrollTop).toBe(0);
+    const list = scrolled(0);
+    view.unmount();
+    renderHook(() => useScrollRestore(surface(list), session, 'list', true));
+    expect(list.scrollTop).toBe(900);
+  });
+  it('restores each column’s own offset', () => {
+    const session = browseSession('scroll-columns', '/Work');
+    recordScroll(session, 'columns', scrolled(400, '/Work/B'));
+    const first = scrolled(0, '/Work'),
+      second = scrolled(0, '/Work/B');
+    renderHook(() => useScrollRestore(surface(first, second), session, 'columns', true));
+    expect(first.scrollTop).toBe(0);
+    expect(second.scrollTop).toBe(400);
+  });
+  it('restores a folder’s offset on Back and Forward, as when it loads', () => {
+    const a = browseSession('scroll-history', '/A');
+    recordScroll(a, 'list', scrolled(800));
+    const b = browseSession('scroll-history', '/B');
+    const element = scrolled(0);
+    const view = renderHook(
+      ({ session }) => useScrollRestore(surface(element), session, 'list', true),
+      {
+        initialProps: { session: b },
+      },
+    );
+    expect(element.scrollTop).toBe(0);
+    view.rerender({ session: browseSession('scroll-history', '/A') });
+    expect(element.scrollTop).toBe(800);
   });
 });

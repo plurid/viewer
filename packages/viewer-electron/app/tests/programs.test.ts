@@ -294,6 +294,23 @@ describe('external terminal adapters', () => {
   });
 });
 
+describe('terminal launchers left behind (2026-10-20)', () => {
+  it('removes a launcher an earlier session wrote and Terminal never ran, and keeps this session’s', async () => {
+    // A launcher removes itself when it runs; one that never ran kept the profile's environment.
+    const directory = path.join(root, 'profile', 'terminal-launches');
+    await fs.mkdir(directory, { recursive: true });
+    const stale = path.join(directory, 'stale.command');
+    const current = path.join(directory, 'current.command');
+    const other = path.join(directory, 'notes.txt');
+    for (const file of [stale, current, other]) await fs.writeFile(file, 'export TOKEN=x');
+    const hourAgo = new Date(Date.now() - 3600_000);
+    await fs.utimes(stale, hourAgo, hourAgo);
+    await fs.utimes(other, hourAgo, hourAgo);
+    const terminals = new ExternalTerminals(directory, () => config, '/Applications');
+    await terminals.sweep(path.join(root, 'profile'));
+    expect((await fs.readdir(directory)).sort()).toEqual(['current.command', 'notes.txt']);
+  });
+});
 describe('embedded terminal planes', () => {
   it('starts a configured profile only once it is confirmed, including on restore', async () => {
     const build = {
@@ -379,6 +396,35 @@ describe('agent review and execution grants', () => {
     await fs.appendFile(path.join(folder, 'one.txt'), ' and edited later');
     await expect(requests.review(proposal.id, true)).rejects.toThrow('contents of');
     expect(execute).not.toHaveBeenCalled();
+  });
+  it('counts a folder from the disk, whatever the selection says it is (2026-10-20)', async () => {
+    // The window's `directory: false` was taken at its word: a folder was listed as one path.
+    const { requests } = await setup();
+    const folder = path.join(root, 'Drafts');
+    await fs.mkdir(folder);
+    for (const name of ['one.txt', 'two.txt', 'three.txt'])
+      await fs.writeFile(path.join(folder, name), name);
+    const proposal = await requests.command(
+      'trash',
+      { ...target(), selection: [{ ...(await entry(folder)), directory: false }] },
+      'Move to Trash',
+    );
+    expect(requests.get(proposal.id).detail).toContain('(folder: 3 items');
+  });
+  it('hands the approved folder proofs to the Trash move, which checks them again as it runs (2026-10-20)', async () => {
+    // Checked at approval only, a nested edit while the move waited in the queue went unnoticed.
+    const { execute, requests } = await setup();
+    const folder = path.join(root, 'Drafts');
+    await fs.mkdir(folder);
+    await fs.writeFile(path.join(folder, 'one.txt'), 'reviewed');
+    const proposal = await requests.command(
+      'trash',
+      { ...target(), selection: [await entry(folder)] },
+      'Move to Trash',
+    );
+    await requests.review(proposal.id, true);
+    const contents = (execute.mock.calls[0] as unknown[])[2] as ReadonlyMap<string, string>;
+    expect([...contents.keys()]).toEqual([folder]);
   });
   it('requires fresh review and refuses grants that could bypass removal approval', async () => {
     const { settings, execute, requests } = await setup();

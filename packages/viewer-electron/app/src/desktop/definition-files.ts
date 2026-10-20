@@ -2,9 +2,9 @@ import { constants } from 'node:fs';
 import { open, lstat, rename, type FileHandle } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { parse, applyEdits, modify, printParseErrorCode, type ParseError } from 'jsonc-parser';
+import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import type { ZodType } from 'zod';
-import { configChanges } from './configuration';
+import { applyConfigEdits, configEdits } from './configuration-edits';
 import { fileCoordination } from './file-coordination';
 import { missingDefinitionCode, type DefinitionDocument } from '../domain/definitions';
 import { discardOwnTemporaryFile } from './removal';
@@ -202,18 +202,14 @@ export class DefinitionFiles<T> {
   private text(before: string | null, definition: T): string {
     let text = before;
     if (this.format) text = this.format.serialize(definition);
-    else if (text) {
-      for (const change of configChanges(
-        decodeDefinition(text, this.schema, this.title, this.limit),
-        definition,
-      ))
-        text = applyEdits(
-          text,
-          modify(text, change.keys, change.value, {
-            formattingOptions: { insertSpaces: true, tabSize: 2 },
-          }),
-        );
-    } else text = this.comments + JSON.stringify(definition, null, 2) + '\n';
+    // item by item, so the comments beside steps and planes that did not change stay (2026-10-20)
+    else if (text)
+      text = applyConfigEdits(
+        text,
+        configEdits(decodeDefinition(text, this.schema, this.title, this.limit), definition),
+        { insertSpaces: true, tabSize: 2 },
+      );
+    else text = this.comments + JSON.stringify(definition, null, 2) + '\n';
     decodeDefinition(text, this.schema, this.title, this.limit);
     return text;
   }
@@ -229,7 +225,8 @@ export class DefinitionFiles<T> {
       try {
         await handle.writeFile(text);
         if (before !== null) await keepMetadata(actual, handle);
-        else if (this.format) await handle.chmod(this.format.mode);
+        // a new project or workflow is a document like any other: it was private (0600) (2026-10-20)
+        else await handle.chmod(this.format?.mode ?? 0o644);
         await handle.sync();
       } finally {
         await handle.close();

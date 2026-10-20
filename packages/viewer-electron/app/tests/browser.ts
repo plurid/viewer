@@ -46,6 +46,11 @@ const api: ViewerAPI = {
   configOpen: () => invoke('configOpen'),
   configValidate: () => invoke('configValidate'),
   configTransfer: (kind) => invoke('configTransfer', kind),
+  configRestore: () => invoke('configRestore'),
+  providerPermissionAgents: (id, endpoint, allow) =>
+    invoke('providerPermissionAgents', id, endpoint, allow),
+  settingsCategory: (category) => invoke('settingsCategory', category),
+  agentAccess: (request) => invoke('agentAccess', request),
   terminalApplication: () => invoke('terminalApplication'),
   terminalExternal: (cwd, tmux) => invoke('terminalExternal', cwd, tmux),
   terminalStart: (request) => invoke('terminalStart', request),

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { SettingsPatch, SettingsSnapshot } from '../../domain/services';
 import type { CustomAction, TerminalProfile } from '../../domain/automation';
 import { Field } from './SettingField';
+import { referencesTo } from '../../domain/references';
 import { Icon } from './Icon';
 import {
   customActionEdit,
@@ -47,6 +48,29 @@ function JsonField({
         {error && <small role="alert">{error}</small>}
       </div>
     </div>
+  );
+}
+/** A Remove button for an item others use: kept, naming them, until they change (2026-10-20). */
+export function ReferencedRemove({
+  users,
+  onRemove,
+  children,
+}: {
+  users: string[];
+  onRemove(): void;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <button disabled={!!users.length} onClick={onRemove}>
+        {children}
+      </button>
+      {!!users.length && (
+        <p className="settings-note">
+          Used by {users.join(', ')}. Change or remove {users.length === 1 ? 'it' : 'them'} first.
+        </p>
+      )}
+    </>
   );
 }
 export function TerminalSettings({ snapshot, save }: EditingProps) {
@@ -124,13 +148,14 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
             save={(env) => profile(item.id, { env: env as Record<string, string> })}
           />
           {value.profiles.length > 1 && item.id !== value.profileID && (
-            <button
-              onClick={() =>
+            <ReferencedRemove
+              users={referencesTo(snapshot.settings, 'profile', item.id)}
+              onRemove={() =>
                 patchProfiles((profiles) => profiles.filter((profile) => profile.id !== item.id))
               }
             >
               Remove profile
-            </button>
+            </ReferencedRemove>
           )}
         </details>
       ))}
@@ -343,7 +368,7 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
                   kind === 'builtin'
                     ? { kind, command: 'open-terminal' }
                     : kind === 'recipe'
-                      ? { kind, recipeID: 'rename' }
+                      ? { kind, recipeID: snapshot.settings.recipes[0]?.id ?? 'rename' }
                       : kind === 'terminal'
                         ? { kind, profileID: snapshot.settings.terminals.profileID }
                         : kind === 'shell'
@@ -522,6 +547,43 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
           {message}
         </p>
       ))}
+      {config?.fallback === 'last-valid' && (
+        <p className="settings-error" role="alert">
+          Viewer runs on the last valid copy of config.jsonc until the file is fixed.
+        </p>
+      )}
+      {config?.fallback === 'defaults' && (
+        <p className="settings-error" role="alert">
+          config.jsonc and its last valid copy cannot be read. Viewer runs on its defaults and saves
+          nothing until config.jsonc is fixed.
+        </p>
+      )}
+      {config?.missing && (
+        <div className="settings-error" role="alert">
+          <p>
+            config.jsonc was removed. Viewer keeps the current settings and writes the file again
+            with your next change.
+          </p>
+          <button onClick={() => run(window.viewer.configRestore(), 'config.jsonc was restored.')}>
+            Restore config.jsonc
+          </button>
+        </div>
+      )}
+      {config?.restored && <p role="status">{config.restored}</p>}
+      {!!config?.warnings?.length && (
+        <>
+          <h2>References to missing items</h2>
+          <p className="settings-note">
+            These stay in config.jsonc; the action or recipe that uses one fails until it is
+            changed.
+          </p>
+          <ul className="settings-warnings">
+            {config.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </>
+      )}
       {message && <p role="status">{message}</p>}
       <h2>Recent changes</h2>
       {config?.changes.length ? (
