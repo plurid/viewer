@@ -222,6 +222,7 @@ export class AgentBroker {
     await this.tokenStore.save(token);
     this.token = token;
     await this.stop(sharedClientID);
+    await this.extension?.requests.revokeGrants(sharedClientID);
     for (const stream of this.streams) stream.destroy();
     return token;
   }
@@ -243,6 +244,8 @@ export class AgentBroker {
         : undefined,
     );
     await this.stop(request.id);
+    // a revoked client's grants could never be used again
+    if (request.kind === 'revoke') await this.extension?.requests.revokeGrants(request.id);
     return result;
   }
   async stop(clientID: string): Promise<void> {

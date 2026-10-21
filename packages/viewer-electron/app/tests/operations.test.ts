@@ -1090,6 +1090,149 @@ describe('reviewed work that waits (2026-10-20)', () => {
     expect(outcome).toBe('done');
     expect(operations.all().find((job) => job.id === holder)?.status).toBe('collision');
   });
+  describe('an Undo beside a waiting prompt (2026-10-21)', () => {
+    // Undo waited for the whole queue, so an unanswered prompt anywhere held every Undo behind it.
+    let hold: { file: string; reached: boolean; release: () => void } | undefined;
+    let released = Promise.resolve();
+    /** Holds the next access check of `file`: an Undo's first step, once it has started. */
+    const holdAt = (file: string) => {
+      let release!: () => void;
+      released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      hold = { file, reached: false, release };
+      return hold;
+    };
+    beforeEach(async () => {
+      await operations.close();
+      hold = undefined;
+      operations = new Operations(
+        async (file) => {
+          await rename(file, path.join(trash, path.basename(file) + '-' + crypto.randomUUID()));
+        },
+        () => undefined,
+        undefined,
+        undefined,
+        async (files) => {
+          if (!hold || !files.includes(hold.file)) return;
+          hold.reached = true;
+          await released;
+        },
+      );
+    });
+    const status = (id: string) => operations.all().find((job) => job.id === id)?.status;
+    const settles = (work: Promise<unknown>, wait = 300) =>
+      Promise.race([
+        work.then(
+          () => 'done',
+          () => 'failed',
+        ),
+        new Promise((resolve) => setTimeout(() => resolve('waiting'), wait)),
+      ]);
+    /** A completed move in a folder of its own, which no held job involves. */
+    async function elsewhere() {
+      const folder = path.join(root, 'other');
+      await mkdir(path.join(folder, 'moved'), { recursive: true });
+      const original = path.join(folder, 'a.txt');
+      await writeFile(original, 'a');
+      const { id } = await run({
+        kind: 'move',
+        sources: [original],
+        destination: path.join(folder, 'moved'),
+      });
+      return { id, original, moved: path.join(folder, 'moved', 'a.txt') };
+    }
+    it('runs an unrelated Undo while a job waits at its prompt; a related one waits', async () => {
+      const near = path.join(root, 'near.txt');
+      await writeFile(near, 'near');
+      const related = await run({ kind: 'move', sources: [near], destination });
+      const unrelated = await elsewhere();
+      const holder = await held();
+      expect(await settles(operations.undo(unrelated.id), 3000)).toBe('done');
+      expect(await readFile(unrelated.original, 'utf8')).toBe('a');
+      expect(status(holder)).toBe('collision');
+      // it would put a file back into the folder the held job copies into
+      const waiting = operations.undo(related.id);
+      expect(await settles(waiting)).toBe('waiting');
+      operations.resolve(holder, 'skip', false);
+      await waiting;
+      expect(await readFile(near, 'utf8')).toBe('near');
+    });
+    it('holds the answered job, and a job queued meanwhile, until the Undo ends', async () => {
+      const unrelated = await elsewhere();
+      const holder = await held();
+      const gate = holdAt(unrelated.moved);
+      const undoing = operations.undo(unrelated.id);
+      await vi.waitFor(() => expect(gate.reached).toBe(true), { timeout: 3000 });
+      const later = operations.start({ kind: 'mkdir', sources: [], destination, name: 'Later' });
+      operations.resolve(holder, 'replace', false);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(await readFile(path.join(destination, 'held.txt'), 'utf8')).toBe('old');
+      expect(status(later)).toBe('queued');
+      gate.release();
+      await undoing;
+      expect((await waitFor(holder)).status).toBe('completed');
+      expect(await readFile(path.join(destination, 'held.txt'), 'utf8')).toBe('new');
+      expect((await waitFor(later)).status).toBe('completed');
+    });
+    it('closes only once an Undo running beside a prompt has ended', async () => {
+      const unrelated = await elsewhere();
+      const holder = await held();
+      const gate = holdAt(unrelated.moved);
+      const undoing = operations.undo(unrelated.id);
+      await vi.waitFor(() => expect(gate.reached).toBe(true), { timeout: 3000 });
+      const closing = operations.close();
+      expect(await settles(closing, 100)).toBe('waiting');
+      gate.release();
+      await Promise.all([closing, undoing]);
+      expect(await readFile(unrelated.original, 'utf8')).toBe('a');
+      expect(status(holder)).toBe('cancelled');
+    });
+    it('runs one Undo when it is asked for twice', async () => {
+      const unrelated = await elsewhere();
+      await Promise.all([operations.undo(unrelated.id), operations.undo(unrelated.id)]);
+      expect(await readFile(unrelated.original, 'utf8')).toBe('a');
+    });
+    it('waits while a paused rename would write beside what the Undo puts back', async () => {
+      const folder = path.join(root, 'folder');
+      const away = path.join(root, 'away');
+      await mkdir(folder);
+      await mkdir(away);
+      await writeFile(path.join(folder, 'sibling.txt'), 'sibling');
+      const moved = await run({
+        kind: 'move',
+        sources: [path.join(folder, 'sibling.txt')],
+        destination: away,
+      });
+      await writeFile(path.join(folder, 'x.txt'), 'x');
+      await writeFile(path.join(folder, 'y.txt'), 'y');
+      const renaming = operations.start({
+        kind: 'rename',
+        sources: [path.join(folder, 'x.txt')],
+        name: 'y.txt',
+      });
+      await waitFor(renaming, (job) => job.status === 'collision');
+      const waiting = operations.undo(moved.id);
+      expect(await settles(waiting)).toBe('waiting');
+      operations.resolve(renaming, 'skip', false);
+      await waiting;
+      expect(await readFile(path.join(folder, 'sibling.txt'), 'utf8')).toBe('sibling');
+    });
+  });
+  it('counts what Quit would cancel, and says when it is done (2026-10-21)', async () => {
+    // Quit asks before cancelling: a job waiting at its prompt counts until it is answered.
+    const holder = await held();
+    expect(operations.pendingCount()).toBe(1);
+    let drained = false;
+    const done = operations.drained().then(() => {
+      drained = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(drained).toBe(false);
+    operations.resolve(holder, 'skip', false);
+    await done;
+    expect(operations.pendingCount()).toBe(0);
+  });
   it('still waits for a related job, which it cancels', async () => {
     const holder = await held();
     await operations.quiesce(root);

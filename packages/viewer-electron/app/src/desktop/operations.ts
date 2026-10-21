@@ -93,6 +93,10 @@ export class Operations {
   /** The queued job in progress and exclusive work in progress, which quiesce waits for. */
   private active?: Task;
   private exclusiveActive = false;
+  /** Exclusive work asked for and not finished: an Undo, a plan apply, a Trash restore. */
+  private exclusivePending = 0;
+  /** Each job's Undo in progress, which a second Undo of it joins. */
+  private undoing = new Map<string, Promise<void>>();
   private settled: (() => void)[] = [];
   private journal?: OperationLog;
   private loaded?: Promise<void>;
@@ -377,6 +381,39 @@ export class Operations {
   private settle(): void {
     for (const resolve of this.settled.splice(0)) resolve();
   }
+  /** Whether exclusive work over `footprint` may run while the current job waits at its prompt. */
+  private besidePrompt(footprint: string[]): boolean {
+    const active = this.active;
+    if (this.exclusiveActive || !active?.decision || active.job.status !== 'collision')
+      return false;
+    // Waiting is always safe, so other case and Unicode spellings match too, as in quiesce.
+    const key = (file: string) =>
+      file
+        .normalize('NFC')
+        .toLocaleLowerCase('en-US')
+        .replace(/[\\/]+$/, '');
+    const own = footprint.filter(Boolean).map(key);
+    const related = (file: string) => {
+      const other = key(file);
+      return own.some(
+        (mine) =>
+          mine === other || mine.startsWith(other + path.sep) || other.startsWith(mine + path.sep),
+      );
+    };
+    return ![active, ...this.queue].some((task) => this.footprint(task).some(related));
+  }
+  /** What a job reads or changes: its sources and destination, the folder a rename, duplicate,
+   * alias or conversion writes into, and the paths its prompt asks about. */
+  private footprint({ request, job }: Task): string[] {
+    const besideSources = ['rename', 'duplicate', 'alias', 'convert'].includes(request.kind);
+    return [
+      ...request.sources,
+      ...(besideSources ? request.sources.map((file) => path.dirname(file)) : []),
+      request.destination ?? '',
+      job.collision?.source ?? '',
+      job.collision?.destination ?? '',
+    ].filter(Boolean);
+  }
   /** An item put back from the Trash takes its Trash step with it, so Undo is no longer offered
    * for it and the Trash stops showing it as Viewer's (2026-10-20: Undo stayed offered and
    * failed with a raw ENOENT). */
@@ -398,15 +435,40 @@ export class Operations {
     if (applyAll) task.policy = decision;
     task.decision(decision);
   }
+  /** What Quit would cancel: queued, running and prompting jobs, and exclusive work. */
+  pendingCount(): number {
+    let jobs = 0;
+    for (const { job } of this.tasks.values())
+      if (job.status === 'queued' || job.status === 'running' || job.status === 'collision') jobs++;
+    return jobs + this.exclusivePending;
+  }
+  /** Resolves once nothing is pending; a job waiting at its prompt waits for its answer. */
+  async drained(): Promise<void> {
+    while (this.pendingCount() > 0) await new Promise<void>((resolve) => this.idle.push(resolve));
+  }
   async close(): Promise<void> {
     this.stopped = true;
     for (const task of this.tasks.values()) this.cancel(task.job.id);
-    if (this.running) await new Promise<void>((resolve) => this.idle.push(resolve));
+    // a loop: a wake-up from finished exclusive work can come while the queue runs on
+    while (this.running || this.exclusiveActive)
+      await new Promise<void>((resolve) => this.idle.push(resolve));
     await this.journal?.flush();
   }
-  async undo(id: string): Promise<void> {
-    await this.load();
-    return this.exclusive(async () => this.undoTask(id));
+  undo(id: string): Promise<void> {
+    // a second ⌘Z while the first Undo waits would fail: the job is no longer undoable once it ran
+    let undoing = this.undoing.get(id);
+    if (!undoing) {
+      undoing = this.load()
+        .then(() =>
+          this.exclusive(
+            async () => this.undoTask(id),
+            () => (this.tasks.get(id)?.undo ?? []).flatMap((step) => [step.from, step.to]),
+          ),
+        )
+        .finally(() => this.undoing.delete(id));
+      this.undoing.set(id, undoing);
+    }
+    return undoing;
   }
   private async undoTask(id: string): Promise<void> {
     const task = this.tasks.get(id);
@@ -645,12 +707,20 @@ export class Operations {
         signal?: AbortSignal,
       ) => Promise<void>,
     ) => Promise<T>,
+    /** The paths the work changes. With them it may also run while the current job waits at its
+     * prompt, when neither that job nor a queued one involves them; the job goes on once it ends.
+     * An Undo waited for the whole queue, so behind any unanswered prompt (2026-10-21). */
+    footprint?: () => string[],
   ): Promise<T> {
+    this.exclusivePending++;
     const task = this.exclusiveQueue
       .catch(() => {})
       .then(async () => {
-        while (this.running) await new Promise<void>((resolve) => this.idle.push(resolve));
+        while (this.running && !(footprint && this.besidePrompt(footprint())))
+          await new Promise<void>((resolve) => this.settled.push(resolve));
         if (this.stopped) throw new Error('The operation service is closed.');
+        // beside a prompt, `running` stays the queue's
+        const beside = this.running;
         this.running = true;
         this.exclusiveActive = true;
         try {
@@ -658,12 +728,16 @@ export class Operations {
             publish(source, destination, this.access, undefined, guard, signal),
           );
         } finally {
-          this.running = false;
+          if (!beside) this.running = false;
           this.exclusiveActive = false;
           this.settle();
           for (const resolve of this.idle.splice(0)) resolve();
           void this.run();
         }
+      })
+      .finally(() => {
+        this.exclusivePending--;
+        for (const resolve of this.idle.splice(0)) resolve();
       });
     this.exclusiveQueue = task.then(
       () => {},
@@ -765,11 +839,14 @@ export class Operations {
         task.decision = resolve;
       });
       this.emit(task);
+      // an Undo waiting for the queue may run meanwhile
+      this.settle();
       decision = await pending;
       task.decision = undefined;
       task.job.collision = undefined;
       task.job.status = 'running';
       this.emit(task);
+      while (this.exclusiveActive) await new Promise<void>((resolve) => this.settled.push(resolve));
     }
     this.check(task);
     if (decision === 'cancel') {
@@ -896,7 +973,11 @@ export class Operations {
     try {
       await this.load();
       while (this.queue.length) {
-        const task = this.queue.shift()!;
+        // nor does a job start while one runs beside a prompt
+        while (this.exclusiveActive)
+          await new Promise<void>((resolve) => this.settled.push(resolve));
+        const task = this.queue.shift();
+        if (!task) break;
         currentTask = task;
         this.active = task;
         this.settle();

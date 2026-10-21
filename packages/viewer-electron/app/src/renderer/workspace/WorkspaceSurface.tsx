@@ -16,12 +16,7 @@ import {
   usePluridPlane,
   type PluridApplicationHandle,
 } from '@plurid/plurid-react';
-import {
-  PLURID_PUBSUB_TOPIC,
-  type PluridApi,
-  type PluridPartialConfiguration,
-  type PluridPlane,
-} from '@plurid/plurid-data';
+import { PLURID_PUBSUB_TOPIC, type PluridApi, type PluridPlane } from '@plurid/plurid-data';
 import { activeWorkspace, report, setActivePane, storageAdapter, useViewer } from '../state/store';
 import { SearchExplorer } from '../explorer/SearchExplorer';
 import { CollectionExplorer } from '../explorer/CollectionExplorer';
@@ -36,7 +31,7 @@ import { frameWorkspace, refitWorkspace } from './framing';
 export { frameWorkspace } from './framing';
 import { focusFiles } from './sessions';
 import { useWorkspace } from './context';
-import { looks } from './look';
+import { surfaceConfiguration } from './surface-configuration';
 import { routeFileKeyboard } from '../explorer/selection';
 
 import { flattenTree, hostID } from './tree';
@@ -180,63 +175,8 @@ export function WorkspaceSurface({
   // A new epoch (workspace reset) needs a fresh adapter for the same workspace ID.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const storage = useMemo(() => storageAdapter(space.id), [space.id, space.epoch]);
-  const configuration = useMemo<PluridPartialConfiguration>(
-    () => ({
-      global: { look: looks[look] },
-      space: {
-        dimensions: { width: '100%', height: '100%' },
-        presentation: 'space',
-        transformOrigin: { show: preferences.origin },
-        // Workspace persistence owns navigation; a shared window URL must not
-        // restore a plane belonging to another workspace.
-        docking: { url: false },
-        clipboard: false,
-        gestures: { wheel: 'click-to-scroll', dragHandle: 'chrome' },
-        bridge: { preset: 'reading', planeAngle: 90.1 },
-        shortcuts: {
-          // The engine's own close/reopen keys change its tree without Viewer's workspace,
-          // which then keeps (and later restores) the closed plane. Viewer's Close plane
-          // (⌥⌘W) and Undo arrangement keep both in step.
-          disabled: [
-            'palette',
-            'copy',
-            'cut',
-            'paste',
-            'undo',
-            'redo',
-            'duplicateSelection',
-            'closePlane',
-            'openClosedPlane',
-          ],
-        },
-        culling: {
-          enabled: true,
-          distance: 6000,
-          freezeDistance: 3500,
-          detach: { mode: 'unmount', delay: 1500, max: 40 },
-        },
-        navigation: { onClose: 'parent', framing: { fill: 0.92 }, childFraming: 'plane' },
-      },
-      elements: {
-        minimap: { show: preferences.minimap },
-        viewcube: { show: preferences.viewcube },
-        toolbar: { show: preferences.toolbar },
-        shortcuts: { show: false },
-        palette: { show: false },
-        // Viewer owns frame/dock commands in the workspace header. The engine's
-        // floating duplicate controls would cover preview actions when docked.
-        dockRail: { show: false },
-        // Automatic dimensions use the engine's live configuration; changing the
-        // registered routes would reconstruct its store and discard linked planes.
-        plane: {
-          width: Math.max(380, size.width - 64),
-          height: Math.max(300, size.height - 112),
-          controls: { show: preferences.planeHeaders },
-          resizable: preferences.resizing,
-          backface: 'visible',
-        },
-      },
-    }),
+  const configuration = useMemo(
+    () => surfaceConfiguration({ look, size, preferences }),
     [look, size, preferences],
   );
   useEffect(() => {

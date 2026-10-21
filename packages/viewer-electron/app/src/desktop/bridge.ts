@@ -279,6 +279,16 @@ export class Desktop {
       dataPath,
       (value) => safeStorage.encryptStringAsync(value),
       async (value) => (await safeStorage.decryptStringAsync(value)).result,
+      // a key saved before keys were tied to an endpoint is tied only once the person allows it
+      (provider) =>
+        confirmNatively(
+          [...this.windows.values()].find(
+            ({ window }) => !window.isDestroyed() && window.isFocused(),
+          )?.window ?? this.window,
+          `Send your saved ${provider.name} API key to ${modelEndpoint(provider)}?`,
+          'This key was saved before Viewer tied each key to the address it was entered for. Allow it, and it is sent only to this address from now on; to use it elsewhere, enter it again in Settings → Models.',
+          'Allow',
+        ),
     );
     this.modelPermissions = new ModelPermissions(
       dataPath,
@@ -613,6 +623,14 @@ export class Desktop {
       throw error;
     });
     return this.agentsConfiguration;
+  }
+  /** The file operations Quit would cancel. */
+  pendingOperations(): number {
+    return this.operations.pendingCount();
+  }
+  /** Resolves once no file operation is left. */
+  operationsDrained(): Promise<void> {
+    return this.operations.drained();
   }
   attach(window: BrowserWindow, role: 'viewer' | 'settings'): void {
     const sender = window.webContents.id;
@@ -1086,7 +1104,9 @@ export class Desktop {
         if (!args[1]) {
           if (provider) await this.modelPermissions.set(provider, null);
           this.emit({ type: 'model-permission', providerID: args[0] });
-        }
+        } else if (!provider)
+          // a key is tied to its provider's endpoint as it is saved: one without a provider was not
+          throw new Error('Save the provider in Settings → Models before entering its key.');
         await this.credentials.set(
           args[0],
           args[1],

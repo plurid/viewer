@@ -44,19 +44,37 @@ describe('model provider presets and adapters', () => {
     expect(await credentials.forProvider(provider)).toBe('test-only-key');
     const moved = { ...provider, kind: 'local' as const, endpoint: 'https://collector.example' };
     await expect(credentials.forProvider(moved)).rejects.toThrow('changed after its API key');
-    // A key saved without a binding is bound to the provider on first use.
-    const unbound = { ...provider, id: 'unbound' };
+  });
+  it('asks once before an older key is tied to the endpoint it would be sent to (2026-10-21)', async () => {
+    // A key saved before keys were tied to an endpoint was tied, silently, to whatever endpoint
+    // config.jsonc named at its first use.
+    const provider = { ...newModelProvider('openrouter', 'unbound'), model: 'fixture-model' };
     await credentials.set('unbound', 'older-key');
-    expect(await credentials.forProvider(unbound)).toBe('older-key');
+    await expect(credentials.forProvider(provider)).rejects.toThrow('saved before');
+    const decrypt = vi.fn(async (value: Buffer) => value.toString());
+    const confirm = vi.fn(async () => false);
+    const asking = new Credentials(root, async (value) => Buffer.from(value), decrypt, confirm);
+    await expect(asking.forProvider(provider)).rejects.toThrow('saved before');
+    // a key not allowed is not even read
+    expect(decrypt).not.toHaveBeenCalled();
+    confirm.mockResolvedValue(true);
+    const [first, second] = await Promise.all([
+      asking.forProvider(provider),
+      asking.forProvider(provider),
+    ]);
+    expect([first, second]).toEqual(['older-key', 'older-key']);
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(await asking.forProvider(provider)).toBe('older-key');
+    expect(confirm).toHaveBeenCalledTimes(2);
     await expect(
-      credentials.forProvider({ ...unbound, endpoint: 'https://collector.example' }),
+      asking.forProvider({ ...provider, endpoint: 'https://collector.example' }),
     ).rejects.toThrow('changed after its API key');
   });
   it.each(newKinds)(
     'uses the documented %s transport, output mode and stored-key authentication',
     async (kind) => {
-      await credentials.set('fixture', 'test-only-key');
       const provider = { ...newModelProvider(kind, 'fixture'), model: 'fixture-model' };
+      await credentials.set('fixture', 'test-only-key', providerBinding(provider));
       const request = vi.fn(
         async () =>
           new Response(
@@ -197,7 +215,6 @@ describe('model provider presets and adapters', () => {
   it.each(['length', 'content_filter', 'sensitive', 'network_error'])(
     'rejects a %s response even when its partial content parses as JSON',
     async (finish_reason) => {
-      await credentials.set('fixture', 'test-only-key');
       const request = vi.fn(
         async () =>
           new Response(
@@ -205,6 +222,7 @@ describe('model provider presets and adapters', () => {
           ),
       );
       const provider = { ...newModelProvider('deepseek', 'fixture'), model: 'fixture' };
+      await credentials.set('fixture', 'test-only-key', providerBinding(provider));
       await expect(
         (await approved(provider, request as typeof fetch)).generate(
           provider,

@@ -747,4 +747,20 @@ describe('reviewed MCP workspace navigation', () => {
     await expect(call('run_action', { recipeID: 'rename', sources })).rejects.toThrow('no content');
     expect(startAction).not.toHaveBeenCalled();
   });
+  it('revokes the shared connection’s terminal grants with its token (2026-10-21)', async () => {
+    // The grants belonged to the connection, so the token given after the old one leaked kept them.
+    await requests.grant('*', files, 'terminal-read', true);
+    const named = await broker.clients.create({
+      name: 'Reader',
+      roots: [files],
+      capabilities: ['metadata', 'terminal-read'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    await requests.grant('*', files, 'terminal-read', true, named.client.id);
+    await broker.credential();
+    expect((await requests.listGrants()).map((grant) => grant.clientID)).toEqual([named.client.id]);
+    // and a revoked client's grants, which nothing could use again, go with it
+    await broker.clientRequest({ kind: 'revoke', id: named.client.id, revision: 1 });
+    expect(await requests.listGrants()).toEqual([]);
+  });
 });

@@ -49,6 +49,25 @@ export function confirmNatively(
     noLink: true,
   });
 }
+/** A native question with buttons of its own: the index of the one chosen, `cancelId` when the
+ * dialog is dismissed. */
+export async function askNatively(
+  window: BrowserWindow | undefined,
+  options: {
+    message: string;
+    detail: string;
+    buttons: string[];
+    defaultId: number;
+    cancelId: number;
+  },
+): Promise<number> {
+  const parent = window && !window.isDestroyed() ? window : undefined;
+  const box: MessageBoxOptions = { type: 'warning', noLink: true, ...options };
+  const { response } = parent
+    ? await dialog.showMessageBox(parent, box)
+    : await dialog.showMessageBox(box);
+  return response;
+}
 /** Button 1 is the only affirmative answer; closing or cancelling refuses. */
 async function showConfirmation(
   window: BrowserWindow | undefined,

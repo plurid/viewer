@@ -28,6 +28,7 @@ import { DiagnosticLog } from './desktop/diagnostics';
 import { planeAlignments, planeSizePresets } from './domain/plane-layout';
 import { applicationCSP } from './desktop/application-csp';
 import { debuggingAllowed } from './desktop/debugging';
+import { askNatively } from './desktop/native-confirmation';
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -765,10 +766,9 @@ app
 app.on('activate', () => {
   if (!mcpMode && desktop && !window && !quitPending && !quitting) void createWindow();
 });
-app.on('before-quit', (event) => {
-  if (quitting) return;
-  event.preventDefault();
-  if (quitPending) return;
+/** Asking whether to quit with file operations in progress, or waiting for them to finish. */
+let quitAsking = false;
+function beginQuit(): void {
   quitPending = true;
   // Keep the bridge and services alive until every renderer has saved and
   // Electron has closed its windows. Cleanup belongs to will-quit.
@@ -781,6 +781,43 @@ app.on('before-quit', (event) => {
     closing = true;
     app.quit();
   });
+}
+app.on('before-quit', (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  if (quitPending || quitAsking) return;
+  // Quit cancelled queued and running file operations without a word, so queued work was never
+  // done (2026-10-21). With some in progress it asks first.
+  const pending = desktop?.pendingOperations() ?? 0;
+  if (!pending) {
+    beginQuit();
+    return;
+  }
+  quitAsking = true;
+  void askNatively(window ?? undefined, {
+    message:
+      pending === 1
+        ? 'A file operation is still in progress.'
+        : `${pending} file operations are still in progress.`,
+    detail:
+      'Quitting now cancels them: what is already done stays done, and a partial copy goes to the Trash. Waiting finishes them first, then quits; answer any question they ask.',
+    buttons: ['Wait for them', 'Cancel them and quit', 'Keep Viewer open'],
+    defaultId: 0,
+    cancelId: 2,
+  })
+    .then(async (choice) => {
+      if (choice === 2) return;
+      if (choice === 0) {
+        // their questions are answered in the workspace window
+        if (!window) await createWindow();
+        await desktop?.operationsDrained();
+      }
+      beginQuit();
+    })
+    .catch((error) => console.error('Quit confirmation failed', error))
+    .finally(() => {
+      quitAsking = false;
+    });
 });
 app.on('will-quit', (event) => {
   if (disposed || !desktop) return;

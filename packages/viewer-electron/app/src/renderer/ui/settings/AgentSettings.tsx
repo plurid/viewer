@@ -109,11 +109,12 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
             />
           </label>
         ))}
-        <AgentGrants settings={settings} roots={access?.roots ?? []} />
+        {/* a new token revokes the connection's grants: the list is read again after it */}
+        <AgentGrants key={agentConfig} settings={settings} roots={access?.roots ?? []} />
         <h2>Connect a client</h2>
         <p className="settings-note">
-          Keep Viewer open for proposal review. Regenerating the token disconnects previous
-          credentials.
+          Keep Viewer open for proposal review. Generating a configuration makes a new token: it
+          disconnects previous credentials and revokes this connection's terminal read grants.
         </p>
         <div className="settings-actions">
           <button

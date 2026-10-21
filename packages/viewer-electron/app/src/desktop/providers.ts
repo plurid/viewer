@@ -20,10 +20,13 @@ export class Credentials {
   private bindingStore: DocumentStore<Record<string, string>>;
   private loaded?: Promise<void>;
   private writes: Promise<void> = Promise.resolve();
+  private confirming = new Map<string, Promise<boolean>>();
   constructor(
     dataPath: string,
     private encrypt: (value: string) => Promise<Buffer>,
     private decrypt: (value: Buffer) => Promise<string>,
+    /** Asks the person before a key saved without its endpoint is tied to this provider's. */
+    private confirmBinding?: (provider: ModelProvider) => Promise<boolean>,
   ) {
     this.store = new DocumentStore(path.join(dataPath, 'credentials-v1.json'), (value) =>
       secretSchema.parse(value),
@@ -70,11 +73,14 @@ export class Credentials {
     this.writes = write;
     return write;
   }
-  /** A key is sent only to the provider type and endpoint it was entered for. Keys
-   * saved before bindings existed are bound on first use. */
+  /**
+   * A key is sent only to the provider type and endpoint it was entered for. A key saved before keys
+   * were tied to an endpoint is tied once the person allows it, naming the endpoint: it was tied,
+   * silently, to whatever endpoint config.jsonc named at its first use (2026-10-21).
+   */
   async forProvider(provider: ModelProvider): Promise<string> {
-    const secret = await this.get(provider.id);
-    if (!secret) return '';
+    await this.load();
+    if (!this.values[provider.id]) return '';
     const expected = providerBinding(provider);
     const bound = this.bindings[provider.id];
     if (bound && bound !== expected)
@@ -82,6 +88,20 @@ export class Credentials {
         'This provider’s type or endpoint changed after its API key was saved. Enter the key again in Settings to use it there.',
       );
     if (!bound) {
+      const key = provider.id + '\n' + expected;
+      // one question for concurrent first uses
+      let asked = this.confirming.get(key);
+      if (!asked) {
+        asked = (this.confirmBinding?.(provider) ?? Promise.resolve(false)).finally(() =>
+          this.confirming.delete(key),
+        );
+        this.confirming.set(key, asked);
+      }
+      if (!(await asked))
+        throw new Error(
+          'This provider’s API key was saved before keys were tied to an endpoint. Allow it for this endpoint, or enter the key again in Settings.',
+        );
+      if (this.bindings[provider.id] === expected) return this.get(provider.id);
       const write = this.writes
         .catch(() => {})
         .then(async () => {
@@ -92,7 +112,7 @@ export class Credentials {
       this.writes = write;
       await write;
     }
-    return secret;
+    return this.get(provider.id);
   }
   async get(id: string): Promise<string> {
     await this.load();

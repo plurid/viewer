@@ -122,7 +122,9 @@ program or socket and a terminal application chosen by path. An imported or
 externally edited configuration therefore cannot run code silently; confirmations
 are stored privately outside JSONC. A provider API key is
 bound to the provider type and endpoint it was entered for and is not sent after
-either changes. Effective grants, and the agents switch and folders, stay outside JSONC;
+either changes. A key saved before keys were tied to an endpoint is
+sent only after you allow it once, in a system dialog naming the endpoint; it is then
+tied to that endpoint. Effective grants, and the agents switch and folders, stay outside JSONC;
 imported configuration cannot authorize itself. Disabling Agents rejects further
 requests and closes the server. Viewer must be running to supply context and
 review UI. Coding agents also follow the repository's [removal policy](../AGENTS.md).

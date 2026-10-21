@@ -8,7 +8,7 @@ import { FileIndex } from '../src/desktop/index-core';
 import { defaultSettings, newPlaneFolder } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences';
 import { extractDocument, localBookFields } from '../src/desktop/formats';
-import { Credentials, Providers } from '../src/desktop/providers';
+import { Credentials, Providers, providerBinding } from '../src/desktop/providers';
 import { ModelPermissions } from '../src/desktop/model-permissions';
 import { imageDimensions } from '../src/desktop/image-dimensions';
 import { imageFixture } from './media-fixtures';
@@ -688,7 +688,6 @@ describe('protected credentials and structured providers', () => {
         async (value) => Buffer.from(value),
         async (value) => value.toString(),
       );
-      await credentials.set('p', 'fixture-key');
       const json =
         kind === 'anthropic'
           ? { content: [{ type: 'tool_use', name: 'propose', input: { rows: [] } }] }
@@ -712,6 +711,7 @@ describe('protected credentials and structured providers', () => {
         model: 'fixture',
         allowContent: true,
       };
+      await credentials.set('p', 'fixture-key', providerBinding(provider));
       const permissions = new ModelPermissions(root, () => [provider]);
       await permissions.set(provider, 'full-text');
       const providers = new Providers(credentials, request as typeof fetch, permissions);

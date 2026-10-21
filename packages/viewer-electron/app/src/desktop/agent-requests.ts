@@ -164,6 +164,21 @@ export class AgentRequests {
     this.grantQueue = task;
     await task;
   }
+  /** Every grant one client holds. A regenerated token starts its connection afresh: the grants
+   * were the connection's, so the token given after the old one leaked kept them (2026-10-21). */
+  async revokeGrants(clientID: string): Promise<void> {
+    const task = this.grantQueue
+      .catch(() => {})
+      .then(async () => {
+        await this.load();
+        const next = this.grants.filter((grant) => (grant.clientID ?? sharedClientID) !== clientID);
+        if (next.length === this.grants.length) return;
+        await this.store.save(next);
+        this.grants = next;
+      });
+    this.grantQueue = task;
+    await task;
+  }
   private async allowed(
     actionID: string,
     root: string,

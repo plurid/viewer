@@ -11,6 +11,10 @@ const native = vi.hoisted(() => ({
   bridge: true,
   options: undefined as { openSettings(): Promise<void> } | undefined,
   profile: '',
+  /** File operations Quit would cancel, and when they finish. */
+  pending: 0,
+  drained: Promise.resolve(),
+  ask: vi.fn<(...args: unknown[]) => Promise<{ response: number }>>(),
 }));
 class NativeEvent {
   prevented = false;
@@ -113,6 +117,7 @@ vi.mock('electron', () => ({
     getDisplayMatching: () => ({ id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } }),
   },
   Menu: { buildFromTemplate: (value: unknown) => value, setApplicationMenu: vi.fn() },
+  dialog: { showMessageBox: native.ask },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
   crashReporter: { start: vi.fn() },
   shell: { openExternal: vi.fn(), showItemInFolder: vi.fn() },
@@ -137,6 +142,8 @@ vi.mock('../src/desktop/bridge', () => ({
     emit = vi.fn();
     flush = native.flush;
     flushSettings = native.flushSettings;
+    pendingOperations = () => native.pending;
+    operationsDrained = () => native.drained;
     constructor(_path: string, _trusted: unknown, options: typeof native.options) {
       native.options = options;
     }
@@ -166,11 +173,15 @@ beforeEach(async () => {
   native.flush.mockReset().mockResolvedValue();
   native.dispose.mockReset().mockResolvedValue();
   native.flushSettings.mockReset().mockResolvedValue();
+  native.pending = 0;
+  native.drained = Promise.resolve();
+  native.ask.mockReset().mockResolvedValue({ response: 2 });
   native.profile = await temporaryRoot('viewer-lifecycle-');
   await import('../src/main');
   await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(1));
 });
 afterEach(async () => {
+  native.pending = 0;
   application.quit();
   await vi.waitFor(() => expect(application.terminated).toBe(true));
   application.removeAllListeners();
@@ -262,6 +273,43 @@ describe('native window and application shutdown', () => {
     expect(native.dispose).toHaveBeenCalledTimes(1);
     disposal.resolve();
     await vi.waitFor(() => expect(application.terminated).toBe(true));
+  });
+  describe('Quit while file operations are in progress (2026-10-21)', () => {
+    // Quit cancelled them without a word: queued work was never done.
+    const buttons = () => (native.ask.mock.calls[0]?.[1] as { buttons: string[] }).buttons;
+    it('asks first, and Keep Viewer open keeps everything running', async () => {
+      native.pending = 2;
+      application.quit();
+      await vi.waitFor(() => expect(native.ask).toHaveBeenCalledOnce());
+      expect(buttons()).toEqual(['Wait for them', 'Cancel them and quit', 'Keep Viewer open']);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(native.flush).not.toHaveBeenCalled();
+      expect(application.terminated).toBe(false);
+      expect(TestWindow.windows.every((window) => !window.destroyed)).toBe(true);
+    });
+    it('quits as before after Cancel them and quit', async () => {
+      native.pending = 1;
+      native.ask.mockResolvedValue({ response: 1 });
+      application.quit();
+      await vi.waitFor(() => expect(application.terminated).toBe(true));
+      expect(native.flush).toHaveBeenCalledOnce();
+    });
+    it('quits once they finish after Wait for them, and a second Quit does not ask again', async () => {
+      native.pending = 1;
+      const finished = gate();
+      native.drained = finished.promise;
+      native.ask.mockResolvedValue({ response: 0 });
+      application.quit();
+      await vi.waitFor(() => expect(native.ask).toHaveBeenCalledOnce());
+      application.quit();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(native.ask).toHaveBeenCalledOnce();
+      expect(native.flush).not.toHaveBeenCalled();
+      native.pending = 0;
+      finished.resolve();
+      await vi.waitFor(() => expect(application.terminated).toBe(true));
+      expect(native.flush).toHaveBeenCalledOnce();
+    });
   });
   it('a native window close saves once and preserves services for macOS reopening', async () => {
     const save = gate();
