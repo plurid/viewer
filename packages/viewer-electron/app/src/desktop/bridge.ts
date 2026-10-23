@@ -153,7 +153,7 @@ export class Desktop {
     dataPath: string,
     private allowedURL: (url: string) => boolean,
     private options: {
-      openSettings(): Promise<void>;
+      openSettings(focus?: string): Promise<void>;
       worker: string;
       terminalWorker: string;
       ocr: string;
@@ -1022,7 +1022,7 @@ export class Desktop {
       },
       executionList: () => this.executions.list(),
       executionCancel: (args) => this.executions.cancel(args[0]),
-      openSettings: () => this.options.openSettings(),
+      openSettings: ([focus]) => this.options.openSettings(focus),
       settingsCategory: ([category]) => this.options.settingsCategory?.(category),
       settingsGet: async () => {
         await this.settings.load();
@@ -1431,6 +1431,11 @@ export class Desktop {
         return this.applications.open(args[0], args[1]);
       },
       // the path comes from Launch Services' own listing, never from the renderer
+      windowButtons: ([visible], senderID) => {
+        // a hidden title bar takes the window buttons with it; they come back with it
+        if (process.platform === 'darwin')
+          this.windows.get(senderID)?.window.setWindowButtonVisibility(visible);
+      },
       applicationIcon: async ([id]) => {
         const item = await entry(this.applications.location(id));
         return this.appIcons.get(item.path, 'small', item.modified);

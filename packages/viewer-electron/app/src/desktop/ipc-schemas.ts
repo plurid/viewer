@@ -350,7 +350,15 @@ export const schemas = {
   ]),
   executionList: z.tuple([]),
   executionCancel: z.tuple([id]),
-  openSettings: z.tuple([]),
+  openSettings: z.union([
+    z.tuple([]),
+    z.tuple([
+      z
+        .string()
+        .max(200)
+        .regex(/^[A-Za-z0-9.]+$/),
+    ]),
+  ]),
   settingsGet: z.tuple([]),
   settingsPatch: z.tuple([
     z
@@ -427,6 +435,7 @@ export const schemas = {
   nativeFilePanel: z.tuple([z.enum(['preview', 'share']), z.array(localPath).min(1).max(100)]),
   applications: z.tuple([z.array(localPath).min(1).max(2000)]),
   applicationIcon: z.tuple([id]),
+  windowButtons: z.tuple([z.boolean()]),
   chooseApplication: z.tuple([]),
   openWith: z.tuple([z.array(localPath).min(1).max(2000), id]),
   folderSizeStart: z.tuple([z.array(localPath).min(1).max(10000)]),
@@ -529,6 +538,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
   'index',
   'service-error',
   'model-permission',
+  'settings-focus',
 ];
 /**
  * Which window may call each method. Credentials, agent clients and folder revocation belong
@@ -609,6 +619,7 @@ export const methodWindows = {
   nativeFilePanel: 'viewer',
   applications: 'viewer',
   applicationIcon: 'viewer',
+  windowButtons: 'viewer',
   chooseApplication: 'viewer',
   openWith: 'viewer',
   folderSizeStart: 'viewer',

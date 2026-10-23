@@ -1,5 +1,6 @@
 import type { CustomAction } from './automation';
 import { forbiddenTrashCommands } from './trash';
+import { settingCatalog, workspaceMayChange } from './setting-catalog';
 
 export const agentRemovalPolicy = Object.freeze({
   requiresUserApproval: true,
@@ -99,6 +100,10 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
     );
   if (command === 'parent-plane' || command === 'view-open-plane')
     throw new Error('Use propose_focus_plane for an explicitly authorized destination plane.');
+  if (command.startsWith('setting.')) {
+    agentSettingCommand(command);
+    return command;
+  }
   if (command === 'paste' || command === 'paste-move')
     throw new Error(
       'Paste acts on clipboard items outside the captured selection. Use Copy To or Move To instead.',
@@ -156,6 +161,21 @@ export function agentDispatchRefusal(
   )
     return 'The action changed after it was reviewed. Ask the agent for a new proposal.';
   return undefined;
+}
+/**
+ * A setting's command an agent may propose (2026-10-23): an on/off setting or a choice the agent
+ * could also propose as configuration, and that the workspace changes itself. A number or colour
+ * opens Settings, for the person; anything else is the person's, as configuration is.
+ */
+function agentSettingCommand(command: string): void {
+  const [path = '', value] = command.slice('setting.'.length).split('=');
+  const definition = settingCatalog.find((item) => item.path === path);
+  if (!definition) throw new Error(`There is no setting “${path}”.`);
+  if (!['boolean', 'choice'].includes(definition.kind) || value === 'custom')
+    throw new Error(`“${definition.label}” is changed in Settings. Ask the person to change it.`);
+  agentConfigurationPath(path.split('.'));
+  if (!workspaceMayChange(path.split('.')))
+    throw new Error(`“${definition.label}” is changed in Settings. Ask the person to change it.`);
 }
 export function agentConfigurationPath(keys: readonly string[]): void {
   if (

@@ -3,6 +3,8 @@ import { portablePath as localPath } from '../domain/schemas';
 const sections = z.enum(['locations', 'favorites', 'recents']);
 const fields = z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size']);
 const boolean = z.boolean();
+/** A space colour; empty follows the appearance. */
+const color = z.union([z.literal(''), z.string().regex(/^#[0-9a-f]{6}$/i)]);
 export const preferencesSchema = z
   .object({
     version: z.literal(3),
@@ -21,6 +23,7 @@ export const preferencesSchema = z
         labels: z.record(localPath, z.string().min(1).max(200)),
       })
       .strict(),
+    titlebar: z.object({ visible: boolean }).strict().default({ visible: true }),
     space: z
       .object({
         toolbar: boolean,
@@ -33,6 +36,8 @@ export const preferencesSchema = z
         opening: z.enum(['face-on', 'pair', 'dock']),
         backdrop: z.enum(['opaque', 'blur', 'clear']).default('opaque'),
         backdropOpacity: z.number().int().min(0).max(100).default(60),
+        grid: boolean.default(true),
+        color: color.default(''),
         headerControls: z
           .object({
             parent: boolean.default(true),

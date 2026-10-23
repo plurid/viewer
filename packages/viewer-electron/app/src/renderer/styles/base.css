@@ -266,6 +266,39 @@ select {
 .app-titlebar select {
   -webkit-app-region: no-drag;
 }
+/* A hidden title bar (2026-10-23): out of the layout, it comes back over the space while the
+   pointer is at the window's top edge (ui/titlebar.ts), above plurid's layers and under menus. */
+.app-shell:not([data-titlebar='shown']) {
+  position: relative;
+}
+.app-shell:not([data-titlebar='shown']) > .app-main {
+  isolation: isolate;
+}
+.app-shell:not([data-titlebar='shown']) > .app-titlebar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 900;
+  background: var(--space);
+  transform: translateY(-100%);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+.app-shell[data-titlebar='revealed'] > .app-titlebar {
+  transform: none;
+  box-shadow: 0 8px 24px #0005;
+}
+.titlebar-reveal {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 899;
+  height: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell:not([data-titlebar='shown']) > .app-titlebar {
+    transition: none;
+  }
+}
 .traffic-space {
   width: 94px;
   flex-shrink: 0;

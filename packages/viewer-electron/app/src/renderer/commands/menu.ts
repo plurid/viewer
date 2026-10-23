@@ -33,6 +33,7 @@ const icons: Record<string, IconName> = {
   Space: 'model',
   Sidebar: 'sidebar',
   App: 'settings',
+  Settings: 'sliders',
   Workspace: 'dock',
   Project: 'briefcase',
   Workspaces: 'grid',
@@ -56,6 +57,7 @@ const order = [
   'Size & position',
   'Project',
   'App',
+  'Settings',
 ];
 const leaf = (command: ResolvedCommand): MenuEntry => ({
   kind: 'command',

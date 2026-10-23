@@ -5,7 +5,7 @@ import {
   type SavedState,
   type Workspace,
 } from '../../domain/contracts';
-import { migratePlaneNavigation, normalizePreferences } from '../../domain/preferences';
+import { migratePlaneNavigation, normalizePreferences, spaceColor } from '../../domain/preferences';
 import { clearSessions } from '../workspace/sessions';
 import { defaultSettings } from '../../domain/services';
 import { panePresentation, resolveFolderPresentation } from '../../domain/folder-presentation';
@@ -151,6 +151,15 @@ export async function newWorkspace(name: string): Promise<void> {
 }
 export function renameWorkspace(name: string): void {
   changeWorkspace((space) => ({ ...space, name }));
+}
+/** The active workspace's own space colour; empty goes back to the general one (2026-10-23). */
+export function setWorkspaceSpaceColor(color: string): void {
+  const chosen = spaceColor(color);
+  changeWorkspace((space) => {
+    if (space.spaceColor === chosen) return space;
+    const { spaceColor: _previous, ...rest } = space;
+    return chosen ? { ...rest, spaceColor: chosen } : rest;
+  });
 }
 /** Removes only saved Viewer layout. No filesystem service is involved. */
 export async function deleteWorkspace(id: string): Promise<void> {

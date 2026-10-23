@@ -8,6 +8,7 @@ const paths = {
   text: 'M5 6V4h14v2M12 4v16m-3 0h6',
   briefcase: 'M3 8h18v12H3V8Zm6 0V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3M3 13h18',
   compass: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm3.5 5.5-2 5-5 2 2-5 5-2Z',
+  sliders: 'M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4',
   share: 'M12 16V3m-4 4 4-4 4 4M7 11H3v10h18V11h-4',
   drive: 'M5 4h14l3 11v5H2v-5L5 4Zm-3 11h20M6 18h.01M10 18h.01',
   eject: 'm12 3 8 11H4L12 3ZM4 18h16v3H4v-3Z',

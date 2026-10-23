@@ -378,6 +378,32 @@ function menu(): void {
             accelerator: accelerator(settings?.shortcuts['toggle-sidebar'] ?? 'Cmd+Alt+S'),
             click: command('toggle-sidebar'),
           },
+          {
+            label: 'Show / Hide Title Bar',
+            accelerator: accelerator(settings?.shortcuts['toggle-titlebar'] ?? 'Cmd+Alt+T'),
+            click: command('toggle-titlebar'),
+          },
+          // every setting is a command (2026-10-23): the space's own chrome, here too
+          {
+            label: 'Show / Hide Space Toolbar',
+            accelerator: accelerator(settings?.shortcuts['setting.ui.space.toolbar'] ?? ''),
+            click: command('setting.ui.space.toolbar'),
+          },
+          {
+            label: 'Show / Hide Minimap',
+            accelerator: accelerator(settings?.shortcuts['setting.ui.space.minimap'] ?? ''),
+            click: command('setting.ui.space.minimap'),
+          },
+          {
+            label: 'Show / Hide Viewcube',
+            accelerator: accelerator(settings?.shortcuts['setting.ui.space.viewcube'] ?? ''),
+            click: command('setting.ui.space.viewcube'),
+          },
+          {
+            label: 'Show / Hide Background Grid',
+            accelerator: accelerator(settings?.shortcuts['setting.ui.space.grid'] ?? ''),
+            click: command('setting.ui.space.grid'),
+          },
           { label: 'Show / Hide Plane Navigation', click: command('plane-sidebar') },
           { label: 'View Side by Side', click: command('view-side-by-side') },
           { label: 'View Stacked', click: command('view-stacked') },
@@ -609,7 +635,7 @@ function rememberWindow(created: BrowserWindow): void {
     captureWindowFrame(created, screen.getDisplayMatching(created.getBounds())),
   );
 }
-async function openSettingsWindow(): Promise<void> {
+async function openSettingsWindow(focus?: string): Promise<void> {
   await settingsClosing;
   if (!desktop || quitPending || quitting) return;
   if (settingsWindow && !settingsWindow.isDestroyed()) {
@@ -617,6 +643,8 @@ async function openSettingsWindow(): Promise<void> {
       settingsWindow.show();
       settingsWindow.focus();
     }
+    // a setting's command: Settings shows that setting
+    if (focus) desktop.emit({ type: 'settings-focus', path: focus });
     return;
   }
   await desktop.settings.load();
@@ -687,6 +715,7 @@ async function openSettingsWindow(): Promise<void> {
   const url = new URL(devURL || 'viewer-app://app/index.html');
   url.searchParams.set('window', 'settings');
   url.searchParams.set('category', settingsWindowState?.value?.category ?? legacy?.category ?? '');
+  if (focus) url.searchParams.set('focus', focus);
   try {
     await created.loadURL(url.toString());
   } catch (error) {

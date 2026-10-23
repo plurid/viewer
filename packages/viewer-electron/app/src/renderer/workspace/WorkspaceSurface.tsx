@@ -187,8 +187,8 @@ export function WorkspaceSurface({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const storage = useMemo(() => storageAdapter(space.id), [space.id, space.epoch]);
   const configuration = useMemo(
-    () => surfaceConfiguration({ look, size, preferences }),
-    [look, size, preferences],
+    () => surfaceConfiguration({ look, size, preferences, color: space.spaceColor }),
+    [look, size, preferences, space.spaceColor],
   );
   useEffect(() => {
     if (!api) return;

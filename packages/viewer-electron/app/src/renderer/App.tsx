@@ -54,6 +54,8 @@ import { RelationshipControls } from './ui/Relationships';
 import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
+import { useTitlebar } from './ui/titlebar';
+import { WorkspaceBackgroundDialog } from './ui/WorkspaceBackgroundDialog';
 import { openTerminalFind } from './terminals/find';
 import { CommandsContext, useCommands, useCommandSource } from './commands/context';
 import { CommandRegistry, type CommandContext } from './commands/registry';
@@ -116,7 +118,7 @@ function AppWindow() {
     void recoverBuffers().catch(report);
   }, [ready]);
   const [workspaceDialog, setWorkspaceDialog] = useState<{
-    kind: 'new' | 'rename' | 'delete';
+    kind: 'new' | 'rename' | 'delete' | 'background';
     id: string;
   } | null>(null);
   const [shortcutDialog, setShortcutDialog] = useState<{ path: string; name: string } | null>(null);
@@ -146,6 +148,8 @@ function AppWindow() {
   const [showWorkspaceUndo, setShowWorkspaceUndo] = useState(false);
   const initialOpenHandled = useRef(false);
   const saved = useViewer((state) => state.saved);
+  // ⌥⌘T hides the title bar; it comes back at the window's top edge (ui/titlebar.ts)
+  const titlebar = useTitlebar(saved.ui.titlebar.visible);
   const activePane = useViewer((state) => state.activePane);
   const space = useViewer(activeWorkspace);
   const bootstrap = useViewer((state) => state.bootstrap);
@@ -612,10 +616,22 @@ function AppWindow() {
       <CollectionControls />
       <WorkflowControls />
       <RelationshipControls />
-      <div className="app-shell" data-look={saved.look} data-density={density}>
+      <div
+        className="app-shell"
+        data-look={saved.look}
+        data-density={density}
+        data-titlebar={titlebar.state}
+      >
         <AgentReview />
         <ExecutionPanel />
-        <header className="app-titlebar">
+        {titlebar.state !== 'shown' && (
+          <div className="titlebar-reveal" aria-hidden onPointerEnter={titlebar.reveal} />
+        )}
+        <header
+          className="app-titlebar"
+          onPointerEnter={titlebar.state === 'shown' ? undefined : titlebar.reveal}
+          onPointerLeave={titlebar.state === 'shown' ? undefined : titlebar.conceal}
+        >
           <div className="traffic-space" />
           <IconButton
             icon="sidebar"
@@ -727,22 +743,27 @@ function AppWindow() {
             }
           />
         )}
-        {workspaceDialog && workspaceDialog.kind !== 'delete' && (
-          <NameDialog
-            title={workspaceDialog.kind === 'new' ? 'New workspace' : 'Rename workspace'}
-            maxLength={100}
-            initial={workspaceDialog.kind === 'rename' ? targetWorkspace?.name : ''}
-            action={workspaceDialog.kind === 'new' ? 'Create' : 'Rename'}
-            onClose={() => setWorkspaceDialog(null)}
-            onSubmit={async (name) => {
-              name = name.trim();
-              if (!name) throw new Error('Enter a workspace name.');
-              if (workspaceDialog.kind === 'new') {
-                await transitionWorkspace(() => newWorkspace(name));
-              } else if (targetWorkspace?.id === activeWorkspace().id) renameWorkspace(name);
-            }}
-          />
+        {workspaceDialog?.kind === 'background' && (
+          <WorkspaceBackgroundDialog onClose={() => setWorkspaceDialog(null)} />
         )}
+        {workspaceDialog &&
+          workspaceDialog.kind !== 'delete' &&
+          workspaceDialog.kind !== 'background' && (
+            <NameDialog
+              title={workspaceDialog.kind === 'new' ? 'New workspace' : 'Rename workspace'}
+              maxLength={100}
+              initial={workspaceDialog.kind === 'rename' ? targetWorkspace?.name : ''}
+              action={workspaceDialog.kind === 'new' ? 'Create' : 'Rename'}
+              onClose={() => setWorkspaceDialog(null)}
+              onSubmit={async (name) => {
+                name = name.trim();
+                if (!name) throw new Error('Enter a workspace name.');
+                if (workspaceDialog.kind === 'new') {
+                  await transitionWorkspace(() => newWorkspace(name));
+                } else if (targetWorkspace?.id === activeWorkspace().id) renameWorkspace(name);
+              }}
+            />
+          )}
         {workspaceDialog?.kind === 'delete' && targetWorkspace && (
           <Dialog
             title="Delete workspace?"

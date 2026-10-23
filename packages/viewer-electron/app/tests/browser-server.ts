@@ -430,6 +430,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return { applications: [], supported: false };
     case 'applicationIcon':
       return '';
+    case 'windowButtons':
+      return undefined;
     case 'chooseApplication':
       return null;
     case 'openWith':

@@ -10,6 +10,7 @@ import { previewsCommands } from './window-commands/previews';
 import { textCommands } from './window-commands/text';
 import { sidebarCommands } from './window-commands/sidebar';
 import { catalogCommands } from './window-commands/catalog';
+import { settingsCommands } from './window-commands/settings';
 import { windowScopes, type WindowActions } from './window-commands/scope';
 
 export type { WindowActions };
@@ -28,6 +29,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     ...textCommands(scopes),
     ...sidebarCommands(scopes),
     ...catalogCommands(scopes),
+    ...settingsCommands(scopes),
     ...actionCommands(),
   ];
 }

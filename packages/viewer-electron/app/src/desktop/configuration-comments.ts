@@ -239,6 +239,12 @@ const descriptions: Record<string, string[]> = {
   'ui.sidebar.labels': [
     'Optional display labels keyed by absolute location path. This does not rename folders.',
   ],
+  'ui.titlebar': [
+    'Viewer’s title bar. visible false hides it (⌥⌘T); it comes back while the pointer is at the window’s top edge.',
+  ],
+  'ui.space.color': [
+    'The space’s colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace background…).',
+  ],
   'ui.space': [
     'Spatial navigation and plane chrome. Child planes retain the normal 90.1-degree parent relationship.',
   ],

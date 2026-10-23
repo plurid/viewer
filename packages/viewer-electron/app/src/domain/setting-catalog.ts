@@ -7,11 +7,41 @@ export interface SettingDefinition {
   label: string;
   detail?: string;
   section?: string;
-  kind: 'boolean' | 'choice' | 'number';
+  /** `color`: a `#rrggbb` colour, or empty for the automatic one. */
+  kind: 'boolean' | 'choice' | 'number' | 'color';
   choices?: [string, string][];
   min?: number;
   max?: number;
 }
+/**
+ * What the workspace window changes itself (2026-10-23): its view and presentation. Programs, Trash
+ * confirmation, agents, providers, opening rules and limits change only in Settings, which a page
+ * the workspace shows cannot reach. One list for the settings service and the setting commands.
+ */
+export const workspaceSettingPaths: readonly (readonly string[])[] = [
+  ['ui'],
+  ['settings', 'folders'],
+  ['settings', 'appearance'],
+  ['settings', 'browsing'],
+  ['settings', 'savedSearches'],
+  ['settings', 'editor'],
+  ['settings', 'terminalFont'],
+];
+/** Within those, the person's own safeguards: Trash confirmation changes only in Settings. */
+export const settingsOnlyPaths: readonly (readonly string[])[] = [
+  ['settings', 'browsing', 'confirmTrash'],
+];
+const within = (paths: readonly (readonly string[])[], keys: readonly string[]) =>
+  paths.some((prefix) => prefix.every((key, index) => keys[index] === key));
+export const workspaceMayChange = (keys: readonly string[]) =>
+  within(workspaceSettingPaths, keys) && !within(settingsOnlyPaths, keys);
+/** What a setting's label needs, away from its Settings page: its section, or its category's name
+ * where labels repeat across categories (Editor and Terminals both have a Font). */
+export const settingContext = (definition: SettingDefinition): string | undefined =>
+  definition.section ??
+  (['Editor', 'Terminals', 'Previews', 'Search'].includes(definition.category)
+    ? definition.category
+    : undefined);
 export const categories = [
   'Browsing',
   'Navigation',
@@ -350,6 +380,21 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'boolean',
   },
   {
+    path: 'ui.space.color',
+    category: 'Space',
+    label: 'Space colour',
+    detail:
+      'The colour behind the planes; Automatic follows the appearance. A workspace can have its own: Workspace background… in the Workspace menu.',
+    kind: 'color',
+  },
+  {
+    path: 'ui.titlebar.visible',
+    category: 'Space',
+    label: 'Show title bar',
+    detail: 'Hidden (⌥⌘T), it comes back while the pointer is at the window’s top edge.',
+    kind: 'boolean',
+  },
+  {
     path: 'ui.space.backdrop',
     category: 'Space',
     label: 'Space background',
@@ -384,7 +429,9 @@ export const settingCatalog: SettingDefinition[] = [
   },
   ...(
     [
-      ['toolbar', 'Show bottom toolbar'],
+      ['grid', 'Show background grid'],
+      // plurid's toolbar along the space's bottom: rotate, scale, translate
+      ['toolbar', 'Show space toolbar'],
       ['minimap', 'Show minimap'],
       ['viewcube', 'Show viewcube'],
       ['planeHeaders', 'Show plane headers'],

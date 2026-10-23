@@ -163,6 +163,8 @@ export interface Workspace {
   epoch?: number;
   collections?: Collection[];
   basket?: BasketItem[];
+  /** This workspace's space colour, `#rrggbb`, over the general one (2026-10-23). */
+  spaceColor?: string;
 }
 /** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
 export const CURRENT_STATE_VERSION = 5 as const;
@@ -190,6 +192,10 @@ export interface UIPreferences {
     hidden: string[];
     labels: Record<string, string>;
   };
+  /** Viewer's title bar (2026-10-23): hidden, it comes back while the pointer is at the window's top. */
+  titlebar: {
+    visible: boolean;
+  };
   space: {
     toolbar: boolean;
     minimap: boolean;
@@ -203,6 +209,10 @@ export interface UIPreferences {
     backdrop: 'opaque' | 'blur' | 'clear';
     /** How much of the space's colour is drawn over what is behind, in percent. */
     backdropOpacity: number;
+    /** The space's grid lines (2026-10-23). */
+    grid: boolean;
+    /** The space's colour, `#rrggbb`; empty follows the appearance. A workspace may have its own. */
+    color: string;
     headerControls: {
       parent: boolean;
       sidebar: boolean;
@@ -345,6 +355,8 @@ export interface ArchiveListing {
 }
 export type DesktopEvent =
   | { type: 'watch-rule'; rule: WatchRule }
+  /** Settings shows this setting: a command for a setting the workspace does not change itself. */
+  | { type: 'settings-focus'; path: string }
   | { type: 'service-error'; service: string; message: string }
   | { type: 'agent-proposal'; proposal: AgentProposal }
   | {
@@ -432,7 +444,8 @@ export interface ViewerAPI {
   executionList(): Promise<ExecutionTask[]>;
   executionCancel(id: string): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
-  openSettings(): Promise<void>;
+  /** Opens Settings; with a setting's path, at that setting (2026-10-23). */
+  openSettings(focus?: string): Promise<void>;
   settingsGet(): Promise<SettingsSnapshot>;
   settingsPatch(patches: SettingsPatch[], revision: number): Promise<SettingsSnapshot>;
   providerCredential(id: string, key: string): Promise<void>;
@@ -478,6 +491,8 @@ export interface ViewerAPI {
   chooseApplication(): Promise<NativeApplication | null>;
   /** A listed application's own icon, as a data URL (Open With rows, 2026-10-23). */
   applicationIcon(id: string): Promise<string>;
+  /** Shows or hides the window's close, minimise and zoom buttons, with a hidden title bar. */
+  windowButtons(visible: boolean): Promise<void>;
   openWith(paths: string[], applicationID: string): Promise<void>;
   folderSizeStart(paths: string[]): Promise<FolderSizeTask>;
   folderSizeGet(id: string): Promise<FolderSizeTask>;

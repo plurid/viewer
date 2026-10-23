@@ -93,6 +93,10 @@ const savedStateSchema = z
           arrangement: z.record(z.string().max(300), z.string().max(4 * 1024 * 1024)),
           collections: z.array(collectionSchema).max(200).optional(),
           basket: z.array(basketItemSchema).max(10000).optional(),
+          spaceColor: z
+            .string()
+            .regex(/^#[0-9a-f]{6}$/)
+            .optional(),
           layout: layoutSchema.optional(),
           epoch: z.number().int().min(0).optional(),
           project: z

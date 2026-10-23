@@ -67,6 +67,9 @@ export function normalizePaneSidebar(value: unknown): PaneSidebar | undefined {
   return { visible: boolean(sidebar.visible, true), width: width(sidebar.width) };
 }
 
+/** A space colour as `#rrggbb`, lowercased; anything else is no colour. */
+export const spaceColor = (value: unknown): string | undefined =>
+  typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : undefined;
 /** Invalid UI fields fall back independently; core workspace state never depends on them. */
 export function normalizePreferences(value?: unknown): UIPreferences {
   const ui = object(value);
@@ -104,6 +107,7 @@ export function normalizePreferences(value?: unknown): UIPreferences {
       hidden: paths(sidebar.hidden),
       labels: labels as Record<string, string>,
     },
+    titlebar: { visible: boolean(object(ui.titlebar).visible, true) },
     space: {
       // Restore the spatial aids once for profiles made before the controls were exposed.
       toolbar: ui.version === 2 || ui.version === 3 ? boolean(space.toolbar, true) : true,
@@ -123,6 +127,8 @@ export function normalizePreferences(value?: unknown): UIPreferences {
         typeof space.backdropOpacity === 'number' && Number.isFinite(space.backdropOpacity)
           ? Math.round(Math.min(100, Math.max(0, space.backdropOpacity)))
           : 60,
+      grid: boolean(space.grid, true),
+      color: spaceColor(space.color) ?? '',
       headerControls: {
         parent: boolean(controls.parent, true),
         sidebar: boolean(controls.sidebar, true),

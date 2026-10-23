@@ -48,7 +48,7 @@ export function changePreferences(transform: (ui: UIPreferences) => UIPreference
   const ui = transform(old);
   if (ui === old) return;
   savePatch({ ui });
-  for (const group of ['sidebar', 'space', 'list'] as const)
+  for (const group of ['sidebar', 'titlebar', 'space', 'list'] as const)
     for (const key of Object.keys(ui[group]) as (keyof (typeof ui)[typeof group])[]) {
       if (old[group][key] !== ui[group][key])
         pendingPreferences.set(`ui.${group}.${key}`, ui[group][key]);

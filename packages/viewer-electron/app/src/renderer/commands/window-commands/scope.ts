@@ -7,7 +7,7 @@ export interface WindowActions {
   ready: boolean;
   palette(mode: 'commands' | 'files' | 'workspaces'): void;
   settings(): void;
-  workspaceDialog(kind: 'new' | 'rename' | 'delete'): void;
+  workspaceDialog(kind: 'new' | 'rename' | 'delete' | 'background'): void;
   renameShortcut(path: string, name: string): void;
   switchWorkspace(id: string): Promise<void>;
   restoreWorkspace(): Promise<void>;

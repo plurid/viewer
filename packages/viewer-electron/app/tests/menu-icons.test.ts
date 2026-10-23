@@ -28,6 +28,7 @@ const groups = [
   'Project',
   'Lens',
   'Text',
+  'Settings',
   'Preview',
 ];
 const command = (group: string, index: number): ResolvedCommand => ({

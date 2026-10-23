@@ -62,9 +62,9 @@ const api: ViewerAPI = {
   executionList: () => invoke('executionList'),
   executionCancel: (id) => invoke('executionCancel', id),
 
-  openSettings: () => {
+  openSettings: (focus) => {
     window.open(
-      location.pathname + '?window=settings',
+      location.pathname + '?window=settings' + (focus ? '&focus=' + encodeURIComponent(focus) : ''),
       'viewer-fixture-settings',
       'width=900,height=640',
     );
@@ -108,6 +108,7 @@ const api: ViewerAPI = {
   nativeFilePanel: (kind, files) => invoke('nativeFilePanel', kind, files),
   applications: (paths) => invoke('applications', paths),
   applicationIcon: (id) => invoke('applicationIcon', id),
+  windowButtons: (visible) => invoke('windowButtons', visible),
   chooseApplication: () => invoke('chooseApplication'),
   openWith: (paths, id) => invoke('openWith', paths, id),
   folderSizeStart: (paths) => invoke('folderSizeStart', paths),

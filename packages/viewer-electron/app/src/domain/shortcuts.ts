@@ -7,6 +7,8 @@ export const defaultShortcuts: Record<string, string> = {
   'frame-all': 'Cmd+0',
   dock: 'Cmd+Enter',
   'toggle-sidebar': 'Cmd+Alt+S',
+  // Finder's Hide Toolbar key (2026-10-23)
+  'toggle-titlebar': 'Cmd+Alt+T',
   'go-to': 'Cmd+L',
   'open-selection': 'Cmd+O',
   parent: 'Cmd+ArrowUp',

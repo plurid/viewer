@@ -28,6 +28,15 @@ export function SettingsWindow() {
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [category, setCategory] = useState('Browsing');
   const [query, setQuery] = useState('');
+  // a setting's command opened Settings at it (2026-10-23): its category, the row shown and marked
+  const [focused, setFocused] = useState<{ path: string; at: number } | null>(null);
+  const show = (path: string) => {
+    const definition = settingCatalog.find((item) => item.path === path);
+    if (!definition) return;
+    setQuery('');
+    setCategory(definition.category);
+    setFocused({ path, at: Date.now() });
+  };
   const [error, setError] = useState('');
   const latest = useRef<SettingsSnapshot | undefined>(undefined);
   const writes = useRef<Promise<void>>(Promise.resolve());
@@ -47,11 +56,14 @@ export function SettingsWindow() {
           categories.find((category) => category.toLowerCase() === saved.toLowerCase()) ||
             'Browsing',
         );
+        const focus = new URLSearchParams(window.location.search).get('focus');
+        if (focus) show(focus);
       })
       .catch((error) => setError(error.message));
     return window.viewer.onEvent((event) => {
       if (event.type === 'service-error') setError(event.message);
       if (event.type === 'settings') accept(event.snapshot);
+      if (event.type === 'settings-focus') show(event.path);
       if (event.type === 'flush-settings') {
         (document.activeElement as HTMLElement | null)?.blur();
         void writes.current
@@ -60,6 +72,19 @@ export function SettingsWindow() {
       }
     });
   }, []);
+  useEffect(() => {
+    if (!focused) return;
+    const row = document.querySelector<HTMLElement>(
+      `[data-setting-path="${CSS.escape(focused.path)}"]`,
+    );
+    if (!row) return;
+    row.scrollIntoView({ block: 'center' });
+    row.querySelector<HTMLElement>('input, button')?.focus({ preventScroll: true });
+    row.classList.add('is-focused');
+    const timer = setTimeout(() => row.classList.remove('is-focused'), 1600);
+    return () => clearTimeout(timer);
+    // the rows of the shown category, once drawn
+  }, [focused, category, snapshot]);
   const look = snapshot?.look;
   useEffect(() => {
     if (look) {

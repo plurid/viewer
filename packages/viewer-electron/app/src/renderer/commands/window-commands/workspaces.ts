@@ -38,6 +38,15 @@ export function workspacesCommands({
       run: () => actions.workspaceDialog('rename'),
     },
     {
+      id: 'workspace-background',
+      label: 'Workspace background…',
+      group: 'Workspaces',
+      icon: 'sun',
+      aliases: ['background', 'colour', 'color', 'space colour', 'wb'],
+      when: workspaceScope,
+      run: () => actions.workspaceDialog('background'),
+    },
+    {
       id: 'delete-workspace',
       label: 'Delete workspace…',
       group: 'Workspaces',

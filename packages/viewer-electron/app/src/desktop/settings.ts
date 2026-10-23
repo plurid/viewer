@@ -1,7 +1,7 @@
 import type { ParseError } from 'jsonc-parser';
 import { pathMapper, type FileChange } from '../domain/changes';
 import { preferencesSchema } from './preferences-schema';
-import { settingCatalog } from '../domain/setting-catalog';
+import { settingCatalog, workspaceMayChange } from '../domain/setting-catalog';
 import path from 'node:path';
 import { z } from 'zod';
 import type { ApplicationSettings, SettingsPatch, SettingsSnapshot } from '../domain/services';
@@ -350,15 +350,8 @@ export function importChanges(current: ApplicationSettings, next: ApplicationSet
  * compromised workspace renderer could widen agent folders, add a provider or an action (2026-10-20);
  * the rest is changed in Settings.
  */
-const workspacePaths = [
-  ['ui'],
-  ['settings', 'folders'],
-  ['settings', 'appearance'],
-  ['settings', 'browsing'],
-  ['settings', 'savedSearches'],
-];
-const workspaceMayPatch = (keys: readonly string[]) =>
-  workspacePaths.some((prefix) => prefix.every((key, index) => keys[index] === key));
+// the workspace window's own view and presentation: domain/setting-catalog.ts
+const workspaceMayPatch = workspaceMayChange;
 const configSchema = z
   .object({
     $schema: z.literal('config.schema.json').default('config.schema.json'),
@@ -576,6 +569,12 @@ export class SettingsService {
         }
         const { revision: _revision, ...config } = next;
         const validated = configSchema.parse(config);
+        // a whole browsing section from the workspace keeps the person's Trash confirmation
+        if (
+          scope === 'workspace' &&
+          validated.settings.browsing.confirmTrash !== this.document.settings.browsing.confirmTrash
+        )
+          throw new Error('Change this setting in Settings.');
         await this.store.write(validated);
         this.document = { ...validated, revision: this.document.revision + 1 };
         for (const patch of patches)

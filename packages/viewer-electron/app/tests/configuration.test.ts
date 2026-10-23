@@ -511,6 +511,9 @@ describe('settings the workspace window may change (2026-10-20)', () => {
       ['settings.customActions', []],
       ['settings.terminals', service.snapshot().settings.terminals],
       ['settings', service.snapshot().settings],
+      // Trash confirmation is the person's, in Settings, even inside a whole browsing section
+      ['settings.browsing.confirmTrash', false],
+      ['settings.browsing', { ...service.snapshot().settings.browsing, confirmTrash: false }],
     ] as const)
       await expect(patch(path, value)).rejects.toThrow('Change this setting in Settings');
     expect(service.snapshot().settings.browsing.mode).toBe('columns');

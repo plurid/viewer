@@ -1,8 +1,10 @@
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { settingValue, type SettingDefinition } from '../../../domain/setting-catalog';
 import { Icon, type IconName } from '../Icon';
 import type { SettingsEditor } from './editor';
 import { ChoiceButton } from '../ChoiceMenu';
+import { ColorField } from '../ColorField';
+import { looks } from '../../workspace/look';
 
 const toolbarIcons: Record<string, IconName> = {
   parent: 'parent-plane',
@@ -27,6 +29,21 @@ export function CatalogSettings({
   query: string;
 }) {
   const { snapshot, patch, patches, error: setError } = editor;
+  // the system colour picker reports as it is dragged: the colour is saved once it rests
+  const colorTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = colorTimers.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+    };
+  }, []);
+  const patchColor = (path: string, value: string) => {
+    clearTimeout(colorTimers.current.get(path));
+    colorTimers.current.set(
+      path,
+      setTimeout(() => patch(path, value), 200),
+    );
+  };
   const settings = snapshot.settings;
   const chooseNewPlaneFolder = (field: 'newPlaneLocation' | 'emptyWorkspaceLocation') => {
     void window.viewer
@@ -62,12 +79,14 @@ export function CatalogSettings({
           ? definition.path.split('.').at(-1)!
           : undefined;
         const checked = settingValue(snapshot, definition.path) === true;
+        // a row of buttons is no label: a click on its text would press the first
+        const Row = definition.kind === 'color' ? 'div' : 'label';
         return (
           <Fragment key={definition.path}>
             {definition.section && definition.section !== definitions[index - 1]?.section && (
               <h2>{definition.section}</h2>
             )}
-            <label className="settings-row">
+            <Row className="settings-row" data-setting-path={definition.path}>
               <span>
                 {toolbarKey ? (
                   <span className="settings-toolbar-label">
@@ -113,6 +132,15 @@ export function CatalogSettings({
                     );
                   }}
                 />
+              ) : definition.kind === 'color' ? (
+                <ColorField
+                  label={definition.label}
+                  value={String(settingValue(snapshot, definition.path) ?? '')}
+                  look={snapshot.look}
+                  automatic="Automatic"
+                  automaticColor={looks[snapshot.look].space}
+                  onChange={(value) => patchColor(definition.path, value)}
+                />
               ) : (
                 <input
                   aria-label={definition.label}
@@ -123,7 +151,7 @@ export function CatalogSettings({
                   onBlur={(event) => patch(definition.path, Number(event.target.value))}
                 />
               )}
-            </label>
+            </Row>
             {locationField && settings.browsing[locationField] === 'custom' && (
               <div className="settings-folder-choice">
                 <span title={customPath}>{customPath}</span>

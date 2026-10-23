@@ -3132,8 +3132,58 @@ async function verifyTextEditing(): Promise<void> {
   assert.match(backdrop.space, /\/ 0\.6\)|, 0\.6\)/, backdrop.space);
   assert.match(backdrop.titlebar, /^rgb\(/, backdrop.titlebar);
   await patchInSettings(`[{path:'ui.space.backdrop',value:'opaque'}]`);
+  // ⌥⌘T hides the title bar and shows it again; the grid; a workspace's own colour (2026-10-23)
+  const titlebarState = () =>
+    evaluate<string>('document.querySelector(".app-shell")?.dataset.titlebar ?? ""');
+  // the native menu takes ⌥⌘T anywhere; these keys reach the page itself, which leaves an
+  // editor's keys to the editor
+  await evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  await key('t', 'KeyT', 5);
+  await until(titlebarState, (state) => state === 'hidden', 'title bar hidden by ⌥⌘T');
+  await delay(300);
+  assert.ok(
+    (await evaluate<number>(
+      'document.querySelector(".app-titlebar").getBoundingClientRect().bottom',
+    )) <= 1,
+  );
+  await key('t', 'KeyT', 5);
+  await until(titlebarState, (state) => state === 'shown', 'title bar shown by ⌥⌘T');
+  const ground = `getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]'))`;
+  await paletteCommand('Workspace background…');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector("dialog [aria-label=\\"Ocean\\"]")'),
+    Boolean,
+    'workspace background dialog',
+  );
+  await click('dialog [aria-label="Ocean"]');
+  await until(
+    () => evaluate<string>(`${ground}.backgroundColor`),
+    (color) => color === 'rgb(15, 38, 51)',
+    "the workspace's colour on its space",
+  );
+  await snapshot('workspace-background.png');
+  await click('dialog footer .primary');
+  await paletteCommand('Hide background grid');
+  await until(
+    () => evaluate<string>(`${ground}.backgroundImage`),
+    (image) => !image.includes('gradient'),
+    'grid hidden',
+  );
+  await paletteCommand('Show background grid');
+  // every setting is a command: plurid's minimap goes and comes back
+  const minimap = () => evaluate<boolean>('!!document.querySelector("[data-plurid-minimap]")');
+  assert.equal(await minimap(), true);
+  await paletteCommand('Hide minimap');
+  await until(minimap, (shown) => !shown, 'minimap hidden by its command');
+  await paletteCommand('Show minimap');
+  await until(minimap, Boolean, 'minimap shown by its command');
+  await until(
+    () => evaluate<string>(`${ground}.backgroundImage`),
+    (image) => image.includes('gradient'),
+    'grid shown',
+  );
   console.log(
-    "Text editing: saved, undone, scratch text kept, Viewer's find, and the header's Save; a see-through space between solid controls.",
+    "Text editing: saved, undone, scratch text kept, Viewer's find, and the header's Save; a see-through space between solid controls; the title bar hidden and shown, the grid, and a workspace's colour.",
   );
 }
 /** Additional release checks against the actual signed Electron bundle. Files remain untouched. */

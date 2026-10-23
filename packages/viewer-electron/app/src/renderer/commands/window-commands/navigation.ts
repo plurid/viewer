@@ -129,6 +129,17 @@ export function navigationCommands({
         })),
     },
     {
+      id: 'toggle-titlebar',
+      label: state.saved.ui.titlebar.visible ? 'Hide title bar' : 'Show title bar',
+      group: 'View',
+      icon: 'frame',
+      aliases: ['title bar', 'titlebar', 'chrome', 'toolbar', 'tb'],
+      shortcut: '⌥⌘T',
+      when: windowScope,
+      run: () =>
+        changePreferences((ui) => ({ ...ui, titlebar: { visible: !ui.titlebar.visible } })),
+    },
+    {
       id: 'plane-sidebar',
       label: (context) =>
         context.folder?.sidebar?.visible !== false
