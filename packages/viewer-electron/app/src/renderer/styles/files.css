@@ -543,3 +543,13 @@
   display: block;
   object-fit: contain;
 }
+/* A selected application or bundle in the gallery: its own icon, as Finder's preview shows it. */
+.gallery-bundle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--ink);
+}

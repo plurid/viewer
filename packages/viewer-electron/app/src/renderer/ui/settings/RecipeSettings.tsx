@@ -4,6 +4,7 @@ import { Field } from '../SettingField';
 import { ReferencedRemove } from '../AutomationSettings';
 import { referencesTo } from '../../../domain/references';
 import { Icon } from '../Icon';
+import { ChoiceButton } from '../ChoiceMenu';
 import type { SettingsEditor } from './editor';
 
 /** Action recipes: editing, duplicating, importing and exporting. */
@@ -43,23 +44,17 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
             </label>
             <label>
               Action type
-              <select
+              <ChoiceButton
+                label="Action type"
                 value={recipe.kind}
-                onChange={(event) =>
+                choices={builtInRecipes.map((item) => ({ value: item.kind, label: item.name }))}
+                onChoose={(kind) =>
                   recipePatch(recipe.id, {
-                    kind: event.target.value as ActionRecipe['kind'],
-                    template:
-                      builtInRecipes.find((item) => item.kind === event.target.value)?.template ||
-                      '',
+                    kind: kind as ActionRecipe['kind'],
+                    template: builtInRecipes.find((item) => item.kind === kind)?.template || '',
                   })
                 }
-              >
-                {builtInRecipes.map((item) => (
-                  <option key={item.kind} value={item.kind}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
             <label>
               Formats
@@ -106,32 +101,33 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
             </label>
             <label>
               Model provider
-              <select
+              <ChoiceButton
+                label="Model provider"
                 value={recipe.providerID || ''}
-                onChange={(event) =>
-                  recipePatch(recipe.id, { providerID: event.target.value || undefined })
+                choices={[
+                  { value: '', label: 'Local metadata / no model' },
+                  ...settings.providers.map((provider) => ({
+                    value: provider.id,
+                    label: `${provider.name} · ${provider.model || 'Choose model'}`,
+                  })),
+                ]}
+                onChoose={(providerID) =>
+                  recipePatch(recipe.id, { providerID: providerID || undefined })
                 }
-              >
-                <option value="">Local metadata / no model</option>
-                {settings.providers.map((provider) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.name} · {provider.model || 'Choose model'}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
             <label>
               Permitted data
-              <select
+              <ChoiceButton
+                label="Permitted data"
                 value={recipe.data}
-                onChange={(event) =>
-                  recipePatch(recipe.id, { data: event.target.value as ActionRecipe['data'] })
-                }
-              >
-                <option value="names">Filenames only</option>
-                <option value="excerpts">Metadata and excerpts</option>
-                <option value="full-text">Extracted text</option>
-              </select>
+                choices={[
+                  { value: 'names', label: 'Filenames only' },
+                  { value: 'excerpts', label: 'Metadata and excerpts' },
+                  { value: 'full-text', label: 'Extracted text' },
+                ]}
+                onChoose={(data) => recipePatch(recipe.id, { data: data as ActionRecipe['data'] })}
+              />
             </label>
             <label>
               Shortcut

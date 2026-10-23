@@ -6,6 +6,7 @@ import {
   type ModelDataLevel,
   type ModelDataPermission,
 } from '../../domain/model-permissions';
+import { ChoiceButton } from './ChoiceMenu';
 
 export function useModelPermission(provider?: ModelProvider) {
   const identity = provider ? `${provider.id}:${provider.kind}:${provider.endpoint}` : '';
@@ -88,18 +89,16 @@ export function ProviderDataPermission({
         </p>
       )}
       <div className="settings-actions">
-        <select
-          aria-label={`Data to allow for ${provider.name}`}
+        <ChoiceButton
+          label={`Data to allow for ${provider.name}`}
           value={level}
-          onChange={(event) => setLevel(event.target.value as ModelDataLevel)}
+          choices={modelDataLevels.map((level) => ({
+            value: level,
+            label: modelDataLabels[level],
+          }))}
+          onChoose={(level) => setLevel(level as ModelDataLevel)}
           disabled={busy || loading}
-        >
-          {modelDataLevels.map((level) => (
-            <option key={level} value={level}>
-              {modelDataLabels[level]}
-            </option>
-          ))}
-        </select>
+        />
         <button
           type="button"
           disabled={busy || loading || !!loadError}

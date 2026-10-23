@@ -102,6 +102,36 @@ describe('authoritative JSONC configuration', () => {
         path,
       ).rejects.toThrow();
   });
+  it("sets the terminal font, by default as the owner's iTerm profile (2026-10-23)", async () => {
+    const service = create();
+    await service.load();
+    const config = await read();
+    delete config.settings.terminalFont;
+    await fs.writeFile(file(), JSON.stringify(config));
+    await service.reload();
+    expect(service.snapshot().settings.terminalFont).toEqual({
+      fontFamily: 'Hack Nerd Font Mono',
+      fontSize: 17,
+      fontWeight: 'bold',
+      lineHeight: 1.3,
+      letterSpacing: 1,
+    });
+    await service.patch(
+      [{ path: 'settings.terminalFont.lineHeight', value: 1.1 }],
+      service.snapshot().revision,
+    );
+    expect((await read()).settings.terminalFont.lineHeight).toBe(1.1);
+    for (const [path, value] of [
+      ['settings.terminalFont.fontSize', 3],
+      ['settings.terminalFont.lineHeight', 4],
+      ['settings.terminalFont.fontWeight', 'heavy'],
+      ['settings.terminalFont.fontFamily', 'Hack"; x'],
+    ] as const)
+      await expect(
+        service.patch([{ path, value }], service.snapshot().revision),
+        path,
+      ).rejects.toThrow();
+  });
   it('keeps a symbolically linked config.jsonc as a link when saving', async () => {
     const dotfiles = path.join(root, 'dotfiles');
     await fs.mkdir(dotfiles);

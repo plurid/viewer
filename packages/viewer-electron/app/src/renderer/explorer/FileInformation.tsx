@@ -7,6 +7,7 @@ import {
   type FileInformation as Information,
 } from '../../domain/file-information';
 import { Dialog, IconButton } from '../ui/primitives';
+import { ChoiceButton } from '../ui/ChoiceMenu';
 import { SelectionSize, calculateSize } from './sizes';
 import { getState, report } from '../state/store';
 import { errorMessage } from '../../domain/errors';
@@ -134,23 +135,21 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
                       <span className={'tag-dot tag-color-' + tag.color} aria-hidden="true" />
                       {tag.name}
                     </span>
-                    <select
-                      aria-label={'Color for ' + tag.name}
-                      value={tag.color}
-                      onChange={(event) =>
+                    <ChoiceButton
+                      label={'Color for ' + tag.name}
+                      value={String(tag.color)}
+                      choices={tagColors.map((name, color) => ({
+                        value: String(color),
+                        label: name,
+                      }))}
+                      onChoose={(value) =>
                         change({
                           tags: draft.tags.map((item, i) =>
-                            i === index ? { ...item, color: Number(event.target.value) } : item,
+                            i === index ? { ...item, color: Number(value) } : item,
                           ),
                         })
                       }
-                    >
-                      {tagColors.map((name, color) => (
-                        <option key={name} value={color}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
+                    />
                     <IconButton
                       icon="close"
                       label={'Remove tag ' + tag.name}

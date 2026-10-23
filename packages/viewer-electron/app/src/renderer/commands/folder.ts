@@ -20,6 +20,8 @@ import type { CommandContext, CommandDefinition } from './registry';
 
 export interface FolderActions {
   open(entries: readonly FileEntry[], linked: boolean, another?: boolean): void;
+  /** Browses into an application or other bundle, where the plane can (Show Package Contents). */
+  contents?(entry: FileEntry): void;
   dialog(kind: 'rename' | 'mkdir' | 'mkfile' | 'group' | 'go-to', context: CommandContext): void;
   trash(context: CommandContext): void | Promise<void>;
   info(context: CommandContext): void;
@@ -109,7 +111,9 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
         if (!entry) return;
         const info = await window.viewer.fileInformation(entry.path);
         if (!info.package) throw new Error('This folder is not a macOS package.');
-        actions.open([entry], false);
+        // Open starts an application now (nativeOpening): browse into it, or show it in a plane
+        if (actions.contents) actions.contents(entry);
+        else actions.open([entry], true);
       },
     },
     {

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalPane as Pane } from '../../domain/contracts';
 import { activeWorkspace, getState, report, setActivePane, useViewer } from '../state/store';
@@ -6,17 +7,25 @@ import { useWorkspace } from '../workspace/context';
 import { terminalSession, type TerminalSession } from './sessions';
 import { FILE_DRAG } from '../explorer/file-drop';
 import { IconButton } from '../ui/primitives';
-import { terminalTheme } from './theme';
+import { usePreviewControlsSlot } from '../previews/controls';
+import { searchDecorations, terminalFontOptions, terminalTheme } from './theme';
+import { registerTerminalFind } from './find';
 const quote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
 export function TerminalPlane({ pane }: { pane: Pane }) {
   const container = useRef<HTMLDivElement>(null);
   const live = useRef<TerminalSession | undefined>(undefined);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [found, setFound] = useState<{ index: number; count: number } | null>(null);
   const workspace = useWorkspace();
   const settings = useViewer((state) => state.settings.settings.terminals);
+  const font = useViewer((state) => state.settings.settings.terminalFont);
   const look = useViewer((state) => state.saved.look);
+  // Find lives in the plane's header (2026-10-23): a row of its own wasted the plane's top, and
+  // opening it grew that row and shifted the terminal. With headers off it floats over the top.
+  const header = usePreviewControlsSlot(pane.id);
   useEffect(() => {
     let attached = true;
     let observer: ResizeObserver | undefined;
@@ -34,7 +43,12 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
         if (!attached || !container.current) return;
         live.current = session;
         session.terminal.options.theme = terminalTheme(getState().saved.look);
+        Object.assign(
+          session.terminal.options,
+          terminalFontOptions(getState().settings.settings.terminalFont),
+        );
         session.attach(container.current);
+        setReady(true);
         if (!session.started && !session.exited) {
           session.starting ??= window.viewer
             .terminalStart({ ...request, cols: session.terminal.cols, rows: session.terminal.rows })
@@ -82,15 +96,88 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pane.id]);
   useEffect(() => {
-    if (live.current) {
-      live.current.terminal.options.scrollback = settings.scrollback;
-      live.current.terminal.options.theme = terminalTheme(look);
-    }
-  }, [settings.scrollback, look]);
+    const session = live.current;
+    if (!session) return;
+    session.terminal.options.scrollback = settings.scrollback;
+    session.terminal.options.theme = terminalTheme(look);
+    Object.assign(session.terminal.options, terminalFontOptions(font));
+    // another font or spacing changes the cells: the rows and columns follow
+    session.fit.fit();
+  }, [ready, settings.scrollback, look, font]);
+  useEffect(() => {
+    const session = live.current;
+    if (!session || !ready) return;
+    const subscription = session.search.onDidChangeResults(({ resultIndex, resultCount }) =>
+      setFound({ index: resultIndex, count: resultCount }),
+    );
+    return () => subscription.dispose();
+  }, [ready]);
+  useEffect(() => registerTerminalFind(pane.id, () => setSearchOpen(true)), [pane.id]);
+  const options = () => ({ incremental: true, decorations: searchDecorations(look) });
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setFound(null);
+    live.current?.search.clearDecorations();
+    live.current?.terminal.focus();
+  };
+  const find = (
+    <div className={'preview-toolbar terminal-find' + (header ? '' : ' terminal-find-floating')}>
+      {searchOpen ? (
+        <>
+          <input
+            autoFocus
+            aria-label="Find in terminal"
+            placeholder="Find"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (event.target.value) live.current?.search.findNext(event.target.value, options());
+              else {
+                setFound(null);
+                live.current?.search.clearDecorations();
+              }
+            }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === 'Enter' && query) {
+                if (event.shiftKey) live.current?.search.findPrevious(query, options());
+                else live.current?.search.findNext(query, { ...options(), incremental: false });
+              }
+              if (event.key === 'Escape') closeSearch();
+            }}
+          />
+          <span className="terminal-find-count muted" aria-live="polite">
+            {query && found
+              ? found.count
+                ? `${found.index + 1} / ${found.count}`
+                : 'No matches'
+              : ''}
+          </span>
+          <IconButton
+            icon="up"
+            label="Previous match"
+            onClick={() => query && live.current?.search.findPrevious(query, options())}
+          />
+          <IconButton
+            icon="down"
+            label="Next match"
+            onClick={() =>
+              query && live.current?.search.findNext(query, { ...options(), incremental: false })
+            }
+          />
+          <IconButton icon="close" label="Close find" onClick={closeSearch} />
+        </>
+      ) : (
+        <IconButton icon="search" label="Find in terminal" onClick={() => setSearchOpen(true)} />
+      )}
+    </div>
+  );
   return (
     <div
       className="terminal-plane"
       data-terminal-id={pane.id}
+      // the whole plane in the terminal's own background: no frame around it, no bar below
+      style={{ '--terminal-background': terminalTheme(look).background } as CSSProperties}
       onPointerDownCapture={() => setActivePane(pane.id)}
       onKeyDown={(event) => event.stopPropagation()}
       onWheel={(event) => event.stopPropagation()}
@@ -117,32 +204,12 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
         }
       }}
     >
-      <div className="terminal-search-control">
-        <IconButton
-          icon="search"
-          label="Search terminal output"
-          onClick={() => setSearchOpen((value) => !value)}
-        />
-        {searchOpen && (
-          <input
-            autoFocus
-            aria-label="Search terminal output"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              live.current?.search.findNext(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') live.current?.search.findNext(query);
-              if (event.key === 'Escape') {
-                setSearchOpen(false);
-                live.current?.terminal.focus();
-              }
-            }}
-          />
-        )}
-      </div>
-      {error && <p role="alert">{error}</p>}
+      {header ? createPortal(find, header) : find}
+      {error && (
+        <p className="terminal-error" role="alert">
+          {error}
+        </p>
+      )}
       <div className="terminal-container" ref={container} />
     </div>
   );

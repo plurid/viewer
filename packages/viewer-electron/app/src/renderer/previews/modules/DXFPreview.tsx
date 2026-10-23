@@ -3,6 +3,7 @@ import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { ChoiceButton } from '../../ui/ChoiceMenu';
 import {
   createDrawingCanvas,
   type CanvasOptions,
@@ -214,17 +215,18 @@ export default function DXFPreview(context: PreviewContext) {
           disabled={!ready}
           onClick={() => session.current?.frame()}
         />
-        <select
-          aria-label="Drawing tool"
+        <ChoiceButton
+          label="Drawing tool"
           disabled={!ready}
           value={tool}
-          onChange={(event) => setTool(event.target.value as Tool)}
-        >
-          <option value="inspect">Inspect</option>
-          <option value="distance">Distance</option>
-          <option value="angle">Angle</option>
-          <option value="area">Area</option>
-        </select>
+          choices={[
+            { value: 'inspect', label: 'Inspect' },
+            { value: 'distance', label: 'Distance' },
+            { value: 'angle', label: 'Angle' },
+            { value: 'area', label: 'Area' },
+          ]}
+          onChoose={(value) => setTool(value as Tool)}
+        />
         <button
           aria-pressed={snap}
           className={snap ? 'selected' : ''}
@@ -320,20 +322,17 @@ export default function DXFPreview(context: PreviewContext) {
             </header>
             <label>
               Measurement units
-              <select
-                aria-label="Drawing measurement units"
+              <ChoiceButton
+                label="Drawing measurement units"
                 value={display}
-                onChange={(event) => setDisplay(event.target.value)}
-              >
-                <option value="drawing">From file ({unitInfo(sourceUnit).symbol})</option>
-                {units
-                  .filter((u) => [1, 2, 4, 5, 6].includes(u.id))
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.label}
-                    </option>
-                  ))}
-              </select>
+                choices={[
+                  { value: 'drawing', label: `From file (${unitInfo(sourceUnit).symbol})` },
+                  ...units
+                    .filter((u) => [1, 2, 4, 5, 6].includes(u.id))
+                    .map((u) => ({ value: String(u.id), label: u.label })),
+                ]}
+                onChoose={setDisplay}
+              />
             </label>
             {!sourceUnit && (
               <p className="muted">

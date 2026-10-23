@@ -31,6 +31,8 @@ export const preferencesSchema = z
         dragging: boolean,
         resizing: boolean,
         opening: z.enum(['face-on', 'pair', 'dock']),
+        backdrop: z.enum(['opaque', 'blur', 'clear']).default('opaque'),
+        backdropOpacity: z.number().int().min(0).max(100).default(60),
         headerControls: z
           .object({
             parent: boolean.default(true),

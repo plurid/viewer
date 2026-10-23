@@ -45,6 +45,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ApiMethod, ApiResult, DesktopEvent, FileEntry } from '../domain/contracts';
 import { absolute, entry, list } from './filesystem';
+import { isPackage } from '../domain/files';
 import { spotlightTagged } from './spotlight';
 import { nativeImageConverter } from './native-image-convert';
 import { quickLookRender } from './quick-look-render';
@@ -136,6 +137,18 @@ export class Desktop {
   private flushes = new Map<string, () => void>();
   private flushing?: Promise<void>;
   private disposal?: Promise<void>;
+  /** Saved state read early for the window's settings, handed to the first bootstrap unread again:
+   * reading it moves a damaged file aside, and a second read would lose that notice. */
+  private storedEarly?: ReturnType<Storage['load']>;
+  private settingsPrepared?: Promise<void>;
+  /** Settings loaded as bootstrap loads them (seeded from saved state on a first configuration), so
+   * the window is made with its backdrop (backdrop.ts). */
+  prepareSettings(): Promise<void> {
+    return (this.settingsPrepared ??= (async () => {
+      this.storedEarly = this.storage.load();
+      await this.settings.load((await this.storedEarly).state || undefined);
+    })());
+  }
   constructor(
     dataPath: string,
     private allowedURL: (url: string) => boolean,
@@ -318,8 +331,9 @@ export class Desktop {
         // elsewhere (2026-10-20); the cache keys already carry each file's identity and date
         void this.thumbnails.clear(change.source);
         void this.thumbnails.clear(change.destination);
+        this.appIcons.forget(change.source);
+        this.appIcons.forget(change.destination);
       }
-      this.appIcons.clear();
     };
     this.operations = new Operations(
       (file) =>
@@ -1263,8 +1277,8 @@ export class Desktop {
       appIcon: async ([file, size]) => {
         await this.fileAccess.require([file]);
         const item = await entry(file);
-        if (!item.directory || item.extension !== 'app')
-          throw new Error('Icons are offered for applications only.');
+        if (!isPackage(item))
+          throw new Error('Icons are offered for applications and other bundles only.');
         return this.appIcons.get(item.path, size, item.modified);
       },
       thumbnail: async (args) => {
@@ -1282,8 +1296,11 @@ export class Desktop {
       bootstrap: async () => {
         const home = this.home;
         await this.fileAccess.load();
-        const stored = await this.storage.load();
+        const early = this.storedEarly;
+        this.storedEarly = undefined;
+        const stored = await (early ?? this.storage.load());
         await this.settings.load(stored.state || undefined);
+        this.settingsPrepared ??= Promise.resolve();
         if (stored.state) {
           const spaces = [...stored.state.workspaces].sort(
             (a, b) =>
@@ -1412,6 +1429,11 @@ export class Desktop {
       openWith: async (args) => {
         await this.fileAccess.require(args[0]);
         return this.applications.open(args[0], args[1]);
+      },
+      // the path comes from Launch Services' own listing, never from the renderer
+      applicationIcon: async ([id]) => {
+        const item = await entry(this.applications.location(id));
+        return this.appIcons.get(item.path, 'small', item.modified);
       },
       chooseApplication: async () => {
         if (process.platform !== 'darwin')

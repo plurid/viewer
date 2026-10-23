@@ -210,10 +210,11 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const opening = useViewer((state) => state.settings.settings.fileOpening);
   const open = useCallback(
     (entry: FileEntry, linked = false, another = false) => {
-      if (entry.directory && !linked) navigate(id, entry.path);
-      else if (nativeOpening(entry, opening, linked)) {
+      // an application starts rather than opening as a folder (nativeOpening)
+      if (nativeOpening(entry, opening, linked)) {
         void window.viewer.openExternal(entry.path).catch(report);
-      } else {
+      } else if (entry.directory && !linked) navigate(id, entry.path);
+      else {
         const origin = activeWorkspace().id;
         void revealFile(id, entry.path)
           .then((link) => {
@@ -267,6 +268,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           open: (entries, linked, another) => {
             for (const entry of entries) open(entry, linked, another);
           },
+          contents: (entry) => navigate(id, entry.path),
           ...fileDialogs.actions,
           search: () => {
             if (searchOpen) closeSearch();

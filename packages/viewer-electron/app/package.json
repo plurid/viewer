@@ -41,8 +41,8 @@
     "test:mas": "tsx tests/mas-native.ts",
     "qualify": "tsx tools/qualification.ts",
     "direct:release": "tsx tools/direct-release.ts",
-    "package": "tsx tools/build-helpers.ts && electron-forge package",
-    "make": "tsx tools/build-helpers.ts && electron-forge make",
+    "package": "tsx tools/trash-previous-build.ts && tsx tools/build-helpers.ts && electron-forge package",
+    "make": "tsx tools/trash-previous-build.ts && tsx tools/build-helpers.ts && electron-forge make",
     "mas:preflight": "tsx tools/mas.ts preflight",
     "mas:dev": "tsx tools/mas.ts dev",
     "mas:package": "tsx tools/mas.ts distribution"

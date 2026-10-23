@@ -83,8 +83,9 @@
   display: grid;
   gap: 6px;
 }
-.dxf-details select {
+.dxf-details .choice-button {
   min-width: 0;
+  max-width: none;
   width: 100%;
   font-size: 11px;
 }
@@ -519,8 +520,7 @@ button.markdown-link {
   gap: 8px;
   min-width: 0;
 }
-.workbook-sheet-picker select {
-  min-width: 120px;
+.workbook-sheet-picker .choice-button {
   max-width: 280px;
 }
 .office-coverage {

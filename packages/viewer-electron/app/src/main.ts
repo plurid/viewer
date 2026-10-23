@@ -1,3 +1,5 @@
+import { backdropChange, backdropWindowOptions } from './desktop/backdrop';
+import type { UIPreferences } from './domain/contracts';
 import {
   nativeTheme,
   app,
@@ -502,7 +504,22 @@ function menu(): void {
     ]),
   );
 }
+/** The backdrop the window was made with: a clear one cannot be switched on or off in place. */
+let createdBackdrop: UIPreferences['space']['backdrop'] = 'opaque';
+/** Blur and solid apply at once; clear waits for the window to open again (backdrop.ts). */
+function applyBackdrop(): void {
+  if (!window || window.isDestroyed() || !desktop || process.platform !== 'darwin') return;
+  const snapshot = desktop.settings.snapshot();
+  const next = snapshot.ui.space.backdrop;
+  if (createdBackdrop === 'clear' || backdropChange(createdBackdrop, next) !== 'live') return;
+  const options = backdropWindowOptions(next, snapshot.look);
+  window.setVibrancy(next === 'blur' ? 'under-window' : null);
+  window.setBackgroundColor(options.backgroundColor);
+}
 async function createWindow(): Promise<void> {
+  if (window || quitPending || quitting) return;
+  // the backdrop is set as the window is made: its settings first
+  await desktop?.prepareSettings().catch(() => {});
   if (window || quitPending || quitting) return;
   closing = false;
   const restored = restoreWindowFrame(
@@ -515,7 +532,13 @@ async function createWindow(): Promise<void> {
     minWidth: restored.minWidth,
     minHeight: restored.minHeight,
     title: 'Viewer',
-    backgroundColor: '#272a30',
+    ...backdropWindowOptions(
+      (createdBackdrop =
+        process.platform === 'darwin'
+          ? (desktop?.settings.snapshot().ui.space.backdrop ?? 'opaque')
+          : 'opaque'),
+      desktop?.settings.snapshot().look ?? 'dark',
+    ),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 20 },
     show: false,
@@ -702,6 +725,14 @@ app
         process.exitCode = 1;
       }
       quitting = true;
+      // app.quit() ends with 0 whatever process.exitCode says, so an agent's client saw a failed
+      // start as success (2026-10-23): flush what was written, then exit with the failure
+      if (process.exitCode) {
+        await new Promise((resolve) => process.stdout.write('', resolve));
+        await new Promise((resolve) => process.stderr.write('', resolve));
+        app.exit(Number(process.exitCode));
+        return;
+      }
       app.quit();
       return;
     }
@@ -724,7 +755,10 @@ app
         );
         settingsWindowState?.remember(frame && { ...frame, category });
       },
-      settingsChanged: menu,
+      settingsChanged: () => {
+        menu();
+        applyBackdrop();
+      },
       diagnose: (detail) => void diagnostics.record('renderer-error', detail),
       worker: path.join(__dirname, 'worker.cjs'),
       fileBackend:

@@ -195,3 +195,10 @@
   flex-shrink: 0;
   color: var(--muted);
 }
+/* A choice menu shows about five rows and scrolls the rest. */
+.choice-menu .command-results {
+  max-height: calc(34px * 5.5 + 10px);
+}
+.choice-placeholder {
+  color: var(--muted);
+}

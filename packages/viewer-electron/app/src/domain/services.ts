@@ -83,8 +83,19 @@ export interface ApplicationSettings {
     insertSpaces: boolean;
     wordWrap: boolean;
     lineNumbers: boolean;
-    /** On save, as VS Code's files.trimTrailingWhitespace. */
+    /** On save, spaces and tabs at line ends go. */
     trimTrailingWhitespace: boolean;
+  };
+  /** The terminal plane's text (2026-10-23); its defaults are its owner's iTerm profile. */
+  terminalFont: {
+    /** A monospace family; Menlo follows it. */
+    fontFamily: string;
+    fontSize: number;
+    fontWeight: 'normal' | 'bold';
+    /** A multiple of the font's height, as iTerm's vertical spacing. */
+    lineHeight: number;
+    /** Pixels added between characters. */
+    letterSpacing: number;
   };
   search: { roots: string[]; exclusions: string[]; contentRoots: string[]; paused: boolean };
   providers: ModelProvider[];
@@ -333,6 +344,13 @@ export function defaultSettings(home: string): ApplicationSettings {
       wordWrap: false,
       lineNumbers: true,
       trimTrailingWhitespace: true,
+    },
+    terminalFont: {
+      fontFamily: 'Hack Nerd Font Mono',
+      fontSize: 17,
+      fontWeight: 'bold',
+      lineHeight: 1.3,
+      letterSpacing: 1,
     },
     search: {
       roots: [home],

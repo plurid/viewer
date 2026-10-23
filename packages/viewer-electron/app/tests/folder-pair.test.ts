@@ -27,6 +27,7 @@ import {
   updatePane,
 } from '../src/renderer/state/store';
 import { useWorkspaceController } from '../src/renderer/workspace/controller';
+import { continuesEditing } from '../src/renderer/editing/sessions';
 import { folderPairArea, folderPairGeometry } from '../src/renderer/workspace/folder-pair';
 import { browseSession, clearSessions } from '../src/renderer/workspace/sessions';
 import { flattenTree, hostID, paneRoute } from '../src/renderer/workspace/tree';
@@ -722,5 +723,32 @@ describe('following a link', () => {
     const opened = activeWorkspace().panes.find((pane) => pane.path === '/fixtures/linked')!;
     await vi.waitFor(() => expect(scrollOwner()).toBe(planeID(opened.id)));
     expect(getState().activePane).toBe(opened.id);
+  });
+});
+describe('opening a file to edit (2026-10-23)', () => {
+  const file = (name: string) =>
+    ({
+      path: `/fixtures/${name}`,
+      name,
+      parent: '/fixtures',
+      extension: name.split('.').pop()!,
+      mime: 'text/plain',
+      size: 4,
+      kind: 'file',
+      directory: false,
+      identity: '1:' + name,
+      modified: 1,
+      created: 1,
+      hidden: false,
+    }) as const;
+  it('marks a new text plane to start editing, and never a preview without an editor', async () => {
+    const { controller } = await workspace();
+    const root = activeWorkspace().panes[0]!;
+    await act(async () => controller.open(file('notes.md'), root.id, { edit: true }));
+    const notes = activeWorkspace().panes.find((pane) => pane.path === '/fixtures/notes.md')!;
+    expect(continuesEditing(notes.id)).toBe(true);
+    await act(async () => controller.open(file('photo.png'), root.id, { edit: true }));
+    const photo = activeWorkspace().panes.find((pane) => pane.path === '/fixtures/photo.png')!;
+    expect(continuesEditing(photo.id)).toBe(false);
   });
 });

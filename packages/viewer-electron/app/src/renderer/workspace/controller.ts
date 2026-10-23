@@ -24,6 +24,9 @@ import {
   setActivePane,
 } from '../state/store';
 import { focusPlane, rootOwners } from './sessions';
+import { editingPlane } from '../editing/planes';
+import { continueEditing } from '../editing/sessions';
+import { choosePreview } from '../previews/registry';
 import { repeatedPreviews } from './recovery';
 import { flattenTree, hostID, paneRoute, parentPaneID, linkedPaneID } from './tree';
 import { cancelWorkspaceFraming, frameWorkspace } from './framing';
@@ -379,6 +382,7 @@ export function useWorkspaceController({
           link?: string;
           evidence?: EvidenceNavigation;
           activate?: boolean;
+          edit?: boolean;
         },
       ) {
         if (!entry.directory && entry.name === 'viewer.project.jsonc') {
@@ -417,6 +421,7 @@ export function useWorkspaceController({
           if (existing.type === 'preview' && options?.evidence)
             updatePane(existing.id, { evidence: options.evidence });
           controller.focusPane(existing.id, { activate: options?.activate });
+          if (options?.edit) editingPlane(existing.id)?.edit?.();
           return;
         }
         const linked = !!parent && !options?.another;
@@ -426,6 +431,9 @@ export function useWorkspaceController({
         pending.set(pane.id, linked ? (rootID ?? pane.id) : pane.id);
         if (pane.type === 'preview' && options?.evidence)
           updatePane(pane.id, { evidence: options.evidence });
+        // its text preview starts editing when it mounts; any other preview has no editor to start
+        if (options?.edit && pane.type === 'preview' && choosePreview(entry).id === 'text')
+          continueEditing(pane.id, crypto.randomUUID());
         setActivePane(pane.id);
         if (api && linked) {
           api.pubsub.publish({

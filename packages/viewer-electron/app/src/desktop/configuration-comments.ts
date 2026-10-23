@@ -63,8 +63,12 @@ const descriptions: Record<string, string[]> = {
   'settings.browsing.emptyWorkspacePath': [
     'Required absolute folder path when emptyWorkspaceLocation is custom. Does not affect newPlanePath.',
   ],
+  'settings.terminalFont': [
+    "The terminal plane's text: one monospace family name (Menlo follows it), size in pixels,",
+    "weight normal | bold, lineHeight as a multiple of the font's height, letterSpacing in pixels.",
+  ],
   'settings.editor': [
-    'The text editor of preview and scratch planes. Defaults follow VS Code at fontSize 18, lineHeight 40.',
+    'The text editor of preview and scratch planes.',
     'fontSize and lineHeight are pixels; fontFamily names one monospace family; tabSize counts columns.',
     'trimTrailingWhitespace removes spaces and tabs at line ends when a file is saved.',
   ],

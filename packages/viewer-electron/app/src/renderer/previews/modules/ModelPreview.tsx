@@ -25,6 +25,7 @@ import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { ChoiceButton } from '../../ui/ChoiceMenu';
 
 interface ModelSession {
   frame(): void;
@@ -682,17 +683,12 @@ export default function ModelPreview(context: PreviewContext) {
         </button>
         {animations.length > 0 && (
           <>
-            <select
-              aria-label="Model animation"
-              value={animation}
-              onChange={(event) => setAnimation(Number(event.target.value))}
-            >
-              {animations.map((name, index) => (
-                <option key={index} value={index}>
-                  {name}
-                </option>
-              ))}
-            </select>
+            <ChoiceButton
+              label="Model animation"
+              value={String(animation)}
+              choices={animations.map((name, index) => ({ value: String(index), label: name }))}
+              onChoose={(value) => setAnimation(Number(value))}
+            />
             <IconButton
               icon={playing ? 'pause' : 'play'}
               label={playing ? 'Pause animation' : 'Play animation'}
@@ -702,18 +698,21 @@ export default function ModelPreview(context: PreviewContext) {
         )}
         <span className="toolbar-spacer" />
         {!physicalUnits && (
-          <select
-            aria-label="Assumed model units"
-            title="This format does not declare physical units. Choose the units used when it was exported."
-            value={assumedUnit}
-            onChange={(event) => setAssumedUnit(event.target.value)}
-          >
-            <option value="units">Model units</option>
-            <option value="mm">Millimeters</option>
-            <option value="cm">Centimeters</option>
-            <option value="m">Meters</option>
-            <option value="in">Inches</option>
-          </select>
+          // the button takes no title of its own: its wrapper shows the tooltip
+          <span title="This format does not declare physical units. Choose the units used when it was exported.">
+            <ChoiceButton
+              label="Assumed model units"
+              value={assumedUnit}
+              choices={[
+                { value: 'units', label: 'Model units' },
+                { value: 'mm', label: 'Millimeters' },
+                { value: 'cm', label: 'Centimeters' },
+                { value: 'm', label: 'Meters' },
+                { value: 'in', label: 'Inches' },
+              ]}
+              onChoose={setAssumedUnit}
+            />
+          </span>
         )}
         <span className="muted">{resource.entry.extension.toUpperCase()}</span>
       </PreviewToolbar>

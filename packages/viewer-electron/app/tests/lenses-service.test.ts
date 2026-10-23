@@ -137,12 +137,32 @@ describe('lens storage', () => {
   });
   it('sends lens files to the Trash, never deleting them', async () => {
     const created = await lenses.create(folder, 'By year');
+    const other = await lenses.create(folder, 'By client');
     expect(await lenses.trash(folder, created.file)).toEqual({ job: 'job-1' });
     expect(trashed).toEqual([created.file]);
+    // the operation moved it; the last lens then takes Viewer's now-empty folder along (2026-10-23)
+    await rename(created.file, path.join(root, 'moved.lens.jsonc'));
+    await lenses.trash(folder, other.file);
+    expect(trashed).toEqual([created.file, path.join(folder, '.viewer')]);
     await expect(lenses.trash(folder, path.join(folder, 'Acme'))).rejects.toThrow();
     await expect(lenses.apply(folder, path.join(root, 'other.lens.jsonc'), [])).rejects.toThrow(
       'Choose a lens of this folder.',
     );
+  });
+});
+
+describe('lens folders only where a lens is (2026-10-23)', () => {
+  it('opening, listing and watching a folder writes nothing', async () => {
+    const before = await readdir(folder);
+    await lenses.list(folder);
+    await lenses.list(folder);
+    expect(await readdir(folder)).toEqual(before);
+  });
+  it('keeps a .viewer holding anything else, trashing only the lens', async () => {
+    const created = await lenses.create(folder, 'By year');
+    await writeFile(path.join(folder, '.viewer', 'notes.txt'), 'mine');
+    await lenses.trash(folder, created.file);
+    expect(trashed).toEqual([created.file]);
   });
 });
 

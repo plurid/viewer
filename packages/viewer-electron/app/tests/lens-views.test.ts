@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { createElement, createRef } from 'react';
-import type { FileEntry } from '../src/domain/contracts';
+import type { DesktopEvent, FileEntry } from '../src/domain/contracts';
 import {
   applyLensOps,
   emptyLens,
@@ -29,6 +29,7 @@ import {
   redoLens,
   undoLens,
   useLenses,
+  lensDirectory,
 } from '../src/renderer/state/lenses';
 import { MapView, type MapControls } from '../src/renderer/explorer/map/MapView';
 import { revealFile } from '../src/renderer/explorer/anchors';
@@ -203,6 +204,39 @@ describe('lens editing', () => {
     cleanup();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+  it('watches the lens folder again after it went away and came back (2026-10-23)', async () => {
+    const listeners: ((event: DesktopEvent) => void)[] = [];
+    (window.viewer as unknown as { onEvent: unknown }).onEvent = (
+      listener: (event: DesktopEvent) => void,
+    ) => {
+      listeners.push(listener);
+      return () => {};
+    };
+    const emit = (event: DesktopEvent) => listeners.forEach((listener) => listener(event));
+    render(
+      createElement(() => {
+        useLenses(folder);
+        return null;
+      }),
+    );
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    const watch = window.viewer.watch as ReturnType<typeof vi.fn>;
+    expect(watch).toHaveBeenCalledTimes(1);
+    // the last lens went to the Trash with its folder: that watch ends, and is not retried blindly
+    await act(async () => {
+      emit({ type: 'watch-error', path: lensDirectory(folder), message: 'gone', code: 'ENOENT' });
+      await vi.runAllTimersAsync();
+    });
+    expect(window.viewer.unwatch).toHaveBeenCalled();
+    // the folder's own watch sees a lens again, which is watched anew
+    await act(async () => {
+      emit({ type: 'folder-changed', path: folder });
+      await vi.runAllTimersAsync();
+    });
+    expect(watch).toHaveBeenCalledTimes(2);
   });
   it('shows edits at once, saves them in one batch, and undoes and redoes them', async () => {
     let seen: Lens | undefined;

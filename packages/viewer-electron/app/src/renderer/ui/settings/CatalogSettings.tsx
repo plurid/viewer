@@ -106,7 +106,10 @@ export function CatalogSettings({
                     }
                     patch(
                       definition.path,
-                      definition.path === 'settings.previews.thumbnailSize' ? Number(value) : value,
+                      // a numeric setting (thumbnail size, line spacing) keeps its type
+                      typeof settingValue(snapshot, definition.path) === 'number'
+                        ? Number(value)
+                        : value,
                     );
                   }}
                 />

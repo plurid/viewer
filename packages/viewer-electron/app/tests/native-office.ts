@@ -190,6 +190,21 @@ async function capture(
   });
   await writeFile(path.join(output, name + '.png'), Buffer.from(shot.data, 'base64'));
 }
+/** Chooses in a choice menu (ui/ChoiceMenu.tsx) as a person does: its button, then the value's row. */
+async function choose(
+  evaluate: <T>(expression: string) => Promise<T>,
+  label: string,
+  value: string,
+) {
+  const row = JSON.stringify(`.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`);
+  await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(label)}]').click()`);
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector(${row})`),
+    Boolean,
+    label + ' menu',
+  );
+  await evaluate(`document.querySelector(${row}).click()`);
+}
 async function checkBook() {
   const profile = await prepare(book, 'BookProfile', {
     kind: 'cells',
@@ -274,44 +289,23 @@ async function checkBook() {
     });
     await capture(connection, 'workbook-compact-light');
     await evaluate(
-      `Array.from(document.querySelectorAll('.preview-toolbar button')).find(b=>b.textContent==='Preview details').click();document.querySelector('select[aria-label="Worksheet"]').focus()`,
+      `Array.from(document.querySelectorAll('.preview-toolbar button')).find(b=>b.textContent==='Preview details').click()`,
     );
-    await connection.command('Input.dispatchKeyEvent', {
-      type: 'keyDown',
-      key: 'Home',
-      code: 'Home',
-    });
-    await connection.command('Input.dispatchKeyEvent', {
-      type: 'keyUp',
-      key: 'Home',
-      code: 'Home',
-    });
-    // Native select keyboard behavior varies. Dispatch a normal change only if Home did not select it.
-    if (
-      (await evaluate<string>(`document.querySelector('select[aria-label="Worksheet"]').value`)) !==
-      'Hidden'
-    )
-      await evaluate(
-        `(()=>{const s=document.querySelector('select[aria-label="Worksheet"]');s.value='Hidden';s.dispatchEvent(new Event('change',{bubbles:true}))})()`,
-      );
+    await choose(evaluate, 'Worksheet', 'Hidden');
     await until(
       () => evaluate<string>(`document.querySelector('.data-scroll')?.textContent||''`),
       (text) => text.includes('Hidden source'),
       'hidden worksheet selection',
     );
     await capture(connection, 'workbook-hidden-compact-light');
-    await evaluate(
-      `(()=>{const s=document.querySelector('select[aria-label="Worksheet"]');s.value='Empty';s.dispatchEvent(new Event('change',{bubbles:true}))})()`,
-    );
+    await choose(evaluate, 'Worksheet', 'Empty');
     await until(
       () => evaluate<string>(`document.querySelector('.data-viewer')?.textContent||''`),
       (text) => text.includes('No stored rows in this sheet.'),
       'empty worksheet message',
     );
     await capture(connection, 'workbook-empty-compact-light');
-    await evaluate(
-      `(()=>{const s=document.querySelector('select[aria-label="Worksheet"]');s.value='Hidden';s.dispatchEvent(new Event('change',{bubbles:true}))})()`,
-    );
+    await choose(evaluate, 'Worksheet', 'Hidden');
     await viewer.close(connection);
     connection = undefined;
     const saved = JSON.parse(

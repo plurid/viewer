@@ -6,6 +6,7 @@ import { usePreviewState } from '../state';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { DataTable } from '../DataTable';
 import { Empty, Loading } from '../../ui/primitives';
+import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { report } from '../../state/store';
 
 /* THESIS: Read Word text and inspect worksheet cells within the existing file plane.
@@ -95,18 +96,15 @@ export default function OfficePreview(context: PreviewContext) {
         {office.kind === 'workbook' && (
           <label className="workbook-sheet-picker">
             Worksheet{' '}
-            <select
-              aria-label="Worksheet"
-              value={sheet?.name}
-              onChange={(event) => setSheetName(event.target.value)}
-            >
-              {office.sheets.map((sheet) => (
-                <option key={sheet.name} value={sheet.name}>
-                  {sheet.name}
-                  {sheet.hidden ? ' (hidden)' : ''}
-                </option>
-              ))}
-            </select>
+            <ChoiceButton
+              label="Worksheet"
+              value={sheet?.name ?? ''}
+              choices={office.sheets.map((sheet) => ({
+                value: sheet.name,
+                label: sheet.name + (sheet.hidden ? ' (hidden)' : ''),
+              }))}
+              onChoose={setSheetName}
+            />
           </label>
         )}
         <span className="muted">

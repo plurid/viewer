@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../src/domain/services';
+import { normalizePreferences } from '../src/domain/preferences';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const native = vi.hoisted(() => ({
@@ -133,9 +134,14 @@ vi.mock('../src/desktop/mcp-client', () => ({ runMCPClient: vi.fn() }));
 vi.mock('../src/desktop/bridge', () => ({
   Desktop: class {
     settings = {
-      snapshot: () => ({ settings: defaultSettings('/fixtures') }),
+      snapshot: () => ({
+        settings: defaultSettings('/fixtures'),
+        ui: normalizePreferences(),
+        look: 'dark',
+      }),
       load: async () => {},
     };
+    prepareSettings = async () => {};
     resources = { response: vi.fn() };
     attach = vi.fn();
     open = vi.fn();

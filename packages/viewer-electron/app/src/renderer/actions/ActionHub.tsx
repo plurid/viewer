@@ -7,6 +7,7 @@ import { activeWorkspace, report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { Dialog, Empty, IconButton, Loading, NameDialog } from '../ui/primitives';
 import { useModelPermission } from '../ui/ModelDataPermission';
+import { ChoiceButton } from '../ui/ChoiceMenu';
 import { modelDataLabels, modelPermissionCovers } from '../../domain/model-permissions';
 import type { CheckpointEstimate } from '../../domain/change-plan';
 import { formatBytes } from '../../domain/files';
@@ -188,6 +189,11 @@ function ConfigureTask({
   const approvalKey = remote && recipe ? `${remote.id}:${remote.endpoint}:${recipe.data}` : '';
   const approved =
     remote && recipe && modelPermissionCovers(permission.permission, remote, recipe.data);
+  const action = useRef<HTMLLabelElement>(null);
+  // in place of data-autofocus: the dialog, a child, has opened in its effect, which runs first
+  useEffect(() => {
+    action.current?.querySelector('button')?.focus({ preventScroll: true });
+  }, []);
   return (
     <Dialog title="Run action" onClose={onClose} className="action-config">
       <form
@@ -211,29 +217,20 @@ function ConfigureTask({
           }
         }}
       >
-        <label className="field-label">
+        <label className="field-label" ref={action}>
           Action
-          <select
-            data-autofocus
+          <ChoiceButton
+            label="Action"
             value={chosen}
-            onChange={(event) => {
-              setChosen(event.target.value);
-              const next = settings.recipes.find((recipe) => recipe.id === event.target.value);
+            choices={settings.recipes.map((recipe) => ({ value: recipe.id, label: recipe.name }))}
+            placeholder="Choose an action"
+            onChoose={(id) => {
+              setChosen(id);
+              const next = settings.recipes.find((recipe) => recipe.id === id);
               setRecursive(next?.recursive || false);
               setOptions({ template: next?.template });
             }}
-          >
-            {!recipe && (
-              <option value={chosen} disabled>
-                Choose an action
-              </option>
-            )}
-            {settings.recipes.map((recipe) => (
-              <option key={recipe.id} value={recipe.id}>
-                {recipe.name}
-              </option>
-            ))}
-          </select>
+          />
         </label>
         {!recipe && (
           <p className="error" role="alert">
@@ -266,20 +263,22 @@ function ConfigureTask({
             <p className="muted">Template fields: {'{name} {extension} {number}'}</p>
             <label className="field-label">
               Letter case
-              <select
+              <ChoiceButton
+                label="Letter case"
                 value={options.case || 'keep'}
-                onChange={(event) =>
+                choices={[
+                  { value: 'keep', label: 'Keep' },
+                  { value: 'lower', label: 'lowercase' },
+                  { value: 'upper', label: 'UPPERCASE' },
+                  { value: 'title', label: 'Title Case' },
+                ]}
+                onChoose={(value) =>
                   setOptions({
                     ...options,
-                    case: event.target.value as NonNullable<ActionRequest['options']>['case'],
+                    case: value as NonNullable<ActionRequest['options']>['case'],
                   })
                 }
-              >
-                <option value="keep">Keep</option>
-                <option value="lower">lowercase</option>
-                <option value="upper">UPPERCASE</option>
-                <option value="title">Title Case</option>
-              </select>
+              />
             </label>
             <label className="field-label">
               Number padding

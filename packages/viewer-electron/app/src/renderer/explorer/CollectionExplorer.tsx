@@ -20,7 +20,8 @@ import { FileTable } from './FileTable';
 import { ContextMenu } from '../ui/ContextMenu';
 import type { CommandRequest } from '../commands/registry';
 import { Loading, Empty } from '../ui/primitives';
-import { sortEntries } from '../../domain/files';
+import { isPackage, sortEntries } from '../../domain/files';
+import { nativeOpening } from './opening';
 import { useContextPublish } from './context-publish';
 export function CollectionExplorer({ id }: { id: string }) {
   const active = useViewer((state) => state.activePane);
@@ -29,6 +30,7 @@ export function CollectionExplorer({ id }: { id: string }) {
   const collection = useViewer((state) =>
     activeWorkspace(state).collections?.find((value) => value.id === pane?.collectionID),
   );
+  const opening = useViewer((state) => state.settings.settings.fileOpening);
   const workspace = useWorkspace(),
     dialogs = useFileDialogs(),
     surface = useRef<HTMLDivElement>(null);
@@ -149,7 +151,12 @@ export function CollectionExplorer({ id }: { id: string }) {
         folderCommands({
           ...dialogs.actions,
           open: (files, linked, another) =>
-            files.forEach((file) => workspace.open(file, id, { another })),
+            files.forEach((file) =>
+              // an application in a collection starts, as it does from its folder
+              isPackage(file) && nativeOpening(file, opening, linked)
+                ? void window.viewer.openExternal(file.path).catch(report)
+                : workspace.open(file, id, { another }),
+            ),
           path: () => {},
           search: () => {},
           refresh: () => setRefresh((value) => value + 1),

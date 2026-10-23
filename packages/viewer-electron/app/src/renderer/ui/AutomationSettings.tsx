@@ -4,6 +4,7 @@ import type { CustomAction, TerminalProfile } from '../../domain/automation';
 import { Field } from './SettingField';
 import { referencesTo } from '../../domain/references';
 import { Icon } from './Icon';
+import { ChoiceButton } from './ChoiceMenu';
 import {
   customActionEdit,
   terminalProfileEdit,
@@ -101,16 +102,12 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
       </label>
       <label className="settings-row">
         <span>Default shell profile</span>
-        <select
+        <ChoiceButton
+          label="Default shell profile"
           value={value.profileID}
-          onChange={(event) => patch('profileID', event.target.value)}
-        >
-          {value.profiles.map((profile) => (
-            <option value={profile.id} key={profile.id}>
-              {profile.name}
-            </option>
-          ))}
-        </select>
+          choices={value.profiles.map((profile) => ({ value: profile.id, label: profile.name }))}
+          onChoose={(id) => patch('profileID', id)}
+        />
       </label>
       <h2>Shell profiles</h2>
       {value.profiles.map((item) => (
@@ -285,38 +282,36 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
           </label>
           <label className="settings-row">
             <span>Icon</span>
-            <select
+            <ChoiceButton
+              label="Icon"
               value={action.icon}
-              onChange={(event) => patch(action.id, { icon: event.target.value })}
-            >
-              {['command', 'terminal', 'rename', 'folder', 'external', 'code', 'copy'].map(
-                (icon) => (
-                  <option key={icon}>{icon}</option>
-                ),
-              )}
-            </select>
+              choices={[
+                { value: 'command', label: 'Command' },
+                { value: 'terminal', label: 'Terminal' },
+                { value: 'rename', label: 'Rename' },
+                { value: 'folder', label: 'Folder' },
+                { value: 'external', label: 'External' },
+                { value: 'code', label: 'Code' },
+                { value: 'copy', label: 'Copy' },
+              ]}
+              onChoose={(icon) => patch(action.id, { icon })}
+            />
           </label>
           <label className="settings-row">
             <span>Available for</span>
-            <select
+            <ChoiceButton
+              label="Available for"
               value={action.when.target}
-              onChange={(event) =>
-                when(action.id, {
-                  target: event.target.value as CustomAction['when']['target'],
-                })
+              choices={[
+                { value: 'any', label: 'Files and folders' },
+                { value: 'files', label: 'Files' },
+                { value: 'folders', label: 'Folders' },
+                { value: 'background', label: 'Folder background' },
+              ]}
+              onChoose={(target) =>
+                when(action.id, { target: target as CustomAction['when']['target'] })
               }
-            >
-              {[
-                ['any', 'Files and folders'],
-                ['files', 'Files'],
-                ['folders', 'Folders'],
-                ['background', 'Folder background'],
-              ].map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label className="settings-row">
             <span>
@@ -360,10 +355,17 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
           </div>
           <label className="settings-row">
             <span>Execution</span>
-            <select
+            <ChoiceButton
+              label="Execution"
               value={action.executor.kind}
-              onChange={(event) => {
-                const kind = event.target.value;
+              choices={[
+                { value: 'builtin', label: 'Built-in command' },
+                { value: 'recipe', label: 'Action recipe' },
+                { value: 'terminal', label: 'Terminal plane' },
+                { value: 'executable', label: 'Executable' },
+                { value: 'shell', label: 'Shell script' },
+              ]}
+              onChoose={(kind) => {
                 const executor: CustomAction['executor'] =
                   kind === 'builtin'
                     ? { kind, command: 'open-terminal' }
@@ -381,21 +383,7 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
                             };
                 patch(action.id, { executor });
               }}
-            >
-              {['builtin', 'recipe', 'terminal', 'executable', 'shell'].map((kind) => (
-                <option key={kind} value={kind}>
-                  {
-                    {
-                      builtin: 'Built-in command',
-                      recipe: 'Action recipe',
-                      terminal: 'Terminal plane',
-                      executable: 'Executable',
-                      shell: 'Shell script',
-                    }[kind as CustomAction['executor']['kind']]
-                  }
-                </option>
-              ))}
-            </select>
+            />
           </label>
           {action.executor.kind === 'builtin' && (
             <label className="settings-row">
@@ -412,37 +400,33 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
           {action.executor.kind === 'recipe' && (
             <label className="settings-row">
               <span>Action recipe</span>
-              <select
+              <ChoiceButton
+                label="Action recipe"
                 value={action.executor.recipeID}
-                onChange={(event) =>
-                  patch(action.id, { executor: { kind: 'recipe', recipeID: event.target.value } })
+                choices={snapshot.settings.recipes.map((recipe) => ({
+                  value: recipe.id,
+                  label: recipe.name,
+                }))}
+                onChoose={(recipeID) =>
+                  patch(action.id, { executor: { kind: 'recipe', recipeID } })
                 }
-              >
-                {snapshot.settings.recipes.map((recipe) => (
-                  <option value={recipe.id} key={recipe.id}>
-                    {recipe.name}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
           )}
           {action.executor.kind === 'terminal' && (
             <label className="settings-row">
               <span>Shell profile</span>
-              <select
+              <ChoiceButton
+                label="Shell profile"
                 value={action.executor.profileID}
-                onChange={(event) =>
-                  patch(action.id, {
-                    executor: { kind: 'terminal', profileID: event.target.value },
-                  })
+                choices={snapshot.settings.terminals.profiles.map((profile) => ({
+                  value: profile.id,
+                  label: profile.name,
+                }))}
+                onChoose={(profileID) =>
+                  patch(action.id, { executor: { kind: 'terminal', profileID } })
                 }
-              >
-                {snapshot.settings.terminals.profiles.map((profile) => (
-                  <option value={profile.id} key={profile.id}>
-                    {profile.name}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
           )}
           {(action.executor.kind === 'executable' || action.executor.kind === 'shell') && (
@@ -609,25 +593,22 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
         credentials and execution approvals are stored separately.
       </p>
       <div className="settings-action-row">
-        <select
-          aria-label="Configuration section"
+        <ChoiceButton
+          label="Configuration section"
           value={section}
-          onChange={(event) => setSection(event.target.value)}
-        >
-          {[
-            'browsing',
-            'folders',
-            'fileOpening',
-            'previews',
-            'terminals',
-            'customActions',
-            'shortcuts',
-            'search',
-            'recipes',
-          ].map((key) => (
-            <option key={key}>{key}</option>
-          ))}
-        </select>
+          choices={[
+            { value: 'browsing', label: 'Browsing' },
+            { value: 'folders', label: 'Folder views' },
+            { value: 'fileOpening', label: 'File opening' },
+            { value: 'previews', label: 'Previews' },
+            { value: 'terminals', label: 'Terminals' },
+            { value: 'customActions', label: 'Custom commands' },
+            { value: 'shortcuts', label: 'Shortcuts' },
+            { value: 'search', label: 'Search' },
+            { value: 'recipes', label: 'Action recipes' },
+          ]}
+          onChoose={setSection}
+        />
         <button
           onClick={() => {
             const defaults = defaultSettings(snapshot.settings.search.roots[0] || '/');
@@ -645,9 +626,16 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
 import { defaultSettings } from '../../domain/services';
 export function FolderOverrideSettings({ snapshot, save }: Props) {
   const folders = snapshot.settings.folders;
+  const count = Object.keys(folders).length;
   return (
-    <>
-      <h2>Folder views</h2>
+    <details className="settings-recipe">
+      <summary>
+        <Icon name="right" size={12} />
+        <span>
+          Folder views
+          {count > 0 && ` · ${count} ${count === 1 ? 'folder' : 'folders'}`}
+        </span>
+      </summary>
       <p className="settings-note">
         A folder’s view is shared across planes, roots and workspaces. The controls above set
         defaults for folders without overrides.
@@ -655,23 +643,26 @@ export function FolderOverrideSettings({ snapshot, save }: Props) {
       {Object.entries(folders).map(([path, view]) => (
         <div className="settings-folder-override" key={path}>
           <span title={path}>{path}</span>
-          <select
-            aria-label={'View for ' + path}
+          <ChoiceButton
+            label={'View for ' + path}
             value={view.mode || snapshot.settings.browsing.mode}
-            onChange={(event) =>
+            choices={[
+              { value: 'list', label: 'List' },
+              { value: 'grid', label: 'Grid' },
+              { value: 'columns', label: 'Columns' },
+              { value: 'gallery', label: 'Gallery' },
+              { value: 'map', label: 'Map' },
+            ]}
+            onChoose={(mode) =>
               save([
                 {
                   path: 'settings.folders',
                   keys: ['settings', 'folders', path, 'mode'],
-                  value: event.target.value,
+                  value: mode,
                 },
               ])
             }
-          >
-            {['list', 'grid', 'columns', 'gallery', 'map'].map((mode) => (
-              <option key={mode}>{mode}</option>
-            ))}
-          </select>
+          />
           <button
             onClick={() =>
               save([{ path: 'settings.folders', keys: ['settings', 'folders', path], value: null }])
@@ -699,6 +690,6 @@ export function FolderOverrideSettings({ snapshot, save }: Props) {
           Add folder override…
         </button>
       </div>
-    </>
+    </details>
   );
 }

@@ -11,6 +11,7 @@ import {
 import { parentPath } from './folder';
 import { activeWorkspace, getState, report, useViewer } from '../state/store';
 import { Dialog, IconButton, NameDialog } from '../ui/primitives';
+import { ChoiceButton } from '../ui/ChoiceMenu';
 import { useFolder } from '../explorer/useFolder';
 import { useSearch } from '../explorer/useSearch';
 import { useIndexedSearch } from '../explorer/useIndexedSearch';
@@ -240,15 +241,16 @@ function FileFinder({
           {context.selection.length ? `${context.selection.length} selected · ` : ''}
           {directory}
         </span>
-        <select
-          aria-label="Search scope"
+        <ChoiceButton
+          label="Search scope"
           value={scope}
-          onChange={(event) => setScope(event.target.value as typeof scope)}
-        >
-          <option value="folder">This folder</option>
-          <option value="subfolders">Subfolders</option>
-          <option value="all">Indexed locations</option>
-        </select>
+          choices={[
+            { value: 'folder', label: 'This folder' },
+            { value: 'subfolders', label: 'Subfolders' },
+            { value: 'all', label: 'Indexed locations' },
+          ]}
+          onChoose={(value) => setScope(value as typeof scope)}
+        />
         <label className="search-content-option">
           <input
             type="checkbox"

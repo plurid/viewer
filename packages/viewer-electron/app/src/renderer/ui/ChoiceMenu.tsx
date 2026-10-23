@@ -15,46 +15,55 @@ export interface Choice {
 
 /**
  * CHOICES USE THE SEARCHABLE MENU (2026-10-23): the context menu's keyboard-first search over a
- * list of values, the current one checked, in place of a native dropdown. Not a command: nothing
- * here reaches the command catalog or agents.
+ * list of values, the current one checked, in place of a native dropdown. Its end lines up with
+ * the button's, it shows about five rows and scrolls the rest, and inside a modal dialog it opens
+ * in that dialog's top layer. Not a command: nothing here reaches the command catalog or agents.
  */
 export function ChoiceMenu({
   label,
   choices,
   value,
-  position,
   anchor,
+  container,
   onChoose,
   onClose,
 }: {
   label: string;
   choices: readonly Choice[];
   value: string;
-  position: { x: number; y: number };
-  anchor?: HTMLElement | null;
+  /** The button it opens from: the menu's end lines up with the button's. */
+  anchor: HTMLElement;
+  /** Where it renders: the open dialog the button is in, or the page. */
+  container: HTMLElement;
   onChoose(value: string): void;
   onClose(): void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
+  const opener = anchor.getBoundingClientRect();
   useEffect(() => {
     const element = root.current?.querySelector<HTMLElement>('.context-menu');
     if (element) {
       const rect = element.getBoundingClientRect();
-      element.style.left = `${Math.max(8, Math.min(position.x, innerWidth - rect.width - 8))}px`;
-      const top = Math.max(8, Math.min(position.y, innerHeight - rect.height - 8));
+      const left = opener.right - rect.width;
+      element.style.left = `${Math.max(8, Math.min(left, innerWidth - rect.width - 8))}px`;
+      const below = opener.bottom + 4;
+      // below the button, or above it when the window ends first
+      const top =
+        below + rect.height <= innerHeight - 8 ? below : Math.max(8, opener.top - 4 - rect.height);
       element.style.top = `${top}px`;
-      element.style.maxHeight = `min(540px, calc(100vh - ${top + 8}px))`;
     }
     const dismiss = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (!root.current?.contains(target) && !anchor?.contains(target)) close.current();
+      if (!root.current?.contains(target) && !anchor.contains(target)) close.current();
     };
     window.addEventListener('pointerdown', dismiss);
     return () => {
       window.removeEventListener('pointerdown', dismiss);
-      if (!dialogOpen() && anchor?.isConnected) anchor.focus({ preventScroll: true });
+      // back to the button, unless a dialog it is not in has opened over it meanwhile
+      if (anchor.isConnected && (anchor.closest('dialog[open]') || !dialogOpen()))
+        anchor.focus({ preventScroll: true });
     };
     // Placed once when opened, like the context menu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,7 +72,8 @@ export function ChoiceMenu({
     id: 'choice:' + choice.value,
     label: choice.label,
     detail: choice.detail,
-    group: label,
+    // no group: the search field already names the choice, a heading would repeat it
+    group: '',
     icon: choice.value === value ? 'check' : undefined,
     aliases: [choice.value, ...(choice.aliases ?? [])],
     primary: false,
@@ -73,8 +83,13 @@ export function ChoiceMenu({
   return createPortal(
     <div
       ref={root}
-      className="context-menu-layer"
-      style={{ '--menu-left': `${position.x}px`, '--menu-top': `${position.y}px` } as CSSProperties}
+      className="context-menu-layer choice-menu"
+      style={
+        {
+          '--menu-left': `${opener.left}px`,
+          '--menu-top': `${opener.bottom + 4}px`,
+        } as CSSProperties
+      }
       role="dialog"
       aria-label={label}
       data-plurid-overlay="context-menu"
@@ -97,7 +112,7 @@ export function ChoiceMenu({
         }}
       />
     </div>,
-    document.body,
+    container,
   );
 }
 
@@ -107,17 +122,23 @@ export function ChoiceButton({
   value,
   choices,
   onChoose,
+  placeholder,
+  disabled,
   className,
 }: {
   label: string;
   value: string;
   choices: readonly Choice[];
   onChoose(value: string): void;
+  /** Shown while the value is none of the choices: “Choose an action”. */
+  placeholder?: string;
+  disabled?: boolean;
   className?: string;
 }) {
-  const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
+  const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const current = choices.find((choice) => choice.value === value);
+  const show = () => setOpen(true);
   return (
     <>
       <button
@@ -126,30 +147,35 @@ export function ChoiceButton({
         className={'choice-button' + (className ? ' ' + className : '')}
         aria-label={label}
         aria-haspopup="dialog"
-        aria-expanded={!!open}
+        aria-expanded={open}
+        disabled={disabled}
         onClick={(event) => {
           // inside a settings row's label, a click would also reach the row
           event.preventDefault();
-          if (open) {
-            setOpen(null);
-            return;
+          setOpen((value) => !value);
+        }}
+        onKeyDown={(event) => {
+          // as a native dropdown opens on the arrow keys
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            show();
           }
-          const rect = button.current!.getBoundingClientRect();
-          setOpen({ x: rect.left, y: rect.bottom + 4 });
         }}
       >
-        <span>{current?.label ?? value}</span>
+        <span className={current ? undefined : 'choice-placeholder'}>
+          {current?.label ?? placeholder ?? value}
+        </span>
         <Icon name="down" size={10} />
       </button>
-      {open && (
+      {open && button.current && (
         <ChoiceMenu
           label={label}
           choices={choices}
           value={value}
-          position={open}
           anchor={button.current}
+          container={button.current.closest<HTMLElement>('dialog[open]') ?? document.body}
           onChoose={onChoose}
-          onClose={() => setOpen(null)}
+          onClose={() => setOpen(false)}
         />
       )}
     </>

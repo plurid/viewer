@@ -199,6 +199,10 @@ export interface UIPreferences {
     dragging: boolean;
     resizing: boolean;
     opening: 'face-on' | 'pair' | 'dock';
+    /** What the space shows behind the planes (2026-10-23): its colour, or what is behind the window. */
+    backdrop: 'opaque' | 'blur' | 'clear';
+    /** How much of the space's colour is drawn over what is behind, in percent. */
+    backdropOpacity: number;
     headerControls: {
       parent: boolean;
       sidebar: boolean;
@@ -472,6 +476,8 @@ export interface ViewerAPI {
   nativeFilePanel(kind: 'preview' | 'share', paths: string[]): Promise<void>;
   applications(paths: string[]): Promise<ApplicationChoices>;
   chooseApplication(): Promise<NativeApplication | null>;
+  /** A listed application's own icon, as a data URL (Open With rows, 2026-10-23). */
+  applicationIcon(id: string): Promise<string>;
   openWith(paths: string[], applicationID: string): Promise<void>;
   folderSizeStart(paths: string[]): Promise<FolderSizeTask>;
   folderSizeGet(id: string): Promise<FolderSizeTask>;

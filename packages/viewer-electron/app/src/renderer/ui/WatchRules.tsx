@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { workflowUsesSelection, type WorkflowDocument } from '../../domain/workflows';
 import type { WatchRule } from '../../domain/watch-rules';
+import { ChoiceButton } from './ChoiceMenu';
 
 export function WatchRuleControls({
   document,
@@ -239,15 +240,19 @@ export function WatchRuleControls({
             </label>
             <label className="field-label">
               Minimum time between runs
-              <select
-                value={cooldown}
+              <ChoiceButton
+                label="Minimum time between runs"
+                value={String(cooldown)}
                 disabled={blocked}
-                onChange={(event) => setCooldown(Number(event.target.value))}
-              >
-                <option value={30}>30 seconds</option>
-                <option value={60}>1 minute</option>
-                <option value={300}>5 minutes</option>
-              </select>
+                choices={[
+                  { value: '30', label: '30 seconds' },
+                  { value: '60', label: '1 minute' },
+                  { value: '300', label: '5 minutes' },
+                ]}
+                // a configured rule may keep another interval
+                placeholder={`${cooldown} seconds`}
+                onChoose={(value) => setCooldown(Number(value))}
+              />
             </label>
             {!bound && <p className="muted">Choose the workflow’s folder bindings above first.</p>}
             {!matching && (

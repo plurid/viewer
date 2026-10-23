@@ -56,8 +56,7 @@
   padding: 5px 8px;
   font-size: 12px;
 }
-.preview-toolbar button,
-.preview-toolbar select {
+.preview-toolbar button {
   height: var(--preview-control-height);
   min-height: var(--preview-control-height);
   padding-block: 0;
@@ -67,6 +66,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+/* a choice keeps its chevron at the end, as the dropdown it replaced */
+.preview-toolbar .choice-button {
+  justify-content: space-between;
 }
 .preview-toolbar input:not([type='checkbox']):not([type='range']) {
   height: var(--preview-control-height);
@@ -183,8 +186,9 @@
   display: grid;
   gap: 6px;
 }
-.model-shading-fields select {
+.model-shading-fields .choice-button {
   width: 100%;
+  max-width: none;
 }
 .model-brightness > span {
   display: flex;

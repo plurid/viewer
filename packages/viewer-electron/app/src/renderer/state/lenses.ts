@@ -46,7 +46,7 @@ function subscription(folder: string): Subscription {
   return value;
 }
 const notify = (value: Subscription) => value.listeners.forEach((listener) => listener());
-const lensDirectory = (folder: string) =>
+export const lensDirectory = (folder: string) =>
   folder.replace(/\/$/, '') + '/' + lensFolder + '/' + lensSubfolder;
 
 /** Unsaved edits stay visible on top of what the desktop service last reported. */
@@ -103,7 +103,13 @@ export function useLenses(folder: string): LensView {
         };
         const off = window.viewer.onEvent((event) => {
           if (event.type === 'lens-changed' && event.folder === folder) refresh(60);
-          else if (
+          // The lens folder went away (its last lens trashed with it): end that watch, and leave
+          // noticing a new one to the folder's own watch; nothing is created in order to watch.
+          else if (event.type === 'watch-error' && event.path === lensDirectory(folder)) {
+            if (watching) void window.viewer.unwatch(subscriber).catch(() => {});
+            watching = false;
+            refresh(300);
+          } else if (
             event.type === 'folder-changed' &&
             (event.path === folder || event.path === lensDirectory(folder))
           )

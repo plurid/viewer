@@ -102,6 +102,13 @@ export class Applications {
     }
     return { applications, supported: true, defaultName: value.defaultName || undefined };
   }
+  /** Where a listed application is, for its icon; Open With knows it only by its id. */
+  location(id: string): string {
+    const record = this.registered.get(id);
+    if (!record)
+      throw new Error('Choose the application again; this choice is no longer available.');
+    return record.path;
+  }
   async open(paths: string[], id: string): Promise<void> {
     const record = this.registered.get(id);
     if (!record)

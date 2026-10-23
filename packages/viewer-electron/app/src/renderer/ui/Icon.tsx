@@ -4,6 +4,10 @@ const paths = {
   tag: 'M3 3h7l11 11-7 7L3 10V3Zm4 4h.01',
   map: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Zm0 0v14m6-12v14',
   lens: 'M12 3 3 8l9 5 9-5-9-5ZM3 12l9 5 9-5M3 16l9 5 9-5',
+  // 2026-10-23: a group of its own each (Text, Project, Navigation)
+  text: 'M5 6V4h14v2M12 4v16m-3 0h6',
+  briefcase: 'M3 8h18v12H3V8Zm6 0V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3M3 13h18',
+  compass: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm3.5 5.5-2 5-5 2 2-5 5-2Z',
   share: 'M12 16V3m-4 4 4-4 4 4M7 11H3v10h18V11h-4',
   drive: 'M5 4h14l3 11v5H2v-5L5 4Zm-3 11h20M6 18h.01M10 18h.01',
   eject: 'm12 3 8 11H4L12 3ZM4 18h16v3H4v-3Z',

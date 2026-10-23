@@ -13,7 +13,14 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry, ListColumn } from '../../domain/contracts';
 import { visibleListColumns } from '../../domain/list-columns';
 import { getState, report, useFolderPresentation, useViewer } from '../state/store';
-import { fileFamily, formatBytes, groupEntries, sortEntries } from '../../domain/files';
+import {
+  browsable,
+  fileFamily,
+  formatBytes,
+  groupEntries,
+  kindLabel,
+  sortEntries,
+} from '../../domain/files';
 import { Icon, type IconName } from '../ui/Icon';
 import { PreviewHost } from '../previews/PreviewHost';
 import { useFolder } from './useFolder';
@@ -31,7 +38,7 @@ import { rowsUnder, useMarquee, type MarqueeSelect } from './marquee';
 import { renderedImageFormats } from '../../domain/rendered-images';
 import { thumbnailByteLimit } from '../../domain/thumbnails';
 import { PreviewActivity } from '../previews/activity';
-import { AppIcon, isApplication } from './app-icon';
+import { AppIcon, hasBundleIcon } from './app-icon';
 import {
   acceptsDrop,
   droppedPaths,
@@ -73,7 +80,7 @@ export function FileIcon({ entry, size = 18 }: { entry: FileEntry; size?: number
   const symbol = <Icon name={family as IconName} size={size} />;
   return (
     <span className={`file-icon family-${family}`}>
-      {isApplication(entry) ? <AppIcon entry={entry} size={size} fallback={symbol} /> : symbol}
+      {hasBundleIcon(entry) ? <AppIcon entry={entry} size={size} fallback={symbol} /> : symbol}
       {entry.kind === 'symlink' && <Icon name="alias" size={11} className="symlink-mark" />}
     </span>
   );
@@ -100,9 +107,10 @@ export const FileRow = memo(function FileRow({
       role="option"
       aria-selected={selected}
       data-file-path={entry.path}
-      data-directory-path={entry.directory ? entry.path : undefined}
+      // an application is no folder to drop into: its bundle is the app's own
+      data-directory-path={browsable(entry) ? entry.path : undefined}
       aria-expanded={
-        entry.directory && props.toggle ? props.expanded?.includes(entry.path) : undefined
+        browsable(entry) && props.toggle ? props.expanded?.includes(entry.path) : undefined
       }
       title={entry.error || entry.path}
       onClick={(event) => props.select(entry, event)}
@@ -119,7 +127,7 @@ export const FileRow = memo(function FileRow({
             : undefined
         }
       >
-        {props.toggle && entry.directory && (
+        {props.toggle && browsable(entry) && (
           <button
             className="folder-disclosure"
             style={{ left: 2 + (props.depths?.get(entry.path) || 0) * 18 }}
@@ -155,13 +163,7 @@ export const FileRow = memo(function FileRow({
                   '—'
                 )
               ) : column === 'kind' ? (
-                entry.directory ? (
-                  'Folder'
-                ) : entry.kind === 'symlink' ? (
-                  'Alias'
-                ) : (
-                  entry.extension.toUpperCase() || 'File'
-                )
+                kindLabel(entry)
               ) : column === 'extension' ? (
                 entry.extension || '—'
               ) : entry.directory ? (
@@ -171,7 +173,7 @@ export const FileRow = memo(function FileRow({
               )}
             </span>
           ))}
-      {compact && entry.directory && <Icon name="right" size={14} />}
+      {compact && browsable(entry) && <Icon name="right" size={14} />}
     </div>
   );
 });
@@ -521,7 +523,7 @@ export function GridView(props: FileViewProps) {
                   key={entry.path}
                   title={entry.path}
                   data-file-path={entry.path}
-                  data-directory-path={entry.directory ? entry.path : undefined}
+                  data-directory-path={browsable(entry) ? entry.path : undefined}
                   onClick={(event) => props.select(entry, event)}
                   onDoubleClick={(event) =>
                     props.open(entry, event.altKey || event.metaKey || event.ctrlKey)
@@ -537,7 +539,7 @@ export function GridView(props: FileViewProps) {
                     <span>{entry.name}</span>
                     <LinkedPlaneButton paneID={props.paneID} entry={entry} />
                   </span>
-                  <small>{entry.directory ? 'Folder' : formatBytes(entry.size)}</small>
+                  <small>{entry.directory ? kindLabel(entry) : formatBytes(entry.size)}</small>
                 </div>
               ))}
             </div>
@@ -756,6 +758,12 @@ export function GalleryView(props: FileViewProps) {
       <div className="gallery-preview" ref={keepPreviewKeys}>
         {selected && !selected.directory ? (
           <PreviewHost path={selected.path} {...activity} />
+        ) : selected && hasBundleIcon(selected) ? (
+          // an application or bundle shows its own icon, as Finder's preview does
+          <div className="gallery-bundle">
+            <AppIcon entry={selected} size={128} fallback={<Icon name="folder" size={64} />} />
+            <strong>{selected.name}</strong>
+          </div>
         ) : (
           <Empty
             icon={selected?.directory ? 'folder' : 'image'}
@@ -783,7 +791,7 @@ export function GalleryView(props: FileViewProps) {
                   className={`gallery-item ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
                   style={{ height: '100%' }}
                   data-file-path={entry.path}
-                  data-directory-path={entry.directory ? entry.path : undefined}
+                  data-directory-path={browsable(entry) ? entry.path : undefined}
                   aria-selected={props.selectionSet.has(entry.path)}
                   role="option"
                   onClick={(event) => props.select(entry, event)}

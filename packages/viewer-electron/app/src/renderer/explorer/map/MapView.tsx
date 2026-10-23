@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from 'react';
 import type { FileEntry } from '../../../domain/contracts';
+import { browsable } from '../../../domain/files';
 import {
   emptyLens,
   resolveLens,
@@ -618,7 +619,7 @@ export const MapView = memo(function MapView({
                   aria-label={tile.entry.name}
                   title={tile.entry.path}
                   data-file-path={tile.entry.path}
-                  data-directory-path={tile.entry.directory ? tile.entry.path : undefined}
+                  data-directory-path={browsable(tile.entry) ? tile.entry.path : undefined}
                   style={{ left: tile.x + (carried?.x ?? 0), top: tile.y + (carried?.y ?? 0) }}
                   onPointerDown={(event) => onTilePointerDown(event, tile)}
                   onPointerUp={(event) => {

@@ -10,6 +10,7 @@ import {
 import type { SettingsChange } from './settings-edits';
 import { Field } from './SettingField';
 import { IconButton } from './primitives';
+import { ChoiceButton } from './ChoiceMenu';
 import { referencesTo } from '../../domain/references';
 import { ProviderDataPermission } from './ModelDataPermission';
 
@@ -48,17 +49,15 @@ export function ModelSettings({
         Choose a provider and model for each recipe. Requests run only when you invoke an action.
       </p>
       <div className="settings-actions settings-provider-add">
-        <select
-          aria-label="New model provider"
+        <ChoiceButton
+          label="New model provider"
           value={kind}
-          onChange={(event) => setKind(event.target.value as ProviderKind)}
-        >
-          {providerKinds.map((kind) => (
-            <option key={kind} value={kind}>
-              {providerPresets[kind].name}
-            </option>
-          ))}
-        </select>
+          choices={providerKinds.map((kind) => ({
+            value: kind,
+            label: providerPresets[kind].name,
+          }))}
+          onChoose={(kind) => setKind(kind as ProviderKind)}
+        />
         <button
           onClick={() => {
             const provider = newModelProvider(kind, crypto.randomUUID());

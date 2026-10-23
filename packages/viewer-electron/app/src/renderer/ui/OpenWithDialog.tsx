@@ -137,7 +137,7 @@ export function OpenWithDialog({ paths, onClose }: { paths: string[]; onClose():
                   void open(app);
                 }}
               >
-                <Icon name="external" size={18} />
+                <ApplicationIcon id={app.id} />
                 <span>{app.name}</span>
                 {app.default && <small>Default</small>}
               </button>
@@ -169,5 +169,30 @@ export function OpenWithDialog({ paths, onClose }: { paths: string[]; onClose():
         </footer>
       </form>
     </Dialog>
+  );
+}
+
+const applicationIcons = new Map<string, string>();
+/** An application's own icon in its Open With row; the generic symbol while it loads or without one. */
+function ApplicationIcon({ id }: { id: string }) {
+  const [icon, setIcon] = useState(() => applicationIcons.get(id) ?? '');
+  useEffect(() => {
+    if (applicationIcons.has(id)) return;
+    let live = true;
+    void window.viewer
+      .applicationIcon(id)
+      .then((value) => {
+        applicationIcons.set(id, value);
+        if (live) setIcon(value);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  return icon ? (
+    <img className="app-icon" src={icon} alt="" width={18} height={18} draggable={false} />
+  ) : (
+    <Icon name="external" size={18} />
   );
 }

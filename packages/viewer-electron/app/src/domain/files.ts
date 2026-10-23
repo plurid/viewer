@@ -47,7 +47,7 @@ export function sortEntries(
   foldersFirst = true,
 ): FileEntry[] {
   return [...entries].sort((a, b) => {
-    if (foldersFirst && a.directory !== b.directory) return a.directory ? -1 : 1;
+    if (foldersFirst && browsable(a) !== browsable(b)) return browsable(a) ? -1 : 1;
     const value =
       key === 'name'
         ? collator.compare(a.name, b.name)
@@ -62,6 +62,47 @@ export function formatBytes(value: number): string {
   const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), 4);
   return `${(value / 1024 ** index).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${['B', 'KB', 'MB', 'GB', 'TB'][index]}`;
 }
+/** Folders macOS shows as one item, with an icon of their own: applications and other bundles. */
+export const packageExtensions: ReadonlySet<string> = new Set([
+  'app',
+  'bundle',
+  'framework',
+  'plugin',
+  'kext',
+  'prefpane',
+  'appex',
+  'xpc',
+  'saver',
+  'qlgenerator',
+  'mdimporter',
+  'photoslibrary',
+  'musiclibrary',
+  'xcodeproj',
+  'xcworkspace',
+  'playground',
+  'rtfd',
+  'pages',
+  'numbers',
+  'key',
+  'fcpbundle',
+  'logicx',
+  'band',
+  'lproj',
+]);
+export const isPackage = (entry: Pick<FileEntry, 'directory' | 'extension'>) =>
+  entry.directory && packageExtensions.has(entry.extension.toLowerCase());
+/** A folder Viewer browses into. An application or other bundle is one item, as in Finder
+ * (2026-10-23): it opens in its app, and Show Package Contents goes inside. */
+export const browsable = (entry: Pick<FileEntry, 'directory' | 'extension'>) =>
+  entry.directory && !isPackage(entry);
+/** The Kind column: Folder, Application, Alias, or a file's or bundle's extension. */
+export function kindLabel(entry: Pick<FileEntry, 'directory' | 'extension' | 'kind'>): string {
+  if (browsable(entry)) return 'Folder';
+  if (entry.kind === 'symlink') return 'Alias';
+  if (isPackage(entry) && entry.extension.toLowerCase() === 'app') return 'Application';
+  return entry.extension.toUpperCase() || 'File';
+}
+
 export function fileFamily(entry: Pick<FileEntry, 'extension' | 'directory' | 'mime'>): string {
   if (entry.directory) return 'folder';
   if (entry.extension === 'dxf') return 'drawing';
@@ -91,11 +132,13 @@ export function selectedRange(entries: FileEntry[], anchor: string, target: stri
 export function fileGroup(entry: FileEntry, group: 'none' | 'kind' | 'modified'): string {
   if (group === 'none') return '';
   if (group === 'kind')
-    return entry.directory
+    return browsable(entry)
       ? 'Folders'
-      : entry.extension
-        ? entry.extension.toUpperCase() + ' files'
-        : 'Files';
+      : isPackage(entry) && entry.extension.toLowerCase() === 'app'
+        ? 'Applications'
+        : entry.extension
+          ? entry.extension.toUpperCase() + ' files'
+          : 'Files';
   if (!entry.modified) return 'Unknown date';
   // The person's calendar day, not the UTC one.
   const date = new Date(entry.modified);

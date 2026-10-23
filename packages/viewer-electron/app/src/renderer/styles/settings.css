@@ -43,9 +43,6 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.settings-row select {
-  min-width: 110px;
-}
 .settings-row input[type='checkbox'] {
   width: 15px;
   height: 15px;
@@ -225,13 +222,17 @@
   font-weight: 400;
 }
 .settings-page .settings-row > input:not([type='checkbox']),
-.settings-page .settings-row select {
+.settings-page .settings-row .choice-button {
   width: 180px;
   flex-shrink: 0;
 }
-.settings-page .settings-wide-field select {
+.settings-page .settings-wide-field .choice-button {
   width: 300px;
   max-width: 100%;
+}
+/* fits the folder override's view column */
+.settings-folder-override .choice-button {
+  min-width: 0;
 }
 .settings-field-detail {
   font-size: 12px;
@@ -241,17 +242,20 @@
   margin: 8px 0 16px;
 }
 @container (max-width: 540px) {
-  .settings-page .settings-row:has(> select),
+  .settings-page .settings-row:has(> .choice-button),
   .settings-page .settings-row:has(> input:not([type='checkbox'])),
   .settings-page .settings-row:has(> div) {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
-  .settings-page .settings-row > select,
+  .settings-page .settings-row > .choice-button,
   .settings-page .settings-row > input:not([type='checkbox']),
   .settings-page .settings-row > div {
     width: 100%;
+  }
+  .settings-page .settings-row > .choice-button {
+    max-width: none;
   }
 }
 .settings-page textarea {
@@ -300,7 +304,7 @@
   align-items: center;
   margin-bottom: 20px;
 }
-.settings-provider-add select {
+.settings-provider-add .choice-button {
   width: 220px;
   max-width: 100%;
 }
@@ -324,10 +328,11 @@
 .model-data-permission .settings-actions {
   margin: 0;
 }
-.model-data-permission .settings-actions select {
+.model-data-permission .settings-actions .choice-button {
   flex: 1 1 240px;
   min-width: 0;
   width: auto;
+  max-width: none;
 }
 .model-endpoint {
   overflow-wrap: anywhere;
@@ -376,8 +381,11 @@
   color: var(--muted);
 }
 .settings-editor input,
-.settings-editor select {
+.settings-editor .choice-button {
   width: 100%;
+}
+.settings-editor .choice-button {
+  max-width: none;
 }
 .settings-editor .settings-row {
   padding: 8px 0;

@@ -1,3 +1,4 @@
+import { packageExtensions } from '../domain/files';
 import { constants } from 'node:fs';
 import {
   access as fileAccess,
@@ -49,16 +50,8 @@ Deleting this folder removes the lenses only. Your files are never touched.
 To keep lenses out of version control, add \`.viewer/\` to \`.gitignore\`.
 `;
 const ownReadme = (text: string) => text.includes('Viewer keeps the lenses for this folder here.');
-/** Folders whose contents belong to an application, or Home, never receive a `.viewer`. */
-const packageExtensions = new Set([
-  '.app',
-  '.bundle',
-  '.framework',
-  '.plugin',
-  '.kext',
-  '.photoslibrary',
-  '.xcodeproj',
-]);
+/** Folders whose contents belong to an application or a document (`isPackage`), or Home, never
+ * receive a `.viewer`. */
 const unwritable = new Set(['EACCES', 'EPERM', 'EROFS']);
 const missingDays = 30;
 const stateSchema = z
@@ -179,7 +172,7 @@ export class Lenses {
   ): Promise<{ directory?: string; creatable: boolean; writable: boolean }> {
     if (
       path.resolve(folder) === path.resolve(this.options.home) ||
-      packageExtensions.has(path.extname(folder).toLowerCase())
+      packageExtensions.has(path.extname(folder).slice(1).toLowerCase())
     )
       return { creatable: false, writable: false };
     const viewer = path.join(folder, lensFolder),
@@ -500,7 +493,25 @@ export class Lenses {
       this.options.changed(folder);
       return {};
     }
+    // The last lens takes Viewer's now-empty folder along, as one undoable Trash item, rather than
+    // leaving a README and an empty lenses/ behind (2026-10-23).
+    const viewer = path.join(folder, lensFolder);
+    if (await this.onlyLens(viewer, file)) return { job: await this.options.trash(viewer) };
     return { job: await this.options.trash(file) };
+  }
+  /** Whether `file` is the one lens in a `.viewer` holding nothing but Viewer's own README. */
+  private async onlyLens(viewer: string, file: string): Promise<boolean> {
+    if (path.dirname(file) !== path.join(viewer, lensSubfolder)) return false;
+    const [inside, lenses] = await Promise.all([
+      readdir(viewer).catch(() => null),
+      readdir(path.join(viewer, lensSubfolder)).catch(() => null),
+    ]);
+    if (!inside || !lenses || lenses.length !== 1 || lenses[0] !== path.basename(file))
+      return false;
+    if (inside.some((name) => name !== 'README.md' && name !== lensSubfolder)) return false;
+    return inside.includes('README.md')
+      ? readFile(path.join(viewer, 'README.md'), 'utf8').then(ownReadme, () => false)
+      : true;
   }
   /** Moves a lens kept on this Mac into the folder, once the folder can hold it. */
   async share(folder: string, file: string): Promise<LensDocument> {

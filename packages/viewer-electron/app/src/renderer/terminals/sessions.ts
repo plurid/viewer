@@ -73,7 +73,8 @@ export function terminalSession(
         scrollback,
         fontFamily: 'Menlo, Monaco, monospace',
         fontSize: 13,
-        allowProposedApi: false,
+        // Find highlights its matches with decorations, a proposed API
+        allowProposedApi: true,
         cursorBlink: true,
         convertEol: false,
         theme: terminalTheme('dark'),
@@ -117,7 +118,8 @@ export function terminalSession(
               .catch(report);
           return false;
         }
-        if (event.metaKey && ['k', ','].includes(event.key.toLowerCase())) return false;
+        // ⌘K, ⌘, and ⌘F (the terminal's Find) are Viewer's, not the shell's
+        if (event.metaKey && ['k', ',', 'f'].includes(event.key.toLowerCase())) return false;
         return true;
       });
       terminal.onData((data) => {

@@ -37,6 +37,8 @@ export interface WorkspaceController {
       evidence?: EvidenceNavigation;
       /** A link followed: the plane also becomes the active one, taking the wheel and the keys. */
       activate?: boolean;
+      /** A text file opens editing (Quick Preview's Edit, 2026-10-23). */
+      edit?: boolean;
     },
   ): void;
   openPath(
@@ -51,6 +53,8 @@ export interface WorkspaceController {
       directory?: boolean;
       /** A link followed: the plane it opens or shows becomes the active one. */
       activate?: boolean;
+      /** A text file opens editing. */
+      edit?: boolean;
     },
   ): Promise<void>;
   /** Shows a plane and makes it Viewer's active pane; `activate` also gives it the wheel and the

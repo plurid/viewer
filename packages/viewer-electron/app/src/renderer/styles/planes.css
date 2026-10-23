@@ -79,7 +79,8 @@
 .plane-module-controls .preview-toolbar .toolbar-spacer {
   display: none;
 }
-.plane-module-controls .preview-toolbar select {
+.plane-module-controls .preview-toolbar .choice-button {
+  min-width: 0;
   max-width: 125px;
   padding: 3px 5px;
 }

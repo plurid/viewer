@@ -457,6 +457,37 @@ async function click(selector: string, count = 1, modifiers = 0): Promise<void> 
     });
   }
 }
+/** A choice menu's button (ui/ChoiceMenu.tsx), by the name it shares with its menu. */
+const choiceButton = (label: string) =>
+  JSON.stringify(`button[aria-label=${JSON.stringify(label)}]`);
+/** Chooses in a choice menu as a person does: its button, then the value's row. */
+async function choose(
+  label: string,
+  value: string,
+  run: <T>(expression: string) => Promise<T> = evaluate,
+): Promise<void> {
+  const row = JSON.stringify(`.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`);
+  await run(`document.querySelector(${choiceButton(label)}).click()`);
+  await until(() => run<boolean>(`!!document.querySelector(${row})`), Boolean, `${label} menu`);
+  await run(`document.querySelector(${row}).click()`);
+}
+/** The values a choice menu offers, read from it open; it is closed again. */
+async function choiceValues(
+  label: string,
+  run: <T>(expression: string) => Promise<T> = evaluate,
+): Promise<string[]> {
+  await run(`document.querySelector(${choiceButton(label)}).click()`);
+  const values = await until(
+    () =>
+      run<string[]>(
+        `Array.from(document.querySelectorAll('.choice-menu [data-menu-id]'),row=>row.dataset.menuId.slice('choice:'.length))`,
+      ),
+    (values) => values.length > 0,
+    `${label} menu`,
+  );
+  await run(`document.querySelector(${choiceButton(label)}).click()`);
+  return values;
+}
 async function key(
   key: string,
   code: string,
@@ -1482,12 +1513,7 @@ async function verifyConfiguredChrome(): Promise<void> {
     Boolean,
     'rename action picker',
   );
-  assert.deepEqual(
-    await evaluate(
-      `Array.from(document.querySelector('[aria-label="Rename actions"]').options).slice(1).map(option=>option.value)`,
-    ),
-    ['recipe.rename', 'recipe.batch-rename'],
-  );
+  assert.deepEqual(await choiceValues('Rename actions'), ['recipe.rename', 'recipe.batch-rename']);
   await snapshot('desktop-native-rename-actions.png');
   await click('dialog [aria-label="Close"]');
   await click(fileSelector(path.join(fixture.files, 'Documents')), 2);
@@ -1504,9 +1530,7 @@ async function verifyConfiguredChrome(): Promise<void> {
   await evaluate(
     `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Documents', 'Project notes.md')))}).click()`,
   );
-  await evaluate(
-    `(() => { const picker=document.querySelector('[aria-label="Rename actions"]');picker.value='recipe.book-name';picker.dispatchEvent(new Event('change',{bubbles:true})); })()`,
-  );
+  await choose('Rename actions', 'recipe.book-name');
   await until(
     () => evaluate<boolean>('!!document.querySelector(".action-config")'),
     Boolean,
@@ -2343,17 +2367,18 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   await tab('Models');
   await until(
     () =>
-      settingsEvaluate<number>(
-        `document.querySelectorAll('[aria-label="New model provider"] option').length`,
-      ),
-    (count) => count === 8,
+      settingsEvaluate<boolean>(`!!document.querySelector(${choiceButton('New model provider')})`),
+    Boolean,
+    'provider picker',
+  );
+  assert.equal(
+    (await choiceValues('New model provider', settingsEvaluate)).length,
+    8,
     'complete provider picker',
   );
   await snapshot('desktop-native-models-empty.png');
   for (const kind of ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter']) {
-    await settingsEvaluate(
-      `(() => { const picker=document.querySelector('[aria-label="New model provider"]');picker.value=${JSON.stringify(kind)};picker.dispatchEvent(new Event('change',{bubbles:true})); })()`,
-    );
+    await choose('New model provider', kind, settingsEvaluate);
     await settingsEvaluate(
       `Array.from(document.querySelectorAll('.settings-provider-add button')).find(button=>button.textContent.trim()==='Add provider').click()`,
     );
@@ -2844,7 +2869,7 @@ async function verifyRefinements(): Promise<void> {
         if (category === 'Agents')
           assert.ok(
             (await settingsEvaluate<number>(
-              'document.querySelector(".settings-wide-field select").clientWidth',
+              'document.querySelector(".settings-wide-field .choice-button").clientWidth',
             )) >= 240,
             'Authorized-folder choice fits its placeholder',
           );
@@ -3278,7 +3303,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
       'Drawing controls align vertically',
     );
   };
-  await checkDrawingToolbar('.quick-preview .preview-toolbar > :is(button,select)', 30);
+  await checkDrawingToolbar('.quick-preview .preview-toolbar > button', 30);
   assert.equal(
     await evaluate<number>('document.querySelector(".dxf-info").offsetHeight'),
     34,
@@ -3294,9 +3319,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     'Drawing units stay beside the instructions',
   );
   const tool = async (value: string) => {
-    await evaluate(
-      `(()=>{const input=document.querySelector('[aria-label="Drawing tool"]');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change',{bubbles:true}));})()`,
-    );
+    await choose('Drawing tool', value);
     await evaluate(
       'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
     );
@@ -3358,9 +3381,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   );
   await click('[aria-label="Show drawing details"]');
   assert.equal(await evaluate('document.querySelectorAll(".dxf-measurement").length'), 3);
-  await evaluate(
-    `(()=>{const field=document.querySelector('[aria-label="Drawing measurement units"]');field.value='1';field.dispatchEvent(new Event('change',{bubbles:true}));})()`,
-  );
+  await choose('Drawing measurement units', '1');
   await until(
     () =>
       evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
@@ -3499,11 +3520,14 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     Boolean,
     'drawing tools in plane header',
   );
-  await checkDrawingToolbar('.plane-module-controls .preview-toolbar > :is(button,select)', 28);
+  await checkDrawingToolbar('.plane-module-controls .preview-toolbar > button', 28);
   await paletteCommand('Measure distance');
   await until(
-    () => evaluate<string>(`document.querySelector('[aria-label="Drawing tool"]')?.value || ''`),
-    (value) => value === 'distance',
+    () =>
+      evaluate<string>(
+        `document.querySelector(${choiceButton('Drawing tool')})?.textContent || ''`,
+      ),
+    (value) => value === 'Distance',
     'searchable preview measurement command',
   );
   assert.equal(
@@ -3987,6 +4011,10 @@ async function verifyServiceWorkflows(): Promise<void> {
   agent.stdout.on('data', (chunk) => {
     agentOutput += String(chunk);
   });
+  let agentErrors = '';
+  agent.stderr.on('data', (chunk) => {
+    agentErrors += String(chunk);
+  });
   const exited = new Promise<number | null>((resolve, reject) => {
     agent.once('error', reject);
     agent.once('exit', resolve);
@@ -4030,7 +4058,8 @@ async function verifyServiceWorkflows(): Promise<void> {
         throw new Error('Packaged MCP client timed out');
       }),
     ]);
-    assert.equal(code, 0);
+    assert.equal(code, 0, agentErrors);
+    assert.ok(agentOutput.trim(), `Packaged MCP client answered nothing. ${agentErrors}`);
     const replies = agentOutput
       .trim()
       .split('\n')
@@ -5391,9 +5420,7 @@ async function verify(): Promise<void> {
     'contextual file finder',
   );
   await command('Input.insertText', { text: 'Project brief.pdf' });
-  await evaluate(
-    `(() => { const input = document.querySelector('[aria-label="Search scope"]'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(input,'subfolders'); input.dispatchEvent(new Event('change',{bubbles:true})); })()`,
-  );
+  await choose('Search scope', 'subfolders');
   await until(
     () =>
       evaluate<string>(

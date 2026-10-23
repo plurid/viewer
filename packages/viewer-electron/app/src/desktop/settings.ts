@@ -176,6 +176,25 @@ export const settingsSchema = z
         lineNumbers: true,
         trimTrailingWhitespace: true,
       }),
+    terminalFont: z
+      .object({
+        fontFamily: z
+          .string()
+          .regex(/^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$/)
+          .default('Hack Nerd Font Mono'),
+        fontSize: z.number().int().min(8).max(48).default(17),
+        fontWeight: z.enum(['normal', 'bold']).default('bold'),
+        lineHeight: z.number().min(1).max(2).default(1.3),
+        letterSpacing: z.number().int().min(0).max(8).default(1),
+      })
+      .strict()
+      .default({
+        fontFamily: 'Hack Nerd Font Mono',
+        fontSize: 17,
+        fontWeight: 'bold',
+        lineHeight: 1.3,
+        letterSpacing: 1,
+      }),
     search: z
       .object({
         roots: z.array(localPath).max(100),

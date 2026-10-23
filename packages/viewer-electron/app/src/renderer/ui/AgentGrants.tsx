@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ExecutionGrant } from '../../domain/agent-requests';
 import type { ApplicationSettings } from '../../domain/services';
 import { sharedClientID } from '../../domain/agent-clients';
+import { ChoiceButton } from './ChoiceMenu';
 export function AgentGrants({
   settings,
   clientID = sharedClientID,
@@ -49,17 +50,14 @@ export function AgentGrants({
       </p>
       <label className="settings-row settings-wide-field">
         <span>Grant for folder</span>
-        <select
+        <ChoiceButton
+          label="Grant for folder"
           value={root}
-          title={root}
+          choices={roots.map((root) => ({ value: root, label: root }))}
+          placeholder="Choose an authorized folder"
           disabled={!roots.length}
-          onChange={(event) => setRoot(event.target.value)}
-        >
-          <option value="">Choose an authorized folder</option>
-          {roots.map((root) => (
-            <option key={root}>{root}</option>
-          ))}
-        </select>
+          onChoose={setRoot}
+        />
       </label>
       {root && <p className="settings-field-detail">{root}</p>}
       {root && (

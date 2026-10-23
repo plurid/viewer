@@ -36,4 +36,8 @@ export class AppIcons {
   clear(): void {
     this.cache.clear();
   }
+  /** A bundle that changed: its icons are rendered again, and the others kept. */
+  forget(file: string): void {
+    for (const key of [...this.cache.keys()]) if (key.endsWith('\0' + file)) this.cache.delete(key);
+  }
 }

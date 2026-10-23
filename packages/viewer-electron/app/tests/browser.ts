@@ -107,6 +107,7 @@ const api: ViewerAPI = {
   taggedFiles: (tag, roots) => invoke('taggedFiles', tag, roots),
   nativeFilePanel: (kind, files) => invoke('nativeFilePanel', kind, files),
   applications: (paths) => invoke('applications', paths),
+  applicationIcon: (id) => invoke('applicationIcon', id),
   chooseApplication: () => invoke('chooseApplication'),
   openWith: (paths, id) => invoke('openWith', paths, id),
   folderSizeStart: (paths) => invoke('folderSizeStart', paths),

@@ -42,10 +42,9 @@
   margin-right: auto;
   min-width: 0;
 }
-.rename-action-select {
+.choice-button.rename-action-select {
   max-width: 175px;
   padding: 6px 8px;
-  text-overflow: ellipsis;
 }
 .dialog footer button {
   border-color: var(--line);
@@ -166,8 +165,9 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.information-tag select {
+.information-tag .choice-button {
   width: 112px;
+  min-width: 0;
   flex: 0 0 112px;
 }
 .information-tag-add {

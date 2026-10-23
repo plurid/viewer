@@ -14,6 +14,7 @@ import { createLens, editLens, trashLens } from '../state/lenses';
 import { folderPresentation, report, updateFolderPresentation } from '../state/store';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
+import { ChoiceButton } from '../ui/ChoiceMenu';
 
 export type LensPrompt =
   | { kind: 'new-lens'; folder: string }
@@ -340,26 +341,33 @@ function RulesDialog({
       {rules.length > 1 && (
         <label className="lens-rule-match">
           Items must match
-          <select value={match} onChange={(event) => setMatch(event.target.value as 'all' | 'any')}>
-            <option value="all">every rule</option>
-            <option value="any">any rule</option>
-          </select>
+          {/* lowercase: the choice completes the sentence its label starts */}
+          <ChoiceButton
+            label="Items must match"
+            value={match}
+            choices={[
+              { value: 'all', label: 'every rule' },
+              { value: 'any', label: 'any rule' },
+            ]}
+            onChoose={(value) => setMatch(value as 'all' | 'any')}
+          />
         </label>
       )}
       <ul className="lens-rules">
         {rules.map((rule, index) => (
           <li key={index}>
-            <select
-              aria-label="Rule"
+            <ChoiceButton
+              label="Rule"
               value={rule.kind}
-              onChange={(event) => change(index, { kind: event.target.value as DraftRule['kind'] })}
-            >
-              <option value="name">Name matches</option>
-              <option value="extension">Extension is</option>
-              <option value="type">Type is</option>
-              <option value="created">Created</option>
-              <option value="modified">Modified</option>
-            </select>
+              choices={[
+                { value: 'name', label: 'Name matches' },
+                { value: 'extension', label: 'Extension is' },
+                { value: 'type', label: 'Type is' },
+                { value: 'created', label: 'Created' },
+                { value: 'modified', label: 'Modified' },
+              ]}
+              onChoose={(kind) => change(index, { kind: kind as DraftRule['kind'] })}
+            />
             {rule.kind === 'name' || rule.kind === 'extension' ? (
               <input
                 aria-label={rule.kind === 'name' ? 'Name pattern' : 'Extensions'}
@@ -369,19 +377,12 @@ function RulesDialog({
                 onChange={(event) => change(index, { text: event.target.value })}
               />
             ) : rule.kind === 'type' ? (
-              <select
-                aria-label="Type"
+              <ChoiceButton
+                label="Type"
                 value={rule.type}
-                onChange={(event) =>
-                  change(index, { type: event.target.value as DraftRule['type'] })
-                }
-              >
-                {lensTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {typeLabels[type]}
-                  </option>
-                ))}
-              </select>
+                choices={lensTypes.map((type) => ({ value: type, label: typeLabels[type] }))}
+                onChoose={(type) => change(index, { type: type as DraftRule['type'] })}
+              />
             ) : (
               <span className="lens-rule-dates">
                 in

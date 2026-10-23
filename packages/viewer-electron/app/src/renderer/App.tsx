@@ -53,7 +53,8 @@ import { WorkflowControls } from './ui/Workflows';
 import { RelationshipControls } from './ui/Relationships';
 import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
-import { QuickPreview } from './previews/QuickPreview';
+import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
+import { openTerminalFind } from './terminals/find';
 import { CommandsContext, useCommands, useCommandSource } from './commands/context';
 import { CommandRegistry, type CommandContext } from './commands/registry';
 import { windowCommands } from './commands/window';
@@ -360,6 +361,13 @@ function AppWindow() {
   const invoke = async (id: string) => {
     // Edit menu Undo, Redo and Select All reach a CodeMirror editor, which `webContents` does not
     if (routeToEditor(id, getState().activePane)) return;
+    // ⌘E in Quick Preview edits the text file it shows, as its plane
+    if (id === 'edit-file' && quickPreviewEdit()) return;
+    // ⌘F in a terminal searches its output, rather than opening the file palette
+    if (id === 'find-file') {
+      const terminal = document.activeElement?.closest<HTMLElement>('.terminal-plane');
+      if (terminal?.dataset.terminalId && openTerminalFind(terminal.dataset.terminalId)) return;
+    }
     if (
       document.activeElement?.closest('.terminal-plane') &&
       (await terminalEditing(getState().activePane, id))
@@ -522,6 +530,14 @@ function AppWindow() {
     document.documentElement.dataset.look = saved.look;
     document.documentElement.style.colorScheme = saved.look;
   }, [saved.look]);
+  // A see-through space (2026-10-23): the window lets what is behind it through (backdrop.ts); the
+  // page draws the space at the chosen opacity, the planes opaque over it.
+  const backdrop = saved.ui.space.backdrop;
+  const backdropOpacity = saved.ui.space.backdropOpacity;
+  useEffect(() => {
+    document.documentElement.dataset.backdrop = backdrop;
+    document.documentElement.style.setProperty('--space-opacity', `${backdropOpacity}%`);
+  }, [backdrop, backdropOpacity]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       // Quick Preview's own keys are its own (`QuickPreview`), answered after the focus has had them.

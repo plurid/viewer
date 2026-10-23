@@ -18,6 +18,12 @@ folders and build artifacts until their removal has been approved; do not run
 cleanup routines that permanently delete them. Do not rewrite or delete user
 changes while doing unrelated work.
 
+Standing exception (approved 2026-10-23): `pnpm package` and `pnpm make` first run
+`tools/trash-previous-build.ts`, which moves the previous build output, exactly
+`packages/viewer-electron/app/.vite` and `packages/viewer-electron/app/out/Viewer-<platform>-<arch>`,
+to the Trash before rebuilding. It moves nothing else, refuses links and stops the build
+if the Trash fails.
+
 Viewer must enforce agent removal approval in the desktop service. Editable
 JSONC, imported configuration, custom-action aliases and saved terminal/execution
 grants must not bypass it. Agent shell, executable and terminal-input routes must

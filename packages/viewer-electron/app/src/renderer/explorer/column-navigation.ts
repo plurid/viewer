@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import type { FileEntry } from '../../domain/contracts';
+import { browsable } from '../../domain/files';
 import { browseSession, useBrowseField } from '../workspace/sessions';
 import type { FileModifiers, FileSelection } from './selection';
 
@@ -25,13 +26,14 @@ export function useColumnNavigation(
       const depth = entry.parent === path ? 0 : session.columnTrail.indexOf(entry.parent) + 1;
       if (depth < 0 || (entry.parent !== path && !depth)) return;
       setTrail((value) => {
-        const next = [...value.slice(0, depth), ...(entry.directory ? [entry.path] : [])];
+        // an application shows its preview, not a column of its bundle, as in Finder
+        const next = [...value.slice(0, depth), ...(browsable(entry) ? [entry.path] : [])];
         return next.length === value.length && next.every((part, index) => value[index] === part)
           ? value
           : next;
       });
       session.columnScope = entry.parent;
-      setDirectory(entry.directory ? entry.path : entry.parent);
+      setDirectory(browsable(entry) ? entry.path : entry.parent);
     },
     [path, session, setTrail, setDirectory],
   );
@@ -49,7 +51,7 @@ export function useColumnNavigation(
       if (directory !== path && !depth) return;
       scopes.set(directory, scope);
       const child = session.columnTrail[depth];
-      if (child && !scope.some((entry) => entry.directory && entry.path === child)) {
+      if (child && !scope.some((entry) => browsable(entry) && entry.path === child)) {
         selecting.removeBranch(child);
         setTrail((value) => value.slice(0, depth));
         if (
@@ -105,7 +107,7 @@ export function useColumnNavigation(
     },
     right() {
       const entry = scope().find((item) => item.path === session.cursor);
-      if (!entry?.directory) return;
+      if (!entry || !browsable(entry)) return;
       reveal(entry);
       const children = scopes.get(entry.path);
       if (children) {

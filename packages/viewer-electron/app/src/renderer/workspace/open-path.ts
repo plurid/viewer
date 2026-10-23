@@ -40,6 +40,7 @@ export async function openWorkspacePath(
       another: target?.another,
       link: target?.link,
       activate: target?.activate,
+      edit: target?.edit,
     });
   return true;
 }

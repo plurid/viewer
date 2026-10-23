@@ -21,7 +21,7 @@ const icons: Record<string, IconName> = {
   View: 'list',
   Columns: 'columns',
   'Group by': 'grid',
-  Navigation: 'folder',
+  Navigation: 'compass',
   Terminal: 'terminal',
   Actions: 'command',
   Plane: 'link',
@@ -32,9 +32,12 @@ const icons: Record<string, IconName> = {
   Space: 'model',
   Sidebar: 'sidebar',
   App: 'settings',
-  Workspace: 'command',
-  Project: 'folder',
+  Workspace: 'dock',
+  Project: 'briefcase',
   Workspaces: 'grid',
+  Lens: 'lens',
+  Text: 'text',
+  Preview: 'eye',
   'Quick actions': 'image',
 };
 const order = [
@@ -45,8 +48,12 @@ const order = [
   'Terminal',
   'Actions',
   'Quick actions',
+  'Text',
+  'Preview',
+  'Lens',
   'Plane',
   'Size & position',
+  'Project',
   'App',
 ];
 const leaf = (command: ResolvedCommand): MenuEntry => ({
@@ -179,7 +186,9 @@ export function contextMenuSections(
     if (label === 'Size & position') return branch(label, layoutSections(rows));
     if (label === 'Files') {
       const open = rows.filter((item) =>
-        ['open-default', 'linked', 'another-plane', 'reveal'].includes(item.id),
+        ['open-default', 'show-package-contents', 'linked', 'another-plane', 'reveal'].includes(
+          item.id,
+        ),
       );
       const organize = rows.filter((item) =>
         ['cut', 'copy-to', 'move-to', 'duplicate'].includes(item.id),

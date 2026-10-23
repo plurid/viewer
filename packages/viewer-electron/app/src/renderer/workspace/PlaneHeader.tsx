@@ -303,7 +303,9 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
               ? 'Folder actions'
               : pane?.type === 'search'
                 ? 'Search actions'
-                : 'Preview actions'
+                : pane?.type === 'terminal'
+                  ? 'Terminal actions'
+                  : 'Preview actions'
           }
           aria-haspopup="dialog"
           aria-expanded={menu?.kind === 'actions'}

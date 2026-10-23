@@ -15,6 +15,7 @@ import { Dialog, Loading } from './primitives';
 import { reviewOperationPlan } from './OperationReview';
 import { WorkflowArtifact } from './WorkflowArtifact';
 import { WatchRuleControls } from './WatchRules';
+import { ChoiceButton } from './ChoiceMenu';
 import type { WatchRule } from '../../domain/watch-rules';
 const statusLabel: Record<WorkflowRun['status'] | WorkflowRun['steps'][number]['status'], string> =
   {
@@ -237,17 +238,19 @@ export function WorkflowControls() {
           </button>
           <label>
             New workflow
-            <select
+            <ChoiceButton
+              label="New workflow"
               value={template}
               disabled={busy}
-              onChange={(event) => setTemplate(event.target.value as typeof template)}
-            >
-              <option value="inspect">Inspect files</option>
-              <option value="compare">Compare folders</option>
-              <option value="copy">Inspect and copy</option>
-              <option value="inspect-selection">Inspect selection</option>
-              <option value="copy-selection">Inspect and copy selection</option>
-            </select>
+              choices={[
+                { value: 'inspect', label: 'Inspect files' },
+                { value: 'compare', label: 'Compare folders' },
+                { value: 'copy', label: 'Inspect and copy' },
+                { value: 'inspect-selection', label: 'Inspect selection' },
+                { value: 'copy-selection', label: 'Inspect and copy selection' },
+              ]}
+              onChoose={(value) => setTemplate(value as typeof template)}
+            />
           </label>
           <button disabled={busy} onClick={() => void perform(() => choose('create'))}>
             Create…

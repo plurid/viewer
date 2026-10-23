@@ -116,6 +116,13 @@ export function normalizePreferences(value?: unknown): UIPreferences {
       opening: ['face-on', 'pair', 'dock'].includes(String(space.opening))
         ? (space.opening as UIPreferences['space']['opening'])
         : 'face-on',
+      backdrop: ['opaque', 'blur', 'clear'].includes(String(space.backdrop))
+        ? (space.backdrop as UIPreferences['space']['backdrop'])
+        : 'opaque',
+      backdropOpacity:
+        typeof space.backdropOpacity === 'number' && Number.isFinite(space.backdropOpacity)
+          ? Math.round(Math.min(100, Math.max(0, space.backdropOpacity)))
+          : 60,
       headerControls: {
         parent: boolean(controls.parent, true),
         sidebar: boolean(controls.sidebar, true),

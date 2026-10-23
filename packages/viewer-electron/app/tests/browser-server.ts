@@ -428,6 +428,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       throw new Error('Credentials and agents are only available in the native app.');
     case 'applications':
       return { applications: [], supported: false };
+    case 'applicationIcon':
+      return '';
     case 'chooseApplication':
       return null;
     case 'openWith':

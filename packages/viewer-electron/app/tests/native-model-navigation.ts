@@ -182,15 +182,22 @@ async function theme(look: 'dark' | 'light') {
   );
   if (await evaluate<boolean>('!!document.querySelector(".model-viewer")')) await models();
 }
-async function surface(value: string) {
-  await evaluate(
-    `(()=>{const input=document.querySelector('[aria-label="Model surface"]');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+/** Chooses in a choice menu (ui/ChoiceMenu.tsx) as a person does: its button, then the value's row. */
+async function choose(label: string, value: string) {
+  const row = JSON.stringify(`.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`);
+  await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(label)}]').click()`);
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector(${row})`),
+    Boolean,
+    label + ' menu',
   );
+  await evaluate(`document.querySelector(${row}).click()`);
+}
+async function surface(value: string) {
+  await choose('Model surface', value);
 }
 async function lighting(value: string) {
-  await evaluate(
-    `(()=>{const input=document.querySelector('[aria-label="Model lighting"]');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change',{bubbles:true}));})()`,
-  );
+  await choose('Model lighting', value);
 }
 async function saved() {
   return JSON.parse(
@@ -495,8 +502,8 @@ try {
     await metrics(900, 640);
     await click('Shading');
     assert.equal(
-      await evaluate<string>(`document.querySelector('[aria-label="Model surface"]').value`),
-      'clay',
+      await evaluate<string>(`document.querySelector('[aria-label="Model surface"]').textContent`),
+      'Clay',
     );
     await capture('restored-shading-compact-dark');
     evidence.push(

@@ -13,6 +13,7 @@ import { usePreviewState } from '../state';
 import { pdfCanvasRatio, pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { getState, report } from '../../state/store';
 import { PDFOutline, PDFThumbnails } from '../pdf/PDFSidebar';
 
@@ -351,37 +352,33 @@ export default function PDFPreview(context: PreviewContext) {
           disabled={page >= pdf.numPages}
           onClick={() => setPage(page + 1)}
         />
-        <select
-          aria-label="PDF zoom"
-          value={zoom}
-          onChange={(event) => {
-            const value = event.target.value;
-            setZoom(pdfZoom(value === 'page' || value === 'width' ? value : Number(value)));
-          }}
-        >
-          <option value="page">Fit page</option>
-          <option value="width">Fit width</option>
-          {[
-            ...new Set([
-              0.25,
-              0.5,
-              0.75,
-              1,
-              1.25,
-              1.5,
-              2,
-              3,
-              4,
-              ...(typeof zoom === 'number' ? [zoom] : []),
-            ]),
-          ]
-            .sort((a, b) => a - b)
-            .map((value) => (
-              <option value={value} key={value}>
-                {Math.round(value * 100)}%
-              </option>
-            ))}
-        </select>
+        <ChoiceButton
+          label="PDF zoom"
+          value={String(zoom)}
+          choices={[
+            { value: 'page', label: 'Fit page' },
+            { value: 'width', label: 'Fit width' },
+            ...[
+              ...new Set([
+                0.25,
+                0.5,
+                0.75,
+                1,
+                1.25,
+                1.5,
+                2,
+                3,
+                4,
+                ...(typeof zoom === 'number' ? [zoom] : []),
+              ]),
+            ]
+              .sort((a, b) => a - b)
+              .map((value) => ({ value: String(value), label: `${Math.round(value * 100)}%` })),
+          ]}
+          onChoose={(value) =>
+            setZoom(pdfZoom(value === 'page' || value === 'width' ? value : Number(value)))
+          }
+        />
         <IconButton icon="search" label="Search PDF" onClick={() => setSearchOpen(true)} />
         <IconButton
           icon="sidebar"

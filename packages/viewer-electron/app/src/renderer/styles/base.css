@@ -405,3 +405,17 @@ select {
 .workspace-surface > div {
   height: 100%;
 }
+/* A see-through space (2026-10-23): with a blurred or clear backdrop, the window shows what is
+   behind it between planes, under the space's colour at the chosen opacity; planes stay solid. */
+:root[data-backdrop='blur'],
+:root[data-backdrop='clear'] {
+  background: transparent;
+}
+:root[data-backdrop='blur'] .app-shell,
+:root[data-backdrop='clear'] .app-shell {
+  background: color-mix(in srgb, var(--space) var(--space-opacity, 60%), transparent);
+}
+:root[data-backdrop='blur'] .workspace-surface [data-plurid-application],
+:root[data-backdrop='clear'] .workspace-surface [data-plurid-application] {
+  --plurid-space: transparent;
+}

@@ -1,6 +1,7 @@
 import type { CommandContext } from '../commands/registry';
 import { useCommands, useCommandRevision } from '../commands/context';
 import { report, useViewer } from '../state/store';
+import { ChoiceButton } from '../ui/ChoiceMenu';
 
 /** Reuse captured command targets and the normal proposal/review flow from manual rename. */
 export function RenameActions({
@@ -26,13 +27,19 @@ export function RenameActions({
   });
   if (!commands.length) return null;
   return (
-    <select
+    // an action menu: it always shows its placeholder, and a choice runs the action
+    <ChoiceButton
       className="rename-action-select"
-      aria-label="Rename actions"
+      label="Rename actions"
       disabled={disabled}
       value=""
-      onChange={(event) => {
-        const command = commands.find((command) => command.id === event.target.value);
+      placeholder="Rename actions…"
+      choices={ids.flatMap((id) => {
+        const command = commands.find((command) => command.id === id);
+        return command ? [{ value: id, label: command.label }] : [];
+      })}
+      onChoose={(id) => {
+        const command = commands.find((command) => command.id === id);
         if (!command) return;
         onChoose();
         // Remove the manual dialog from the native top layer before opening action setup.
@@ -45,20 +52,6 @@ export function RenameActions({
             .catch(report);
         });
       }}
-    >
-      <option value="" disabled>
-        Rename actions…
-      </option>
-      {ids.flatMap((id) => {
-        const command = commands.find((command) => command.id === id);
-        return command ? (
-          <option key={id} value={id}>
-            {command.label}
-          </option>
-        ) : (
-          []
-        );
-      })}
-    </select>
+    />
   );
 }

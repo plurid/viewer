@@ -149,10 +149,16 @@ async function fitted() {
   );
   return size;
 }
+/** Chooses a zoom in its choice menu (ui/ChoiceMenu.tsx): the button, then the value's row. */
 async function selectZoom(value: string) {
-  await connection!.evaluate(
-    `(()=>{const select=document.querySelector('select[aria-label="PDF zoom"]');select.value=${JSON.stringify(value)};select.dispatchEvent(new Event('change',{bubbles:true}))})()`,
+  const row = JSON.stringify(`.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`);
+  await connection!.evaluate(`document.querySelector('button[aria-label="PDF zoom"]').click()`);
+  await until(
+    () => connection!.evaluate<boolean>(`!!document.querySelector(${row})`),
+    Boolean,
+    'PDF zoom menu',
   );
+  await connection!.evaluate(`document.querySelector(${row}).click()`);
 }
 async function capture(name: string) {
   let previous = '',
@@ -238,8 +244,10 @@ try {
   await rendered(1);
   await fitted();
   assert.equal(
-    await connection.evaluate(`document.querySelector('select[aria-label="PDF zoom"]').value`),
-    'page',
+    await connection.evaluate(
+      `document.querySelector('button[aria-label="PDF zoom"]').textContent`,
+    ),
+    'Fit page',
   );
   await capture('pdf-portrait-wide-dark');
   await metrics(900, 640);
@@ -322,8 +330,10 @@ try {
   connection = await viewer.connect();
   await rendered(1);
   assert.equal(
-    await connection.evaluate(`document.querySelector('select[aria-label="PDF zoom"]').value`),
-    '1.5',
+    await connection.evaluate(
+      `document.querySelector('button[aria-label="PDF zoom"]').textContent`,
+    ),
+    '150%',
   );
   await until(
     geometry,

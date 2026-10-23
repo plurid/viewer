@@ -55,3 +55,73 @@ it('closes on Escape without choosing', async () => {
   await waitFor(() => expect(view.queryByRole('dialog')).toBeNull());
   expect(onChoose).not.toHaveBeenCalled();
 });
+it('lines up with the end of its button, shows a short list, and no repeated heading', async () => {
+  const view = button();
+  const trigger = view.getByRole('button', { name: 'Language' });
+  trigger.getBoundingClientRect = () =>
+    ({ left: 300, right: 420, top: 20, bottom: 50, width: 120, height: 30 }) as DOMRect;
+  const measure = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+    return this.classList.contains('context-menu')
+      ? ({ left: 0, top: 0, right: 304, bottom: 200, width: 304, height: 200 } as DOMRect)
+      : measure.call(this);
+  };
+  try {
+    fireEvent.click(trigger);
+    const menu = await waitFor(() => view.getByRole('dialog', { name: 'Language' }));
+    expect(menu.classList.contains('choice-menu')).toBe(true);
+    expect(menu.querySelector<HTMLElement>('.context-menu')?.style.left).toBe(`${420 - 304}px`);
+    expect(menu.querySelector('.command-group')).toBeNull();
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = measure;
+  }
+});
+it('names a value no choice has by its placeholder, and opens with the down arrow', async () => {
+  const view = render(
+    createElement(ChoiceButton, {
+      label: 'Recipe',
+      value: '',
+      placeholder: 'Choose an action',
+      choices,
+      onChoose: vi.fn(),
+    }),
+  );
+  const trigger = view.getByRole('button', { name: 'Recipe' });
+  expect(trigger.textContent).toContain('Choose an action');
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  await waitFor(() => expect(view.getByRole('dialog', { name: 'Recipe' })).toBeTruthy());
+});
+it('opens inside the dialog it is in, above which a page-level menu would not show', async () => {
+  const view = render(
+    createElement(
+      'dialog',
+      { open: true },
+      createElement(ChoiceButton, {
+        label: 'Language',
+        value: 'markdown',
+        choices,
+        onChoose: vi.fn(),
+      }),
+    ),
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Language' }));
+  const menu = await waitFor(() => view.getByRole('dialog', { name: 'Language' }));
+  expect(menu.closest('dialog[open]')).not.toBeNull();
+});
+it('gives the keyboard back to its button once chosen, inside a dialog too', async () => {
+  const onChoose = vi.fn();
+  const view = render(
+    createElement(
+      'dialog',
+      { open: true },
+      createElement(ChoiceButton, { label: 'Language', value: 'markdown', choices, onChoose }),
+    ),
+  );
+  const opener = view.getByRole('button', { name: 'Language' });
+  fireEvent.click(opener);
+  const menu = await waitFor(() => view.getByRole('dialog', { name: 'Language' }));
+  fireEvent.click(menu.querySelectorAll<HTMLElement>('.command-result')[2]!);
+  await waitFor(() => expect(view.queryByRole('dialog', { name: 'Language' })).toBeNull());
+  expect(onChoose).toHaveBeenCalledWith('python');
+  expect(document.activeElement).toBe(opener);
+});

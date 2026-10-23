@@ -176,7 +176,7 @@ export function SettingsWindow() {
         {page === 'Actions' && <RecipeSettings editor={editor} />}
         {page === 'Agents' && <AgentSettings editor={editor} />}
         {page === 'Shortcuts' && <ShortcutSettings editor={editor} />}
-        {!query && ['Browsing', 'Previews', 'Editor', 'Space'].includes(category) && (
+        {!query && ['Browsing', 'Previews', 'Editor', 'Terminals', 'Space'].includes(category) && (
           <button
             className="settings-reset"
             onClick={() => {
@@ -184,6 +184,9 @@ export function SettingsWindow() {
               if (category === 'Space') patch('ui.space', normalizePreferences().space);
               else if (category === 'Previews') patch('settings.previews', defaults.previews);
               else if (category === 'Editor') patch('settings.editor', defaults.editor);
+              // the font only: profiles and programs are the person's own
+              else if (category === 'Terminals')
+                patch('settings.terminalFont', defaults.terminalFont);
               else
                 patches([
                   { path: 'settings.browsing', value: defaults.browsing },
@@ -192,7 +195,9 @@ export function SettingsWindow() {
                 ]);
             }}
           >
-            Reset {category.toLowerCase()} defaults
+            {category === 'Terminals'
+              ? 'Reset terminal font'
+              : `Reset ${category.toLowerCase()} defaults`}
           </button>
         )}
       </main>
