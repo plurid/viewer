@@ -23,6 +23,9 @@ export interface PreviewContext {
   signal: AbortSignal;
   look: 'dark' | 'light';
   commands?: { header?: HTMLElement; register(commands: readonly PreviewCommand[]): () => void };
+  /** A workspace preview plane's own: its text may be edited where it is (2026-10-23). Quick
+   * Preview and folder galleries pass none. */
+  editing?: { paneID: string };
   /** Opens a local file the preview refers to (a relative link) beside its plane. */
   openRelated?(path: string): void;
   services: {

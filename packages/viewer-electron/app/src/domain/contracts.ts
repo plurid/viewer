@@ -1,3 +1,4 @@
+import type { TextBuffer, TextBufferSummary, TextOpening, TextVersion } from './text-documents';
 import type { EvidenceNavigation, SourceVersion, InspectionResult } from './inspection';
 import type { WorkflowRequest, WorkflowReply } from './workflows';
 import type { WatchRule, WatchRuleRequest, WatchRuleReply } from './watch-rules';
@@ -108,6 +109,21 @@ export interface PreviewPane {
   /** Explicit Open another plane copies survive duplicate-preview recovery. */
   keepSeparate?: boolean;
   evidence?: EvidenceNavigation;
+  /** Unsaved edits to the file, kept in the profile until saved or discarded. */
+  bufferID?: string;
+}
+/**
+ * A plane of unsaved text (2026-10-23), kept in the profile until it is saved as a file or discarded.
+ * `path` is the folder Save As starts in, so every plane has a real folder, as a collection's does.
+ */
+export interface ScratchPane {
+  id: string;
+  type: 'scratch';
+  path: string;
+  bufferID: string;
+  /** A language id from the highlighting table. */
+  language?: string;
+  title?: string;
 }
 export interface SearchPane {
   id: string;
@@ -132,7 +148,8 @@ export interface CollectionPane {
   path: string;
   collectionID: string;
 }
-export type Pane = FolderPane | PreviewPane | SearchPane | TerminalPane | CollectionPane;
+export type Pane =
+  FolderPane | PreviewPane | SearchPane | TerminalPane | CollectionPane | ScratchPane;
 export interface Workspace {
   id: string;
   name: string;
@@ -147,8 +164,10 @@ export interface Workspace {
   collections?: Collection[];
   basket?: BasketItem[];
 }
+/** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
+export const CURRENT_STATE_VERSION = 5 as const;
 export interface SavedState {
-  version: 1 | 2 | 3 | 4;
+  version: 1 | 2 | 3 | 4 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
   preferencesRevision?: number;
   workspaces: Workspace[];
@@ -225,7 +244,9 @@ export type OperationKind =
   | 'trash'
   | 'compress'
   | 'extract'
-  | 'convert';
+  | 'convert'
+  /** A text save over an existing file, its previous version moved to the Trash. */
+  | 'rewrite';
 /** Image quick actions. Each creates a new file; sources are never changed. */
 export type ImageConversion = 'rotate-left' | 'rotate-right' | 'jpeg' | 'png' | 'pdf';
 export interface OperationRequest {
@@ -240,6 +261,10 @@ export interface OperationRequest {
   /** A reviewed folder's contents (`outputProof`), set by the desktop for an agent's approved Trash;
    * checked again inside the claim that moves the folder. */
   expectedContents?: { path: string; proof: string }[];
+  /** A text save's content, recorded by hash and length only: the text itself is never journaled,
+   * so a save is not offered for Redo. */
+  textSHA256?: string;
+  textBytes?: number;
 }
 export type CollisionDecision = 'skip' | 'keep-both' | 'replace' | 'cancel';
 export interface Collision {
@@ -497,6 +522,32 @@ export interface ViewerAPI {
   >;
   fileAccessRevoke(path: string): Promise<void>;
   textEdit(command: TextEditCommand): Promise<void>;
+  /** Opens a previewed text file for editing where it is, or says why it cannot be. */
+  textOpen(resourceID: string): Promise<TextOpening>;
+  /** Saves edited text over the version that was read; resolves with the new version. */
+  textSave(
+    file: string,
+    text: string,
+    expected: TextVersion,
+    session: string,
+    bom: boolean,
+  ): Promise<TextVersion>;
+  /** Asks where to save text as a file, starting on the Desktop; null when cancelled. */
+  textSaveAs(
+    text: string,
+    name: string,
+    session: string,
+  ): Promise<{ file: string; version: TextVersion } | null>;
+  /** An editor closed: its saves are no longer its own to overwrite. */
+  textEditEnd(session: string): Promise<void>;
+  /** Asks natively what to do with unsaved text: before closing it, or before Revert to Saved. */
+  textPrompt(kind: 'close' | 'revert', name: string): Promise<'save' | 'discard' | 'cancel'>;
+  /** Unsaved text kept in the profile, without the text, and what could not be read. */
+  bufferList(): Promise<{ buffers: TextBufferSummary[]; problems: string[] }>;
+  bufferRead(id: string): Promise<TextBuffer | null>;
+  bufferWrite(buffer: TextBuffer): Promise<void>;
+  /** Removes unsaved text the person chose to discard. */
+  bufferDiscard(id: string): Promise<void>;
   onEvent(listener: (event: DesktopEvent) => void): () => void;
 }
 export type ApiMethod = Exclude<keyof ViewerAPI, 'onEvent'>;

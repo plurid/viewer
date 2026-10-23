@@ -5,11 +5,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import { WorkspaceContext } from '../workspace/context';
-import type { Resource } from '../../domain/contracts';
+import type { FileEntry, Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
 import { activeWorkspace, getState, report, useViewer } from '../state/store';
@@ -19,7 +20,14 @@ import type { PreviewContext, PreviewModule } from './contracts';
 import { previewState } from './state';
 import { choosePreview } from './registry';
 import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
-import { sameSourceVersion, sourceVersion, type EvidenceNavigation } from '../../domain/inspection';
+import {
+  sameSourceVersion,
+  sourceVersion,
+  type EvidenceNavigation,
+  type SourceVersion,
+} from '../../domain/inspection';
+import { parentPath } from '../../domain/planes';
+import { editingPlane } from '../editing/planes';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
 function componentFor(module: PreviewModule) {
@@ -46,6 +54,7 @@ export const PreviewHost = memo(function PreviewHost({
   interactive = true,
   resource: supplied,
   paneID,
+  editable = false,
   renderFooter,
 }: {
   path?: string;
@@ -54,6 +63,8 @@ export const PreviewHost = memo(function PreviewHost({
   interactive?: boolean;
   resource?: Resource;
   paneID?: string;
+  /** A workspace preview plane, whose text may be edited where it is. */
+  editable?: boolean;
   renderFooter?(resource: Resource, module: PreviewModule): ReactNode;
 }) {
   const [resource, setResource] = useState<Resource | null>(supplied ?? null);
@@ -67,7 +78,8 @@ export const PreviewHost = memo(function PreviewHost({
   const openRelated = useMemo(
     () =>
       paneID && workspace
-        ? (file: string) => void workspace.openPath(file, { paneID, linked: true }).catch(report)
+        ? (file: string) =>
+            void workspace.openPath(file, { paneID, linked: true, activate: true }).catch(report)
         : undefined,
     [paneID, workspace],
   );
@@ -75,11 +87,69 @@ export const PreviewHost = memo(function PreviewHost({
     if (active) setActivated(true);
   }, [active]);
   const entry = resource?.entry;
+  // A PREVIEW PLANE FOLLOWS ITS FILE (2026-10-23): saved in another app, it shows the new version.
+  // Its folder is watched; a change there is the file's only when the file's version changed.
+  const seen = useRef<SourceVersion | undefined>(undefined);
+  // the file as it is now, for the footer: a save changes its size after the preview opened
+  const [current, setCurrent] = useState<FileEntry | undefined>(undefined);
+  useEffect(() => {
+    seen.current = entry ? sourceVersion(entry) : undefined;
+    setCurrent(undefined);
+  }, [entry]);
+  useEffect(() => {
+    if (!paneID || !path || supplied) return;
+    const folder = parentPath(path);
+    const subscriber = `preview:${paneID}`;
+    void window.viewer.watch(folder, subscriber).catch(() => {});
+    let checking = false,
+      again = false;
+    const check = async (): Promise<void> => {
+      const latest = await window.viewer.stat(path);
+      const version = sourceVersion(latest);
+      if (!seen.current || sameSourceVersion(version, seen.current)) return;
+      seen.current = version;
+      // a link's own entry is not its file's
+      if (latest.kind === 'file') setCurrent(latest);
+      // a text plane reads it again in place, and an edited one asks before losing edits
+      const plane = editingPlane(paneID);
+      if (plane?.changedOnDisk) plane.changedOnDisk();
+      else setRetry((value) => value + 1);
+    };
+    const off = window.viewer.onEvent((event) => {
+      if (event.type !== 'folder-changed' || event.path !== folder) return;
+      if (checking) {
+        again = true;
+        return;
+      }
+      checking = true;
+      const run = (): Promise<void> =>
+        check()
+          .catch(() => {
+            // gone or unreadable: the preview keeps what it shows
+          })
+          .then(() => {
+            if (!again) return;
+            again = false;
+            return run();
+          });
+      void run().finally(() => {
+        checking = false;
+      });
+    });
+    return () => {
+      off();
+      void window.viewer.unwatch(subscriber).catch(() => {});
+    };
+  }, [paneID, path, supplied]);
   const viewState = useMemo(
     () => previewState(paneID || path || supplied?.id || 'temporary', entry),
     [paneID, path, supplied?.id, entry],
   );
   const limits = useViewer((state) => state.settings.settings.previews);
+  const editing = useMemo(
+    () => (editable && paneID && !supplied ? { paneID } : undefined),
+    [editable, paneID, supplied],
+  );
   const look = useViewer((state) => state.saved.look);
   // One controller per resource effect run: a new `supplied` object re-runs that effect.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,6 +290,7 @@ export const PreviewHost = memo(function PreviewHost({
               state={viewState}
               limits={limits}
               openRelated={openRelated}
+              editing={editing}
             />
           </Suspense>
         </ErrorBoundary>
@@ -230,11 +301,11 @@ export const PreviewHost = memo(function PreviewHost({
         <footer className="preview-info">
           <div className="preview-file-info">
             <span className="preview-filename" title={resource.entry.path}>
-              {resource.entry.name}
+              {(current ?? resource.entry).name}
             </span>
             <span className="preview-file-details">
               <span className="separator">·</span> {module.label}{' '}
-              <span className="separator">·</span> {formatBytes(resource.entry.size)}
+              <span className="separator">·</span> {formatBytes((current ?? resource.entry).size)}
             </span>
           </div>
           {!supplied && (

@@ -26,9 +26,9 @@ export function catalogCommands({
   for (const pane of space.panes)
     commands.push({
       id: `plane:${pane.id}`,
-      label: baseName(pane.path),
+      label: pane.type === 'scratch' ? (pane.title ?? 'Untitled') : baseName(pane.path),
       group: 'Open planes',
-      detail: pane.path,
+      detail: pane.type === 'scratch' ? 'Unsaved text' : pane.path,
       aliases: ['plane', 'switch'],
       icon: pane.type === 'folder' ? 'folder' : 'file',
       remember: false,

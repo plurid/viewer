@@ -1239,3 +1239,130 @@ describe('reviewed work that waits (2026-10-20)', () => {
     expect(operations.all().find((job) => job.id === holder)?.status).toBe('cancelled');
   });
 });
+/**
+ * SAVING TEXT (2026-10-23). An edited preview saves through the queue's own guarantees: the version a
+ * save replaces goes to the Trash with an Undo step, and nothing is overwritten that was not checked.
+ */
+describe('saving text', () => {
+  const receipts = async (file: string) => {
+    const directory = (await lstat(file)).isDirectory(),
+      target = path.join(trash, crypto.randomUUID());
+    await rename(file, target);
+    return { path: target, directory };
+  };
+  const version = async (file: string) => sourceVersion(await entry(file));
+  beforeEach(() => {
+    operations = new Operations(receipts, () => {});
+  });
+  it('moves the version it replaces to the Trash, and Undo puts it back', async () => {
+    const file = path.join(root, 'notes.txt');
+    await writeFile(file, 'before');
+    const job = await operations.writeText(file, 'after', { version: await version(file) });
+    expect(job).toMatchObject({ kind: 'rewrite', status: 'completed', undoable: true });
+    expect(await readFile(file, 'utf8')).toBe('after');
+    const trashed = await readdir(trash);
+    expect(trashed).toHaveLength(1);
+    expect(await readFile(path.join(trash, trashed[0]!), 'utf8')).toBe('before');
+    await operations.undo(job.id);
+    expect(await readFile(file, 'utf8')).toBe('before');
+    // the saved version went to the Trash in its turn, rather than being deleted
+    const after = await Promise.all(
+      (await readdir(trash)).map((name) => readFile(path.join(trash, name), 'utf8')),
+    );
+    expect(after).toEqual(['after']);
+    // the text is not kept, so nothing can run it again
+    expect(operations.all().find((item) => item.id === job.id)?.redoable).toBeFalsy();
+    expect(() => operations.redo(job.id)).toThrow('cannot be redone');
+  });
+  it('refuses a file that changed since it was read, and keeps it', async () => {
+    const file = path.join(root, 'notes.txt');
+    await writeFile(file, 'before');
+    const read = await version(file);
+    await writeFile(file, 'someone else');
+    await expect(operations.writeText(file, 'after', { version: read })).rejects.toThrow('changed');
+    expect(await readFile(file, 'utf8')).toBe('someone else');
+    expect(await readdir(trash)).toEqual([]);
+    // a hash that does not match is refused even when the version looks the same
+    await expect(
+      operations.writeText(file, 'after', { version: await version(file), sha256: '0'.repeat(64) }),
+    ).rejects.toThrow('changed');
+    expect(await readFile(file, 'utf8')).toBe('someone else');
+  });
+  it("keeps the file's permissions", async () => {
+    const file = path.join(root, 'run.sh');
+    await writeFile(file, 'echo one\n', { mode: 0o755 });
+    await operations.writeText(file, 'echo two\n', { version: await version(file) });
+    expect((await lstat(file)).mode & 0o777).toBe(0o755);
+  });
+  it('refuses a symbolic link, which would be replaced by a file', async () => {
+    const file = path.join(root, 'target.txt'),
+      link = path.join(root, 'link.txt');
+    await writeFile(file, 'before');
+    await symlink(file, link);
+    await expect(
+      operations.writeText(link, 'after', { version: sourceVersion(await entry(link)) }),
+    ).rejects.toThrow('link');
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+    expect(await readFile(file, 'utf8')).toBe('before');
+  });
+  it('journals the hash of the text, never the text', async () => {
+    const dataPath = path.join(root, 'private');
+    operations = new Operations(receipts, () => {}, undefined, undefined, undefined, dataPath);
+    const file = path.join(root, 'secret.txt');
+    await writeFile(file, 'before');
+    await operations.writeText(file, 'a private sentence', { version: await version(file) });
+    await operations.close();
+    const journal = (
+      await Promise.all(
+        (await readdir(dataPath, { recursive: true })).map((name) =>
+          readFile(path.join(dataPath, name), 'utf8').catch(() => ''),
+        ),
+      )
+    ).join('');
+    expect(journal).toContain('textSHA256');
+    expect(journal).not.toContain('a private sentence');
+    // and the journal still loads
+    operations = new Operations(receipts, () => {}, undefined, undefined, undefined, dataPath);
+    await operations.load();
+    expect(operations.all()[0]).toMatchObject({ kind: 'rewrite', status: 'completed' });
+  });
+  it('creates a new file with the text, which Undo moves to the Trash', async () => {
+    const file = path.join(root, 'Untitled.txt');
+    const job = await operations.writeText(file, 'scratch');
+    expect(job).toMatchObject({ kind: 'mkfile', status: 'completed', undoable: true });
+    expect(await readFile(file, 'utf8')).toBe('scratch');
+    await expect(operations.writeText(file, 'again')).rejects.toThrow('exists');
+    expect(await readFile(file, 'utf8')).toBe('scratch');
+    await operations.undo(job.id);
+    await expect(lstat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readdir(trash)).toHaveLength(1);
+  });
+  it('is not held behind another job waiting at its prompt', async () => {
+    const source = path.join(root, 'one.txt');
+    await writeFile(source, 'new');
+    await writeFile(path.join(destination, 'one.txt'), 'old');
+    const waiting = operations.start({ kind: 'copy', sources: [source], destination });
+    await waitFor(waiting, (job) => job.status === 'collision');
+    const file = path.join(root, 'notes.txt');
+    await writeFile(file, 'before');
+    await operations.writeText(file, 'after', { version: await version(file) });
+    expect(await readFile(file, 'utf8')).toBe('after');
+    expect(operations.all().find((job) => job.id === waiting)?.status).toBe('collision');
+    operations.cancel(waiting);
+  });
+  it('refuses text over the 4 MiB limit before touching anything', async () => {
+    const file = path.join(root, 'notes.txt');
+    await writeFile(file, 'before');
+    await expect(
+      operations.writeText(file, 'é'.repeat(2 * 1024 * 1024 + 1), {
+        version: await version(file),
+      }),
+    ).rejects.toThrow('4 MiB');
+    expect(await readFile(file, 'utf8')).toBe('before');
+  });
+  it('cannot be started as an ordinary operation', () => {
+    expect(() => operations.start({ kind: 'rewrite', sources: [path.join(root, 'x')] })).toThrow(
+      'Save',
+    );
+  });
+});

@@ -325,6 +325,21 @@ async function settingsEvaluate<T>(expression: string): Promise<T> {
     throw new Error('Settings evaluation failed: ' + JSON.stringify(result.exceptionDetails));
   return result.result.value;
 }
+/**
+ * Changes a setting the workspace window may not (search content, agents) where a person changes it:
+ * in the Settings window. The settings service refuses those from the workspace (`workspaceMayPatch`).
+ */
+async function patchInSettings(patches: string): Promise<void> {
+  await evaluate('window.viewer.openSettings()');
+  await until(
+    () => settingsEvaluate<boolean>('!!document.querySelector(".settings-window")'),
+    Boolean,
+    'native Settings for a setting changed there',
+  );
+  await settingsEvaluate(
+    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch(${patches}, current.revision); })()`,
+  );
+}
 async function openSettingsProbe() {
   settingsMode = true;
   await until(
@@ -1156,8 +1171,8 @@ async function verifyFoundations(): Promise<void> {
     (count) => count > 0,
     'external configuration edit reaches all matching roots',
   );
-  await evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(fixture.root)}]}],s.revision))`,
+  await patchInSettings(
+    `[{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(fixture.root)}]}]`,
   );
   const agentCall = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
     const connection = JSON.parse(
@@ -2965,6 +2980,74 @@ async function paletteCommand(label: string): Promise<void> {
     'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
   );
 }
+/**
+ * EDITING TEXT (2026-10-23): a file edited where it is previewed and saved with ⌘S, the version it
+ * replaced in the Trash and back with Undo, and a scratch plane's text kept in the profile as it is
+ * typed. Save As uses the native save panel, which this harness does not drive.
+ */
+async function verifyTextEditing(): Promise<void> {
+  const note = path.join(fixture.files, 'Edited note.md');
+  await writeFile(note, '# Before\n');
+  await until(text, (value) => value.includes('Edited note.md'), 'listed note');
+  await click(fileSelector(note), 2);
+  const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
+  await until(
+    saved,
+    (state) =>
+      state.workspaces[0]!.panes.some((pane) => pane.type === 'preview' && pane.path === note),
+    'note preview plane',
+  );
+  const edit = 'button[title="Edit Text (⌘E)"]';
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(edit)})`),
+    Boolean,
+    'Edit offered',
+  );
+  await click(edit);
+  await until(
+    () => evaluate<boolean>('document.activeElement?.classList.contains("cm-content") === true'),
+    Boolean,
+    'focused editor',
+  );
+  await command('Input.insertText', { text: 'After ' });
+  await key('s', 'KeyS', 4);
+  await until(
+    () => readFile(note, 'utf8'),
+    (value) => value === 'After # Before\n',
+    'saved note',
+  );
+  const jobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  const save = jobs.findLast((job) => job.kind === 'rewrite');
+  assert.equal(save?.status, 'completed', JSON.stringify(save?.errors));
+  assert.equal(save?.undoable, true);
+  await evaluate(`window.viewer.undo(${JSON.stringify(save!.id)})`);
+  await until(
+    () => readFile(note, 'utf8'),
+    (value) => value === '# Before\n',
+    'Undo put back the version the save replaced',
+  );
+  await key('t', 'KeyT', 4);
+  await until(
+    saved,
+    (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'scratch'),
+    'scratch plane',
+  );
+  await until(
+    () =>
+      evaluate<boolean>(
+        '!!document.activeElement?.closest("[data-scratch-plane]") && document.activeElement.classList.contains("cm-content")',
+      ),
+    Boolean,
+    'focused scratch editor',
+  );
+  await command('Input.insertText', { text: 'scratch text' });
+  await until(
+    () => evaluate<{ buffers: { kind: string; bytes: number }[] }>('window.viewer.bufferList()'),
+    (list) => list.buffers.some((buffer) => buffer.kind === 'scratch' && buffer.bytes === 12),
+    'scratch text kept in the profile',
+  );
+  console.log('Text editing: saved, undone, and scratch text kept.');
+}
 /** Additional release checks against the actual signed Electron bundle. Files remain untouched. */
 async function verifyPublishedPlaneInput(): Promise<void> {
   const sourceID = fixture.state.workspaces[0].roots[0];
@@ -3860,8 +3943,8 @@ async function verifyServiceWorkflows(): Promise<void> {
     'shared search result file information',
   );
   await closePreview();
-  await evaluate(
-    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.search.contentRoots',value:[${JSON.stringify(documents)}]}],current.revision); })()`,
+  await patchInSettings(
+    `[{path:'settings.search.contentRoots',value:[${JSON.stringify(documents)}]}]`,
   );
   await until(
     () =>
@@ -3871,8 +3954,8 @@ async function verifyServiceWorkflows(): Promise<void> {
     (result) => result.entries.some((file) => file.path === book),
     'explicitly granted local document-text indexing',
   );
-  await evaluate(
-    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.search.contentRoots',value:[]},{path:'settings.search.paused',value:true}],current.revision); })()`,
+  await patchInSettings(
+    `[{path:'settings.search.contentRoots',value:[]},{path:'settings.search.paused',value:true}]`,
   );
   await until(
     () =>
@@ -3882,16 +3965,14 @@ async function verifyServiceWorkflows(): Promise<void> {
     (result) => !result.entries.length,
     'revoking text permission clears stored content while paused',
   );
-  await evaluate(
-    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.search.paused',value:false}],current.revision); })()`,
-  );
+  await patchInSettings(`[{path:'settings.search.paused',value:false}]`);
   await paletteCommand('Settings');
   for (const category of ['Browsing', 'Search', 'Actions', 'Models', 'Agents', 'Shortcuts']) {
     await tab(category);
     await snapshot('settings-' + category.toLowerCase() + '-native.png');
   }
-  await evaluate(
-    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(documents)}]}],current.revision); })()`,
+  await patchInSettings(
+    `[{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(documents)}]}]`,
   );
   const configuration = JSON.parse(
     await settingsEvaluate<string>('window.viewer.agentToken()'),
@@ -3969,8 +4050,8 @@ async function verifyServiceWorkflows(): Promise<void> {
     );
   } finally {
     if (agent.exitCode === null && agent.signalCode === null) agent.kill('SIGKILL');
-    await evaluate(
-      `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{path:'settings.agents.enabled',value:false},{path:'settings.agents.roots',value:[]}],current.revision); })()`,
+    await patchInSettings(
+      `[{path:'settings.agents.enabled',value:false},{path:'settings.agents.roots',value:[]}]`,
     );
   }
   await click('dialog [aria-label="Close"]');
@@ -4572,9 +4653,17 @@ async function verifyEntryAndPalette(): Promise<void> {
     Boolean,
     'new-plane folder preference',
   );
+  // a choice is a searchable menu (2026-10-23): open it, then choose the row
   await settingsEvaluate(
-    `(() => { const select=document.querySelector('[aria-label="New folder planes start in"]');select.value='downloads';select.dispatchEvent(new Event('change',{bubbles:true})); })()`,
+    `document.querySelector('[aria-label="New folder planes start in"]').click()`,
   );
+  await until(
+    () =>
+      settingsEvaluate<boolean>(`!!document.querySelector('.command-result[title="Downloads"]')`),
+    Boolean,
+    'new-plane folder choices',
+  );
+  await settingsEvaluate(`document.querySelector('.command-result[title="Downloads"]').click()`);
   await until(
     () =>
       evaluate<{ settings: { browsing: { newPlaneLocation: string } } }>(
@@ -4958,6 +5047,12 @@ async function verify(): Promise<void> {
     await verifyPublishedPlaneInput();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'text-editing') {
+    await verifyTextEditing();
+    await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }

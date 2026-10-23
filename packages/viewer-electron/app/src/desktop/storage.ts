@@ -2,7 +2,7 @@ import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { SavedState } from '../domain/contracts';
+import { CURRENT_STATE_VERSION, type SavedState } from '../domain/contracts';
 import { collectionSchema, basketItemSchema } from '../domain/collections';
 import { evidenceNavigationSchema } from '../domain/inspection';
 import {
@@ -22,6 +22,14 @@ import { localPath, id } from './schemas';
 
 const pane = z.discriminatedUnion('type', [
   z.object({ id, type: z.literal('collection'), path: localPath, collectionID: z.uuid() }),
+  z.object({
+    id,
+    type: z.literal('scratch'),
+    path: localPath,
+    bufferID: z.uuid(),
+    language: z.string().max(40).optional(),
+    title: z.string().max(255).optional(),
+  }),
   z.object({
     id,
     type: z.literal('terminal'),
@@ -56,6 +64,7 @@ const pane = z.discriminatedUnion('type', [
     type: z.literal('preview'),
     path: localPath,
     evidence: evidenceNavigationSchema.optional(),
+    bufferID: z.uuid().optional(),
     keepSeparate: z
       .unknown()
       .optional()
@@ -64,7 +73,13 @@ const pane = z.discriminatedUnion('type', [
 ]);
 const savedStateSchema = z
   .object({
-    version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    version: z.union([
+      z.literal(1),
+      z.literal(2),
+      z.literal(3),
+      z.literal(4),
+      z.literal(CURRENT_STATE_VERSION),
+    ]),
     previewStates: z.record(id, previewValuesSchema).optional(),
     preferencesRevision: z.number().int().min(0).optional(),
     workspaces: z
@@ -165,7 +180,7 @@ export function salvageState(
   });
   if (!parsed.success) return;
   return {
-    state: { ...parsed.data, version: 4 },
+    state: { ...parsed.data, version: CURRENT_STATE_VERSION },
     dropped: saved.workspaces.length - kept.length,
   };
 }
@@ -230,8 +245,21 @@ export class Storage {
       } finally {
         await backup.close();
       }
-      state = { ...state, version: 4 };
+    } else if (state.version < CURRENT_STATE_VERSION) {
+      // An older Viewer sets a version 5 file aside, unread: this copy is what it can open.
+      const backup = await open(
+        this.file + '.before-scratch-v5-' + randomUUID() + '.bak',
+        'wx',
+        0o600,
+      );
+      try {
+        await backup.writeFile(text);
+        await backup.sync();
+      } finally {
+        await backup.close();
+      }
     }
+    if (state.version < CURRENT_STATE_VERSION) state = { ...state, version: CURRENT_STATE_VERSION };
     return { state };
   }
   save(input: SavedState): Promise<void> {

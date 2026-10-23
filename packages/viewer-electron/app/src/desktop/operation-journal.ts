@@ -26,6 +26,7 @@ const kind = z.enum([
   'compress',
   'extract',
   'convert',
+  'rewrite',
 ]);
 const count = z.number().nonnegative().finite();
 export const undoStepSchema = z
@@ -105,6 +106,11 @@ const record = z
           .array(z.object({ path: file, proof: z.string().length(64) }).strict())
           .max(10000)
           .optional(),
+        textSHA256: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/)
+          .optional(),
+        textBytes: count.optional(),
       })
       .strict(),
     // Replace adds a Trash step beside each item's own step.

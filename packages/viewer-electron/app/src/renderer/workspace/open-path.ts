@@ -35,6 +35,11 @@ export async function openWorkspacePath(
   if (entry.directory && pane?.type === 'folder' && !target?.linked && !target?.another) {
     navigate(pane.id, entry.path);
     controller.focusPane(pane.id);
-  } else controller.open(entry, pane?.id, { another: target?.another, link: target?.link });
+  } else
+    controller.open(entry, pane?.id, {
+      another: target?.another,
+      link: target?.link,
+      activate: target?.activate,
+    });
   return true;
 }

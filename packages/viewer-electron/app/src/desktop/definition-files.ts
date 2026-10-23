@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { open, lstat, rename, type FileHandle } from 'node:fs/promises';
+import { open, lstat, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
@@ -8,25 +8,8 @@ import { applyConfigEdits, configEdits } from './configuration-edits';
 import { fileCoordination } from './file-coordination';
 import { missingDefinitionCode, type DefinitionDocument } from '../domain/definitions';
 import { discardOwnTemporaryFile } from './removal';
-import { macFiles } from './macos-files';
+import { keepMetadata } from './file-metadata';
 const revision = (text: string) => createHash('sha256').update(text).digest('hex');
-/** A saved definition keeps its Finder tags, comments, extended attributes and mode. */
-async function keepMetadata(file: string, output: FileHandle): Promise<void> {
-  const input = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW).catch(() => null);
-  if (!input) return;
-  try {
-    if (process.platform === 'darwin')
-      try {
-        await macFiles().copyMetadata(input.fd, output.fd);
-        return;
-      } catch {
-        // Keep at least the permissions below.
-      }
-    await output.chmod((await input.stat()).mode & 0o777);
-  } finally {
-    await input.close();
-  }
-}
 export function decodeDefinition<T>(
   text: string,
   schema: ZodType<T>,

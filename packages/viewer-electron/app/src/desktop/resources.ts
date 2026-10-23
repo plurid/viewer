@@ -171,6 +171,15 @@ export class Resources {
     await this.access([grant.file]);
     return grant.file;
   }
+  /** The file a preview shows, to edit where it is: a link's target, never an archive entry. */
+  editableFile(id: string): string {
+    const grant = this.get(id);
+    if (!grant.file || grant.data)
+      throw new Error(
+        'This preview shows an entry inside an archive, which is not edited in place.',
+      );
+    return grant.file;
+  }
   documentSource(id: string): string {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Nested document extraction is unavailable.');

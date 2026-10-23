@@ -156,6 +156,16 @@ const api: ViewerAPI = {
     document.execCommand(command);
     return Promise.resolve();
   },
+  textOpen: (resourceID) => invoke('textOpen', resourceID),
+  textSave: (file, text, expected, session, bom) =>
+    invoke('textSave', file, text, expected, session, bom),
+  textSaveAs: (text, name, session) => invoke('textSaveAs', text, name, session),
+  textEditEnd: (session) => invoke('textEditEnd', session),
+  textPrompt: (kind, name) => invoke('textPrompt', kind, name),
+  bufferList: () => invoke('bufferList'),
+  bufferRead: (id) => invoke('bufferRead', id),
+  bufferWrite: (buffer) => invoke('bufferWrite', buffer),
+  bufferDiscard: (id) => invoke('bufferDiscard', id),
   onEvent: (listener) => {
     listeners.add(listener);
     return () => {

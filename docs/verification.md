@@ -508,6 +508,8 @@ After `pnpm make`, run `node --import tsx tests/window-state-native.ts` from `pa
 
 After `pnpm mas:dev`, run `pnpm test:mas` for the signed development baseline. It verifies the real bundle and container boundaries using a hidden window and disposable data. Native picker/bookmark and subprocess/agent acceptance remain separate checks.
 
+`VIEWER_TEST_SCENARIO=text-editing pnpm test:desktop` (2026-10-23) edits a text file where it is previewed, saves it with ⌘S, checks the version it replaced is in the Trash and back with Undo, then opens a scratch plane with ⌘T and checks its text reaches the profile as it is typed. Save As uses the native save panel, which the harness does not drive; unit tests cover it.
+
 `VIEWER_TEST_SCENARIO=menus-models pnpm test:desktop` checks grouped menu flyouts, keyboard/search/target behavior, minimum-window positioning, delayed docking focus and all five new provider profiles in hidden windows. No provider key or paid request is used.
 
 `VIEWER_TEST_SCENARIO=drawings-workspaces pnpm test:desktop` checks drawing measurements, units, layers, keyboard ownership, resize/appearance and workspace switching in hidden windows. Optional `VIEWER_TEST_DXF_FILE=/absolute/path/to/drawing.dxf` reads a local file into the disposable fixture; it never edits that source. Development captures include drawing/measurement, compact/light appearance, linked-plane and workspace-picker states.

@@ -8,7 +8,9 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | Explorer session    | One plane's selection, cursor, range anchor, column trail and scroll; `renderer/workspace/sessions.ts`. Navigation history belongs to the saved folder pane. |
 | Folder presentation | Shared path-keyed view, sort, metadata columns and browser width; `domain/folder-presentation.ts`, `renderer/state/presentation.ts`.             |
 | Lens                | A folder-local grouping of its direct children, with remembered Map places, stored in the folder's `.viewer/lenses/`; it never moves files. `domain/lenses.ts`, `desktop/lenses.ts`, [lenses](docs/lenses.md). |
-| Plane               | A host record for a folder, search, collection, preview or terminal; its engine route and geometry belong to the workspace adapter.              |
+| Plane               | A host record for a folder, search, collection, preview, terminal or scratch text; its engine route and geometry belong to the workspace adapter. |
+| Scratch plane       | Text that is not a file yet, kept in the profile until Save As writes it (the plane then shows that file, in place) or it is discarded; `editing/ScratchPlane.tsx`. |
+| Text buffer         | Unsaved text kept in the profile: a scratch plane's, or a file's unsaved edits with the version they were made over; `desktop/text-buffers.ts`, `renderer/editing/buffers.ts`. Removed only when saved or discarded. |
 | Root                | An independent spatial branch. Reuse of a preview stays within that root; explicit new planes remain independent.                                |
 | Captured target     | Workspace/root/plane/directory plus selected entries and origin path, frozen before an asynchronous action; `domain/automation.ts`.              |
 | Command             | A contextual action with ID, availability, aliases and shortcut; `renderer/commands/registry.ts`. UI menus, keys and agent proposals invoke it.  |

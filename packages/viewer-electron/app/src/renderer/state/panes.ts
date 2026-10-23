@@ -4,11 +4,13 @@ import type {
   Pane,
   PaneSidebar,
   NewRootFolderTarget,
+  ScratchPane,
   TerminalPane,
 } from '../../domain/contracts';
 import { normalizePreferences } from '../../domain/preferences';
 import { trimSessions } from '../workspace/sessions';
 import { parentPath } from '../../domain/planes';
+import { languageFor } from '../../domain/text-languages';
 import { defaultSettings, newPlaneFolder } from '../../domain/services';
 import { panePresentation, resolveFolderPresentation } from '../../domain/folder-presentation';
 import { activeWorkspace, changeWorkspace, getState, savePatch, update, uuid } from './core';
@@ -134,6 +136,59 @@ export function addRootFolder(target: NewRootFolderTarget = {}): FolderPane | un
   const pane = addPane(path, 'folder', true) as FolderPane;
   setActivePane(pane.id);
   return pane;
+}
+/** The folder Save As starts in: the Desktop. */
+export function desktopFolder(): string {
+  const { home, platform, locations } = getState().bootstrap;
+  return (
+    locations.find((location) => location.name === 'Desktop')?.path ??
+    home.replace(/[\\/]+$/, '') + (platform === 'win32' ? '\\' : '/') + 'Desktop'
+  );
+}
+/** The first “Untitled n” no scratch plane of any workspace is called. */
+function untitledName(): string {
+  const used = new Set(
+    getState().saved.workspaces.flatMap((space) =>
+      space.panes.flatMap((pane) => (pane.type === 'scratch' && pane.title ? [pane.title] : [])),
+    ),
+  );
+  for (let number = 1; ; number++) if (!used.has(`Untitled ${number}`)) return `Untitled ${number}`;
+}
+/**
+ * A new scratch plane (2026-10-23): text kept in the profile until it is saved as a file or
+ * discarded. A recovered buffer comes back with its own id, title and language.
+ */
+export function addScratchPane(
+  options: { bufferID?: string; title?: string; language?: string } = {},
+): ScratchPane {
+  if (activeWorkspace().panes.length >= 200)
+    throw new Error('This workspace has 200 planes. Close a plane or create another workspace.');
+  const pane: ScratchPane = {
+    id: uuid(),
+    type: 'scratch',
+    path: desktopFolder(),
+    bufferID: options.bufferID ?? uuid(),
+    title: options.title ?? untitledName(),
+    // the language of the configured new-file extension: Markdown by default
+    language:
+      options.language ??
+      languageFor({ name: '', extension: getState().settings.settings.browsing.newFileExtension })
+        ?.id ??
+      'plaintext',
+  };
+  changeWorkspace((space) => ({
+    ...space,
+    panes: [...space.panes, pane],
+    roots: [...space.roots, pane.id],
+  }));
+  return pane;
+}
+/** Replaces a plane's record, keeping its id and so its place: a scratch plane saved as a file. */
+export function replacePane(id: string, pane: Pane): void {
+  changeWorkspace((space) => ({
+    ...space,
+    panes: space.panes.map((item) => (item.id === id ? pane : item)),
+  }));
 }
 export function removePanes(ids: string[]): void {
   const removed = new Set(ids);

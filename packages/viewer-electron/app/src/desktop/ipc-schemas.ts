@@ -13,6 +13,13 @@ import { lensGroupIDSchema, lensOpSchema } from '../domain/lenses';
 import { stateSchema } from './storage';
 import { informationPatchSchema } from './file-information';
 import { localPath, id } from './schemas';
+import { textBufferSchema } from './text-buffers';
+import { MAX_TEXT_BYTES, textVersionSchema } from '../domain/text-documents';
+
+/** Text an editor saves: at most what Viewer reads, counted in bytes. */
+const editedText = z.string().refine((text) => Buffer.byteLength(text, 'utf8') <= MAX_TEXT_BYTES, {
+  message: 'Viewer saves text up to 4 MiB.',
+});
 
 const indexedQuerySchema = z
   .object({
@@ -37,7 +44,7 @@ const workspaceSnapshotSchema = z.object({
           .array(
             z.object({
               id,
-              type: z.enum(['folder', 'preview', 'search', 'terminal', 'collection']),
+              type: z.enum(['folder', 'preview', 'search', 'terminal', 'collection', 'scratch']),
               path: localPath,
               mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']).optional(),
               allLocations: z.boolean().optional(),
@@ -502,6 +509,15 @@ export const schemas = {
   fileAccessList: z.tuple([]),
   fileAccessRevoke: z.tuple([localPath]),
   textEdit: z.tuple([z.enum(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])]),
+  textOpen: z.tuple([id]),
+  textSave: z.tuple([localPath, editedText, textVersionSchema, id, z.boolean()]),
+  textSaveAs: z.tuple([editedText, z.string().min(1).max(255), id]),
+  textEditEnd: z.tuple([id]),
+  textPrompt: z.tuple([z.enum(['close', 'revert']), z.string().min(1).max(255)]),
+  bufferList: z.tuple([]),
+  bufferRead: z.tuple([z.uuid()]),
+  bufferWrite: z.tuple([textBufferSchema]),
+  bufferDiscard: z.tuple([z.uuid()]),
 } satisfies Record<ApiMethod, z.ZodType>;
 /**
  * The events Settings receives, for what it shows: settings, search status, service errors and
@@ -631,6 +647,15 @@ export const methodWindows = {
   fileAccessList: 'both',
   fileAccessRevoke: 'settings',
   textEdit: 'both',
+  textOpen: 'viewer',
+  textSave: 'viewer',
+  textSaveAs: 'viewer',
+  textEditEnd: 'viewer',
+  textPrompt: 'viewer',
+  bufferList: 'viewer',
+  bufferRead: 'viewer',
+  bufferWrite: 'viewer',
+  bufferDiscard: 'viewer',
 } satisfies Record<ApiMethod, 'viewer' | 'settings' | 'both'>;
 /** Every IPC method's handler, receiving the arguments its schema produced. */
 export type ApiHandlers = {

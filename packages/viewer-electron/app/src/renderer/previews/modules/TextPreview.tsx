@@ -3,20 +3,66 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Prism from 'prismjs';
-import 'prismjs/components/prism-markup';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-typescript';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-bash';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty, Loading } from '../../ui/primitives';
 import { DelimitedTable } from '../DataTable';
-import { getState, report } from '../../state/store';
+import { activeWorkspace, getState, report, useViewer } from '../../state/store';
+import { FileEditor } from '../../editing/FileEditor';
+import { registerEditingPlane } from '../../editing/planes';
+import { continuesEditing } from '../../editing/sessions';
+import { editorFont } from '../../editing/font';
 import { relativeLinkTarget } from '../../../domain/planes';
 import { highlightedLines } from '../highlight';
+import { languageByID, languageFor, loadPrismGrammar } from '../languages';
+
+/** A Prism grammar, loaded on first use: the component renders again once it is ready. */
+function usePrismGrammar(id: string | undefined): Prism.Grammar | undefined {
+  const [, setLoaded] = useState(0);
+  useEffect(() => {
+    if (!id || Prism.languages[id]) return;
+    let live = true;
+    void loadPrismGrammar(id).then(() => {
+      if (live) setLoaded((count) => count + 1);
+    });
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  return id ? Prism.languages[id] : undefined;
+}
+
+/** A Markdown fence's code, highlighted in the language it names (`rust`, `ts`, `sh`). */
+function FencedCode({ language, text }: { language: string; text: string }) {
+  const id =
+    languageByID(language)?.prism ??
+    languageFor({ name: '', extension: language })?.prism ??
+    language;
+  const grammar = usePrismGrammar(id);
+  const lines = useMemo(
+    () => (grammar && text.length <= 1_000_000 ? highlightedLines(text, grammar) : null),
+    [grammar, text],
+  );
+  if (!lines) return <code className={`language-${language}`}>{text}</code>;
+  return (
+    <code className={`language-${language}`}>
+      {lines.map((segments, line) => (
+        <span key={line}>
+          {line > 0 && '\n'}
+          {segments.map((segment, index) =>
+            segment.className ? (
+              <span key={index} className={segment.className}>
+                {segment.text}
+              </span>
+            ) : (
+              segment.text
+            ),
+          )}
+        </span>
+      ))}
+    </code>
+  );
+}
 
 function JSONNode({ name, value, depth = 0 }: { name: string; value: unknown; depth?: number }) {
   const [open, setOpen] = useState(depth < 1);
@@ -63,39 +109,28 @@ function JSONNode({ name, value, depth = 0 }: { name: string; value: unknown; de
 }
 function Code({
   text,
-  extension,
+  language,
   line: targetLine,
 }: {
   text: string;
-  extension: string;
+  /** Prism's grammar id, from the language table. */
+  language?: string;
   line?: number;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const lines = useMemo(() => text.split('\n'), [text]);
-  const language =
-    (
-      {
-        js: 'javascript',
-        jsx: 'javascript',
-        mjs: 'javascript',
-        ts: 'typescript',
-        tsx: 'typescript',
-        py: 'python',
-        sh: 'bash',
-        html: 'markup',
-        xml: 'markup',
-        svg: 'markup',
-      } as Record<string, string>
-    )[extension] || extension;
+  // the editor's font settings: a file reads as it edits
+  const settings = useViewer((state) => state.settings.settings.editor);
+  const grammar = usePrismGrammar(language);
   // Whole-document tokens for ordinary files; very large ones fall back to single lines.
-  const document = useMemo(() => {
-    const grammar = Prism.languages[language];
-    return grammar && text.length <= 1_000_000 ? highlightedLines(text, grammar) : null;
-  }, [text, language]);
+  const document = useMemo(
+    () => (grammar && text.length <= 1_000_000 ? highlightedLines(text, grammar) : null),
+    [text, grammar],
+  );
   const virtual = useVirtualizer({
     count: lines.length,
     getScrollElement: () => scroll.current,
-    estimateSize: () => 22,
+    estimateSize: () => settings.lineHeight,
     overscan: 12,
   });
   useEffect(() => {
@@ -103,7 +138,13 @@ function Code({
       virtual.scrollToIndex(Math.min(lines.length - 1, targetLine - 1), { align: 'center' });
   }, [targetLine, lines.length, virtual]);
   return (
-    <div className="code-scroll" ref={scroll} tabIndex={0} aria-label="File text">
+    <div
+      className="code-scroll"
+      ref={scroll}
+      tabIndex={0}
+      aria-label="File text"
+      style={editorFont(settings)}
+    >
       <div
         style={{
           height: virtual.getTotalSize(),
@@ -116,11 +157,10 @@ function Code({
           const line = lines[item.index];
           if (line === undefined) return null;
           const segments = document?.[item.index];
-          const grammar = Prism.languages[language];
           // Highlighted HTML comes exclusively from Prism's escaping tokenizer, never from file HTML.
           const highlighted =
             !segments && grammar && line.length < 10000
-              ? Prism.highlight(line, grammar, language)
+              ? Prism.highlight(line, grammar, language!)
               : null;
           return (
             <div
@@ -162,21 +202,47 @@ export default function TextPreview(context: PreviewContext) {
   );
   const [error, setError] = useState('');
   const [raw, setRaw] = useState(false);
+  // a workspace plane's text may be edited where it is; one holding unsaved edits opens editing
+  const paneID = context.editing?.paneID;
+  const bufferID = useViewer((state) => {
+    const pane = paneID && activeWorkspace(state).panes.find((item) => item.id === paneID);
+    return pane && pane.type === 'preview' ? pane.bufferID : undefined;
+  });
+  // asked for (Edit, a Save As going on) takes the keys; edits restored at launch do not
+  const [editing, setEditing] = useState<'asked' | 'restored' | false>(() =>
+    !paneID ? false : continuesEditing(paneID) ? 'asked' : bufferID ? 'restored' : false,
+  );
+  // read again after editing, which may have saved
+  const [reading, setReading] = useState(0);
   const evidenceLine =
     context.evidence?.anchor.kind === 'text' ? context.evidence.anchor.line : undefined;
   useEffect(() => {
     if (evidenceLine) setRaw(true);
   }, [evidenceLine]);
   useEffect(() => {
-    void services
-      .read(resource.id)
-      .then((value) => {
+    // the file's grammar loads beside its text, so it shows highlighted from the first paint
+    const grammar = languageFor(resource.entry)?.prism;
+    void Promise.all([
+      services.read(resource.id),
+      grammar ? loadPrismGrammar(grammar).catch(() => undefined) : undefined,
+    ])
+      .then(([value]) => {
         if (!signal.aborted) setData(value);
       })
       .catch((error) => {
         if (!signal.aborted) setError(error.message);
       });
-  }, [resource.id, services, signal]);
+  }, [resource.id, resource.entry, services, signal, reading]);
+  const editable = !!paneID && !!data && !data.binary && !data.truncated;
+  useEffect(() => {
+    if (!paneID || editing || !editable) return;
+    return registerEditingPlane(paneID, {
+      edit: () => setEditing('asked'),
+      dirty: () => false,
+      // saved in another app: read again in place, keeping the scroll position
+      changedOnDisk: () => setReading((value) => value + 1),
+    });
+  }, [paneID, editing, editable]);
   const json = useMemo(() => {
     if (!data || resource.entry.extension !== 'json' || data.truncated) return null;
     try {
@@ -203,6 +269,20 @@ export default function TextPreview(context: PreviewContext) {
       [raw, data, resource.entry.extension],
     ),
   );
+  if (editing && paneID)
+    return (
+      <FileEditor
+        resourceID={resource.id}
+        paneID={paneID}
+        bufferID={bufferID}
+        header={context.commands?.header}
+        focus={editing === 'asked'}
+        onClose={() => {
+          setEditing(false);
+          setReading((value) => value + 1);
+        }}
+      />
+    );
   if (error) return <Empty icon="warning" title="Text could not be read" detail={error} />;
   if (!data) return <Loading />;
   if (data.binary)
@@ -228,16 +308,26 @@ export default function TextPreview(context: PreviewContext) {
     );
   const ext = resource.entry.extension;
   const markdown = ['md', 'markdown', 'mdx'].includes(ext);
+  const language = languageFor(resource.entry)?.prism;
   return (
     <div className="text-viewer">
-      {(markdown || ext === 'json') && (
+      {(markdown || ext === 'json' || editable) && (
         <PreviewToolbar context={context}>
-          <button className={!raw ? 'selected' : ''} onClick={() => setRaw(false)}>
-            {markdown ? 'Document' : 'Tree'}
-          </button>
-          <button className={raw ? 'selected' : ''} onClick={() => setRaw(true)}>
-            Source
-          </button>
+          {(markdown || ext === 'json') && (
+            <>
+              <button className={!raw ? 'selected' : ''} onClick={() => setRaw(false)}>
+                {markdown ? 'Document' : 'Tree'}
+              </button>
+              <button className={raw ? 'selected' : ''} onClick={() => setRaw(true)}>
+                Source
+              </button>
+            </>
+          )}
+          {editable && (
+            <button title="Edit Text (⌘E)" onClick={() => setEditing('asked')}>
+              Edit
+            </button>
+          )}
         </PreviewToolbar>
       )}
       {data.truncated && (
@@ -275,6 +365,15 @@ export default function TextPreview(context: PreviewContext) {
                 );
               },
               img: ({ alt }) => <span className="muted">[Image: {alt || 'external image'}]</span>,
+              // a fence that names its language is highlighted in it
+              code: ({ className, children }) => {
+                const fence = /language-([\w+#-]+)/.exec(className ?? '');
+                return fence ? (
+                  <FencedCode language={fence[1]!} text={String(children).replace(/\n$/, '')} />
+                ) : (
+                  <code className={className}>{children}</code>
+                );
+              },
             }}
           >
             {data.text}
@@ -284,7 +383,7 @@ export default function TextPreview(context: PreviewContext) {
         'error' in json ? (
           <div className="json-scroll">
             <p className="error">Invalid JSON: {json.error}</p>
-            <Code text={data.text} extension={ext} />
+            <Code text={data.text} language={language} />
           </div>
         ) : (
           <div className="json-scroll">
@@ -292,7 +391,7 @@ export default function TextPreview(context: PreviewContext) {
           </div>
         )
       ) : (
-        <Code text={data.text} extension={ext} line={evidenceLine} />
+        <Code text={data.text} language={language} line={evidenceLine} />
       )}
     </div>
   );

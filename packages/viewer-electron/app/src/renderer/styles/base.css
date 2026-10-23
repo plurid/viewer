@@ -219,6 +219,12 @@ select {
   filter: brightness(1.1);
   background: var(--accent);
 }
+/* a primary action at work keeps its colour: the disabled hover cleared it, leaving dark text */
+.primary:disabled,
+.primary:disabled:hover {
+  background: var(--accent);
+  filter: none;
+}
 .danger {
   color: var(--danger);
   border-color: var(--line);

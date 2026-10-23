@@ -49,6 +49,8 @@ import { spotlightTagged } from './spotlight';
 import { nativeImageConverter } from './native-image-convert';
 import { quickLookRender } from './quick-look-render';
 import { Operations } from './operations';
+import { TextFiles } from './text-files';
+import { TextBuffers } from './text-buffers';
 import { Resources } from './resources';
 import { Search } from './search';
 import { Storage } from './storage';
@@ -59,7 +61,7 @@ import { trashLocation, trashName, type DesktopPlatform } from '../domain/trash'
 import { FileAccess } from './file-access';
 import { NativeSelections } from './native-selections';
 import { Pasteboard } from './pasteboard';
-import { confirmAgentProposal, confirmNatively } from './native-confirmation';
+import { askNatively, confirmAgentProposal, confirmNatively } from './native-confirmation';
 import { AgentAccess } from './agent-access';
 import { fileCoordination } from './file-coordination';
 import { FileInformationService } from './file-information';
@@ -98,6 +100,8 @@ export class Desktop {
   readonly watchRules: WatchRules;
   readonly relationships: Relationships;
   readonly operations: Operations;
+  readonly texts: TextFiles;
+  readonly buffers: TextBuffers;
   readonly watchers: Watchers;
   readonly search: Search;
   readonly storage: Storage;
@@ -335,6 +339,8 @@ export class Desktop {
       new ProtectedPaths(this.home),
       nativeImageConverter,
     );
+    this.texts = new TextFiles(this.operations, access);
+    this.buffers = new TextBuffers(dataPath);
     this.lenses = new Lenses(dataPath, access, {
       home: this.home,
       trash: async (file) => this.operations.start({ kind: 'trash', sources: [file] }),
@@ -707,7 +713,7 @@ export class Desktop {
         this.emit({ type: 'flush', token });
       });
     }
-    await Promise.all([this.storage.flush(), this.settings.flush()]);
+    await Promise.all([this.storage.flush(), this.settings.flush(), this.buffers.flush()]);
   }
   dispose(): Promise<void> {
     return (this.disposal ??= this.disposeServices());
@@ -732,6 +738,7 @@ export class Desktop {
       this.agentsConfiguration.catch(() => {}).then(() => this.agents.close()),
       this.watchers.close(),
       this.operations.close(),
+      this.buffers.close(),
       this.modelPermissions.close(),
       this.search.close(),
       this.executions.close(),
@@ -1489,6 +1496,64 @@ export class Desktop {
         this.windows.get(senderID)!.window.webContents[command]();
         return;
       },
+      textOpen: async (args) => {
+        let file: string;
+        try {
+          file = this.resources.editableFile(args[0]);
+        } catch (error) {
+          return { editable: false, reason: errorMessage(error) };
+        }
+        return this.texts.open(file);
+      },
+      textSave: (args) => this.texts.save(args[0], args[1], args[2], args[3], args[4]),
+      textSaveAs: async (args, senderID) => {
+        const [text, name, session] = args;
+        const window = this.windows.get(senderID)?.window;
+        const options = {
+          title: 'Save As',
+          defaultPath: path.join(this.home, 'Desktop', path.basename(name)),
+          securityScopedBookmarks: this.fileAccess.scoped,
+        };
+        const { canceled, filePath, bookmark } = window
+          ? await dialog.showSaveDialog(window, options)
+          : await dialog.showSaveDialog(options);
+        if (canceled || !filePath) return null;
+        await this.fileAccess.allowOnce(filePath, bookmark);
+        await this.fileAccess.require([filePath]);
+        const version = await this.texts.saveAs(filePath, text, session);
+        this.emit({ type: 'folder-changed', path: path.dirname(filePath) });
+        return { file: filePath, version };
+      },
+      textEditEnd: (args) => this.texts.end(args[0]),
+      textPrompt: async (args, senderID) => {
+        const [kind, name] = args;
+        const window = this.windows.get(senderID)?.window;
+        if (kind === 'revert')
+          return (await askNatively(window, {
+            message: `Revert “${name}” to the saved version?`,
+            detail: 'Your unsaved edits are discarded. The saved file is not changed.',
+            buttons: ['Cancel', 'Revert'],
+            defaultId: 0,
+            cancelId: 0,
+          })) === 1
+            ? 'discard'
+            : 'cancel';
+        const choice = await askNatively(window, {
+          message: `Save the changes to “${name}” before closing it?`,
+          detail: 'If you don’t save, your changes are discarded.',
+          buttons: ['Save', 'Don’t Save', 'Cancel'],
+          defaultId: 0,
+          cancelId: 2,
+        });
+        return (['save', 'discard', 'cancel'] as const)[choice] ?? 'cancel';
+      },
+      bufferList: async () => ({
+        buffers: await this.buffers.list(),
+        problems: this.buffers.problems(),
+      }),
+      bufferRead: (args) => this.buffers.read(args[0]),
+      bufferWrite: (args) => this.buffers.write(args[0]),
+      bufferDiscard: (args) => this.buffers.discard(args[0]),
     };
   }
   private provider(id: string) {

@@ -176,13 +176,14 @@ export function SettingsWindow() {
         {page === 'Actions' && <RecipeSettings editor={editor} />}
         {page === 'Agents' && <AgentSettings editor={editor} />}
         {page === 'Shortcuts' && <ShortcutSettings editor={editor} />}
-        {!query && ['Browsing', 'Previews', 'Space'].includes(category) && (
+        {!query && ['Browsing', 'Previews', 'Editor', 'Space'].includes(category) && (
           <button
             className="settings-reset"
             onClick={() => {
               const defaults = defaultSettings(settings.search.roots[0] || '/');
               if (category === 'Space') patch('ui.space', normalizePreferences().space);
               else if (category === 'Previews') patch('settings.previews', defaults.previews);
+              else if (category === 'Editor') patch('settings.editor', defaults.editor);
               else
                 patches([
                   { path: 'settings.browsing', value: defaults.browsing },

@@ -328,11 +328,11 @@
   overflow: auto;
 }
 .code-scroll {
-  font:
-    12px/22px ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+  /* Settings → Editor, as the editor (2026-10-23) */
+  font-family: var(--editor-font, ui-monospace), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--editor-font-size, 12px);
+  line-height: var(--editor-line-height, 22px);
+  tab-size: var(--editor-tab-size, 4);
   padding: 12px 0;
 }
 .code-line {

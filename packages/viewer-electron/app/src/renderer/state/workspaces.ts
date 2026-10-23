@@ -1,5 +1,10 @@
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
-import type { Bootstrap, SavedState, Workspace } from '../../domain/contracts';
+import {
+  CURRENT_STATE_VERSION,
+  type Bootstrap,
+  type SavedState,
+  type Workspace,
+} from '../../domain/contracts';
 import { migratePlaneNavigation, normalizePreferences } from '../../domain/preferences';
 import { clearSessions } from '../workspace/sessions';
 import { defaultSettings } from '../../domain/services';
@@ -52,7 +57,7 @@ export function initialize(bootstrap: Bootstrap): void {
   };
   const saved = {
     ...original,
-    version: 4 as const,
+    version: CURRENT_STATE_VERSION,
     ui: settings.ui,
     look: settings.look,
     workspaces: original.workspaces.map((space) => ({

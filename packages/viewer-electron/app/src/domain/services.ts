@@ -55,6 +55,8 @@ export interface ApplicationSettings {
     newPlanePath: string;
     emptyWorkspaceLocation: Exclude<ApplicationSettings['browsing']['newPlaneLocation'], 'current'>;
     emptyWorkspacePath: string;
+    /** The extension New file… names a file with, and a scratch plane starts in (2026-10-23). */
+    newFileExtension: string;
   };
   folders: Record<string, FolderOverride>;
   fileOpening: {
@@ -70,6 +72,20 @@ export interface ApplicationSettings {
     tmux: { executable: string; session: string; socket: string; windowName: string };
   };
   previews: { thumbnailSize: number; maxImagePixels: number; maxModelMB: number };
+  /** The text editor (2026-10-23); its defaults are its owner's VS Code. */
+  editor: {
+    fontSize: number;
+    /** In pixels. */
+    lineHeight: number;
+    /** A monospace family; the system's follows it. */
+    fontFamily: string;
+    tabSize: number;
+    insertSpaces: boolean;
+    wordWrap: boolean;
+    lineNumbers: boolean;
+    /** On save, as VS Code's files.trimTrailingWhitespace. */
+    trimTrailingWhitespace: boolean;
+  };
   search: { roots: string[]; exclusions: string[]; contentRoots: string[]; paused: boolean };
   providers: ModelProvider[];
   recipes: ActionRecipe[];
@@ -285,6 +301,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       newPlanePath: '',
       emptyWorkspaceLocation: 'home',
       emptyWorkspacePath: '',
+      newFileExtension: 'md',
     },
     folders: {},
     fileOpening: {
@@ -307,6 +324,16 @@ export function defaultSettings(home: string): ApplicationSettings {
       tmux: { executable: 'tmux', session: 'viewer', socket: '', windowName: '{folder}' },
     },
     previews: { thumbnailSize: 256, maxImagePixels: 64000000, maxModelMB: 256 },
+    editor: {
+      fontSize: 18,
+      lineHeight: 40,
+      fontFamily: 'Menlo',
+      tabSize: 4,
+      insertSpaces: true,
+      wordWrap: false,
+      lineNumbers: true,
+      trimTrailingWhitespace: true,
+    },
     search: {
       roots: [home],
       exclusions: [home + '/Library', '.git', 'node_modules', '.cache', '.vite', 'out'],

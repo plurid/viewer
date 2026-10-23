@@ -1,11 +1,12 @@
 // The renderer state container: one immutable snapshot, change notification and saved-state patches.
 import { useSyncExternalStore } from 'react';
-import type {
-  Bootstrap,
-  OperationJob,
-  SavedState,
-  UIPreferences,
-  Workspace,
+import {
+  CURRENT_STATE_VERSION,
+  type Bootstrap,
+  type OperationJob,
+  type SavedState,
+  type UIPreferences,
+  type Workspace,
 } from '../../domain/contracts';
 import type { SettingsSnapshot } from '../../domain/services';
 import { errorMessage } from '../../domain/errors';
@@ -67,7 +68,12 @@ export function savePatch(patch: Partial<SavedState>): void {
   update(
     {
       ...current,
-      saved: { ...current.saved, ...patch, version: 4, ui: patch.ui ?? current.saved.ui },
+      saved: {
+        ...current.saved,
+        ...patch,
+        version: CURRENT_STATE_VERSION,
+        ui: patch.ui ?? current.saved.ui,
+      },
     },
     true,
   );

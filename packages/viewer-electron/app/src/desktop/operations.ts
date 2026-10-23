@@ -1,8 +1,8 @@
 import type { FileChange } from '../domain/changes';
 import type { TrashOrigin } from '../domain/trash';
 import type { ObservedOperationLink } from '../domain/relationships';
-import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readdir, stat } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { lstat, mkdir, open, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   CollisionDecision,
@@ -11,11 +11,13 @@ import type {
   OperationRequest,
 } from '../domain/contracts';
 import { absolute, exists, message, validName, entry } from './filesystem';
-import { sourceVersion, sameSourceVersion } from '../domain/inspection';
+import { sourceVersion, sameSourceVersion, type SourceVersion } from '../domain/inspection';
 import { macFiles, type TrashReceipt, type ReceiptAccess } from './macos-files';
 import { createArchive, extractArchive } from './archive-jobs';
 import { OperationLog, outputProof, type OperationReceipt } from './operation-journal';
 import { privateStage } from './staging';
+import { keepMetadata } from './file-metadata';
+import { MAX_TEXT_BYTES, textChangedCode } from '../domain/text-documents';
 import { fileCoordination } from './file-coordination';
 import { removeEmptyDirectory, unlinkVerified } from './removal';
 import { ProtectedPaths } from './protected-paths';
@@ -65,7 +67,15 @@ interface Task {
   intent?: OperationReceipt['intent'];
   /** The request Redo would start, pinned to the versions Undo restored. */
   redo?: OperationRequest;
+  /** Runs as exclusive work rather than from the queue (a text save), counted once as pending. */
+  exclusive?: boolean;
 }
+const changedOnDisk = () =>
+  Object.assign(
+    new Error('The file changed on disk since it was opened. Reload it, or save over it.'),
+    { code: textChangedCode },
+  );
+const sha256 = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
 
 /** Selected ancestors carry their descendants; membership checks preserve source order. */
 export function operationRoots(sources: readonly string[], paths = path): string[] {
@@ -239,14 +249,13 @@ export class Operations {
   }
   start(request: OperationRequest, redo = false): string {
     if (this.stopped) throw new Error('The file operation queue has closed.');
-    // A new operation ends earlier Redo offers, as in other applications.
-    if (!redo)
-      for (const task of this.tasks.values())
-        if (task.redo) {
-          task.redo = undefined;
-          task.job.redoable = false;
-          this.emit(task);
-        }
+    if (
+      request.kind === 'rewrite' ||
+      request.textSHA256 !== undefined ||
+      request.textBytes !== undefined
+    )
+      throw new Error('Save text from its editor: a save is not an ordinary file operation.');
+    if (!redo) this.endRedo();
     if (request.kind === 'alias' && process.platform !== 'darwin')
       throw new Error('Finder aliases require macOS.');
     const sources = [...new Set(request.sources.map(absolute))];
@@ -312,17 +321,33 @@ export class Operations {
     const single =
       ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
       (request.kind === 'convert' && request.conversion === 'pdf');
+    const task = this.add({ ...request, sources: roots }, single ? 1 : roots.length);
+    this.queue.push(task);
+    void this.run();
+    return task.job.id;
+  }
+  /** A new operation ends earlier Redo offers, as in other applications. */
+  private endRedo(): void {
+    for (const task of this.tasks.values())
+      if (task.redo) {
+        task.redo = undefined;
+        task.job.redoable = false;
+        this.emit(task);
+      }
+  }
+  /** A job for `request`, announced and kept with the history. */
+  private add(request: OperationRequest, itemsTotal: number): Task {
     const job: OperationJob = {
       id: randomUUID(),
       revision: 0,
       kind: request.kind,
       status: 'queued',
-      sources: roots,
+      sources: request.sources,
       destination: request.destination,
       bytesDone: 0,
       bytesTotal: 0,
       itemsDone: 0,
-      itemsTotal: single ? 1 : roots.length,
+      itemsTotal,
       completed: [],
       errors: [],
       errorCount: 0,
@@ -330,15 +355,13 @@ export class Operations {
     };
     const task: Task = {
       job,
-      request: { ...request, sources: roots },
+      request,
       abort: new AbortController(),
       undo: [],
       lastProgress: 0,
     };
     this.tasks.set(job.id, task);
-    this.queue.push(task);
     this.emit(task);
-    void this.run();
     // Completed history is bounded on its own: a large queued batch must not discard
     // earlier Undo receipts, and pending work, including collision decisions, is never dropped.
     if (this.tasks.size > 100) {
@@ -353,7 +376,143 @@ export class Operations {
         void this.journal?.forget(id).catch(() => {});
       }
     }
-    return job.id;
+    return task;
+  }
+  /**
+   * SAVING TEXT (2026-10-23). Writes `text` to `file` as a job of its own: over the version that was
+   * read (`expected`), which goes to the Trash with an Undo step, as Replace does; or, with none, to a
+   * new file, created exclusively. It runs as exclusive work, beside a job waiting at its prompt when
+   * that job leaves the file alone. The text is never journaled, only its hash and length, so a save
+   * is not offered for Redo.
+   */
+  async writeText(
+    file: string,
+    text: string,
+    expected?: { version: SourceVersion; sha256?: string },
+  ): Promise<OperationJob> {
+    if (this.stopped) throw new Error('The file operation queue has closed.');
+    file = absolute(file);
+    const bytes = Buffer.from(text, 'utf8');
+    if (bytes.length > MAX_TEXT_BYTES)
+      throw new Error('Text over 4 MiB is saved from another app; Viewer edits up to 4 MiB.');
+    const folder = path.dirname(file);
+    const request: OperationRequest = {
+      ...(expected
+        ? {
+            kind: 'rewrite' as const,
+            sources: [file],
+            expectedSources: [{ path: file, version: expected.version }],
+          }
+        : { kind: 'mkfile' as const, sources: [], destination: folder, name: path.basename(file) }),
+      textSHA256: sha256(bytes),
+      textBytes: bytes.length,
+    };
+    if (request.name !== undefined) validName(request.name);
+    await this.load();
+    this.endRedo();
+    const task = this.add(request, 1);
+    task.exclusive = true;
+    const { job } = task;
+    let failure: unknown;
+    await this.exclusive(
+      async () => {
+        job.status = 'running';
+        job.current = file;
+        this.emit(task);
+        let stage: Awaited<ReturnType<typeof privateStage>> | undefined;
+        try {
+          this.check(task);
+          if (expected) {
+            await this.access([file, folder]);
+            const existing = await lstat(file);
+            if (existing.isSymbolicLink())
+              throw new Error('Save to the file a symbolic link points to, rather than the link.');
+            if (!existing.isFile()) throw new Error('Only a regular file can be saved over.');
+            if (!sameSourceVersion(expected.version, sourceVersion(await entry(file))))
+              throw changedOnDisk();
+            if (expected.sha256 && sha256(await readFile(file)) !== expected.sha256)
+              throw changedOnDisk();
+            stage = await privateStage(folder, '.viewer-save-', this.trash);
+            task.intent = { source: file, destination: file, staging: stage.file };
+            await this.checkpoint(task);
+            const output = await open(stage.file, 'wx', 0o600);
+            try {
+              await output.writeFile(bytes);
+              await keepMetadata(file, output);
+              await output.sync();
+            } finally {
+              await output.close();
+            }
+            this.check(task);
+            // the version read goes to the Trash, pinned to what was checked above
+            await this.publishReplacing(task, stage.file, file, existing);
+          } else {
+            await this.access([file]);
+            task.intent = { source: '', destination: file };
+            await this.checkpoint(task);
+            await fileCoordination.run(
+              [{ path: file, mode: 'write' }],
+              async (signal) => {
+                signal?.throwIfAborted();
+                this.check(task);
+                const actual = fileCoordination.path(file);
+                await this.access([actual]);
+                // Exclusive creation: an item that appeared meanwhile is never touched.
+                const output = await open(actual, 'wx', 0o644).catch(
+                  (error: NodeJS.ErrnoException) => {
+                    if (error.code === 'EEXIST')
+                      throw new Error(
+                        `${path.basename(file)} already exists. Choose another name.`,
+                      );
+                    throw error;
+                  },
+                );
+                try {
+                  await output.writeFile(bytes);
+                  await output.sync();
+                } finally {
+                  await output.close();
+                }
+              },
+              task.abort.signal,
+            );
+          }
+          // Undo moves the saved version to the Trash, then puts back the one it replaced.
+          const proof = await outputProof(file);
+          if (proof) {
+            const info = await lstat(file);
+            task.undo.push({
+              from: file,
+              to: '',
+              remove: true,
+              proof,
+              identity: `${info.dev}:${info.ino}`,
+              modified: info.mtimeMs,
+              size: info.size,
+            });
+          }
+          job.completed.push({ source: expected ? file : '', destination: file });
+          task.intent = undefined;
+        } catch (error) {
+          failure = error;
+          job.errors.push({ path: file, message: message(error).slice(0, 4000) });
+        } finally {
+          if (stage) await this.disposeStage(task, stage);
+        }
+        job.itemsDone = 1;
+        job.status = task.abort.signal.aborted ? 'cancelled' : failure ? 'failed' : 'completed';
+        job.undoable = !!task.undo.length;
+        job.current = undefined;
+        if (task.intent) job.recovery = task.intent;
+        task.intent = undefined;
+        this.emit(task);
+        await this.checkpoint(task);
+        await this.compact(task);
+      },
+      () => [file],
+    );
+    if (failure) throw failure;
+    return structuredClone(job);
   }
   cancel(id: string): void {
     const task = this.tasks.get(id);
@@ -438,8 +597,12 @@ export class Operations {
   /** What Quit would cancel: queued, running and prompting jobs, and exclusive work. */
   pendingCount(): number {
     let jobs = 0;
-    for (const { job } of this.tasks.values())
-      if (job.status === 'queued' || job.status === 'running' || job.status === 'collision') jobs++;
+    for (const { job, exclusive } of this.tasks.values())
+      if (
+        !exclusive &&
+        (job.status === 'queued' || job.status === 'running' || job.status === 'collision')
+      )
+        jobs++;
     return jobs + this.exclusivePending;
   }
   /** Resolves once nothing is pending; a job waiting at its prompt waits for its answer. */
@@ -557,9 +720,11 @@ export class Operations {
         // A source that is absent after Undo (a created output) needs no pin.
       }
     // An agent approval's contents pins are not carried over: Redo is the person's own, pinned to
-    // what Undo put back.
-    task.redo = { ...task.request, expectedSources, expectedContents: undefined };
-    task.job.redoable = true;
+    // what Undo put back. A save kept no text to write again.
+    if (task.request.textSHA256 === undefined) {
+      task.redo = { ...task.request, expectedSources, expectedContents: undefined };
+      task.job.redoable = true;
+    }
     this.emit(task);
     await this.checkpoint(task);
     await this.compact(task);

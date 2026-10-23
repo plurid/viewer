@@ -210,6 +210,15 @@ function menu(): void {
             click: command('new-root-folder'),
           },
           {
+            label: 'New Scratch Plane',
+            accelerator: accelerator(
+              settings?.shortcuts['new-scratch-plane'] ??
+                defaultShortcuts['new-scratch-plane'] ??
+                '',
+            ),
+            click: command('new-scratch-plane'),
+          },
+          {
             label: 'Open Folder…',
             accelerator: accelerator(
               settings?.shortcuts['choose-folder'] ?? menuShortcuts['choose-folder'] ?? '',
@@ -243,6 +252,29 @@ function menu(): void {
             click: command('info'),
           },
           { label: 'Calculate Size', click: command('calculate-size') },
+          { type: 'separator' },
+          {
+            label: 'Edit Text',
+            accelerator: accelerator(
+              settings?.shortcuts['edit-file'] ?? defaultShortcuts['edit-file'] ?? '',
+            ),
+            click: command('edit-file'),
+          },
+          {
+            label: 'Save',
+            accelerator: accelerator(
+              settings?.shortcuts['save-file'] ?? defaultShortcuts['save-file'] ?? '',
+            ),
+            click: command('save-file'),
+          },
+          {
+            label: 'Save As…',
+            accelerator: accelerator(
+              settings?.shortcuts['save-file-as'] ?? defaultShortcuts['save-file-as'] ?? '',
+            ),
+            click: command('save-file-as'),
+          },
+          { label: 'Revert to Saved…', click: command('revert-file') },
           { type: 'separator' },
           {
             label: 'Duplicate',

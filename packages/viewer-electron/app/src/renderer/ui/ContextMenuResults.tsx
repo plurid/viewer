@@ -13,12 +13,18 @@ export function ContextMenuResults({
   focused,
   onSelect,
   onClose,
+  searchLabel = 'actions',
+  blankIcons = false,
 }: {
   commands: readonly ResolvedCommand[];
   recent: readonly string[];
   focused: boolean;
   onSelect(command: ResolvedCommand): void;
   onClose(): void;
+  /** What the search finds, in its label: “Search actions”, or a choice's name. */
+  searchLabel?: string;
+  /** Rows without an icon keep its place blank, so a choice menu checks only the current one. */
+  blankIcons?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [opened, setOpened] = useState<string[]>([]);
@@ -152,8 +158,8 @@ export function ContextMenuResults({
           <input
             ref={input}
             data-autofocus
-            aria-label="Search actions"
-            placeholder="Search actions…"
+            aria-label={`Search ${searchLabel}`}
+            placeholder={`Search ${searchLabel}…`}
             role={searching ? 'combobox' : undefined}
             aria-autocomplete={searching ? 'list' : undefined}
             aria-expanded={searching ? true : undefined}
@@ -180,6 +186,7 @@ export function ContextMenuResults({
           id={`${id}-list-0`}
           label="Actions"
           searching={searching}
+          blankIcons={blankIcons}
           activeID={depth === 0 ? current?.id : opened[0]}
           openedID={opened[0]}
           buttons={buttons.current}
@@ -207,6 +214,7 @@ export function ContextMenuResults({
               depth={popupDepth}
               id={`${id}-list-${popupDepth}`}
               label={branch?.kind === 'submenu' ? branch.label : 'Actions'}
+              blankIcons={blankIcons}
               anchor={buttons.current.get(rowID(index, opened[index] ?? ''))}
               activeID={depth === popupDepth ? current?.id : opened[popupDepth]}
               openedID={opened[popupDepth]}
@@ -231,6 +239,7 @@ function MenuList({
   id,
   label,
   searching = false,
+  blankIcons = false,
   anchor,
   activeID,
   openedID,
@@ -246,6 +255,7 @@ function MenuList({
   id: string;
   label: string;
   searching?: boolean;
+  blankIcons?: boolean;
   anchor?: HTMLElement;
   activeID?: string;
   openedID?: string;
@@ -342,10 +352,14 @@ function MenuList({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSelect(entry, depth)}
               >
-                <Icon
-                  name={command?.icon ?? (entry.kind === 'submenu' ? entry.icon : 'file')}
-                  size={16}
-                />
+                {blankIcons && command && !command.icon ? (
+                  <span className="command-icon-spacer" aria-hidden="true" />
+                ) : (
+                  <Icon
+                    name={command?.icon ?? (entry.kind === 'submenu' ? entry.icon : 'file')}
+                    size={16}
+                  />
+                )}
                 <span className="command-result-text">
                   <span>{name}</span>
                   {searching && <small>{command?.detail ?? command?.group}</small>}

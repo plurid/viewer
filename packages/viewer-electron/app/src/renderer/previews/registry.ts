@@ -2,6 +2,7 @@ import type { FileEntry } from '../../domain/contracts';
 import type { PreviewModule } from './contracts';
 import { modelFormats } from '../../domain/model-formats';
 import { renderedImageFormats } from '../../domain/rendered-images';
+import { languageExtensions, languageFor } from '../../domain/text-languages';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
   formats.includes(entry.extension) ? 100 : 0;
@@ -61,7 +62,9 @@ const textFormats = [
   'env',
   'gitignore',
   'dockerfile',
-];
+  // and every language the highlighting table names (rs, lua, diff, ...)
+  ...languageExtensions,
+].filter((format, index, all) => all.indexOf(format) === index);
 export const previewModules: PreviewModule[] = [
   {
     id: 'office',
@@ -153,7 +156,8 @@ export const previewModules: PreviewModule[] = [
     detect: (entry) =>
       textFormats.includes(entry.extension) ||
       textFormats.includes(dotfileFormat(entry)) ||
-      ['LICENSE', 'README', 'Dockerfile', 'Makefile'].includes(entry.name)
+      ['LICENSE', 'README', 'Dockerfile', 'Makefile'].includes(entry.name) ||
+      !!languageFor(entry)
         ? 100
         : entry.mime.startsWith('text/')
           ? 80

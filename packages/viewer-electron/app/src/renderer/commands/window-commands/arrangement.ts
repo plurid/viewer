@@ -1,3 +1,4 @@
+import { confirmClose } from '../../editing/unsaved';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
@@ -70,7 +71,7 @@ export function arrangementCommands({
         if (!entry) return;
         const id = actions.workspace.existingPaneID(context.paneID!, entry);
         if (!id) throw new Error('This plane is no longer open.');
-        actions.workspace.focusPane(id);
+        actions.workspace.focusPane(id, { activate: true });
       },
     },
     {
@@ -91,7 +92,11 @@ export function arrangementCommands({
       aliases: ['cl'],
       shortcut: '⌥⌘W',
       when: paneScope,
-      run: (context) => actions.workspace.closePane(context.paneID!),
+      // planes holding unsaved text ask Save, Don't Save or Cancel first (2026-10-23)
+      run: async (context) => {
+        if (await confirmClose(actions.workspace.subtree(context.paneID!)))
+          actions.workspace.closePane(context.paneID!);
+      },
     },
     {
       id: 'undo-arrangement',

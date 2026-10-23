@@ -24,6 +24,12 @@ Drag across blank space in list or grid view to select the items under the recta
 
 New file… (Folder menu) creates an empty file through the operation service, exclusively: a name that already exists can only keep both or be skipped, never replaced. Undo moves the new file to the Trash. New folder follows the same rule.
 
+## Saving text
+
+A text file edited in its preview plane saves through the operation service (`Operations.writeText`, 2026-10-23). The first save of an editing session is a **Save** job (`rewrite`): the text is staged privately beside the file with its tags, extended attributes and mode, the version it replaces is moved to the Trash pinned to the version the editor read, and the staged file takes its place. Undo moves the saved version to the Trash and puts the replaced one back. Later saves in the same editing session overwrite what that session wrote (`desktop/text-files.ts`), checked by hash against it; a relaunch or a new editing session sends the next replaced version to the Trash again. A save is refused, with Reload, Save Over It or Cancel, when the file changed on disk since it was read; Save Over It moves the changed version to the Trash. Saves run beside the queue's work, never behind another job's collision prompt, and Eject or a revoke waits for them. The text is never journaled, only its SHA-256 and length, so a save is not offered for Redo.
+
+Only UTF-8 text without NUL bytes, of up to 4 MiB, in a regular file with no other hard link and a writable file and folder, is edited in place: a save puts a new file in its place, which would separate a hard link from its other names. A symbolic link is edited at the file it points to. The byte-order mark and the file's line breaks are kept. Save As (⇧⌘S) asks where to save, starting on the Desktop: a new name is created exclusively (**New file**, which Undo moves to the Trash); replacing an existing file moves it to the Trash first, whatever it holds.
+
 ## Quick actions
 
 The Quick actions submenu works on selected images (JPEG, PNG, TIFF, HEIC, GIF, BMP, WebP):

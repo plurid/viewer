@@ -75,6 +75,15 @@ function PreviewContent() {
   );
   const interactive = useInteractive();
   if (!record) return <Empty title="Preview is unavailable" />;
+  // a scratch plane renders where a preview does, so Save As makes it the file's in place
+  if (record.type === 'scratch')
+    return (
+      <PreviewFrame activate={() => setActivePane(record.id)}>
+        <Suspense fallback={<Empty title="Opening scratch plane…" />}>
+          <LazyScratchPlane pane={record} visible={plane.shown && plane.culled === 'visible'} />
+        </Suspense>
+      </PreviewFrame>
+    );
   return (
     <PreviewFrame activate={() => setActivePane(record.id)}>
       <PreviewHost
@@ -83,10 +92,12 @@ function PreviewContent() {
         paneID={record.id}
         active={plane.shown && plane.culled === 'visible'}
         interactive={interactive}
+        editable
       />
     </PreviewFrame>
   );
 }
+const LazyScratchPlane = lazy(() => import('../editing/ScratchPlane'));
 const LazyTerminalPlane = lazy(() =>
   import('../terminals/TerminalPlane').then((module) => ({ default: module.TerminalPlane })),
 );

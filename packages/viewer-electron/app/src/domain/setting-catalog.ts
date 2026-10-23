@@ -1,4 +1,5 @@
 import { listColumns } from './list-columns';
+import { textLanguages } from './text-languages';
 
 export interface SettingDefinition {
   path: string;
@@ -15,6 +16,7 @@ export const categories = [
   'Browsing',
   'Navigation',
   'Previews',
+  'Editor',
   'Space',
   'Search',
   'Permissions',
@@ -115,6 +117,23 @@ export const settingCatalog: SettingDefinition[] = [
     ],
   },
   {
+    path: 'settings.browsing.newFileExtension',
+    category: 'Browsing',
+    label: 'New text files are',
+    detail: 'The extension New file… starts with, and the language a new scratch plane starts in.',
+    kind: 'choice',
+    // Markdown and plain text first, then each language of the highlighting table
+    choices: [
+      ...['markdown', 'plaintext'].flatMap((id) =>
+        textLanguages.filter((language) => language.id === id),
+      ),
+      ...textLanguages.filter((language) => !['markdown', 'plaintext'].includes(language.id)),
+    ].map((language): [string, string] => [
+      language.extensions[0]!,
+      `${language.label} (.${language.extensions[0]})`,
+    ]),
+  },
+  {
     path: 'settings.browsing.density',
     category: 'Browsing',
     label: 'Row spacing',
@@ -206,6 +225,70 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'number',
     min: 16,
     max: 512,
+  },
+  {
+    path: 'settings.editor.fontSize',
+    category: 'Editor',
+    label: 'Font size',
+    kind: 'number',
+    min: 8,
+    max: 48,
+  },
+  {
+    path: 'settings.editor.lineHeight',
+    category: 'Editor',
+    label: 'Line height',
+    detail: 'In pixels, as VS Code’s editor.lineHeight.',
+    kind: 'number',
+    min: 10,
+    max: 96,
+  },
+  {
+    path: 'settings.editor.fontFamily',
+    category: 'Editor',
+    label: 'Font',
+    kind: 'choice',
+    choices: [
+      ['Menlo', 'Menlo'],
+      ['SF Mono', 'SF Mono'],
+      ['Monaco', 'Monaco'],
+      ['Courier New', 'Courier New'],
+      ['Andale Mono', 'Andale Mono'],
+      ['JetBrains Mono', 'JetBrains Mono'],
+      ['Fira Code', 'Fira Code'],
+    ],
+  },
+  {
+    path: 'settings.editor.tabSize',
+    category: 'Editor',
+    label: 'Tab size',
+    kind: 'number',
+    min: 1,
+    max: 16,
+  },
+  {
+    path: 'settings.editor.insertSpaces',
+    category: 'Editor',
+    label: 'Indent with spaces',
+    kind: 'boolean',
+  },
+  {
+    path: 'settings.editor.wordWrap',
+    category: 'Editor',
+    label: 'Wrap long lines',
+    kind: 'boolean',
+  },
+  {
+    path: 'settings.editor.lineNumbers',
+    category: 'Editor',
+    label: 'Show line numbers',
+    kind: 'boolean',
+  },
+  {
+    path: 'settings.editor.trimTrailingWhitespace',
+    category: 'Editor',
+    label: 'Trim trailing whitespace on save',
+    kind: 'boolean',
   },
   {
     path: 'ui.space.opening',

@@ -9,6 +9,7 @@ import {
   type ProjectLayout,
 } from '../../domain/project';
 import { parentPath } from '../../domain/planes';
+import type { Pane, ScratchPane } from '../../domain/contracts';
 import {
   activeWorkspace,
   associateProject,
@@ -133,6 +134,21 @@ export function ProjectFileNotice() {
     </div>
   );
 }
+/** The folders a new project binds: each outside it that a plane shows, as `external-n`. A scratch
+ * plane's folder is only where Save As starts, so it binds nothing. */
+export function projectBindings(root: string, panes: readonly Pane[]): Record<string, string> {
+  const bindings: Record<string, string> = {};
+  for (const pane of panes) {
+    if (pane.type === 'scratch') continue;
+    try {
+      projectReference(root, pane.path, bindings);
+    } catch {
+      bindings['external-' + (Object.keys(bindings).length + 1)] =
+        pane.type === 'folder' ? pane.path : parentPath(pane.path);
+    }
+  }
+  return bindings;
+}
 async function readProject(file: string): Promise<ProjectDocument> {
   const reply = await window.viewer.project({ kind: 'read', file });
   if (!reply || typeof reply !== 'object') throw new Error('The project could not be opened.');
@@ -140,7 +156,11 @@ async function readProject(file: string): Promise<ProjectDocument> {
 }
 function definition(project: ProjectAssociation, layout: ProjectLayout): ProjectDefinition {
   const space = activeWorkspace();
-  const planes: ProjectDefinition['planes'] = space.panes.map((pane) => {
+  // A scratch plane's text is private, kept in the profile: it stays out of the project file.
+  const shared = space.panes.filter(
+    (pane): pane is Exclude<Pane, ScratchPane> => pane.type !== 'scratch',
+  );
+  const planes: ProjectDefinition['planes'] = shared.map((pane) => {
     const target = projectReference(project.root, pane.path, project.bindings);
     const state = Object.fromEntries(
       Object.entries(previewValues(pane.id)).filter(([key]) => key !== '_sourceVersion'),
@@ -169,7 +189,7 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
   const known = new Set(planes.map((plane) => plane.id));
   const shown = new Set(layout.placements.map((plane) => plane.id));
   const placements = [
-    ...layout.placements,
+    ...layout.placements.filter((plane) => known.has(plane.id)),
     ...project.definition.layout.placements.filter(
       (plane) => known.has(plane.id) && !shown.has(plane.id),
     ),
@@ -285,15 +305,7 @@ export function ProjectControls() {
           });
           if (typeof file !== 'string' || !isCurrent()) return;
           const root = parentPath(file);
-          const bindings: Record<string, string> = {};
-          for (const pane of current.panes) {
-            try {
-              projectReference(root, pane.path, bindings);
-            } catch {
-              bindings['external-' + (Object.keys(bindings).length + 1)] =
-                pane.type === 'folder' ? pane.path : parentPath(pane.path);
-            }
-          }
+          const bindings = projectBindings(root, current.panes);
           project = {
             file,
             root,

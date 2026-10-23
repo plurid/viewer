@@ -168,3 +168,30 @@
   flex-shrink: 0;
   font-size: 11px;
 }
+/* A choice menu checks only the current choice; the other rows keep the icon's place. */
+.command-icon-spacer {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+/* A button naming the current choice, opening its searchable menu (ui/ChoiceMenu.tsx). */
+.choice-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 120px;
+  max-width: 260px;
+  border-color: var(--line);
+  background: var(--field);
+  text-align: left;
+}
+.choice-button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.choice-button svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}

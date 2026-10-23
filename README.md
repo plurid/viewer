@@ -95,6 +95,8 @@ Command-Z undoes eligible rename/move, copy/duplicate/create/archive outputs and
 | Parent / back / forward          | ⌘↑ / ⌥← / ⌥→      |
 | Hidden files / duplicate / Trash | ⌘⇧. / ⌘D / ⌘⌫     |
 | Frame all / dock or reveal       | ⌘0 / ⌘Return      |
+| New scratch plane / edit text    | ⌘T / ⌘E           |
+| Save / save as                   | ⌘S / ⇧⌘S          |
 
 ## Previews
 
@@ -113,7 +115,7 @@ Right-click or Command-K provides **Batch rename**, **Rename as book**, **Rename
 | EPUB        | Local publication metadata, chapter navigation, safe text reading and search                                                     |
 | DjVu        | Worker rendering through WebAssembly, pages and text-layer search                                                                |
 | Office      | DOCX text, headings and simple tables; XLSX worksheets with stored values and formulas, never evaluated                          |
-| Text/data   | Safe Markdown, code/text, expandable JSON and virtualized CSV/TSV tables                                                         |
+| Text/data   | Safe Markdown, code/text highlighted in 34 languages, expandable JSON and CSV/TSV tables; text edits where it is previewed       |
 | Archives    | ZIP, TAR, TAR.GZ/TGZ indexing and entry previews without extraction                                                              |
 
 Formats outside this set receive file information and an external-app action. Presentations, other Office formats, additional ebooks, USD and other creative formats are proposed next in the [preview roadmap](docs/preview-roadmap.md); Office coverage is in [Office previews](docs/office-previews.md). DXF support and limits are documented in [drawing previews](docs/drawings.md); physical units, CAD conversion limits and surface measurements are documented in [model previews](docs/model-previews.md). A registered extension does not guarantee a file’s codec, compression or external asset requirements: failures stay visible and recoverable.
@@ -130,7 +132,7 @@ The [verification report](docs/verification.md) records executed checks and the 
 
 The renderer is sandboxed and isolated, with no Node access or arbitrary IPC. Previews receive revocable local resources, bounded reads and range streams. Downloaded files and Markdown cannot execute scripts, open remote pages or fetch network assets inside the application.
 
-Workspaces use a fresh `viewer-state-v1.json` in Electron’s Viewer user-data directory (normally `~/Library/Application Support/Viewer` on macOS). Writes are atomic; unreadable state is retained as a backup. `VIEWER_DATA_DIRECTORY=/absolute/path` selects an isolated profile. Legacy `~/.viewer` data is not imported or modified.
+Workspaces use a fresh `viewer-state-v1.json` in Electron’s Viewer user-data directory (normally `~/Library/Application Support/Viewer` on macOS). Writes are atomic; unreadable state is retained as a backup. Unsaved text (scratch planes and unsaved edits) is kept in its `text-buffers/` folder, one private file per plane, until it is saved or discarded. `VIEWER_DATA_DIRECTORY=/absolute/path` selects an isolated profile. Legacy `~/.viewer` data is not imported or modified.
 
 Licensed under [DEL](LICENSE). Part of [Plurid](https://plurid.com).
 

@@ -23,6 +23,8 @@ export interface WorkspaceController {
     content?: boolean,
   ): void;
   newRootFolder(target?: NewRootFolderTarget): void;
+  /** A new scratch plane of unsaved text, framed and active. */
+  newScratch(): void;
   splitFolder(target: { workspaceID: string; paneID: string; path: string }, axis: 'x' | 'y'): void;
   layoutPlane(target: PlaneLayoutTarget, edit: PlaneLayoutEdit): void;
   editPlane(target: PlaneLayoutTarget, mode: 'move' | 'resize'): void;
@@ -33,6 +35,8 @@ export interface WorkspaceController {
       another?: boolean;
       link?: string;
       evidence?: EvidenceNavigation;
+      /** A link followed: the plane also becomes the active one, taking the wheel and the keys. */
+      activate?: boolean;
     },
   ): void;
   openPath(
@@ -45,12 +49,18 @@ export interface WorkspaceController {
       link?: string;
       /** Known folder destinations may request a native access grant. */
       directory?: boolean;
+      /** A link followed: the plane it opens or shows becomes the active one. */
+      activate?: boolean;
     },
   ): Promise<void>;
-  focusPane(hostID: string): void;
+  /** Shows a plane and makes it Viewer's active pane; `activate` also gives it the wheel and the
+   * keys, as following a link does (2026-10-23). Plurid's selection is not changed. */
+  focusPane(hostID: string, options?: { activate?: boolean }): void;
   frameAll(): void;
   dock(hostID?: string): void;
   closePane(hostID: string): void;
+  /** A plane and every plane under it: what closing it closes. */
+  subtree(hostID: string): string[];
   consolidatePreviews(): void;
   arrange(axis: 'x' | 'y'): void;
   undo(): void;

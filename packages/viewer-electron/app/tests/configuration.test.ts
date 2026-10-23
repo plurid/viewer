@@ -47,6 +47,61 @@ describe('authoritative JSONC configuration', () => {
     await reloaded.load();
     expect(reloaded.snapshot().settings.browsing.confirmTrash).toBe(false);
   });
+  it('names new text files .md unless configured otherwise (2026-10-23)', async () => {
+    const service = create();
+    await service.load();
+    const config = await read();
+    delete config.settings.browsing.newFileExtension;
+    await fs.writeFile(file(), JSON.stringify(config));
+    await service.reload();
+    expect(service.snapshot().settings.browsing.newFileExtension).toBe('md');
+    await service.patch(
+      [{ path: 'settings.browsing.newFileExtension', value: 'txt' }],
+      service.snapshot().revision,
+    );
+    expect((await read()).settings.browsing.newFileExtension).toBe('txt');
+    for (const value of ['.md', 'a/b', '', 'x'.repeat(17)])
+      await expect(
+        service.patch(
+          [{ path: 'settings.browsing.newFileExtension', value }],
+          service.snapshot().revision,
+        ),
+        value,
+      ).rejects.toThrow();
+  });
+  it("configures the text editor, by default as the owner's VS Code (2026-10-23)", async () => {
+    const service = create();
+    await service.load();
+    const config = await read();
+    delete config.settings.editor;
+    await fs.writeFile(file(), JSON.stringify(config));
+    await service.reload();
+    expect(service.snapshot().settings.editor).toEqual({
+      fontSize: 18,
+      lineHeight: 40,
+      fontFamily: 'Menlo',
+      tabSize: 4,
+      insertSpaces: true,
+      wordWrap: false,
+      lineNumbers: true,
+      trimTrailingWhitespace: true,
+    });
+    await service.patch(
+      [{ path: 'settings.editor.fontSize', value: 14 }],
+      service.snapshot().revision,
+    );
+    expect((await read()).settings.editor.fontSize).toBe(14);
+    for (const [path, value] of [
+      ['settings.editor.fontSize', 2],
+      ['settings.editor.lineHeight', 500],
+      ['settings.editor.tabSize', 0],
+      ['settings.editor.fontFamily', 'Menlo; color: red'],
+    ] as const)
+      await expect(
+        service.patch([{ path, value }], service.snapshot().revision),
+        path,
+      ).rejects.toThrow();
+  });
   it('keeps a symbolically linked config.jsonc as a link when saving', async () => {
     const dotfiles = path.join(root, 'dotfiles');
     await fs.mkdir(dotfiles);

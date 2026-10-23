@@ -75,6 +75,7 @@
 .model-viewer,
 .pdf-viewer,
 .text-viewer,
+.text-editing,
 .archive-viewer,
 .archive-child,
 .data-viewer {
@@ -206,4 +207,99 @@
   margin: 0;
   font-size: 11px;
   line-height: 1.5;
+}
+/* Editing text (2026-10-23): CodeMirror in Viewer's own colours; tokens use Prism's classes. */
+.text-editing-toolbar .muted {
+  margin-right: auto;
+  font-size: 12px;
+}
+.editing-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+.editing-bar button {
+  height: 24px;
+  min-height: 24px;
+  padding-block: 0;
+  font-size: 11px;
+}
+.text-editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.text-editor .cm-editor {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  color: var(--ink);
+  background: transparent;
+  /* Settings → Editor (2026-10-23) */
+  font-family: var(--editor-font, ui-monospace), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--editor-font-size, 12px);
+  line-height: var(--editor-line-height, 22px);
+  tab-size: var(--editor-tab-size, 4);
+}
+.text-editor .cm-editor.cm-focused {
+  outline: none;
+}
+.text-editor .cm-scroller {
+  font: inherit;
+  line-height: inherit;
+}
+.text-editor .cm-content {
+  caret-color: var(--accent);
+  padding-block: 12px;
+}
+.text-editor .cm-cursor {
+  border-left-color: var(--accent);
+}
+.text-editor .cm-gutters {
+  color: var(--subtle);
+  background: transparent;
+  border-right: none;
+}
+.text-editor .cm-lineNumbers .cm-gutterElement {
+  min-width: 42px;
+  padding-right: 16px;
+}
+/* quiet tints: a full-strength band hid the light text on the cursor's line in the dark look */
+.text-editor .cm-activeLine,
+.text-editor .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.text-editor .cm-activeLineGutter {
+  color: var(--ink);
+}
+.text-editor .cm-selectionBackground,
+.text-editor .cm-editor.cm-focused .cm-selectionBackground,
+.text-editor .cm-content ::selection {
+  background: var(--selection) !important;
+}
+.text-editor .cm-selectionMatch,
+.text-editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.text-editor .cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.text-editor .cm-matchingBracket,
+.text-editor .cm-editor.cm-focused .cm-matchingBracket {
+  background: transparent;
+  outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.text-editor .cm-panels {
+  color: var(--ink);
+  background: var(--raised);
+  border-color: var(--line);
+}
+.text-editor .cm-panels input,
+.text-editor .cm-panels button {
+  font-size: 12px;
+}
+.text-editor .token.invalid {
+  color: var(--danger);
 }

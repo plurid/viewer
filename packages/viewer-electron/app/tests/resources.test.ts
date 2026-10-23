@@ -280,3 +280,18 @@ describe('printing previewed PDFs', () => {
     );
   });
 });
+describe('editing a previewed file (2026-10-23)', () => {
+  it('names the file a preview shows, through a link its target, and refuses an archive entry', async () => {
+    const file = path.join(root, 'notes.txt'),
+      link = path.join(root, 'link.txt');
+    await writeFile(file, 'text');
+    await symlink(file, link);
+    expect(resources.editableFile((await resources.grant(file)).id)).toBe(await realpath(file));
+    expect(resources.editableFile((await resources.grant(link)).id)).toBe(await realpath(file));
+    const archive = path.join(root, 'notes.zip');
+    await writeFile(archive, zipSync({ 'inside.txt': strToU8('inside') }));
+    const grant = await resources.grant(archive);
+    const child = await resources.archiveEntry(grant.id, 'inside.txt');
+    expect(() => resources.editableFile(child.id)).toThrow('archive');
+  });
+});

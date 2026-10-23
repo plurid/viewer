@@ -13,6 +13,9 @@ import rendererConfig from '../vite.renderer.config';
 import { createFixtures } from './fixtures';
 import { Resources } from '../src/desktop/resources';
 import { Operations } from '../src/desktop/operations';
+import { TextFiles } from '../src/desktop/text-files';
+import { TextBuffers, type TextBuffer } from '../src/desktop/text-buffers';
+import type { TextVersion } from '../src/domain/text-documents';
 import { Watchers } from '../src/desktop/watchers';
 import { FolderSizes } from '../src/desktop/folder-sizes';
 import { Search } from '../src/desktop/search';
@@ -83,6 +86,10 @@ const operations = new Operations(
   (progress) => emit({ type: 'job-progress', progress }),
 );
 const storage = new Storage(path.join(fixture.root, 'state.json'));
+const texts = new TextFiles(operations, async (paths) => {
+  paths.forEach(scoped);
+});
+const buffers = new TextBuffers(path.join(fixture.root, 'profile'));
 const agentClients = new AgentClients(path.join(fixture.root, 'agents'), async (paths) => {
   paths.forEach(scoped);
 });
@@ -493,6 +500,34 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'flushed':
     case 'textEdit':
       return;
+    case 'textOpen':
+      return texts.open(resources.editableFile(args[0] as string));
+    case 'textSave':
+      return texts.save(
+        scoped(args[0] as string),
+        args[1] as string,
+        args[2] as TextVersion,
+        args[3] as string,
+        args[4] as boolean,
+      );
+    case 'textSaveAs': {
+      // the save panel's answer: a file in the fixture's own folder
+      const file = scoped(path.join(fixture.files, path.basename(args[1] as string)));
+      return { file, version: await texts.saveAs(file, args[0] as string, args[2] as string) };
+    }
+    case 'textEditEnd':
+      return texts.end(args[0] as string);
+    case 'textPrompt':
+      // no native dialog here: closing keeps the text, as Cancel does
+      return 'cancel';
+    case 'bufferList':
+      return { buffers: await buffers.list(), problems: buffers.problems() };
+    case 'bufferRead':
+      return buffers.read(args[0] as string);
+    case 'bufferWrite':
+      return buffers.write(args[0] as TextBuffer);
+    case 'bufferDiscard':
+      return buffers.discard(args[0] as string);
     case 'clipboardWrite':
       clipboard = { paths: args[0] as string[], cut: args[1] as boolean };
       return;

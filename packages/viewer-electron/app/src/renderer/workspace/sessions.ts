@@ -140,6 +140,22 @@ export function focusFiles(id: string): void {
   };
   requestAnimationFrame(focus);
 }
+/** Moves the keys into a plane's content, any kind: a link followed to it (2026-10-23). */
+export function focusPlane(id: string): void {
+  const until = performance.now() + 1500;
+  const focus = () => {
+    if (dialogOpen()) return;
+    const control = Array.from(document.querySelectorAll<HTMLElement>('[data-viewer-plane]')).find(
+      (el) => el.dataset.viewerPlane === id,
+    );
+    const target = control
+      ?.closest('[data-plurid-plane]')
+      ?.querySelector<HTMLElement>('.folder-explorer, .preview-plane, .terminal-plane');
+    if (target) target.focus({ preventScroll: true });
+    else if (performance.now() < until) requestAnimationFrame(focus);
+  };
+  requestAnimationFrame(focus);
+}
 /** Live topology is authoritative; reservations cover the interval before a spawn mounts. */
 export function rootOwners<T extends { children?: T[] }>(
   tree: T[],

@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { settingValue, type SettingDefinition } from '../../../domain/setting-catalog';
 import { Icon, type IconName } from '../Icon';
 import type { SettingsEditor } from './editor';
+import { ChoiceButton } from '../ChoiceMenu';
 
 const toolbarIcons: Record<string, IconName> = {
   parent: 'parent-plane',
@@ -93,28 +94,22 @@ export function CatalogSettings({
                   onChange={(event) => patch(definition.path, event.target.checked)}
                 />
               ) : definition.kind === 'choice' ? (
-                <select
-                  aria-label={definition.label}
+                // the searchable choice menu, not a native dropdown (2026-10-23)
+                <ChoiceButton
+                  label={definition.label}
                   value={String(settingValue(snapshot, definition.path))}
-                  onChange={(event) => {
-                    if (locationField && event.target.value === 'custom') {
+                  choices={(definition.choices ?? []).map(([value, label]) => ({ value, label }))}
+                  onChoose={(value) => {
+                    if (locationField && value === 'custom') {
                       chooseNewPlaneFolder(locationField);
                       return;
                     }
                     patch(
                       definition.path,
-                      definition.path === 'settings.previews.thumbnailSize'
-                        ? Number(event.target.value)
-                        : event.target.value,
+                      definition.path === 'settings.previews.thumbnailSize' ? Number(value) : value,
                     );
                   }}
-                >
-                  {definition.choices?.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                />
               ) : (
                 <input
                   aria-label={definition.label}

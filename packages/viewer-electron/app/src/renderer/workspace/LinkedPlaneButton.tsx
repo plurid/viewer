@@ -25,7 +25,8 @@ export function LinkedPlaneButton({ paneID, entry }: { paneID?: string; entry: F
       onClick={(event) => {
         event.stopPropagation();
         const live = paneID && workspace?.linkedPaneID(paneID, entry);
-        if (live) workspace?.focusPane(live);
+        // following the link makes its plane the active one, as clicking it would
+        if (live) workspace?.focusPane(live, { activate: true });
       }}
     >
       <Icon name="link" size={14} />

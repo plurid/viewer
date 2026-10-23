@@ -20,6 +20,7 @@ const operationLabels: Record<OperationKind, string> = {
   compress: 'Compress',
   extract: 'Extract',
   convert: 'Quick action',
+  rewrite: 'Save',
 };
 
 export function OperationsPanel() {

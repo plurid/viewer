@@ -63,6 +63,15 @@ const descriptions: Record<string, string[]> = {
   'settings.browsing.emptyWorkspacePath': [
     'Required absolute folder path when emptyWorkspaceLocation is custom. Does not affect newPlanePath.',
   ],
+  'settings.editor': [
+    'The text editor of preview and scratch planes. Defaults follow VS Code at fontSize 18, lineHeight 40.',
+    'fontSize and lineHeight are pixels; fontFamily names one monospace family; tabSize counts columns.',
+    'trimTrailingWhitespace removes spaces and tabs at line ends when a file is saved.',
+  ],
+  'settings.browsing.newFileExtension': [
+    'Extension, without the dot, that New file… names a file with: md, txt, json, ….',
+    'A new scratch plane starts in its language, and Save As offers it when it is one of that language.',
+  ],
   'settings.folders': [
     'Sparse per-folder overrides, keyed by absolute path. Omitted fields inherit the defaults.',
     'Example: "/absolute/path/Downloads": { "mode": "list", "sort": "modified", "descending": true }.',

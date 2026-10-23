@@ -127,6 +127,16 @@ const api: ViewerAPI = {
   fileAccessList: () => invoke('fileAccessList'),
   fileAccessRevoke: (path) => invoke('fileAccessRevoke', path),
   textEdit: (command) => invoke('textEdit', command),
+  textOpen: (resourceID) => invoke('textOpen', resourceID),
+  textSave: (file, text, expected, session, bom) =>
+    invoke('textSave', file, text, expected, session, bom),
+  textSaveAs: (text, name, session) => invoke('textSaveAs', text, name, session),
+  textEditEnd: (session) => invoke('textEditEnd', session),
+  textPrompt: (kind, name) => invoke('textPrompt', kind, name),
+  bufferList: () => invoke('bufferList'),
+  bufferRead: (id) => invoke('bufferRead', id),
+  bufferWrite: (buffer) => invoke('bufferWrite', buffer),
+  bufferDiscard: (id) => invoke('bufferDiscard', id),
   onEvent: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, event: DesktopEvent) => listener(event);
     ipcRenderer.on('viewer:event', handler);

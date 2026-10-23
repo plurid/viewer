@@ -321,11 +321,11 @@ const target = () => {
   const folder = activeWorkspace().panes[0]!;
   return { workspaceID: activeWorkspace().id, paneID: folder.id, path: folder.path };
 };
-async function workspace() {
+async function workspace(planeConfiguration = configuration) {
   rendered = await renderPlurid({
     id: 'folder-pair',
     planes,
-    configuration,
+    configuration: planeConfiguration,
     view: routes(),
     useLocalStorage: true,
     storageAdapter: storageAdapter(activeWorkspace().id),
@@ -652,5 +652,75 @@ describe('folder pair commands', () => {
     }
     await act(async () => registry.run(commands[0]!));
     expect(split).toHaveBeenCalledWith(target(), 'x');
+  });
+});
+/**
+ * FOLLOWING A LINK ACTIVATES ITS PLANE (2026-10-23): the row's link marker, Go to linked plane and a
+ * Markdown link moved the camera to the plane, but the plane clicked from stayed the active one, the
+ * one taking the wheel. Plurid's selection, for moving planes, is a different thing and stays.
+ */
+describe('following a link', () => {
+  // Viewer's own wheel mode (`surface-configuration.ts`): the active plane is the wheel's owner
+  const clickToScroll = configurationWith({
+    elements: { plane: { width: 800, height: 480 } },
+    space: { gestures: { wheel: 'click-to-scroll' } },
+  });
+  const spawnChild = async (path: string) => {
+    const child = addPane(path, 'folder', false);
+    await act(async () => {
+      rendered!.api.pubsub.publish({
+        topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
+        data: {
+          route: paneRoute('folder', child.id),
+          parentPlaneID: rendered!.handle.tree.get()[0]!.planeID,
+          framing: 'none',
+        },
+      });
+    });
+    return child;
+  };
+  const planeID = (id: string) =>
+    flattenTree(rendered!.handle.tree.get()).find((node) => hostID(node) === id)!.planeID;
+  const scrollOwner = () =>
+    (rendered!.api.store.getState() as { ui: { scrollPlaneID: string } }).ui.scrollPlaneID;
+  it('makes the plane it shows the active one, where focusing alone does not', async () => {
+    const { controller } = await workspace(clickToScroll);
+    const root = activeWorkspace().panes[0]!;
+    const child = await spawnChild('/fixtures/child');
+    await act(async () => {
+      rendered!.handle.selection.set([planeID(root.id)]);
+      rendered!.api.store.dispatch(
+        pluridStateModules.ui.actions.setScrollPlaneID(planeID(root.id)),
+      );
+    });
+    await act(async () => controller.focusPane(child.id));
+    expect(scrollOwner()).toBe(planeID(root.id));
+    await act(async () => controller.focusPane(child.id, { activate: true }));
+    expect(scrollOwner()).toBe(planeID(child.id));
+    expect(getState().activePane).toBe(child.id);
+    // the selection for moving planes is not the link's to change
+    expect(rendered!.handle.selection.get()).toEqual([planeID(root.id)]);
+  });
+  it('activates a plane it opens, once the plane is there', async () => {
+    const { controller } = await workspace(clickToScroll);
+    const root = activeWorkspace().panes[0]!;
+    const entry = {
+      path: '/fixtures/linked',
+      name: 'linked',
+      parent: '/fixtures',
+      extension: '',
+      mime: 'inode/directory',
+      size: 0,
+      kind: 'directory',
+      directory: true,
+      identity: '1:9',
+      modified: 1,
+      created: 1,
+      hidden: false,
+    } as const;
+    await act(async () => controller.open(entry, root.id, { activate: true }));
+    const opened = activeWorkspace().panes.find((pane) => pane.path === '/fixtures/linked')!;
+    await vi.waitFor(() => expect(scrollOwner()).toBe(planeID(opened.id)));
+    expect(getState().activePane).toBe(opened.id);
   });
 });

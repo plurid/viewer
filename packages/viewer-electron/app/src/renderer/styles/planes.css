@@ -43,6 +43,14 @@
   font-size: 13px;
   font-weight: 600;
 }
+/* text not saved: a file's edits, or a scratch plane's text */
+.plane-unsaved {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
 .plane-view-button {
   display: inline-flex;
   align-items: center;

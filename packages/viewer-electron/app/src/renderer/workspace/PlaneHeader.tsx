@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
 import type { PluridPlaneChromeContext, TreePlane } from '@plurid/plurid-data';
 import {
   activeWorkspace,
@@ -21,6 +21,7 @@ import { setPreviewControlsSlot } from '../previews/controls';
 import { useWorkspace } from './context';
 import { baseName } from '../../domain/planes';
 import { hostID } from './tree';
+import { buffersGeneration, heldBuffer, subscribeBuffers } from '../editing/buffers';
 
 /** Chooses and edits a folder's lenses; shown once the folder has one, and on the Map. */
 function LensButton({
@@ -66,6 +67,12 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       (value) => pane?.type === 'collection' && value.id === pane.collectionID,
     ),
   );
+  // a dot for text not saved: a file's edits, or a scratch plane's text
+  useSyncExternalStore(subscribeBuffers, buffersGeneration);
+  const unsaved =
+    pane?.type === 'scratch'
+      ? !!heldBuffer(pane.bufferID)?.text
+      : pane?.type === 'preview' && !!pane.bufferID;
   const dragging = useViewer((state) => state.saved.ui.space.dragging);
   const controls = useViewer((state) => state.saved.ui.space.headerControls);
   const registry = useCommands();
@@ -97,7 +104,20 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     void registry
       .invoke(command, request)
       .then(() => {
-        if (!['search', 'close-plane', 'parent-plane'].includes(command)) focusFiles(id);
+        // text commands leave the focus in the editor
+        if (
+          ![
+            'search',
+            'close-plane',
+            'parent-plane',
+            'edit-file',
+            'save-file',
+            'save-file-as',
+            'revert-file',
+            'done-editing',
+          ].includes(command)
+        )
+          focusFiles(id);
       })
       .catch(report);
   };
@@ -195,14 +215,19 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           size={16}
         />
         <span className="plane-title">
-          {pane?.type === 'collection'
-            ? (collection?.name ?? 'Collection')
-            : pane?.type === 'search'
-              ? pane.name
-              : pane?.type === 'terminal'
-                ? 'Terminal · ' + baseName(pane.path)
-                : (pane && baseName(pane.path)) || 'Plane'}
+          {pane?.type === 'scratch'
+            ? (pane.title ?? 'Untitled')
+            : pane?.type === 'collection'
+              ? (collection?.name ?? 'Collection')
+              : pane?.type === 'search'
+                ? pane.name
+                : pane?.type === 'terminal'
+                  ? 'Terminal · ' + baseName(pane.path)
+                  : (pane && baseName(pane.path)) || 'Plane'}
         </span>
+        {unsaved && (
+          <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
+        )}
       </span>
       {pane?.type === 'folder' ? (
         <>

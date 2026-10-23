@@ -11,7 +11,7 @@ import {
   type ProjectDefinition,
 } from '../src/domain/project';
 import { Storage } from '../src/desktop/storage';
-import type { SavedState } from '../src/domain/contracts';
+import { CURRENT_STATE_VERSION, type SavedState } from '../src/domain/contracts';
 import {
   activeWorkspace,
   flushState,
@@ -312,11 +312,11 @@ describe('project sessions', () => {
     });
     await writeFile(storage.file, original);
     const state = (await storage.load()).state!;
-    expect(state.version).toBe(4);
+    expect(state.version).toBe(CURRENT_STATE_VERSION);
     expect(await readFile(storage.file, 'utf8')).toBe(original);
     const backup = (await readdir(root)).find((file) => file.includes('before-projects-v4'))!;
     expect(await readFile(root + '/' + backup, 'utf8')).toBe(original);
     await storage.save(state);
-    expect((await storage.load()).state?.version).toBe(4);
+    expect((await storage.load()).state?.version).toBe(CURRENT_STATE_VERSION);
   });
 });

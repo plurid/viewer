@@ -9,6 +9,7 @@ import {
   activeWorkspace,
   addPane,
   addRootFolder,
+  addScratchPane,
   addSearchPane,
   addTerminalPane,
   addCollectionPane,
@@ -22,7 +23,7 @@ import {
   removePanes,
   setActivePane,
 } from '../state/store';
-import { rootOwners } from './sessions';
+import { focusPlane, rootOwners } from './sessions';
 import { repeatedPreviews } from './recovery';
 import { flattenTree, hostID, paneRoute, parentPaneID, linkedPaneID } from './tree';
 import { cancelWorkspaceFraming, frameWorkspace } from './framing';
@@ -31,6 +32,24 @@ import { frontPlaneDepth, planeLayoutGeometry } from './plane-layout';
 import type { WorkspaceController } from './context';
 import { openWorkspacePath } from './open-path';
 /** Owns host-plane identity and creation. Engine routes/IDs stay inside the adapter. */
+/**
+ * Makes a plane the active one, as following a link does: it takes the wheel (plurid's
+ * click-to-scroll owner, whose header is tinted) and the keys. The camera alone moved there, and the
+ * plane clicked from stayed active (2026-10-23). Plurid's selection, for moving planes, is left as
+ * it is. A plane just spawned is activated once it is in the tree.
+ */
+function activatePlane(engine: RefObject<PluridApplicationHandle | null>, id: string): void {
+  const until = performance.now() + 1500;
+  const attempt = () => {
+    const api = engine.current;
+    const node = api && flattenTree(api.tree.get()).find((item) => hostID(item) === id);
+    if (api && node) {
+      api.store.dispatch(pluridStateModules.ui.actions.setScrollPlaneID(node.planeID));
+      focusPlane(id);
+    } else if (performance.now() < until) requestAnimationFrame(attempt);
+  };
+  attempt();
+}
 export function useWorkspaceController({
   engine,
   surface,
@@ -239,6 +258,14 @@ export function useWorkspaceController({
         const paneID = addCollectionPane(id);
         frameWorkspace(engine, surface, [paneID]);
       },
+      newScratch() {
+        if (!engine.current || !readyRef.current) return;
+        const pane = addScratchPane();
+        setActivePane(pane.id);
+        frameWorkspace(engine, surface, [pane.id], {
+          dock: getState().saved.ui.space.opening === 'dock',
+        });
+      },
       newRootFolder(target) {
         if (!engine.current || !readyRef.current) return;
         const pane = addRootFolder(target);
@@ -351,6 +378,7 @@ export function useWorkspaceController({
           another?: boolean;
           link?: string;
           evidence?: EvidenceNavigation;
+          activate?: boolean;
         },
       ) {
         if (!entry.directory && entry.name === 'viewer.project.jsonc') {
@@ -388,7 +416,7 @@ export function useWorkspaceController({
         if (existing) {
           if (existing.type === 'preview' && options?.evidence)
             updatePane(existing.id, { evidence: options.evidence });
-          controller.focusPane(existing.id);
+          controller.focusPane(existing.id, { activate: options?.activate });
           return;
         }
         const linked = !!parent && !options?.another;
@@ -423,10 +451,11 @@ export function useWorkspaceController({
           frameWorkspace(engine, surface, [pane.id], {
             dock: getState().saved.ui.space.opening === 'dock',
           });
+        if (options?.activate) activatePlane(engine, pane.id);
       },
       openPath: (path, target): Promise<void> =>
         openWorkspacePath(path, target, controller).then(() => {}),
-      focusPane(id) {
+      focusPane(id, options) {
         if (!activeWorkspace().panes.some((pane) => pane.id === id)) return;
         const node =
           engine.current &&
@@ -441,6 +470,7 @@ export function useWorkspaceController({
           else if (!docked) frameWorkspace(engine, surface, [id]);
         } else frameWorkspace(engine, surface, [id]);
         setActivePane(id);
+        if (options?.activate) activatePlane(engine, id);
       },
       frameAll: () => frameWorkspace(engine, surface),
       dock: (id) => {
@@ -452,6 +482,11 @@ export function useWorkspaceController({
         if (node) setActivePane(hostID(node));
         if (api.camera.docked()) api.camera.reveal({ animate: true });
         else api.camera.dock(node?.planeID, { animate: true });
+      },
+      subtree: (id) => {
+        const api = engine.current;
+        const node = api && flattenTree(api.tree.get()).find((node) => hostID(node) === id);
+        return node ? flattenTree([node]).map(hostID) : [id];
       },
       closePane: (id) => {
         const api = engine.current;

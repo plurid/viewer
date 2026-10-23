@@ -13,13 +13,16 @@ export { flushState, previewValues, savePreviewValue, storageAdapter } from './p
 export {
   addPane,
   addRootFolder,
+  addScratchPane,
   addSearchPane,
   addTerminalPane,
+  desktopFolder,
   folderPane,
   historyNavigate,
   navigate,
   reconcilePanes,
   removePanes,
+  replacePane,
   setActivePane,
   updatePane,
 } from './panes';

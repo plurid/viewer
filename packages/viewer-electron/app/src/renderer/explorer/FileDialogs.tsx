@@ -10,6 +10,7 @@ import { OpenWithDialog } from '../ui/OpenWithDialog';
 import { RenameActions } from '../actions/RenameActions';
 import { sourceVersion } from '../../domain/inspection';
 import { formatBytes } from '../../domain/files';
+import { untitledFileName } from '../../domain/text-languages';
 import { calculateSize, cancelFolderSize, useFolderSize } from './sizes';
 const moveToTrash = async (context: CommandContext) => {
   await window.viewer.operate({
@@ -196,7 +197,7 @@ export function useFileDialogs(): {
                   : name.kind === 'group'
                     ? 'New Folder With Items'
                     : name.kind === 'mkfile'
-                      ? 'untitled.txt'
+                      ? untitledFileName(getState().settings.settings.browsing.newFileExtension)
                       : ''
             }
             maxLength={name.kind === 'go-to' ? 32768 : 255}

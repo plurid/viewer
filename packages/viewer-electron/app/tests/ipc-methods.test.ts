@@ -16,7 +16,23 @@ describe('IPC method table', () => {
       'configRestore',
     ])
       expect(methodWindows[method as keyof typeof methodWindows]).toBe('settings');
-    for (const method of ['operate', 'save', 'trashConfirmation', 'printPDF', 'clipboardWrite'])
+    for (const method of [
+      'operate',
+      'save',
+      'trashConfirmation',
+      'printPDF',
+      'clipboardWrite',
+      // text a person edits or keeps unsaved, and the saves that write it (2026-10-23)
+      'textOpen',
+      'textSave',
+      'textSaveAs',
+      'textEditEnd',
+      'textPrompt',
+      'bufferList',
+      'bufferRead',
+      'bufferWrite',
+      'bufferDiscard',
+    ])
       expect(methodWindows[method as keyof typeof methodWindows]).toBe('viewer');
   });
   it('sends Settings the permission changes its provider controls show', () => {
@@ -24,5 +40,28 @@ describe('IPC method table', () => {
     expect(methodWindows.providerPermissionSet).toBe('both');
     expect(settingsEvents).toContain('model-permission');
     expect(settingsEvents).not.toContain('open');
+  });
+});
+describe('the workspace snapshot agents read (2026-10-23)', () => {
+  it('accepts a scratch plane, by its type and folder only', () => {
+    const snapshot = {
+      activeWorkspace: 'w',
+      workspaces: [
+        {
+          id: 'w',
+          name: 'Work',
+          roots: ['s'],
+          panes: [{ id: 's', type: 'scratch', path: '/Users/someone/Desktop' }],
+        },
+      ],
+    };
+    const target = {
+      workspaceID: 'w',
+      rootID: 's',
+      paneID: 's',
+      directory: '/Users/someone/Desktop',
+      selection: [],
+    };
+    expect(schemas.commandsPublish.safeParse([target, [], snapshot]).success).toBe(true);
   });
 });

@@ -59,6 +59,8 @@ import { CommandRegistry, type CommandContext } from './commands/registry';
 import { windowCommands } from './commands/window';
 import { CommandPalette } from './commands/CommandPalette';
 import { editable, textEditFor } from './commands/editing';
+import { routeToEditor, subscribeEditingPlanes } from './editing/planes';
+import { recoverBuffers } from './editing/unsaved';
 import { Sidebar } from './ui/Sidebar';
 
 import { ContextMenu } from './ui/ContextMenu';
@@ -105,6 +107,13 @@ function AppWindow() {
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
   readyRef.current = ready;
+  // once, at launch: unsaved text no plane holds comes back as planes (2026-10-23)
+  const recovered = useRef(false);
+  useEffect(() => {
+    if (!ready || recovered.current) return;
+    recovered.current = true;
+    void recoverBuffers().catch(report);
+  }, [ready]);
   const [workspaceDialog, setWorkspaceDialog] = useState<{
     kind: 'new' | 'rename' | 'delete';
     id: string;
@@ -323,6 +332,8 @@ function AppWindow() {
       clearTimeout(timer);
     };
   }, [registry, controller, activePane, windowContext]);
+  // a plane that starts or stops editing changes which text commands apply
+  useEffect(() => subscribeEditingPlanes(() => registry.touch()), [registry]);
   useEffect(() => {
     if (!ready) return;
     let previous = '';
@@ -347,6 +358,8 @@ function AppWindow() {
     );
   }, [saved.workspaces]);
   const invoke = async (id: string) => {
+    // Edit menu Undo, Redo and Select All reach a CodeMirror editor, which `webContents` does not
+    if (routeToEditor(id, getState().activePane)) return;
     if (
       document.activeElement?.closest('.terminal-plane') &&
       (await terminalEditing(getState().activePane, id))
@@ -547,7 +560,12 @@ function AppWindow() {
         !['palette', 'settings'].includes(id || '')
       )
         return;
-      if (editable(event.target) && !['palette', 'settings'].includes(id || '')) return;
+      // inside a text editor, its file's commands still work: ⌘S, ⇧⌘S, ⌘T
+      const textCommands = (event.target as Element).closest?.('.text-editor')
+        ? ['save-file', 'save-file-as', 'new-scratch-plane']
+        : [];
+      if (editable(event.target) && !['palette', 'settings', ...textCommands].includes(id || ''))
+        return;
       if (id && explorerCommandIDs.has(id)) {
         if (!overlayOpen()) routeFileKeyboard(getState().activePane, event);
         return;

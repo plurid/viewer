@@ -92,6 +92,10 @@ export const settingsSchema = z
           ])
           .default('home'),
         emptyWorkspacePath: z.union([z.literal(''), localPath]).default(''),
+        newFileExtension: z
+          .string()
+          .regex(/^[A-Za-z0-9][A-Za-z0-9_+-]{0,15}$/)
+          .default('md'),
       })
       .strict(),
     folders: z.record(localPath, folderOverrideSchema).default({}),
@@ -146,6 +150,32 @@ export const settingsSchema = z
         maxModelMB: z.number().int().min(16).max(512),
       })
       .strict(),
+    editor: z
+      .object({
+        fontSize: z.number().int().min(8).max(48).default(18),
+        lineHeight: z.number().int().min(10).max(96).default(40),
+        // a family name only: it is written into a style
+        fontFamily: z
+          .string()
+          .regex(/^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$/)
+          .default('Menlo'),
+        tabSize: z.number().int().min(1).max(16).default(4),
+        insertSpaces: z.boolean().default(true),
+        wordWrap: z.boolean().default(false),
+        lineNumbers: z.boolean().default(true),
+        trimTrailingWhitespace: z.boolean().default(true),
+      })
+      .strict()
+      .default({
+        fontSize: 18,
+        lineHeight: 40,
+        fontFamily: 'Menlo',
+        tabSize: 4,
+        insertSpaces: true,
+        wordWrap: false,
+        lineNumbers: true,
+        trimTrailingWhitespace: true,
+      }),
     search: z
       .object({
         roots: z.array(localPath).max(100),

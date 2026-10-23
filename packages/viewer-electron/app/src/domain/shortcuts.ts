@@ -31,6 +31,11 @@ export const defaultShortcuts: Record<string, string> = {
   'view-gallery': 'Cmd+4',
   'view-map': 'Cmd+5',
   'toggle-hidden': 'Cmd+Shift+.',
+  // text (2026-10-23)
+  'new-scratch-plane': 'Cmd+T',
+  'edit-file': 'Cmd+E',
+  'save-file': 'Cmd+S',
+  'save-file-as': 'Cmd+Shift+S',
 };
 /** Second bindings kept for Finder habits, alongside the primary shortcut. */
 export const alternateShortcuts: Readonly<Record<string, string>> = { 'go-to': 'Cmd+Shift+G' };

@@ -1,5 +1,6 @@
 // Saving workspace state: engine arrangements, retained preview values and the debounced save.
-import type { Pane, SavedState } from '../../domain/contracts';
+import { flushBuffers } from '../editing/buffers';
+import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../domain/contracts';
 import { previewValuesSchema, type JSONValue } from '../../domain/project';
 import { activeWorkspace, getState, replaceState, report } from './core';
 import { flushPreferences } from './preferences';
@@ -57,6 +58,8 @@ function retainedPreviewStates(): SavedState['previewStates'] {
 }
 export async function flushState(flushEngine = true): Promise<void> {
   if (flushEngine) window.dispatchEvent(new Event('pagehide'));
+  // unsaved text first: a quit waits for this flush
+  await flushBuffers();
   // After the engine's synchronous flush: a save it scheduled is covered by this one.
   clearTimeout(persistTimer);
   await flushPreferences();
@@ -109,7 +112,7 @@ export function savePreviewValue(
     ...getState(),
     saved: {
       ...getState().saved,
-      version: 4,
+      version: CURRENT_STATE_VERSION,
       previewStates: {
         ...getState().saved.previewStates,
         [owner + ':' + paneID]: parsed.data,
