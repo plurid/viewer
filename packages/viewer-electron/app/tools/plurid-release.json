@@ -1,19 +1,19 @@
 {
-  "release": "2026-10-18",
+  "release": "2026-10-23",
   "direct": ["@plurid/plurid-data", "@plurid/plurid-react"],
   "versions": {
-    "@plurid/generate-plurid-app": "0.0.0-17",
-    "@plurid/plurid-data": "0.0.0-27",
-    "@plurid/plurid-engine": "0.0.0-24",
-    "@plurid/plurid-functions": "0.0.0-33",
-    "@plurid/plurid-functions-react": "0.0.0-8",
-    "@plurid/plurid-icons-react": "0.0.0-13",
-    "@plurid/plurid-kit": "0.0.0-7",
-    "@plurid/plurid-pubsub": "0.0.0-13",
-    "@plurid/plurid-react": "0.0.0-41",
-    "@plurid/plurid-react-server": "0.0.0-20",
-    "@plurid/plurid-themes": "0.0.0-5",
-    "@plurid/plurid-ui-components-react": "0.0.0-37",
-    "@plurid/plurid-ui-state-react": "0.0.0-16"
+    "@plurid/generate-plurid-app": "0.0.0-18",
+    "@plurid/plurid-data": "0.0.0-28",
+    "@plurid/plurid-engine": "0.0.0-25",
+    "@plurid/plurid-functions": "0.0.0-34",
+    "@plurid/plurid-functions-react": "0.0.0-9",
+    "@plurid/plurid-icons-react": "0.0.0-14",
+    "@plurid/plurid-kit": "0.0.0-8",
+    "@plurid/plurid-pubsub": "0.0.0-14",
+    "@plurid/plurid-react": "0.0.0-42",
+    "@plurid/plurid-react-server": "0.0.0-21",
+    "@plurid/plurid-themes": "0.0.0-6",
+    "@plurid/plurid-ui-components-react": "0.0.0-38",
+    "@plurid/plurid-ui-state-react": "0.0.0-17"
   }
 }
