@@ -1,4 +1,5 @@
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
+import type { Tiling } from '../../domain/tiling';
 import {
   CURRENT_STATE_VERSION,
   type Bootstrap,
@@ -151,6 +152,13 @@ export async function newWorkspace(name: string): Promise<void> {
 }
 export function renameWorkspace(name: string): void {
   changeWorkspace((space) => ({ ...space, name }));
+}
+/** The active workspace's tiling (2026-10-23); undefined lets its planes go where they are. */
+export function setTiling(tiling: Tiling | undefined): void {
+  changeWorkspace((space) => {
+    const { tiling: _previous, ...rest } = space;
+    return tiling?.panes.length ? { ...rest, tiling } : rest;
+  });
 }
 /** The active workspace's own space colour; empty goes back to the general one (2026-10-23). */
 export function setWorkspaceSpaceColor(color: string): void {

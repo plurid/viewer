@@ -17,6 +17,12 @@ export interface WindowActions {
   connectServer(): void;
   findTagged(): void;
   openWith(paths: string[]): void;
+  /** Names a recorded macro and saves it as a command sequence. */
+  saveMacro(commands: string[]): void;
+  /** Save view… (a name) and Views… (go, rename, remove). */
+  viewDialog(kind: 'save' | 'manage'): void;
+  /** Names the planes in view as a layout template. */
+  templateDialog(): void;
 }
 /** The state snapshot and scope predicates shared by every window command group. */
 export function windowScopes(actions: WindowActions) {

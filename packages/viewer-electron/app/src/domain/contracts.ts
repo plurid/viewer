@@ -1,3 +1,4 @@
+import type { Tiling } from './tiling';
 import type { TextBuffer, TextBufferSummary, TextOpening, TextVersion } from './text-documents';
 import type { EvidenceNavigation, SourceVersion, InspectionResult } from './inspection';
 import type { WorkflowRequest, WorkflowReply } from './workflows';
@@ -92,6 +93,8 @@ export interface FolderPane {
   history: string[];
   historyIndex: number;
   sidebar?: PaneSidebar;
+  /** Opened by Explode folder from that plane (2026-10-23): Collapse closes it again. */
+  exploded?: string;
 }
 export interface PaneSidebar {
   visible: boolean;
@@ -165,6 +168,8 @@ export interface Workspace {
   basket?: BasketItem[];
   /** This workspace's space colour, `#rrggbb`, over the general one (2026-10-23). */
   spaceColor?: string;
+  /** Planes tiled as tmux's panes (2026-10-23): kept in their layout as the window resizes. */
+  tiling?: Tiling;
 }
 /** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
 export const CURRENT_STATE_VERSION = 5 as const;
@@ -176,6 +181,8 @@ export interface SavedState {
   activeWorkspace: string;
   favorites: { name: string; path: string }[];
   recents: string[];
+  /** Folders' visits for `z` in the palette (2026-10-23): how many, and the last. */
+  visits?: Record<string, { count: number; last: number }>;
   look: 'dark' | 'light';
   ui?: UIPreferences;
 }

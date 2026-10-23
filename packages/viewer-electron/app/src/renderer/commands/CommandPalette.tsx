@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CommandResults } from './CommandResults';
 import { useCommands, useCommandRevision, useCommandSource } from './context';
 import {
@@ -16,6 +16,8 @@ import { useFolder } from '../explorer/useFolder';
 import { useSearch } from '../explorer/useSearch';
 import { useIndexedSearch } from '../explorer/useIndexedSearch';
 import { useWorkspace } from '../workspace/context';
+import type { FileEntry } from '../../domain/contracts';
+import { calculate, paletteIntent, rankFrecent } from './smart-palette';
 
 export function CommandPalette({
   mode,
@@ -82,13 +84,17 @@ function CommandFinder({
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
   const [query, setQuery] = useState('');
+  const smart = useSmartRows(workspaces ? '' : query, context, directory);
   const commands = registry.list({ paneID: active, scope: 'window', context });
-  const rows = rankCommands(
-    workspaces ? commands.filter((command) => command.id.startsWith('workspace:')) : commands,
-    query,
-    recent,
-    workspaces ? 'menu' : 'palette',
-  );
+  const rows = [
+    ...smart,
+    ...rankCommands(
+      workspaces ? commands.filter((command) => command.id.startsWith('workspace:')) : commands,
+      query,
+      recent,
+      workspaces ? 'menu' : 'palette',
+    ),
+  ];
   return (
     <>
       <CommandResults
@@ -107,6 +113,12 @@ function CommandFinder({
         }
         recent={recent.filter((id) => rows.some((row) => row.id === id)).slice(0, 2)}
         onSelect={(command) => {
+          // a smart row's source ends with the palette: it runs first, as a found file's does
+          if (command.id.startsWith('smart:')) {
+            void registry.run(command).catch(report);
+            onClose();
+            return;
+          }
           onClose();
           requestAnimationFrame(() => {
             void registry.run(command).catch(report);
@@ -125,6 +137,160 @@ function CommandFinder({
       </div>
     </>
   );
+}
+
+/**
+ * THE SMART PALETTE'S ROWS (2026-10-23), above the commands: a typed path's folder contents, a
+ * calculation, frecent folders for `z`, or a command with its argument (smart-palette.ts).
+ */
+function useSmartRows(
+  query: string,
+  context: CommandContext,
+  directory: string,
+): ResolvedCommand[] {
+  const registry = useCommands();
+  const workspace = useWorkspace();
+  const home = getState().bootstrap.home;
+  const intent = useMemo(() => paletteIntent(query, home, directory), [query, home, directory]);
+  const [listing, setListing] = useState<{ directory: string; entries: FileEntry[] }>();
+  const listed = intent?.kind === 'path' ? intent.directory : '';
+  useEffect(() => {
+    if (!listed) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      void window.viewer
+        .list(listed)
+        .then((result) => {
+          if (live) setListing({ directory: listed, entries: result.entries });
+        })
+        .catch(() => {
+          if (live) setListing({ directory: listed, entries: [] });
+        });
+    }, 80);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [listed]);
+  const open = (path: string) => async () => {
+    const entry = await window.viewer.stat(path);
+    if (activeWorkspace().id !== context.workspaceID) return;
+    await workspace.openPath(entry.path, {
+      paneID: context.paneID,
+      workspaceID: context.workspaceID,
+    });
+  };
+  const sourceID = useMemo(() => `smart:${crypto.randomUUID()}`, []);
+  const row = (
+    id: string,
+    definition: Omit<CommandDefinition, 'id' | 'when' | 'remember' | 'primary'>,
+  ): CommandDefinition => ({
+    ...definition,
+    id: `smart:${id}`,
+    primary: true,
+    remember: false,
+    when: () => true,
+  });
+  const definitions: CommandDefinition[] = (() => {
+    if (!intent) return [];
+    if (intent.kind === 'calc') {
+      const value = calculate(intent.expression);
+      if (value === undefined) return [];
+      const text = Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(12)));
+      return [
+        row('calc', {
+          label: `= ${text}`,
+          detail: 'Copy the result',
+          group: 'Calculator',
+          icon: 'copy',
+          run: () => navigator.clipboard.writeText(text),
+        }),
+      ];
+    }
+    if (intent.kind === 'jump')
+      return rankFrecent(getState().saved.visits ?? {}, intent.text, Date.now())
+        .slice(0, 10)
+        .map((path) =>
+          row(`jump:${path}`, {
+            label: path.split('/').pop() || path,
+            detail: path,
+            group: 'Frecent folders',
+            icon: 'folder',
+            run: open(path),
+          }),
+        );
+    if (intent.kind === 'path') {
+      const entries = listing?.directory === intent.directory ? listing.entries : [];
+      const hidden = intent.partial.startsWith('.');
+      return [
+        ...(intent.partial
+          ? []
+          : [
+              row(`path:${intent.directory}`, {
+                label: intent.directory,
+                detail: 'Open this folder',
+                group: 'Go',
+                icon: 'folder',
+                run: open(intent.directory),
+              }),
+            ]),
+        ...rankFiles(
+          entries.filter((entry) => hidden || !entry.hidden),
+          intent.partial,
+          12,
+        ).map((entry) =>
+          row(`path:${entry.path}`, {
+            label: entry.name,
+            detail: entry.parent,
+            group: 'Go',
+            icon: entry.directory ? 'folder' : 'file',
+            run: open(entry.path),
+          }),
+        ),
+      ];
+    }
+    const name = intent.text;
+    const selected = context.selection;
+    if (intent.command === 'go-to')
+      return [row('go', { label: `Go to ${name}`, group: 'Go', icon: 'folder', run: open(name) })];
+    if (intent.command === 'rename')
+      return selected.length === 1
+        ? [
+            row('rename', {
+              label: `Rename “${selected[0]!.name}” to “${name}”`,
+              group: 'Files',
+              icon: 'rename',
+              run: async () => {
+                await window.viewer.operate({ kind: 'rename', name, sources: [selected[0]!.path] });
+              },
+            }),
+          ]
+        : [];
+    if (!context.directory) return [];
+    const kind = intent.command === 'new-folder' ? 'mkdir' : 'mkfile';
+    return [
+      row(intent.command, {
+        label: `${kind === 'mkdir' ? 'New folder' : 'New file'} “${name}”`,
+        detail: context.directory,
+        group: 'Files',
+        icon: kind === 'mkdir' ? 'folder' : 'file',
+        run: async () => {
+          await window.viewer.operate({ kind, name, sources: [], destination: context.directory });
+        },
+      }),
+    ];
+  })();
+  useCommandSource(
+    sourceID,
+    {
+      context: () => context,
+      definitions: () => definitions,
+      valid: (invocation) => invocation.workspaceID === activeWorkspace().id,
+    },
+    // the palette's context is a new object each render: republishing on it never settled
+    [intent, listing],
+  );
+  return definitions.length ? registry.list({ sources: [sourceID] }) : [];
 }
 
 /** File listing, watches and recursive search exist only while the file finder is open. */

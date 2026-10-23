@@ -55,7 +55,14 @@ import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
 import { useTitlebar } from './ui/titlebar';
+import { useKeySequences } from './keys/sequences';
+import { recordCommand, useMacroRecording } from './keys/macro';
+import type { CustomAction } from '../domain/automation';
+import { WhichKey } from './keys/WhichKey';
+import { PlaneHints } from './keys/PlaneHints';
 import { WorkspaceBackgroundDialog } from './ui/WorkspaceBackgroundDialog';
+import { ViewsDialog } from './ui/ViewsDialog';
+import { captureCurrentLayout, saveLayoutTemplate } from './commands/window-commands/templates';
 import { openTerminalFind } from './terminals/find';
 import { CommandsContext, useCommands, useCommandSource } from './commands/context';
 import { CommandRegistry, type CommandContext } from './commands/registry';
@@ -79,7 +86,11 @@ export function App() {
   const registry = useMemo(
     () =>
       new CommandRegistry(
-        rememberCommand,
+        (id) => {
+          rememberCommand(id);
+          // Record macro (keys/macro.ts) collects what the person runs
+          recordCommand(id);
+        },
         (id) => getState().settings.settings.shortcuts[commandShortcutID(id)],
       ),
     [],
@@ -122,6 +133,10 @@ function AppWindow() {
     id: string;
   } | null>(null);
   const [shortcutDialog, setShortcutDialog] = useState<{ path: string; name: string } | null>(null);
+  const [macroDraft, setMacroDraft] = useState<string[] | null>(null);
+  const [viewDialog, setViewDialog] = useState<'save' | 'manage' | null>(null);
+  const [templateDialog, setTemplateDialog] = useState(false);
+  const recordingMacro = useMacroRecording();
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
 
   const [palette, setPalette] = useState<'commands' | 'files' | 'workspaces' | null>(null);
@@ -154,6 +169,15 @@ function AppWindow() {
   const space = useViewer(activeWorkspace);
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
+  const noticeKind = useViewer((state) => state.noticeKind);
+  // information goes by itself after a moment; a problem stays until it is dismissed
+  useEffect(() => {
+    if (!notice || noticeKind !== 'info') return;
+    const timer = setTimeout(() => {
+      if (getState().notice === notice) dismissNotice();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [notice, noticeKind]);
   const quick = useViewer((state) => state.quickPreview);
   const density = useViewer((state) => state.settings.settings.browsing.density);
   const jobs = useViewer((state) => state.jobs);
@@ -232,6 +256,7 @@ function AppWindow() {
           // `false` when nothing of that ID ran: the custom action then says so
           (id, context) => registry.invoke(id, { paneID: context.paneID, context }),
           terminalName,
+          () => registry.context(getState().activePane) || windowContext(),
         ),
         ...windowCommands({
           workspace: controller,
@@ -250,6 +275,9 @@ function AppWindow() {
           connectServer: () => setConnecting(true),
           findTagged: () => setTagging(true),
           openWith: setOpenWithPaths,
+          saveMacro: setMacroDraft,
+          viewDialog: setViewDialog,
+          templateDialog: () => setTemplateDialog(true),
         }),
       ],
       valid: (invocation) =>
@@ -394,6 +422,20 @@ function AppWindow() {
   };
   const invokeRef = useRef(invoke);
   invokeRef.current = invoke;
+  // the prefix and leader keys' sequences (keys/sequences.ts): before App's own key handler
+  useKeySequences(invoke);
+  const commandLabel = (id: string) => {
+    const context = registry.context(getState().activePane) || windowContext();
+    const available = registry.list({
+      ids: [id],
+      scope: 'window',
+      paneID: context.paneID,
+      context,
+    })[0];
+    if (available) return { label: available.label, available: true };
+    const label = registry.label(id, context);
+    return label ? { label, available: false } : undefined;
+  };
   useEffect(() => {
     let syncing: Promise<void> | undefined;
     let resyncAgain = false;
@@ -624,6 +666,8 @@ function AppWindow() {
       >
         <AgentReview />
         <ExecutionPanel />
+        <WhichKey label={commandLabel} />
+        <PlaneHints />
         {titlebar.state !== 'shown' && (
           <div className="titlebar-reveal" aria-hidden onPointerEnter={titlebar.reveal} />
         )}
@@ -654,6 +698,16 @@ function AppWindow() {
             <span>{space.name}</span>
             <Icon name="down" size={13} />
           </button>
+          {recordingMacro && (
+            <button
+              className="macro-recording"
+              title="Stop recording and name the macro"
+              onClick={() => void invoke('record-macro').catch(report)}
+            >
+              <span aria-hidden className="macro-dot" />
+              Recording macro · {recordingMacro.length}
+            </button>
+          )}
           <IconButton
             icon="plus"
             label="New folder plane (⌘N)"
@@ -708,8 +762,11 @@ function AppWindow() {
           <CommandPalette mode={palette} onMode={setPalette} onClose={() => setPalette(null)} />
         )}
         {notice && (
-          <div className="notice" role="alert">
-            <Icon name="warning" />
+          <div
+            className={`notice ${noticeKind === 'info' ? 'is-info' : ''}`}
+            role={noticeKind === 'info' ? 'status' : 'alert'}
+          >
+            <Icon name={noticeKind === 'info' ? 'info' : 'warning'} />
             <span>{notice}</span>
             <IconButton icon="close" label="Dismiss message" onClick={dismissNotice} />
           </div>
@@ -800,6 +857,77 @@ function AppWindow() {
               </button>
             </footer>
           </Dialog>
+        )}
+        {viewDialog === 'save' && (
+          <NameDialog
+            title="Save view"
+            label="View name"
+            maxLength={100}
+            action="Save"
+            onClose={() => setViewDialog(null)}
+            onSubmit={(name) => {
+              name = name.trim();
+              if (!name) throw new Error('Enter a name for the view.');
+              controller.saveBookmark(name);
+              setViewDialog(null);
+            }}
+          />
+        )}
+        {templateDialog && (
+          <NameDialog
+            title="Save layout as template"
+            label="Layout name"
+            maxLength={100}
+            action="Save"
+            onClose={() => setTemplateDialog(false)}
+            onSubmit={async (name) => {
+              name = name.trim();
+              if (!name) throw new Error('Enter a name for the layout.');
+              await saveLayoutTemplate(captureCurrentLayout(name));
+              setTemplateDialog(false);
+            }}
+          />
+        )}
+        {viewDialog === 'manage' && (
+          <ViewsDialog workspace={controller} onClose={() => setViewDialog(null)} />
+        )}
+        {macroDraft && (
+          <NameDialog
+            title="Save macro"
+            label="Macro name"
+            initial="Macro"
+            maxLength={100}
+            action="Save"
+            onClose={() => setMacroDraft(null)}
+            onSubmit={async (name) => {
+              name = name.trim();
+              if (!name) throw new Error('Enter a name for the macro.');
+              const actions = getState().settings.settings.customActions;
+              const slug = name
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '');
+              // a command sequence: it can be given a shortcut or a prefix key in Settings
+              const action: CustomAction = {
+                id: `macro-${slug || 'macro'}-${Date.now().toString(36)}`,
+                name,
+                aliases: ['macro'],
+                icon: 'command',
+                shortcut: '',
+                order: actions.length,
+                pinned: false,
+                when: { target: 'any', extensions: [], min: 0, max: 10000 },
+                executor: { kind: 'sequence', commands: macroDraft },
+              };
+              receiveSettings(
+                await window.viewer.settingsPatch(
+                  [{ path: 'settings.customActions', value: [...actions, action] }],
+                  getState().settings.revision,
+                ),
+              );
+              setMacroDraft(null);
+            }}
+          />
         )}
         {shortcutDialog && (
           <NameDialog

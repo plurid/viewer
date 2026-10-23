@@ -83,6 +83,11 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
       throw new Error(
         'Agents cannot run shell scripts, executables or terminal profiles: these can bypass Trash. Use a reviewed built-in action.',
       );
+    // a sequence is what its steps are: each passes as a command of its own would
+    if (executor.kind === 'sequence') {
+      for (const step of executor.commands) agentCommandID(step, actions);
+      return id;
+    }
     if (executor.kind === 'builtin') {
       if (executor.command.startsWith('custom.'))
         throw new Error('Custom actions cannot call another custom action.');

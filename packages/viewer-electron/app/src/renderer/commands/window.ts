@@ -11,6 +11,11 @@ import { textCommands } from './window-commands/text';
 import { sidebarCommands } from './window-commands/sidebar';
 import { catalogCommands } from './window-commands/catalog';
 import { settingsCommands } from './window-commands/settings';
+import { keysCommands } from './window-commands/keys';
+import { viewsCommands } from './window-commands/views';
+import { tilingCommands } from './window-commands/tiling';
+import { templateCommands } from './window-commands/templates';
+import { explodeCommands } from './window-commands/explode';
 import { windowScopes, type WindowActions } from './window-commands/scope';
 
 export type { WindowActions };
@@ -29,6 +34,11 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     ...textCommands(scopes),
     ...sidebarCommands(scopes),
     ...catalogCommands(scopes),
+    ...keysCommands(scopes),
+    ...viewsCommands(scopes),
+    ...tilingCommands(scopes),
+    ...templateCommands(scopes),
+    ...explodeCommands(scopes),
     ...settingsCommands(scopes),
     ...actionCommands(),
   ];

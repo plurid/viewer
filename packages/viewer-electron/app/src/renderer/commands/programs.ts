@@ -26,6 +26,8 @@ export function programCommands(
   /** `false` when no command of that ID is available here. */
   invoke: (id: string, context: CommandContext) => Promise<boolean | void>,
   terminalName?: string,
+  /** The context as it is now: a sequence's later steps act where the earlier ones left it. */
+  live?: () => CommandContext,
 ): CommandDefinition[] {
   const folder = (context: CommandContext) => !!context.directory || !!context.folder;
   const target = (context: CommandContext) => {
@@ -116,10 +118,25 @@ export function programCommands(
         aliases: action.aliases,
         shortcut: action.shortcut,
         primary: action.pinned,
+        // a sequence runs anywhere a command can; the others act on a folder's selection
         when: (context) =>
-          folder(context) && actionAvailable(action, captureTarget(context, workspace)),
+          action.executor.kind === 'sequence' && !folder(context)
+            ? true
+            : folder(context) && actionAvailable(action, captureTarget(context, workspace)),
         run: async (context) => {
           const executor = action.executor;
+          if (executor.kind === 'sequence') {
+            for (const [index, command] of executor.commands.entries()) {
+              if (command.startsWith('custom.'))
+                throw new Error('Custom actions cannot call another custom action.');
+              const step = index ? (live?.() ?? context) : context;
+              if ((await invoke(command, step)) === false)
+                throw new Error(
+                  `“${action.name}” stopped at “${command}”, which is not a command available here.`,
+                );
+            }
+            return;
+          }
           if (executor.kind === 'builtin') {
             if (executor.command.startsWith('custom.'))
               throw new Error('Custom actions cannot call another custom action.');

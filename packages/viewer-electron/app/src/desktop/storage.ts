@@ -1,3 +1,4 @@
+import { tileLayouts } from '../domain/tiling';
 import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -58,6 +59,7 @@ const pane = z.discriminatedUnion('type', [
     history: z.array(localPath).max(200),
     historyIndex: z.number().int().min(0).max(199),
     sidebar: z.unknown().optional().transform(normalizePaneSidebar),
+    exploded: id.optional(),
   }),
   z.object({
     id,
@@ -93,6 +95,14 @@ const savedStateSchema = z
           arrangement: z.record(z.string().max(300), z.string().max(4 * 1024 * 1024)),
           collections: z.array(collectionSchema).max(200).optional(),
           basket: z.array(basketItemSchema).max(10000).optional(),
+          tiling: z
+            .object({
+              panes: z.array(id).min(1).max(30),
+              layout: z.enum(tileLayouts),
+              main: z.number().min(0.2).max(0.8),
+            })
+            .strict()
+            .optional(),
           spaceColor: z
             .string()
             .regex(/^#[0-9a-f]{6}$/)
@@ -118,6 +128,13 @@ const savedStateSchema = z
     activeWorkspace: id,
     favorites: z.array(z.object({ name: z.string().max(200), path: localPath })).max(200),
     recents: z.array(localPath).max(50),
+    visits: z
+      .record(
+        localPath,
+        z.object({ count: z.number().int().min(0).max(1e9), last: z.number().min(0) }).strict(),
+      )
+      .refine((visits) => Object.keys(visits).length <= 500)
+      .optional(),
     look: z.enum(['dark', 'light']),
     ui: z.unknown().optional().transform(normalizePreferences),
   })

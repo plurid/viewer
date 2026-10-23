@@ -463,3 +463,33 @@ select {
   --plurid-surface: var(--plurid-surface-solid);
   --plurid-surface-strong: var(--plurid-surface-solid);
 }
+/* Record macro (2026-10-23): what is being recorded, in the title bar; a click stops it */
+.macro-recording {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: 14px;
+  color: var(--ink);
+  font-size: 12px;
+}
+.macro-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: macro-pulse 1.2s ease-in-out infinite;
+}
+@keyframes macro-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .macro-dot {
+    animation: none;
+  }
+}

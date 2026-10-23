@@ -38,6 +38,13 @@ export const defaultShortcuts: Record<string, string> = {
   'edit-file': 'Cmd+E',
   'save-file': 'Cmd+S',
   'save-file-as': 'Cmd+Shift+S',
+  // the space's views (2026-10-23): ⌥⌘ goes to one, ⌃⌥⌘ saves the camera as one
+  ...Object.fromEntries(
+    [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((slot) => [
+      [`bookmark.${slot}`, `Cmd+Alt+${slot}`],
+      [`bookmark.save.${slot}`, `Ctrl+Cmd+Alt+${slot}`],
+    ]),
+  ),
 };
 /** Second bindings kept for Finder habits, alongside the primary shortcut. */
 export const alternateShortcuts: Readonly<Record<string, string>> = { 'go-to': 'Cmd+Shift+G' };
@@ -96,7 +103,10 @@ export function validShortcut(value: string): boolean {
     new Set(parts).size === parts.length &&
     parts.every(
       (part) =>
-        ['cmd', 'ctrl', 'shift', 'alt', 'enter', 'backspace', 'delete', 'escape'].includes(part) ||
+        // space too (2026-10-23): ⌃Space is a common prefix, as in tmux
+        ['cmd', 'ctrl', 'shift', 'alt', 'enter', 'backspace', 'delete', 'escape', 'space'].includes(
+          part,
+        ) ||
         part.length === 1 ||
         /^arrow(up|down|left|right)$/.test(part) ||
         /^f([1-9]|1[0-9]|2[0-4])$/.test(part),
@@ -137,7 +147,7 @@ export function matchesShortcut(
     event.ctrlKey === parts.includes('ctrl') &&
     event.altKey === parts.includes('alt') &&
     event.shiftKey === parts.includes('shift') &&
-    (key === event.key.toLowerCase() ||
+    (key === (event.key === ' ' ? 'space' : event.key.toLowerCase()) ||
       // Option and Shift change the produced character (Option+C is "ç", Shift+. is ">").
       ((event.altKey || event.shiftKey) && key === codeKey(event.code)))
   );

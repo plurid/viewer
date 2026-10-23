@@ -1,6 +1,7 @@
 import { defaultShortcuts, menuShortcuts } from '../../../domain/shortcuts';
 import { Field } from '../SettingField';
 import type { SettingsEditor } from './editor';
+import { KeymapSettings } from './KeymapSettings';
 
 /** Keyboard shortcuts for commands and menu items. */
 export function ShortcutSettings({ editor }: { editor: SettingsEditor }) {
@@ -27,6 +28,7 @@ export function ShortcutSettings({ editor }: { editor: SettingsEditor }) {
       <div className="settings-actions">
         <button onClick={() => patch('settings.shortcuts', {})}>Reset keyboard shortcuts</button>
       </div>
+      <KeymapSettings editor={editor} />
     </>
   );
 }

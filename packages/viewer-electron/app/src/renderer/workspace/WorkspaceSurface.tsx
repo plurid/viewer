@@ -30,6 +30,7 @@ import { PlaneHeader } from './PlaneHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
 export { frameWorkspace } from './framing';
 import { focusFiles } from './sessions';
+import { applyTiling } from './tiling';
 import { useWorkspace } from './context';
 import { surfaceConfiguration } from './surface-configuration';
 import { routeFileKeyboard } from '../explorer/selection';
@@ -141,12 +142,25 @@ function CollectionContent() {
   const plane = usePluridPlane();
   return <CollectionExplorer id={plane.parameters.id ?? ''} />;
 }
+/**
+ * Each plane's content carries its pane's id (2026-10-23): a plane is found by it whether or not its
+ * header shows (focus, hints, directional focus). `display: contents` leaves the layout as it was.
+ */
+const marked = (Content: React.ComponentType): React.ComponentType =>
+  function MarkedPlane() {
+    const plane = usePluridPlane();
+    return (
+      <div className="pane-marker" data-viewer-pane={plane.parameters.id ?? ''}>
+        <Content />
+      </div>
+    );
+  };
 const planes: PluridPlane<React.ComponentType>[] = [
-  { route: '/terminals/:id', component: TerminalContent },
-  { route: '/folders/:id', component: FolderContent },
-  { route: '/searches/:id', component: SearchContent },
-  { route: '/collections/:id', component: CollectionContent },
-  { route: '/previews/:id', component: PreviewContent },
+  { route: '/terminals/:id', component: marked(TerminalContent) },
+  { route: '/folders/:id', component: marked(FolderContent) },
+  { route: '/searches/:id', component: marked(SearchContent) },
+  { route: '/collections/:id', component: marked(CollectionContent) },
+  { route: '/previews/:id', component: marked(PreviewContent) },
 ];
 export function WorkspaceSurface({
   engine,
@@ -164,6 +178,7 @@ export function WorkspaceSurface({
   const [size, setSize] = useState({ width: 992, height: 692 });
   const [api, setApi] = useState<PluridApi | null>(null);
   useEffect(() => {
+    let retiling: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
       const { width, height } = entry.contentRect;
@@ -172,12 +187,26 @@ export function WorkspaceSurface({
         setSize((previous) =>
           previous.width === next.width && previous.height === next.height ? previous : next,
         );
-        refitWorkspace(engine, surface);
+        // tiled planes keep their layout in the new size, as tmux's panes do (2026-10-23)
+        if (activeWorkspace().tiling) {
+          clearTimeout(retiling);
+          retiling = setTimeout(() => applyTiling(engine, surface), 120);
+        } else refitWorkspace(engine, surface);
       }
     });
     if (surface.current) observer.observe(surface.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      clearTimeout(retiling);
+    };
   }, [surface, engine]);
+  // a tiled plane closed, or the workspace opened tiled: the rest take its place (2026-10-23)
+  const tiled = space.tiling?.panes
+    .filter((id) => space.panes.some((pane) => pane.id === id))
+    .join('\n');
+  useEffect(() => {
+    if (tiled) applyTiling(engine, surface);
+  }, [tiled, engine, surface]);
   // The engine needs a stable `view` array: rebuild it only when a route changes.
   const routes = (space.layout ? space.panes.map((pane) => pane.id) : space.roots)
     .map((id) => paneRoute(space.panes.find((item) => item.id === id)?.type ?? 'preview', id))

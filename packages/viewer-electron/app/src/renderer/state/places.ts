@@ -1,4 +1,5 @@
 // Sidebar favorites, shortcut labels and recent folders.
+import { recordVisit } from '../commands/smart-palette';
 import { reorder } from '../../domain/preferences';
 import { getState, savePatch } from './core';
 import { changePreferences } from './preferences';
@@ -31,6 +32,8 @@ export function renameShortcut(path: string, name: string): void {
 export function remember(path: string): void {
   savePatch({
     recents: [path, ...getState().saved.recents.filter((item) => item !== path)].slice(0, 50),
+    // frecency for `z` in the palette (commands/smart-palette.ts)
+    visits: recordVisit(getState().saved.visits ?? {}, path, Date.now()),
   });
 }
 export function favorite(path: string, name: string): void {

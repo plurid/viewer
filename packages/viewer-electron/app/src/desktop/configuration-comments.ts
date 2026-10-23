@@ -211,6 +211,31 @@ const descriptions: Record<string, string[]> = {
     'Other useful IDs: new-root-folder, open-terminal, open-tmux, open-terminal-plane and open-config.',
     'Recipe/custom-action shortcuts use the same conflict checks. Each shortcut must be assigned only once.',
   ],
+  'settings.tiling': [
+    'Tiling lays planes out as tmux lays out panes. splitWith: same | folder | terminal | scratch, what a split adds.',
+    'defaultLayout: even-horizontal | even-vertical | main-vertical | main-horizontal | tiled.',
+  ],
+  'settings.layouts': [
+    'Layout templates: {id,name,planes,layout,main}. Save layout as template… captures the planes in view.',
+    'planes: {kind:"folder"|"file",path} | {kind:"terminal",path,profileID?} | {kind:"scratch"} | {kind:"search",query,name,root?}.',
+    'A path starting ~ is in the home folder; an empty path is the folder in view when the layout opens.',
+  ],
+  'settings.tour': [
+    'Tour flies through the saved views (bookmarks) in turn: dwell ms at each, duration ms for each flight.',
+    'loop true starts again after the last view. Any key or click stops a tour.',
+  ],
+  'settings.keymap': [
+    'Key sequences, as tmux: press prefix (Ctrl+B), then a key from bindings. "" turns the prefix off.',
+    'leader: a key that starts a sequence outside text fields and terminals, e.g. "Space"; "" is none.',
+    'inTerminals false: the prefix goes to the shell; pressed twice it is sent to the shell anyway.',
+    'inTextFields false: the prefix goes to text fields and editors, where Ctrl+B moves the caret.',
+    'whichKey shows the next keys while a sequence waits; timeout (ms) ends a sequence left waiting.',
+  ],
+  'settings.keymap.bindings': [
+    'Key -> a command ID ("new-terminal-plane"), a list run in order (["select-all","copy"]) or a map (a chord).',
+    'Keys: a character ("%", "C"), Space, Enter, Tab, Left/Right/Up/Down, F1-F24, with Ctrl+/Alt+/Cmd+/Shift+.',
+    'Every command ID works, including setting.<path>, custom.<id> and recipe.<id>; chords nest four keys deep.',
+  ],
   'settings.savedSearches': [
     'Named queries: {id,name,query,root?,recursive?,content?}. IDs are unique; root is an absolute path.',
     'Omit root for all indexed roots. content:true still requires permission in search.contentRoots.',

@@ -20,6 +20,8 @@ export interface ViewerState {
   activePane: string;
   quickPreview: { paths: string[]; index: number; paneID?: string; workspaceID: string } | null;
   notice: string | null;
+  /** Whether the notice is information or a problem (2026-10-23): it shows and stays as such. */
+  noticeKind?: 'info' | 'error';
   operationsOpen: boolean;
   operationsHistory: boolean;
   acknowledgedJobs: string[];
@@ -55,11 +57,11 @@ export function useViewer<T>(selector: (state: ViewerState) => T): T {
   return useSyncExternalStore(subscribe, () => selector(current));
 }
 export function report(error: unknown): void {
-  update({ ...current, notice: errorMessage(error) });
+  update({ ...current, notice: errorMessage(error), noticeKind: 'error' });
 }
 /** A notice that is information, not an error. */
 export function announce(message: string): void {
-  update({ ...current, notice: message });
+  update({ ...current, notice: message, noticeKind: 'info' });
 }
 export function dismissNotice(): void {
   update({ ...current, notice: null });

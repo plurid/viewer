@@ -96,6 +96,8 @@ export function addPane(
   options?: {
     keepSeparate?: boolean;
     folderView?: Pick<FolderPane, 'mode' | 'sort' | 'descending' | 'showHidden'>;
+    /** Explode folder opens many at once: they are not the person's visits. */
+    remember?: boolean;
   },
 ): Pane {
   if (activeWorkspace().panes.length >= 200)
@@ -112,7 +114,7 @@ export function addPane(
     panes: [...space.panes, pane],
     roots: root ? [...space.roots, pane.id] : space.roots,
   }));
-  remember(path);
+  if (options?.remember !== false) remember(path);
   return pane;
 }
 /** An explicit new explorer is a fresh root, independent even when its path is already open. */

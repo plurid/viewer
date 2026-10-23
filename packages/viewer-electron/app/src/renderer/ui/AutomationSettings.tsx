@@ -360,6 +360,7 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
               value={action.executor.kind}
               choices={[
                 { value: 'builtin', label: 'Built-in command' },
+                { value: 'sequence', label: 'Command sequence (macro)' },
                 { value: 'recipe', label: 'Action recipe' },
                 { value: 'terminal', label: 'Terminal plane' },
                 { value: 'executable', label: 'Executable' },
@@ -369,18 +370,20 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
                 const executor: CustomAction['executor'] =
                   kind === 'builtin'
                     ? { kind, command: 'open-terminal' }
-                    : kind === 'recipe'
-                      ? { kind, recipeID: snapshot.settings.recipes[0]?.id ?? 'rename' }
-                      : kind === 'terminal'
-                        ? { kind, profileID: snapshot.settings.terminals.profileID }
-                        : kind === 'shell'
-                          ? { kind, executable: '/bin/zsh', script: 'pwd', perItem: false }
-                          : {
-                              kind: 'executable',
-                              executable: '/usr/bin/printf',
-                              args: ['%s\\n', '{paths}'],
-                              perItem: false,
-                            };
+                    : kind === 'sequence'
+                      ? { kind, commands: ['select-all', 'copy'] }
+                      : kind === 'recipe'
+                        ? { kind, recipeID: snapshot.settings.recipes[0]?.id ?? 'rename' }
+                        : kind === 'terminal'
+                          ? { kind, profileID: snapshot.settings.terminals.profileID }
+                          : kind === 'shell'
+                            ? { kind, executable: '/bin/zsh', script: 'pwd', perItem: false }
+                            : {
+                                kind: 'executable',
+                                executable: '/usr/bin/printf',
+                                args: ['%s\\n', '{paths}'],
+                                perItem: false,
+                              };
                 patch(action.id, { executor });
               }}
             />
@@ -394,6 +397,29 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
                 label="Built-in command ID"
                 value={action.executor.command}
                 save={(command) => patch(action.id, { executor: { kind: 'builtin', command } })}
+              />
+            </label>
+          )}
+          {action.executor.kind === 'sequence' && (
+            <label className="settings-row">
+              <span>
+                Commands
+                <small>Command IDs in order, separated by commas. Recorded by Record macro.</small>
+              </span>
+              <Field
+                label="Command sequence"
+                value={action.executor.commands.join(', ')}
+                save={(text) =>
+                  patch(action.id, {
+                    executor: {
+                      kind: 'sequence',
+                      commands: text
+                        .split(',')
+                        .map((command) => command.trim())
+                        .filter(Boolean),
+                    },
+                  })
+                }
               />
             </label>
           )}

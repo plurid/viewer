@@ -3010,6 +3010,215 @@ async function paletteCommand(label: string): Promise<void> {
  * replaced in the Trash and back with Undo, and a scratch plane's text kept in the profile as it is
  * typed. Save As uses the native save panel, which this harness does not drive.
  */
+/** The space (2026-10-23): views flown back to, tmux-style tiling, Explode folder and layout
+ * templates, in the packaged app. */
+async function verifySpace(): Promise<void> {
+  const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
+  const blur = () =>
+    evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  const prefix = () => key('b', 'KeyB', 2);
+  const camera = () =>
+    evaluate<{ x: number; y: number }>(
+      '(() => { const c = window.__qaEngine.camera.get(); return { x: Math.round(c.offset.x), y: Math.round(c.offset.y) }; })()',
+    );
+  const rects = () =>
+    evaluate<{ pane: string; left: number; top: number; right: number; bottom: number }[]>(
+      `Array.from(document.querySelectorAll('[data-viewer-pane]')).map((marker) => { const plane = marker.closest('[data-plurid-plane]'); const r = plane.getBoundingClientRect(); return { pane: marker.dataset.viewerPane, left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; })`,
+    );
+  const tiles = async () => {
+    const state = await saved();
+    const tiling = state.workspaces[0]!.tiling;
+    const all = await rects();
+    return (tiling?.panes ?? []).map((id) => all.find((rect) => rect.pane === id)!).filter(Boolean);
+  };
+  await blur();
+  // ⌃⌥⌘1 saves the camera as view 1; after the camera moves, ⌥⌘1 flies back
+  const start = await camera();
+  await key('1', 'Digit1', 7);
+  await until(
+    () =>
+      evaluate<number>(
+        'window.__qaEngine.bookmarks.get().filter((entry) => entry.source === "bookmark").length',
+      ),
+    (count) => count === 1,
+    'view 1 saved',
+  );
+  await evaluate('window.__qaEngine.camera.moveBy({ pan: { x: 320, y: 160 } })');
+  await until(camera, (now) => now.x !== start.x || now.y !== start.y, 'the camera moved');
+  await key('1', 'Digit1', 5);
+  await until(
+    camera,
+    (now) => Math.abs(now.x - start.x) <= 2 && Math.abs(now.y - start.y) <= 2,
+    'flown back to view 1',
+  );
+  // ⌃B %: the folder and a copy side by side; ⌃B Space: stacked
+  await prefix();
+  await key('%', 'Digit5', 8);
+  await until(
+    tiles,
+    (list) =>
+      list.length === 2 &&
+      Math.abs(list[0]!.top - list[1]!.top) <= 2 &&
+      list[0]!.right < list[1]!.left,
+    'two planes tiled side by side',
+  );
+  await snapshot('tiled.png');
+  await prefix();
+  await key(' ', 'Space');
+  await until(
+    tiles,
+    (list) =>
+      list.length === 2 &&
+      Math.abs(list[0]!.left - list[1]!.left) <= 2 &&
+      list[0]!.bottom < list[1]!.top,
+    'stacked by the next layout',
+  );
+  // ⌃B e: the active folder's subfolders as planes; ⌃B E: gone again
+  const count = async () => (await saved()).workspaces[0]!.panes.length;
+  const before = await count();
+  await prefix();
+  await key('e', 'KeyE');
+  await until(count, (now) => now >= before + 3, 'subfolders opened as planes');
+  await snapshot('exploded.png');
+  await prefix();
+  await key('E', 'KeyE', 8);
+  await until(count, (now) => now === before, 'exploded planes collapsed');
+  // a template of the planes in view, opened again tiled
+  await paletteCommand('Save layout as template…');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector("dialog[open] input")'),
+    Boolean,
+    'the template name dialog',
+  );
+  await command('Input.insertText', { text: 'Pair' });
+  await click('dialog[open] footer .primary');
+  await until(
+    () =>
+      evaluate<number>(
+        'window.viewer.settingsGet().then((value) => value.settings.layouts.length)',
+      ),
+    (layouts) => layouts === 1,
+    'the template saved',
+  );
+  const panes = await count();
+  await paletteCommand('Open layout “Pair”');
+  await until(count, (now) => now === panes + 2, 'the template opened its planes');
+  await until(tiles, (list) => list.length === 2, 'the template’s planes tiled');
+  await prefix();
+  await key('!', 'Digit1', 8);
+  await until(
+    () => saved().then((state) => !state.workspaces[0]!.tiling),
+    Boolean,
+    'tiling stopped',
+  );
+  console.log(
+    'Space: a view flown back to, tiling split and relaid, Explode and Collapse, and a layout template.',
+  );
+}
+/** The key layer (2026-10-23): tmux's prefix and which-key, plane hints, the palette's calculator
+ * and Record macro, in the packaged app. */
+async function verifyKeys(): Promise<void> {
+  const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
+  const blur = () =>
+    evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  const prefix = () => key('b', 'KeyB', 2);
+  const whichKey = () => evaluate<number>('document.querySelectorAll(".which-key-list li").length');
+  const activePlane = () =>
+    evaluate<string>(
+      `document.querySelector('[data-plurid-plane][data-plurid-scroll-selected="true"] [data-viewer-pane]')?.dataset.viewerPane ?? ''`,
+    );
+  await blur();
+  // ⌃B ? lists every binding; Escape closes it
+  await prefix();
+  await key('?', 'Slash', 8);
+  await until(whichKey, (count) => count >= 20, 'which-key lists the bindings');
+  await snapshot('which-key.png');
+  await key('Escape', 'Escape');
+  await until(whichKey, (count) => count === 0, 'which-key closed');
+  // ⌃B c: a terminal plane
+  await prefix();
+  await key('c', 'KeyC');
+  await until(
+    saved,
+    (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'terminal'),
+    'terminal plane by ⌃B c',
+  );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".terminal-plane .xterm")'),
+    Boolean,
+    'terminal attached',
+  );
+  await delay(400);
+  await blur();
+  // ⌃B f: a label on each plane; typing one makes it the active plane
+  await prefix();
+  await key('f', 'KeyF');
+  const hints = await until(
+    () =>
+      evaluate<{ label: string; pane: string }[]>(
+        `Array.from(document.querySelectorAll('.plane-hint')).map((hint) => ({ label: hint.textContent, pane: hint.dataset.pane }))`,
+      ),
+    (list) => list.length >= 2,
+    'plane hints',
+  );
+  await snapshot('plane-hints.png');
+  const current = await activePlane();
+  const choice = hints.find((hint) => hint.pane !== current)!;
+  for (const letter of choice.label) await key(letter, 'Key' + letter.toUpperCase());
+  await until(activePlane, (id) => id === choice.pane, 'the hinted plane active');
+  // ⌃B o: the next plane
+  await prefix();
+  await key('o', 'KeyO');
+  await until(activePlane, (id) => !!id && id !== choice.pane, 'the next plane active');
+  // the palette calculates
+  await blur();
+  await key('k', 'KeyK', 4);
+  await until(
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    Boolean,
+    'command palette',
+  );
+  await command('Input.insertText', { text: '= 6*7' });
+  await until(
+    () => evaluate<string>('document.querySelector(".command-result")?.textContent ?? ""'),
+    (row) => row.includes('= 42'),
+    'the calculator row',
+  );
+  await key('Escape', 'Escape');
+  // ⌃B q records the commands run until ⌃B q again, then saves them as a sequence
+  await blur();
+  await prefix();
+  await key('q', 'KeyQ');
+  const recording = () =>
+    evaluate<string>('document.querySelector(".macro-recording")?.textContent ?? ""');
+  await until(recording, (text) => text.includes('Recording'), 'recording a macro');
+  await key('s', 'KeyS', 5);
+  await until(recording, (text) => text.includes('1'), 'one command recorded');
+  await key('s', 'KeyS', 5);
+  await until(recording, (text) => text.includes('2'), 'two commands recorded');
+  await prefix();
+  await key('q', 'KeyQ');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector("dialog[open] input")'),
+    Boolean,
+    'the macro name dialog',
+  );
+  // a key sent here carries no character, so it submits no form: Save is clicked
+  await click('dialog[open] footer .primary');
+  await until(
+    () =>
+      evaluate<string[][]>(
+        `window.viewer.settingsGet().then((value) => value.settings.customActions.filter((action) => action.executor.kind === 'sequence').map((action) => action.executor.commands))`,
+      ),
+    (sequences) =>
+      sequences.some((commands) => commands.join() === 'toggle-sidebar,toggle-sidebar'),
+    'the recorded macro saved as a sequence',
+  );
+  console.log(
+    'Keys: ⌃B and which-key, a terminal by ⌃B c, plane hints and the next plane, the calculator, and a recorded macro.',
+  );
+}
 async function verifyTextEditing(): Promise<void> {
   const note = path.join(fixture.files, 'Edited note.md');
   await writeFile(note, '# Before\n');
@@ -5189,6 +5398,18 @@ async function verify(): Promise<void> {
     await verifyPublishedPlaneInput();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'space') {
+    await verifySpace();
+    await verifyBackgroundApp();
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'keys') {
+    await verifyKeys();
+    await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }

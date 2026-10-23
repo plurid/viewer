@@ -34,6 +34,10 @@ export function settingsDiscovery(settings: ApplicationSettings, query: string) 
       category: 'Permissions',
       terms: 'folder files access grant revoke sandbox privacy disk volume',
     },
-    { category: 'Shortcuts', terms: 'keyboard hotkeys commands bindings' },
+    {
+      category: 'Shortcuts',
+      terms:
+        'keyboard hotkeys commands bindings prefix leader tmux chord sequence which-key keymap ctrl+b',
+    },
   ].filter((item) => query && item.terms.toLowerCase().includes(query.toLowerCase()));
 }

@@ -1,3 +1,6 @@
+import type { LayoutTemplate } from './layout-templates';
+import type { TileLayout } from './tiling';
+import { defaultKeymap, type Keymap } from './keymap';
 import type { SearchEvidence, EvidenceAnchor } from './inspection';
 import type { FileEntry, UIPreferences, ViewMode, SortKey } from './contracts';
 import type { FolderOverride } from './folder-presentation';
@@ -97,11 +100,31 @@ export interface ApplicationSettings {
     /** Pixels added between characters. */
     letterSpacing: number;
   };
+  /** Tiling planes as tmux's panes (2026-10-23). */
+  tiling: {
+    /** What a split adds beside the active plane: a copy of it, a folder, a terminal, a scratch plane. */
+    splitWith: 'same' | 'folder' | 'terminal' | 'scratch';
+    /** The layout tiling starts with. */
+    defaultLayout: TileLayout;
+  };
+  /** Named sets of planes and their tiling, to open anywhere (2026-10-23): domain/layout-templates.ts. */
+  layouts: LayoutTemplate[];
+  /** Tour: flying through the space's views in turn (2026-10-23). */
+  tour: {
+    /** How long each view shows, ms. */
+    dwell: number;
+    /** How long each flight takes, ms. */
+    duration: number;
+    /** Whether the last view leads to the first again. */
+    loop: boolean;
+  };
   search: { roots: string[]; exclusions: string[]; contentRoots: string[]; paused: boolean };
   providers: ModelProvider[];
   recipes: ActionRecipe[];
   agents: { enabled: boolean; roots: string[]; allowLayout: boolean };
   shortcuts: Record<string, string>;
+  /** The prefix and leader keys and their sequences (2026-10-23): domain/keymap.ts. */
+  keymap: Keymap;
   savedSearches: {
     id: string;
     name: string;
@@ -352,6 +375,9 @@ export function defaultSettings(home: string): ApplicationSettings {
       lineHeight: 1.3,
       letterSpacing: 1,
     },
+    tiling: { splitWith: 'same', defaultLayout: 'even-horizontal' },
+    layouts: [],
+    tour: { dwell: 3000, duration: 900, loop: true },
     search: {
       roots: [home],
       exclusions: [home + '/Library', '.git', 'node_modules', '.cache', '.vite', 'out'],
@@ -362,6 +388,7 @@ export function defaultSettings(home: string): ApplicationSettings {
     recipes: builtInRecipes.map((recipe) => ({ ...recipe })),
     agents: { enabled: false, roots: [], allowLayout: false },
     shortcuts: {},
+    keymap: structuredClone(defaultKeymap) as Keymap,
     savedSearches: [],
   };
 }

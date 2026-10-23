@@ -129,28 +129,27 @@ export function focusFiles(id: string): void {
       )
     )
       return;
-    const control = Array.from(document.querySelectorAll<HTMLElement>('[data-viewer-plane]')).find(
-      (el) => el.dataset.viewerPlane === id,
-    );
-    const target = control
-      ?.closest('[data-plurid-plane]')
-      ?.querySelector<HTMLElement>('.folder-explorer');
+    const target = planeElement(id)?.querySelector<HTMLElement>('.folder-explorer');
     if (target) target.focus({ preventScroll: true });
     else if (performance.now() < until) requestAnimationFrame(focus);
   };
   requestAnimationFrame(focus);
+}
+/** A pane's plane on the page, by the id its content carries: headers may be hidden (2026-10-23). */
+export function planeElement(id: string): HTMLElement | undefined {
+  const marker = Array.from(document.querySelectorAll<HTMLElement>('[data-viewer-pane]')).find(
+    (element) => element.dataset.viewerPane === id,
+  );
+  return marker?.closest<HTMLElement>('[data-plurid-plane]') ?? undefined;
 }
 /** Moves the keys into a plane's content, any kind: a link followed to it (2026-10-23). */
 export function focusPlane(id: string): void {
   const until = performance.now() + 1500;
   const focus = () => {
     if (dialogOpen()) return;
-    const control = Array.from(document.querySelectorAll<HTMLElement>('[data-viewer-plane]')).find(
-      (el) => el.dataset.viewerPlane === id,
+    const target = planeElement(id)?.querySelector<HTMLElement>(
+      '.folder-explorer, .preview-plane, .terminal-plane',
     );
-    const target = control
-      ?.closest('[data-plurid-plane]')
-      ?.querySelector<HTMLElement>('.folder-explorer, .preview-plane, .terminal-plane');
     if (target) target.focus({ preventScroll: true });
     else if (performance.now() < until) requestAnimationFrame(focus);
   };

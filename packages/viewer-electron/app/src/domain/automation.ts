@@ -33,7 +33,30 @@ export interface CustomAction {
     | { kind: 'recipe'; recipeID: string }
     | { kind: 'terminal'; profileID: string }
     | { kind: 'executable'; executable: string; args: string[]; perItem: boolean }
-    | { kind: 'shell'; executable: string; script: string; perItem: boolean };
+    | { kind: 'shell'; executable: string; script: string; perItem: boolean }
+    /** Built-in commands in order, as a macro records them (2026-10-23); no custom actions. */
+    | { kind: 'sequence'; commands: string[] };
+}
+/**
+ * Whether a workspace's change to custom actions only adds, edits or removes command sequences
+ * (2026-10-23): Record macro saves from the workspace, which can run any built-in command anyway;
+ * programs, scripts and terminals still change only in Settings.
+ */
+export function sequencesOnly(
+  current: readonly CustomAction[],
+  next: readonly CustomAction[],
+): boolean {
+  const before = new Map(current.map((action) => [action.id, action]));
+  const after = new Map(next.map((action) => [action.id, action]));
+  return [...new Set([...before.keys(), ...after.keys()])].every((id) => {
+    const old = before.get(id);
+    const changed = after.get(id);
+    if (old && changed && JSON.stringify(old) === JSON.stringify(changed)) return true;
+    return (
+      (!old || old.executor.kind === 'sequence') &&
+      (!changed || changed.executor.kind === 'sequence')
+    );
+  });
 }
 export interface ExecutionTask {
   id: string;

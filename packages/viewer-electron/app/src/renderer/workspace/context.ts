@@ -59,8 +59,22 @@ export interface WorkspaceController {
   ): Promise<void>;
   /** Shows a plane and makes it Viewer's active pane; `activate` also gives it the wheel and the
    * keys, as following a link does (2026-10-23). Plurid's selection is not changed. */
-  focusPane(hostID: string, options?: { activate?: boolean }): void;
+  focusPane(hostID: string, options?: { activate?: boolean; frame?: boolean }): void;
   frameAll(): void;
+  /** The space's named views (2026-10-23): plurid's bookmarks, saved with the arrangement. */
+  bookmarks(): { name: string; label: string }[];
+  /** Saves the camera as a view; a name in use is replaced. */
+  saveBookmark(name: string): void;
+  /** Flies to a view; false when there is no view of that name. */
+  goBookmark(name: string, options?: { duration?: number; onSettle?: () => void }): boolean;
+  removeBookmark(name: string): void;
+  /** Opens a folder plane's subfolders, `depth` levels deep, as linked planes: one undo step. */
+  explode(hostID: string, depth: number): Promise<number>;
+  /** Closes the planes Explode folder opened from a plane. */
+  collapse(hostID: string): void;
+  /** Lays the workspace's tiled planes out again in their layout (workspace/tiling.ts). */
+  retile(): void;
+  renameBookmark(from: string, to: string): void;
   dock(hostID?: string): void;
   closePane(hostID: string): void;
   /** A plane and every plane under it: what closing it closes. */

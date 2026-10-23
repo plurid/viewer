@@ -118,6 +118,16 @@ export class CommandRegistry {
       this.sources.get('window')?.context()
     );
   }
+  /** A command's label in a context, available there or not: which-key names every binding. */
+  label(id: string, context: CommandContext): string | undefined {
+    for (const source of this.sources.values())
+      for (const definition of source.definitions())
+        if (definition.id === id)
+          return typeof definition.label === 'string'
+            ? definition.label
+            : definition.label(context);
+    return undefined;
+  }
   list(request: CommandRequest = {}): ResolvedCommand[] {
     const commands: ResolvedCommand[] = [];
     const seen = new Set<string>();

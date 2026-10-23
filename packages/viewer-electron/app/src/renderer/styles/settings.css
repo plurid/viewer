@@ -544,3 +544,47 @@
     background 600ms ease,
     box-shadow 600ms ease;
 }
+/* Prefix keys (2026-10-23): one row per binding, the keys as pressed then the commands */
+.keymap-rows {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.keymap-row {
+  display: grid;
+  grid-template-columns: 110px minmax(80px, 140px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.keymap-keys {
+  overflow: hidden;
+  color: var(--muted);
+  font:
+    600 12px/1.2 ui-monospace,
+    Menlo,
+    monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.keymap-row button {
+  border-color: var(--line);
+}
+/* press to set a key (2026-10-23) */
+.key-capture {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.key-capture button {
+  min-width: 96px;
+  height: 28px;
+  border-color: var(--line);
+  font:
+    600 13px/1 ui-monospace,
+    Menlo,
+    monospace;
+}
+.key-capture small {
+  color: var(--danger);
+}

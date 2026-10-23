@@ -508,7 +508,23 @@ describe('settings the workspace window may change (2026-10-20)', () => {
       ['settings.agents', { ...service.snapshot().settings.agents, enabled: true }],
       ['settings.providers', []],
       ['settings.recipes', []],
-      ['settings.customActions', []],
+      // a program, unlike a macro, is the person's to add (2026-10-23)
+      [
+        'settings.customActions',
+        [
+          {
+            id: 'zsh',
+            name: 'zsh',
+            aliases: [],
+            icon: 'command',
+            shortcut: '',
+            order: 0,
+            pinned: false,
+            when: { target: 'any', extensions: [], min: 0, max: 10000 },
+            executor: { kind: 'shell', executable: '/bin/zsh', script: 'pwd', perItem: false },
+          },
+        ],
+      ],
       ['settings.terminals', service.snapshot().settings.terminals],
       ['settings', service.snapshot().settings],
       // Trash confirmation is the person's, in Settings, even inside a whole browsing section
@@ -801,5 +817,44 @@ describe('reloading config.jsonc (2026-10-20)', () => {
     emit.mockClear();
     await service.reload();
     expect(emit).toHaveBeenCalledOnce();
+  });
+});
+
+describe('a macro saved from the workspace (2026-10-23)', () => {
+  const action = (id: string, executor: Record<string, unknown>) => ({
+    id,
+    name: id,
+    aliases: [],
+    icon: 'command',
+    shortcut: '',
+    order: 0,
+    pinned: false,
+    when: { target: 'any', extensions: [], min: 0, max: 10000 },
+    executor,
+  });
+  it('may add or change a command sequence, and nothing that runs a program', async () => {
+    const service = create();
+    await service.load();
+    const patch = (value: unknown) =>
+      service.patch(
+        [{ path: 'settings.customActions', value }],
+        service.snapshot().revision,
+        'workspace',
+      );
+    const macro = action('macro-copy', { kind: 'sequence', commands: ['select-all', 'copy'] });
+    await patch([macro]);
+    expect(service.snapshot().settings.customActions).toHaveLength(1);
+    await expect(
+      patch([
+        macro,
+        action('shell', { kind: 'shell', executable: '/bin/zsh', script: 'pwd', perItem: false }),
+      ]),
+    ).rejects.toThrow('Change this setting in Settings');
+    await expect(
+      patch([action('macro-copy', { kind: 'builtin', command: 'copy' })]),
+    ).rejects.toThrow('Change this setting in Settings');
+    await expect(
+      patch([action('bad', { kind: 'sequence', commands: ['custom.other'] })]),
+    ).rejects.toThrow();
   });
 });

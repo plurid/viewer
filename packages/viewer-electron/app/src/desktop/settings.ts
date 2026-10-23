@@ -1,6 +1,9 @@
 import type { ParseError } from 'jsonc-parser';
 import { pathMapper, type FileChange } from '../domain/changes';
 import { preferencesSchema } from './preferences-schema';
+import { keymapSchema } from './keymap-schema';
+import { sequencesOnly } from '../domain/automation';
+import { tileLayouts } from '../domain/tiling';
 import { settingCatalog, workspaceMayChange } from '../domain/setting-catalog';
 import path from 'node:path';
 import { z } from 'zod';
@@ -38,6 +41,49 @@ const recipe = z
     providerID: id.optional(),
     data: z.enum(['names', 'excerpts', 'full-text']),
     shortcut: z.string().max(80).optional(),
+  })
+  .strict();
+const templatePath = z
+  .string()
+  .max(4096)
+  .refine((value) => !value.includes('\0'));
+/** A layout template (2026-10-23): planes by kind and folder, and their tiling. */
+export const layoutTemplateSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(/^[a-z0-9-]+$/)
+      .max(100),
+    name: z.string().min(1).max(100),
+    planes: z
+      .array(
+        z.discriminatedUnion('kind', [
+          z.object({ kind: z.literal('folder'), path: templatePath }).strict(),
+          z.object({ kind: z.literal('file'), path: templatePath }).strict(),
+          z
+            .object({
+              kind: z.literal('terminal'),
+              path: templatePath,
+              profileID: z.string().max(200).optional(),
+            })
+            .strict(),
+          z.object({ kind: z.literal('scratch') }).strict(),
+          z
+            .object({
+              kind: z.literal('search'),
+              query: z.string().max(300),
+              name: z.string().min(1).max(100),
+              root: templatePath.optional(),
+              recursive: z.boolean().optional(),
+              content: z.boolean().optional(),
+            })
+            .strict(),
+        ]),
+      )
+      .min(1)
+      .max(30),
+    layout: z.enum(tileLayouts),
+    main: z.number().min(0.2).max(0.8),
   })
   .strict();
 export const settingsSchema = z
@@ -195,6 +241,29 @@ export const settingsSchema = z
         lineHeight: 1.3,
         letterSpacing: 1,
       }),
+    tiling: z
+      .object({
+        splitWith: z.enum(['same', 'folder', 'terminal', 'scratch']).default('same'),
+        defaultLayout: z.enum(tileLayouts).default('even-horizontal'),
+      })
+      .strict()
+      .default({ splitWith: 'same', defaultLayout: 'even-horizontal' }),
+    layouts: z
+      .array(layoutTemplateSchema)
+      .max(50)
+      .refine(
+        (layouts) => new Set(layouts.map((item) => item.id)).size === layouts.length,
+        'Layout IDs must be unique.',
+      )
+      .default([]),
+    tour: z
+      .object({
+        dwell: z.number().int().min(500).max(60000).default(3000),
+        duration: z.number().int().min(100).max(10000).default(900),
+        loop: z.boolean().default(true),
+      })
+      .strict()
+      .default({ dwell: 3000, duration: 900, loop: true }),
     search: z
       .object({
         roots: z.array(localPath).max(100),
@@ -239,6 +308,7 @@ export const settingsSchema = z
       })
       .strict(),
     shortcuts: z.record(z.string().max(200), z.string().max(80)),
+    keymap: keymapSchema,
     savedSearches: z
       .array(
         z
@@ -298,6 +368,8 @@ export const settingsSchema = z
       ...Object.values(alternateShortcuts),
       ...value.recipes.map((item) => item.shortcut || ''),
       ...value.customActions.map((item) => item.shortcut || ''),
+      // the prefix starts a sequence: no shortcut may share it
+      value.keymap.prefix,
     ].filter(Boolean);
     if (shortcuts.some((shortcut) => !validShortcut(shortcut)))
       context.addIssue({
@@ -543,7 +615,9 @@ export class SettingsService {
             keys.some((key) => ['__proto__', 'prototype', 'constructor'].includes(key))
           )
             throw new Error('Unknown setting.');
-          if (scope === 'workspace' && !workspaceMayPatch(keys))
+          // Record macro saves a command sequence from the workspace: checked once the result is known
+          const macros = keys[0] === 'settings' && keys[1] === 'customActions';
+          if (scope === 'workspace' && !workspaceMayPatch(keys) && !macros)
             throw new Error('Change this setting in Settings.');
           if (
             [...this.fields].some(
@@ -569,6 +643,11 @@ export class SettingsService {
         }
         const { revision: _revision, ...config } = next;
         const validated = configSchema.parse(config);
+        if (
+          scope === 'workspace' &&
+          !sequencesOnly(this.document.settings.customActions, validated.settings.customActions)
+        )
+          throw new Error('Change this setting in Settings.');
         // a whole browsing section from the workspace keeps the person's Trash confirmation
         if (
           scope === 'workspace' &&

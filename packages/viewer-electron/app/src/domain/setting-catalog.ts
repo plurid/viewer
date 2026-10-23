@@ -1,3 +1,4 @@
+import { tileLayouts, tileLayoutLabels } from './tiling';
 import { listColumns } from './list-columns';
 import { textLanguages } from './text-languages';
 
@@ -26,6 +27,9 @@ export const workspaceSettingPaths: readonly (readonly string[])[] = [
   ['settings', 'savedSearches'],
   ['settings', 'editor'],
   ['settings', 'terminalFont'],
+  ['settings', 'tour'],
+  ['settings', 'tiling'],
+  ['settings', 'layouts'],
 ];
 /** Within those, the person's own safeguards: Trash confirmation changes only in Settings. */
 export const settingsOnlyPaths: readonly (readonly string[])[] = [
@@ -415,6 +419,55 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'number',
     min: 0,
     max: 100,
+  },
+  {
+    path: 'settings.tiling.splitWith',
+    category: 'Space',
+    section: 'Tiling',
+    label: 'A split adds',
+    detail:
+      'Prefix % splits right and " splits down, as tmux does; prefix Space changes the layout.',
+    kind: 'choice',
+    choices: [
+      ['same', 'A plane like the active one'],
+      ['folder', 'A folder plane'],
+      ['terminal', 'A terminal plane'],
+      ['scratch', 'A scratch plane'],
+    ],
+  },
+  {
+    path: 'settings.tiling.defaultLayout',
+    category: 'Space',
+    section: 'Tiling',
+    label: 'Tiling starts as',
+    kind: 'choice',
+    choices: tileLayouts.map((layout): [string, string] => [layout, tileLayoutLabels[layout]]),
+  },
+  {
+    path: 'settings.tour.dwell',
+    category: 'Space',
+    section: 'Tour',
+    label: 'Time at each view (ms)',
+    detail: 'Tour flies through the saved views in turn; any key or click stops it.',
+    kind: 'number',
+    min: 500,
+    max: 60000,
+  },
+  {
+    path: 'settings.tour.duration',
+    category: 'Space',
+    section: 'Tour',
+    label: 'Flight time (ms)',
+    kind: 'number',
+    min: 100,
+    max: 10000,
+  },
+  {
+    path: 'settings.tour.loop',
+    category: 'Space',
+    section: 'Tour',
+    label: 'Start again after the last view',
+    kind: 'boolean',
   },
   {
     path: 'ui.space.opening',

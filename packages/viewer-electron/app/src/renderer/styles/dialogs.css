@@ -363,6 +363,10 @@
   color: var(--danger);
   flex-shrink: 0;
 }
+/* information, not a problem (2026-10-23) */
+.notice.is-info > svg {
+  color: var(--accent);
+}
 .notice > span {
   overflow-wrap: anywhere;
 }
@@ -443,4 +447,32 @@
 .collision-actions button {
   border-color: var(--line);
   font-size: 12px;
+}
+/* Views (2026-10-23): the space's saved camera positions */
+.views-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 14px 18px;
+  list-style: none;
+}
+.views-list li,
+.views-list form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.views-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.views-list input {
+  flex: 1;
+  min-width: 0;
+}
+.views-list button {
+  border-color: var(--line);
 }

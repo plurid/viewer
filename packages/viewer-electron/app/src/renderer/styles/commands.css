@@ -202,3 +202,97 @@
 .choice-placeholder {
   color: var(--muted);
 }
+/* Key sequences (2026-10-23): which-key above the space's toolbar, and plane hints on each plane.
+   Neither is a dialog: the commands they show still run. */
+.which-key {
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  z-index: 950;
+  min-width: 260px;
+  max-width: min(760px, calc(100vw - 32px));
+  max-height: 46vh;
+  overflow: auto;
+  transform: translateX(-50%);
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 12px 32px #0006;
+  font-size: 12px;
+}
+.which-key-trail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+.which-key kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  background: var(--field);
+  font:
+    600 12px/1 ui-monospace,
+    Menlo,
+    monospace;
+}
+.which-key-list {
+  display: grid;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.which-key-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.which-key-list li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.which-key-list li[data-chord='true'] span {
+  color: var(--accent);
+}
+.which-key-list li[data-available='false'] span {
+  color: var(--subtle);
+}
+.which-key-message {
+  margin: 0;
+  color: var(--muted);
+}
+.plane-hints {
+  position: fixed;
+  inset: 0;
+  z-index: 960;
+  pointer-events: none;
+}
+.plane-hint {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 6px 12px;
+  border-radius: 7px;
+  color: var(--space);
+  background: var(--accent);
+  box-shadow: 0 4px 12px #0006;
+  font:
+    700 20px/1 ui-monospace,
+    Menlo,
+    monospace;
+  text-transform: uppercase;
+}
+.plane-hint b {
+  opacity: 0.5;
+}

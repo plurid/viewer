@@ -41,6 +41,26 @@ export const customActionSchema = z
       .default({ target: 'any', extensions: [], min: 0, max: 10000 }),
     executor: z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('builtin'), command: z.string().min(1).max(200) }).strict(),
+      z
+        .object({
+          kind: z.literal('sequence'),
+          commands: z
+            .array(
+              z
+                .string()
+                .min(1)
+                .max(200)
+                .regex(/^[A-Za-z0-9._:=@/-]+$/)
+                // a sequence runs built-in commands, not another custom action
+                .refine(
+                  (command) => !command.startsWith('custom.'),
+                  'A sequence cannot run a custom action.',
+                ),
+            )
+            .min(1)
+            .max(50),
+        })
+        .strict(),
       z.object({ kind: z.literal('recipe'), recipeID: z.string().min(1).max(200) }).strict(),
       z.object({ kind: z.literal('terminal'), profileID: z.string().min(1).max(200) }).strict(),
       z

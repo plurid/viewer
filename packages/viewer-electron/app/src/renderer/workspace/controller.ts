@@ -4,7 +4,7 @@ import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid
 import { PLURID_PUBSUB_TOPIC, type TreePlane, type TreePlaneLocation } from '@plurid/plurid-data';
 import type { FileEntry } from '../../domain/contracts';
 import { sameSourceVersion, sourceVersion, type EvidenceNavigation } from '../../domain/inspection';
-import { matchingPane, normalizedPanePath } from '../../domain/planes';
+import { baseName, matchingPane, normalizedPanePath } from '../../domain/planes';
 import {
   activeWorkspace,
   addPane,
@@ -30,6 +30,8 @@ import { choosePreview } from '../previews/registry';
 import { repeatedPreviews } from './recovery';
 import { flattenTree, hostID, paneRoute, parentPaneID, linkedPaneID } from './tree';
 import { cancelWorkspaceFraming, frameWorkspace } from './framing';
+import { applyTiling } from './tiling';
+import { explodePlan } from '../../domain/explode';
 import { folderPairArea, folderPairGeometry } from './folder-pair';
 import { frontPlaneDepth, planeLayoutGeometry } from './plane-layout';
 import type { WorkspaceController } from './context';
@@ -469,6 +471,12 @@ export function useWorkspaceController({
           engine.current &&
           flattenTree(engine.current.tree.get()).find((node) => hostID(node) === id);
         const api = engine.current;
+        // a plane already on screen (hints, directional focus) becomes active where it is
+        if (options?.frame === false) {
+          setActivePane(id);
+          if (options.activate) activatePlane(engine, id);
+          return;
+        }
         if (node && api) {
           api.tree.open(node.planeID);
           const docked = api.camera.docked();
@@ -481,6 +489,76 @@ export function useWorkspaceController({
         if (options?.activate) activatePlane(engine, id);
       },
       frameAll: () => frameWorkspace(engine, surface),
+      // the space's named views are plurid's bookmarks, saved with the workspace's arrangement
+      bookmarks: () =>
+        (engine.current?.bookmarks.get() ?? [])
+          .filter((entry) => entry.source === 'bookmark' && !!entry.camera)
+          .map(({ name, label }) => ({ name, label })),
+      saveBookmark: (name) => engine.current?.bookmarks.save(name),
+      goBookmark(name, options) {
+        const api = engine.current;
+        if (
+          !api?.bookmarks.get().some((entry) => entry.source === 'bookmark' && entry.name === name)
+        )
+          return false;
+        api.bookmarks.go(name, { animate: true, easing: 'in-out-cubic', ...options });
+        return true;
+      },
+      removeBookmark: (name) => engine.current?.bookmarks.remove(name),
+      retile: () => applyTiling(engine, surface),
+      async explode(id, depth) {
+        const api = engine.current;
+        const space = activeWorkspace();
+        const pane = space.panes.find((item) => item.id === id);
+        if (!api || !readyRef.current || pane?.type !== 'folder') return 0;
+        const limit = Math.min(60, 200 - space.panes.length);
+        if (limit <= 0) throw new Error('This workspace has 200 planes. Close some first.');
+        const plan = await explodePlan(
+          pane.path,
+          depth,
+          (path) => window.viewer.list(path).then((listing) => listing.entries),
+          { limit, showHidden: pane.showHidden },
+        );
+        if (!plan.length) throw new Error(`“${baseName(pane.path)}” has no subfolders to open.`);
+        // the workspace or the plane changed while the folders were read
+        const root = flattenTree(api.tree.get()).find((node) => hostID(node) === id);
+        if (activeWorkspace().id !== space.id || !root) return 0;
+        const pending = pendingOwners.current.get(space.id) || new Map<string, string>();
+        pendingOwners.current.set(space.id, pending);
+        const owner = controller.rootID(id) || id;
+        const planes = new Map([[pane.path, root.planeID]]);
+        cancelWorkspaceFraming(api);
+        api.history.transaction(() => {
+          for (const { path, parent } of plan) {
+            const parentPlane = planes.get(parent);
+            if (!parentPlane) continue;
+            const child = addPane(path, 'folder', false, { keepSeparate: true, remember: false });
+            updatePane(child.id, { exploded: id });
+            pending.set(child.id, owner);
+            const planeID = api.tree.spawn(paneRoute('folder', child.id), parentPlane);
+            if (planeID) planes.set(path, planeID);
+          }
+        });
+        setActivePane(id);
+        frameWorkspace(engine, surface);
+        return planes.size - 1;
+      },
+      collapse(id) {
+        const api = engine.current;
+        const exploded = activeWorkspace().panes.filter(
+          (pane) => pane.type === 'folder' && pane.exploded === id,
+        );
+        if (!api || !exploded.length) return;
+        // closing a plane closes those under it: each exploded plane once, from the top
+        api.history.transaction(() => {
+          for (const pane of exploded)
+            if (activeWorkspace().panes.some((item) => item.id === pane.id))
+              controller.closePane(pane.id);
+        });
+        setActivePane(id);
+        frameWorkspace(engine, surface, [id]);
+      },
+      renameBookmark: (from, to) => engine.current?.bookmarks.rename(from, to),
       dock: (id) => {
         const api = engine.current;
         if (!api) return;
