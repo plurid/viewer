@@ -1,7 +1,8 @@
 import type { CommandContext, CommandDefinition } from './registry';
 import type { CapturedTarget } from '../../domain/automation';
 import { actionAvailable, terminalDirectory } from '../../domain/automation';
-import { getState } from '../state/store';
+import { activeWorkspace, getState } from '../state/store';
+import { newPlaneFolder } from '../../domain/services';
 import type { WorkspaceController } from '../workspace/context';
 import { requestAction } from '../actions/commands';
 import type { IconName } from '../ui/Icon';
@@ -59,6 +60,38 @@ export function programCommands(
       aliases: ['tp', 'terminal plane', 'shell plane'],
       when: folder,
       run: (context) => workspace.newTerminal(target(context)),
+    },
+    {
+      id: 'new-terminal-plane',
+      label: 'New terminal plane',
+      group: 'Terminal',
+      icon: 'terminal',
+      aliases: ['nt', 'root terminal', 'new terminal', 'terminal', 'shell'],
+      // a root plane of its own, from anywhere (2026-10-23): Open terminal plane links one to a folder
+      when: () => true,
+      run: (context) => {
+        const space = activeWorkspace();
+        const owner = space.panes.find(
+          (pane) => pane.id === (context.paneID || getState().activePane),
+        );
+        const current =
+          context.directory ||
+          context.folder?.path ||
+          (owner?.type === 'folder' || owner?.type === 'terminal' ? owner.path : undefined);
+        workspace.newTerminal({
+          workspaceID: context.workspaceID || space.id,
+          rootID: '',
+          paneID: '',
+          // where new planes start: Settings → Browsing
+          directory: newPlaneFolder(
+            getState().settings.settings.browsing,
+            getState().bootstrap.home,
+            current,
+            space.panes.length === 0,
+          ),
+          selection: [],
+        });
+      },
     },
     {
       id: 'open-config',

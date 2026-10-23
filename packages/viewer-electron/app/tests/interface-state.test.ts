@@ -85,6 +85,7 @@ describe('layout-only changes', () => {
   });
   it('binds every default shortcut and menu command to a registered command', async () => {
     const { folderCommands } = await import('../src/renderer/commands/folder');
+    const { programCommands } = await import('../src/renderer/commands/programs');
     const { readFile } = await import('node:fs/promises');
     const { defaultShortcuts, shortcutCommandID } = await import('../src/domain/shortcuts');
     const actions = {
@@ -99,7 +100,12 @@ describe('layout-only changes', () => {
       tool: null,
     } as unknown as WindowActions;
     const registered = new Set(
-      [...windowCommands(actions), ...folderCommands({} as never)].map((command) => command.id),
+      [
+        ...windowCommands(actions),
+        ...folderCommands({} as never),
+        // the App registers these too: terminals, configuration, custom actions
+        ...programCommands(actions.workspace, async () => false),
+      ].map((command) => command.id),
     );
     const missing = Object.keys(defaultShortcuts)
       .map(shortcutCommandID)

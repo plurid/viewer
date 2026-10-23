@@ -8,7 +8,12 @@ export const agentRemovalPolicy = Object.freeze({
   permanentDeletion: false,
 });
 
-const terminalCommands = new Set(['open-terminal', 'open-tmux', 'open-terminal-plane']);
+const terminalCommands = new Set([
+  'open-terminal',
+  'open-tmux',
+  'open-terminal-plane',
+  'new-terminal-plane',
+]);
 /** Built-in commands an agent may propose. Each acts only on the captured folder and
  * selection, opens a dialog the person completes, or changes the view. Everything
  * else is refused, including commands added later and clipboard-driven paste/move. */

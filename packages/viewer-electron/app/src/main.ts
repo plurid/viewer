@@ -221,6 +221,11 @@ function menu(): void {
             click: command('new-scratch-plane'),
           },
           {
+            label: 'New Terminal Plane',
+            accelerator: accelerator(settings?.shortcuts['new-terminal-plane'] ?? ''),
+            click: command('new-terminal-plane'),
+          },
+          {
             label: 'Open Folder…',
             accelerator: accelerator(
               settings?.shortcuts['choose-folder'] ?? menuShortcuts['choose-folder'] ?? '',
