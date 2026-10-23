@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Compartment, EditorSelection, EditorState } from '@codemirror/state';
 import {
   EditorView,
@@ -24,12 +24,23 @@ import {
   indentUnit,
   syntaxHighlighting,
 } from '@codemirror/language';
-import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
+import {
+  findNext,
+  findPrevious,
+  getSearchQuery,
+  highlightSelectionMatches,
+  search,
+  selectNextOccurrence,
+  selectSelectionMatches,
+} from '@codemirror/search';
+import type { Command } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import type { EditorHandle } from '../../editing/planes';
 import type { ApplicationSettings } from '../../../domain/services';
 import { editorLanguages } from './languages';
 import { editorFont } from '../../editing/font';
+import { findMarks, findOpen, showFind } from './find';
+import { EditorFind, type FindRequest } from './EditorFind';
 
 /** Prism's token classes, so text reads and edits in the same colours, in both looks. */
 const tokens = HighlightStyle.define([
@@ -100,8 +111,43 @@ export default function TextEditor({
   finished.current = onFinal;
   // the initial text only: the owner remounts the editor to load another
   const initial = useRef(text);
+  // Viewer's find over the text (EditorFind), opened by ⌘F, ⌥⌘F or the handle
+  const [editorView, setEditorView] = useState<EditorView | null>(null);
+  const [find, setFind] = useState<FindRequest | null>(null);
+  const findListeners = useRef(new Set<() => void>());
+  const subscribe = useCallback((listener: () => void) => {
+    findListeners.current.add(listener);
+    return () => {
+      findListeners.current.delete(listener);
+    };
+  }, []);
+  const openFind = useRef((replace: boolean) => {
+    const editor = view.current;
+    if (!editor) return;
+    const { from, to } = editor.state.selection.main;
+    const selected = editor.state.sliceDoc(from, to);
+    setFind((open) => ({
+      replace: replace || !!open?.replace,
+      nonce: (open?.nonce ?? 0) + 1,
+      // the selected text becomes the query, when it is one line
+      initial: selected && !selected.includes('\n') ? selected : undefined,
+    }));
+  });
+  const closeFind = useCallback(() => {
+    view.current?.dispatch({ effects: showFind.of(false) });
+    setFind(null);
+    view.current?.focus();
+  }, []);
   useEffect(() => {
     const crlf = initial.current.includes('\r\n');
+    // ⌘G and F3 step through the last query, or open find when there is none
+    const step =
+      (command: Command): Command =>
+      (editor) => {
+        if (getSearchQuery(editor.state).valid) return command(editor);
+        openFind.current(false);
+        return true;
+      };
     const editor = new EditorView({
       parent: host.current!,
       state: EditorState.create({
@@ -116,19 +162,60 @@ export default function TextEditor({
           bracketMatching(),
           highlightActiveLine(),
           highlightSelectionMatches(),
-          search({ top: true }),
+          // the search state and commands only: CodeMirror's own panel is never opened
+          search({ createPanel: () => ({ dom: document.createElement('div') }) }),
+          findMarks,
           syntaxHighlighting(tokens),
           languages.current.of([]),
           EditorView.contentAttributes.of({ 'aria-label': label }),
-          keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+          keymap.of([
+            {
+              key: 'Mod-f',
+              run: () => {
+                openFind.current(false);
+                return true;
+              },
+            },
+            {
+              key: 'Mod-Alt-f',
+              run: () => {
+                openFind.current(true);
+                return true;
+              },
+            },
+            { key: 'Mod-g', run: step(findNext), shift: step(findPrevious), preventDefault: true },
+            { key: 'F3', run: step(findNext), shift: step(findPrevious), preventDefault: true },
+            { key: 'Mod-d', run: selectNextOccurrence, preventDefault: true },
+            { key: 'Mod-Shift-l', run: selectSelectionMatches },
+            {
+              key: 'Escape',
+              run: (editor) => {
+                if (!findOpen(editor.state)) return false;
+                closeFind();
+                return true;
+              },
+            },
+            ...defaultKeymap,
+            ...historyKeymap,
+            indentWithTab,
+          ]),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) changed.current();
+            if (
+              findListeners.current.size &&
+              (update.docChanged ||
+                update.selectionSet ||
+                update.transactions.some((transaction) => transaction.effects.length))
+            )
+              for (const listener of findListeners.current) listener();
           }),
         ],
       }),
     });
     view.current = editor;
+    setEditorView(editor);
     onHandle({
+      find: () => openFind.current(false),
       undo: () => undo(editor),
       redo: () => redo(editor),
       selectAll: () => {
@@ -152,6 +239,7 @@ export default function TextEditor({
       finished.current?.(editor.state.sliceDoc());
       onHandle(null);
       view.current = null;
+      setEditorView(null);
       editor.destroy();
     };
     // the label and handle callback are fixed for an editor's life
@@ -174,5 +262,12 @@ export default function TextEditor({
   useEffect(() => {
     view.current?.dispatch({ effects: configured.current.reconfigure(presentation(settings)) });
   }, [settings]);
-  return <div className="text-editor" ref={host} style={editorFont(settings)} />;
+  return (
+    <div className="text-editor-frame">
+      <div className="text-editor" ref={host} style={editorFont(settings)} />
+      {find && editorView && (
+        <EditorFind view={editorView} request={find} subscribe={subscribe} onClose={closeFind} />
+      )}
+    </div>
+  );
 }

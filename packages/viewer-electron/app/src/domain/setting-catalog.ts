@@ -358,7 +358,7 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'choice',
     choices: [
       ['opaque', 'Solid'],
-      ['blur', 'Blur what is behind'],
+      ['blur', 'Blur'],
       ['clear', 'Clear'],
     ],
   },

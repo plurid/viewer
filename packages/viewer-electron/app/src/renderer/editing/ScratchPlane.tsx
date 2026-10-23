@@ -129,6 +129,17 @@ export default function ScratchPlane({
   if (initial === null) return <Loading label="Opening scratch plane…" />;
   const toolbar = (
     <div className="preview-toolbar text-editing-toolbar">
+      {/* a scratch plane is saved as a file: there is nothing to save while it is empty. Save comes
+          first, so the language choice keeps its place as it appears (2026-10-23) */}
+      {!empty && (
+        <button
+          className="primary"
+          title="Save As… (⌘S)"
+          onClick={() => void saveAs().catch(report)}
+        >
+          Save…
+        </button>
+      )}
       <ChoiceButton
         label="Language"
         value={pane.language ?? 'plaintext'}
@@ -143,16 +154,6 @@ export default function ScratchPlane({
           if (text.current || editor.current?.text()) keep(editor.current?.text() ?? text.current);
         }}
       />
-      {/* a scratch plane is saved as a file: there is nothing to save while it is empty */}
-      {!empty && (
-        <button
-          className="primary"
-          title="Save As… (⌘S)"
-          onClick={() => void saveAs().catch(report)}
-        >
-          Save…
-        </button>
-      )}
     </div>
   );
   return (

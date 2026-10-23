@@ -295,13 +295,114 @@
   background: transparent;
   outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
 }
-.text-editor .cm-panels {
-  color: var(--ink);
-  background: var(--raised);
-  border-color: var(--line);
+/* Find in text (2026-10-23): Viewer's find over the editor's top right (EditorFind), covering the
+   text rather than pushing it down. CodeMirror's own panel, with its native-looking buttons, is never
+   opened; should anything open it, it stays out of sight. */
+.text-editor-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
-.text-editor .cm-panels input,
-.text-editor .cm-panels button {
+.text-editor .cm-panels {
+  display: none;
+}
+.text-editor .cm-find-match {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.text-editor .cm-find-current {
+  background: color-mix(in srgb, var(--accent) 48%, transparent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.editor-find {
+  position: absolute;
+  top: 8px;
+  right: 18px;
+  z-index: 3;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 8px 24px #0005;
+  font-size: 12px;
+}
+.editor-find-rows {
+  display: grid;
+  gap: 4px;
+}
+.editor-find-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.editor-find .icon-button {
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+}
+.editor-find .icon-button.editor-find-disclosure {
+  width: 18px;
+  height: auto;
+  padding: 0;
+}
+.editor-find-field {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  width: 260px;
+  height: 26px;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--field);
+}
+.editor-find-field:focus-within {
+  border-color: var(--accent);
+}
+.editor-find-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+}
+.editor-find-option {
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--subtle);
+  font:
+    600 11px/1 ui-monospace,
+    Menlo,
+    monospace;
+}
+.editor-find-option[aria-label='Whole word'] span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.editor-find-count {
+  min-width: 78px;
+  padding: 0 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.editor-find-count.is-invalid {
+  color: var(--danger);
+}
+.editor-find-action {
+  height: 26px;
+  padding: 0 9px;
+  border-color: var(--line);
   font-size: 12px;
 }
 .text-editor .token.invalid {

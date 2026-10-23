@@ -3,6 +3,8 @@ export interface EditorHandle {
   undo(): boolean;
   redo(): boolean;
   selectAll(): boolean;
+  /** Opens Viewer's find over the text (⌘F), the selection as its query. */
+  find(): void;
   focus(): void;
   hasFocus(): boolean;
   /** The whole text, with the file's own line breaks. */
@@ -70,6 +72,8 @@ export function routeToEditor(command: string, activePane: string): boolean {
   if (command === 'undo-file') editor.undo();
   else if (command === 'redo-file') editor.redo();
   else if (command === 'select-all') editor.selectAll();
+  // ⌘F in an editor finds in its text, rather than opening the file palette
+  else if (command === 'find-file') editor.find();
   else return false;
   return true;
 }

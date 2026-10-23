@@ -3071,7 +3071,70 @@ async function verifyTextEditing(): Promise<void> {
     (list) => list.buffers.some((buffer) => buffer.kind === 'scratch' && buffer.bytes === 12),
     'scratch text kept in the profile',
   );
-  console.log('Text editing: saved, undone, and scratch text kept.');
+  // Find in text (2026-10-23): Viewer's own find over the text, never CodeMirror's panel
+  await key('f', 'KeyF', 4);
+  await until(
+    () =>
+      evaluate<boolean>(
+        '!!document.querySelector("[data-scratch-plane] .editor-find") && document.activeElement?.getAttribute("aria-label") === "Find"',
+      ),
+    Boolean,
+    "Viewer's find over the scratch text",
+  );
+  assert.equal(await evaluate<boolean>('!!document.querySelector(".cm-search")'), false);
+  await command('Input.insertText', { text: 'text' });
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector("[data-scratch-plane] .editor-find-count")?.textContent ?? ""',
+      ),
+    (count) => count === '1 / 1',
+    'find counts the match',
+  );
+  await snapshot('text-find.png');
+  await key('Escape', 'Escape');
+  await until(
+    () => evaluate<boolean>('!document.querySelector(".editor-find")'),
+    Boolean,
+    'find closed',
+  );
+  // Save before the language choice, so the choice keeps its place; one height, filled to the edge
+  const header = await evaluate<{ order: string[]; heights: number[]; edge: string }>(`(() => {
+    const bar = [...document.querySelectorAll('.text-editing-toolbar')].find((item) =>
+      item.querySelector('[aria-label="Language"]'));
+    const items = [...(bar ? bar.children : [])];
+    const choice = bar?.querySelector('[aria-label="Language"]');
+    return {
+      order: items.map((item) => item.getAttribute('aria-label') || item.textContent.trim()),
+      heights: items.map((item) => Math.round(item.getBoundingClientRect().height)),
+      edge: choice ? getComputedStyle(choice).borderTopColor : '',
+    };
+  })()`);
+  assert.deepEqual(header.order, ['Save…', 'Language']);
+  assert.equal(new Set(header.heights).size, 1, JSON.stringify(header.heights));
+  assert.equal(header.edge, 'rgba(0, 0, 0, 0)');
+  // plurid's controls solid, and a see-through space only between planes (2026-10-23)
+  const application = `getComputedStyle(document.querySelector('.workspace-surface [data-plurid-application]'))`;
+  assert.equal(
+    await evaluate<string>(`${application}.getPropertyValue('--plurid-opacity-persistent').trim()`),
+    '1',
+  );
+  await patchInSettings(`[{path:'ui.space.backdrop',value:'blur'}]`);
+  await until(
+    () => evaluate<string>('document.documentElement.dataset.backdrop ?? ""'),
+    (backdrop) => backdrop === 'blur',
+    'blurred backdrop applied',
+  );
+  const backdrop = await evaluate<{ space: string; titlebar: string }>(`({
+    space: getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]')).backgroundColor,
+    titlebar: getComputedStyle(document.querySelector('.app-titlebar')).backgroundColor,
+  })`);
+  assert.match(backdrop.space, /\/ 0\.6\)|, 0\.6\)/, backdrop.space);
+  assert.match(backdrop.titlebar, /^rgb\(/, backdrop.titlebar);
+  await patchInSettings(`[{path:'ui.space.backdrop',value:'opaque'}]`);
+  console.log(
+    "Text editing: saved, undone, scratch text kept, Viewer's find, and the header's Save; a see-through space between solid controls.",
+  );
 }
 /** Additional release checks against the actual signed Electron bundle. Files remain untouched. */
 async function verifyPublishedPlaneInput(): Promise<void> {

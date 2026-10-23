@@ -405,17 +405,28 @@ select {
 .workspace-surface > div {
   height: 100%;
 }
-/* A see-through space (2026-10-23): with a blurred or clear backdrop, the window shows what is
-   behind it between planes, under the space's colour at the chosen opacity; planes stay solid. */
+/* A see-through space (2026-10-23): with a blurred or clear backdrop, only the space's grid floor
+   between planes shows what is behind the window, under its colour at the chosen opacity, its grid
+   lines kept, as iTerm's window does. Viewer's title bar and sidebar, the planes and plurid's
+   controls stay solid. */
 :root[data-backdrop='blur'],
-:root[data-backdrop='clear'] {
-  background: transparent;
-}
+:root[data-backdrop='clear'],
 :root[data-backdrop='blur'] .app-shell,
 :root[data-backdrop='clear'] .app-shell {
-  background: color-mix(in srgb, var(--space) var(--space-opacity, 60%), transparent);
+  background: transparent;
 }
-:root[data-backdrop='blur'] .workspace-surface [data-plurid-application],
-:root[data-backdrop='clear'] .workspace-surface [data-plurid-application] {
-  --plurid-space: transparent;
+:root[data-backdrop='blur'] :is(.app-titlebar, .location-sidebar),
+:root[data-backdrop='clear'] :is(.app-titlebar, .location-sidebar) {
+  background: var(--space);
+}
+:root[data-backdrop='blur'] .workspace-surface [data-plurid-entity='PluridSpace'],
+:root[data-backdrop='clear'] .workspace-surface [data-plurid-entity='PluridSpace'] {
+  background-color: color-mix(in srgb, var(--plurid-space) var(--space-opacity, 60%), transparent);
+}
+/* plurid's controls solid (2026-10-23): its toolbar drew at 85% over translucent glass, so a plane
+   behind it showed through. Its tokens, set more specifically than its own look stylesheet. */
+.workspace-surface [data-plurid-application] {
+  --plurid-opacity-persistent: 1;
+  --plurid-surface: var(--plurid-surface-solid);
+  --plurid-surface-strong: var(--plurid-surface-solid);
 }

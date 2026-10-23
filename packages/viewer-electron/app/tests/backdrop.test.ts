@@ -2,6 +2,7 @@
  * A SEE-THROUGH SPACE (2026-10-23): the space between planes may show what is behind Viewer's window,
  * blurred or clear, at a chosen opacity; the planes stay opaque.
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { normalizePreferences } from '../src/domain/preferences';
 import { backdropWindowOptions, backdropChange } from '../src/desktop/backdrop';
@@ -43,5 +44,21 @@ describe("the window's backdrop", () => {
     expect(backdropChange('blur', 'clear')).toBe('reopen');
     expect(backdropChange('clear', 'opaque')).toBe('reopen');
     expect(backdropChange('clear', 'clear')).toBe('live');
+  });
+});
+
+describe('what is see-through', () => {
+  const css = readFileSync(new URL('../src/renderer/styles/base.css', import.meta.url), 'utf8');
+  it("is the space's grid floor alone: the title bar, sidebar and plurid's colours stay", () => {
+    expect(css).toMatch(
+      /\[data-backdrop='clear'\] \.workspace-surface \[data-plurid-entity='PluridSpace'\]/,
+    );
+    // plurid's space colour also fills its palette and shortcut backdrops: it is not overridden
+    expect(css).not.toMatch(/--plurid-space:\s*transparent/);
+    expect(css).toMatch(/\[data-backdrop='clear'\] :is\(\.app-titlebar, \.location-sidebar\)/);
+  });
+  it("draws plurid's controls solid, so a plane behind them does not show through", () => {
+    expect(css).toMatch(/--plurid-opacity-persistent: 1;/);
+    expect(css).toMatch(/--plurid-surface: var\(--plurid-surface-solid\);/);
   });
 });
