@@ -99,7 +99,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       label: 'Show Package Contents',
       group: 'Files',
       icon: 'folder',
-      aliases: ['package', 'bundle', 'application contents'],
+      aliases: ['package', 'bundle', 'application contents', 'view contents', 'inside'],
       when: (context) =>
         selected(context) &&
         context.selection.length === 1 &&

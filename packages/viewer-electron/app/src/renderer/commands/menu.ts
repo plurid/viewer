@@ -11,7 +11,8 @@ export type MenuEntry =
 
 // Contextual presentation is separate from search ranking and command execution.
 const direct = [
-  ['open-selection', 'quick-preview', 'open-with'],
+  // a package's contents next to Open, as Finder's menu has it (shown only for a package)
+  ['open-selection', 'show-package-contents', 'quick-preview', 'open-with'],
   ['rename', 'copy', 'copy-path', 'paste', 'new-folder', 'select-all'],
   ['info', 'trash'],
 ];
@@ -186,9 +187,7 @@ export function contextMenuSections(
     if (label === 'Size & position') return branch(label, layoutSections(rows));
     if (label === 'Files') {
       const open = rows.filter((item) =>
-        ['open-default', 'show-package-contents', 'linked', 'another-plane', 'reveal'].includes(
-          item.id,
-        ),
+        ['open-default', 'linked', 'another-plane', 'reveal'].includes(item.id),
       );
       const organize = rows.filter((item) =>
         ['cut', 'copy-to', 'move-to', 'duplicate'].includes(item.id),

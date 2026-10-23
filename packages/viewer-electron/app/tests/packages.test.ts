@@ -16,7 +16,8 @@ import { FileRow } from '../src/renderer/explorer/views';
 import { useColumnNavigation } from '../src/renderer/explorer/column-navigation';
 import type { FileSelection } from '../src/renderer/explorer/selection';
 import { activeWorkspace, initialize } from '../src/renderer/state/store';
-import type { CommandContext } from '../src/renderer/commands/registry';
+import type { CommandContext, ResolvedCommand } from '../src/renderer/commands/registry';
+import { contextMenuSections } from '../src/renderer/commands/menu';
 
 const entry = (name: string, directory: boolean): FileEntry => ({
   path: `/fixtures/${name}`,
@@ -137,5 +138,24 @@ describe('Show Package Contents', () => {
     const actions = { open: vi.fn() };
     await command(actions).run(context([app]));
     expect(actions.open).toHaveBeenCalledWith([app], true);
+  });
+});
+
+describe('the context menu of a package', () => {
+  it('offers Show Package Contents right under Open, as Finder does', () => {
+    const command = (id: string, group = 'Files') =>
+      ({ id, label: id, group, primary: false }) as unknown as ResolvedCommand;
+    const sections = contextMenuSections(
+      ['open-selection', 'show-package-contents', 'quick-preview', 'open-with', 'linked'].map(
+        (id) => command(id),
+      ),
+      [],
+    );
+    expect(sections[0]!.entries.map((entry) => entry.id)).toEqual([
+      'open-selection',
+      'show-package-contents',
+      'quick-preview',
+      'open-with',
+    ]);
   });
 });
