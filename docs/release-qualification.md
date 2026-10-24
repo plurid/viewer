@@ -8,6 +8,15 @@ Each check records the artifact hash, runtime/channel, OS, fixtures, result and 
 
 ## Work and acceptance ledger
 
+### October 24 Clear backdrop after ⌘H
+
+The latest accepted candidate disables the native alpha-derived window shadow
+for Clear backdrops. The operator confirmed that ⌘H → Dock restore → move plane
+no longer leaves the former plane rectangle. A native shadow-policy regression,
+26 focused tests, static checks, packaging/signature verification and the
+packaged spatial scenario pass. Candidate hashes, source-bound native evidence
+and the operator's physical result are recorded in [verification](verification.md).
+
 ### October 24 Viewcube corner and conceal follow-up
 
 The latest follow-up preserves the engine's Viewcube corner, native conceal and

@@ -1,5 +1,49 @@
 # Verification
 
+## October 24 clear-window shadow after application hide
+
+The accepted direct candidate is open and preserved at
+`/private/tmp/viewer-clear-shadow-candidate-20261024-ucjn2msh/Viewer.app`.
+Executable SHA-256:
+`1611aa14b8b2d211f331fa3d5dd1290d563797f20527ab604b67c8a26e556198`;
+ASAR SHA-256:
+`642cbb2120e30368ccf969e1e142e0d5bb58026b4cca25164325b61693d4dea5`.
+The adjacent `candidate.json` records source, lockfile and regression hashes.
+
+The operator isolated the remaining rectangle to ⌘H → restore from the Dock →
+move a plane. Clear windows still had the default native shadow enabled. macOS
+can cache that shadow from the opaque content islands of a transparent window;
+disabling it for Clear removes the stale shape without changing the rendered
+plane shadows or floor. Electron documents this native artifact boundary in its
+[window-shadow API](https://www.electronjs.org/docs/latest/api/browser-window#wininvalidateshadow-macos).
+Blur and opaque window options retain their existing shadow behavior.
+
+- The operator performed the exact sequence in the corrected, reopened build and
+  replied **“No, the rectangle is gone”**, then **“seems okay now.”** Adjacent
+  `physical-hide-show.json` binds that result to the executable/ASAR hashes and
+  existing profile. Normal Quit/reopen preserved the workspace.
+- The new native shadow regression was observed failing before the correction:
+  a real transparent Electron window reported `hasShadow() === true`. With the
+  correction it reports false at creation, application hide/restore, plane
+  movement and window hide/restore. A read-only CoreGraphics/AppKit probe also
+  verifies zero on-screen fixture windows while hidden and their return on show.
+  This is a source-bound ordinary Electron fixture, separately from the packaged
+  operator acceptance. Result:
+  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-clear-backdrop-obLdym/result.json`.
+- **26 focused tests pass**, as do all four TypeScript targets, scoped ESLint,
+  Prettier, whitespace checks, ordinary packaging and strict/deep signature
+  verification. Logs use `/private/tmp/viewer-clear-shadow-` with `regressions`,
+  `final-types`, `lint`, `format` and `package` suffixes.
+- The packaged spatial regression passes on these exact bytes: real resize and
+  plane movement, native cube conceal/hover, compact layout and uniform exposed
+  floor samples. Result:
+  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-spatial-surface-VdwzRM/result.json`.
+
+WebContents screenshots alone did not expose the native shadow cache. Physical
+operator acceptance establishes the reported visual correction; other OS/channel
+configurations and earlier whole-suite/physical-hotkey results retain their
+separate qualification scope below.
+
 ## October 24 Viewcube corner and conceal follow-up
 
 The corrected direct candidate is preserved at
