@@ -36,6 +36,7 @@ describe("the window's backdrop", () => {
     expect(backdropWindowOptions('clear', 'light')).toEqual({
       transparent: true,
       backgroundColor: '#00000000',
+      hasShadow: false,
     });
   });
   it('switches blur live, and waits for a new window to become clear or stop being clear', () => {

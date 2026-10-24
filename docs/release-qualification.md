@@ -8,6 +8,18 @@ Each check records the artifact hash, runtime/channel, OS, fixtures, result and 
 
 ## Work and acceptance ledger
 
+### October 24 Viewcube corner and conceal follow-up
+
+The latest follow-up preserves the engine's Viewcube corner, native conceal and
+hover transitions. It protects actual toolbar controls instead of the full-width
+click-through band. Twenty-six focused tests, all four TypeScript targets, scoped
+lint/format checks, packaging and signature verification pass. Packaged native
+resize/drag/conceal/hover checks and isolated Chat Send hit tests pass on the exact
+candidate recorded in [verification](verification.md). Clear-floor renderer
+captures are uniform; no background/compositor correction is claimed. One earlier
+concurrent Chat check exposed an offscreen framing timing concern; isolated checks
+pass and the concern remains recorded separately.
+
 ### October 24 latest user-report and Git candidate
 
 The latest candidate includes fixed folder Git actions, Chat styling/diagnostics,

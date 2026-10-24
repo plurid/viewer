@@ -1,5 +1,58 @@
 # Verification
 
+## October 24 Viewcube corner and conceal follow-up
+
+The corrected direct candidate is preserved at
+`/private/tmp/viewer-spatial-anchor-candidate-20261024-jfda6lbv/Viewer.app`.
+Executable SHA-256:
+`73dc9033f3419fb78abe62382b4896a79cd4ae89d8038810c5ee78de3f14d49f`;
+ASAR SHA-256:
+`af47fac029677d04418c2341f6765084986b562819ff153e07a4ffa962c868b4`.
+The adjacent `candidate.json` binds source, lockfile and native regression hashes.
+Ordinary `pnpm package` and strict/deep signature verification pass.
+
+The previous adapter clamped the engine's tucked cube into the viewport, wrote
+fixed `left`/`top` coordinates and retained them after resizing. It also treated
+the toolbar's full-width, click-through band as an obstruction. Viewer now leaves
+corner anchors, responsive offsets, conceal and hover transitions to Plurid.
+Only actual toolbar controls and open menus obstruct overlays; a cube covering
+protected controls is temporarily suppressed without relocating it.
+
+- **26 focused tests pass in three files**, including engine conceal offsets,
+  obstacle removal, viewport growth, toolbar-band exclusion, actual control
+  collisions, docked/hidden chrome and pointer interaction. The conceal/anchor
+  and toolbar regressions were observed failing before their respective fixes.
+  Log: `/private/tmp/viewer-spatial-final-regressions-20261024.log`.
+- All four TypeScript targets and scoped ESLint pass; changed source/test files
+  pass Prettier and whitespace checks. Logs use
+  `/private/tmp/viewer-spatial-anchor-` with `types`, `lint` and `package` suffixes.
+- `tests/native/spatial-surface.ts` passes against these exact packaged bytes in
+  a foreground, generated profile. Real window resizing, an actual plane drag,
+  native conceal and hover expansion pass at 1000×700, 1400×982 and 780×560.
+  All six snapshots retain the engine's anchors, keep the cube visible, and have
+  zero mismatches among 894 exposed-floor samples at the selected 60% opacity.
+  Result:
+  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-spatial-surface-7qaqC5/result.json`.
+- The isolated packaged Chat/palette scenario passes again: the real Send hit
+  target is unobstructed at 1280×900 and 780×560; no provider request is sent.
+  Clear recent, concise help and the retained Overview command also pass.
+  Result:
+  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-hDA5bx/result.json`.
+
+An earlier concurrent Chat run on the intermediate cube candidate failed with the
+Chat plane offscreen, not with an overlay intercepting Send. Its isolated rerun
+passed; the final candidate also passes in isolation. Concurrent framing timing
+remains a separate test concern rather than a verified product correction.
+
+Those uniform floor captures did not exercise native application hide/show. The
+operator subsequently isolated the remaining rectangle to ⌘H → show → move a
+plane, so the earlier background-content explanation was not established. These
+are WebContents captures; an attempted OS window capture failed with
+`could not create image from window`, so they do not establish WindowServer or
+native shadow behavior. The clear-window shadow follow-up records that separate
+boundary. Existing full-suite and physical-hotkey results below remain bound to
+their earlier candidates.
+
 ## October 24 final interface and context candidate
 
 The final direct candidate is preserved at

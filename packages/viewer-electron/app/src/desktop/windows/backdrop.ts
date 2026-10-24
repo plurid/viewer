@@ -8,7 +8,14 @@ type Backdrop = UIPreferences['space']['backdrop'];
  * draws the space at the chosen opacity, the planes opaque over it.
  */
 export function backdropWindowOptions(backdrop: Backdrop, look: 'dark' | 'light') {
-  if (backdrop === 'clear') return { transparent: true, backgroundColor: '#00000000' };
+  if (backdrop === 'clear')
+    return {
+      transparent: true,
+      backgroundColor: '#00000000',
+      // macOS can cache a transparent window's shadow from the opaque planes before app hide.
+      // Plane shadows belong to the renderer; a native alpha-derived shadow can retain old shapes.
+      hasShadow: false,
+    };
   if (backdrop === 'blur')
     return {
       vibrancy: 'under-window' as const,
