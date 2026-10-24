@@ -16,20 +16,24 @@ export const looks = {
 };
 
 const chosenLooks = new Map<string, (typeof looks)[keyof typeof looks] & { grid: boolean }>();
+/** The four colours plurid derives its look from, as a theme gives them. */
+export type LookPalette = Partial<Record<'space' | 'surface' | 'ink' | 'accent', string>>;
 /**
  * plurid's look with the space's grid and colour from Settings → Space, or the workspace's own
- * colour (2026-10-23). plurid derives the rest from it, so the grid lines, minimap and palette
- * backdrop follow the colour too. One object per choice: plurid resolves a look once per object.
+ * colour, over the theme's colours (2026-10-23). plurid derives the rest from it, so the grid lines,
+ * minimap and palette backdrop follow too. One object per choice: plurid resolves a look once per
+ * object.
  */
 export function spaceLook(
   look: keyof typeof looks,
-  { grid, color }: { grid: boolean; color: string },
+  { grid, color, palette }: { grid: boolean; color: string; palette?: LookPalette },
 ) {
-  if (grid && !color) return looks[look];
-  const key = `${look}|${grid}|${color}`;
+  const themed = palette && Object.keys(palette).length ? palette : undefined;
+  if (grid && !color && !themed) return looks[look];
+  const key = `${look}|${grid}|${color}|${JSON.stringify(themed ?? {})}`;
   let chosen = chosenLooks.get(key);
   if (!chosen) {
-    chosen = { ...looks[look], grid, ...(color ? { space: color } : {}) };
+    chosen = { ...looks[look], ...themed, grid, ...(color ? { space: color } : {}) };
     chosenLooks.set(key, chosen);
   }
   return chosen;

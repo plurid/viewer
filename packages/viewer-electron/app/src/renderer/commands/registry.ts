@@ -29,8 +29,19 @@ export interface CommandDefinition {
   detail?: string | ((context: CommandContext) => string);
   primary?: boolean | ((context: CommandContext) => boolean);
   remember?: boolean;
+  /** A setting's command (2026-10-23): the palette lists it apart, by the setting's name, with its
+   * value (on or off, or the current value) and whether it is a workspace's own. */
+  setting?: CommandSetting;
   when(context: CommandContext): boolean;
   run(context: CommandContext): void | Promise<void>;
+}
+export interface CommandSetting {
+  name: string;
+  value?: boolean | string;
+  workspace?: boolean;
+  /** One of a setting's choices: its label, and whether it is the current one. */
+  choice?: string;
+  current?: boolean;
 }
 export interface CommandSource {
   context(): CommandContext;
@@ -57,6 +68,7 @@ export interface ResolvedCommand {
   aliases: readonly string[];
   detail?: string;
   primary: boolean;
+  setting?: CommandSetting;
   source: string;
   context: CommandContext;
 }
@@ -164,6 +176,7 @@ export class CommandRegistry {
             typeof definition.primary === 'function'
               ? definition.primary(context)
               : !!definition.primary,
+          ...(definition.setting ? { setting: definition.setting } : {}),
           source: id,
           context,
         });
@@ -196,7 +209,7 @@ export class CommandRegistry {
   }
 }
 
-const normalize = (value: string) =>
+export const normalize = (value: string) =>
   value
     .toLocaleLowerCase()
     .normalize('NFD')
@@ -233,6 +246,23 @@ export function rankFiles(entries: readonly FileEntry[], query: string, limit = 
     .slice(0, limit)
     .map((item) => item.entry);
 }
+/** How well a command matches a normalized query: its label, aliases or group. */
+export function commandScore(command: ResolvedCommand, needle: string): number {
+  const label = scoreLabel(normalize(command.label), needle);
+  const alias = Math.max(
+    0,
+    ...command.aliases.map((alias) => {
+      const value = normalize(alias);
+      return value === needle
+        ? 1100
+        : value.startsWith(needle)
+          ? 950
+          : scoreLabel(value, needle) * 0.5;
+    }),
+  );
+  const group = normalize(command.group);
+  return Math.max(label, alias, group.startsWith(needle) ? 500 : group.includes(needle) ? 400 : 0);
+}
 export function rankCommands(
   commands: readonly ResolvedCommand[],
   query: string,
@@ -255,27 +285,7 @@ export function rankCommands(
     ];
   }
   return commands
-    .map((command, index) => {
-      const label = scoreLabel(normalize(command.label), needle);
-      const alias = Math.max(
-        0,
-        ...command.aliases.map((alias) => {
-          const value = normalize(alias);
-          return value === needle
-            ? 1100
-            : value.startsWith(needle)
-              ? 950
-              : scoreLabel(value, needle) * 0.5;
-        }),
-      );
-      const group = normalize(command.group);
-      const score = Math.max(
-        label,
-        alias,
-        group.startsWith(needle) ? 500 : group.includes(needle) ? 400 : 0,
-      );
-      return { command, score, index };
-    })
+    .map((command, index) => ({ command, score: commandScore(command, needle), index }))
     .filter((item) => item.score > 0)
     .sort(
       (a, b) =>

@@ -1,3 +1,5 @@
+import type { Theme } from './themes';
+import type { SettingProfile } from './profiles';
 import type { LayoutTemplate } from './layout-templates';
 import type { TileLayout } from './tiling';
 import { defaultKeymap, type Keymap } from './keymap';
@@ -107,6 +109,12 @@ export interface ApplicationSettings {
     /** The layout tiling starts with. */
     defaultLayout: TileLayout;
   };
+  /** Colour themes (2026-10-23): domain/themes.ts. */
+  themes: Theme[];
+  /** The theme for each appearance; empty is the built-in one. */
+  theme: { dark: string; light: string };
+  /** Named sets of settings applied at once (2026-10-23): domain/profiles.ts. */
+  profiles: SettingProfile[];
   /** Named sets of planes and their tiling, to open anywhere (2026-10-23): domain/layout-templates.ts. */
   layouts: LayoutTemplate[];
   /** Tour: flying through the space's views in turn (2026-10-23). */
@@ -377,6 +385,9 @@ export function defaultSettings(home: string): ApplicationSettings {
     },
     tiling: { splitWith: 'same', defaultLayout: 'even-horizontal' },
     layouts: [],
+    profiles: [],
+    themes: [],
+    theme: { dark: '', light: '' },
     tour: { dwell: 3000, duration: 900, loop: true },
     search: {
       roots: [home],

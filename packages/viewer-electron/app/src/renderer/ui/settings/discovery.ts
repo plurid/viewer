@@ -28,6 +28,11 @@ export function settingsDiscovery(settings: ApplicationSettings, query: string) 
         'allow local agent clients mcp token client authorization folders scope agent configuration',
     },
     { category: 'Terminals', terms: 'shell profiles environment tmux iterm external terminal' },
+    {
+      category: 'Themes',
+      terms:
+        'theme colours colors accent palette dark light iterm vs code import syntax highlighting',
+    },
     { category: 'Configuration', terms: 'jsonc config file validate changes import export reset' },
     { category: 'Privacy', terms: 'privacy policy sharing data retention support email tracking' },
     {
@@ -39,5 +44,10 @@ export function settingsDiscovery(settings: ApplicationSettings, query: string) 
       terms:
         'keyboard hotkeys commands bindings prefix leader tmux chord sequence which-key keymap ctrl+b',
     },
-  ].filter((item) => query && item.terms.toLowerCase().includes(query.toLowerCase()));
+    // a category is found by its own name too: "shortcut" finds Shortcuts (2026-10-23)
+  ].filter(
+    (item) =>
+      query &&
+      (item.category + ' ' + item.terms).toLowerCase().includes(query.trim().toLowerCase()),
+  );
 }

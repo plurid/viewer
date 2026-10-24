@@ -1,3 +1,5 @@
+import { useTheme } from '../ui/theme';
+import { effectiveUI } from '../../domain/overrides';
 import {
   lazy,
   Suspense,
@@ -174,7 +176,29 @@ export function WorkspaceSurface({
   const space = useViewer(activeWorkspace);
   const look = useViewer((state) => state.saved.look);
   const workspace = useWorkspace();
-  const preferences = useViewer((state) => state.saved.ui.space);
+  // this workspace's own settings over the general ones (domain/overrides.ts)
+  const general = useViewer((state) => state.saved.ui);
+  // the theme's colours for plurid, only a custom theme's: the built-in ones are plurid's look already
+  const theme = useTheme(
+    useViewer((state) => state.settings.settings),
+    look,
+  );
+  const palette = useMemo(
+    () =>
+      theme.id.startsWith('viewer-')
+        ? undefined
+        : {
+            space: theme.shell.space,
+            surface: theme.shell.surface,
+            ink: theme.shell.ink,
+            accent: theme.shell.accent,
+          },
+    [theme],
+  );
+  const preferences = useMemo(
+    () => effectiveUI(general, space.overrides).space,
+    [general, space.overrides],
+  );
   const [size, setSize] = useState({ width: 992, height: 692 });
   const [api, setApi] = useState<PluridApi | null>(null);
   useEffect(() => {
@@ -216,8 +240,8 @@ export function WorkspaceSurface({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const storage = useMemo(() => storageAdapter(space.id), [space.id, space.epoch]);
   const configuration = useMemo(
-    () => surfaceConfiguration({ look, size, preferences, color: space.spaceColor }),
-    [look, size, preferences, space.spaceColor],
+    () => surfaceConfiguration({ look, size, preferences, color: space.spaceColor, palette }),
+    [look, size, preferences, space.spaceColor, palette],
   );
   useEffect(() => {
     if (!api) return;

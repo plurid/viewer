@@ -30,6 +30,9 @@ export const workspaceSettingPaths: readonly (readonly string[])[] = [
   ['settings', 'tour'],
   ['settings', 'tiling'],
   ['settings', 'layouts'],
+  ['settings', 'profiles'],
+  // which theme shows is presentation; the themes themselves are edited in Settings
+  ['settings', 'theme'],
 ];
 /** Within those, the person's own safeguards: Trash confirmation changes only in Settings. */
 export const settingsOnlyPaths: readonly (readonly string[])[] = [
@@ -52,6 +55,7 @@ export const categories = [
   'Previews',
   'Editor',
   'Space',
+  'Themes',
   'Search',
   'Permissions',
   'Actions',

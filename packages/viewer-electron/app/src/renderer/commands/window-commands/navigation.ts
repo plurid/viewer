@@ -80,6 +80,15 @@ export function navigationCommands({
       run: () => actions.palette('commands'),
     },
     {
+      id: 'palette-settings',
+      label: 'Search settings…',
+      group: 'App',
+      icon: 'settings',
+      aliases: ['settings', 'preferences', 'options', 'configure'],
+      when: windowScope,
+      run: () => actions.palette('settings'),
+    },
+    {
       id: 'find-file',
       label: 'Find file…',
       group: 'Navigation',

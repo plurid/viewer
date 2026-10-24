@@ -114,7 +114,7 @@ describe('the commands', () => {
     expect(getState().saved.ui.space.grid).toBe(false);
   });
   it("choose the workspace's background", async () => {
-    expect(find('workspace-background').label).toBe('Workspace background…');
+    expect(find('workspace-background').label).toBe('Workspace look…');
     await find('workspace-background').run(context);
     expect(actions.workspaceDialog).toHaveBeenCalledWith('background');
   });

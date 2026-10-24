@@ -33,6 +33,11 @@
   --selection-muted: #c4d7e3;
   --danger: #ff9da0;
   --field: #292d34;
+  --syntax-comment: #9fabb9;
+  --syntax-string: #b7c79e;
+  --syntax-keyword: #c9b4d6;
+  --syntax-number: #dfb891;
+  --syntax-function: #82b3cf;
   --shadow: 0 18px 56px #0005;
   color: var(--ink);
   background: var(--space);
@@ -51,6 +56,11 @@
   --selection-muted: #546071;
   --danger: #a62f3e;
   --field: #f4f6f8;
+  --syntax-comment: #637084;
+  --syntax-string: #386731;
+  --syntax-keyword: #755183;
+  --syntax-number: #805d32;
+  --syntax-function: #337396;
   --shadow: 0 18px 56px #20304025;
   color-scheme: light;
 }

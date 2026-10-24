@@ -13,7 +13,9 @@ export function CommandResults({
   label = 'Search actions',
   empty = 'No matching actions',
   recent = [],
+  headings,
   leading,
+  onEmptyBackspace,
 }: {
   query: string;
   onQuery(query: string): void;
@@ -24,7 +26,11 @@ export function CommandResults({
   label?: string;
   empty?: string;
   recent?: readonly string[];
+  /** Section headings, by the id of the row each comes before. */
+  headings?: ReadonlyMap<string, string>;
   leading?: React.ReactNode;
+  /** Backspace with nothing typed: out of a palette's mode. */
+  onEmptyBackspace?(): void;
 }) {
   const [activeID, setActiveID] = useState('');
   const [keyboardScroll, setKeyboardScroll] = useState(0);
@@ -68,6 +74,9 @@ export function CommandResults({
           const target = rows[next];
           if (target) setActiveID(target.id);
           setKeyboardScroll((value) => value + 1);
+        } else if (event.key === 'Backspace' && !query && onEmptyBackspace) {
+          event.preventDefault();
+          onEmptyBackspace();
         } else if (event.key === 'Enter' && rows[index]) {
           event.preventDefault();
           event.stopPropagation();
@@ -118,22 +127,37 @@ export function CommandResults({
               rowIndex > 0 &&
               recent.includes(rows[rowIndex - 1]?.id ?? '') &&
               !recent.includes(row.id) && <div className="command-divider" />}
+            {headings?.get(row.id) && <div className="command-group">{headings.get(row.id)}</div>}
             <button
               type="button"
               tabIndex={-1}
               id={`${id}-${rowIndex}`}
               role="option"
               aria-selected={index === rowIndex}
-              className="command-result"
+              className={row.setting ? 'command-result is-setting' : 'command-result'}
               onPointerMove={() => setActiveID(row.id)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onSelect(row)}
             >
-              <Icon name={row.icon ?? 'file'} size={16} />
+              {/* a setting's switch shows whether it is on: the icon is the setting's */}
+              <Icon
+                name={typeof row.setting?.value === 'boolean' ? 'settings' : (row.icon ?? 'file')}
+                size={16}
+              />
               <span className="command-result-text">
                 <span>{row.label}</span>
                 {row.detail && <small>{row.detail}</small>}
               </span>
+              {typeof row.setting?.value === 'boolean' ? (
+                <span
+                  className="command-switch"
+                  data-on={String(row.setting.value)}
+                  role="img"
+                  aria-label={row.setting.value ? 'On' : 'Off'}
+                />
+              ) : (
+                row.setting?.value && <span className="command-value">{row.setting.value}</span>
+              )}
               {row.shortcut && <kbd>{row.shortcut}</kbd>}
             </button>
           </div>

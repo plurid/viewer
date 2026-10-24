@@ -1,3 +1,4 @@
+import { overridablePaths } from '../domain/overrides';
 import { tileLayouts } from '../domain/tiling';
 import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
@@ -95,6 +96,12 @@ const savedStateSchema = z
           arrangement: z.record(z.string().max(300), z.string().max(4 * 1024 * 1024)),
           collections: z.array(collectionSchema).max(200).optional(),
           basket: z.array(basketItemSchema).max(10000).optional(),
+          overrides: z
+            .partialRecord(
+              z.enum(overridablePaths),
+              z.union([z.boolean(), z.number().min(0).max(100)]),
+            )
+            .optional(),
           tiling: z
             .object({
               panes: z.array(id).min(1).max(30),
@@ -128,6 +135,13 @@ const savedStateSchema = z
     activeWorkspace: id,
     favorites: z.array(z.object({ name: z.string().max(200), path: localPath })).max(200),
     recents: z.array(localPath).max(50),
+    profile: z
+      .object({
+        id: z.string().max(100),
+        previous: z.record(z.string().max(200), z.json()),
+      })
+      .strict()
+      .optional(),
     visits: z
       .record(
         localPath,

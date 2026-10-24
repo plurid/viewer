@@ -1,3 +1,4 @@
+import { useTheme } from '../ui/theme';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import '@xterm/xterm/css/xterm.css';
@@ -23,6 +24,10 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
   const settings = useViewer((state) => state.settings.settings.terminals);
   const font = useViewer((state) => state.settings.settings.terminalFont);
   const look = useViewer((state) => state.saved.look);
+  const palette = useTheme(
+    useViewer((state) => state.settings.settings),
+    look,
+  ).terminal;
   // Find lives in the plane's header (2026-10-23): a row of its own wasted the plane's top, and
   // opening it grew that row and shifted the terminal. With headers off it floats over the top.
   const header = usePreviewControlsSlot(pane.id);
@@ -99,11 +104,11 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
     const session = live.current;
     if (!session) return;
     session.terminal.options.scrollback = settings.scrollback;
-    session.terminal.options.theme = terminalTheme(look);
+    session.terminal.options.theme = terminalTheme(look, palette);
     Object.assign(session.terminal.options, terminalFontOptions(font));
     // another font or spacing changes the cells: the rows and columns follow
     session.fit.fit();
-  }, [ready, settings.scrollback, look, font]);
+  }, [ready, settings.scrollback, look, font, palette]);
   useEffect(() => {
     const session = live.current;
     if (!session || !ready) return;
@@ -177,7 +182,7 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
       className="terminal-plane"
       data-terminal-id={pane.id}
       // the whole plane in the terminal's own background: no frame around it, no bar below
-      style={{ '--terminal-background': terminalTheme(look).background } as CSSProperties}
+      style={{ '--terminal-background': terminalTheme(look, palette).background } as CSSProperties}
       onPointerDownCapture={() => setActivePane(pane.id)}
       onKeyDown={(event) => event.stopPropagation()}
       onWheel={(event) => event.stopPropagation()}

@@ -354,38 +354,24 @@
 }
 .token.comment,
 .token.prolog {
-  color: var(--subtle);
+  color: var(--syntax-comment, var(--subtle));
 }
+/* the code colours are the theme's (2026-10-23): domain/themes.ts */
 .token.string,
 .token.attr-value {
-  color: #b7c79e;
+  color: var(--syntax-string);
 }
 .token.keyword,
 .token.boolean {
-  color: #c9b4d6;
+  color: var(--syntax-keyword);
 }
 .token.number,
 .token.constant {
-  color: #dfb891;
+  color: var(--syntax-number);
 }
 .token.function,
 .token.tag {
-  color: var(--accent);
-}
-:root[data-look='light'] .token.string,
-:root[data-look='light'] .token.attr-value,
-:root[data-look='light'] .json-string {
-  color: #386731;
-}
-:root[data-look='light'] .token.keyword,
-:root[data-look='light'] .token.boolean {
-  color: #755183;
-}
-:root[data-look='light'] .token.number,
-:root[data-look='light'] .token.constant,
-:root[data-look='light'] .json-number,
-:root[data-look='light'] .json-boolean {
-  color: #805d32;
+  color: var(--syntax-function, var(--accent));
 }
 .json-scroll {
   padding: 18px;
@@ -414,11 +400,11 @@
   margin-left: 22px;
 }
 .json-string {
-  color: #b7c79e;
+  color: var(--syntax-string);
 }
 .json-number,
 .json-boolean {
-  color: #dfb891;
+  color: var(--syntax-number);
 }
 .markdown {
   padding: 24px 32px;

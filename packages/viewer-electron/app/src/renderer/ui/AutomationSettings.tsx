@@ -1,3 +1,5 @@
+import { KeyCapture } from './settings/KeyCapture';
+import { shortcutOwner } from '../../domain/shortcuts';
 import { useState } from 'react';
 import type { SettingsPatch, SettingsSnapshot } from '../../domain/services';
 import type { CustomAction, TerminalProfile } from '../../domain/automation';
@@ -258,10 +260,12 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
           </label>
           <label className="settings-row">
             <span>Shortcut</span>
-            <Field
+            <KeyCapture
               label="Command shortcut"
+              kind="shortcut"
               value={action.shortcut}
-              save={(shortcut) => patch(action.id, { shortcut })}
+              owner={(value) => shortcutOwner(snapshot.settings, value, 'custom.' + action.id)}
+              onChange={(shortcut) => patch(action.id, { shortcut })}
             />
           </label>
           <label className="settings-row">

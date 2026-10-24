@@ -4,6 +4,7 @@ import { preferencesSchema } from './preferences-schema';
 import { keymapSchema } from './keymap-schema';
 import { sequencesOnly } from '../domain/automation';
 import { tileLayouts } from '../domain/tiling';
+import { shellTokens, syntaxTokens, terminalTokens } from '../domain/themes';
 import { settingCatalog, workspaceMayChange } from '../domain/setting-catalog';
 import path from 'node:path';
 import { z } from 'zod';
@@ -47,6 +48,44 @@ const templatePath = z
   .string()
   .max(4096)
   .refine((value) => !value.includes('\0'));
+/** A colour as themes keep it: `#rgb`, `#rrggbb` or `#rrggbbaa`. */
+const themeColorSchema = z.string().regex(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+/** A colour theme (2026-10-23): the shell's, the code's and the terminal's colours. */
+export const themeSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(/^[a-z0-9-]+$/)
+      .max(100),
+    name: z.string().min(1).max(100),
+    look: z.enum(['dark', 'light']),
+    shell: z.partialRecord(z.enum(shellTokens), themeColorSchema),
+    syntax: z.partialRecord(z.enum(syntaxTokens), themeColorSchema),
+    terminal: z.partialRecord(z.enum(terminalTokens), themeColorSchema),
+  })
+  .strict();
+/** A setting profile (2026-10-23): settings the workspace may change, and their values. */
+export const profileSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(/^[a-z0-9-]+$/)
+      .max(100),
+    name: z.string().min(1).max(100),
+    values: z
+      .record(
+        z
+          .string()
+          .max(200)
+          .refine(
+            (path) => workspaceMayChange(path.split('.')),
+            'A profile holds only settings the workspace window changes itself.',
+          ),
+        z.json(),
+      )
+      .refine((values) => Object.keys(values).length <= 100),
+  })
+  .strict();
 /** A layout template (2026-10-23): planes by kind and folder, and their tiling. */
 export const layoutTemplateSchema = z
   .object({
@@ -248,6 +287,26 @@ export const settingsSchema = z
       })
       .strict()
       .default({ splitWith: 'same', defaultLayout: 'even-horizontal' }),
+    themes: z
+      .array(themeSchema)
+      .max(30)
+      .refine(
+        (themes) => new Set(themes.map((item) => item.id)).size === themes.length,
+        'Theme IDs must be unique.',
+      )
+      .default([]),
+    theme: z
+      .object({ dark: z.string().max(100).default(''), light: z.string().max(100).default('') })
+      .strict()
+      .default({ dark: '', light: '' }),
+    profiles: z
+      .array(profileSchema)
+      .max(30)
+      .refine(
+        (profiles) => new Set(profiles.map((item) => item.id)).size === profiles.length,
+        'Profile IDs must be unique.',
+      )
+      .default([]),
     layouts: z
       .array(layoutTemplateSchema)
       .max(50)

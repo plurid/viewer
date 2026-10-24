@@ -13,3 +13,9 @@ it('marks information as such, and a problem as one', () => {
   report(new Error('The folder is gone.'));
   expect(getState()).toMatchObject({ notice: 'The folder is gone.', noticeKind: 'error' });
 });
+it('reads a validation failure in words, not as its JSON', async () => {
+  const { errorMessage } = await import('../src/domain/errors');
+  const { z } = await import('zod');
+  const result = z.object({ keymap: z.object({ leader: z.string() }) }).safeParse({ keymap: {} });
+  expect(errorMessage(result.error)).toBe('keymap.leader: expected string, received undefined');
+});

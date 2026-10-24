@@ -1,3 +1,4 @@
+import type { WorkspaceOverrides } from './overrides';
 import type { Tiling } from './tiling';
 import type { TextBuffer, TextBufferSummary, TextOpening, TextVersion } from './text-documents';
 import type { EvidenceNavigation, SourceVersion, InspectionResult } from './inspection';
@@ -168,6 +169,8 @@ export interface Workspace {
   basket?: BasketItem[];
   /** This workspace's space colour, `#rrggbb`, over the general one (2026-10-23). */
   spaceColor?: string;
+  /** This workspace's own chrome and space settings over the general ones (2026-10-23). */
+  overrides?: WorkspaceOverrides;
   /** Planes tiled as tmux's panes (2026-10-23): kept in their layout as the window resizes. */
   tiling?: Tiling;
 }
@@ -181,6 +184,8 @@ export interface SavedState {
   activeWorkspace: string;
   favorites: { name: string; path: string }[];
   recents: string[];
+  /** The profile applied, and the values it replaced, to leave it again (2026-10-23). */
+  profile?: { id: string; previous: Record<string, JSONValue> };
   /** Folders' visits for `z` in the palette (2026-10-23): how many, and the last. */
   visits?: Record<string, { count: number; last: number }>;
   look: 'dark' | 'light';

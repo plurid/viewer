@@ -1,3 +1,4 @@
+import { builtInProfileIDs } from './profiles';
 import type { CustomAction } from './automation';
 import { forbiddenTrashCommands } from './trash';
 import { settingCatalog, workspaceMayChange } from './setting-catalog';
@@ -65,6 +66,8 @@ const agentCommands = new Set([
   'plane-notes',
   'plane-sidebar',
   'toggle-sidebar',
+  'focus-mode',
+  'profile-restore',
   'wrap-file-names',
   'reset-list-columns',
   'reset-folder-view',
@@ -110,6 +113,12 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
     );
   if (command === 'parent-plane' || command === 'view-open-plane')
     throw new Error('Use propose_focus_plane for an explicitly authorized destination plane.');
+  // a built-in profile changes only the view; a person's own may hold any presentation setting
+  if (command.startsWith('profile.')) {
+    if (!builtInProfileIDs.has(command.slice('profile.'.length)))
+      throw new Error('Agents may propose only the built-in profiles: Focus, Present and Full.');
+    return command;
+  }
   if (command.startsWith('setting.')) {
     agentSettingCommand(command);
     return command;
@@ -178,7 +187,9 @@ export function agentDispatchRefusal(
  * opens Settings, for the person; anything else is the person's, as configuration is.
  */
 function agentSettingCommand(command: string): void {
-  const [path = '', value] = command.slice('setting.'.length).split('=');
+  const [named = '', value] = command.slice('setting.'.length).split('=');
+  // a workspace's own is as the general setting is, for an agent
+  const path = named.replace(/@workspace$/, '');
   const definition = settingCatalog.find((item) => item.path === path);
   if (!definition) throw new Error(`There is no setting “${path}”.`);
   if (!['boolean', 'choice'].includes(definition.kind) || value === 'custom')

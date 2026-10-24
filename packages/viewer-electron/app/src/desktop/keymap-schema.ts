@@ -23,19 +23,26 @@ const binding = (depth: number): z.ZodType<KeymapBinding> =>
 /** `settings.keymap` (2026-10-23): the prefix, the leader and their bindings. */
 export const keymapSchema = z
   .object({
+    // each field defaults: `"keymap": { "prefix": "Ctrl+A" }` alone is a whole keymap, as one line
+    // of .tmux.conf is (2026-10-23)
     prefix: z
       .string()
       .max(80)
-      .refine((value) => !value || validShortcut(value), 'The prefix needs ⌃ or ⌘ and one key.'),
+      .refine((value) => !value || validShortcut(value), 'The prefix needs ⌃ or ⌘ and one key.')
+      .default(defaultKeymap.prefix),
     leader: z
       .string()
       .max(40)
-      .refine((value) => !value || validKeymapKey(value), 'Not a key.'),
-    inTerminals: z.boolean(),
-    inTextFields: z.boolean(),
-    whichKey: z.boolean(),
-    timeout: z.number().int().min(300).max(10000),
-    bindings: z.record(key, binding(1)).refine((map) => Object.keys(map).length <= 200),
+      .refine((value) => !value || validKeymapKey(value), 'Not a key.')
+      .default(defaultKeymap.leader),
+    inTerminals: z.boolean().default(defaultKeymap.inTerminals),
+    inTextFields: z.boolean().default(defaultKeymap.inTextFields),
+    whichKey: z.boolean().default(defaultKeymap.whichKey),
+    timeout: z.number().int().min(300).max(10000).default(defaultKeymap.timeout),
+    bindings: z
+      .record(key, binding(1))
+      .refine((map) => Object.keys(map).length <= 200)
+      .default(() => structuredClone(defaultKeymap.bindings) as Record<string, KeymapBinding>),
   })
   .strict()
-  .default(defaultKeymap);
+  .default(() => structuredClone(defaultKeymap));

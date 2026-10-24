@@ -55,6 +55,7 @@ import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
 import { useTitlebar } from './ui/titlebar';
+import { useTheme, useThemeVariables } from './ui/theme';
 import { useKeySequences } from './keys/sequences';
 import { recordCommand, useMacroRecording } from './keys/macro';
 import type { CustomAction } from '../domain/automation';
@@ -63,11 +64,12 @@ import { PlaneHints } from './keys/PlaneHints';
 import { WorkspaceBackgroundDialog } from './ui/WorkspaceBackgroundDialog';
 import { ViewsDialog } from './ui/ViewsDialog';
 import { captureCurrentLayout, saveLayoutTemplate } from './commands/window-commands/templates';
+import { captureProfile, saveProfile } from './commands/window-commands/profiles';
 import { openTerminalFind } from './terminals/find';
 import { CommandsContext, useCommands, useCommandSource } from './commands/context';
 import { CommandRegistry, type CommandContext } from './commands/registry';
 import { windowCommands } from './commands/window';
-import { CommandPalette } from './commands/CommandPalette';
+import { CommandPalette, type PaletteMode } from './commands/CommandPalette';
 import { editable, textEditFor } from './commands/editing';
 import { routeToEditor, subscribeEditingPlanes } from './editing/planes';
 import { recoverBuffers } from './editing/unsaved';
@@ -136,10 +138,11 @@ function AppWindow() {
   const [macroDraft, setMacroDraft] = useState<string[] | null>(null);
   const [viewDialog, setViewDialog] = useState<'save' | 'manage' | null>(null);
   const [templateDialog, setTemplateDialog] = useState(false);
+  const [profileDialog, setProfileDialog] = useState(false);
   const recordingMacro = useMacroRecording();
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const [palette, setPalette] = useState<'commands' | 'files' | 'workspaces' | null>(null);
+  const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [goTo, setGoTo] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [tagging, setTagging] = useState(false);
@@ -164,7 +167,12 @@ function AppWindow() {
   const initialOpenHandled = useRef(false);
   const saved = useViewer((state) => state.saved);
   // ⌥⌘T hides the title bar; it comes back at the window's top edge (ui/titlebar.ts)
-  const titlebar = useTitlebar(saved.ui.titlebar.visible);
+  const titlebarOverride = useViewer(
+    (state) => activeWorkspace(state).overrides?.['ui.titlebar.visible'],
+  );
+  const titlebar = useTitlebar(
+    typeof titlebarOverride === 'boolean' ? titlebarOverride : saved.ui.titlebar.visible,
+  );
   const activePane = useViewer((state) => state.activePane);
   const space = useViewer(activeWorkspace);
   const bootstrap = useViewer((state) => state.bootstrap);
@@ -278,6 +286,7 @@ function AppWindow() {
           saveMacro: setMacroDraft,
           viewDialog: setViewDialog,
           templateDialog: () => setTemplateDialog(true),
+          profileDialog: () => setProfileDialog(true),
         }),
       ],
       valid: (invocation) =>
@@ -572,6 +581,13 @@ function AppWindow() {
       for (const path of bootstrap.openPaths) void controller.openPath(path).catch(report);
     }
   }, [ready, bootstrap.openPaths, controller]);
+  // the theme's colours as the page's variables (2026-10-23)
+  useThemeVariables(
+    useTheme(
+      useViewer((state) => state.settings.settings),
+      saved.look,
+    ),
+  );
   useEffect(() => {
     document.documentElement.dataset.look = saved.look;
     document.documentElement.style.colorScheme = saved.look;
@@ -870,6 +886,21 @@ function AppWindow() {
               if (!name) throw new Error('Enter a name for the view.');
               controller.saveBookmark(name);
               setViewDialog(null);
+            }}
+          />
+        )}
+        {profileDialog && (
+          <NameDialog
+            title="Save profile as"
+            label="Profile name"
+            maxLength={100}
+            action="Save"
+            onClose={() => setProfileDialog(false)}
+            onSubmit={async (name) => {
+              name = name.trim();
+              if (!name) throw new Error('Enter a name for the profile.');
+              await saveProfile(captureProfile(name));
+              setProfileDialog(false);
             }}
           />
         )}

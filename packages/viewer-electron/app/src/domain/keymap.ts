@@ -223,7 +223,11 @@ const glyphs: Readonly<Record<string, string>> = {
 export function keyGlyphs(name: string): string {
   const parts = keyParts(name);
   const base = parts.base;
-  const modifiers = parts.modifiers.map((part) => glyphs[part] ?? part);
+  // the Mac's order, whatever order they were written in: ⌃⌥⇧⌘
+  const order = ['Ctrl', 'Alt', 'Shift', 'Cmd'];
+  const modifiers = [...parts.modifiers]
+    .sort((a, b) => order.indexOf(a) - order.indexOf(b))
+    .map((part) => glyphs[part] ?? part);
   // a letter after a modifier reads as Finder's menus show it: ⌃B
   const key = glyphs[base] ?? (modifiers.length && base.length === 1 ? base.toUpperCase() : base);
   return modifiers.join('') + key;

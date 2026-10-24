@@ -1,4 +1,5 @@
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
+import { overridable, type WorkspaceOverrides } from '../../domain/overrides';
 import type { Tiling } from '../../domain/tiling';
 import {
   CURRENT_STATE_VERSION,
@@ -152,6 +153,24 @@ export async function newWorkspace(name: string): Promise<void> {
 }
 export function renameWorkspace(name: string): void {
   changeWorkspace((space) => ({ ...space, name }));
+}
+/** A setting of the active workspace's own (2026-10-23); undefined goes back to the general one. */
+export function setWorkspaceOverride(path: string, value: boolean | number | undefined): void {
+  if (!overridable(path)) return;
+  changeWorkspace((space) => {
+    const overrides: WorkspaceOverrides = { ...space.overrides };
+    if (value === undefined) delete overrides[path];
+    else overrides[path] = value;
+    const { overrides: _previous, ...rest } = space;
+    return Object.keys(overrides).length ? { ...rest, overrides } : rest;
+  });
+}
+/** Back to the general settings in the active workspace. */
+export function clearWorkspaceOverrides(): void {
+  changeWorkspace((space) => {
+    const { overrides: _previous, ...rest } = space;
+    return rest;
+  });
 }
 /** The active workspace's tiling (2026-10-23); undefined lets its planes go where they are. */
 export function setTiling(tiling: Tiling | undefined): void {

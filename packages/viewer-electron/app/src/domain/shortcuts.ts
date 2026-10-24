@@ -38,6 +38,8 @@ export const defaultShortcuts: Record<string, string> = {
   'edit-file': 'Cmd+E',
   'save-file': 'Cmd+S',
   'save-file-as': 'Cmd+Shift+S',
+  // the chrome away and back (2026-10-23); not ⌃⌘F, the Mac's full screen
+  'focus-mode': 'Cmd+Shift+F',
   // the space's views (2026-10-23): ⌥⌘ goes to one, ⌃⌥⌘ saves the camera as one
   ...Object.fromEntries(
     [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((slot) => [
@@ -170,4 +172,46 @@ export function accelerator(value: string): string | undefined {
         })[part] || part.toUpperCase(),
     )
     .join('+');
+}
+/** A shortcut's command in words: `undo-file` → "Undo file", `bookmark.3` → "Go to view 3". */
+export function shortcutLabel(id: string): string {
+  const view = /^bookmark\.(save\.)?(\d)$/.exec(id);
+  if (view) return view[1] ? `Save view as ${view[2]}` : `Go to view ${view[2]}`;
+  const words = shortcutCommandID(id).replace(/[-.]/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+/**
+ * What already answers a chord, other than `except` (2026-10-23): a built-in or menu shortcut,
+ * a recipe's, a custom action's, or the prefix. Settings says so rather than saving a conflict.
+ */
+export function shortcutOwner(
+  settings: ApplicationSettings,
+  value: string,
+  except: string,
+): string | undefined {
+  const wanted = shortcutKey(value);
+  const owners: [string, string, string][] = [
+    ...Object.entries({ ...defaultShortcuts, ...menuShortcuts, ...settings.shortcuts }).map(
+      ([id, shortcut]): [string, string, string] => [id, shortcut, shortcutLabel(id)],
+    ),
+    ...Object.entries(alternateShortcuts).map(([id, shortcut]): [string, string, string] => [
+      `${id}:alternate`,
+      shortcut,
+      shortcutLabel(id),
+    ]),
+    ...settings.recipes.map((recipe): [string, string, string] => [
+      `recipe.${recipe.id}`,
+      recipe.shortcut ?? '',
+      recipe.name,
+    ]),
+    ...settings.customActions.map((action): [string, string, string] => [
+      `custom.${action.id}`,
+      action.shortcut,
+      action.name,
+    ]),
+    ['keymap-prefix', settings.keymap.prefix, 'Prefix key'],
+  ];
+  return owners.find(
+    ([id, shortcut]) => id !== except && !!shortcut && shortcutKey(shortcut) === wanted,
+  )?.[2];
 }

@@ -22,8 +22,11 @@ import { SearchSettings } from './settings/SearchSettings';
 import { RecipeSettings } from './settings/RecipeSettings';
 import { AgentSettings } from './settings/AgentSettings';
 import { ShortcutSettings } from './settings/ShortcutSettings';
+import { ThemeSettings } from './settings/ThemeSettings';
+import { useTheme, useThemeVariables } from './theme';
 import { settingsDiscovery } from './settings/discovery';
 
+const noThemes = { themes: [], theme: { dark: '', light: '' } };
 export function SettingsWindow() {
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [category, setCategory] = useState('Browsing');
@@ -86,6 +89,8 @@ export function SettingsWindow() {
     // the rows of the shown category, once drawn
   }, [focused, category, snapshot]);
   const look = snapshot?.look;
+  // the theme's colours here too (2026-10-23)
+  useThemeVariables(useTheme(snapshot?.settings ?? noThemes, look ?? 'dark'));
   useEffect(() => {
     if (look) {
       document.documentElement.dataset.look = look;
@@ -201,6 +206,7 @@ export function SettingsWindow() {
         {page === 'Actions' && <RecipeSettings editor={editor} />}
         {page === 'Agents' && <AgentSettings editor={editor} />}
         {page === 'Shortcuts' && <ShortcutSettings editor={editor} />}
+        {page === 'Themes' && <ThemeSettings editor={editor} />}
         {!query && ['Browsing', 'Previews', 'Editor', 'Terminals', 'Space'].includes(category) && (
           <button
             className="settings-reset"

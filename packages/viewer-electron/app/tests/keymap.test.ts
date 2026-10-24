@@ -126,3 +126,11 @@ describe('a key as a Mac shows it', () => {
     expect(keyGlyphs('Left')).toBe('←');
   });
 });
+
+describe('a keymap in part', () => {
+  it('is completed from the defaults, as one line of .tmux.conf sets one thing', () => {
+    const parsed = keymapSchema.parse({ prefix: 'Ctrl+A' });
+    expect(parsed).toEqual({ ...defaultKeymap, prefix: 'Ctrl+A' });
+    expect(keymapSchema.parse(undefined)).toEqual(defaultKeymap);
+  });
+});

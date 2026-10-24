@@ -3010,6 +3010,120 @@ async function paletteCommand(label: string): Promise<void> {
  * replaced in the Trash and back with Undo, and a scratch plane's text kept in the profile as it is
  * typed. Save As uses the native save panel, which this harness does not drive.
  */
+/** Configuration and look (2026-10-23): Focus mode, a workspace's own setting and a theme, in the
+ * packaged app. */
+async function verifyLook(): Promise<void> {
+  const blur = () =>
+    evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  const chrome = () =>
+    evaluate<{ toolbar: boolean; minimap: boolean; titlebar: string }>(`({
+      toolbar: !!document.querySelector('[data-plurid-entity="PluridToolbar"]'),
+      minimap: !!document.querySelector('[data-plurid-minimap]'),
+      titlebar: document.querySelector('.app-shell')?.dataset.titlebar ?? '',
+    })`);
+  await blur();
+  assert.deepEqual(await chrome(), { toolbar: true, minimap: true, titlebar: 'shown' });
+  // ⇧⌘F: the chrome away, and back
+  await key('f', 'KeyF', 12);
+  await until(
+    chrome,
+    (now) => !now.toolbar && !now.minimap && now.titlebar === 'hidden',
+    'Focus mode hides the chrome',
+  );
+  await key('f', 'KeyF', 12);
+  await until(
+    chrome,
+    (now) => now.toolbar && now.minimap && now.titlebar === 'shown',
+    'Focus mode left',
+  );
+  // this workspace's own: no minimap here, the general setting as it was
+  await paletteCommand('This workspace: Hide minimap');
+  await until(chrome, (now) => !now.minimap, 'the minimap hidden in this workspace');
+  assert.equal(
+    await evaluate<boolean>('window.viewer.settingsGet().then((value) => value.ui.space.minimap)'),
+    true,
+  );
+  await paletteCommand('Use the general settings in this workspace');
+  await until(chrome, (now) => now.minimap, 'the general settings again');
+  // settings apart in the palette: after the commands, a few, with their switches; `,` for them alone
+  await click('[aria-label="Commands (⌘K)"]');
+  await until(
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    (present) => present,
+    'focused command palette',
+  );
+  await command('Input.insertText', { text: 'grid' });
+  const sections = await until(
+    () =>
+      evaluate<{ headings: string[]; switches: number; first: string }>(`({
+        headings: [...document.querySelectorAll('.command-palette .command-group')].map((item) => item.textContent),
+        switches: document.querySelectorAll('.command-palette .command-switch').length,
+        first: document.querySelector('.command-result')?.textContent || '',
+      })`),
+    (value) => value.headings.includes('Settings') && value.switches > 0,
+    'a Settings section for grid',
+  );
+  assert.match(sections.first, /grid/i);
+  await snapshot('palette-settings-section.png');
+  await evaluate(`(() => {
+    const input = document.querySelector('[aria-label="Search commands"]');
+    input.select();
+  })()`);
+  await command('Input.insertText', { text: ',' });
+  await until(
+    () => evaluate<number>("document.querySelectorAll('.command-palette .is-setting').length"),
+    (count) => count > 30,
+    'every setting after a comma',
+  );
+  await snapshot('palette-settings-search.png');
+  // a setting's choices are one row with its value; choosing it lists them
+  await command('Input.insertText', { text: 'appearance' });
+  await until(
+    () =>
+      evaluate<{ label: string; value: string }>(`({
+        label: document.querySelector('.command-result[aria-selected="true"] .command-result-text > span')?.textContent || '',
+        value: document.querySelector('.command-result[aria-selected="true"] .command-value')?.textContent || '',
+      })`),
+    (row) => row.label === 'Appearance' && !!row.value,
+    'Appearance as one row with its value',
+  );
+  await key('Enter', 'Enter');
+  await until(
+    () =>
+      evaluate<string[]>(
+        "[...document.querySelectorAll('.command-palette .command-result-text > span')].map((item) => item.textContent)",
+      ),
+    (labels) => labels.length === 3 && labels.every((label) => label?.startsWith('Appearance: ')),
+    'the choices of Appearance',
+  );
+  await snapshot('palette-settings-choices.png');
+  await key('Escape', 'Escape');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(\'[aria-label="Search commands"]\')'),
+    (present) => present,
+    'back to the commands',
+  );
+  await key('Escape', 'Escape');
+  // a theme: its accent is the page's
+  await patchInSettings(
+    `[{path:'settings.themes',value:[{id:'smoke',name:'Smoke',look:'dark',shell:{accent:'#ff8800'},syntax:{},terminal:{}}]},{path:'settings.theme',value:{dark:'smoke',light:''}}]`,
+  );
+  await tab('Themes');
+  await snapshot('themes-settings.png');
+  await tab('Shortcuts');
+  await snapshot('shortcuts-settings.png');
+  await click('dialog [aria-label="Close"]');
+  await until(
+    () =>
+      evaluate<string>(
+        "getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()",
+      ),
+    (accent) => accent === '#ff8800',
+    "the theme's accent on the page",
+  );
+  console.log("Look: Focus mode and back, a workspace's own minimap, and a theme's colours.");
+}
 /** The space (2026-10-23): views flown back to, tmux-style tiling, Explode folder and layout
  * templates, in the packaged app. */
 async function verifySpace(): Promise<void> {
@@ -3215,8 +3329,39 @@ async function verifyKeys(): Promise<void> {
       sequences.some((commands) => commands.join() === 'toggle-sidebar,toggle-sidebar'),
     'the recorded macro saved as a sequence',
   );
+  // Settings → Shortcuts: the prefix is recorded by pressing it; then ⌃A starts a sequence
+  await tab('Shortcuts');
+  await settingsEvaluate(`document.querySelector('[aria-label="Prefix"]').click()`);
+  await until(
+    () => settingsEvaluate<string>(`document.querySelector('[aria-label="Prefix"]').textContent`),
+    (text) => text.includes('Press'),
+    'the prefix listening',
+  );
+  for (const type of ['keyDown', 'keyUp'] as const)
+    await settingsCommand('Input.dispatchKeyEvent', {
+      type,
+      key: 'a',
+      code: 'KeyA',
+      modifiers: 2,
+      windowsVirtualKeyCode: 65,
+    });
+  await until(
+    () =>
+      evaluate<string>('window.viewer.settingsGet().then((value) => value.settings.keymap.prefix)'),
+    (prefix) => prefix === 'Ctrl+A',
+    'the prefix recorded as ⌃A',
+  );
+  await click('dialog [aria-label="Close"]');
+  await blur();
+  await key('a', 'KeyA', 2);
+  await until(
+    () => evaluate<string>('document.querySelector(".which-key-trail")?.textContent ?? ""'),
+    (trail) => trail === '⌃A',
+    'which-key after ⌃A',
+  );
+  await key('Escape', 'Escape');
   console.log(
-    'Keys: ⌃B and which-key, a terminal by ⌃B c, plane hints and the next plane, the calculator, and a recorded macro.',
+    'Keys: ⌃B and which-key, a terminal by ⌃B c, plane hints and the next plane, the calculator, a recorded macro, and the prefix set in Settings by pressing it.',
   );
 }
 async function verifyTextEditing(): Promise<void> {
@@ -3358,7 +3503,7 @@ async function verifyTextEditing(): Promise<void> {
   await key('t', 'KeyT', 5);
   await until(titlebarState, (state) => state === 'shown', 'title bar shown by ⌥⌘T');
   const ground = `getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]'))`;
-  await paletteCommand('Workspace background…');
+  await paletteCommand('Workspace look…');
   await until(
     () => evaluate<boolean>('!!document.querySelector("dialog [aria-label=\\"Ocean\\"]")'),
     Boolean,
@@ -5398,6 +5543,12 @@ async function verify(): Promise<void> {
     await verifyPublishedPlaneInput();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'look') {
+    await verifyLook();
+    await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }

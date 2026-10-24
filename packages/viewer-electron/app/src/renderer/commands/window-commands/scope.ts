@@ -5,7 +5,7 @@ import type { CommandContext } from '../registry';
 export interface WindowActions {
   workspace: WorkspaceController;
   ready: boolean;
-  palette(mode: 'commands' | 'files' | 'workspaces'): void;
+  palette(mode: 'commands' | 'files' | 'workspaces' | 'settings'): void;
   settings(): void;
   workspaceDialog(kind: 'new' | 'rename' | 'delete' | 'background'): void;
   renameShortcut(path: string, name: string): void;
@@ -23,6 +23,8 @@ export interface WindowActions {
   viewDialog(kind: 'save' | 'manage'): void;
   /** Names the planes in view as a layout template. */
   templateDialog(): void;
+  /** Names the current chrome and look as a setting profile. */
+  profileDialog(): void;
 }
 /** The state snapshot and scope predicates shared by every window command group. */
 export function windowScopes(actions: WindowActions) {

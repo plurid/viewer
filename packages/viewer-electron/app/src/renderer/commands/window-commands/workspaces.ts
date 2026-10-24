@@ -39,10 +39,10 @@ export function workspacesCommands({
     },
     {
       id: 'workspace-background',
-      label: 'Workspace background…',
+      label: 'Workspace look…',
       group: 'Workspaces',
       icon: 'sun',
-      aliases: ['background', 'colour', 'color', 'space colour', 'wb'],
+      aliases: ['background', 'colour', 'color', 'space colour', 'look', 'override', 'wb'],
       when: workspaceScope,
       run: () => actions.workspaceDialog('background'),
     },

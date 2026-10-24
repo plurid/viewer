@@ -532,8 +532,19 @@
   opacity: 0;
   cursor: pointer;
 }
-.workspace-background-dialog .color-field {
-  padding: 0 18px 18px;
+.workspace-look {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 18px;
+}
+.workspace-look-row {
+  display: contents;
+}
+.workspace-look-label {
+  color: var(--muted);
+  font-size: 12px;
 }
 /* a setting's command opened Settings here (2026-10-23) */
 .settings-row.is-focused {
@@ -552,7 +563,7 @@
 }
 .keymap-row {
   display: grid;
-  grid-template-columns: 110px minmax(80px, 140px) minmax(0, 1fr) auto;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
@@ -587,4 +598,68 @@
 }
 .key-capture small {
   color: var(--danger);
+}
+.shortcut-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.shortcut-reset {
+  height: 24px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.keymap-row .key-capture button {
+  min-width: 0;
+  width: 100%;
+}
+/* Themes (2026-10-23) */
+.theme-editor {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+}
+.theme-editor summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+.theme-editor summary small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.theme-group h3 {
+  margin: 14px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.theme-color {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px 110px;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+.theme-swatch {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.theme-swatch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }

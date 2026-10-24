@@ -164,6 +164,21 @@
   text-overflow: ellipsis;
   overflow: hidden;
 }
+/* the settings search's key, beside the folder (2026-10-23) */
+.palette-context > .palette-hint {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--muted);
+}
+.palette-context:has(.palette-hint) > span:first-child {
+  flex: 1 1 0;
+}
+.palette-hint kbd {
+  font: inherit;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
 .palette-context > button {
   flex-shrink: 0;
   font-size: 11px;
@@ -295,4 +310,49 @@
 }
 .plane-hint b {
   opacity: 0.5;
+}
+/* A setting's row (2026-10-23): a switch for on and off, its value for a number or a colour. */
+.command-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 26px;
+  height: 15px;
+  margin-left: auto;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  transition: background-color 120ms ease;
+}
+.command-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 120ms ease;
+}
+.command-switch[data-on='true'] {
+  background: var(--accent);
+}
+.command-switch[data-on='true']::after {
+  transform: translateX(11px);
+}
+.command-value {
+  flex-shrink: 0;
+  max-width: 120px;
+  margin-left: auto;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-result .command-switch + kbd,
+.command-result .command-value + kbd {
+  margin-left: 0;
 }

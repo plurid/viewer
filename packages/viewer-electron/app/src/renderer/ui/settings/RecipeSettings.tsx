@@ -1,3 +1,5 @@
+import { KeyCapture } from './KeyCapture';
+import { shortcutOwner } from '../../../domain/shortcuts';
 import type { ActionRecipe } from '../../../domain/services';
 import { builtInRecipes } from '../../../domain/services';
 import { Field } from '../SettingField';
@@ -131,11 +133,12 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
             </label>
             <label>
               Shortcut
-              <Field
+              <KeyCapture
                 label="Recipe shortcut"
+                kind="shortcut"
                 value={recipe.shortcut || ''}
-                placeholder="Cmd+Shift+R"
-                save={(shortcut) => recipePatch(recipe.id, { shortcut: shortcut || undefined })}
+                owner={(value) => shortcutOwner(settings, value, 'recipe.' + recipe.id)}
+                onChange={(shortcut) => recipePatch(recipe.id, { shortcut: shortcut || undefined })}
               />
             </label>
             <div className="settings-actions">

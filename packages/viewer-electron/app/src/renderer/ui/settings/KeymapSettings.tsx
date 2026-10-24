@@ -3,15 +3,15 @@ import {
   bindingRows,
   bindingsFrom,
   defaultKeymap,
-  keyGlyphs,
   type BindingRow,
   type Keymap,
 } from '../../../domain/keymap';
+import { defaultShortcuts, shortcutOwner } from '../../../domain/shortcuts';
+import { settingCatalog } from '../../../domain/setting-catalog';
 import { Field } from '../SettingField';
 import { KeyCapture } from './KeyCapture';
 import type { SettingsEditor } from './editor';
 
-const keysText = (keys: readonly string[]) => keys.join(' ');
 const keysFrom = (text: string) => text.trim().split(/\s+/).filter(Boolean);
 const commandsText = (commands: readonly string[]) => commands.join(', ');
 const commandsFrom = (text: string) =>
@@ -19,43 +19,47 @@ const commandsFrom = (text: string) =>
     .split(',')
     .map((command) => command.trim())
     .filter(Boolean);
-/**
- * PREFIX KEYS (2026-10-23): the prefix (tmux's ⌃B), an optional leader, and their bindings as rows:
- * the keys pressed in turn ("b s") and the command, or commands in order, they run.
- */
+/** Prefix keys (2026-10-23): the prefix, the leader, and their bindings, each recorded by pressing. */
 export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
   const { snapshot, patch } = editor;
-  const keymap = snapshot.settings.keymap;
+  const keymap: Keymap = { ...defaultKeymap, ...snapshot.settings.keymap };
   const rows = bindingRows(keymap.bindings);
   const [draft, setDraft] = useState({ keys: '', commands: '' });
+  // a whole keymap each time, whatever the snapshot held
   const save = (next: Partial<Keymap>) => patch('settings.keymap', { ...keymap, ...next });
   const saveRows = (next: BindingRow[]) => save({ bindings: bindingsFrom(next) });
+  // command IDs to choose from as one types
+  const commandIDs = [
+    ...new Set([
+      ...Object.keys(defaultShortcuts),
+      ...Object.values(defaultKeymap.bindings).flatMap((binding) =>
+        typeof binding === 'string' ? [binding] : [],
+      ),
+      ...settingCatalog.map((definition) => 'setting.' + definition.path),
+      ...snapshot.settings.customActions.map((action) => 'custom.' + action.id),
+      ...snapshot.settings.recipes.map((recipe) => 'recipe.' + recipe.id),
+    ]),
+  ].sort();
   return (
     <>
       <h2>Prefix keys</h2>
-      <p className="settings-note">
-        Press the prefix, then a key, as in tmux. A key runs a command, several in order, or waits
-        for the next key: a chord. The same keymap is <code>settings.keymap</code> in config.jsonc.
-      </p>
+      <datalist id="keymap-commands">
+        {commandIDs.map((id) => (
+          <option key={id} value={id} />
+        ))}
+      </datalist>
       <label className="settings-row">
-        <span>
-          Prefix
-          <small>As tmux's prefix: click, then press ⌃ or ⌘ with a key (⌃A, ⌃Space…).</small>
-        </span>
+        <span>Prefix</span>
         <KeyCapture
           label="Prefix"
-          kind="prefix"
+          kind="shortcut"
           value={keymap.prefix}
+          owner={(value) => shortcutOwner(snapshot.settings, value, 'keymap-prefix')}
           onChange={(prefix) => save({ prefix })}
         />
       </label>
       <label className="settings-row">
-        <span>
-          Leader
-          <small>
-            A key that starts a sequence outside text fields and terminals, such as Space.
-          </small>
-        </span>
+        <span>Leader</span>
         <KeyCapture
           label="Leader"
           kind="leader"
@@ -65,20 +69,13 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
       </label>
       {(
         [
-          [
-            'inTerminals',
-            'Prefix in terminal planes',
-            'Off, the shell receives it; pressed twice, it does anyway.',
-          ],
-          ['inTextFields', 'Prefix in text fields and editors', 'Off, ⌃B moves the caret there.'],
-          ['whichKey', 'Show the next keys while a sequence waits', ''],
+          ['inTerminals', 'Prefix in terminals'],
+          ['inTextFields', 'Prefix in text fields'],
+          ['whichKey', 'Show next keys'],
         ] as const
-      ).map(([key, label, detail]) => (
+      ).map(([key, label]) => (
         <label className="settings-row" key={key}>
-          <span>
-            {label}
-            {detail && <small>{detail}</small>}
-          </span>
+          <span>{label}</span>
           <input
             type="checkbox"
             checked={keymap[key]}
@@ -87,9 +84,9 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
         </label>
       ))}
       <label className="settings-row">
-        <span>Wait for the next key (ms)</span>
+        <span>Timeout (ms)</span>
         <input
-          aria-label="Wait for the next key"
+          aria-label="Timeout"
           type="number"
           min={300}
           max={10000}
@@ -99,23 +96,24 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
       </label>
       <div className="keymap-rows" role="table" aria-label="Key bindings">
         {rows.map((row, index) => (
-          <div className="keymap-row" role="row" key={keysText(row.keys)}>
-            <kbd className="keymap-keys" title={keysText(row.keys)}>
-              {keymap.prefix ? keyGlyphs(keymap.prefix) + ' ' : ''}
-              {row.keys.map(keyGlyphs).join(' ')}
-            </kbd>
-            <Field
+          <div className="keymap-row" role="row" key={row.keys.join(' ')}>
+            <KeyCapture
               label={`Keys for ${commandsText(row.commands)}`}
-              value={keysText(row.keys)}
-              save={(text) =>
-                saveRows(
-                  rows.map((item, at) => (at === index ? { ...item, keys: keysFrom(text) } : item)),
-                )
-              }
+              kind="sequence"
+              value={row.keys.join(' ')}
+              onChange={(text) => {
+                if (keysFrom(text).length)
+                  saveRows(
+                    rows.map((item, at) =>
+                      at === index ? { ...item, keys: keysFrom(text) } : item,
+                    ),
+                  );
+              }}
             />
             <Field
-              label={`Commands for ${keysText(row.keys)}`}
+              label={`Commands for ${row.keys.join(' ')}`}
               value={commandsText(row.commands)}
+              list="keymap-commands"
               save={(text) =>
                 saveRows(
                   rows.map((item, at) =>
@@ -126,7 +124,7 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
             />
             <button
               type="button"
-              aria-label={`Remove ${keysText(row.keys)}`}
+              aria-label={`Remove ${row.keys.join(' ')}`}
               onClick={() => saveRows(rows.filter((_, at) => at !== index))}
             >
               Remove
@@ -134,16 +132,16 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
           </div>
         ))}
         <div className="keymap-row keymap-new" role="row">
-          <span className="keymap-keys" />
-          <input
-            aria-label="New binding's keys"
-            placeholder="Keys, e.g. g d"
+          <KeyCapture
+            label="New binding's keys"
+            kind="sequence"
             value={draft.keys}
-            onChange={(event) => setDraft({ ...draft, keys: event.target.value })}
+            onChange={(keys) => setDraft({ ...draft, keys })}
           />
           <input
             aria-label="New binding's commands"
-            placeholder="Command, e.g. go-to"
+            placeholder="Command"
+            list="keymap-commands"
             value={draft.commands}
             onChange={(event) => setDraft({ ...draft, commands: event.target.value })}
           />

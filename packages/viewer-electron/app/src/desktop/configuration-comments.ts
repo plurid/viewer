@@ -215,6 +215,18 @@ const descriptions: Record<string, string[]> = {
     'Tiling lays planes out as tmux lays out panes. splitWith: same | folder | terminal | scratch, what a split adds.',
     'defaultLayout: even-horizontal | even-vertical | main-vertical | main-horizontal | tiled.',
   ],
+  'settings.themes': [
+    'Colour themes: {id,name,look,shell,syntax,terminal}, each a map of tokens to #rrggbb colours.',
+    'shell: space surface raised field ink muted subtle accent line selection danger. syntax: comment string keyword number function.',
+    'terminal: background foreground cursor selectionBackground and the 16 ANSI colours. What a theme leaves out is the built-in one.',
+  ],
+  'settings.theme': [
+    'The theme id for each appearance: {dark,light}; "" is the built-in Viewer theme.',
+  ],
+  'settings.profiles': [
+    'Setting profiles: {id,name,values}. values maps setting paths to values, e.g. {"ui.space.minimap":false}.',
+    'Built in: focus, present, full. Profile: <name> applies one; Leave profile puts back what it replaced.',
+  ],
   'settings.layouts': [
     'Layout templates: {id,name,planes,layout,main}. Save layout as template… captures the planes in view.',
     'planes: {kind:"folder"|"file",path} | {kind:"terminal",path,profileID?} | {kind:"scratch"} | {kind:"search",query,name,root?}.',

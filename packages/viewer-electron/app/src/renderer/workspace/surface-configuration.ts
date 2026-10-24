@@ -1,6 +1,6 @@
 import { TOOLBAR_DRAWERS, type PluridPartialConfiguration } from '@plurid/plurid-data';
 import type { UIPreferences } from '../../domain/contracts';
-import { looks, spaceLook } from './look';
+import { looks, spaceLook, type LookPalette } from './look';
 
 /** plurid's toolbar drawers Viewer offers: all but Global. Viewer sets the look from its Appearance
  * setting, so the Global drawer's look, theme and language picks changed only plurid's chrome, until
@@ -15,16 +15,19 @@ export function surfaceConfiguration({
   size,
   preferences,
   color,
+  palette,
 }: {
   look: keyof typeof looks;
   size: { width: number; height: number };
   preferences: UIPreferences['space'];
   /** The workspace's own space colour, over the general one. */
   color?: string;
+  /** The theme's colours plurid derives its look from. */
+  palette?: LookPalette;
 }): PluridPartialConfiguration {
   return {
     global: {
-      look: spaceLook(look, { grid: preferences.grid, color: color || preferences.color }),
+      look: spaceLook(look, { grid: preferences.grid, color: color || preferences.color, palette }),
     },
     space: {
       dimensions: { width: '100%', height: '100%' },

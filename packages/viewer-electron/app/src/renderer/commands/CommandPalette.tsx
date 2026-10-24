@@ -18,17 +18,32 @@ import { useIndexedSearch } from '../explorer/useIndexedSearch';
 import { useWorkspace } from '../workspace/context';
 import type { FileEntry } from '../../domain/contracts';
 import { calculate, paletteIntent, rankFrecent } from './smart-palette';
+import {
+  choicesPrefix,
+  moreSettingsID,
+  paletteRows,
+  settingRows,
+  settingsPrefix,
+} from './palette-sections';
+
+export type PaletteMode = 'commands' | 'files' | 'workspaces' | 'settings';
 
 export function CommandPalette({
   mode,
   onMode,
   onClose,
 }: {
-  mode: 'commands' | 'files' | 'workspaces';
-  onMode(mode: 'commands' | 'files' | 'workspaces'): void;
+  mode: PaletteMode;
+  onMode(mode: PaletteMode): void;
   onClose(): void;
 }) {
   const registry = useCommands();
+  // what was typed, carried into the mode it chose: `,wrap` searches the settings for "wrap"
+  const [carried, setCarried] = useState('');
+  const change = (next: PaletteMode, query = '') => {
+    setCarried(query);
+    onMode(next);
+  };
   useCommandRevision();
   const active = useViewer((state) => state.activePane);
   const context = registry.context(active)!;
@@ -37,7 +52,13 @@ export function CommandPalette({
   return (
     <Dialog
       title={
-        mode === 'files' ? 'Find file' : mode === 'workspaces' ? 'Change workspace' : 'Commands'
+        mode === 'files'
+          ? 'Find file'
+          : mode === 'workspaces'
+            ? 'Change workspace'
+            : mode === 'settings'
+              ? 'Settings'
+              : 'Commands'
       }
       onClose={onClose}
       className="command-palette"
@@ -47,7 +68,7 @@ export function CommandPalette({
           key={`${context.workspaceID}:${active}:${directory}`}
           context={context}
           directory={directory}
-          onCommands={() => onMode('commands')}
+          onCommands={() => change('commands')}
           onClose={onClose}
         />
       ) : (
@@ -57,8 +78,9 @@ export function CommandPalette({
           active={active}
           directory={directory}
           onClose={onClose}
-          workspaces={mode === 'workspaces'}
-          onCommands={() => onMode('commands')}
+          mode={mode}
+          initialQuery={carried}
+          onMode={change}
         />
       )}
     </Dialog>
@@ -70,49 +92,85 @@ function CommandFinder({
   active,
   directory,
   onClose,
-  workspaces,
-  onCommands,
+  mode,
+  initialQuery,
+  onMode,
 }: {
   context: CommandContext;
   active: string;
   directory: string;
   onClose(): void;
-  workspaces: boolean;
-  onCommands(): void;
+  mode: Exclude<PaletteMode, 'files'>;
+  initialQuery: string;
+  onMode(mode: PaletteMode, query?: string): void;
 }) {
   const registry = useCommands();
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
-  const [query, setQuery] = useState('');
-  const smart = useSmartRows(workspaces ? '' : query, context, directory);
+  const [query, setQuery] = useState(initialQuery);
+  const workspaces = mode === 'workspaces';
+  const settings = mode === 'settings';
+  const nested = workspaces || settings;
+  const onCommands = () => onMode('commands');
+  const smart = useSmartRows(nested ? '' : query, context, directory);
   const commands = registry.list({ paneID: active, scope: 'window', context });
-  const rows = [
-    ...smart,
-    ...rankCommands(
-      workspaces ? commands.filter((command) => command.id.startsWith('workspace:')) : commands,
-      query,
-      recent,
-      workspaces ? 'menu' : 'palette',
-    ),
-  ];
+  // settings apart (palette-sections.ts): their own section, or `,` for them alone
+  const view = workspaces
+    ? {
+        rows: rankCommands(
+          commands.filter((command) => command.id.startsWith('workspace:')),
+          query,
+          recent,
+          'menu',
+        ),
+        headings: undefined,
+      }
+    : settings
+      ? settingRows(commands, query)
+      : paletteRows(commands, query, recent);
+  const rows = [...smart, ...view.rows];
   return (
     <>
       <CommandResults
         query={query}
-        onQuery={setQuery}
+        onQuery={(text) => {
+          if (mode === 'commands' && text.startsWith(settingsPrefix))
+            onMode('settings', text.slice(settingsPrefix.length).trimStart());
+          else setQuery(text);
+        }}
         rows={rows}
-        onClose={workspaces ? onCommands : onClose}
-        label={workspaces ? 'Search workspaces' : 'Search commands'}
+        headings={view.headings}
+        onClose={nested ? onCommands : onClose}
+        onEmptyBackspace={nested ? onCommands : undefined}
+        label={workspaces ? 'Search workspaces' : settings ? 'Search settings' : 'Search commands'}
         placeholder={
-          workspaces ? 'Type a workspace name…' : 'Search commands, workspaces and places…'
+          workspaces
+            ? 'Type a workspace name…'
+            : settings
+              ? 'Search settings…'
+              : 'Search commands, workspaces and places…'
         }
+        empty={settings ? 'No matching settings' : undefined}
         leading={
-          workspaces ? (
+          nested ? (
             <IconButton icon="left" label="Back to commands" onClick={onCommands} />
           ) : undefined
         }
-        recent={recent.filter((id) => rows.some((row) => row.id === id)).slice(0, 2)}
+        recent={
+          settings ? [] : recent.filter((id) => rows.some((row) => row.id === id)).slice(0, 2)
+        }
         onSelect={(command) => {
+          if (command.id === moreSettingsID) {
+            onMode('settings', query);
+            return;
+          }
+          // a setting's choices, folded into one row: listed by its name and a colon
+          if (command.id.startsWith(choicesPrefix)) {
+            const named = `${command.setting!.name}: `;
+            if (settings) setQuery(named);
+            else onMode('settings', named);
+            return;
+          }
           // a smart row's source ends with the palette: it runs first, as a found file's does
           if (command.id.startsWith('smart:')) {
             void registry.run(command).catch(report);
@@ -128,11 +186,18 @@ function CommandFinder({
       <div className="palette-context">
         {workspaces ? (
           <span>Current workspace: {activeWorkspace().name}</span>
+        ) : settings ? (
+          <span>⌘, opens Settings</span>
         ) : (
-          <span title={directory}>
-            {context.selection.length ? `${context.selection.length} selected · ` : ''}
-            {directory}
-          </span>
+          <>
+            <span title={directory}>
+              {context.selection.length ? `${context.selection.length} selected · ` : ''}
+              {directory}
+            </span>
+            <span className="palette-hint">
+              <kbd>{settingsPrefix}</kbd> settings
+            </span>
+          </>
         )}
       </div>
     </>

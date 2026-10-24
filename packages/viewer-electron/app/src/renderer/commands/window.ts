@@ -16,6 +16,7 @@ import { viewsCommands } from './window-commands/views';
 import { tilingCommands } from './window-commands/tiling';
 import { templateCommands } from './window-commands/templates';
 import { explodeCommands } from './window-commands/explode';
+import { profileCommands } from './window-commands/profiles';
 import { windowScopes, type WindowActions } from './window-commands/scope';
 
 export type { WindowActions };
@@ -39,6 +40,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     ...tilingCommands(scopes),
     ...templateCommands(scopes),
     ...explodeCommands(scopes),
+    ...profileCommands(scopes),
     ...settingsCommands(scopes),
     ...actionCommands(),
   ];
