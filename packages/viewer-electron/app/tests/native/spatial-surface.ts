@@ -1,9 +1,11 @@
 /** Owned clear-backdrop and HUD regression; only generated folders are inspected. */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { promisify } from 'node:util';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { defaultSettings } from '../../src/domain/services';
@@ -78,6 +80,14 @@ const mode = process.env.VIEWER_NATIVE_WINDOW_MODE ?? 'hidden';
 assert.ok(mode === 'hidden' || mode === 'foreground');
 const app = await ownedApp(binary, profile, { mode });
 const main = await app.connect();
+const nativeCapture = process.env.VIEWER_NATIVE_CAPTURE_WINDOW === '1';
+const visibility = path.join(root, 'on-screen-windows');
+if (nativeCapture) {
+  assert.equal(mode, 'foreground');
+  await promisify(execFile)('/usr/bin/xcrun', [
+    'swiftc', 'tests/native/fixtures/on-screen-windows.swift', '-o', visibility,
+  ]);
+}
 result.evidenceDirectory = app.evidenceDirectory;
 const measurements: unknown[] = [];
 result.measurements = measurements;
@@ -125,7 +135,17 @@ async function measure(name: string) {
   const { data } = await main.command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
   const screenshot = path.join(app.evidenceDirectory, name + '.png');
   await writeFile(screenshot, Buffer.from(data, 'base64'), { flag: 'wx', mode: 0o600 });
-  measurements.push({ name, ...value, screenshot });
+  let windowScreenshot: string | undefined;
+  if (nativeCapture) {
+    const { stdout } = await promisify(execFile)(visibility, [String(app.child.pid)]);
+    const identifiers: number[] = JSON.parse(stdout);
+    assert.equal(identifiers.length, 1, 'Only the owned test window is captured');
+    windowScreenshot = path.join(app.evidenceDirectory, name + '-window.png');
+    await promisify(execFile)('/usr/sbin/screencapture', [
+      '-x', '-o', '-l', String(identifiers[0]), windowScreenshot,
+    ]);
+  }
+  measurements.push({ name, ...value, screenshot, windowScreenshot });
   await save();
   return value;
 }
@@ -136,8 +156,12 @@ try {
     Boolean,
     'generated folder plane',
   );
-  await main.command('Emulation.setDeviceMetricsOverride', {
-    width: 1000, height: 700, deviceScaleFactor: 1, mobile: false,
+  const { windowId } = await main.command<{ windowId: number }>('Browser.getWindowForTarget');
+  await main.command('Browser.setWindowBounds', {
+    windowId, bounds: { windowState: 'normal' },
+  });
+  await main.command('Browser.setWindowBounds', {
+    windowId, bounds: { width: 1000, height: 700 },
   });
   await measure('before-drag');
   const point = await main.evaluate<{ x: number; y: number }>(`(() => {
@@ -159,8 +183,8 @@ try {
     x: point.x + 160, y: point.y - 96,
   });
   await measure('after-drag');
-  await main.command('Emulation.setDeviceMetricsOverride', {
-    width: 1400, height: 1200, deviceScaleFactor: 1, mobile: false,
+  await main.command('Browser.setWindowBounds', {
+    windowId, bounds: { width: 1400, height: 1200 },
   });
   await measure('after-resize');
   result.completed = true;
