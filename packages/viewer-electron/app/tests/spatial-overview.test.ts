@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  solveOverviewPlacement,
-  solveProtectedOverlayPlacement,
-} from '../src/renderer/workspace/overlays/placement';
+import { solveOverviewPlacement } from '../src/renderer/workspace/overlays/placement';
 import { SpatialOverview } from '../src/renderer/workspace/overlays/SpatialOverview';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
 import { arrangementCommands } from '../src/renderer/commands/window-commands/arrangement';
@@ -15,46 +12,6 @@ const viewport = { x: 0, y: 0, width: 1000, height: 600 };
 const size = { width: 172, height: 120 };
 
 describe('spatial overview placement', () => {
-  it('uses a safe edge between protected bands and retains its position when the bands move', () => {
-    const moved = solveProtectedOverlayPlacement({
-      viewport: { x: 0, y: 56, width: 1280, height: 844 },
-      bounds: { x: 1130, y: 725, width: 150, height: 175 },
-      obstacles: [
-        { x: 51, y: 123, width: 1178, height: 140 },
-        { x: 51, y: 657, width: 1178, height: 175 },
-        { x: 488, y: 840, width: 304, height: 46 },
-      ],
-    });
-    expect(moved).toEqual({ x: 1114, y: 474, width: 150, height: 175 });
-    expect(
-      solveProtectedOverlayPlacement({
-        viewport: { x: 0, y: 56, width: 1280, height: 844 },
-        bounds: moved!,
-        obstacles: [],
-      }),
-    ).toEqual(moved);
-  });
-
-  it('returns no unsafe placement on a narrow viewport or invalid geometry', () => {
-    expect(
-      solveProtectedOverlayPlacement({
-        viewport: { x: 0, y: 56, width: 780, height: 504 },
-        bounds: { x: 630, y: 297, width: 150, height: 175 },
-        obstacles: [
-          { x: 0, y: 56, width: 780, height: 180 },
-          { x: 0, y: 360, width: 780, height: 200 },
-        ],
-      }),
-    ).toBeUndefined();
-    expect(
-      solveProtectedOverlayPlacement({
-        viewport,
-        bounds: { x: NaN, y: 0, width: 150, height: 175 },
-        obstacles: [],
-      }),
-    ).toBeUndefined();
-  });
-
   it('moves out of a complete plane header and retains a safe corner without reserving canvas width', () => {
     const blocked = solveOverviewPlacement({
       viewport,
@@ -180,8 +137,12 @@ describe('engine overlay adapter', () => {
     vi.spyOn(element, 'getBoundingClientRect').mockImplementation(
       () =>
         new DOMRect(
-          element.style.left ? Number.parseFloat(element.style.left) : 850,
-          element.style.top ? Number.parseFloat(element.style.top) : 425,
+          element.style.left
+            ? Number.parseFloat(element.style.left)
+            : view.root.getBoundingClientRect().right - 150 - Number.parseFloat(element.style.right),
+          element.style.top
+            ? Number.parseFloat(element.style.top)
+            : view.root.getBoundingClientRect().bottom - 175 - Number.parseFloat(element.style.bottom),
           150,
           175,
         ),
@@ -198,15 +159,17 @@ describe('engine overlay adapter', () => {
     return { element, rectangle };
   }
 
-  it('keeps a visible Viewcube above a full-width composer when the minimap is disabled', () => {
+  it('protects a composer without overriding the engine Viewcube position', () => {
     const view = fixture();
     view.map.remove();
     const element = cube(view);
     protectedArea(view, new DOMRect(0, 440, 1000, 160));
     frame();
-    expect(element.style.left).toBe('834px');
-    expect(element.style.top).toBe('257px');
-    expect(element.style.visibility).not.toBe('hidden');
+    expect(element.style.left).toBe('');
+    expect(element.style.top).toBe('');
+    expect(element.style.right).toBe('0px');
+    expect(element.style.bottom).toBe('0px');
+    expect(element.style.visibility).toBe('hidden');
     expect(element.querySelector('button')?.getAttribute('aria-label')).toBe(
       'view from front middleCenter',
     );
@@ -214,21 +177,58 @@ describe('engine overlay adapter', () => {
     expect(frames.size).toBe(0);
   });
 
-  it('temporarily conceals a cube with no safe space and restores it after a frame geometry change', () => {
+  it('leaves corner anchoring to the engine when an obstacle closes and the window grows', () => {
     const view = fixture();
     view.map.remove();
     const element = cube(view);
-    protectedArea(view, new DOMRect(0, 0, 1000, 200));
-    const footer = protectedArea(view, new DOMRect(0, 350, 1000, 250));
+    const footer = protectedArea(view, new DOMRect(0, 440, 1000, 160));
+    frame();
+    expect(element.style.visibility).toBe('hidden');
+
+    footer.element.remove();
+    vi.mocked(view.root.getBoundingClientRect).mockReturnValue(new DOMRect(0, 0, 1400, 1000));
+    view.emit();
+    frame();
+
+    const bounds = element.getBoundingClientRect();
+    expect(bounds.right).toBe(1400);
+    expect(bounds.bottom).toBe(1000);
+    expect(element.style.visibility).toBe('');
+    expect(element.style.transition).toBe('');
+    expect(frames.size).toBe(0);
+  });
+
+  it('preserves the engine conceal offsets and reveals its expanded cube only when safe', () => {
+    const view = fixture();
+    view.map.remove();
+    const element = cube(view);
+    element.style.right = '-100px';
+    element.style.bottom = '-90px';
+    element.dataset.pluridHover = 'false';
+    protectedArea(view, new DOMRect(400, 440, 500, 160));
+    frame();
+    expect(element.style.right).toBe('-100px');
+    expect(element.style.bottom).toBe('-90px');
+    expect(element.style.left).toBe('');
+    expect(element.style.top).toBe('');
+    expect(element.style.visibility).toBe('');
+
+    element.style.right = '0px';
+    element.style.bottom = '0px';
+    element.dataset.pluridHover = 'true';
+    element.dispatchEvent(new Event('transitionend'));
     frame();
     expect(element.style.visibility).toBe('hidden');
     expect(element.querySelector('button')).not.toBeNull();
-    footer.rectangle.mockReturnValue(new DOMRect(0, 500, 1000, 100));
-    for (let event = 0; event < 50; event++) view.emit();
-    expect(frames.size).toBe(1);
+
+    element.style.right = '-100px';
+    element.style.bottom = '-90px';
+    element.dataset.pluridHover = 'false';
+    element.dispatchEvent(new Event('transitionend'));
     frame();
     expect(element.style.visibility).toBe('');
-    expect(Number.parseFloat(element.style.top) + 175).toBeLessThanOrEqual(492);
+    expect(element.style.right).toBe('-100px');
+    expect(element.style.bottom).toBe('-90px');
     expect(frames.size).toBe(0);
   });
 
@@ -243,7 +243,7 @@ describe('engine overlay adapter', () => {
     element.style.display = '';
     view.emit();
     frame();
-    expect(element.style.top).toBe('257px');
+    expect(element.style.visibility).toBe('hidden');
     view.docked.mockReturnValue(true);
     view.emit();
     frame();
@@ -273,18 +273,19 @@ describe('engine overlay adapter', () => {
     view.map.remove();
     const element = cube(view);
     const bounds = vi.mocked(view.root.getBoundingClientRect);
-    bounds.mockReturnValue(new DOMRect(0, 0, 180, 200));
+    const footer = protectedArea(view, new DOMRect(0, 0, 1000, 600));
     frame();
     expect(element.style.visibility).toBe('hidden');
     element.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    footer.element.remove();
     bounds.mockReturnValue(new DOMRect(0, 0, 1000, 600));
     resized();
     expect(frames.size).toBe(0);
     window.dispatchEvent(new MouseEvent('pointerup'));
     frame();
     expect(element.style.visibility).toBe('');
-    expect(element.style.left).toBe('834px');
-    expect(element.style.top).toBe('409px');
+    expect(element.style.left).toBe('');
+    expect(element.style.top).toBe('');
     expect(frames.size).toBe(0);
   });
 

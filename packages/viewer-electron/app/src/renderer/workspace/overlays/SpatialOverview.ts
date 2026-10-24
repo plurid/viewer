@@ -79,7 +79,7 @@ export class SpatialOverview {
     private root: HTMLElement,
     private ports: SpatialOverviewPorts,
   ) {
-    this.viewcube = new SpatialViewcube(this.pressPointer);
+    this.viewcube = new SpatialViewcube(this.pressPointer, this.invalidate);
     if (typeof ResizeObserver !== 'undefined') this.resize = new ResizeObserver(this.invalidate);
     this.mutation = new MutationObserver((records) => {
       if (
@@ -99,7 +99,7 @@ export class SpatialOverview {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: [protectedAreaAttribute],
+      attributeFilter: [protectedAreaAttribute, 'data-plurid-hover'],
     });
     this.unsubscribe = ports.subscribeEngine(this.invalidate);
     window.addEventListener('resize', this.invalidate);

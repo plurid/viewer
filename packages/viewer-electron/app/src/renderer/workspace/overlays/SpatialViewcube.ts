@@ -1,37 +1,40 @@
-import { solveProtectedOverlayPlacement, type OverlayRect } from './placement';
+import { overlaysIntersect, validOverlayRect, type OverlayRect } from './placement';
 
-const ownedStyles = ['left', 'top', 'right', 'bottom', 'visibility', 'transition'] as const;
-
-/** Keeps the original engine control usable without covering explicitly protected plane controls. */
+/** The engine owns positioning, conceal and hover; Viewer only protects controls underneath. */
 export class SpatialViewcube {
   private element?: HTMLElement;
-  private styles = new Map<string, string>();
-  private concealed = false;
-  private applied = '';
+  private visibility = '';
+  private visibilityPriority = '';
+  private suppressed = false;
 
-  constructor(private pressPointer: () => void) {}
+  constructor(
+    private pressPointer: () => void,
+    private invalidate: () => void,
+  ) {}
+
+  private transitionEnd = (event: Event): void => {
+    if (event.target === this.element) this.invalidate();
+  };
 
   bind(element: HTMLElement | undefined): void {
     if (element === this.element) return;
     if (this.element) {
       this.restore();
       this.element.removeEventListener('pointerdown', this.pressPointer);
+      this.element.removeEventListener('transitionend', this.transitionEnd);
     }
     this.element = element;
-    this.styles.clear();
-    this.concealed = false;
-    this.applied = '';
     if (!element) return;
-    for (const property of ownedStyles)
-      this.styles.set(property, element.style.getPropertyValue(property));
+    this.visibility = element.style.getPropertyValue('visibility');
+    this.visibilityPriority = element.style.getPropertyPriority('visibility');
     element.addEventListener('pointerdown', this.pressPointer);
+    element.addEventListener('transitionend', this.transitionEnd);
   }
 
   private restore(): void {
-    if (!this.element) return;
-    for (const [property, value] of this.styles) this.element.style.setProperty(property, value);
-    this.concealed = false;
-    this.applied = '';
+    if (!this.element || !this.suppressed) return;
+    this.element.style.setProperty('visibility', this.visibility, this.visibilityPriority);
+    this.suppressed = false;
   }
 
   place(viewport: OverlayRect, obstacles: readonly OverlayRect[], docked: boolean): void {
@@ -42,36 +45,29 @@ export class SpatialViewcube {
       return;
     }
     const style = getComputedStyle(element);
-    if (style.display === 'none' || (!this.concealed && style.visibility === 'hidden')) return;
+    if (style.display === 'none' || (!this.suppressed && style.visibility === 'hidden')) return;
     const measured = element.getBoundingClientRect();
-    const placement = solveProtectedOverlayPlacement({
-      viewport,
-      bounds: { x: measured.x, y: measured.y, width: measured.width, height: measured.height },
-      obstacles,
-    });
-    const parent =
-      element.offsetParent instanceof HTMLElement
-        ? element.offsetParent.getBoundingClientRect()
-        : viewport;
-    const signature = JSON.stringify([placement, parent.x, parent.y]);
-    if (signature === this.applied) return;
-    this.applied = signature;
-    if (!placement) {
-      // Rotation/frame commands remain available; a geometry change restores the cube automatically.
-      element.style.visibility = 'hidden';
-      this.concealed = true;
-      return;
+    // Conceal deliberately puts most of the cube outside the viewport. Only its visible portion
+    // can block a button; clamping the entire cube inside would defeat the engine's tucked state.
+    const x = Math.max(measured.x, viewport.x);
+    const y = Math.max(measured.y, viewport.y);
+    const visible = {
+      x,
+      y,
+      width: Math.min(measured.right, viewport.x + viewport.width) - x,
+      height: Math.min(measured.bottom, viewport.y + viewport.height) - y,
+    };
+    const blocked =
+      validOverlayRect(visible) &&
+      obstacles.some((area) => validOverlayRect(area) && overlaysIntersect(visible, area));
+    if (blocked) {
+      if (!this.suppressed) {
+        element.style.setProperty('visibility', 'hidden', this.visibilityPriority);
+        this.suppressed = true;
+      }
+    } else {
+      this.restore();
     }
-    Object.assign(element.style, {
-      left: `${placement.x - parent.x}px`,
-      top: `${placement.y - parent.y}px`,
-      right: 'auto',
-      bottom: 'auto',
-      visibility: this.styles.get('visibility') ?? '',
-      // Moving a HUD through a protected button would briefly recreate the obstruction.
-      transition: 'none',
-    });
-    this.concealed = false;
   }
 
   destroy(): void {
