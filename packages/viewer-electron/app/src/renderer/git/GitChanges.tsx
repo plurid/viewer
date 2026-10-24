@@ -16,7 +16,8 @@ export default function GitChanges({ path }: { path: string }) {
     estimateSize: () => 54,
     overscan: 8,
   });
-  if (!enabled) return <Empty title="Git is off" detail="Enable Git in Settings → Browsing." />;
+  if (!enabled)
+    return <Empty title="Git is off" detail="Enable Git in Settings → Browsing → Git." />;
   if (!view) return <Loading label="Reading Git status…" />;
   if (view.result.kind !== 'ready')
     return <Empty title="Git status unavailable" detail={view.result.message} />;

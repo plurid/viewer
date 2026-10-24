@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { gitActionKinds, gitTerminalProfileID } from '../comparison/git-actions';
 import type { FolderOverride } from '../preferences/folder-presentation';
 
 const id = z
@@ -192,7 +193,14 @@ const projectPlaneSchema = z.discriminatedUnion('type', [
     })
     .strict(),
   // This is a terminal location, never shell input. Imports always require Start.
-  z.object({ ...planeBase, type: z.literal('terminal'), profileID: id }).strict(),
+  z
+    .object({
+      ...planeBase,
+      type: z.literal('terminal'),
+      profileID: z.union([id, z.literal(gitTerminalProfileID)]),
+      gitAction: z.enum(gitActionKinds).optional(),
+    })
+    .strict(),
   z.object({ ...planeBase, type: z.literal('collection'), collectionID: z.uuid() }).strict(),
 ]);
 export const projectDefinitionSchema = z

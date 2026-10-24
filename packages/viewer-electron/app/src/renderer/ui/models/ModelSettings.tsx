@@ -13,6 +13,7 @@ import { IconButton } from '../primitives';
 import { ChoiceButton } from '../ChoiceMenu';
 import { referencesTo } from '../../../domain/automation/references';
 import { ProviderDataPermission } from './ModelDataPermission';
+import { ProviderCheck } from './ProviderCheck';
 
 export function ModelSettings({
   snapshot,
@@ -191,6 +192,13 @@ export function ModelSettings({
               provider={provider}
               error={error}
             />
+            {provider.kind === 'gemini' && (
+              <ProviderCheck
+                key={JSON.stringify([provider.id, provider.endpoint, provider.model])}
+                providerID={provider.id}
+                onError={error}
+              />
+            )}
             <div className="settings-actions">
               {!preset.suggestedModels && (
                 <button

@@ -1,8 +1,143 @@
 # Verification
 
-## October 24 stabilization, HTML previews and local servers
+## October 24 final interface and context candidate
 
-This is the current direct-build evidence. It supersedes the earlier October 24
+The final direct candidate is preserved at
+`/private/tmp/viewer-final-candidate-20261024-skt44mhz/Viewer.app` and is open with
+the existing isolated acceptance profile. Executable SHA-256:
+`87be3a9db07d039c781c2179efe41373e32a47227aae39ea4cda2e947f527766`;
+ASAR SHA-256:
+`2ffe2e2a481fd886f000eeae32fd63795541dce0938efeb4c9b83a82116aadd8`.
+The adjacent `candidate.json` records source/lockfile hashes. Ordinary
+`pnpm package` and `codesign --verify --deep --strict` pass.
+
+- **216 focused regressions pass in 17 files.** The actual desktop Git admission
+  and Chat-origin seam reproduces the cold-start failure before the fix, then
+  passes without advancing a timer. First publication is immediate; subsequent
+  registry changes remain debounced. Forged ownership still fails.
+- All four TypeScript targets, full ESLint, Prettier and whitespace checks pass.
+  Retained logs use `/private/tmp/viewer-final-candidate-` with
+  `regressions`, `types`, `lint`, `format` and `package` suffixes.
+- The complete focused native Git/Chat/palette scenario passes on these exact
+  bytes: real status/history output, commit-form cancellation, five dormant
+  results without replay, linked-result closing to the parent, and unchanged
+  generated repository state. Result:
+  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-yBJx3a/result.json`.
+- At 1280×900 and 780×560, Chat uses the interface font and themed text field,
+  keeps its 8px action gap, and exposes an unobstructed Send hit target. Native
+  diagnostics identified the original occluder as the engine's Viewcube face.
+  It now moves to safe free space, or temporarily hides when no position fits;
+  the saved setting remains intact and geometry changes restore it.
+- Native palette checks verify `help`, `Ask Viewer…`, Clear recent preserving
+  input/query focus, the absent topbar Overview button and the retained Overview
+  command. Screenshots and measurements remain in
+  `packages/viewer-electron/app/out/native-evidence/native-supplemental-2026-10-24T13-25-04-667Z-e6d2f94c-9313-44b6-9b85-01652e86a95d`.
+- Actual no-file Gemini Chat succeeds again on the final binary; adjacent
+  `live-chat.json` records the new conversation and model attribution. Earlier
+  generated-folder inspection and physical fullscreen acceptance remain bound to
+  their explicitly identified candidate below.
+- Prompt output now uses one shared generation/local-validation contract.
+  Malformed, missing or extra fields cannot become an offered command line;
+  recursive command-policy checks still apply after shape validation.
+
+The full-suite no-removal limitations remain recorded below. Native shell-command
+Uninstall is waiting for exact-path approval; automatic approval review rejected
+the attempted test before dispatch because that approval was absent. No script
+was moved. Agent access stays disabled after the operator's Settings revocation;
+the native Cancel and positive scoped authenticated-read cases remain unverified.
+
+## October 24 live Gemini and operator acceptance
+
+The accepted provider/fullscreen candidate is preserved at
+`/private/tmp/viewer-user-ready-20261024-qpmo3jqi/Viewer.app`.
+Its executable SHA-256 is
+`0fff4110bbbb5a996ea0b1c7de0a994e857f8e3e6e7cea36a527eb622e723912`;
+ASAR SHA-256 is
+`ad704cf13cb92d7b5903448ba1093c5ee91d81e1fbc51c6a33b41401694118cf`.
+Normal packaging and strict/deep signature verification pass; the adjacent
+`candidate.json` binds source/lockfile hashes.
+
+- Fixed live diagnostics isolated the original Gemini failure: plain text and
+  a small schema returned HTTP 200; the full Chat schema returned HTTP 400.
+  The reduced generation grammar now returns HTTP 200. The full local schema,
+  file scopes, budgets and proposal reviews remain enforced.
+- Actual Chat with `gemini-3.8-flash` passes a no-file fixed-response request and
+  a generated-folder listing with one real bounded inspection result and an
+  attributed answer. The generated file's hash is unchanged and no proposal is
+  created. Only the newly created conversations were inspected. Retained results:
+  adjacent `provider-compatibility.json` and `live-chat.json`.
+- The operator physically confirmed fullscreen → ⌥Space hide → restore without
+  the prior stuck black/green screen or unintended fullscreen exit. The report
+  is bound to this candidate in adjacent `physical-hotkey.json`.
+- The operator chose Allow in the real agent-access dialog, then disabled access
+  in Settings. The native API returned `enabled=true` after Allow; subsequent
+  public state confirms `enabled=false`, no granted folders, and the local broker
+  endpoint refuses connections. Adjacent `agent-consent.json` records the scope.
+  The originally planned Cancel case was not performed; a positive authenticated
+  read inside an approved agent folder remains unverified. Access stays disabled.
+- 115 focused provider/Chat/grammar tests pass in six files, including rejection
+  of oversized generated patches, renames and replies before inspection/proposals:
+  `/private/tmp/viewer-gemini-grammar-tests-20261024.log`.
+- The full no-removal run passes 1,649 tests, with four skipped; thirteen removal
+  scenarios are blocked by `VIEWER_TEST_NO_REMOVAL=1` and one operation-log stress
+  case times out under suite load. Its isolated six-test rerun passes. This is
+  not a green full-suite result. Logs:
+  `/private/tmp/viewer-user-final-suite-20261024.log` and
+  `/private/tmp/viewer-user-final-log-idle-20261024.log`.
+
+Subsequent native UI checks found a Viewcube obstruction over Chat's Send button
+and an initial command-catalog publication race. The later final candidate and
+its corrections are recorded above; these earlier results remain separately bound.
+
+## October 24 earlier user reports, Git actions and Chat diagnostics
+
+The earlier packaged direct candidate is preserved at
+`/private/tmp/viewer-git-chat-candidate-20261024-m58wuq7s/Viewer.app`.
+Its executable SHA-256 is
+`94b7c7143c3ee01816f23a3b5ef41c11bf50f2713b56e5d84d5ab3e564e3b2ad`;
+ASAR SHA-256 is
+`75ec1af00dfdc3264487fb95aff097843ac887d8164c3e7ad02996d61733d6f5`.
+The adjacent `candidate.json` retains source/lockfile hashes. Normal `pnpm package`
+and strict/deep signature verification pass;
+`/private/tmp/viewer-git-chat-package-20261024.log`.
+
+- 251 focused Git, provider/Chat, agent policy, architecture, sidebar, Overview
+  and hotkey regressions pass in 24 files:
+  `/private/tmp/viewer-git-chat-regressions-20261024.log`.
+- After final handoff fixes, 38 focused tests in six files pass, covering early
+  Git output/exit retention, lease-through-publication, dormant restoration,
+  origin/IPC validation and same-batch dialog replacement:
+  `/private/tmp/viewer-git-final-handoff-tests-20261024.log`.
+- All four TypeScript targets, ESLint and formatting pass. Retained logs use the
+  prefix `/private/tmp/viewer-git-final-handoff-`; whitespace checks pass.
+- Real browser measurements confirm aligned Size/Git columns, narrow-plane
+  scrolling, the Git settings subsection and sidebar ordering that excludes Trash
+  from saved paths. Captures and measurements remain in
+  `/private/tmp/viewer-ui-layout-20261024-GYIvuv`.
+- The full native fullscreen request-transition fix has unit/compile evidence.
+  An earlier settled-fullscreen native scenario passed; the latest entering-race
+  and physical fullscreen experience still need candidate-specific acceptance.
+- Two synthetic live Gemini requests attached no files. That earlier candidate failed
+  with HTTP 400 / `INVALID_ARGUMENT`, despite the normalized selected model being
+  available in model discovery. Corrected bounded error decoding exposes the
+  code; it does not establish the rejected parameter or successful live Chat.
+  The latest safe result is adjacent `provider-check-result.json`. No API key,
+  private user transcript or actual selected file content was read by these checks.
+
+The current feature set includes [human Git actions](git-actions.md), themed Chat
+controls and explicit footer protection. Worktree/session development,
+[Journal](journal-plane.md) and [composable actions](composable-actions.md) are
+documented proposals, not accepted native feature results.
+
+No full-suite or full packaged-smoke result is claimed for these latest bytes.
+The results below belong to the earlier stabilization candidate. A later broad
+unit attempt in the restricted environment failed with loopback/file-access
+permission errors and dependent assertions; it is retained at
+`/private/tmp/viewer-fullscreen-complete-unit.log`, rather than reported as a pass.
+
+## October 24 earlier stabilization, HTML previews and local servers
+
+This is historical direct-build evidence. It supersedes the earlier October 24
 dependency warning and unresolved minimap overlap recorded below. Verification
 used Apple Silicon macOS 15.1, Node 26.8.2 and pnpm 11.3.0. All generated profiles,
 fixtures and captures are retained. Unattended native checks set

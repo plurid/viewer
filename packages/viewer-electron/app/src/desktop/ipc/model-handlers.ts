@@ -11,6 +11,7 @@ type ModelHandlers = Pick<
   ApiHandlers,
   | 'providerCredential'
   | 'providerModels'
+  | 'providerCheck'
   | 'providerPermissionGet'
   | 'providerPermissionSet'
   | 'providerPermissionAgents'
@@ -57,6 +58,8 @@ export function createModelHandlers(ports: ModelPorts): ModelHandlers {
       if (!provider) throw new Error('Provider is unavailable.');
       return ports.providers.models(provider);
     },
+    providerCheck: ([request]) =>
+      ports.providers.check(requireProvider(request.providerID), request.kind),
     providerPermissionGet: ([id]) => ports.modelPermissions.get(requireProvider(id)),
     providerPermissionSet: async ([id, endpoint, level], senderID) => {
       const provider = requireProvider(id);

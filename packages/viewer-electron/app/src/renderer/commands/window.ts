@@ -1,5 +1,6 @@
 import { pairCommands } from './window-commands/pair';
 import { comparisonCommands } from './window-commands/comparison';
+import { gitCommands } from '../git/commands';
 import { actionCommands } from '../actions/commands';
 import type { CommandDefinition } from './registry';
 import { toolsCommands } from './window-commands/tools';
@@ -42,6 +43,10 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     ...tilingCommands(scopes),
     ...pairCommands(scopes),
     ...comparisonCommands(scopes),
+    ...gitCommands(scopes, {
+      start: (kind, target) => actions.workspace.newGitAction(target, { kind }),
+      commit: (target) => actions.gitCommit(target),
+    }),
     ...templateCommands(scopes),
     ...explodeCommands(scopes),
     ...profileCommands(scopes),

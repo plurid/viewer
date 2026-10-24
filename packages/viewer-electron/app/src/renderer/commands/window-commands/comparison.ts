@@ -45,7 +45,7 @@ export function comparisonCommands({
     {
       id: 'git-diff',
       label: 'Compare with HEAD',
-      group: 'Files',
+      group: 'Git',
       icon: 'side-by-side',
       aliases: ['git', 'diff', 'changes'],
       when: (context) =>
@@ -58,7 +58,7 @@ export function comparisonCommands({
     {
       id: 'git-changes',
       label: 'Git changes',
-      group: 'Files',
+      group: 'Git',
       icon: 'list',
       aliases: ['git', 'repository', 'status'],
       when: (context) =>

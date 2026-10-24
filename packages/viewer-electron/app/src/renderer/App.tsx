@@ -303,6 +303,8 @@ function AppWindow() {
           viewDialog: (kind) => setWindowDialog({ type: 'view', kind }),
           templateDialog: () => setWindowDialog({ type: 'template' }),
           profileDialog: () => setWindowDialog({ type: 'profile' }),
+          gitCommit: (target) =>
+            setWindowDialog({ type: 'git-commit', id: crypto.randomUUID(), target }),
         }),
       ],
       valid: (invocation) =>
@@ -338,7 +340,7 @@ function AppWindow() {
   useEffect(() => {
     trimTerminals(
       new Set(
-        saved.workspaces.flatMap((space) =>
+        getState().saved.workspaces.flatMap((space) =>
           space.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
         ),
       ),
@@ -736,16 +738,6 @@ function AppWindow() {
             }}
           />
           <span className="toolbar-spacer" />
-          {overview?.available && overview.collapsed && (
-            <button
-              aria-label="Overview"
-              aria-haspopup="dialog"
-              aria-expanded={overview.expanded}
-              onClick={(event) => overview.open(event.currentTarget)}
-            >
-              Overview
-            </button>
-          )}
           <ActionHub />
           {showOperations && (
             <button
@@ -849,7 +841,9 @@ function AppWindow() {
         )}
         <WindowDialogs
           dialog={windowDialog}
-          onClose={() => setWindowDialog(undefined)}
+          onClose={(request) =>
+            setWindowDialog((current) => (current === request ? undefined : current))
+          }
           workspace={controller}
           transitionWorkspace={transitionWorkspace}
         />

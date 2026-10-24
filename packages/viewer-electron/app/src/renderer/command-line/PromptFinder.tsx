@@ -223,7 +223,7 @@ export function PromptFinder({
         }}
         onEmptyBackspace={onBack}
         label="Ask in words"
-        placeholder="sort by year · select the PDFs from last week · put Documents beside this"
+        placeholder="Ask Viewer…"
         leading={
           <>
             <IconButton icon="left" label="Back to commands" onClick={onBack} />

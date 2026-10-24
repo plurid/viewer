@@ -212,22 +212,19 @@
   text-align: left;
 }
 .file-heading .column-label {
-  width: calc(100% - 12px);
-  margin-right: 12px;
-  padding: 3px 8px 3px 0;
+  width: calc(100% - 8px);
+  margin-inline: 4px;
+  padding: 3px 4px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .file-heading[data-column='name'] .column-label {
-  padding-left: 27px;
+  padding-inline-start: 23px;
 }
 .file-heading[data-column='size'] .column-label {
   text-align: right;
-  padding-right: 0;
-  width: 100%;
-  margin-right: 0;
 }
 .file-heading .column-resizer {
   position: absolute;
@@ -250,11 +247,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-right: 8px;
+  min-width: 0;
+  padding-inline: 8px;
 }
 .file-table .file-row > [data-column='size'] {
   text-align: right;
-  padding-right: 0;
 }
 .file-table[data-wrap-names='true'] .file-row {
   height: auto;

@@ -107,6 +107,36 @@ async function send(id: string): Promise<void> {
 }
 
 describe('read-only Chat', () => {
+  it.each(['patches', 'renames', 'text'] as const)(
+    'rejects generated %s beyond local limits before inspecting or proposing anything',
+    async (field) => {
+      const file = path.join(root, 'context', 'notes.txt');
+      const oversized =
+        field === 'patches'
+          ? step('settings', {
+              patches: Array.from({ length: 21 }, () => ({ path: 'ui.space.grid', value: false })),
+            })
+          : field === 'renames'
+            ? step('rename', {
+                renames: Array.from({ length: 101 }, () => ({ path: file, name: 'Changed.txt' })),
+              })
+            : step('reply', { text: 'x'.repeat(32001) });
+      generate.mockResolvedValue(oversized);
+      const conversation = await create();
+      await send(conversation.id);
+      const result = await settled(conversation.id);
+
+      expect(result.status).toBe('failed');
+      expect(generate).toHaveBeenCalledOnce();
+      expect(result.messages.filter((message) => message.role !== 'user')).toEqual([]);
+      expect(inspect).not.toHaveBeenCalled();
+      expect(command).not.toHaveBeenCalled();
+      expect(configuration).not.toHaveBeenCalled();
+      expect(rename).not.toHaveBeenCalled();
+      expect(await readFile(file, 'utf8')).toBe('Original content');
+    },
+  );
+
   it('records the generating model on replies and proposal messages', async () => {
     const file = path.join(root, 'context', 'notes.txt');
     rename.mockResolvedValue({ id: '10a21b40-72b2-46d4-85ad-d76cfba84d7a' });

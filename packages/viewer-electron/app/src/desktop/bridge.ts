@@ -93,6 +93,8 @@ import { methodWindows, schemas, settingsEvents, type ApiHandlers } from './ipc/
 import { serverAddress } from '../domain/files/volumes';
 import { errorMessage } from '../domain/errors';
 import { GitReader } from './comparison/git';
+import { GitActions } from './comparison/git-actions';
+import { bindGitTarget, validateGitTarget, type GitTargetWindow } from './comparison/git-target';
 import { WorkspaceSessions } from './windows/workspace-sessions';
 import { ShellCommand } from './windows/shell-command';
 import type { HotkeyStatus } from './windows/hotkey-window';
@@ -108,6 +110,7 @@ export class Desktop {
   private shellCommand: ShellCommand;
   readonly workspaceSessions = new WorkspaceSessions();
   readonly git: GitReader;
+  private readonly gitActions: GitActions;
   private gitResources = new Set<string>();
   private nativeSelections = new NativeSelections((source) =>
     macFiles().clipboardVersion(source === 'drag'),
@@ -155,6 +158,7 @@ export class Desktop {
       launches: LaunchRequest[];
       catalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
       workspaceCatalog?: AgentWorkspaceSnapshot;
+      planeOwners?: Record<string, string>;
       context?: ActionContext;
     }
   >();
@@ -391,6 +395,12 @@ export class Desktop {
       access,
       (profile) => confirmations.requireTerminal(profile),
     );
+    this.gitActions = new GitActions({
+      direct: !process.mas,
+      access,
+      validateTarget: (owner, target) => validateGitTarget(target, this.gitWindow(owner)),
+      launch: (program, owner) => this.terminals.startGit(program, owner),
+    });
     this.externalTerminals = new ExternalTerminals(
       path.join(dataPath, 'terminal-launches'),
       () => this.settings.snapshot().settings,
@@ -856,6 +866,7 @@ export class Desktop {
     window.on('closed', () => {
       this.flushes.disconnected(sender);
       this.chats.retain(sender, new Set());
+      this.gitActions.stopOwner(sender);
       this.terminals.stopOwner(sender);
       void this.webPreviews
         .stopOwner(sender)
@@ -984,6 +995,7 @@ export class Desktop {
   }
   private async disposeServices(): Promise<void> {
     await this.chats.close();
+    await this.gitActions.close();
     this.git.close();
     this.ready = false;
     this.trash.close();
@@ -1027,6 +1039,21 @@ export class Desktop {
       result.status === 'rejected' ? [result.reason] : [],
     );
     if (errors.length) throw new AggregateError(errors, 'Desktop services failed to stop.');
+  }
+  private gitWindow(owner: number): GitTargetWindow | undefined {
+    const record = this.windows.get(owner);
+    if (!record || record.role !== 'viewer') return;
+    const current = record.catalog?.target.workspaceID === record.workspaceID;
+    return {
+      originID: record.originID,
+      workspaceID: record.workspaceID,
+      alive:
+        !record.window.isDestroyed() &&
+        !!record.workspaceID &&
+        this.workspaceSessions.owner(record.workspaceID) === owner,
+      workspaces: current ? record.workspaceCatalog : undefined,
+      owners: current ? record.planeOwners : undefined,
+    };
   }
   private audited = new Set<string>();
   /** Each reviewed agent request leaves one durable record of its outcome. */
@@ -1137,6 +1164,12 @@ export class Desktop {
         request.kind === 'status'
           ? this.git.status(request.path, request.refresh)
           : this.git.head(request.path),
+      gitAction: async ([request], owner) => {
+        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
+          throw new Error('Agents cannot run Git program actions.');
+        const target = await bindGitTarget(request.target, this.gitWindow(owner));
+        return this.gitActions.start({ ...request, target }, owner);
+      },
       gitResource: async ([source]) => {
         const bytes = await this.git.blob(source);
         const resource = await this.resources.grantBytes(source.repository, source.path, bytes);
@@ -1206,6 +1239,7 @@ export class Desktop {
           commands: args[1],
         };
         record.workspaceCatalog = args[2];
+        record.planeOwners = args[3];
         record.ready = true;
         for (const request of record.launches.splice(0))
           record.window.webContents.send('viewer:event', { type: 'launch', request });
@@ -1314,7 +1348,10 @@ export class Desktop {
       terminalResize: (args, senderID) =>
         this.terminals.resize(args[0], args[1], args[2], senderID),
       terminalAck: (args, senderID) => this.terminals.ack(args[0], args[1], senderID),
-      terminalClose: (args, senderID) => this.terminals.stop(args[0], senderID),
+      terminalClose: (args, senderID) => {
+        this.gitActions.stop(args[0], senderID);
+        this.terminals.stop(args[0], senderID);
+      },
       customExecute: (args) => {
         // never on an agent's request: its approval was for a recipe or a command, not a program
         if ([...this.agentCommands.values()].some(({ command }) => command === 'custom.' + args[0]))
@@ -1351,6 +1388,7 @@ export class Desktop {
             this.actions.quiesce(root),
             this.operations.quiesce(root),
             this.executions.quiesce(root),
+            this.gitActions.quiesce(root),
             this.terminals.quiesce(root),
             this.externalTerminals.quiesce(),
           ]);
@@ -1396,6 +1434,7 @@ export class Desktop {
             await this.actions.quiesce(root);
             await this.operations.quiesce(root);
             await this.executions.quiesce(root);
+            await this.gitActions.quiesce(root);
             await this.terminals.quiesce(root);
             await this.externalTerminals.quiesce();
             await this.watchers.revoke(root);
@@ -1644,6 +1683,7 @@ export class Desktop {
           launches,
           home,
           freshSession,
+          gitActionsAvailable: !process.mas,
           settings: this.settings.snapshot(this.credentials.ids()),
           platform: process.platform as DesktopPlatform,
           locations: [

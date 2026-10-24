@@ -2,6 +2,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import type { ReviewedFileExpectation } from './reviewed-file';
 import { guardNativeTestRemovals } from './test-removal-policy';
+import type { FullscreenPhase } from '../windows/fullscreen-transition';
 export interface NativeVolume {
   path: string;
   name: string;
@@ -23,6 +24,8 @@ export interface NativeAddedDate {
   added?: number;
 }
 export interface MacFiles {
+  /** Public AppKit transition notifications, read only for a live owned NSView handle. */
+  windowFullscreenPhase(handle: Buffer): FullscreenPhase;
   /** Displays native confirmation only. No callable erasure/approval endpoint. */
   trashConfirmation(review: string): void;
   datesAdded(files: string[]): Promise<NativeAddedDate[]>;

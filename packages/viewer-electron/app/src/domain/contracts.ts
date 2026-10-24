@@ -2,8 +2,10 @@ import type { PromptAnswer, PromptRequest } from './command-line/prompt';
 import type { FlushResult } from './persistence/flush';
 import type { DiffSource } from './comparison/diff';
 import type { GitRequest, GitReply, GitSource } from './comparison/git';
+import type { GitActionKind, GitActionRequest, GitActionReply } from './comparison/git-actions';
 import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
+import type { ProviderCheckRequest, ProviderCheckResult } from './models/provider-checks';
 import type { SessionKeys } from './preferences/session-keys';
 import type { WorkspaceOverrides } from './preferences/overrides';
 import type { Tiling } from './workspaces/tiling';
@@ -163,6 +165,8 @@ export interface TerminalPane {
   path: string;
   profileID: string;
   startOnOpen?: boolean;
+  /** Display metadata only. Git jobs are never replayed from saved state. */
+  gitAction?: GitActionKind;
 }
 export interface CollectionPane {
   id: string;
@@ -310,6 +314,7 @@ export interface UIPreferences {
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
+  gitActionsAvailable?: boolean;
   launches?: LaunchRequest[];
   freshSession?: boolean;
   home: string;
@@ -483,6 +488,7 @@ export interface ViewerAPI {
   newWindow(): Promise<void>;
   git(request: GitRequest): Promise<GitReply>;
   gitResource(source: GitSource): Promise<Resource>;
+  gitAction(request: GitActionRequest): Promise<GitActionReply>;
   watchRules(request: WatchRuleRequest): Promise<WatchRuleReply>;
   relationships(request: RelationshipsRequest): Promise<RelationshipsReply>;
   workflow(request: WorkflowRequest): Promise<WorkflowReply>;
@@ -500,6 +506,8 @@ export interface ViewerAPI {
     target: CapturedTarget,
     commands: CommandDescriptor[],
     workspaces?: AgentWorkspaceSnapshot,
+    /** Private active-workspace ownership; not part of agent discovery. */
+    planeOwners?: Record<string, string>,
   ): Promise<void>;
   agentCommandResult(id: string, error?: string): Promise<void>;
   agentReviewList(): Promise<AgentProposal[]>;
@@ -552,6 +560,7 @@ export interface ViewerAPI {
   sessionKeysDiscard(): Promise<SessionKeys>;
   providerCredential(id: string, key: string): Promise<void>;
   providerModels(id: string): Promise<string[]>;
+  providerCheck(request: ProviderCheckRequest): Promise<ProviderCheckResult>;
   providerPermissionGet(id: string): Promise<ModelDataPermission | null>;
   providerPermissionSet(id: string, endpoint: string, level: ModelDataLevel | null): Promise<void>;
   indexStatus(): Promise<IndexStatus>;

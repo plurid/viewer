@@ -2,11 +2,17 @@ import * as pty from 'node-pty';
 import type { TerminalEvent } from '../../domain/automation/actions';
 import { workerPort } from '../workers/worker-port';
 import { errorMessage } from '../../domain/errors';
+import type { TerminalWorkerRequest } from './terminal-protocol';
+import { TerminalOutputBudget } from './terminal-output';
 interface Session {
   process: pty.IPty;
   pending: number;
   chunks: string[];
   timer?: ReturnType<typeof setTimeout>;
+  deadline?: ReturnType<typeof setTimeout>;
+  readOnly: boolean;
+  stopped: boolean;
+  budget: TerminalOutputBudget;
 }
 const sessions = new Map<string, Session>();
 const port = workerPort;
@@ -20,19 +26,17 @@ function drain(id: string, value: Session): void {
     emit({ type: 'data', id, data });
   }
 }
+function stop(id: string, value: Session, message: string): void {
+  if (value.stopped) return;
+  value.stopped = true;
+  clearTimeout(value.deadline);
+  drain(id, value);
+  emit({ type: 'error', id, message });
+  value.process.resume();
+  value.process.kill();
+}
 port.on('message', (message) => {
-  const request = message.data as {
-    kind: string;
-    id: string;
-    executable: string;
-    args: string[];
-    cwd: string;
-    env: Record<string, string>;
-    cols: number;
-    rows: number;
-    data: string;
-    bytes: number;
-  };
+  const request = message.data as TerminalWorkerRequest;
   try {
     if (request.kind === 'start') {
       if (sessions.has(request.id)) return;
@@ -43,18 +47,46 @@ port.on('message', (message) => {
         cols: request.cols,
         rows: request.rows,
       });
-      const value: Session = { process, pending: 0, chunks: [] };
+      const value: Session = {
+        process,
+        pending: 0,
+        chunks: [],
+        readOnly: request.readOnly === true,
+        stopped: false,
+        budget: new TerminalOutputBudget(request.outputLimit, request.readOnly),
+      };
       sessions.set(request.id, value);
+      if (request.timeoutMs !== undefined)
+        value.deadline = setTimeout(
+          () =>
+            stop(
+              request.id,
+              value,
+              'Git action exceeded its time limit. Run it again in a terminal if it needs longer.',
+            ),
+          request.timeoutMs,
+        );
       port.postMessage({ type: 'started', id: request.id, pid: process.pid });
       process.onData((data) => {
-        value.pending += data.length;
-        value.chunks.push(data);
+        if (value.stopped) return;
+        const accepted = value.budget.accept(data);
+        value.pending += accepted.data.length;
+        if (accepted.data) value.chunks.push(accepted.data);
+        if (accepted.exceeded) {
+          stop(
+            request.id,
+            value,
+            'Git output exceeded its size limit. Narrow the request or run it in a terminal.',
+          );
+          return;
+        }
         if (value.pending >= 512 * 1024) process.pause();
         if (value.chunks.reduce((sum, chunk) => sum + chunk.length, 0) >= 64 * 1024)
           drain(request.id, value);
         else value.timer ??= setTimeout(() => drain(request.id, value), 12);
       });
       process.onExit(({ exitCode }) => {
+        clearTimeout(value.deadline);
         drain(request.id, value);
         sessions.delete(request.id);
         emit({ type: 'exit', id: request.id, code: exitCode });
@@ -66,17 +98,23 @@ port.on('message', (message) => {
           emit({ type: 'exit', id: request.id, code: 0 });
         return;
       }
-      if (request.kind === 'write') value.process.write(request.data);
-      else if (request.kind === 'resize') value.process.resize(request.cols, request.rows);
+      if (request.kind === 'write') {
+        if (value.readOnly) throw new Error('Read-only Git output does not accept terminal input.');
+        if (!value.stopped) value.process.write(request.data);
+      } else if (request.kind === 'resize') value.process.resize(request.cols, request.rows);
       else if (request.kind === 'ack') {
         value.pending = Math.max(0, value.pending - request.bytes);
-        if (value.pending < 128 * 1024) value.process.resume();
+        if (!value.stopped && value.pending < 128 * 1024) value.process.resume();
       } else if (request.kind === 'close') {
         clearTimeout(value.timer);
+        clearTimeout(value.deadline);
+        value.stopped = true;
         value.process.resume();
         value.process.kill();
       } else if (request.kind === 'kill') {
         clearTimeout(value.timer);
+        clearTimeout(value.deadline);
+        value.stopped = true;
         value.process.resume();
         value.process.kill('SIGKILL');
       }
@@ -85,6 +123,8 @@ port.on('message', (message) => {
     const session = sessions.get(request.id);
     if (session) {
       clearTimeout(session.timer);
+      clearTimeout(session.deadline);
+      session.stopped = true;
       try {
         session.process.kill();
       } catch {
@@ -101,6 +141,7 @@ port.on('message', (message) => {
 });
 process.on('exit', () => {
   for (const value of sessions.values()) {
+    clearTimeout(value.deadline);
     try {
       value.process.kill();
     } catch {

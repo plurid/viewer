@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+import { promisify } from 'node:util';
 import { app, BrowserWindow, screen } from 'electron';
 import { HotkeyWindow, type WindowBounds } from '../../../src/desktop/windows/hotkey-window';
 import { activateApplication } from '../../../src/desktop/windows/application-dispatch';
+import type { FullscreenPhase } from '../../../src/desktop/windows/fullscreen-transition';
 
 interface WindowEvidence {
   id: number;
@@ -11,13 +15,16 @@ interface WindowEvidence {
   visible: boolean;
   focused: boolean;
   minimized: boolean;
+  fullscreen: boolean;
   dropped: boolean;
   bounds?: WindowBounds;
+  normalBounds?: WindowBounds;
 }
 
 interface NativeState {
   hidden: boolean;
   targetID?: number;
+  onScreenWindowIDs?: number[];
   windows: WindowEvidence[];
 }
 
@@ -41,6 +48,9 @@ const profile = path.join(evidenceRoot, 'Profile');
 mkdirSync(profile, { mode: 0o700 });
 app.setName('Viewer hotkey regression');
 app.setPath('userData', profile);
+const nativeWindows = createRequire(path.join(evidenceRoot, 'native.cjs'))(
+  path.join(evidenceRoot, 'window-fullscreen.node'),
+) as { windowFullscreenPhase(handle: Buffer): FullscreenPhase };
 
 const events: NativeEvent[] = [];
 const windows: BrowserWindow[] = [];
@@ -48,11 +58,13 @@ let hotkey: HotkeyWindow | undefined;
 let target: BrowserWindow | undefined;
 let finished = false;
 let activationQueue: Promise<void> = Promise.resolve();
+let onScreenWindowIDs: number[] | undefined;
 
 function state(): NativeState {
   return {
     hidden: app.isHidden(),
     targetID: target?.id,
+    onScreenWindowIDs,
     windows: windows.map((window) => {
       const destroyed = window.isDestroyed();
       return {
@@ -61,8 +73,10 @@ function state(): NativeState {
         visible: !destroyed && window.isVisible(),
         focused: !destroyed && window.isFocused(),
         minimized: !destroyed && window.isMinimized(),
+        fullscreen: !destroyed && window.isFullScreen(),
         dropped: hotkey?.isDropped(window) ?? false,
         bounds: destroyed ? undefined : window.getBounds(),
+        normalBounds: destroyed ? undefined : window.getNormalBounds(),
       };
     }),
   };
@@ -76,6 +90,7 @@ function writeEvidence(error?: unknown, passed = false): void {
         version: 1,
         pid: process.pid,
         profile,
+        scenario: process.env.VIEWER_HOTKEY_FIXTURE_SCENARIO ?? 'normal',
         passed,
         events,
         error:
@@ -94,7 +109,7 @@ function snapshot(label: string): void {
 }
 
 /** Poll native state through its asynchronous transition, then require a stable observation. */
-async function until(label: string, predicate: () => boolean): Promise<void> {
+async function until(label: string, predicate: () => boolean | Promise<boolean>): Promise<void> {
   const deadline = performance.now() + stateTimeout;
   let stableSince: number | undefined;
   let previous = '';
@@ -107,7 +122,7 @@ async function until(label: string, predicate: () => boolean): Promise<void> {
       previous = current;
       snapshot(label + ': observed');
     }
-    if (predicate()) {
+    if (await predicate()) {
       stableSince ??= now;
       if (now - stableSince >= stableMilliseconds) {
         snapshot(label + ': settled');
@@ -132,6 +147,18 @@ function droppedAndFocused(window: BrowserWindow): boolean {
   );
 }
 
+async function onScreen(window: BrowserWindow): Promise<boolean> {
+  const { stdout } = await promisify(execFile)(
+    path.join(evidenceRoot!, 'on-screen-windows'),
+    [String(process.pid)],
+    { timeout: 2000, maxBuffer: 65536 },
+  );
+  onScreenWindowIDs = JSON.parse(stdout) as number[];
+  const identifier = /^window:(\d+):/.exec(window.getMediaSourceId());
+  assert.ok(identifier, 'The native window has a CoreGraphics source identifier.');
+  return onScreenWindowIDs.includes(Number(identifier[1]));
+}
+
 async function focusOtherWindow(original: BrowserWindow): Promise<void> {
   const other = windows.find((window) => window !== original && window.isVisible());
   assert.ok(other, 'Another owned workspace is available for native focus transfer.');
@@ -145,11 +172,16 @@ async function focusOtherWindow(original: BrowserWindow): Promise<void> {
 
 async function run(): Promise<void> {
   assert.equal(realpathSync(app.getPath('userData')), realpathSync(profile));
+  const scenario = process.env.VIEWER_HOTKEY_FIXTURE_SCENARIO;
+  const fullscreenScenario = scenario === 'fullscreen' || scenario === 'fullscreen-entering';
   for (let index = 0; index < 3; index += 1) {
     const window = new BrowserWindow({
       title: 'Viewer hotkey regression ' + (index + 1),
       width: 800,
       height: 600,
+      minWidth: 780,
+      minHeight: 560,
+      titleBarStyle: 'hiddenInset',
       show: false,
     });
     window.on('focus', () => {
@@ -166,12 +198,18 @@ async function run(): Promise<void> {
     window.on('restore', () => {
       if (!finished) snapshot('native workspace restore');
     });
+    window.on('enter-full-screen', () => {
+      if (!finished) snapshot('native workspace entered fullscreen');
+    });
+    window.on('leave-full-screen', () => {
+      if (!finished) snapshot('native workspace left fullscreen');
+    });
     windows.push(window);
     await window.loadURL('data:text/html,<title>Native hotkey regression</title>');
     window.show();
     await until('workspace ' + (index + 1) + ' shown', () => visibleAndFocused(window));
   }
-  const original = windows[2]!;
+  const original = windows.at(-1)!;
   original.focus();
   await until('original workspace focused', () => original.isFocused() && target === original);
   const originalBounds = original.getBounds();
@@ -181,6 +219,8 @@ async function run(): Promise<void> {
     () => screen.getPrimaryDisplay().workArea,
     () => true,
     () => {},
+    true,
+    (window) => nativeWindows.windowFullscreenPhase(window.getNativeWindowHandle()),
   );
   hotkey.configure(true, 'Alt+Space');
   const activate = () =>
@@ -198,11 +238,54 @@ async function run(): Promise<void> {
     activationQueue = activationQueue.then(activate).catch(finish);
   });
 
+  if (fullscreenScenario) {
+    if (scenario === 'fullscreen') {
+      await new Promise<void>((resolve) => {
+        original.once('enter-full-screen', () => resolve());
+        hotkey!.setFullScreen(original, true);
+      });
+      await until('original workspace in fullscreen', () => visibleAndFocused(original));
+      assert.ok(original.isFullScreen());
+    } else {
+      hotkey.setFullScreen(original, true);
+    }
+    snapshot('before fullscreen toggle');
+    await hotkey.toggle();
+    await until(
+      'fullscreen workspace becomes visible drop-down',
+      async () =>
+        droppedAndFocused(original) &&
+        !original.isFullScreen() &&
+        original.getBounds().height < screen.getPrimaryDisplay().workArea.height &&
+        (await onScreen(original)),
+    );
+    await hotkey.toggle();
+    await until(
+      'fullscreen drop-down hidden',
+      async () => !original.isVisible() && !(await onScreen(original)),
+    );
+    await hotkey.toggle();
+    await until(
+      'fullscreen drop-down shown again',
+      async () => droppedAndFocused(original) && (await onScreen(original)),
+    );
+    await activate();
+    await until(
+      'original fullscreen restored',
+      async () =>
+        visibleAndFocused(original) &&
+        original.isFullScreen() &&
+        !hotkey!.isDropped(original) &&
+        (await onScreen(original)),
+    );
+    return;
+  }
+
   snapshot('before first toggle');
   await hotkey.toggle();
   await until('first drop-down shown', () => droppedAndFocused(original));
   await hotkey.toggle();
-  await until('drop-down hidden', () => !original.isVisible() && !hotkey!.isDropped(original));
+  await until('drop-down hidden', () => !original.isVisible() && hotkey!.isDropped(original));
   assert.equal(original.isVisible(), false, 'The second toggle must actually hide its window.');
   await focusOtherWindow(original);
   await hotkey.toggle();
@@ -230,7 +313,7 @@ async function run(): Promise<void> {
   await hotkey.toggle();
   await until(
     'hotkey target hidden before Dock helper',
-    () => !original.isVisible() && !hotkey!.isDropped(original),
+    () => !original.isVisible() && hotkey!.isDropped(original),
   );
   assert.equal(original.isVisible(), false, 'Dock recovery starts from a hidden hotkey target.');
   await focusOtherWindow(original);

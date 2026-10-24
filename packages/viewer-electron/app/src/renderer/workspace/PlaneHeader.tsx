@@ -1,4 +1,5 @@
 import { useCallback, useState, useSyncExternalStore } from 'react';
+import { gitActionLabels } from '../../domain/comparison/git-actions';
 import type { PluridPlaneChromeContext, TreePlane } from '@plurid/plurid-data';
 import {
   activeWorkspace,
@@ -245,7 +246,11 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
                       : pane?.type === 'search'
                         ? pane.name
                         : pane?.type === 'terminal'
-                          ? 'Terminal · ' + baseName(pane.path)
+                          ? (pane.gitAction
+                              ? 'Git ' + gitActionLabels[pane.gitAction]
+                              : 'Terminal') +
+                            ' · ' +
+                            baseName(pane.path)
                           : (pane && baseName(pane.path)) || 'Plane'}
         </span>
         {unsaved && (

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { Credentials, Providers, providerBinding } from '../src/desktop/models/providers';
+import { chatStepSchema } from '../src/domain/models/chat';
 import {
   newModelProvider,
   providerKinds,
@@ -38,6 +40,125 @@ async function approved(provider: ModelProvider, request: typeof fetch) {
   return new Providers(credentials, request, permissions);
 }
 describe('model provider presets and adapters', () => {
+  it('sends Gemini a smaller Chat grammar and retains the full limits in its instructions', async () => {
+    const provider = { ...newModelProvider('gemini', 'fixture'), model: 'fixture-model' };
+    await credentials.set('fixture', 'generated-test-key', providerBinding(provider));
+    const request = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: '{"rows":[]}' } }],
+      }),
+    );
+    const original = z.toJSONSchema(chatStepSchema);
+    await (
+      await approved(provider, request)
+    ).generate(
+      provider,
+      'Inspect only the given files.',
+      [],
+      original,
+      new AbortController().signal,
+    );
+    const body = JSON.parse(String(request.mock.calls[0]![1]!.body));
+    expect(body.response_format.type).toBe('json_schema');
+    expect(body.response_format.json_schema.strict).toBe(true);
+    expect(body.response_format.json_schema.schema.properties.patches).not.toHaveProperty(
+      'maxItems',
+    );
+    expect(body.response_format.json_schema.schema.properties.renames).not.toHaveProperty(
+      'maxItems',
+    );
+    expect(body.messages[0].content).toContain(JSON.stringify(original));
+    expect(original).toHaveProperty('properties.patches.maxItems', 20);
+    expect(original).toHaveProperty('properties.renames.maxItems', 100);
+  });
+
+  it('normalizes Gemini model resource names for discovery and requests', async () => {
+    const provider = {
+      ...newModelProvider('gemini', 'fixture'),
+      model: 'models/gemini-fixture',
+    };
+    await credentials.set('fixture', 'generated-test-key', providerBinding(provider));
+    const bodies: Record<string, unknown>[] = [];
+    const request = vi.fn<typeof fetch>(async (_url, options) => {
+      if (!options?.body)
+        return Response.json({
+          data: [{ id: 'models/gemini-fixture' }, { id: 'gemini-fixture' }],
+        });
+      bodies.push(JSON.parse(String(options.body)));
+      return Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: '{"rows":[]}' } }],
+      });
+    });
+    const providers = await approved(provider, request);
+    expect(await providers.models(provider)).toEqual(['gemini-fixture']);
+    await providers.generate(provider, '', [], schema, new AbortController().signal);
+    expect(bodies[0]?.model).toBe('gemini-fixture');
+  });
+
+  it('explains a Gemini schema rejection without echoing provider messages', async () => {
+    const provider = { ...newModelProvider('gemini', 'fixture'), model: 'fixture-model' };
+    await credentials.set('fixture', 'generated-test-key', providerBinding(provider));
+    const request = vi.fn<typeof fetch>(async () =>
+      Response.json(
+        {
+          error: {
+            code: 400,
+            status: 'INVALID_ARGUMENT',
+            message: 'response_schema has too many states. PRIVATE_PROMPT and generated-test-key',
+          },
+        },
+        { status: 400 },
+      ),
+    );
+    const providers = await approved(provider, request);
+    const failure = await providers
+      .generate(provider, '', ['PRIVATE_PROMPT'], schema, new AbortController().signal)
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('INVALID_ARGUMENT');
+    expect((failure as Error).message).toContain('structured-output schema');
+    expect((failure as Error).message).not.toContain('PRIVATE_PROMPT');
+    expect((failure as Error).message).not.toContain('generated-test-key');
+  });
+
+  it.each([
+    null,
+    { choices: [{ message: null }] },
+    { choices: [{ message: { content: { private: 'GENERATED_PRIVATE_RESPONSE' } } }] },
+  ])('rejects malformed success envelopes without exposing their contents', async (body) => {
+    const provider = { ...newModelProvider('gemini', 'fixture'), model: 'fixture-model' };
+    await credentials.set('fixture', 'generated-test-key', providerBinding(provider));
+    const request = vi.fn<typeof fetch>(async () => Response.json(body));
+    await expect(
+      (await approved(provider, request)).generate(
+        provider,
+        '',
+        [],
+        schema,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('The provider returned an invalid response envelope.');
+  });
+
+  it('rejects invalid generated JSON without exposing parser excerpts', async () => {
+    const provider = { ...newModelProvider('gemini', 'fixture'), model: 'fixture-model' };
+    await credentials.set('fixture', 'generated-test-key', providerBinding(provider));
+    const request = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        choices: [{ finish_reason: 'stop', message: { content: '{"GENERATED_PRIVATE_RESPONSE' } }],
+      }),
+    );
+    await expect(
+      (await approved(provider, request)).generate(
+        provider,
+        '',
+        [],
+        schema,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('The model returned invalid JSON. No changes were applied.');
+  });
+
   it('sends a stored key only to the provider type and endpoint it was entered for', async () => {
     const provider = { ...newModelProvider('openrouter', 'fixture'), model: 'fixture-model' };
     await credentials.set('fixture', 'test-only-key', providerBinding(provider));

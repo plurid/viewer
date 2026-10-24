@@ -12,6 +12,7 @@ import { IconButton } from '../ui/primitives';
 import { usePreviewControlsSlot } from '../previews/controls';
 import { searchDecorations, terminalFontOptions, terminalTheme } from './theme';
 import { registerTerminalFind } from './find';
+import { gitTerminalProfileID } from '../../domain/comparison/git-actions';
 const quote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
 export function TerminalPlane({ pane }: { pane: Pane }) {
   const container = useRef<HTMLDivElement>(null);
@@ -44,7 +45,12 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
       cols: 80,
       rows: 24,
     };
-    void terminalSession(request, settings.scrollback)
+    const git = !!pane.gitAction || pane.profileID === gitTerminalProfileID;
+    void terminalSession(
+      request,
+      settings.scrollback,
+      git ? { readonly: true, processLabel: 'Git' } : undefined,
+    )
       .then(async (session) => {
         if (!attached || !container.current) return;
         live.current = session;
@@ -55,7 +61,12 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
         );
         session.attach(container.current);
         setReady(true);
-        if (!session.started && !session.exited) {
+        if (git && !session.started && !session.exited) {
+          session.exited = true;
+          session.terminal.options.disableStdin = true;
+          session.terminal.writeln('This Git output is from a previous session.');
+          session.terminal.writeln('Run a Git action from its folder to open a new result.');
+        } else if (!git && !session.started && !session.exited) {
           session.starting ??= window.viewer
             .terminalStart({ ...request, cols: session.terminal.cols, rows: session.terminal.rows })
             .then(async () => {

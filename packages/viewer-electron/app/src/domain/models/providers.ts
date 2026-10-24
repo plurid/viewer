@@ -12,6 +12,12 @@ export const providerKinds = [
 ] as const;
 export type ProviderKind = (typeof providerKinds)[number];
 
+/** Gemini resource names and its OpenAI-compatible chat IDs identify the same model. */
+export function providerModelID(kind: ProviderKind, model: string): string {
+  const id = model.trim();
+  return kind === 'gemini' ? id.replace(/^models\//, '') : id;
+}
+
 interface ProviderPreset {
   name: string;
   endpoint: string;

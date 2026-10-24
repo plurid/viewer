@@ -13,6 +13,7 @@ import { lineCompletions, queryTerms, type Completion } from './complete';
 import type { LineHost } from './host';
 import { planLine, userCommands } from './run';
 import { effectiveKeymap } from '../keys/session';
+import { clearLineHistory } from '../commands/history';
 import { bindingRows, keyGlyphs, type KeymapBinding } from '../../domain/preferences/keymap';
 
 interface Row {
@@ -280,7 +281,7 @@ export function LineFinder({
         onClose={onBack}
         onEmptyBackspace={onBack}
         label="Command line"
-        placeholder="q · vs ~/Documents · set grid! · tabn 2 · help"
+        placeholder="help"
         empty="No lines yet: try help"
         leading={
           <>
@@ -293,10 +294,12 @@ export function LineFinder({
         onKey={(event) => {
           if (event.key === 'Tab' && !event.shiftKey) {
             const first = rows.find((row) => row.id.startsWith('complete:'));
-            if (first?.insert) change(first.insert);
+            if (!first?.insert) return false;
+            change(first.insert);
             return true;
           }
           if (event.ctrlKey && (event.key === 'p' || event.key === 'n')) {
+            if (!history.length) return true;
             const next = Math.max(
               -1,
               Math.min(history.length - 1, historyAt + (event.key === 'p' ? 1 : -1)),
@@ -307,6 +310,15 @@ export function LineFinder({
           }
           return false;
         }}
+        onClearRecent={
+          history.length
+            ? () => {
+                setHistoryAt(-1);
+                clearLineHistory();
+              }
+            : undefined
+        }
+        clearRecentLabel="Clear recent command lines"
         onSelect={(chosen) => {
           const row = rows.find((item) => item.id === chosen.id);
           if (row?.insert !== undefined) change(row.insert);

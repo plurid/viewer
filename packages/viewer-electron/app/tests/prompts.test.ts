@@ -101,6 +101,17 @@ describe('answering a prompt', () => {
     value.customActions = actions;
     return value;
   };
+  it.each([
+    null,
+    { line: 'frame-all' },
+    { line: 'frame-all', explanation: 42 },
+    { line: 'frame-all', explanation: 'Frame the planes.', unexpected: true },
+  ])('rejects malformed model answers before offering a command line', async (answer) => {
+    await expect(
+      answerPrompt(request, settings(), async () => answer, new AbortController().signal),
+    ).rejects.toThrow('The model returned an invalid command response. Try again.');
+  });
+
   it('asks the model chosen for prompts, at the names level, and checks its line', async () => {
     const generate = vi.fn(async () => ({
       line: ':sort.modified',

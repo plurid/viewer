@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { modelLineCommandProblem } from '../agents/safety';
 import type { CustomAction } from '../automation/actions';
 import { queryTypes } from '../search/query';
@@ -34,22 +35,18 @@ export interface PromptAnswer {
   /** Why the line may not run as the model gave it; the line is then not offered. */
   problem?: string;
 }
-/** The structured answer every provider returns. */
-export const promptSchema = {
-  type: 'object',
-  properties: {
-    line: {
-      type: 'string',
-      description: 'One line of the command language, or "" when the request cannot be done.',
-    },
-    explanation: {
-      type: 'string',
-      description: 'One short sentence: what the line does, or why there is none.',
-    },
-  },
-  required: ['line', 'explanation'],
-  additionalProperties: false,
-} as const;
+/** Generation and local validation share one structured-answer contract. */
+export const promptAnswerSchema = z
+  .object({
+    line: z
+      .string()
+      .describe('One line of the command language, or "" when the request cannot be done.'),
+    explanation: z
+      .string()
+      .describe('One short sentence: what the line does, or why there is none.'),
+  })
+  .strict();
+export const promptSchema = z.toJSONSchema(promptAnswerSchema);
 
 /** Resolve the same configuration and session overlay used by the line runner. */
 export function namedLines(

@@ -19,7 +19,7 @@ export const Transcript = memo(function Transcript({
   useEffect(() => {
     if (transcript.current && follow.current)
       transcript.current.scrollTop = transcript.current.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, running]);
   return (
     <div
       className="chat-transcript"
@@ -27,16 +27,19 @@ export const Transcript = memo(function Transcript({
       role="log"
       aria-label="Conversation transcript"
       aria-live="polite"
+      aria-relevant="additions text"
+      tabIndex={0}
       onScroll={(event) => {
         const element = event.currentTarget;
         follow.current =
           element.scrollHeight - element.clientHeight - element.scrollTop <= followDistance;
       }}
     >
-      {!messages.length && (
-        <p className="muted">
-          Ask about the attached files. Proposed changes appear for your review.
-        </p>
+      {!messages.length && !running && (
+        <div className="chat-empty">
+          <strong>Ask about your files</strong>
+          <p>Ask about the attached files. Proposed changes appear for your review.</p>
+        </div>
       )}
       {messages.map((message) =>
         message.role === 'tool' ? (
@@ -54,12 +57,18 @@ export const Transcript = memo(function Transcript({
             <strong title={message.provider?.model}>{messageAuthor(message)}</strong>
             <p>{message.text}</p>
             {message.proposal && (
-              <button onClick={() => onReview(message.proposal!)}>Review proposal</button>
+              <button type="button" onClick={() => onReview(message.proposal!)}>
+                Review proposal
+              </button>
             )}
           </article>
         ),
       )}
-      {running && <p role="status">Inspecting context…</p>}
+      {running && (
+        <p className="chat-running" role="status">
+          Reply in progress…
+        </p>
+      )}
     </div>
   );
 });

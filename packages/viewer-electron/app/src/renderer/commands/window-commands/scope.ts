@@ -2,6 +2,7 @@ import type { PaletteMode } from '../palette-modes';
 import { activeWorkspace, getState } from '../../state/store';
 import type { WorkspaceController } from '../../workspace/context';
 import type { CommandContext } from '../registry';
+import type { CapturedTarget } from '../../../domain/automation/actions';
 
 export interface WindowActions {
   workspace: WorkspaceController;
@@ -28,6 +29,7 @@ export interface WindowActions {
   templateDialog(): void;
   /** Names the current chrome and look as a setting profile. */
   profileDialog(): void;
+  gitCommit(target: CapturedTarget): void;
 }
 /** The state snapshot and scope predicates shared by every window command group. */
 export function windowScopes(actions: WindowActions) {

@@ -33,6 +33,7 @@ import {
   settingRows,
 } from './palette-sections';
 import { palettePrefixes, type PaletteMode } from './palette-modes';
+import { clearRecentCommands } from './history';
 
 export function CommandPalette({
   mode,
@@ -205,6 +206,8 @@ function CommandFinder({
         recent={
           settings ? [] : recent.filter((id) => rows.some((row) => row.id === id)).slice(0, 2)
         }
+        onClearRecent={!settings && recent.length ? clearRecentCommands : undefined}
+        clearRecentLabel="Clear recent commands"
         onSelect={(command) => {
           if (command.id === moreSettingsID) {
             onMode('settings', query);

@@ -3,9 +3,14 @@ import type { SidebarSection } from '../../../domain/contracts';
 import { trashLocation } from '../../../domain/files/trash';
 import { reorder } from '../../../domain/preferences/ui';
 import {
+  displayedSidebarLocations,
+  moveSidebarLocation,
+} from '../../../domain/preferences/sidebar-locations';
+import {
   activeWorkspace,
   addFavorite,
   changePreferences,
+  getState,
   report,
   setActivePane,
   updatePane,
@@ -18,6 +23,7 @@ import type { CommandRequest } from '../../commands/registry';
 import { measureLocalX, type Point } from '../projectedResize';
 import { baseName } from '../../../domain/workspaces/planes';
 import { effectiveWindowUI } from '../../state/effective-ui';
+import { changeSetting } from '../../commands/window-commands/settings';
 
 const titles = { locations: 'Locations', favorites: 'Favorites', recents: 'Recent' };
 export const SIDEBAR_DRAG = 'application/x-viewer-sidebar';
@@ -69,15 +75,11 @@ export function Sidebar({ paneID }: { paneID?: string }) {
         updatePane(paneID, { sidebar: { visible: layout.visible, width } });
     } else changePreferences((ui) => ({ ...ui, sidebar: { ...ui.sidebar, width } }));
   }
-  const order = [
-    ...sidebar.locations,
-    ...bootstrap.locations
-      .map((item) => item.path)
-      .filter((path) => !sidebar.locations.includes(path)),
-  ];
-  const locations = order
-    .flatMap((path) => bootstrap.locations.find((item) => item.path === path) ?? [])
-    .filter((item) => !sidebar.hidden.includes(item.path));
+  const order = displayedSidebarLocations(sidebar, bootstrap.locations);
+  const locations = [
+    ...order.flatMap((path) => bootstrap.locations.find((item) => item.path === path) ?? []),
+    ...bootstrap.locations.filter((item) => item.path === trashLocation),
+  ].filter((item) => !sidebar.hidden.includes(item.path));
   const groups = {
     locations,
     favorites: saved.favorites,
@@ -118,10 +120,10 @@ export function Sidebar({ paneID }: { paneID?: string }) {
       return;
     }
     if (section === 'locations' && dragged?.section === 'locations' && dragged.path) {
-      changePreferences((ui) => ({
-        ...ui,
-        sidebar: { ...ui.sidebar, locations: reorder(order, dragged.path!, before) },
-      }));
+      const state = getState();
+      const current = effectiveWindowUI(state).sidebar;
+      const next = moveSidebarLocation(current, state.bootstrap.locations, dragged.path, before);
+      if (next) await changeSetting('ui.sidebar.locations', next);
       return;
     }
     if (section !== 'favorites') return;

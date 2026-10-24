@@ -6,7 +6,7 @@ the existing desktop services.
 
 ## Git status
 
-Turn on **Settings → Browsing → Show Git status** in the direct build. It starts
+Turn on **Settings → Browsing → Git → Show Git status** in the direct build. It starts
 off. While disabled, Viewer neither probes Git nor scans repositories.
 
 List, grid, columns, gallery and Map show change badges. The optional **Git** list
@@ -21,6 +21,11 @@ and read-only commands. Hooks, fsmonitor, optional locks, replacement objects,
 credential prompts, lazy fetch and network protocols are disabled. Processes have
 time and output limits; at most two Git commands run concurrently. Incomplete,
 oversized or unreadable results are reported instead of presented as clean.
+
+The folder's **Git** submenu and command palette also provide explicit human
+status/history, staging, commit, fast-forward pull and upstream push actions.
+They remain available with background badges disabled. See
+[folder Git actions](git-actions.md) for scope, result planes and execution behavior.
 
 ## Comparison planes
 

@@ -1,5 +1,9 @@
 # Actions and agents
 
+The [composable action proposal](composable-actions.md) records the proposed visual
+builder, typed forms, artifact composition and user-organized palette. Those
+extensions are separate from the implemented capabilities documented below.
+
 Actions produce a proposal bound to the workspace, root, plane and files captured when invoked. Switching planes later does not retarget that task. Open them through a file's searchable context menu, Command-K, the native Actions menu or a recipe shortcut. Recipes can be edited, duplicated, imported and exported in Settings → Actions.
 
 The manual file-rename dialog also offers **Rename actions…**. It lists applicable instruction, book and batch-rename recipes, retains the dialog's original target and opens the usual action setup. Choosing a recipe creates no file change by itself; its proposal still requires review and Apply.
@@ -36,6 +40,15 @@ Settings → Models has a provider picker for OpenAI, Anthropic, z.ai, DeepSeek,
 | Qwen       | Uses the [Alibaba Model Studio compatible API](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope). Match the endpoint to the API key's region; regional and workspace-specific endpoints are supported. Choose a model that supports [structured output in non-thinking mode](https://www.alibabacloud.com/help/en/model-studio/qwen-structured-output). |
 | Gemini     | Uses Google's [OpenAI-compatible Gemini API](https://ai.google.dev/gemini-api/docs/openai), model discovery and structured JSON output.                                                                                                                                                                                                                                                         |
 | OpenRouter | Uses [structured output](https://openrouter.ai/docs/guides/features/structured-outputs). Discovery filters models whose advertised parameters exclude structured outputs; routing requires providers that honor the requested parameters.                                                                                                                                                       |
+
+Gemini receives the typed response grammar without array cardinality bounds or
+the JSON Schema dialect annotation. The complete schema remains in its
+instructions and in local validation. This avoids the rejected Chat grammar
+observed in live acceptance; Google's [schema limitations](https://ai.google.dev/gemini-api/docs/structured-output#limitations)
+describe array-bound complexity as a possible cause of `INVALID_ARGUMENT`.
+Settings offers an explicit **Test structured output** check with fixed synthetic
+input and no attached files. It uses the selected model and the same private
+permission/key routes as Chat; it never runs automatically.
 
 All returned proposals pass the same local shape, evidence and scope validation before review, including providers that cannot enforce the schema themselves. Refused or truncated responses are rejected. Named cloud profiles use supported API hosts and do not forward credentials through redirects. Provider keys are encrypted through Electron's platform secure storage and written in mode-0600 metadata; renderers receive credential IDs rather than saved key values.
 

@@ -11,20 +11,40 @@ import { executablePath } from './terminal-launch';
 import { terminateTerminalGroup } from './terminal-groups';
 import { childEnvironment } from './process-environment';
 import { errorMessage } from '../../domain/errors';
+import {
+  gitTerminalProfileID,
+  readOnlyGitAction,
+  type GitActionKind,
+} from '../../domain/comparison/git-actions';
+import type { GitTerminalLaunch } from '../comparison/git-actions';
+import type { TerminalWorkerRequest } from './terminal-protocol';
+
+interface PendingTerminal {
+  owner: number;
+  request: TerminalStart;
+  cancelled: boolean;
+  git?: GitActionKind;
+  promise: Promise<void>;
+}
+
+interface TerminalSession {
+  owner: number;
+  request: TerminalStart;
+  output: string;
+  cwd: string;
+  git?: GitActionKind;
+}
+
 export class Terminals {
   private closed = false;
   private worker?: OwnedWorker;
   private groups = new Map<string, number>();
+  /** Keep a repository reserved until all descendants are confirmed stopped, even after exit. */
+  private gitMutations = new Map<string, string>();
   private cleanup = new Set<Promise<void>>();
   private failedCleanup = new Map<string, { cwd: string; error: Error }>();
-  private pending = new Map<
-    string,
-    { owner: number; request: TerminalStart; cancelled: boolean; promise: Promise<void> }
-  >();
-  private sessions = new Map<
-    string,
-    { owner: number; request: TerminalStart; output: string; cwd: string }
-  >();
+  private pending = new Map<string, PendingTerminal>();
+  private sessions = new Map<string, TerminalSession>();
   private stopping = new Map<
     string,
     {
@@ -44,6 +64,8 @@ export class Terminals {
     private confirm: (profile: TerminalProfile) => Promise<void> = async () => {},
   ) {}
   start(request: TerminalStart, owner: number): Promise<void> {
+    if (request.profileID === gitTerminalProfileID)
+      return Promise.reject(new Error('Git actions start only through their reviewed command.'));
     if (this.closed) return Promise.reject(new Error('Terminals have closed.'));
     if (this.failedCleanup.has(request.id))
       return Promise.reject(
@@ -71,6 +93,115 @@ export class Terminals {
       if (this.pending.get(request.id) === ticket) this.pending.delete(request.id);
     });
     return ticket.promise;
+  }
+
+  /** Called only by GitActions after compiling a fixed operation and reviewing mutations. */
+  startGit(program: GitTerminalLaunch, owner: number): Promise<void> {
+    const { request } = program;
+    if (process.mas)
+      return Promise.reject(new Error('Git actions are available in the direct build only.'));
+    if (this.closed) return Promise.reject(new Error('Terminals have closed.'));
+    if (
+      program.executable !== '/usr/bin/git' ||
+      request.profileID !== gitTerminalProfileID ||
+      !Number.isSafeInteger(program.outputLimit) ||
+      program.outputLimit < 1 ||
+      program.outputLimit > 1024 * 1024 ||
+      !Number.isSafeInteger(program.timeoutMs) ||
+      program.timeoutMs < 1 ||
+      program.timeoutMs > 10 * 60 * 1000
+    )
+      return Promise.reject(new Error('The private Git launch specification is invalid.'));
+    if (
+      this.failedCleanup.has(request.id) ||
+      this.stopping.has(request.id) ||
+      this.sessions.has(request.id) ||
+      this.pending.has(request.id)
+    )
+      return Promise.reject(
+        new Error('This Git terminal has already started or is still stopping.'),
+      );
+    if (!readOnlyGitAction(program.kind)) {
+      const busy = [...this.sessions.values(), ...this.pending.values()].some(
+        (session) =>
+          session.git !== undefined &&
+          !readOnlyGitAction(session.git) &&
+          session.request.cwd === request.cwd,
+      );
+      if (busy || [...this.gitMutations.values()].includes(request.cwd))
+        return Promise.reject(new Error('Another Git action is still changing this repository.'));
+    }
+    const ticket: PendingTerminal = {
+      owner,
+      request,
+      git: program.kind,
+      cancelled: false,
+      promise: Promise.resolve(),
+    };
+    this.pending.set(request.id, ticket);
+    const cancel = () => this.stop(request.id, owner);
+    program.signal.addEventListener('abort', cancel, { once: true });
+    ticket.promise = this.prepareGit(program, ticket).finally(() => {
+      program.signal.removeEventListener('abort', cancel);
+      if (this.pending.get(request.id) === ticket) this.pending.delete(request.id);
+    });
+    return ticket.promise;
+  }
+
+  private async prepareGit(program: GitTerminalLaunch, ticket: PendingTerminal): Promise<void> {
+    const check = () => {
+      if (this.closed || ticket.cancelled || program.signal.aborted)
+        throw new Error('Git action cancelled before launch.');
+    };
+    check();
+    if (this.sessions.size + this.pending.size > 100)
+      throw new Error('Close a terminal before opening another.');
+    const { request } = program;
+    await this.access([request.cwd]);
+    check();
+    const cwd = await fs.realpath(absolute(request.cwd));
+    if (!(await fs.stat(cwd)).isDirectory()) throw new Error('The Git repository is unavailable.');
+    if (cwd !== request.cwd) throw new Error('The Git repository moved before launch.');
+    await this.access([cwd]);
+    check();
+    if (!readOnlyGitAction(program.kind)) {
+      const busy = [...this.sessions.values(), ...this.pending.values()].some(
+        (session) =>
+          session !== ticket &&
+          session.git !== undefined &&
+          !readOnlyGitAction(session.git) &&
+          session.request.cwd === cwd,
+      );
+      if (busy || [...this.gitMutations.values()].includes(cwd))
+        throw new Error('Another Git action is still changing this repository.');
+    }
+    const worker = this.ensureWorker();
+    this.sessions.set(request.id, {
+      owner: ticket.owner,
+      request,
+      cwd,
+      output: '',
+      git: program.kind,
+    });
+    if (!readOnlyGitAction(program.kind)) this.gitMutations.set(request.id, cwd);
+    const message: TerminalWorkerRequest = {
+      kind: 'start',
+      ...request,
+      cwd,
+      executable: program.executable,
+      args: program.args,
+      env: { ...program.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+      readOnly: readOnlyGitAction(program.kind),
+      outputLimit: program.outputLimit,
+      timeoutMs: program.timeoutMs,
+    };
+    try {
+      worker.postMessage(message);
+    } catch (error) {
+      this.sessions.delete(request.id);
+      this.gitMutations.delete(request.id);
+      throw error;
+    }
   }
   private async prepare(request: TerminalStart, owner: number): Promise<void> {
     const existing = this.sessions.get(request.id);
@@ -107,66 +238,14 @@ export class Terminals {
     if (this.closed || this.pending.get(request.id)?.cancelled) return;
     await this.access([request.cwd, cwd]);
     if (this.closed || this.pending.get(request.id)?.cancelled) return;
-    if (!this.worker) {
-      // One PTY worker per desktop. MAS threads share dynamic picker grants;
-      // node-pty is never loaded concurrently by multiple terminal threads.
-      const worker = launchWorker(
-        this.workerPath,
-        'Viewer terminals',
-        process.mas ? 'thread' : undefined,
-      );
-      this.worker = worker;
-      let diagnostic = '';
-      worker.thread?.on('error', (error: unknown) => {
-        diagnostic = errorMessage(error);
-      });
-      const capture = (data: Buffer) => {
-        diagnostic = (diagnostic + data.toString()).slice(-2000);
-      };
-      if (worker.thread) worker.thread.stderr?.on('data', capture);
-      else worker.process?.stderr?.on('data', capture);
-      worker.message((reply) => {
-        const internal = reply as unknown as { type: string; id: string; pid?: number };
-        if (internal.type === 'started') {
-          if (Number.isSafeInteger(internal.pid) && internal.pid! > 1)
-            this.groups.set(internal.id, internal.pid!);
-          return;
-        }
-        const event = reply as unknown as TerminalEvent;
-        if (event.type === 'exit') {
-          this.reap(event.id, event);
-          return;
-        }
-        const session = this.sessions.get(event.id);
-        if (!session) return;
-        if (event.type === 'data')
-          session.output = (session.output + event.data).slice(-128 * 1024);
-        this.emit(session.owner, event);
-        if (event.type === 'error') this.stop(event.id, session.owner);
-      });
-      worker.exit(() => {
-        if (this.worker !== worker) return;
-        this.worker = undefined;
-        for (const [id, session] of this.sessions) {
-          this.emit(session.owner, {
-            type: 'error',
-            id,
-            message:
-              'Terminal process stopped. Reopen the terminal to start a fresh shell.' +
-              (diagnostic ? '\n' + diagnostic : ''),
-          });
-          this.reap(id);
-        }
-        for (const id of this.stopping.keys()) if (!this.sessions.has(id)) this.reap(id);
-      });
-    }
+    const worker = this.ensureWorker();
     this.sessions.set(request.id, { owner, request, cwd, output: '' });
     const env = childEnvironment({
       ...profile.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
     });
-    this.worker.postMessage({
+    worker.postMessage({
       kind: 'start',
       ...request,
       cwd,
@@ -174,6 +253,60 @@ export class Terminals {
       args: profile.args,
       env,
     });
+  }
+  private ensureWorker(): OwnedWorker {
+    if (this.worker) return this.worker;
+    // One PTY worker per desktop. MAS threads share dynamic picker grants;
+    // node-pty is never loaded concurrently by multiple terminal threads.
+    const worker = launchWorker(
+      this.workerPath,
+      'Viewer terminals',
+      process.mas ? 'thread' : undefined,
+    );
+    this.worker = worker;
+    let diagnostic = '';
+    worker.thread?.on('error', (error: unknown) => {
+      diagnostic = errorMessage(error);
+    });
+    const capture = (data: Buffer) => {
+      diagnostic = (diagnostic + data.toString()).slice(-2000);
+    };
+    if (worker.thread) worker.thread.stderr?.on('data', capture);
+    else worker.process?.stderr?.on('data', capture);
+    worker.message((reply) => {
+      const internal = reply as unknown as { type: string; id: string; pid?: number };
+      if (internal.type === 'started') {
+        if (Number.isSafeInteger(internal.pid) && internal.pid! > 1)
+          this.groups.set(internal.id, internal.pid!);
+        return;
+      }
+      const event = reply as unknown as TerminalEvent;
+      if (event.type === 'exit') {
+        this.reap(event.id, event);
+        return;
+      }
+      const session = this.sessions.get(event.id);
+      if (!session) return;
+      if (event.type === 'data') session.output = (session.output + event.data).slice(-128 * 1024);
+      this.emit(session.owner, event);
+      if (event.type === 'error') this.stop(event.id, session.owner);
+    });
+    worker.exit(() => {
+      if (this.worker !== worker) return;
+      this.worker = undefined;
+      for (const [id, session] of this.sessions) {
+        this.emit(session.owner, {
+          type: 'error',
+          id,
+          message:
+            'Terminal process stopped. Reopen the terminal to start a fresh shell.' +
+            (diagnostic ? '\n' + diagnostic : ''),
+        });
+        this.reap(id);
+      }
+      for (const id of this.stopping.keys()) if (!this.sessions.has(id)) this.reap(id);
+    });
+    return worker;
   }
   private reap(id: string, event?: TerminalEvent): void {
     const pid = this.groups.get(id),
@@ -186,6 +319,7 @@ export class Terminals {
         if (pid) await terminateTerminalGroup(pid);
         else if (!event)
           throw new Error('The terminal worker stopped before confirming its shell process.');
+        this.gitMutations.delete(id);
         if (event && session) this.emit(session.owner, event);
         stopping?.finish();
         if (this.stopping.get(id) === stopping) this.stopping.delete(id);
@@ -209,6 +343,9 @@ export class Terminals {
   }
   write(id: string, data: string, owner: number): void {
     this.owned(id, owner);
+    const git = this.sessions.get(id)?.git;
+    if (git !== undefined && readOnlyGitAction(git))
+      throw new Error('Read-only Git output does not accept terminal input.');
     this.worker?.postMessage({ kind: 'write', id, data });
   }
   resize(id: string, cols: number, rows: number, owner: number): void {
@@ -273,6 +410,8 @@ export class Terminals {
   agentRead(id: string): { cwd: string; output: string } {
     const session = this.sessions.get(id);
     if (!session) throw new Error('Terminal is no longer available.');
+    if (session.git !== undefined)
+      throw new Error('Git terminals are private to the person who ran the action.');
     return { cwd: session.cwd, output: session.output };
   }
   stopOwner(owner: number): void {

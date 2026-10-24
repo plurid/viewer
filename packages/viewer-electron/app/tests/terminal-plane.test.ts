@@ -25,7 +25,7 @@ beforeEach(() => {
   results = undefined;
   const element = document.createElement('div');
   fake.session = {
-    terminal: { options: {}, cols: 80, rows: 24, focus: vi.fn(), paste: vi.fn() },
+    terminal: { options: {}, cols: 80, rows: 24, focus: vi.fn(), paste: vi.fn(), writeln: vi.fn() },
     fit: { fit: vi.fn() },
     search: {
       findNext: vi.fn(),
@@ -65,7 +65,7 @@ const pane = {
   profileID: 'zsh',
 } as TerminalPane;
 const workspace = { rootID: () => 'terminal' } as unknown as WorkspaceController;
-const show = () => {
+const show = (record = pane) => {
   const header = document.createElement('div');
   document.body.append(header);
   setPreviewControlsSlot('terminal', header);
@@ -73,7 +73,7 @@ const show = () => {
     createElement(
       WorkspaceContext.Provider,
       { value: workspace },
-      createElement(TerminalPlane, { pane }),
+      createElement(TerminalPlane, { pane: record }),
     ),
   );
   return { view, header };
@@ -134,3 +134,19 @@ it('paints the whole plane in the terminal background, so no frame or bar shows'
   const plane = view.container.querySelector<HTMLElement>('.terminal-plane')!;
   await waitFor(() => expect(plane.style.getPropertyValue('--terminal-background')).toMatch(/^#/));
 });
+
+it.each(['commit', 'push'] as const)(
+  'never replays a restored Git %s or starts a fallback shell',
+  async (gitAction) => {
+    fake.session.started = false;
+    const start = vi.fn();
+    Object.assign(window.viewer, { terminalStart: start });
+    show({ ...pane, profileID: '@viewer-git', gitAction });
+    await waitFor(() => expect(fake.session.exited).toBe(true));
+    expect(start).not.toHaveBeenCalled();
+    expect(
+      (fake.session.terminal as { writeln: ReturnType<typeof vi.fn> }).writeln,
+    ).toHaveBeenCalledWith('Run a Git action from its folder to open a new result.');
+    expect(terminal().options.disableStdin).toBe(true);
+  },
+);

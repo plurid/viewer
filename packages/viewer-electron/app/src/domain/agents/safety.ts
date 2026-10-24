@@ -2,6 +2,8 @@ import { builtInProfileIDs } from '../preferences/profiles';
 import type { CustomAction } from '../automation/actions';
 import { forbiddenTrashCommands } from '../files/trash';
 import { settingCatalog, workspaceMayChange } from '../preferences/catalog';
+import { humanGitCommand } from '../comparison/git-actions';
+import { parseCommandLine, resolveName } from '../command-line/verbs';
 
 export const agentRemovalPolicy = Object.freeze({
   requiresUserApproval: true,
@@ -85,12 +87,67 @@ export function modelLineCommandProblem(
   id: string,
   actions: readonly CustomAction[],
 ): string | undefined {
-  if (id.startsWith('custom.')) {
-    const action = actions.find((item) => 'custom.' + item.id === id);
-    if (action && ['shell', 'executable', 'terminal'].includes(action.executor.kind))
-      return 'it runs a program';
-    return undefined;
-  }
+  const byID = new Map(actions.map((action) => ['custom.' + action.id, action]));
+  const visiting = new Set<string>();
+  let expanded = 0;
+  const inspect = (command: string, depth: number): string | undefined => {
+    if (depth > agentSequenceNestingLimit || visiting.has(command))
+      return 'its commands call each other recursively or too deeply';
+    if (++expanded > agentCommandExpansionLimit) return 'its expanded commands exceed the limit';
+    if (!command.startsWith('custom.')) return modelBuiltinCommandProblem(command);
+    const action = byID.get(command);
+    if (!action) return 'the custom action is unavailable';
+    const executor = action.executor;
+    if (['shell', 'executable', 'terminal'].includes(executor.kind)) return 'it runs a program';
+    const lines =
+      executor.kind === 'builtin'
+        ? [executor.command]
+        : executor.kind === 'sequence'
+          ? executor.commands
+          : [];
+    visiting.add(command);
+    try {
+      for (const line of lines) {
+        for (const step of parseCommandLine(line)) {
+          const name = resolveName(step.name);
+          if (name.kind === 'id') {
+            if (step.words.length || step.bang) return 'its command has unsupported arguments';
+            for (let count = 0; count < (step.count ?? 1); count++) {
+              const problem = inspect(name.id, depth + 1);
+              if (problem) return problem;
+            }
+          } else if (name.kind === 'verb') {
+            if (step.bang || modelMutationVerbs.has(name.verb.key))
+              return 'it changes files or program commands';
+          } else return 'it calls a named command that needs separate review';
+        }
+      }
+      return undefined;
+    } catch {
+      return 'its command line is invalid';
+    } finally {
+      visiting.delete(command);
+    }
+  };
+  return inspect(id, 0);
+}
+
+const modelMutationVerbs = new Set([
+  'trash',
+  'mv',
+  'send-keys',
+  'bind',
+  'unbind',
+  'alias',
+  'unalias',
+  'write',
+  'wall',
+  'wq',
+  'xit',
+]);
+
+function modelBuiltinCommandProblem(id: string): string | undefined {
+  if (humanGitCommand(id)) return 'Git program actions are available only to the person';
   if (terminalCommands.has(id)) return 'it uses a terminal';
   if (externalCommands.has(id)) return 'it opens another application';
   if (forbiddenTrashCommands.has(id) || id === 'trash') return 'it moves files to the Trash';
@@ -134,11 +191,24 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
       case 'sequence':
         visiting.add(command);
         try {
-          for (const step of executor.commands) {
-            if (resolve(step, depth + 1) === 'trash')
-              throw new Error(
-                'Agent sequences cannot include Trash. Request a separate exact-path Trash proposal.',
-              );
+          for (const line of executor.commands) {
+            for (const step of parseCommandLine(line)) {
+              const name = resolveName(step.name);
+              if (name.kind === 'verb' && name.verb.key === 'trash')
+                throw new Error(
+                  'Agent sequences cannot include Trash. Request a separate exact-path Trash proposal.',
+                );
+              if (name.kind !== 'id' || step.words.length || step.bang)
+                throw new Error(
+                  'Agent sequences may contain only built-in command IDs without arguments.',
+                );
+              for (let count = 0; count < (step.count ?? 1); count++) {
+                if (resolve(name.id, depth + 1) === 'trash')
+                  throw new Error(
+                    'Agent sequences cannot include Trash. Request a separate exact-path Trash proposal.',
+                  );
+              }
+            }
           }
         } finally {
           visiting.delete(command);
@@ -157,6 +227,8 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
 }
 
 function agentBuiltinCommandID(command: string): string {
+  if (humanGitCommand(command))
+    throw new Error('Git program actions are available only to the person, never to agents.');
   if (terminalCommands.has(command))
     throw new Error('Agent terminal execution is unavailable because it can bypass Trash.');
   if (forbiddenTrashCommands.has(command))
@@ -229,6 +301,8 @@ export function agentDispatchRefusal(
 ): string | undefined {
   if (now > event.deadline)
     return 'The request expired before the workspace could run it. Request it again.';
+  if (humanGitCommand(event.command))
+    return 'Git program actions are available only to the person.';
   if (!event.command.startsWith('custom.')) return undefined;
   const action = actions.find((item) => 'custom.' + item.id === event.command);
   if (

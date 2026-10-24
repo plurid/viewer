@@ -59,6 +59,11 @@
 .command-search-field svg {
   flex-shrink: 0;
 }
+.command-clear-recent {
+  flex: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
 .command-results {
   flex: 1;
   overflow-y: auto;

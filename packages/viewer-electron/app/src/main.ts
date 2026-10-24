@@ -37,6 +37,7 @@ import { DiagnosticLog } from './desktop/diagnostics/diagnostics';
 import { applicationCSP } from './desktop/windows/application-csp';
 import { debuggingAllowed } from './desktop/diagnostics/debugging';
 import { HotkeyWindow } from './desktop/windows/hotkey-window';
+import { macFiles } from './desktop/native/macos-files';
 import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/workspaces/launch';
 import { askNatively } from './desktop/native/native-confirmation';
 import { saveBeforeClose, type SaveFailureChoice } from './desktop/windows/save-before-close';
@@ -402,7 +403,10 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
   if (!backgroundTest && !createdWindow.isDestroyed() && !closePending && !quitPending) {
     if (restored.maximized) createdWindow.maximize();
     createdWindow.show();
-    if (restored.fullscreen) createdWindow.setFullScreen(true);
+    if (restored.fullscreen) {
+      if (hotkey) hotkey.setFullScreen(createdWindow, true);
+      else createdWindow.setFullScreen(true);
+    }
   }
   return createdWindow;
 }
@@ -628,6 +632,9 @@ app
         ? path.join(process.resourcesPath, 'viewer-applications')
         : path.resolve('assets/viewer-applications'),
     });
+    // Loading the main-thread binding registers public AppKit observers before
+    // createWindow can request restoration of a native fullscreen Space.
+    const nativeWindows = process.platform === 'darwin' ? macFiles() : undefined;
     hotkey = new HotkeyWindow(
       globalShortcut,
       async () => window ?? (await createWindow()),
@@ -635,6 +642,8 @@ app
       () => !systemPreferences.getAnimationSettings().prefersReducedMotion && !backgroundTest,
       () => {},
       !backgroundTest,
+      (selected) =>
+        nativeWindows?.windowFullscreenPhase(selected.getNativeWindowHandle()) ?? 'idle',
     );
     protocol.handle('viewer-resource', (request) => desktop!.resources.response(request));
     protocol.handle('viewer-html', (request) => desktop!.webPreviews.response(request));

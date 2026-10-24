@@ -43,6 +43,7 @@ const api: ViewerAPI = {
   newWindow: () => invoke('newWindow'),
   git: (request) => invoke('git', request),
   gitResource: (source) => invoke('gitResource', source),
+  gitAction: (request) => invoke('gitAction', request),
   watchRules: (request) => invoke('watchRules', request),
   relationships: (request) => invoke('relationships', request),
   workflow: (request) => invoke('workflow', request),
@@ -54,8 +55,8 @@ const api: ViewerAPI = {
   lens: (request) => invoke('lens', request),
   checkpoints: (request) => invoke('checkpoints', request),
   inspect: (file, content, ocr) => invoke('inspect', file, content, ocr),
-  commandsPublish: (target, commands, workspaces) =>
-    invoke('commandsPublish', target, commands, workspaces),
+  commandsPublish: (target, commands, workspaces, owners) =>
+    invoke('commandsPublish', target, commands, workspaces, owners),
   agentCommandResult: (id, error) => invoke('agentCommandResult', id, error),
   agentReviewList: () => invoke('agentReviewList'),
   agentReview: (id, approve) => invoke('agentReview', id, approve),
@@ -103,6 +104,7 @@ const api: ViewerAPI = {
   sessionKeysDiscard: () => invoke('sessionKeysDiscard'),
   providerCredential: (id, key) => invoke('providerCredential', id, key),
   providerModels: (id) => invoke('providerModels', id),
+  providerCheck: (request) => invoke('providerCheck', request),
   providerPermissionGet: (id) => invoke('providerPermissionGet', id),
   providerPermissionSet: (id, endpoint, level) =>
     invoke('providerPermissionSet', id, endpoint, level),

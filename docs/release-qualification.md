@@ -8,9 +8,33 @@ Each check records the artifact hash, runtime/channel, OS, fixtures, result and 
 
 ## Work and acceptance ledger
 
-### October 24 direct-build candidate
+### October 24 latest user-report and Git candidate
 
-The current stabilization candidate passes 1,452 tests (four skipped), all four
+The latest candidate includes fixed folder Git actions, Chat styling/diagnostics,
+sidebar ordering, list-column alignment, protected Viewcube placement, immediate
+initial command context and native fullscreen transition tracking. Normal
+packaging and signature verification pass; 216 focused regressions and all static
+targets pass. The focused packaged Git/Chat/palette scenario also passes, including
+both window sizes and actual Send hit testing. [Verification](verification.md)
+binds the current hashes and retained evidence. The earlier full-suite/smoke/timing
+results below do not apply automatically to these new bytes.
+
+Live Gemini Chat now passes actual no-file generation and bounded generated-folder
+inspection after reducing the provider generation grammar; the original local
+validation remains enforced. The operator confirmed fullscreen hotkey restoration.
+Real native agent Allow followed by Settings revocation is verified, including the
+disabled broker endpoint. The Cancel case, positive scoped authenticated read,
+shell uninstall and remaining native acceptance are still explicit gates.
+Candidate-specific hashes and retained evidence are in [verification](verification.md).
+Automatic approval review blocked native Uninstall before dispatch because the
+generated script's exact removal path had not been approved. The script is
+preserved while that permission is pending.
+Journal, worktree/session development and the action-builder/palette extensions
+are proposals, with no implementation or acceptance claim.
+
+### October 24 earlier direct-build candidate
+
+The earlier stabilization candidate passed 1,452 tests (four skipped), all four
 TypeScript targets, lint, formatting, normal frozen installation, packaging and
 the complete packaged desktop smoke. Fresh source/store reproduction and exact
 registry-byte verification pass with Plurid data `0.0.0-28` and React `0.0.0-42`.

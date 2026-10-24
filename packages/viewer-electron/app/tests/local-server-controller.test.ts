@@ -93,6 +93,7 @@ function mount() {
         }),
       },
       camera: { docked: () => undefined },
+      history: { transaction: (work: () => void) => work() },
       pubsub: { publish },
     } as unknown as PluridApplicationHandle,
   };

@@ -1,3 +1,10 @@
+import {
+  FullscreenTransitions,
+  type FullscreenEvent,
+  type FullscreenPhase,
+  type FullscreenWindow,
+} from './fullscreen-transition';
+
 export interface WindowBounds {
   x: number;
   y: number;
@@ -5,22 +12,18 @@ export interface WindowBounds {
   height: number;
 }
 
-interface DropWindow {
-  isDestroyed(): boolean;
+interface DropWindow extends FullscreenWindow {
   isVisible(): boolean;
   isFocused(): boolean;
-  isFullScreen(): boolean;
   isMaximized(): boolean;
-  getBounds(): WindowBounds;
+  getNativeWindowHandle(): Buffer;
+  getNormalBounds(): WindowBounds;
   setBounds(bounds: WindowBounds, animate?: boolean): void;
-  setFullScreen(fullscreen: boolean): void;
   unmaximize(): void;
   maximize(): void;
   show(): void;
   hide(): void;
   focus(): void;
-  once(event: 'leave-full-screen', listener: () => void): unknown;
-  removeListener(event: 'leave-full-screen', listener: () => void): unknown;
 }
 
 export interface HotkeyStatus {
@@ -45,6 +48,7 @@ export class HotkeyWindow {
   private binding?: object;
   private cancelTransition?: () => void;
   private closed = false;
+  private fullscreen: FullscreenTransitions<DropWindow>;
 
   constructor(
     private shortcuts: {
@@ -56,7 +60,16 @@ export class HotkeyWindow {
     private animate: () => boolean,
     private changed: (status: HotkeyStatus) => void,
     private available = true,
-  ) {}
+    fullscreenPhase: (window: DropWindow) => FullscreenPhase = () => 'idle',
+  ) {
+    this.fullscreen = new FullscreenTransitions(fullscreenPhase);
+  }
+
+  /** App-origin fullscreen changes must record intent before Electron's deferred native call. */
+  setFullScreen(window: DropWindow, fullscreen: boolean): void {
+    if (this.closed) return;
+    this.fullscreen.request(window, fullscreen);
+  }
 
   snapshot(): HotkeyStatus {
     return { ...this.status };
@@ -102,6 +115,7 @@ export class HotkeyWindow {
   }
 
   isDropped(window: DropWindow): boolean {
+    // Hidden drop-downs still own a temporary frame that must not be persisted.
     return this.dropped?.window === window;
   }
 
@@ -127,11 +141,11 @@ export class HotkeyWindow {
     }
     dropped.window.setBounds(dropped.bounds);
     if (dropped.maximized) dropped.window.maximize();
-    if (dropped.fullscreen) dropped.window.setFullScreen(true);
     this.dropped = undefined;
     if (show) {
       dropped.window.show();
       dropped.window.focus();
+      if (dropped.fullscreen) this.setFullScreen(dropped.window, true);
     } else dropped.window.hide();
     return true;
   }
@@ -151,12 +165,16 @@ export class HotkeyWindow {
     return generation === this.generation && this.status.registered && !this.closed;
   }
 
-  private leaveFullscreen(window: DropWindow): Promise<boolean> {
-    if (!window.isFullScreen()) return Promise.resolve(true);
+  private waitForFullscreen(
+    window: DropWindow,
+    event: FullscreenEvent,
+    request?: () => void,
+  ): Promise<boolean> {
     return new Promise((resolve, reject) => {
       const clean = () => {
         clearTimeout(timeout);
-        window.removeListener('leave-full-screen', finished);
+        window.removeListener(event, finished);
+        window.removeListener('closed', cancelled);
         if (this.cancelTransition === cancelled) this.cancelTransition = undefined;
       };
       const finished = () => {
@@ -172,13 +190,26 @@ export class HotkeyWindow {
         reject(new Error('Wait for the fullscreen transition before opening Viewer again.'));
       }, 3000);
       this.cancelTransition = cancelled;
-      window.once('leave-full-screen', finished);
+      window.once(event, finished);
+      window.once('closed', cancelled);
       try {
-        window.setFullScreen(false);
+        request?.();
       } catch (error) {
         clean();
         reject(error);
       }
+    });
+  }
+
+  private async leaveFullscreen(window: DropWindow, generation: number): Promise<boolean> {
+    const phase = this.fullscreen.phase(window);
+    if (phase === 'entering') {
+      const completed = await this.waitForFullscreen(window, 'enter-full-screen');
+      if (!completed || !this.current(generation) || window.isDestroyed()) return false;
+    } else if (phase === 'exiting') return this.waitForFullscreen(window, 'leave-full-screen');
+    if (!window.isFullScreen()) return true;
+    return this.waitForFullscreen(window, 'leave-full-screen', () => {
+      this.setFullScreen(window, false);
     });
   }
 
@@ -189,34 +220,49 @@ export class HotkeyWindow {
         : await this.target();
     if (!this.current(generation) || !window || window.isDestroyed()) return;
     this.targetWindow = window;
-    if (this.dropped?.window === window && window.isVisible() && window.isFocused()) {
-      this.restoreFrame(false);
+    const phase = this.fullscreen.phase(window);
+    const fullscreenTransition = phase !== 'idle' || window.isFullScreen();
+    if (
+      this.dropped?.window === window &&
+      window.isVisible() &&
+      window.isFocused() &&
+      !fullscreenTransition
+    ) {
+      // A toggle only hides the temporary placement. Re-entering fullscreen on a hidden
+      // macOS window starts a Space transition that cannot complete normally.
+      window.hide();
       return;
     }
-    this.restoreFrame(false);
-    this.dropped = {
-      window,
-      bounds: window.getBounds(),
-      maximized: window.isMaximized(),
-      fullscreen: window.isFullScreen(),
-    };
+    if (this.dropped?.window !== window) {
+      this.restoreFrame(false);
+      this.dropped = {
+        window,
+        bounds: window.getNormalBounds(),
+        maximized: window.isMaximized(),
+        fullscreen: phase === 'entering' || (phase === 'idle' && window.isFullScreen()),
+      };
+    }
     try {
-      const completed = await this.leaveFullscreen(window);
-      if (!completed || !this.current(generation)) return;
+      const completed = await this.leaveFullscreen(window, generation);
+      if (!this.current(generation)) return;
+      if (window.isDestroyed()) {
+        this.dropped = undefined;
+        this.targetWindow = undefined;
+        return;
+      }
+      if (!completed) return;
     } catch (error) {
       if (this.current(generation)) this.restoreFrame(true);
       throw error;
-    }
-    if (window.isDestroyed()) {
-      this.dropped = undefined;
-      return;
     }
     if (window.isMaximized()) window.unmaximize();
     const area = this.workArea();
     const width = Math.min(area.width, Math.max(760, Math.round(area.width * 0.9)));
     const height = Math.min(area.height, Math.max(540, Math.round(area.height * 0.65)));
     const bounds = { x: area.x + Math.round((area.width - width) / 2), y: area.y, width, height };
-    const animate = this.animate();
+    // Native fullscreen already animates the Space handoff. Starting a second animation
+    // above the display can strand the visible window outside that handoff.
+    const animate = !fullscreenTransition && !this.dropped?.fullscreen && this.animate();
     if (animate) window.setBounds({ ...bounds, y: area.y - height });
     window.show();
     window.setBounds(bounds, animate);
@@ -230,6 +276,7 @@ export class HotkeyWindow {
     this.binding = undefined;
     this.status = { registered: false, shortcut: this.status.shortcut };
     this.restore(false);
+    this.fullscreen.close();
     this.changed(this.snapshot());
   }
 }

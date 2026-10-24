@@ -18,6 +18,8 @@ export function CommandResults({
   onEmptyBackspace,
   onKey,
   hint,
+  onClearRecent,
+  clearRecentLabel = 'Clear recent',
 }: {
   query: string;
   onQuery(query: string): void;
@@ -37,6 +39,9 @@ export function CommandResults({
   onKey?(event: React.KeyboardEvent): boolean;
   /** The line a row is, shown beside it (2026-10-23): `:q`, `:set grid!`. */
   hint?(row: ResolvedCommand): string | undefined;
+  /** Clear the mode's existing history without changing its query or selected scope. */
+  onClearRecent?(): void;
+  clearRecentLabel?: string;
 }) {
   const [activeID, setActiveID] = useState('');
   const [keyboardScroll, setKeyboardScroll] = useState(0);
@@ -64,6 +69,12 @@ export function CommandResults({
       className="command-search"
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) return;
+        if (
+          event.key !== 'Escape' &&
+          event.target instanceof Element &&
+          event.target.closest('.command-search-field button')
+        )
+          return;
         if (onKey?.(event)) {
           event.preventDefault();
           event.stopPropagation();
@@ -116,6 +127,20 @@ export function CommandResults({
             setActiveID('');
           }}
         />
+        {onClearRecent && (
+          <button
+            type="button"
+            className="command-clear-recent"
+            aria-label={clearRecentLabel}
+            title={clearRecentLabel}
+            onClick={() => {
+              onClearRecent();
+              input.current?.focus({ preventScroll: true });
+            }}
+          >
+            Clear recent
+          </button>
+        )}
       </div>
       <div
         className="command-results"

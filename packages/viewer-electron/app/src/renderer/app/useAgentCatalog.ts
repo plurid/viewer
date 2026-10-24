@@ -28,62 +28,73 @@ export function useAgentCatalog({
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const publish = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        const state = getState();
-        const workspace = activeWorkspace(state);
-        const workspaces: AgentWorkspaceSnapshot = {
-          activeWorkspace: state.saved.activeWorkspace,
-          workspaces: state.saved.workspaces.map((space) => ({
-            id: space.id,
-            name: space.name,
-            roots: space.roots,
-            panes: space.panes.map((pane) => ({
-              id: pane.id,
-              type: pane.type,
-              path: pane.path,
-              ...(pane.type === 'folder' ? { mode: pane.mode } : {}),
-              ...(pane.type === 'search' ? { allLocations: pane.allLocations } : {}),
-            })),
+      timer = undefined;
+      const state = getState();
+      const workspace = activeWorkspace(state);
+      const workspaces: AgentWorkspaceSnapshot = {
+        activeWorkspace: state.saved.activeWorkspace,
+        workspaces: state.saved.workspaces.map((space) => ({
+          id: space.id,
+          name: space.name,
+          roots: space.roots,
+          panes: space.panes.map((pane) => ({
+            id: pane.id,
+            type: pane.type,
+            path: pane.path,
+            ...(pane.type === 'folder' ? { mode: pane.mode } : {}),
+            ...(pane.type === 'search' ? { allLocations: pane.allLocations } : {}),
           })),
-        };
-        const context = registry.context(state.activePane) ?? windowContext();
-        const pane = workspace.panes.find((pane) => pane.id === state.activePane);
-        const hasDirectory = !!context.directory || !!context.folder;
-        const target: CapturedTarget = hasDirectory
-          ? captureTarget(context, controller)
-          : {
-              workspaceID: workspace.id,
-              rootID: (pane && controller.rootID(pane.id)) || 'none',
-              paneID: pane?.id || 'none',
-              panePath: pane?.path,
-              directory: pane
-                ? pane.type === 'preview'
-                  ? parentPath(pane.path)
-                  : pane.path
-                : state.bootstrap.home,
-              selection: [],
-            };
-        const catalogContext = hasDirectory
-          ? context
-          : { ...context, directory: undefined, folder: undefined, selection: [] };
-        const commands: CommandDescriptor[] =
-          target.selection.length > selectionLimit
-            ? []
-            : agentCatalog(registry, catalogContext).map(
-                ({ id, label, group, aliases, shortcut }) => ({
-                  id,
-                  label,
-                  group,
-                  aliases: [...aliases],
-                  shortcut,
-                }),
-              );
-        if (target.selection.length > selectionLimit) target.selection = [];
-        void window.viewer.commandsPublish(target, commands, workspaces).catch(report);
-      }, publicationDelay);
+        })),
+      };
+      const context = registry.context(state.activePane) ?? windowContext();
+      const pane = workspace.panes.find((pane) => pane.id === state.activePane);
+      const hasDirectory = !!context.directory || !!context.folder;
+      const target: CapturedTarget = hasDirectory
+        ? captureTarget(context, controller)
+        : {
+            workspaceID: workspace.id,
+            rootID: (pane && controller.rootID(pane.id)) || 'none',
+            paneID: pane?.id || 'none',
+            panePath: pane?.path,
+            directory: pane
+              ? pane.type === 'preview'
+                ? parentPath(pane.path)
+                : pane.path
+              : state.bootstrap.home,
+            selection: [],
+          };
+      const catalogContext = hasDirectory
+        ? context
+        : { ...context, directory: undefined, folder: undefined, selection: [] };
+      const commands: CommandDescriptor[] =
+        target.selection.length > selectionLimit
+          ? []
+          : agentCatalog(registry, catalogContext).map(
+              ({ id, label, group, aliases, shortcut }) => ({
+                id,
+                label,
+                group,
+                aliases: [...aliases],
+                shortcut,
+              }),
+            );
+      if (target.selection.length > selectionLimit) target.selection = [];
+      const owners: [string, string][] = [];
+      for (const pane of workspace.panes) {
+        const root = workspace.roots.includes(pane.id) ? pane.id : controller.rootID(pane.id);
+        if (root) owners.push([pane.id, root]);
+      }
+      void window.viewer
+        .commandsPublish(target, commands, workspaces, Object.fromEntries(owners))
+        .catch(report);
     };
-    const unsubscribe = registry.subscribe(publish);
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(publish, publicationDelay);
+    };
+    const unsubscribe = registry.subscribe(schedule);
+    // Human commands can run as soon as the registry is ready. Their desktop
+    // ownership and Chat context must exist before the first debounced update.
     publish();
     return () => {
       unsubscribe();

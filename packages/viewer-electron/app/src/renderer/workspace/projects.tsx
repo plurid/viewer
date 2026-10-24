@@ -192,7 +192,14 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
     if (pane.type === 'folder') return { id: pane.id, type: pane.type, target, state };
     if (pane.type === 'preview') return { id: pane.id, type: pane.type, target, state };
     if (pane.type === 'terminal')
-      return { id: pane.id, type: pane.type, target, state, profileID: pane.profileID };
+      return {
+        id: pane.id,
+        type: pane.type,
+        target,
+        state,
+        profileID: pane.profileID,
+        ...(pane.gitAction ? { gitAction: pane.gitAction } : {}),
+      };
     if (pane.type === 'collection')
       return { id: pane.id, type: pane.type, target, state, collectionID: pane.collectionID };
     if (pane.type === 'git-changes') return { id: pane.id, type: pane.type, target, state };

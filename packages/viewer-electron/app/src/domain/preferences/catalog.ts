@@ -74,13 +74,6 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'boolean',
   },
   {
-    path: 'settings.git.enabled',
-    category: 'Browsing',
-    label: 'Show Git status',
-    detail: 'Read local repository status. Available in the direct build only.',
-    kind: 'boolean',
-  },
-  {
     path: 'settings.terminals.scrollback',
     category: 'Terminals',
     label: 'Terminal scrollback lines',
@@ -220,7 +213,7 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'boolean',
   },
   ...listColumns
-    .filter((column) => column.id !== 'name')
+    .filter((column) => column.id !== 'name' && column.id !== 'git')
     .map((column) => ({
       path: 'ui.list.visible.' + column.id,
       category: 'Browsing',
@@ -234,6 +227,22 @@ export const settingCatalog: SettingDefinition[] = [
     section: 'List columns',
     label: 'Wrap long filenames',
     detail: 'Column edges can be dragged to resize. Double-click an edge to reset its width.',
+    kind: 'boolean',
+  },
+  {
+    path: 'settings.git.enabled',
+    category: 'Browsing',
+    section: 'Git',
+    label: 'Show Git status',
+    detail: 'Read local repository status for badges and branch information. Direct build only.',
+    kind: 'boolean',
+  },
+  {
+    path: 'ui.list.visible.git',
+    category: 'Browsing',
+    section: 'Git',
+    label: 'Show Git column in list view',
+    detail: 'Visible when Git status is enabled.',
     kind: 'boolean',
   },
   {

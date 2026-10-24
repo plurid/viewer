@@ -6,6 +6,19 @@ review/Undo, resource limits and gaps. The [feature ledger](feature-delivery.md)
 retains milestone history. Neither source implementation nor an older passing
 candidate establishes native acceptance for the current package.
 
+[Spatial development](spatial-development.md) records the October 24 research and
+proposal for worktrees, read-only branch folders, linked Git review and structured
+Codex/Claude sessions. It distinguishes proposed features from current behavior;
+the current reliability and native acceptance work still comes first.
+
+The [Journal plane proposal](journal-plane.md) records structured local event
+inspection, workspace/plane/task filters and correlation. It remains proposed;
+existing diagnostic logs and durable operation receipts keep their current owners.
+
+[Composable actions](composable-actions.md) records the proposed action builder,
+typed inputs/outputs, directory predicates and user-organized palette. It builds
+on the existing custom actions, command language and workflow runner.
+
 The current continuation fixes profile/window isolation, minimap hit-testing,
 dependency provenance, consent and save reliability, and groups the code into
 feature modules. General AI-guided folder organization remains deferred. Existing

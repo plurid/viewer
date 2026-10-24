@@ -2,6 +2,7 @@ import {
   promptInput,
   promptInstructions,
   promptLineProblem,
+  promptAnswerSchema,
   promptSchema,
   type PromptAnswer,
   type PromptRequest,
@@ -38,18 +39,20 @@ export async function answerPrompt(
 ): Promise<PromptAnswer> {
   const provider = promptProvider(settings);
   if (!provider) throw new Error('Add a model in Settings → Models to ask in words.');
-  const answer = (await generate(
+  const raw = await generate(
     provider,
     promptInstructions(request.context),
     promptInput(request),
-    promptSchema as unknown as Record<string, unknown>,
+    promptSchema,
     signal,
     'names',
     'user',
-  )) as { line?: unknown; explanation?: unknown } | undefined;
-  const line = typeof answer?.line === 'string' ? answer.line.trim().replace(/^:/, '') : '';
-  const explanation =
-    typeof answer?.explanation === 'string' ? answer.explanation.trim().slice(0, 300) : '';
+  );
+  const parsed = promptAnswerSchema.safeParse(raw);
+  if (!parsed.success)
+    throw new Error('The model returned an invalid command response. Try again.');
+  const line = parsed.data.line.trim().replace(/^:/, '');
+  const explanation = parsed.data.explanation.trim().slice(0, 300);
   const problem = line
     ? promptLineProblem(
         line,

@@ -14,9 +14,29 @@ export interface TerminalSession {
   input: string;
   disposed: boolean;
   exited: boolean;
+  readonly: boolean;
+  processLabel: string;
   attach(container: HTMLElement): void;
 }
 const sessions = new Map<string, Promise<TerminalSession>>();
+const preparing = new Set<string>();
+/** A reviewed program can emit output before its result plane is added to the workspace. */
+export function retainTerminal(id: string): () => void {
+  preparing.add(id);
+  return () => preparing.delete(id);
+}
+export function closeTerminal(id: string): void {
+  preparing.delete(id);
+  const pending = sessions.get(id);
+  sessions.delete(id);
+  void pending
+    ?.then((session) => {
+      session.disposed = true;
+      session.terminal.dispose();
+    })
+    .catch(() => {});
+  void window.viewer.terminalClose(id).catch(() => {});
+}
 /** Terminals revealed by an agent's navigation wait for the person to start a shell. */
 const deferred = new Set<string>();
 export function deferTerminalStart(ids: Iterable<string>): void {
@@ -39,26 +59,30 @@ function subscribe(): void {
         void window.viewer.terminalAck(value.id, value.data.length).catch(() => {});
       return;
     }
-    void pending.then((session) => {
-      if (value.type === 'data')
-        session.terminal.write(value.data, () => {
-          void window.viewer.terminalAck(value.id, value.data.length).catch(() => {});
-        });
-      else {
-        session.exited = true;
-        session.terminal.writeln(
-          '\r\n' +
-            (value.type === 'error'
-              ? value.message
-              : `Shell exited (${value.code}). Close this plane to finish.`),
-        );
-      }
-    });
+    void pending
+      .then((session) => {
+        if (session.disposed) return;
+        if (value.type === 'data')
+          session.terminal.write(value.data, () => {
+            void window.viewer.terminalAck(value.id, value.data.length).catch(() => {});
+          });
+        else {
+          session.exited = true;
+          session.terminal.writeln(
+            '\r\n' +
+              (value.type === 'error'
+                ? value.message
+                : `${session.processLabel} exited (${value.code}). Close this plane to finish.`),
+          );
+        }
+      })
+      .catch(() => {});
   });
 }
 export function terminalSession(
   request: TerminalStart,
   scrollback: number,
+  options?: { readonly: boolean; processLabel: string },
 ): Promise<TerminalSession> {
   subscribe();
   let value = sessions.get(request.id);
@@ -95,6 +119,8 @@ export function terminalSession(
         input: '',
         disposed: false,
         exited: false,
+        readonly: options?.readonly ?? false,
+        processLabel: options?.processLabel ?? 'Shell',
         attach(container) {
           container.append(element);
           if (!opened) {
@@ -123,6 +149,7 @@ export function terminalSession(
         return true;
       });
       terminal.onData((data) => {
+        if (session.readonly) return;
         if (!session.started && !session.exited && !session.disposed)
           session.input = (session.input + data).slice(-64 * 1024);
         if (session.started && !session.exited)
@@ -139,15 +166,7 @@ export function terminalSession(
   return value;
 }
 export function trimTerminals(ids: ReadonlySet<string>): void {
-  for (const [id, session] of sessions)
-    if (!ids.has(id)) {
-      sessions.delete(id);
-      void session.then((session) => {
-        session.disposed = true;
-        session.terminal.dispose();
-      });
-      void window.viewer.terminalClose(id).catch(() => {});
-    }
+  for (const id of sessions.keys()) if (!ids.has(id) && !preparing.has(id)) closeTerminal(id);
 }
 export async function terminalEditing(id: string, command: string): Promise<boolean> {
   const pending = sessions.get(id);

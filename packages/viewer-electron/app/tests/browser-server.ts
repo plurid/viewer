@@ -1,10 +1,12 @@
 import type { ComparisonRequest } from '../src/domain/comparison/folders';
+import type { GitRequest } from '../src/domain/comparison/git';
+import { GitReader } from '../src/desktop/comparison/git';
 import type { OperationPlanRequest } from '../src/domain/operations/operation-plan';
 import type { FileInformationPatch } from '../src/domain/files/information';
 import type { AgentClientRequest } from '../src/domain/agents/clients';
 import type { ReadableStream } from 'node:stream/web';
 import { createServer } from 'vite';
-import { rename, mkdir } from 'node:fs/promises';
+import { rename, mkdir, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -62,6 +64,7 @@ if (!Number.isInteger(fixturePort) || fixturePort < 1024 || fixturePort > 65535)
   throw new Error('Choose a valid fixture port.');
 const fixtureOrigin = 'http://127.0.0.1:' + fixturePort;
 const fixture = await createFixtures();
+const canonicalFixtureRoot = await realpath(fixture.root);
 const permissionScenario = process.env.VIEWER_TEST_SCENARIO === 'folder-access';
 const restrictedFolder = path.join(fixture.files, 'Models');
 let permissionGranted = false;
@@ -144,6 +147,12 @@ const settings = new SettingsService(
 );
 await settings.load(fixture.state);
 index.configure(settings.snapshot().settings.search);
+const git = new GitReader(
+  () => settings.snapshot().settings.git.enabled,
+  async (paths) => {
+    paths.forEach(scoped);
+  },
+);
 const actions = new ActionPlanner(fixture.root, {
   snapshot: async (title, sources, signal) => (await checkpoints.create(title, sources, signal)).id,
   recipes: () => settings.snapshot().settings.recipes,
@@ -217,7 +226,10 @@ const resourceURL = (value: Resource) => ({
 });
 function scoped(file: string): string {
   const resolved = path.resolve(file);
-  if (!resolved.startsWith(fixture.root + path.sep))
+  if (
+    !resolved.startsWith(fixture.root + path.sep) &&
+    !resolved.startsWith(canonicalFixtureRoot + path.sep)
+  )
     throw new Error('Verification is limited to the synthetic fixture folder.');
   return resolved;
 }
@@ -247,6 +259,11 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       else if (action === 'close') await webPreviews.dispose(1, id);
       else if (action === 'open-browser' || action === 'copy-url') webPreviews.get(1, id);
       return;
+    }
+    case 'git': {
+      const request = args[0] as GitRequest;
+      const file = scoped(request.path);
+      return request.kind === 'head' ? git.head(file) : git.status(file, request.refresh);
     }
     case 'hotkeyStatus':
       return {
@@ -666,6 +683,7 @@ console.log(
   `Viewer synthetic workspace: ${fixtureOrigin}/tests/browser.html\nFixtures: ${fixture.files}`,
 );
 async function close() {
+  git.close();
   await webPreviews.close();
   sizes.close();
   resources.clear();

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { CustomAction } from '../../domain/automation/actions';
+import type { CapturedTarget, CustomAction } from '../../domain/automation/actions';
+import { CommitDialog } from '../git/CommitDialog';
 import type { WorkspaceController } from '../workspace/context';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { WorkspaceBackgroundDialog } from '../ui/workspace/WorkspaceBackgroundDialog';
@@ -27,20 +28,22 @@ export type WindowDialog =
   | { type: 'view'; kind: 'save' | 'manage' }
   | { type: 'profile' | 'template' | 'go-to' | 'connect' | 'tag' }
   | { type: 'macro'; commands: string[] }
+  | { type: 'git-commit'; id: string; target: CapturedTarget }
   | { type: 'shortcut'; path: string; name: string };
 
 /** Window-level dialogs have one owner; opening another replaces the previous request. */
 export function WindowDialogs({
   dialog,
-  onClose,
+  onClose: closeRequest,
   workspace: controller,
   transitionWorkspace,
 }: {
   dialog: WindowDialog | undefined;
-  onClose(): void;
+  onClose(request: WindowDialog | undefined): void;
   workspace: WorkspaceController;
   transitionWorkspace(change: () => Promise<void>): Promise<void>;
 }) {
+  const onClose = () => closeRequest(dialog);
   const saved = useViewer((state) => state.saved);
   const bootstrap = useViewer((state) => state.bootstrap);
   const [busy, setBusy] = useState(false);
@@ -56,6 +59,16 @@ export function WindowDialogs({
   const tagging = dialog?.type === 'tag';
   return (
     <>
+      {dialog?.type === 'git-commit' && (
+        <CommitDialog
+          key={dialog.id}
+          directory={dialog.target.directory}
+          onClose={onClose}
+          onSubmit={(message) =>
+            controller.newGitAction(dialog.target, { kind: 'commit', message })
+          }
+        />
+      )}
       {workspaceDialog?.kind === 'background' && (
         <WorkspaceBackgroundDialog onClose={() => onClose()} />
       )}

@@ -35,6 +35,14 @@ and properties inform the basic desktop baseline.
 | Chat and requests           | Conversation with selected/dropped context       | Read-only folder tools and `>` requests                         | Provider data consent is separate from agent grants      | Model suggestions become proposals; no autonomous Trash/apply | Bounded excerpts, tool calls and cancellation                        | Live provider/consent acceptance; broader evaluations          |
 | Native integration          | Open With, Get Info, volumes, Trash              | Finder clipboard/drag, aliases, Quick Look/Share                | Native scopes checked independently of client grants     | Native consent; identity-bound Trash; no deletion fallback    | Revocable capabilities; drained workers before eject                 | Signed Store, physical panels, other operating systems         |
 
+The direct build additionally implements [human Git quick actions](git-actions.md):
+status/history, staging, staged-only commit, fast-forward pull and upstream push.
+They use a fixed desktop API and owned bounded terminal results; the person's
+explicit command triggers execution. Saved results never replay programs. Agents cannot invoke these
+actions or read their terminal output. Background badges retain their separate
+opt-in, hardened read-only behavior. Current package evidence remains in
+[verification](verification.md).
+
 The matrix is a maintenance checklist. New UI, shortcuts and agent tools should use
 the same typed command, inspection, proposal and operation services. A feature
 without a checked target, a bounded workload and an appropriate recovery path is

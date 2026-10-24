@@ -1,4 +1,5 @@
 import { useTheme } from '../ui/theme';
+import { gitTerminalProfileID } from '../../domain/comparison/git-actions';
 import {
   effectiveWindowLook,
   effectiveWindowSettings,
@@ -171,6 +172,8 @@ function TerminalContent() {
   const [started, setStarted] = useState(false);
   if (
     pane?.type === 'terminal' &&
+    !pane.gitAction &&
+    pane.profileID !== gitTerminalProfileID &&
     (pane.startOnOpen === false || terminalStartDeferred(pane.id)) &&
     !started
   )
@@ -262,7 +265,7 @@ export function WorkspaceSurface({
   const [api, setApi] = useState<PluridApi | null>(null);
   const overview = useSpatialOverview({
     root: surface,
-    enabled: preferences.minimap && !!api,
+    enabled: (preferences.minimap || preferences.viewcube) && !!api,
     epoch: space.id + ':' + (space.epoch ?? 0),
     labelsVersion: space.panes,
     subscribeEngine: (listener) => workspace.subscribeEngine(listener),

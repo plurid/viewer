@@ -1,7 +1,12 @@
-import { reorder } from '../../../domain/preferences/ui';
+import {
+  displayedSidebarLocations,
+  moveSidebarLocation,
+} from '../../../domain/preferences/sidebar-locations';
 import { addFavorite, changePreferences, getState, removeFavorite } from '../../state/store';
 import type { CommandContext, CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
+import { effectiveWindowUI } from '../../state/effective-ui';
+import { changeSetting } from './settings';
 
 /** Sidebar shortcuts and sections. */
 export function sidebarCommands({
@@ -124,12 +129,10 @@ export function sidebarCommands({
     const ordered = (context: CommandContext) =>
       context.sidebar!.section === 'favorites'
         ? getState().saved.favorites.map((item) => item.path)
-        : [
-            ...getState().saved.ui.sidebar.locations,
-            ...getState()
-              .bootstrap.locations.map((item) => item.path)
-              .filter((path) => !getState().saved.ui.sidebar.locations.includes(path)),
-          ];
+        : displayedSidebarLocations(
+            effectiveWindowUI(getState()).sidebar,
+            getState().bootstrap.locations,
+          );
     commands.push({
       id: `shortcut-${direction < 0 ? 'up' : 'down'}`,
       label: `Move shortcut ${direction < 0 ? 'up' : 'down'}`,
@@ -143,14 +146,20 @@ export function sidebarCommands({
       run: (context) => {
         const order = ordered(context);
         const index = order.indexOf(context.sidebar!.path!);
+        if (index < 0) return;
         const before = direction < 0 ? order[index - 1] : order[index + 2];
         if (context.sidebar!.section === 'favorites')
           addFavorite(context.sidebar!.path!, context.sidebar!.name!, before);
-        else
-          changePreferences((ui) => ({
-            ...ui,
-            sidebar: { ...ui.sidebar, locations: reorder(order, context.sidebar!.path!, before) },
-          }));
+        else {
+          const state = getState();
+          const next = moveSidebarLocation(
+            effectiveWindowUI(state).sidebar,
+            state.bootstrap.locations,
+            context.sidebar!.path!,
+            before,
+          );
+          if (next) return changeSetting('ui.sidebar.locations', next);
+        }
       },
     });
   }

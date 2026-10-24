@@ -13,7 +13,9 @@ import { lensGroupIDSchema, lensOpSchema } from '../../domain/files/lenses';
 import { rootKey, validKeymapKey } from '../../domain/preferences/keymap';
 import { lineSchema } from '../preferences/keymap-schema';
 import { gitSourceSchema } from '../../domain/comparison/git';
+import { gitActionKinds, gitCommitMessageLimit } from '../../domain/comparison/git-actions';
 import { chatRequestSchema } from '../../domain/models/chat';
+import { providerCheckKinds } from '../../domain/models/provider-checks';
 import { flushResultSchema } from '../../domain/persistence/flush';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
@@ -156,6 +158,23 @@ const targetSchema = z.object({
     )
     .max(2000),
 });
+const gitActionTargetSchema = z.object({
+  id,
+  target: targetSchema.strict(),
+  cols: z.number().int().min(2).max(1000).optional(),
+  rows: z.number().int().min(2).max(500).optional(),
+});
+const gitActionRequestSchema = z.discriminatedUnion('kind', [
+  gitActionTargetSchema
+    .extend({
+      kind: z.literal('commit'),
+      message: z.string().min(1).max(gitCommitMessageLimit),
+    })
+    .strict(),
+  gitActionTargetSchema
+    .extend({ kind: z.enum(gitActionKinds.filter((kind) => kind !== 'commit')) })
+    .strict(),
+]);
 export const schemas = {
   htmlPreview: z.tuple([id]),
   htmlPreviewClose: z.tuple([id]),
@@ -189,6 +208,7 @@ export const schemas = {
     ]),
   ]),
   gitResource: z.tuple([gitSourceSchema.extend({ repository: localPath })]),
+  gitAction: z.tuple([gitActionRequestSchema]),
   watchRules: z.tuple([watchRuleRequestSchema]),
   relationships: z.tuple([
     z.discriminatedUnion('kind', [
@@ -337,6 +357,10 @@ export const schemas = {
       )
       .max(1000),
     workspaceSnapshotSchema.optional(),
+    z
+      .record(id, id)
+      .refine((owners) => Object.keys(owners).length <= 200)
+      .optional(),
   ]),
   agentCommandResult: z.tuple([id, z.string().max(2000).optional()]),
   agentReviewList: z.tuple([]),
@@ -477,6 +501,7 @@ export const schemas = {
   ]),
   providerCredential: z.tuple([id, z.string().max(10000)]),
   providerModels: z.tuple([id]),
+  providerCheck: z.tuple([z.object({ providerID: id, kind: z.enum(providerCheckKinds) }).strict()]),
   providerPermissionGet: z.tuple([id]),
   providerPermissionSet: z.tuple([id, z.url().max(4000), z.enum(modelDataLevels).nullable()]),
   providerPermissionAgents: z.tuple([id, z.url().max(4000), z.boolean()]),
@@ -663,6 +688,7 @@ export const methodWindows = {
   newWindow: 'viewer',
   git: 'viewer',
   gitResource: 'viewer',
+  gitAction: 'viewer',
   watchRules: 'viewer',
   relationships: 'viewer',
   workflow: 'viewer',
@@ -711,6 +737,7 @@ export const methodWindows = {
   sessionKeysDiscard: 'both',
   providerCredential: 'settings',
   providerModels: 'both',
+  providerCheck: 'both',
   providerPermissionGet: 'both',
   providerPermissionSet: 'both',
   providerPermissionAgents: 'settings',

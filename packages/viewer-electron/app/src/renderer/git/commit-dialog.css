@@ -1,0 +1,56 @@
+.git-commit-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+}
+
+.git-commit-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.git-commit-folder strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.git-commit-hint {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.git-commit-dialog textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 100px;
+  max-height: 300px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--field);
+  caret-color: var(--accent);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.git-commit-dialog textarea:focus-visible {
+  border-color: var(--accent);
+}
+
+.git-commit-dialog .error {
+  margin: 0;
+}
+
+.git-commit-dialog footer {
+  flex-wrap: wrap;
+}

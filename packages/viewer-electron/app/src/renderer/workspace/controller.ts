@@ -47,6 +47,8 @@ import { announce } from '../state/core';
 import { addContentPane, addServerPane } from '../state/panes';
 import { connectLocalServers, localServerSessions } from '../local-servers/runtime';
 import { rememberTiling, restoreTiling } from './tiling-history';
+import { gitTerminalProfileID } from '../../domain/comparison/git-actions';
+import { runGitAction } from '../git/runtime';
 /** Owns host-plane identity and creation. Engine routes/IDs stay inside the adapter. */
 /**
  * Makes a plane the active one, as following a link does: it takes the wheel (plurid's
@@ -335,6 +337,61 @@ export function useWorkspaceController({
             },
           });
         frameWorkspace(engine, surface, [pane.id]);
+      },
+      async newGitAction(target, action) {
+        const captured = structuredClone(target);
+        const origin = () => {
+          const api = engine.current;
+          const space = activeWorkspace();
+          const pane = space.panes.find((pane) => pane.id === captured.paneID);
+          const parent =
+            api && flattenTree(api.tree.get()).find((node) => hostID(node) === pane?.id);
+          if (
+            !api ||
+            !readyRef.current ||
+            space.id !== captured.workspaceID ||
+            pane?.type !== 'folder' ||
+            !parent ||
+            controller.rootID(pane.id) !== captured.rootID ||
+            pane.path !== captured.panePath
+          )
+            throw new Error('The originating folder changed or closed. Choose the action again.');
+          if (space.panes.length >= 200) throw new Error('Close a plane before opening another.');
+          return { api, parent };
+        };
+        origin();
+        const id = crypto.randomUUID();
+        await runGitAction(
+          { ...action, id, target: captured },
+          getState().settings.settings.terminals.scrollback,
+          (reply) => {
+            try {
+              const { api, parent } = origin();
+              const pane = addTerminalPane(reply.root, gitTerminalProfileID, false, {
+                id,
+                gitAction: action.kind,
+              });
+              const pending =
+                pendingOwners.current.get(captured.workspaceID) ?? new Map<string, string>();
+              pendingOwners.current.set(captured.workspaceID, pending);
+              pending.set(pane.id, captured.rootID);
+              api.pubsub.publish({
+                topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
+                data: {
+                  route: paneRoute('terminal', pane.id),
+                  parentPlaneID: parent.planeID,
+                  framing: 'none',
+                },
+              });
+              frameWorkspace(engine, surface, [pane.id]);
+            } catch (error) {
+              throw new Error(
+                'Git started, but its originating folder changed before the output could open. Check the repository before running the action again.',
+                { cause: error },
+              );
+            }
+          },
+        );
       },
       newServer(target) {
         const captured = structuredClone(target);
@@ -797,14 +854,63 @@ export function useWorkspaceController({
       },
       closePane: (id) => {
         const api = engine.current;
-        const node = api && flattenTree(api.tree.get()).find((node) => hostID(node) === id);
+        if (!api) return;
+        const tree = api.tree.get();
+        const node = flattenTree(tree).find((node) => hostID(node) === id);
         if (!node) return;
+        const space = activeWorkspace();
+        const active = getState().activePane;
         const removed = new Set(flattenTree([node]).map(hostID));
         for (const [child, owner] of serverParents.current)
-          if (owner.workspaceID === activeWorkspace().id && removed.has(owner.parentID))
-            removed.add(child);
-        api!.tree.remove(node.planeID);
-        removePanes([...removed]);
+          if (owner.workspaceID === space.id && removed.has(owner.parentID)) removed.add(child);
+        const closesActive = removed.has(active);
+        const wasDocked = closesActive && !!api.camera.docked();
+        const surviving = new Set(
+          space.panes.filter((pane) => !removed.has(pane.id)).map((pane) => pane.id),
+        );
+        let destination: string | undefined;
+        if (closesActive) {
+          // The active descendant and its parents disappear together; capture ancestry first.
+          const visited = new Set<string>();
+          let current: string | undefined = active;
+          while (current && !visited.has(current)) {
+            visited.add(current);
+            const pendingParent = serverParents.current.get(current);
+            current =
+              parentPaneID(tree, current) ??
+              (pendingParent?.workspaceID === space.id ? pendingParent.parentID : undefined);
+            if (current && surviving.has(current)) {
+              destination = current;
+              break;
+            }
+          }
+          cancelWorkspaceFraming(api);
+        }
+        api.history.transaction(() => {
+          api.tree.remove(node.planeID);
+          removePanes([...removed]);
+          if (!closesActive) return;
+          // Independent roots retain the store's established first-survivor fallback.
+          const next = destination ?? space.panes.find((pane) => surviving.has(pane.id))?.id;
+          if (!next) return;
+          const dockedTarget =
+            wasDocked && flattenTree(api.tree.get()).find((item) => hostID(item) === next);
+          if (dockedTarget) {
+            api.tree.open(dockedTarget.planeID);
+            api.camera.dock(dockedTarget.planeID, { animate: true });
+            controller.focusPane(next, { frame: false });
+          } else controller.focusPane(next);
+          // Batch closes may remove this fallback next; never retry focus for a closed target.
+          queueMicrotask(() => {
+            if (
+              engine.current === api &&
+              activeWorkspace().id === space.id &&
+              getState().activePane === next &&
+              activeWorkspace().panes.some((pane) => pane.id === next)
+            )
+              activatePlane(engine, next);
+          });
+        });
       },
       consolidatePreviews: () => {
         const api = engine.current;

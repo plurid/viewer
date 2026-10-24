@@ -72,7 +72,14 @@ export async function installProject(
       return [{ id: plane.id, type: 'collection', path, collectionID: plane.collectionID }];
     if (plane.type === 'terminal')
       return [
-        { id: plane.id, type: 'terminal', path, profileID: plane.profileID, startOnOpen: false },
+        {
+          id: plane.id,
+          type: 'terminal',
+          path,
+          profileID: plane.profileID,
+          startOnOpen: false,
+          ...(plane.gitAction ? { gitAction: plane.gitAction } : {}),
+        },
       ];
     return [
       {

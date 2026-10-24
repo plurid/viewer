@@ -4,6 +4,7 @@ import {
   type OverlayRect,
   type OverviewCorner,
 } from './placement';
+import { SpatialViewcube } from './SpatialViewcube';
 
 export interface SpatialOverviewState {
   available: boolean;
@@ -20,8 +21,12 @@ export interface SpatialOverviewPorts {
 }
 
 const mapSelector = '[data-plurid-overlay="minimap"]';
+const cubeSelector = '[data-plurid-overlay="viewcube"]';
+// Only fixed, explicitly opted-in control areas participate; changing file rows do not.
+const protectedAreaAttribute = 'data-viewer-overlay-protected';
 const obstacleSelector =
-  '.plane-controls, [data-plurid-overlay="viewcube"], [data-plurid-entity="PluridToolbar"]';
+  `.plane-controls, ${cubeSelector}, ` +
+  `[data-plurid-entity="PluridToolbar"], [${protectedAreaAttribute}]`;
 const observedSelector = `${mapSelector}, ${obstacleSelector}`;
 const ownedStyles = [
   'position',
@@ -68,25 +73,34 @@ export class SpatialOverview {
   private resize?: ResizeObserver;
   private mutation: MutationObserver;
   private unsubscribe: () => void;
+  private viewcube: SpatialViewcube;
 
   constructor(
     private root: HTMLElement,
     private ports: SpatialOverviewPorts,
   ) {
+    this.viewcube = new SpatialViewcube(this.pressPointer);
     if (typeof ResizeObserver !== 'undefined') this.resize = new ResizeObserver(this.invalidate);
     this.mutation = new MutationObserver((records) => {
       if (
-        records.some((record) =>
-          [...record.addedNodes, ...record.removedNodes].some(
-            (node) =>
-              node instanceof Element &&
-              (node.matches(observedSelector) || !!node.querySelector(observedSelector)),
-          ),
+        records.some(
+          (record) =>
+            record.type === 'attributes' ||
+            [...record.addedNodes, ...record.removedNodes].some(
+              (node) =>
+                node instanceof Element &&
+                (node.matches(observedSelector) || !!node.querySelector(observedSelector)),
+            ),
         )
       )
         this.invalidate();
     });
-    this.mutation.observe(root, { childList: true, subtree: true });
+    this.mutation.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [protectedAreaAttribute],
+    });
     this.unsubscribe = ports.subscribeEngine(this.invalidate);
     window.addEventListener('resize', this.invalidate);
     window.addEventListener('pointerup', this.releasePointer);
@@ -259,9 +273,18 @@ export class SpatialOverview {
   private measure(): void {
     if (this.disposed || this.state.expanded) return;
     const map = this.root.querySelector<HTMLElement>(mapSelector) ?? undefined;
+    const cube = this.root.querySelector<HTMLElement>(cubeSelector) ?? undefined;
+    const viewport = rectangle(this.root);
+    const elements = [...this.root.querySelectorAll<HTMLElement>(obstacleSelector)];
+    this.observe(new Set<Element>([this.root, ...(map ? [map] : []), ...elements]));
+    this.viewcube.bind(cube);
+    this.viewcube.place(
+      viewport,
+      elements.filter((element) => element !== cube && visible(element)).map(rectangle),
+      this.ports.isDocked(),
+    );
     this.bind(map);
     if (!map || this.ports.isDocked()) {
-      this.observe(new Set([this.root]));
       this.publish({ available: false, collapsed: false, expanded: false });
       return;
     }
@@ -269,12 +292,9 @@ export class SpatialOverview {
       this.publish({ available: false, collapsed: false, expanded: false });
       return;
     }
-    const viewport = rectangle(this.root);
     const measured = rectangle(map);
     if (validOverlayRect(measured)) this.size = { width: measured.width, height: measured.height };
-    const elements = [...this.root.querySelectorAll<HTMLElement>(obstacleSelector)];
     const obstacles = elements.filter(visible).map(rectangle).filter(validOverlayRect);
-    this.observe(new Set<Element>([this.root, map, ...elements]));
     const placement = solveOverviewPlacement({
       viewport,
       size: this.size,
@@ -342,6 +362,7 @@ export class SpatialOverview {
     window.removeEventListener('resize', this.invalidate);
     window.removeEventListener('pointerup', this.releasePointer);
     window.removeEventListener('pointercancel', this.releasePointer);
+    this.viewcube.destroy();
     this.bind(undefined);
     this.observed.clear();
   }

@@ -1,6 +1,7 @@
 import type { EvidenceNavigation } from '../../domain/files/inspection';
 import type { ProjectLayout } from '../../domain/workspaces/project';
 import type { CapturedTarget } from '../../domain/automation/actions';
+import type { GitActionIntent } from '../../domain/comparison/git-actions';
 import type { PlaneLayoutEdit, PlaneLayoutTarget } from '../../domain/workspaces/plane-layout';
 import { createContext, useContext } from 'react';
 import type { DiffSource } from '../../domain/comparison/diff';
@@ -18,6 +19,7 @@ export interface WorkspaceController {
   captureLayout(): ProjectLayout;
   restoreLayout(layout: ProjectLayout): void;
   newTerminal(target: CapturedTarget, profileID?: string): void;
+  newGitAction(target: CapturedTarget, action: GitActionIntent): Promise<void>;
   /** Serve one captured folder in a linked, explicitly started plane. */
   newServer(target: CapturedTarget): Promise<void>;
   rootID(paneID: string): string | undefined;

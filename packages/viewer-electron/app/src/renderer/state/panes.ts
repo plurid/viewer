@@ -371,14 +371,20 @@ export function addSearchPane(
   return pane.id;
 }
 
-export function addTerminalPane(path: string, profileID: string, root: boolean): TerminalPane {
+export function addTerminalPane(
+  path: string,
+  profileID: string,
+  root: boolean,
+  task?: Pick<TerminalPane, 'id' | 'gitAction'>,
+): TerminalPane {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('Close a plane before opening another.');
   const pane: TerminalPane = {
-    id: uuid(),
+    id: task?.id ?? uuid(),
     type: 'terminal',
     path,
     profileID,
+    ...(task?.gitAction ? { gitAction: task.gitAction } : {}),
   };
   changeWorkspace((space) => ({
     ...space,

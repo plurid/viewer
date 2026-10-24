@@ -24,6 +24,7 @@ const icons: Record<string, IconName> = {
   'Group by': 'grid',
   Navigation: 'compass',
   Terminal: 'terminal',
+  Git: 'side-by-side',
   Actions: 'command',
   Plane: 'link',
   'Size & position': 'resize',
@@ -48,6 +49,7 @@ const order = [
   'Folder',
   'Navigation',
   'Terminal',
+  'Git',
   'Actions',
   'Quick actions',
   'Text',
@@ -187,6 +189,22 @@ export function contextMenuSections(
     const rows = grouped.get(label)!;
     if (label === 'View') return branch(label, viewSections(rows));
     if (label === 'Size & position') return branch(label, layoutSections(rows));
+    if (label === 'Git')
+      return branch(label, [
+        section(
+          rows.filter((item) =>
+            ['git-changes', 'git-diff', 'git-action.status', 'git-action.log'].includes(item.id),
+          ),
+        ),
+        section(
+          rows.filter((item) =>
+            ['git-action.stage-selected', 'git-action.stage-all', 'git-action.commit'].includes(
+              item.id,
+            ),
+          ),
+        ),
+        section(rows.filter((item) => ['git-action.pull', 'git-action.push'].includes(item.id))),
+      ]);
     if (label === 'Files') {
       const open = rows.filter((item) =>
         ['open-default', 'linked', 'another-plane', 'reveal'].includes(item.id),

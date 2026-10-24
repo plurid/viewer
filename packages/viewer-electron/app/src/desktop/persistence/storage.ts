@@ -8,6 +8,7 @@ import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { gitActionKinds } from '../../domain/comparison/git-actions';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../domain/contracts';
 import { collectionSchema, basketItemSchema } from '../../domain/workspaces/collections';
 import { evidenceNavigationSchema } from '../../domain/files/inspection';
@@ -68,6 +69,7 @@ const pane = z.discriminatedUnion('type', [
     path: localPath,
     profileID: id,
     startOnOpen: z.boolean().optional(),
+    gitAction: z.enum(gitActionKinds).optional(),
   }),
   z.object({
     id,

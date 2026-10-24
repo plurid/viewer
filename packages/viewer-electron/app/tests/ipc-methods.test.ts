@@ -41,6 +41,20 @@ describe('IPC method table', () => {
     ])
       expect(methodWindows[method as keyof typeof methodWindows]).toBe('viewer');
   });
+  it('limits provider checks to fixed synthetic variants without caller content', () => {
+    expect(schemas.providerCheck.safeParse([{ providerID: 'gemini', kind: 'text' }]).success).toBe(
+      true,
+    );
+    expect(methodWindows.providerCheck).toBe('both');
+    expect(
+      schemas.providerCheck.safeParse([
+        { providerID: 'gemini', kind: 'chat-schema', prompt: 'private data' },
+      ]).success,
+    ).toBe(false);
+    expect(
+      schemas.providerCheck.safeParse([{ providerID: 'gemini', kind: 'custom-schema' }]).success,
+    ).toBe(false);
+  });
   it('sends Settings the permission changes its provider controls show', () => {
     // A permission granted or revoked in the workspace window reaches an open Settings window.
     expect(methodWindows.providerPermissionSet).toBe('both');

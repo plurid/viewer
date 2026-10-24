@@ -236,12 +236,12 @@ describe('agent catalog publication and invocation', () => {
       for (let count = 0; count < 50; count += 1) registry.touch();
       await vi.advanceTimersByTimeAsync(79);
     });
-    expect(publish).not.toHaveBeenCalled();
-    await act(async () => vi.advanceTimersByTimeAsync(1));
     expect(publish).toHaveBeenCalledOnce();
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(publish).toHaveBeenCalledTimes(2);
     registry.touch();
     view.unmount();
     await act(async () => vi.advanceTimersByTimeAsync(80));
-    expect(publish).toHaveBeenCalledOnce();
+    expect(publish).toHaveBeenCalledTimes(2);
   });
 });
