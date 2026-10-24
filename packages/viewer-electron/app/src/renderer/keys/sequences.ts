@@ -3,7 +3,8 @@ import { KeySequence, keyName, type KeymapBinding } from '../../domain/keymap';
 import { matchesShortcut } from '../../domain/shortcuts';
 import { editable } from '../commands/editing';
 import { overlayOpen } from '../ui/modal';
-import { getState, report } from '../state/store';
+import { report } from '../state/store';
+import { effectiveKeymap } from './session';
 
 /** What which-key shows: the keys pressed so far and the chord they reached. */
 export interface SequenceView {
@@ -16,6 +17,9 @@ export interface SequenceView {
   help?: boolean;
   /** A key that is not bound, said briefly. */
   message?: string;
+  /** A mode on (2026-10-23), and the count typed in it. */
+  mode?: string;
+  count?: number;
 }
 const idle: SequenceView = { active: false, shown: false, keys: [] };
 let view: SequenceView = idle;
@@ -33,14 +37,13 @@ const subscribe = (listener: () => void) => {
 export const useSequenceView = () => useSyncExternalStore(subscribe, () => view);
 /** Every binding, until the next key or Escape (`keymap-help`, prefix `?`). */
 export function showKeymapHelp(): void {
-  publish({
-    active: true,
-    shown: true,
-    keys: [],
-    node: getState().settings.settings.keymap.bindings,
-    help: true,
-  });
+  publish({ active: true, shown: true, keys: [], node: effectiveKeymap().bindings, help: true });
 }
+/** The installed key layer's own: modes entered and left by a line (`:mode resize`). */
+let modes: { enter(name: string): boolean; leave(): void } | undefined;
+/** Into a key mode until Escape; false when the keymap has none of that name. */
+export const enterKeyMode = (name: string) => modes?.enter(name) ?? false;
+export const leaveKeyMode = () => modes?.leave();
 /** ⌃B pressed twice reaches the terminal as ⌃B, as tmux sends its prefix on (2026-10-23). */
 function sendPrefix(target: Element, prefix: string): void {
   const terminal = target.closest<HTMLElement>('.terminal-plane[data-terminal-id]');
@@ -57,22 +60,26 @@ const consume = (event: KeyboardEvent) => {
   event.preventDefault();
   event.stopImmediatePropagation();
 };
+const leaf = (binding: KeymapBinding | undefined) =>
+  typeof binding === 'string' ? [binding] : Array.isArray(binding) ? binding : undefined;
 /**
  * THE KEY LAYER (2026-10-23): the prefix (or the leader) starts a sequence through the keymap's
- * bindings; its commands run through `invoke`, App's wrapper, as menu commands do. Installed before
- * App's own key handler, it takes the keys of a sequence and leaves every other key alone.
+ * bindings; `root` keys need none; a repeat key may come again without it; a mode keeps its table
+ * until Escape. Each binding is a line, run through `run` (App's line runner) after the sequence
+ * has ended, `count` times. Installed before App's own key handler, it takes the keys of a sequence
+ * or mode and leaves every other key alone.
  */
-export function useKeySequences(invoke: (id: string) => Promise<unknown>): void {
-  const invokeRef = useRef(invoke);
-  invokeRef.current = invoke;
+export function useKeySequences(
+  run: (lines: readonly string[], count: number) => Promise<unknown>,
+): void {
+  const runRef = useRef(run);
+  runRef.current = run;
   useEffect(() => {
-    const sequence = new KeySequence(getState().settings.settings.keymap, (commands) => {
-      // after the sequence has ended: a command that shows something (keymap-help) is not then
+    const sequence = new KeySequence(effectiveKeymap(), (lines, count) => {
+      // after the sequence has ended: a line that shows something (keymap-help) is not then
       // hidden with the sequence
       void Promise.resolve()
-        .then(async () => {
-          for (const id of commands) await invokeRef.current(id);
-        })
+        .then(() => runRef.current(lines, count))
         .catch(report);
     });
     let ending: ReturnType<typeof setTimeout> | undefined;
@@ -82,6 +89,28 @@ export function useKeySequences(invoke: (id: string) => Promise<unknown>): void 
       clearTimeout(showing);
       sequence.cancel();
       publish(idle);
+    };
+    const showMode = (message?: string) =>
+      publish({
+        active: true,
+        shown: true,
+        keys: [],
+        node: sequence.current(),
+        mode: sequence.mode(),
+        count: sequence.counted(),
+        ...(message ? { message } : {}),
+      });
+    modes = {
+      enter: (name) => {
+        clearTimeout(ending);
+        clearTimeout(showing);
+        sequence.cancel();
+        sequence.configure(effectiveKeymap());
+        if (!sequence.enterMode(name)) return false;
+        showMode();
+        return true;
+      },
+      leave: end,
     };
     const wait = (timeout: number, whichKey: boolean) => {
       clearTimeout(ending);
@@ -97,7 +126,7 @@ export function useKeySequences(invoke: (id: string) => Promise<unknown>): void 
     };
     const keydown = (event: KeyboardEvent) => {
       if (event.isComposing) return;
-      const keymap = getState().settings.settings.keymap;
+      const keymap = effectiveKeymap();
       sequence.configure(keymap);
       const target = event.target as Element;
       if (view.help) {
@@ -106,17 +135,50 @@ export function useKeySequences(invoke: (id: string) => Promise<unknown>): void 
         end();
         return;
       }
+      const terminal = !!target.closest?.('.terminal-plane');
+      const field = editable(target);
+      // the shell's and the editor's own keys, unless the keymap says otherwise
+      const allowed =
+        (terminal ? keymap.inTerminals : true) && (field && !terminal ? keymap.inTextFields : true);
+      if (sequence.mode()) {
+        // a dialog opened from the mode takes its own keys; the mode waits
+        if (overlayOpen()) return;
+        const name = keyName(event);
+        if (!name) return;
+        consume(event);
+        const step = sequence.feed(name, performance.now());
+        if (step === 'cancelled') end();
+        else showMode(step === 'unbound' ? 'Not bound' : undefined);
+        return;
+      }
+      if (sequence.repeating()) {
+        const name = keyName(event);
+        if (!name) return;
+        if (sequence.feed(name, performance.now()) === 'passed') {
+          // not a repeat key: it is the window's, as after tmux's repeat time
+          end();
+          return;
+        }
+        consume(event);
+        wait(keymap.repeatTime, false);
+        return;
+      }
       if (!sequence.active()) {
         if (event.repeat || overlayOpen()) return;
-        const terminal = !!target.closest?.('.terminal-plane');
-        const field = editable(target);
+        const name = keyName(event);
+        // a key with no prefix (tmux's bind -n)
+        const root = name ? leaf(keymap.root[name]) : undefined;
+        if (root && allowed) {
+          consume(event);
+          void Promise.resolve()
+            .then(() => runRef.current(root, 1))
+            .catch(report);
+          return;
+        }
         const prefix = !!keymap.prefix && matchesShortcut(keymap.prefix, event);
-        const leader =
-          !prefix && !!keymap.leader && !terminal && !field && keyName(event) === keymap.leader;
+        const leader = !prefix && !!keymap.leader && !terminal && !field && name === keymap.leader;
         if (!prefix && !leader) return;
-        // the shell's and the editor's own keys, unless the keymap says otherwise
-        if (prefix && terminal && !keymap.inTerminals) return;
-        if (prefix && field && !terminal && !keymap.inTextFields) return;
+        if (prefix && !allowed) return;
         consume(event);
         sequence.start(performance.now());
         wait(keymap.timeout, keymap.whichKey);
@@ -134,6 +196,7 @@ export function useKeySequences(invoke: (id: string) => Promise<unknown>): void 
       const pressed = sequence.pressed();
       const step = sequence.feed(name, performance.now());
       if (step === 'pending') wait(keymap.timeout, keymap.whichKey);
+      else if (step === 'ran' && sequence.repeating()) wait(keymap.repeatTime, false);
       else if (step === 'unbound') {
         clearTimeout(showing);
         clearTimeout(ending);
@@ -146,6 +209,7 @@ export function useKeySequences(invoke: (id: string) => Promise<unknown>): void 
       window.removeEventListener('keydown', keydown, true);
       clearTimeout(ending);
       clearTimeout(showing);
+      modes = undefined;
       publish(idle);
     };
   }, []);

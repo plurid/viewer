@@ -18,6 +18,10 @@ import { useIndexedSearch } from '../explorer/useIndexedSearch';
 import { useWorkspace } from '../workspace/context';
 import type { FileEntry } from '../../domain/contracts';
 import { calculate, paletteIntent, rankFrecent } from './smart-palette';
+import { LineFinder } from '../command-line/LineFinder';
+import { lineHint } from '../command-line/hints';
+import { quoteWord } from '../../domain/command-line/lex';
+import type { LineHost } from '../command-line/host';
 import {
   choicesPrefix,
   moreSettingsID,
@@ -26,20 +30,28 @@ import {
   settingsPrefix,
 } from './palette-sections';
 
-export type PaletteMode = 'commands' | 'files' | 'workspaces' | 'settings';
+export type PaletteMode = 'commands' | 'files' | 'workspaces' | 'settings' | 'line';
+/** The command line's prefix in the palette: `:`, as in vim (2026-10-23). */
+export const linePrefix = ':';
 
 export function CommandPalette({
   mode,
   onMode,
   onClose,
+  initialQuery = '',
+  line,
 }: {
   mode: PaletteMode;
   onMode(mode: PaletteMode): void;
   onClose(): void;
+  /** Text the palette opens with (`:help` opens the command line at `help`). */
+  initialQuery?: string;
+  /** The command line: what a line runs against, and running one (App closes the palette first). */
+  line?: { host: LineHost; run(text: string): void };
 }) {
   const registry = useCommands();
   // what was typed, carried into the mode it chose: `,wrap` searches the settings for "wrap"
-  const [carried, setCarried] = useState('');
+  const [carried, setCarried] = useState(initialQuery);
   const change = (next: PaletteMode, query = '') => {
     setCarried(query);
     onMode(next);
@@ -58,12 +70,21 @@ export function CommandPalette({
             ? 'Change workspace'
             : mode === 'settings'
               ? 'Settings'
-              : 'Commands'
+              : mode === 'line'
+                ? 'Command line'
+                : 'Commands'
       }
       onClose={onClose}
       className="command-palette"
     >
-      {mode === 'files' ? (
+      {mode === 'line' && line ? (
+        <LineFinder
+          host={line.host}
+          initialQuery={carried}
+          onRun={line.run}
+          onBack={() => change('commands')}
+        />
+      ) : mode === 'files' ? (
         <FileFinder
           key={`${context.workspaceID}:${active}:${directory}`}
           context={context}
@@ -78,7 +99,7 @@ export function CommandPalette({
           active={active}
           directory={directory}
           onClose={onClose}
-          mode={mode}
+          mode={mode === 'line' ? 'commands' : mode}
           initialQuery={carried}
           onMode={change}
         />
@@ -113,7 +134,10 @@ function CommandFinder({
   const nested = workspaces || settings;
   const onCommands = () => onMode('commands');
   const smart = useSmartRows(nested ? '' : query, context, directory);
-  const commands = registry.list({ paneID: active, scope: 'window', context });
+  // the smart rows' own source shares the plane: listed once, above (2026-10-23)
+  const commands = registry
+    .list({ paneID: active, scope: 'window', context })
+    .filter((command) => !command.id.startsWith('smart:'));
   // settings apart (palette-sections.ts): their own section, or `,` for them alone
   const view = workspaces
     ? {
@@ -136,10 +160,13 @@ function CommandFinder({
         onQuery={(text) => {
           if (mode === 'commands' && text.startsWith(settingsPrefix))
             onMode('settings', text.slice(settingsPrefix.length).trimStart());
+          else if (mode === 'commands' && text.startsWith(linePrefix))
+            onMode('line', text.slice(linePrefix.length));
           else setQuery(text);
         }}
         rows={rows}
         headings={view.headings}
+        hint={workspaces ? undefined : lineHint}
         onClose={nested ? onCommands : onClose}
         onEmptyBackspace={nested ? onCommands : undefined}
         label={workspaces ? 'Search workspaces' : settings ? 'Search settings' : 'Search commands'}
@@ -317,12 +344,22 @@ function useSmartRows(
     const name = intent.text;
     const selected = context.selection;
     if (intent.command === 'go-to')
-      return [row('go', { label: `Go to ${name}`, group: 'Go', icon: 'folder', run: open(name) })];
+      return [
+        row('go', {
+          label: `Go to ${name}`,
+          // the line it is, to learn: `:e ~/Downloads` (2026-10-23)
+          detail: `:e ${quoteWord(name)}`,
+          group: 'Go',
+          icon: 'folder',
+          run: open(name),
+        }),
+      ];
     if (intent.command === 'rename')
       return selected.length === 1
         ? [
             row('rename', {
               label: `Rename “${selected[0]!.name}” to “${name}”`,
+              detail: `:mv ${quoteWord(name)}`,
               group: 'Files',
               icon: 'rename',
               run: async () => {
@@ -336,7 +373,7 @@ function useSmartRows(
     return [
       row(intent.command, {
         label: `${kind === 'mkdir' ? 'New folder' : 'New file'} “${name}”`,
-        detail: context.directory,
+        detail: `:${kind === 'mkdir' ? 'mkdir' : 'touch'} ${quoteWord(name)} · ${context.directory}`,
         group: 'Files',
         icon: kind === 'mkdir' ? 'folder' : 'file',
         run: async () => {

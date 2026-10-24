@@ -5,7 +5,7 @@ import type { CommandContext } from '../registry';
 export interface WindowActions {
   workspace: WorkspaceController;
   ready: boolean;
-  palette(mode: 'commands' | 'files' | 'workspaces' | 'settings'): void;
+  palette(mode: 'commands' | 'files' | 'workspaces' | 'settings' | 'line', query?: string): void;
   settings(): void;
   workspaceDialog(kind: 'new' | 'rename' | 'delete' | 'background'): void;
   renameShortcut(path: string, name: string): void;

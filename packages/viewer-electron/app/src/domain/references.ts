@@ -1,4 +1,6 @@
 import type { ApplicationSettings } from './services';
+import { bindingRows, canonicalBindings, type Keymap, type KeymapBinding } from './keymap';
+import { findVerb, parseCommandLine } from './command-line/verbs';
 
 /**
  * References that name nothing (2026-10-20): a custom action's recipe or terminal profile, a built-in
@@ -29,7 +31,43 @@ export function referenceIssues(settings: ApplicationSettings): string[] {
         ? [`The recipe “${name}” uses the model provider “${providerID}”, which does not exist.`]
         : [],
     ),
+    ...keymapIssues(settings.keymap),
   ];
+}
+/**
+ * The keymap's (2026-10-23): two spellings of one key (`Ctrl+B` and `C-b`), the later used; and
+ * `mode name` lines naming no mode.
+ */
+function keymapIssues(keymap: Keymap): string[] {
+  const tables: [string, Record<string, KeymapBinding>][] = [
+    ['prefix', keymap.bindings],
+    ['no-prefix', keymap.root ?? {}],
+    ...Object.entries(keymap.modes ?? {}).map(
+      ([name, mode]): [string, Record<string, KeymapBinding>] => [`mode ${name}`, mode.bindings],
+    ),
+  ];
+  const modes = new Set(Object.keys(keymap.modes ?? {}));
+  return tables.flatMap(([table, bindings]) => [
+    ...canonicalBindings(bindings).collisions.map(
+      (keys) => `Two ${table} bindings are the key ${keys}: the later one is used.`,
+    ),
+    ...bindingRows(bindings).flatMap(({ keys, commands }) =>
+      commands.flatMap((line) => {
+        try {
+          return parseCommandLine(line)
+            .filter((step) => findVerb(step.name)?.key === 'mode')
+            .flatMap((step) => {
+              const name = step.words.find((word) => !word.text.startsWith('-'))?.text;
+              return name && !modes.has(name)
+                ? [`${keys.join(' ')} (${table}) enters the mode “${name}”, which does not exist.`]
+                : [];
+            });
+        } catch {
+          return [];
+        }
+      }),
+    ),
+  ]);
 }
 
 /** The names of what uses a recipe, a terminal profile or a provider: Settings keeps it until they change. */

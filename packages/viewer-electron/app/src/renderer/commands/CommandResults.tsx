@@ -16,6 +16,8 @@ export function CommandResults({
   headings,
   leading,
   onEmptyBackspace,
+  onKey,
+  hint,
 }: {
   query: string;
   onQuery(query: string): void;
@@ -31,6 +33,10 @@ export function CommandResults({
   leading?: React.ReactNode;
   /** Backspace with nothing typed: out of a palette's mode. */
   onEmptyBackspace?(): void;
+  /** A key the field handles itself first (the command line's Tab and history); true when it did. */
+  onKey?(event: React.KeyboardEvent): boolean;
+  /** The line a row is, shown beside it (2026-10-23): `:q`, `:set grid!`. */
+  hint?(row: ResolvedCommand): string | undefined;
 }) {
   const [activeID, setActiveID] = useState('');
   const [keyboardScroll, setKeyboardScroll] = useState(0);
@@ -58,6 +64,11 @@ export function CommandResults({
       className="command-search"
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) return;
+        if (onKey?.(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         if (event.key === 'Escape') {
           event.preventDefault();
           event.stopPropagation();
@@ -158,6 +169,7 @@ export function CommandResults({
               ) : (
                 row.setting?.value && <span className="command-value">{row.setting.value}</span>
               )}
+              {hint?.(row) && <code className="command-line-hint">:{hint(row)}</code>}
               {row.shortcut && <kbd>{row.shortcut}</kbd>}
             </button>
           </div>

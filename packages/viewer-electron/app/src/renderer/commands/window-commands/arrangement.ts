@@ -1,4 +1,5 @@
 import { confirmClose } from '../../editing/unsaved';
+import { closePlanes, otherPlanes, rootPlanes } from '../closing';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
@@ -96,6 +97,30 @@ export function arrangementCommands({
       run: async (context) => {
         if (await confirmClose(actions.workspace.subtree(context.paneID!)))
           actions.workspace.closePane(context.paneID!);
+      },
+    },
+    // vim's :qa and :only (2026-10-23), unsaved text asked about first
+    {
+      id: 'close-all-planes',
+      label: 'Close all planes',
+      group: 'Plane',
+      icon: 'close',
+      aliases: ['qa', 'close all'],
+      when: (context) => windowScope(context) && actions.ready && space.panes.length > 0,
+      run: async () => {
+        await closePlanes(actions.workspace, rootPlanes(actions.workspace));
+      },
+    },
+    {
+      id: 'close-other-planes',
+      label: 'Close other planes',
+      group: 'Plane',
+      icon: 'close',
+      aliases: ['only', 'close others'],
+      when: (context) =>
+        paneScope(context) && otherPlanes(actions.workspace, context.paneID!).length > 0,
+      run: async (context) => {
+        await closePlanes(actions.workspace, otherPlanes(actions.workspace, context.paneID!));
       },
     },
     {

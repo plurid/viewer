@@ -1,3 +1,5 @@
+import { plainCommandID } from '../../domain/command-line/verbs';
+import { withArguments } from '../../domain/command-line/lex';
 import type { CommandContext, CommandDefinition } from './registry';
 import type { CapturedTarget } from '../../domain/automation';
 import { actionAvailable, terminalDirectory } from '../../domain/automation';
@@ -28,6 +30,8 @@ export function programCommands(
   terminalName?: string,
   /** The context as it is now: a sequence's later steps act where the earlier ones left it. */
   live?: () => CommandContext,
+  /** A step with words (`vs ~/Documents`, 2026-10-23), run by the command line. */
+  line?: (text: string) => Promise<{ ok: boolean; message?: string }>,
 ): CommandDefinition[] {
   const folder = (context: CommandContext) => !!context.directory || !!context.folder;
   const target = (context: CommandContext) => {
@@ -129,6 +133,16 @@ export function programCommands(
             for (const [index, command] of executor.commands.entries()) {
               if (command.startsWith('custom.'))
                 throw new Error('Custom actions cannot call another custom action.');
+              if (!plainCommandID(command)) {
+                // run from a menu or a key, a named sequence has no words: $1… are empty
+                const text = withArguments(command, [], executor.command ?? action.name);
+                const result = line ? await line(text) : { ok: false };
+                if (!result.ok)
+                  throw new Error(
+                    `“${action.name}” stopped at “${command}”${result.message ? `: ${result.message}` : '.'}`,
+                  );
+                continue;
+              }
               const step = index ? (live?.() ?? context) : context;
               if ((await invoke(command, step)) === false)
                 throw new Error(

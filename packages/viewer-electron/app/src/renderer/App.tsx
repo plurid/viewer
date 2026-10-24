@@ -15,6 +15,7 @@ import { agentDispatchRefusal } from '../domain/agent-safety';
 import { selectedFiles } from './workspace/sessions';
 import {
   activeWorkspace,
+  announce,
   deleteWorkspace,
   dismissNotice,
   flushState,
@@ -57,7 +58,7 @@ import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
 import { useTitlebar } from './ui/titlebar';
 import { useTheme, useThemeVariables } from './ui/theme';
 import { useKeySequences } from './keys/sequences';
-import { recordCommand, useMacroRecording } from './keys/macro';
+import { recordCommand, recordLine, useMacroRecording } from './keys/macro';
 import type { CustomAction } from '../domain/automation';
 import { WhichKey } from './keys/WhichKey';
 import { PlaneHints } from './keys/PlaneHints';
@@ -70,6 +71,10 @@ import { CommandsContext, useCommands, useCommandSource } from './commands/conte
 import { CommandRegistry, type CommandContext } from './commands/registry';
 import { windowCommands } from './commands/window';
 import { CommandPalette, type PaletteMode } from './commands/CommandPalette';
+import type { LineHost } from './command-line/host';
+import { runLine, userCommands, type LineResult } from './command-line/run';
+import { commandName } from './command-line/names';
+import { receiveSessionKeys } from './keys/session';
 import { editable, textEditFor } from './commands/editing';
 import { routeToEditor, subscribeEditingPlanes } from './editing/planes';
 import { recoverBuffers } from './editing/unsaved';
@@ -143,6 +148,12 @@ function AppWindow() {
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
 
   const [palette, setPalette] = useState<PaletteMode | null>(null);
+  // what the palette opens with, and each opening's number: a new opening starts it afresh
+  const [paletteQuery, setPaletteQuery] = useState({ text: '', opening: 0 });
+  const openPalette = useCallback((mode: PaletteMode, query = '') => {
+    setPaletteQuery((previous) => ({ text: query, opening: previous.opening + 1 }));
+    setPalette(mode);
+  }, []);
   const [goTo, setGoTo] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [tagging, setTagging] = useState(false);
@@ -254,6 +265,8 @@ function AppWindow() {
       clipboard: state.clipboard,
     };
   }, [controller]);
+  // the command line's runner, for sequences' steps with words: set once the line host is
+  const lineRunRef = useRef<(text: string) => Promise<LineResult>>(async () => ({ ok: false }));
   useCommandSource(
     'window',
     {
@@ -265,12 +278,13 @@ function AppWindow() {
           (id, context) => registry.invoke(id, { paneID: context.paneID, context }),
           terminalName,
           () => registry.context(getState().activePane) || windowContext(),
+          (text) => lineRunRef.current(text),
         ),
         ...windowCommands({
           workspace: controller,
           ready,
           tool,
-          palette: setPalette,
+          palette: openPalette,
           settings: () => {
             void window.viewer.openSettings().catch(report);
           },
@@ -399,40 +413,86 @@ function AppWindow() {
       ),
     );
   }, [saved.workspaces]);
-  const invoke = async (id: string) => {
+  /** Runs a command where it belongs; false when nothing ran (a line stops there, 2026-10-23). */
+  const invoke = async (id: string, remember = true): Promise<boolean> => {
     // Edit menu Undo, Redo and Select All reach a CodeMirror editor, which `webContents` does not
-    if (routeToEditor(id, getState().activePane)) return;
+    if (routeToEditor(id, getState().activePane)) return true;
     // ⌘E in Quick Preview edits the text file it shows, as its plane
-    if (id === 'edit-file' && quickPreviewEdit()) return;
+    if (id === 'edit-file' && quickPreviewEdit()) return true;
     // ⌘F in a terminal searches its output, rather than opening the file palette
     if (id === 'find-file') {
       const terminal = document.activeElement?.closest<HTMLElement>('.terminal-plane');
-      if (terminal?.dataset.terminalId && openTerminalFind(terminal.dataset.terminalId)) return;
+      if (terminal?.dataset.terminalId && openTerminalFind(terminal.dataset.terminalId))
+        return true;
     }
     if (
       document.activeElement?.closest('.terminal-plane') &&
       (await terminalEditing(getState().activePane, id))
     )
-      return;
+      return true;
     const edit = textEditFor(id, editable(document.activeElement));
     if (edit) {
       await window.viewer.textEdit(edit);
-      return;
+      return true;
     }
-    if (editable(document.activeElement) && explorerCommandIDs.has(id)) return;
-    if (overlayOpen() && !['palette', 'settings'].includes(id)) return;
+    if (editable(document.activeElement) && explorerCommandIDs.has(id)) return false;
+    if (overlayOpen() && !['palette', 'settings'].includes(id)) return false;
     const context = registry.context(getState().activePane) || windowContext();
     if (id === 'paste' || id === 'paste-move') await refreshClipboard();
-    await registry.invoke(id, {
+    return registry.invoke(id, {
       paneID: context.paneID,
       scope: 'window',
       context: { ...context, clipboard: getState().clipboard },
+      remember,
     });
   };
   const invokeRef = useRef(invoke);
   invokeRef.current = invoke;
-  // the prefix and leader keys' sequences (keys/sequences.ts): before App's own key handler
-  useKeySequences(invoke);
+  // THE COMMAND LINE (2026-10-23): what a line runs against, and running one from the palette
+  const lineHost = useMemo<LineHost>(
+    () => ({
+      invoke: (id, remember) => invokeRef.current(id, remember),
+      registry,
+      workspace: controller,
+      context: () => registry.context(getState().activePane) || windowContext(),
+      newWorkspace: (name) => transitionWorkspace(() => newWorkspace(name)),
+      switchWorkspace: switchTo,
+      palette: openPalette,
+    }),
+    [registry, controller, windowContext, transitionWorkspace, switchTo, openPalette],
+  );
+  /** Lines one after another, `count` times, until one cannot run (a key's binding, 2026-10-23). */
+  const runLines = async (lines: readonly string[], count = 1) => {
+    for (let time = 0; time < count; time++)
+      for (const line of lines) {
+        if (!time) recordLine(line);
+        const result = await runLine(line, lineHost);
+        if (result.message) {
+          if (result.ok) announce(result.message);
+          else report(new Error(result.message));
+        }
+        if (!result.ok) return;
+      }
+  };
+  // the prefix, root and leader keys and the modes (keys/sequences.ts): before App's own key handler
+  useKeySequences(runLines);
+  lineRunRef.current = (text) => runLine(text, lineHost);
+  const runFromPalette = (text: string) => {
+    recordLine(text);
+    setPalette(null);
+    // the palette is a dialog, and commands wait while one is open: run once it has gone
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        void runLine(text, lineHost)
+          .then((result) => {
+            if (!result.message) return;
+            if (result.ok) announce(result.message);
+            else report(new Error(result.message));
+          })
+          .catch(report);
+      }),
+    );
+  };
   const commandLabel = (id: string) => {
     const context = registry.context(getState().activePane) || windowContext();
     const available = registry.list({
@@ -465,6 +525,8 @@ function AppWindow() {
           }
         });
     };
+    // the session's :bind and :alias, as the main process holds them
+    void window.viewer.sessionKeys?.().then(receiveSessionKeys).catch(report);
     const remove = window.viewer.onEvent((event) => {
       if (event.type === 'service-error') report(event.message);
       else if (event.type === 'folder-size') receiveFolderSize(event.task);
@@ -473,6 +535,7 @@ function AppWindow() {
         invalidateFolderSizes(event.path);
         window.dispatchEvent(new Event('viewer:refresh'));
       } else if (event.type === 'settings') receiveSettings(event.snapshot);
+      else if (event.type === 'session-keys') receiveSessionKeys(event.session);
       else if (event.type === 'file-changes') {
         receiveFileChanges(event.changes);
         for (const change of event.changes) {
@@ -775,7 +838,14 @@ function AppWindow() {
           />
         )}
         {palette && (
-          <CommandPalette mode={palette} onMode={setPalette} onClose={() => setPalette(null)} />
+          <CommandPalette
+            key={paletteQuery.opening}
+            mode={palette}
+            onMode={setPalette}
+            onClose={() => setPalette(null)}
+            initialQuery={paletteQuery.text}
+            line={{ host: lineHost, run: runFromPalette }}
+          />
         )}
         {notice && (
           <div
@@ -938,6 +1008,7 @@ function AppWindow() {
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-|-$/g, '');
+              const command = commandName(name);
               // a command sequence: it can be given a shortcut or a prefix key in Settings
               const action: CustomAction = {
                 id: `macro-${slug || 'macro'}-${Date.now().toString(36)}`,
@@ -948,7 +1019,12 @@ function AppWindow() {
                 order: actions.length,
                 pinned: false,
                 when: { target: 'any', extensions: [], min: 0, max: 10000 },
-                executor: { kind: 'sequence', commands: macroDraft },
+                // its name as a command too, `:OpenDocs`, when no other has it (2026-10-23)
+                executor: {
+                  kind: 'sequence',
+                  commands: macroDraft,
+                  ...(command && !userCommands().has(command) ? { command } : {}),
+                },
               };
               receiveSettings(
                 await window.viewer.settingsPatch(
@@ -957,6 +1033,8 @@ function AppWindow() {
                 ),
               );
               setMacroDraft(null);
+              const kept = action.executor.kind === 'sequence' && action.executor.command;
+              announce(kept ? `Saved “${name}”; run it with :${kept}.` : `Saved “${name}”.`);
             }}
           />
         )}

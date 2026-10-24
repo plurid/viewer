@@ -10,6 +10,37 @@ import { watchRuleRequestSchema } from '../domain/watch-rules';
 import { workflowDefinitionSchema } from '../domain/workflows';
 import { projectDefinitionSchema } from '../domain/project';
 import { lensGroupIDSchema, lensOpSchema } from '../domain/lenses';
+import { rootKey, validKeymapKey } from '../domain/keymap';
+import { lineSchema } from './keymap-schema';
+
+/** What `:bind` and `:alias` changed this session (domain/session-keys.ts). */
+const sessionKeysSchema = z
+  .object({
+    bindings: z
+      .array(
+        z
+          .object({
+            table: z.string().regex(/^(prefix|root|[a-z][a-z0-9-]{0,30})$/),
+            keys: z.array(z.string().max(40).refine(validKeymapKey)).min(1).max(4),
+            line: lineSchema.nullable(),
+            repeat: z.boolean().optional(),
+          })
+          .strict()
+          .refine((binding) => binding.table !== 'root' || binding.keys.every(rootKey)),
+      )
+      .max(200),
+    aliases: z
+      .array(
+        z
+          .object({
+            name: z.string().regex(/^[A-Z][A-Za-z0-9]{0,30}$/),
+            line: lineSchema.nullable(),
+          })
+          .strict(),
+      )
+      .max(100),
+  })
+  .strict();
 import { stateSchema } from './storage';
 import { informationPatchSchema } from './file-information';
 import { localPath, id } from './schemas';
@@ -360,6 +391,10 @@ export const schemas = {
     ]),
   ]),
   settingsGet: z.tuple([]),
+  sessionKeys: z.tuple([]),
+  sessionKeysSet: z.tuple([sessionKeysSchema]),
+  sessionKeysKeep: z.tuple([]),
+  sessionKeysDiscard: z.tuple([]),
   settingsPatch: z.tuple([
     z
       .array(
@@ -521,7 +556,8 @@ export const schemas = {
   textEdit: z.tuple([z.enum(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])]),
   textOpen: z.tuple([id]),
   textSave: z.tuple([localPath, editedText, textVersionSchema, id, z.boolean()]),
-  textSaveAs: z.tuple([editedText, z.string().min(1).max(255), id]),
+  // a name, or a whole path where the dialog opens (`:w path`)
+  textSaveAs: z.tuple([editedText, z.string().min(1).max(1024), id]),
   textEditEnd: z.tuple([id]),
   textPrompt: z.tuple([z.enum(['close', 'revert']), z.string().min(1).max(255)]),
   bufferList: z.tuple([]),
@@ -584,6 +620,11 @@ export const methodWindows = {
   openSettings: 'viewer',
   settingsGet: 'both',
   settingsPatch: 'both',
+  sessionKeys: 'both',
+  // the window binds for its session; only Settings writes them to config.jsonc
+  sessionKeysSet: 'viewer',
+  sessionKeysKeep: 'settings',
+  sessionKeysDiscard: 'both',
   providerCredential: 'settings',
   providerModels: 'both',
   providerPermissionGet: 'both',

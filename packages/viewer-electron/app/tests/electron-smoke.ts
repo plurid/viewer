@@ -3010,6 +3010,201 @@ async function paletteCommand(label: string): Promise<void> {
  * replaced in the Trash and back with Undo, and a scratch plane's text kept in the profile as it is
  * typed. Save As uses the native save panel, which this harness does not drive.
  */
+/** The command line (2026-10-23): prefix : opens it; lines split, set, repeat, report errors and
+ * close every plane, unsaved text and all, with :qa!. */
+async function verifyCommandLine(): Promise<void> {
+  const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
+  const blur = () =>
+    evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  const open = async () => {
+    await blur();
+    await key('b', 'KeyB', 2);
+    await key(':', 'Semicolon', 8);
+    await until(
+      () =>
+        evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Command line"'),
+      (present) => present,
+      'the command line after prefix :',
+    );
+  };
+  const closed = () =>
+    until(
+      () => evaluate<boolean>('!document.querySelector(\'input[aria-label="Command line"]\')'),
+      (gone) => gone,
+      'the command line closed',
+    );
+  const line = async (text: string) => {
+    await open();
+    await command('Input.insertText', { text });
+    await key('Enter', 'Enter');
+    await closed();
+  };
+  // what it can say, and completion
+  await open();
+  await command('Input.insertText', { text: 'help' });
+  await until(
+    () => evaluate<number>("document.querySelectorAll('.command-palette .command-result').length"),
+    (count) => count > 20,
+    'help lists the verbs',
+  );
+  await snapshot('line-help.png');
+  await evaluate(
+    '(() => { const input = document.querySelector(\'input[aria-label="Command line"]\'); input.select(); })()',
+  );
+  await command('Input.insertText', { text: 'tab' });
+  await key('Tab', 'Tab');
+  await until(
+    () =>
+      evaluate<string>(
+        "document.querySelector('input[aria-label=\"Command line\"]')?.getAttribute('value') ?? ''",
+      ),
+    (value) => value.startsWith('tab'),
+    'Tab completed',
+  );
+  await snapshot('line-completions.png');
+  // a line that does not parse points at its column and runs nothing
+  await evaluate(
+    '(() => { const input = document.querySelector(\'input[aria-label="Command line"]\'); input.select(); })()',
+  );
+  await command('Input.insertText', { text: 'vs | nosuch' });
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<string>("document.querySelector('.line-error')?.textContent ?? ''"),
+    (text) => text.includes('Not a command: nosuch'),
+    'the error under the line',
+  );
+  await snapshot('line-error.png');
+  await key('Escape', 'Escape');
+  await key('Escape', 'Escape');
+  await closed();
+  assert.equal((await saved()).workspaces[0]!.tiling, undefined);
+  // :vs splits right; :2 tile-main-grow grows the main tile twice
+  await line('vs');
+  await until(
+    async () => (await saved()).workspaces[0]!.tiling?.panes.length ?? 0,
+    (count) => count === 2,
+    ':vs tiled two planes',
+  );
+  await line('2 tile-main-grow');
+  await until(
+    async () => (await saved()).workspaces[0]!.tiling?.main ?? 0,
+    (main) => Math.abs(main - (0.6 + 2 / 12)) < 0.001,
+    ':2 tile-main-grow grew the main tile twice',
+  );
+  // :set nominimap | set minimap, by name
+  const minimap = () => evaluate<boolean>("!!document.querySelector('[data-plurid-minimap]')");
+  await line('set nominimap');
+  await until(minimap, (shown) => !shown, ':set nominimap');
+  await line('set minimap');
+  await until(minimap, (shown) => shown, ':set minimap');
+  // keys that speak lines: a key without the prefix bound for the session
+  await line('bind -n M-m set minimap!');
+  // a line runs once the palette has gone: the binding arrives a moment later
+  await until(
+    () =>
+      evaluate<number>('window.viewer.sessionKeys().then((session) => session.bindings.length)'),
+    (count) => count === 1,
+    ':bind kept for the session',
+  );
+  await blur();
+  await key('µ', 'KeyM', 1);
+  await until(minimap, (shown) => !shown, '⌥M ran :set minimap!');
+  await key('µ', 'KeyM', 1);
+  await until(minimap, (shown) => shown, '⌥M again');
+  // prefix R: the resize mode, until Escape; 2 h shrinks the main tile twice
+  const main = async () => (await saved()).workspaces[0]!.tiling?.main ?? 0;
+  const before = await main();
+  await key('b', 'KeyB', 2);
+  await key('R', 'KeyR', 8);
+  await until(
+    () => evaluate<string>("document.querySelector('.which-key')?.textContent ?? ''"),
+    (text) => text.includes('-- RESIZE --'),
+    'the resize mode’s line',
+  );
+  await key('2', 'Digit2');
+  await key('h', 'KeyH');
+  await until(
+    main,
+    (now) => Math.abs(now - (before - 2 / 12)) < 0.001,
+    '2 h shrank the main tile twice',
+  );
+  await snapshot('line-mode.png');
+  await key('Escape', 'Escape');
+  await until(
+    () => evaluate<boolean>("!document.querySelector('.which-key')"),
+    (gone) => gone,
+    'Escape left the mode',
+  );
+  // a command of your own, named for the session
+  await line('command Mini set minimap!');
+  await until(
+    () => evaluate<number>('window.viewer.sessionKeys().then((session) => session.aliases.length)'),
+    (count) => count === 1,
+    ':command kept for the session',
+  );
+  await line('Mini');
+  await until(minimap, (shown) => !shown, ':Mini ran');
+  await line('Mini');
+  await until(minimap, (shown) => shown, ':Mini again');
+  // the palette shows each row's line, to learn by
+  await click('[aria-label="Commands (⌘K)"]');
+  await until(
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    (present) => present,
+    'focused command palette',
+  );
+  await command('Input.insertText', { text: 'grid' });
+  await until(
+    () =>
+      evaluate<string>(
+        "document.querySelector('.command-palette .command-line-hint')?.textContent ?? ''",
+      ),
+    (text) => text.startsWith(':'),
+    'a row’s line beside it',
+  );
+  await snapshot('palette-line-hints.png');
+  await key('Escape', 'Escape');
+  // Settings keeps this session's keys and commands in config.jsonc
+  await tab('Shortcuts');
+  await until(
+    () => settingsEvaluate<boolean>("!!document.querySelector('.keymap-session')"),
+    Boolean,
+    'this session’s keys in Settings',
+  );
+  await settingsEvaluate(
+    "Array.from(document.querySelectorAll('.keymap-session button')).find((button) => button.textContent.trim() === 'Keep').click()",
+  );
+  await until(
+    () =>
+      settingsEvaluate<{ root: boolean; command: boolean }>(
+        "window.viewer.settingsGet().then((value) => ({ root: value.settings.keymap.root['Alt+m'] === 'set minimap!', command: value.settings.customActions.some((action) => action.executor.command === 'Mini') }))",
+      ),
+    (kept) => kept.root && kept.command,
+    'Keep wrote them into config.jsonc',
+  );
+  await click('dialog [aria-label="Close"]');
+  // :qa! closes every plane without asking about the scratch plane's text
+  await blur();
+  await key('t', 'KeyT', 4);
+  await until(
+    () => evaluate<boolean>("!!document.querySelector('[data-scratch-plane] .cm-content')"),
+    (present) => present,
+    'a scratch plane',
+  );
+  // it opens beside the tiles, perhaps past the window's edge: focused, not clicked
+  await evaluate("document.querySelector('[data-scratch-plane] .cm-content').focus()");
+  await command('Input.insertText', { text: 'unsaved words' });
+  await line('qa!');
+  await until(
+    () => evaluate<number>("document.querySelectorAll('[data-viewer-pane]').length"),
+    (count) => count === 0,
+    ':qa! closed every plane',
+  );
+  console.log(
+    'Command line: help, completion, errors, :vs, counts, :set, :bind -n, a mode, :command, Keep and :qa!.',
+  );
+}
 /** Configuration and look (2026-10-23): Focus mode, a workspace's own setting and a theme, in the
  * packaged app. */
 async function verifyLook(): Promise<void> {
@@ -5543,6 +5738,12 @@ async function verify(): Promise<void> {
     await verifyPublishedPlaneInput();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'line') {
+    await verifyCommandLine();
+    await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }

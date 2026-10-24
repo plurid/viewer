@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { reservedEnvironment } from './process-environment';
+import { lineSchema } from './keymap-schema';
+import { parseCommandLine } from '../domain/command-line/verbs';
 const processString = z
   .string()
   .max(32768)
@@ -46,19 +48,32 @@ export const customActionSchema = z
           kind: z.literal('sequence'),
           commands: z
             .array(
-              z
-                .string()
-                .min(1)
-                .max(200)
-                .regex(/^[A-Za-z0-9._:=@/-]+$/)
-                // a sequence runs built-in commands, not another custom action
-                .refine(
-                  (command) => !command.startsWith('custom.'),
-                  'A sequence cannot run a custom action.',
-                ),
+              // a line (2026-10-23): a command id as before, or `vs ~/Documents | set grid!`
+              lineSchema.refine(
+                // a sequence runs built-in commands and verbs, not another custom action or
+                // a person's named command, so none runs itself
+                (line) => {
+                  try {
+                    return parseCommandLine(line).every(
+                      (step) => !step.name.startsWith('custom.') && !/^[A-Z]/.test(step.name),
+                    );
+                  } catch {
+                    return true;
+                  }
+                },
+                'A sequence cannot run a custom action.',
+              ),
             )
             .min(1)
             .max(50),
+          // the name it runs by on the command line, capitalised as vim's :command requires
+          command: z
+            .string()
+            .regex(
+              /^[A-Z][A-Za-z0-9]{0,30}$/,
+              'A command’s name starts with a capital: Dev, OpenDocs.',
+            )
+            .optional(),
         })
         .strict(),
       z.object({ kind: z.literal('recipe'), recipeID: z.string().min(1).max(200) }).strict(),

@@ -12,7 +12,7 @@ import {
   paletteRows,
   settingRows,
 } from '../src/renderer/commands/palette-sections';
-import { CommandPalette } from '../src/renderer/commands/CommandPalette';
+import { CommandPalette, type PaletteMode } from '../src/renderer/commands/CommandPalette';
 import { CommandsContext } from '../src/renderer/commands/context';
 import {
   CommandRegistry,
@@ -226,9 +226,7 @@ describe('the palette', () => {
     ];
     registry.register('window', { context: () => ({ ...live }), definitions: () => definitions });
     const Harness = () => {
-      const [mode, setMode] = useState<'commands' | 'files' | 'workspaces' | 'settings'>(
-        'commands',
-      );
+      const [mode, setMode] = useState<PaletteMode>('commands');
       return createElement(CommandPalette, { mode, onMode: setMode, onClose: vi.fn() });
     };
     const view = render(

@@ -1,3 +1,4 @@
+import { receiveSessionKeys } from '../keys/session';
 import { ModelSettings } from './ModelSettings';
 import { FilePermissions } from './FilePermissions';
 import { PrivacyInformation } from './PrivacyInformation';
@@ -63,9 +64,14 @@ export function SettingsWindow() {
         if (focus) show(focus);
       })
       .catch((error) => setError(error.message));
+    void window.viewer
+      .sessionKeys?.()
+      .then(receiveSessionKeys)
+      .catch(() => {});
     return window.viewer.onEvent((event) => {
       if (event.type === 'service-error') setError(event.message);
       if (event.type === 'settings') accept(event.snapshot);
+      else if (event.type === 'session-keys') receiveSessionKeys(event.session);
       if (event.type === 'settings-focus') show(event.path);
       if (event.type === 'flush-settings') {
         (document.activeElement as HTMLElement | null)?.blur();

@@ -80,6 +80,15 @@ export function navigationCommands({
       run: () => actions.palette('commands'),
     },
     {
+      id: 'command-line',
+      label: 'Command line…',
+      group: 'App',
+      icon: 'command',
+      aliases: [':', 'ex', 'vim', 'command prompt'],
+      when: windowScope,
+      run: () => actions.palette('line'),
+    },
+    {
       id: 'palette-settings',
       label: 'Search settings…',
       group: 'App',

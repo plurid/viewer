@@ -356,3 +356,73 @@
 .command-result .command-value + kbd {
   margin-left: 0;
 }
+/* The command line (2026-10-23): a monospace field after a colon, completions in the same face. */
+.line-finder {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.line-finder .command-search-field input,
+.line-finder .command-result-text > span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+/* the colon is the field's sign: no magnifier beside it */
+.line-finder .command-search-field > svg {
+  display: none;
+}
+.line-prompt {
+  margin-right: -4px;
+  color: var(--accent);
+  font:
+    600 14px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.line-error {
+  display: grid;
+  margin: 0 14px 8px;
+  padding: 6px 10px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.line-error code {
+  font: inherit;
+  white-space: pre;
+}
+.line-error code:first-child {
+  color: var(--ink);
+}
+.which-key-mode {
+  color: var(--accent);
+  font:
+    600 12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+/* the line a palette row is, to learn by (2026-10-23) */
+.command-line-hint {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--muted);
+  font:
+    11px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  opacity: 0.8;
+}
+.command-line-hint + kbd,
+.command-switch + .command-line-hint,
+.command-value + .command-line-hint {
+  margin-left: 0;
+}

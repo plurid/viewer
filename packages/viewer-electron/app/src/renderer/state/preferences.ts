@@ -63,6 +63,13 @@ export function rememberCommand(id: string): void {
     recentCommands: [id, ...ui.recentCommands.filter((item) => item !== id)].slice(0, 20),
   }));
 }
+/** A line run from the command line, first in its history (2026-10-23). */
+export function rememberLine(line: string): void {
+  const text = line.trim();
+  if (!text || text.length > 500) return;
+  const previous = getState().saved.lineHistory ?? [];
+  savePatch({ lineHistory: [text, ...previous.filter((item) => item !== text)].slice(0, 200) });
+}
 export function setLook(look: 'dark' | 'light'): void {
   savePatch({ look });
   if (window.viewer.settingsPatch)

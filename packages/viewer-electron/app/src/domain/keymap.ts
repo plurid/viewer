@@ -1,7 +1,9 @@
 /**
  * THE KEY LAYER (2026-10-23): a tmux-style prefix and an optional leader key start a sequence through
- * `settings.keymap.bindings`. A key names a command id, a list of command ids (run in order) or a
- * nested map: a chord. This module is pure: the renderer feeds it key names and the time.
+ * `settings.keymap.bindings`. A key names a line (`vs`, `set grid!`, a command id), a list of lines
+ * (run in order) or a nested map: a chord. `root` keys need no prefix; `repeat` keys may be pressed
+ * again without it for a moment; `modes` are tables that stay until Escape, where digits count. This
+ * module is pure: the renderer feeds it key names and the time.
  */
 export type KeymapBinding = string | readonly string[] | { readonly [key: string]: KeymapBinding };
 export interface Keymap {
@@ -18,6 +20,13 @@ export interface Keymap {
   /** How long a sequence waits for its next key, in milliseconds. */
   timeout: number;
   bindings: Record<string, KeymapBinding>;
+  /** Keys without the prefix, as tmux's `bind -n`: chords with ⌃, ⌥ or ⌘, or F-keys. */
+  root: Record<string, KeymapBinding>;
+  /** Prefix keys that repeat, as tmux's `bind -r`: pressed again within `repeatTime`, no prefix. */
+  repeat: string[];
+  repeatTime: number;
+  /** Named tables that stay until Escape (`mode resize`), as tmux's key tables and vim's modes. */
+  modes: Record<string, { bindings: Record<string, KeymapBinding> }>;
 }
 export const defaultKeymap: Keymap = {
   prefix: 'Ctrl+B',
@@ -45,7 +54,8 @@ export const defaultKeymap: Keymap = {
     p: 'previous-workspace',
     w: 'change-workspace',
     ',': 'rename-workspace',
-    ':': 'palette',
+    // tmux's command prompt: the command line (2026-10-23)
+    ':': 'command-line',
     '?': 'keymap-help',
     q: 'record-macro',
     t: 'new-scratch-plane',
@@ -69,6 +79,25 @@ export const defaultKeymap: Keymap = {
     // a folder's subfolders as planes, and back
     e: 'explode-folder',
     E: 'collapse-folder',
+    // a mode for the tiles: h and l size the main tile, j and k swap, until Escape
+    R: 'mode resize',
+  },
+  root: {},
+  repeat: ['+', '-'],
+  repeatTime: 500,
+  modes: {
+    resize: {
+      bindings: {
+        h: 'tile-main-shrink',
+        l: 'tile-main-grow',
+        j: 'tile-swap-next',
+        k: 'tile-swap-previous',
+        Left: 'tile-main-shrink',
+        Right: 'tile-main-grow',
+        Space: 'tile-next-layout',
+        '=': 'tile-visible',
+      },
+    },
   },
 };
 
@@ -95,10 +124,18 @@ const namedKeys = new Set([
   'PageUp',
   'PageDown',
 ]);
-const modifierOrder = ['Ctrl', 'Alt', 'Cmd'] as const;
 /** The unmodified key on a US layout, from the physical key code: Option changes the character. */
 const codeKey = (code = '') =>
   /^Key([A-Z])$/.exec(code)?.[1]?.toLowerCase() ?? /^Digit(\d)$/.exec(code)?.[1];
+/**
+ * A keymap with the defaults that moved since it was saved (2026-10-23): prefix `:` opened the
+ * palette, and opens the command line now, as tmux's prefix `:` opens its command prompt.
+ */
+export function upgradeKeymap(keymap: Keymap): Keymap {
+  return keymap.bindings[':'] === 'palette'
+    ? { ...keymap, bindings: { ...keymap.bindings, ':': 'command-line' } }
+    : keymap;
+}
 /**
  * A key as bindings name it: modifiers (Ctrl, Alt, Cmd) then the key. Shift is in the character
  * (`%`, `C`) except with named keys (`Shift+Tab`). Undefined for a modifier alone.
@@ -128,15 +165,148 @@ function keyParts(value: string): { base: string; modifiers: string[] } {
   const rest = value.slice(0, value.length - base.length);
   return { base, modifiers: rest ? rest.replace(/\+$/, '').split('+') : [] };
 }
-/** Whether a binding's key could ever be pressed: `a`, `%`, `+`, `Space`, `Ctrl+o`, `F5`. */
+const namedAliases: Readonly<Record<string, string>> = {
+  space: 'Space',
+  spc: 'Space',
+  enter: 'Enter',
+  return: 'Enter',
+  cr: 'Enter',
+  escape: 'Escape',
+  esc: 'Escape',
+  tab: 'Tab',
+  backspace: 'Backspace',
+  bs: 'Backspace',
+  bspace: 'Backspace',
+  delete: 'Delete',
+  del: 'Delete',
+  dc: 'Delete',
+  left: 'Left',
+  right: 'Right',
+  up: 'Up',
+  down: 'Down',
+  home: 'Home',
+  end: 'End',
+  pageup: 'PageUp',
+  pgup: 'PageUp',
+  ppage: 'PageUp',
+  pagedown: 'PageDown',
+  pgdn: 'PageDown',
+  npage: 'PageDown',
+  lt: '<',
+  bar: '|',
+};
+const modifierNames: Readonly<Record<string, 'Ctrl' | 'Alt' | 'Cmd' | 'Shift'>> = {
+  ctrl: 'Ctrl',
+  control: 'Ctrl',
+  c: 'Ctrl',
+  alt: 'Alt',
+  option: 'Alt',
+  opt: 'Alt',
+  meta: 'Alt',
+  m: 'Alt',
+  a: 'Alt',
+  cmd: 'Cmd',
+  command: 'Cmd',
+  d: 'Cmd',
+  shift: 'Shift',
+  s: 'Shift',
+};
+/**
+ * A key written any familiar way, as the key layer names it (2026-10-23): Viewer's `Ctrl+b`, tmux's
+ * `C-b` and `M-h`, vim's `<C-b>`, `<M-h>`, `<D-k>`, `<Space>`, `<CR>`. A letter with ⌃ or ⌘ is
+ * the letter whatever its case, unless Shift is written; with ⌥ it is the letter (⌥ changes the
+ * character, so the key is read). Undefined when it is no key.
+ */
+export function canonicalKey(written: string): string | undefined {
+  let text = written.trim();
+  if (!text) return undefined;
+  const vim = /^<(.+)>$/.exec(text);
+  if (vim && text.length > 2) text = vim[1]!;
+  const modifiers = new Set<'Ctrl' | 'Alt' | 'Cmd' | 'Shift'>();
+  let base: string;
+  if (text === '+' || text === '-' || text.length === 1) base = text;
+  else {
+    const separator = /^[A-Za-z]+-./.test(text) && !text.includes('+') ? '-' : '+';
+    const parts = text.endsWith(separator + separator)
+      ? [...text.slice(0, -2).split(separator), separator]
+      : text.split(separator);
+    base = parts.pop()!;
+    if (!base) return undefined;
+    for (const part of parts) {
+      const modifier = modifierNames[part.toLowerCase()];
+      if (!modifier || modifiers.has(modifier)) return undefined;
+      modifiers.add(modifier);
+    }
+  }
+  if (base.length > 1) {
+    const named = namedAliases[base.toLowerCase()] ?? (namedKeys.has(base) ? base : undefined);
+    const fkey = /^f([1-9]|1[0-9]|2[0-4])$/i.exec(base);
+    if (named) base = named;
+    else if (fkey) base = `F${fkey[1]}`;
+    else return undefined;
+  }
+  const letter = /^[a-z]$/i.test(base);
+  if (letter && modifiers.has('Alt')) {
+    base = base.toLowerCase();
+    modifiers.delete('Shift');
+  } else if (letter && (modifiers.has('Ctrl') || modifiers.has('Cmd'))) {
+    base = modifiers.has('Shift') ? base.toUpperCase() : base.toLowerCase();
+    modifiers.delete('Shift');
+  } else if (base.length === 1 && modifiers.has('Shift')) {
+    // Shift is in the character: S-a is A
+    base = base.toUpperCase();
+    modifiers.delete('Shift');
+  }
+  return [
+    ...(['Ctrl', 'Alt', 'Cmd'] as const).filter((modifier) => modifiers.has(modifier)),
+    ...(modifiers.has('Shift') ? ['Shift'] : []),
+    base,
+  ].join('+');
+}
+/** Whether a binding's key could ever be pressed: `a`, `%`, `+`, `Space`, `Ctrl+o`, `C-o`, `F5`. */
 export function validKeymapKey(value: string): boolean {
-  const { base, modifiers } = keyParts(value);
-  return (
-    !!base &&
-    (base.length === 1 || namedKeys.has(base) || /^F([1-9]|1[0-9]|2[0-4])$/.test(base)) &&
-    new Set(modifiers).size === modifiers.length &&
-    modifiers.every((part) => [...modifierOrder, 'Shift'].includes(part as 'Ctrl'))
-  );
+  return canonicalKey(value) !== undefined;
+}
+/** Whether a key needs no prefix to be safe: a chord with ⌃, ⌥ or ⌘, or an F-key. */
+export function rootKey(value: string): boolean {
+  const key = canonicalKey(value);
+  return !!key && (/^(Ctrl|Alt|Cmd)\+/.test(key) || /^F\d+$/.test(key));
+}
+/**
+ * Bindings with their keys as the key layer names them, and the keys two spellings made one
+ * (`Ctrl+B` and `C-b`): the later wins, as a later line of .tmux.conf does.
+ */
+export function canonicalBindings(
+  bindings: Record<string, KeymapBinding>,
+  path: string[] = [],
+  collisions: string[] = [],
+): { bindings: Record<string, KeymapBinding>; collisions: string[] } {
+  const next: Record<string, KeymapBinding> = {};
+  for (const [written, binding] of Object.entries(bindings)) {
+    const key = canonicalKey(written) ?? written;
+    if (key in next) collisions.push([...path, key].join(' '));
+    next[key] =
+      typeof binding === 'string' || Array.isArray(binding)
+        ? binding
+        : canonicalBindings(binding as Record<string, KeymapBinding>, [...path, key], collisions)
+            .bindings;
+  }
+  return { bindings: next, collisions };
+}
+/** A keymap whose keys, in every table, are as the key layer names them. */
+export function canonicalKeymap(keymap: Keymap): Keymap {
+  return {
+    ...keymap,
+    bindings: canonicalBindings(keymap.bindings).bindings,
+    root: canonicalBindings(keymap.root ?? {}).bindings,
+    repeat: (keymap.repeat ?? []).map((key) => canonicalKey(key) ?? key),
+    modes: Object.fromEntries(
+      Object.entries(keymap.modes ?? {}).map(([name, mode]) => [
+        name,
+        { bindings: canonicalBindings(mode.bindings).bindings },
+      ]),
+    ),
+  };
 }
 /** A chord's next keys, for which-key: each key and what it does. */
 export function bindingChoices(binding: KeymapBinding): { key: string; binding: KeymapBinding }[] {
@@ -146,27 +316,62 @@ export function bindingChoices(binding: KeymapBinding): { key: string; binding: 
     binding: next,
   }));
 }
-export type SequenceStep = 'pending' | 'ran' | 'cancelled' | 'unbound';
-/** One sequence at a time: started by the prefix or leader, fed keys, ended by a command. */
+export type SequenceStep = 'pending' | 'ran' | 'cancelled' | 'unbound' | 'counting' | 'passed';
+const lines = (binding: string | readonly string[]) =>
+  typeof binding === 'string' ? [binding] : binding;
+/**
+ * One sequence at a time: started by the prefix or leader, fed keys, ended by a line; or a mode,
+ * which stays until Escape; or the moment after a repeat key, when another needs no prefix. A
+ * count typed in a mode (digits it does not bind) runs the next line that many times.
+ */
 export class KeySequence {
   private node: KeymapBinding | undefined;
   private deadline = 0;
   private keys: string[] = [];
+  private table: 'prefix' | 'repeat' | 'mode' | undefined;
+  private modeName: string | undefined;
+  private count = 0;
   constructor(
     private keymap: Keymap,
-    private run: (commands: readonly string[]) => void,
+    private run: (lines: readonly string[], count: number) => void,
   ) {}
-  /** The keymap in force; a sequence in progress keeps the one it started with. */
+  /** The keymap in force; a sequence or mode in progress keeps the one it started with. */
   configure(keymap: Keymap): void {
     if (!this.node) this.keymap = keymap;
   }
   start(now: number): void {
     this.node = this.keymap.bindings;
     this.keys = [];
+    this.table = 'prefix';
+    this.modeName = undefined;
+    this.count = 0;
     this.deadline = now + this.keymap.timeout;
+  }
+  /** Into a mode, until Escape; false when the keymap has none of that name. */
+  enterMode(name: string): boolean {
+    const mode = this.keymap.modes?.[name];
+    if (!mode) return false;
+    this.node = mode.bindings;
+    this.keys = [];
+    this.table = 'mode';
+    this.modeName = name;
+    this.count = 0;
+    return true;
   }
   active(): boolean {
     return !!this.node;
+  }
+  /** The mode on, or undefined. */
+  mode(): string | undefined {
+    return this.table === 'mode' ? this.modeName : undefined;
+  }
+  /** Within a repeat key's moment: another repeat key needs no prefix. */
+  repeating(): boolean {
+    return this.table === 'repeat';
+  }
+  /** The count typed so far in a mode, or undefined. */
+  counted(): number | undefined {
+    return this.count || undefined;
   }
   /** The chord being completed, or undefined. */
   current(): KeymapBinding | undefined {
@@ -177,25 +382,65 @@ export class KeySequence {
     return this.keys;
   }
   expired(now: number): boolean {
-    return !!this.node && now > this.deadline;
+    return !!this.node && this.table !== 'mode' && now > this.deadline;
   }
   cancel(): void {
     this.node = undefined;
+    this.table = undefined;
+    this.modeName = undefined;
+    this.keys = [];
+    this.count = 0;
   }
   feed(key: string, now: number): SequenceStep {
     const node = this.node;
-    if (!node || this.expired(now) || key === 'Escape') {
+    if (!node) return 'cancelled';
+    if (this.table === 'repeat') {
+      // a key that does not repeat, or one too late, is the window's again
+      if (now > this.deadline || !this.keymap.repeat.includes(key)) {
+        this.cancel();
+        return 'passed';
+      }
+      const binding = this.keymap.bindings[key];
+      if (typeof binding !== 'string' && !Array.isArray(binding)) {
+        this.cancel();
+        return 'passed';
+      }
+      this.deadline = now + this.keymap.repeatTime;
+      this.run(lines(binding as string | readonly string[]), 1);
+      return 'ran';
+    }
+    if (key === 'Escape' || this.expired(now)) {
       this.cancel();
       return 'cancelled';
     }
     const next = (node as Record<string, KeymapBinding>)[key];
+    const atRoot = !this.keys.length;
     if (next === undefined) {
+      if (this.table === 'mode' && atRoot && /^[0-9]$/.test(key) && (this.count || key !== '0')) {
+        this.count = Math.min(99, this.count * 10 + Number(key));
+        return 'counting';
+      }
+      if (this.table === 'mode') {
+        this.node = this.keymap.modes[this.modeName!]?.bindings;
+        this.keys = [];
+        this.count = 0;
+        return 'unbound';
+      }
       this.cancel();
       return 'unbound';
     }
     if (typeof next === 'string' || Array.isArray(next)) {
-      this.cancel();
-      this.run(typeof next === 'string' ? [next] : (next as readonly string[]));
+      const count = this.count || 1;
+      if (this.table === 'mode') {
+        this.node = this.keymap.modes[this.modeName!]?.bindings;
+        this.keys = [];
+        this.count = 0;
+      } else if (this.table === 'prefix' && atRoot && this.keymap.repeat?.includes(key)) {
+        this.table = 'repeat';
+        this.node = this.keymap.bindings;
+        this.deadline = now + this.keymap.repeatTime;
+      } else this.cancel();
+      this.run(lines(next as string | readonly string[]), count);
       return 'ran';
     }
     this.node = next;

@@ -149,6 +149,7 @@ const savedStateSchema = z
       )
       .refine((visits) => Object.keys(visits).length <= 500)
       .optional(),
+    lineHistory: z.array(z.string().max(500)).max(200).optional(),
     look: z.enum(['dark', 'light']),
     ui: z.unknown().optional().transform(normalizePreferences),
   })

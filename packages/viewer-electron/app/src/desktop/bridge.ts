@@ -1,3 +1,9 @@
+import {
+  emptySessionKeys,
+  keepAliases,
+  withSessionKeys,
+  type SessionKeys,
+} from '../domain/session-keys';
 import type { FileChange } from '../domain/changes';
 import { AgentRequests } from './agent-requests';
 import { agentCommandID } from '../domain/agent-safety';
@@ -82,6 +88,8 @@ export class Desktop {
     macFiles().clipboardVersion(source === 'drag'),
   );
   private pasteboard: Pasteboard;
+  /** `:bind` and `:alias` of this session: in memory only, until quit (2026-10-23). */
+  private sessionKeys: SessionKeys = emptySessionKeys;
   readonly agentRequests: AgentRequests;
   private commandCatalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
   private workspaceCatalog?: AgentWorkspaceSnapshot;
@@ -1108,6 +1116,37 @@ export class Desktop {
         }
         return;
       },
+      sessionKeys: () => this.sessionKeys,
+      sessionKeysSet: (args) => {
+        this.sessionKeys = args[0];
+        this.emit({ type: 'session-keys', session: this.sessionKeys });
+        return this.sessionKeys;
+      },
+      // Keep, from Settings: the session's bindings written into the keymap, then forgotten
+      sessionKeysKeep: async () => {
+        const current = this.settings.snapshot();
+        const snapshot = await this.settings.patch(
+          [
+            {
+              path: 'settings.keymap',
+              value: withSessionKeys(current.settings.keymap, this.sessionKeys),
+            },
+            {
+              path: 'settings.customActions',
+              value: keepAliases(current.settings.customActions, this.sessionKeys),
+            },
+          ],
+          current.revision,
+        );
+        this.sessionKeys = emptySessionKeys;
+        this.emit({ type: 'session-keys', session: this.sessionKeys });
+        return { ...snapshot, credentials: this.credentials.ids() };
+      },
+      sessionKeysDiscard: () => {
+        this.sessionKeys = emptySessionKeys;
+        this.emit({ type: 'session-keys', session: this.sessionKeys });
+        return this.sessionKeys;
+      },
       settingsPatch: async (args, senderID) => {
         return {
           ...(await this.settings.patch(
@@ -1538,7 +1577,10 @@ export class Desktop {
         const window = this.windows.get(senderID)?.window;
         const options = {
           title: 'Save As',
-          defaultPath: path.join(this.home, 'Desktop', path.basename(name)),
+          // `:w path` opens the dialog there (2026-10-23); a name alone starts on the Desktop
+          defaultPath: path.isAbsolute(name)
+            ? path.normalize(name)
+            : path.join(this.home, 'Desktop', path.basename(name)),
           securityScopedBookmarks: this.fileAccess.scoped,
         };
         const { canceled, filePath, bookmark } = window

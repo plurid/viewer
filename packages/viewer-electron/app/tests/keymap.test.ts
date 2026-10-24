@@ -101,7 +101,9 @@ describe('the keymap in config.jsonc', () => {
       keymapSchema.safeParse({ ...defaultKeymap, bindings }).success;
     expect(parse({ a: 'palette' })).toBe(true);
     expect(parse({ ab: 'palette' })).toBe(false);
-    expect(parse({ a: 'not a command id!' })).toBe(false);
+    // a binding is a line (2026-10-23): words are fine, a broken line is not
+    expect(parse({ a: 'vs ~/Documents | set grid!' })).toBe(true);
+    expect(parse({ a: "e 'open" })).toBe(false);
     expect(parse({ a: Array(21).fill('palette') })).toBe(false);
     expect(parse({ a: { b: { c: { d: 'palette' } } } })).toBe(true);
     expect(parse({ a: { b: { c: { d: { e: 'palette' } } } } })).toBe(false);

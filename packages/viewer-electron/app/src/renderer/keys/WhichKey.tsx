@@ -1,9 +1,11 @@
 import { bindingChoices, keyGlyphs, type KeymapBinding } from '../../domain/keymap';
 import { getState } from '../state/store';
+import { plainCommandID } from '../../domain/command-line/verbs';
 import { useSequenceView } from './sequences';
 
 /** A command id read as words, for a command not available here: `new-terminal-plane` → "new terminal plane". */
 const words = (id: string) => id.replace(/^setting\./, '').replace(/[-.]/g, ' ');
+const commandID = plainCommandID;
 /**
  * WHICH-KEY (2026-10-23): while a sequence waits, the keys it can take next and what each does: a
  * command's label, a list's commands in order, or a chord's count of keys. Not a dialog, so the
@@ -17,32 +19,42 @@ export function WhichKey({
   const view = useSequenceView();
   if (!view.active || !view.shown) return null;
   const describe = (binding: KeymapBinding): { text: string; available: boolean } => {
-    if (typeof binding === 'string') {
-      const found = label(binding);
-      return { text: found?.label ?? words(binding), available: found?.available ?? false };
-    }
-    if (Array.isArray(binding)) {
-      const steps = binding.map((id) => label(id));
+    if (typeof binding === 'string' || Array.isArray(binding)) {
+      const lines: readonly string[] = typeof binding === 'string' ? [binding] : binding;
+      // a command's label; a line with words (2026-10-23) as it is written
+      const steps = lines.map((line) => (commandID(line) ? label(line) : undefined));
       return {
-        text: binding.map((id, index) => steps[index]?.label ?? words(id)).join(' → '),
-        available: steps.every((step) => step?.available),
+        text: lines
+          .map((line, index) => steps[index]?.label ?? (commandID(line) ? words(line) : line))
+          .join(' → '),
+        available: lines.every((line, index) => !commandID(line) || steps[index]?.available),
       };
     }
     return { text: `+${Object.keys(binding).length} keys`, available: true };
   };
   const prefix = getState().settings.settings.keymap.prefix;
+  const mode = view.mode;
   const choices = view.node ? bindingChoices(view.node) : [];
   // as wide as the keys need: up to three columns of about eight rows
   const columns = Math.min(3, Math.max(1, Math.ceil(choices.length / 8)));
   return (
     <div className="which-key" role="status" aria-live="polite" aria-label="Key sequence">
       <div className="which-key-trail">
-        {[...(view.help ? [] : prefix ? [prefix] : []), ...view.keys].map((key, index) => (
-          <kbd key={index}>{keyGlyphs(key)}</kbd>
-        ))}
+        {mode ? (
+          // a mode's line, as vim's: it stays until Escape
+          <>
+            <span className="which-key-mode">-- {mode.toUpperCase()} --</span>
+            {view.count && <kbd>{view.count}</kbd>}
+            <span>Escape leaves</span>
+          </>
+        ) : (
+          [...(view.help ? [] : prefix ? [prefix] : []), ...view.keys].map((key, index) => (
+            <kbd key={index}>{keyGlyphs(key)}</kbd>
+          ))
+        )}
         {view.help && <span>Keys after {prefix ? keyGlyphs(prefix) : 'the leader'}</span>}
       </div>
-      {view.message ? (
+      {view.message && !mode ? (
         <p className="which-key-message">{view.message}</p>
       ) : (
         <ul

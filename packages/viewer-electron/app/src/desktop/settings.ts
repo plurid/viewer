@@ -1,3 +1,5 @@
+import { bindingRows } from '../domain/keymap';
+import { findVerb, parseCommandLine } from '../domain/command-line/verbs';
 import type { ParseError } from 'jsonc-parser';
 import { pathMapper, type FileChange } from '../domain/changes';
 import { preferencesSchema } from './preferences-schema';
@@ -416,6 +418,18 @@ export const settingsSchema = z
     ] as const)
       if (new Set(items.map((item) => item.id)).size !== items.length)
         context.addIssue({ code: 'custom', path: [key], message: 'IDs must be unique.' });
+    // a command's name runs one sequence (2026-10-23)
+    const named = value.customActions.flatMap((action) =>
+      action.executor.kind === 'sequence' && action.executor.command
+        ? [action.executor.command]
+        : [],
+    );
+    if (new Set(named).size !== named.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['customActions'],
+        message: 'Two sequences have the same command name.',
+      });
     if (!value.terminals.profiles.some((profile) => profile.id === value.terminals.profileID))
       context.addIssue({
         code: 'custom',
@@ -474,7 +488,41 @@ export function importChanges(current: ApplicationSettings, next: ApplicationSet
     !same(current.providers, next.providers) && 'model providers and their addresses',
     !same(programs(current), programs(next)) && 'actions that run programs or shell scripts',
     !same(current.terminals, next.terminals) && 'terminal profiles and programs',
+    !same(riskyLines(current), riskyLines(next)) &&
+      'keys and sequences that type into terminals, move files to the Trash, rename them or drop unsaved text',
   ].filter((change): change is string => !!change);
+}
+/**
+ * Lines of keys and sequences that act beyond the window (2026-10-23): typing into a terminal,
+ * the Trash, renaming, and `!` dropping unsaved text. An import that changes them asks first.
+ */
+function riskyLines(settings: ApplicationSettings): string[] {
+  const lines = [
+    ...[
+      settings.keymap.bindings,
+      settings.keymap.root ?? {},
+      ...Object.values(settings.keymap.modes ?? {}).map((mode) => mode.bindings),
+    ].flatMap((bindings) => bindingRows(bindings).flatMap((row) => row.commands)),
+    ...settings.customActions.flatMap(({ executor }) =>
+      executor.kind === 'sequence' ? executor.commands : [],
+    ),
+  ];
+  return lines
+    .filter((line) => {
+      try {
+        return parseCommandLine(line).some((step) => {
+          const key = findVerb(step.name)?.key;
+          return (
+            ['send-keys', 'trash', 'mv'].includes(key ?? '') ||
+            step.name === 'trash' ||
+            (step.bang && ['quit', 'qall', 'only'].includes(key ?? ''))
+          );
+        });
+      } catch {
+        return false;
+      }
+    })
+    .sort();
 }
 /**
  * What the workspace window changes: its own preferences and views. It could patch any setting, so a

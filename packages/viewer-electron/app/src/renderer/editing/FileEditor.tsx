@@ -201,10 +201,10 @@ export function FileEditor({
     await forget();
     await open(false);
   };
-  const saveAs = async (): Promise<boolean> => {
+  const saveAs = async (suggested?: string): Promise<boolean> => {
     if (!loaded) return false;
     const text = editor.current?.text() ?? loaded.text;
-    const result = await window.viewer.textSaveAs(text, name, session);
+    const result = await window.viewer.textSaveAs(text, suggested ?? name, session);
     if (!result) return false;
     await forget();
     // the plane shows the new file, still edited in this session
@@ -248,7 +248,7 @@ export function FileEditor({
     () =>
       registerEditingPlane(paneID, {
         save: () => actions.current.save(),
-        saveAs: () => actions.current.saveAs(),
+        saveAs: (suggested) => actions.current.saveAs(suggested),
         get revert() {
           return dirtyNow.current ? () => actions.current.revert() : undefined;
         },

@@ -88,14 +88,14 @@ export default function ScratchPlane({
     timer.current = undefined;
     keep(value);
   };
-  const saveAs = async (): Promise<boolean> => {
+  const saveAs = async (suggested?: string): Promise<boolean> => {
     const { id, bufferID, title, language } = current.current;
     if (getState().settings.settings.editor.trimTrailingWhitespace)
       editor.current?.trimTrailingWhitespace();
     const value = editor.current?.text() ?? text.current;
     const result = await window.viewer.textSaveAs(
       value,
-      scratchFileName(title ?? 'Untitled', language),
+      suggested ?? scratchFileName(title ?? 'Untitled', language),
       session,
     );
     if (!result) return false;
@@ -113,7 +113,7 @@ export default function ScratchPlane({
     () =>
       registerEditingPlane(pane.id, {
         save: () => actions.current.saveAs(),
-        saveAs: () => actions.current.saveAs(),
+        saveAs: (suggested) => actions.current.saveAs(suggested),
         dirty: () => !!(editor.current?.text() ?? text.current),
         discard: async () => {
           clearTimeout(timer.current);

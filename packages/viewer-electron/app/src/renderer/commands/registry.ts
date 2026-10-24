@@ -140,6 +140,13 @@ export class CommandRegistry {
             : definition.label(context);
     return undefined;
   }
+  /** Every command id the sources define, available or not: a line may name any (2026-10-23). */
+  ids(): string[] {
+    const ids = new Set<string>();
+    for (const [id, source] of this.sources)
+      for (const definition of this.catalog(id, source)) ids.add(definition.id);
+    return [...ids];
+  }
   list(request: CommandRequest = {}): ResolvedCommand[] {
     const commands: ResolvedCommand[] = [];
     const seen = new Set<string>();

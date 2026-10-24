@@ -563,7 +563,7 @@
 }
 .keymap-row {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) auto;
+  grid-template-columns: 120px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
 }
@@ -662,4 +662,45 @@
   height: 100%;
   opacity: 0;
   cursor: pointer;
+}
+/* This session's keys (2026-10-23): what :bind changed, to keep or let go */
+.keymap-session {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.keymap-session h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.keymap-session ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.keymap-session li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 26px;
+}
+.keymap-session li > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.keymap-session code {
+  font:
+    12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.keymap-repeat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
 }

@@ -34,8 +34,9 @@ export interface CustomAction {
     | { kind: 'terminal'; profileID: string }
     | { kind: 'executable'; executable: string; args: string[]; perItem: boolean }
     | { kind: 'shell'; executable: string; script: string; perItem: boolean }
-    /** Built-in commands in order, as a macro records them (2026-10-23); no custom actions. */
-    | { kind: 'sequence'; commands: string[] };
+    /** Lines in order, as a macro records them (2026-10-23); no custom actions. `command`, with a
+     * capital, runs it from the command line as `:Name`, its words as $1… and $*. */
+    | { kind: 'sequence'; commands: string[]; command?: string };
 }
 /**
  * Whether a workspace's change to custom actions only adds, edits or removes command sequences

@@ -114,6 +114,33 @@ export async function confirmClose(ids: readonly string[]): Promise<boolean> {
   return true;
 }
 
+/** Planes' unsaved text dropped without asking, as vim's `:q!` (2026-10-23). Files are not touched:
+ * only text typed and never saved is lost. */
+export async function discardUnsaved(ids: readonly string[]): Promise<void> {
+  for (const pane of activeWorkspace().panes.filter((item) => ids.includes(item.id)))
+    if (await unsaved(pane)) await discard(pane);
+}
+/** A plane's unsaved text saved, when it holds any (`:x`); true when nothing is left unsaved. */
+export async function saveUnsaved(id: string): Promise<boolean> {
+  const pane = activeWorkspace().panes.find((item) => item.id === id);
+  if (!pane || !(await unsaved(pane))) return true;
+  return save(pane);
+}
+/**
+ * Every edited file in the workspace saved, as vim's `:wa` (2026-10-23). A scratch plane has no
+ * file yet: it is counted, not asked about, as vim leaves a buffer without a name.
+ */
+export async function saveAll(): Promise<{ saved: number; failed: number; unnamed: number }> {
+  const result = { saved: 0, failed: 0, unnamed: 0 };
+  for (const pane of activeWorkspace().panes) {
+    if (!(await unsaved(pane))) continue;
+    if (pane.type === 'scratch') result.unnamed++;
+    else if (await save(pane)) result.saved++;
+    else result.failed++;
+  }
+  return result;
+}
+
 /**
  * At launch, unsaved text no plane holds comes back as planes: a scratch plane's, or a file's edits
  * beside it. A buffer is never dropped because nothing refers to it: a reset, a downgrade or a

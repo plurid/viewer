@@ -1,3 +1,4 @@
+import type { SessionKeys } from './session-keys';
 import type { WorkspaceOverrides } from './overrides';
 import type { Tiling } from './tiling';
 import type { TextBuffer, TextBufferSummary, TextOpening, TextVersion } from './text-documents';
@@ -188,6 +189,8 @@ export interface SavedState {
   profile?: { id: string; previous: Record<string, JSONValue> };
   /** Folders' visits for `z` in the palette (2026-10-23): how many, and the last. */
   visits?: Record<string, { count: number; last: number }>;
+  /** Lines run from the command line, the latest first (2026-10-23). */
+  lineHistory?: string[];
   look: 'dark' | 'light';
   ui?: UIPreferences;
 }
@@ -386,6 +389,7 @@ export type DesktopEvent =
   | { type: 'execution'; task: ExecutionTask }
   | { type: 'folder-size'; task: FolderSizeTask }
   | { type: 'settings'; snapshot: SettingsSnapshot }
+  | { type: 'session-keys'; session: SessionKeys }
   | { type: 'model-permission'; providerID: string }
   | { type: 'file-access'; path: string; resources?: string[] }
   | { type: 'index'; status: IndexStatus }
@@ -460,6 +464,12 @@ export interface ViewerAPI {
   openSettings(focus?: string): Promise<void>;
   settingsGet(): Promise<SettingsSnapshot>;
   settingsPatch(patches: SettingsPatch[], revision: number): Promise<SettingsSnapshot>;
+  /** `:bind` and `:alias` of this session (2026-10-23): kept in memory until quit. */
+  sessionKeys(): Promise<SessionKeys>;
+  sessionKeysSet(session: SessionKeys): Promise<SessionKeys>;
+  /** Writes the session's bindings into config.jsonc, from Settings only. */
+  sessionKeysKeep(): Promise<SettingsSnapshot>;
+  sessionKeysDiscard(): Promise<SessionKeys>;
   providerCredential(id: string, key: string): Promise<void>;
   providerModels(id: string): Promise<string[]>;
   providerPermissionGet(id: string): Promise<ModelDataPermission | null>;

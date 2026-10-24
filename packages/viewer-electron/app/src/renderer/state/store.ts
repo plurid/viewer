@@ -8,7 +8,13 @@ export {
   report,
   useViewer,
 } from './core';
-export { changePreferences, receiveSettings, rememberCommand, setLook } from './preferences';
+export {
+  changePreferences,
+  receiveSettings,
+  rememberCommand,
+  rememberLine,
+  setLook,
+} from './preferences';
 export { flushState, previewValues, savePreviewValue, storageAdapter } from './persistence';
 export {
   addPane,

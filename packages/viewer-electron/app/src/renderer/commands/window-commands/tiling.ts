@@ -12,6 +12,7 @@ import { setTiling } from '../../state/workspaces';
 import { readingOrder, visiblePlanes } from '../../keys/planes';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
+import type { WorkspaceController } from '../../workspace/context';
 
 /** The plane a split adds beside `pane`: one like it, or the kind Settings → Space names. */
 function splitPane(
@@ -42,6 +43,41 @@ function splitPane(
   return addRootFolder({ path: folder, workspaceID: activeWorkspace().id })?.id;
 }
 /**
+ * A split of the active plane, right or down: the plane `add` makes (by default what Settings → Space
+ * names) joins the tiling after it. `:sp path` and `:vs path` add a plane showing the path. False
+ * when nothing was added.
+ */
+export function splitTile(
+  workspace: WorkspaceController,
+  direction: 'right' | 'down',
+  add?: (pane: Pane) => string | undefined,
+): boolean {
+  const space = activeWorkspace();
+  const active = getState().activePane;
+  const tiling = space.tiling;
+  const settings = getState().settings.settings.tiling;
+  const pane = space.panes.find((item) => item.id === active);
+  if (!pane) return false;
+  const added = add ? add(pane) : splitPane(pane, settings.splitWith);
+  if (!added) return false;
+  const base = tiling ? [...tiling.panes] : [active];
+  if (!base.includes(active)) base.push(active);
+  base.splice(base.indexOf(active) + 1, 0, added);
+  setTiling({
+    panes: base,
+    // a first split goes the way it was asked; later ones keep the layout, as tmux's presets do
+    layout:
+      base.length === 2
+        ? direction === 'right'
+          ? 'even-horizontal'
+          : 'even-vertical'
+        : (tiling?.layout ?? settings.defaultLayout),
+    main: tiling?.main ?? 0.6,
+  });
+  workspace.retile();
+  return true;
+}
+/**
  * TILING AS TMUX'S PANES (2026-10-23): split the active plane right (prefix %) or down (prefix "),
  * tile the planes in view, step through the layouts (prefix Space), swap, promote to main, grow or
  * shrink the main plane, and untile. The layout follows the window's size.
@@ -58,24 +94,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     actions.workspace.retile();
   };
   const split = (direction: 'right' | 'down') => () => {
-    const pane = space.panes.find((item) => item.id === active);
-    if (!pane) return;
-    const added = splitPane(pane, settings.splitWith);
-    if (!added) return;
-    const base = tiling ? [...tiling.panes] : [active];
-    if (!base.includes(active)) base.push(active);
-    base.splice(base.indexOf(active) + 1, 0, added);
-    apply({
-      panes: base,
-      // a first split goes the way it was asked; later ones keep the layout, as tmux's presets do
-      layout:
-        base.length === 2
-          ? direction === 'right'
-            ? 'even-horizontal'
-            : 'even-vertical'
-          : (tiling?.layout ?? settings.defaultLayout),
-      main: tiling?.main ?? 0.6,
-    });
+    splitTile(actions.workspace, direction);
   };
   const swap = (delta: number) => () => {
     if (!tiling) return;

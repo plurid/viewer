@@ -238,15 +238,26 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.keymap': [
     'Key sequences, as tmux: press prefix (Ctrl+B), then a key from bindings. "" turns the prefix off.',
+    'Prefix : opens the command line; :bind and :command change keys for the session, which Settings keeps.',
     'leader: a key that starts a sequence outside text fields and terminals, e.g. "Space"; "" is none.',
     'inTerminals false: the prefix goes to the shell; pressed twice it is sent to the shell anyway.',
     'inTextFields false: the prefix goes to text fields and editors, where Ctrl+B moves the caret.',
     'whichKey shows the next keys while a sequence waits; timeout (ms) ends a sequence left waiting.',
   ],
   'settings.keymap.bindings': [
-    'Key -> a command ID ("new-terminal-plane"), a list run in order (["select-all","copy"]) or a map (a chord).',
-    'Keys: a character ("%", "C"), Space, Enter, Tab, Left/Right/Up/Down, F1-F24, with Ctrl+/Alt+/Cmd+/Shift+.',
-    'Every command ID works, including setting.<path>, custom.<id> and recipe.<id>; chords nest four keys deep.',
+    'Key -> a line: a command ID ("new-terminal-plane") or a command line ("vs ~/Documents | set grid!"),',
+    'a list run in order (["select-all","copy"]) or a map (a chord, nested four keys deep). docs/command-line.md.',
+    'Keys: a character ("%", "C"), Space, Enter, Tab, Left/Right/Up/Down, F1-F24, with Ctrl+/Alt+/Cmd+/Shift+,',
+    'or as tmux ("C-b", "M-h") and vim ("<C-b>", "<Space>") write them.',
+  ],
+  'settings.keymap.root': [
+    'Keys without the prefix (tmux bind -n): each with Ctrl, Alt or Cmd, or an F-key, so typing is never taken.',
+  ],
+  'settings.keymap.repeat': [
+    'Prefix keys that repeat (tmux bind -r): pressed again within repeatTime (ms) they need no prefix.',
+  ],
+  'settings.keymap.modes': [
+    'Named key tables {name: {bindings}}: "mode name" enters one, Escape leaves; digits it does not bind count.',
   ],
   'settings.savedSearches': [
     'Named queries: {id,name,query,root?,recursive?,content?}. IDs are unique; root is an absolute path.',

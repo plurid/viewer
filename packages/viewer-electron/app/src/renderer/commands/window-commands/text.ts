@@ -1,6 +1,22 @@
 import type { CommandContext, CommandDefinition } from '../registry';
 import { editingPlane } from '../../editing/planes';
 import type { WindowScopes } from './scope';
+import { saveAll } from '../../editing/unsaved';
+import { announce } from '../../state/store';
+
+/** What Save all did, said briefly. */
+export function savedText(result: { saved: number; failed: number; unnamed: number }): string {
+  const parts = [
+    result.saved
+      ? `Saved ${result.saved} ${result.saved === 1 ? 'file' : 'files'}`
+      : 'Nothing to save',
+    result.failed ? `${result.failed} not saved` : '',
+    result.unnamed
+      ? `${result.unnamed} scratch ${result.unnamed === 1 ? 'plane has' : 'planes have'} no file yet`
+      : '',
+  ].filter(Boolean);
+  return parts.join(' · ') + '.';
+}
 
 /**
  * TEXT (2026-10-23): editing a previewed file where it is, and scratch planes of unsaved text. Each
@@ -58,6 +74,17 @@ export function textCommands({
       when: (context) => paneScope(context) && !!plane(context)?.saveAs,
       run: async (context) => {
         await plane(context)?.saveAs?.();
+      },
+    },
+    {
+      id: 'save-all',
+      label: 'Save all',
+      group: 'Text',
+      icon: 'check',
+      aliases: ['wa', 'save everything'],
+      when: (context) => windowScope(context) && actions.ready,
+      run: async () => {
+        announce(savedText(await saveAll()));
       },
     },
     {

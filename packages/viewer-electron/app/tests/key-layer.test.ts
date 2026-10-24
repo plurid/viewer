@@ -49,7 +49,8 @@ describe('a sequence in the window', () => {
     expect(press(document.body, 'b', { ctrlKey: true }).defaultPrevented).toBe(true);
     press(document.body, 'c');
     await act(async () => {});
-    expect(invoke).toHaveBeenCalledWith('new-terminal-plane');
+    // a binding is a line, run once (2026-10-23)
+    expect(invoke).toHaveBeenCalledWith(['new-terminal-plane'], 1);
   });
   it('leaves ⌃B to a terminal and a text field, unless told otherwise', async () => {
     const invoke = setup();
@@ -157,8 +158,8 @@ describe('plane hints', () => {
 describe('a command that shows something', () => {
   it('stays shown once the sequence that ran it ends: ⌃B ?', async () => {
     const view = render(createElement(WhichKey, { label: () => undefined }));
-    const invoke = vi.fn(async (id: string) => {
-      if (id === 'keymap-help') showKeymapHelp();
+    const invoke = vi.fn(async (lines: readonly string[]) => {
+      if (lines[0] === 'keymap-help') showKeymapHelp();
     });
     renderHook(() => useKeySequences(invoke));
     press(document.body, 'b', { ctrlKey: true });
