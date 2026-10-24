@@ -7,7 +7,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement, useState } from 'react';
-import { CommandPalette, type PaletteMode } from '../src/renderer/commands/CommandPalette';
+import { CommandPalette } from '../src/renderer/commands/CommandPalette';
+import type { PaletteMode } from '../src/renderer/commands/palette-modes';
 import { CommandsContext } from '../src/renderer/commands/context';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';

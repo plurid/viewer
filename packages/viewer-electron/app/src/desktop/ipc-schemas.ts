@@ -13,6 +13,25 @@ import { lensGroupIDSchema, lensOpSchema } from '../domain/lenses';
 import { rootKey, validKeymapKey } from '../domain/keymap';
 import { lineSchema } from './keymap-schema';
 
+/** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
+const promptRequestSchema = z
+  .object({
+    id,
+    prompt: z.string().trim().min(1).max(1000),
+    context: z
+      .object({
+        folder: localPath.optional(),
+        selection: z.array(z.string().max(255)).max(50),
+        workspace: z.string().max(100),
+        workspaces: z.array(z.string().max(100)).max(30),
+        commands: z
+          .array(z.object({ id: z.string().max(200), label: z.string().max(200) }).strict())
+          .max(600),
+        userCommands: z.array(z.string().regex(/^[A-Z][A-Za-z0-9]{0,30}$/)).max(200),
+      })
+      .strict(),
+  })
+  .strict();
 /** What `:bind` and `:alias` changed this session (domain/session-keys.ts). */
 const sessionKeysSchema = z
   .object({
@@ -391,6 +410,8 @@ export const schemas = {
     ]),
   ]),
   settingsGet: z.tuple([]),
+  promptLine: z.tuple([promptRequestSchema]),
+  promptCancel: z.tuple([id]),
   sessionKeys: z.tuple([]),
   sessionKeysSet: z.tuple([sessionKeysSchema]),
   sessionKeysKeep: z.tuple([]),
@@ -620,6 +641,8 @@ export const methodWindows = {
   openSettings: 'viewer',
   settingsGet: 'both',
   settingsPatch: 'both',
+  promptLine: 'viewer',
+  promptCancel: 'viewer',
   sessionKeys: 'both',
   // the window binds for its session; only Settings writes them to config.jsonc
   sessionKeysSet: 'viewer',

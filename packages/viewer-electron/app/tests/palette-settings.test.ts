@@ -12,7 +12,8 @@ import {
   paletteRows,
   settingRows,
 } from '../src/renderer/commands/palette-sections';
-import { CommandPalette, type PaletteMode } from '../src/renderer/commands/CommandPalette';
+import { CommandPalette } from '../src/renderer/commands/CommandPalette';
+import type { PaletteMode } from '../src/renderer/commands/palette-modes';
 import { CommandsContext } from '../src/renderer/commands/context';
 import {
   CommandRegistry,

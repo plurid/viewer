@@ -26,6 +26,21 @@ Viewer has one small language for its command line, its keys, its macros and its
    In a mode, a digit the mode does not bind is a count.
 5. **Session first, keep later.** `:bind`, `:unbind`, `:command` and `:unalias` last until Viewer quits, as tmux's prompt changes the running server and not `.tmux.conf`. Settings → Shortcuts lists them, with **Keep** (into `config.jsonc`) and **Discard**.
 
+## Requests in words (`>`)
+
+Type `>` at the start of the palette, or choose **Ask in words…**, and write what you want: "sort by year", "select the PDFs from last week", "put Documents beside this folder".
+
+**How it answers.**
+- A model answers with one line of this language and a sentence about it. **Enter** runs the line; **Tab** opens it in the command line to change first.
+- The line is recorded in the command line's history, so the next time you can type it yourself.
+- An unclear or impossible request gets a sentence instead of a line.
+
+**What the model is told.** It is told this language, the settings by name, the commands available where you are, the active folder's path, the selected items' names and the workspaces' names. It is never told the contents of files.
+
+**Which model.** Settings → Models chooses the provider (`settings.prompts.providerID`; the first provider when empty). The provider's "file names" permission is asked for once, as recipes ask for it; Settings → Models withdraws it.
+
+**What a model's line may not do,** even for you to review: move files to the Trash, rename (`mv`), type into a terminal (`send-keys`), bind keys or name commands, save text, use a `!` form, open a terminal or another application, empty the Trash, undo file operations, paste, or run a custom action that runs a program. Such a line is shown with why, and is not run; you can still type it yourself.
+
 ## Learning it
 
 - Completion shows each verb's usage as you type; Tab inserts the first completion.

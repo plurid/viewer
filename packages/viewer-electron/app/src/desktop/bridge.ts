@@ -1,3 +1,4 @@
+import { answerPrompt } from './prompts';
 import {
   emptySessionKeys,
   keepAliases,
@@ -90,6 +91,8 @@ export class Desktop {
   private pasteboard: Pasteboard;
   /** `:bind` and `:alias` of this session: in memory only, until quit (2026-10-23). */
   private sessionKeys: SessionKeys = emptySessionKeys;
+  /** Prompts being answered, to cancel. */
+  private prompts = new Map<string, AbortController>();
   readonly agentRequests: AgentRequests;
   private commandCatalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
   private workspaceCatalog?: AgentWorkspaceSnapshot;
@@ -1115,6 +1118,26 @@ export class Desktop {
           this.emit({ type: 'file-access', path: root, resources });
         }
         return;
+      },
+      // `>` in the palette (2026-10-24): a request in words answered with a line to review
+      promptLine: async (args) => {
+        const request = args[0];
+        const controller = new AbortController();
+        this.prompts.get(request.id)?.abort();
+        this.prompts.set(request.id, controller);
+        try {
+          return await answerPrompt(
+            request,
+            this.settings.snapshot().settings,
+            (...generate) => this.providers.generate(...generate),
+            controller.signal,
+          );
+        } finally {
+          if (this.prompts.get(request.id) === controller) this.prompts.delete(request.id);
+        }
+      },
+      promptCancel: (args) => {
+        this.prompts.get(args[0])?.abort();
       },
       sessionKeys: () => this.sessionKeys,
       sessionKeysSet: (args) => {

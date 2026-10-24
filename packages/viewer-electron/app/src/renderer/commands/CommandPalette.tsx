@@ -21,20 +21,12 @@ import { useWorkspace } from '../workspace/context';
 import type { FileEntry } from '../../domain/contracts';
 import { calculate, paletteIntent, rankFrecent } from './smart-palette';
 import { LineFinder } from '../command-line/LineFinder';
+import { PromptFinder } from '../command-line/PromptFinder';
 import { lineHint } from '../command-line/hints';
 import { quoteWord } from '../../domain/command-line/lex';
 import type { LineHost } from '../command-line/host';
-import {
-  choicesPrefix,
-  moreSettingsID,
-  paletteRows,
-  settingRows,
-  settingsPrefix,
-} from './palette-sections';
-
-export type PaletteMode = 'commands' | 'files' | 'workspaces' | 'settings' | 'line';
-/** The command line's prefix in the palette: `:`, as in vim (2026-10-23). */
-export const linePrefix = ':';
+import { choicesPrefix, moreSettingsID, paletteRows, settingRows } from './palette-sections';
+import { palettePrefixes, type PaletteMode } from './palette-modes';
 
 export function CommandPalette({
   mode,
@@ -74,12 +66,22 @@ export function CommandPalette({
               ? 'Settings'
               : mode === 'line'
                 ? 'Command line'
-                : 'Commands'
+                : mode === 'prompt'
+                  ? 'Ask in words'
+                  : 'Commands'
       }
       onClose={onClose}
       className="command-palette"
     >
-      {mode === 'line' && line ? (
+      {mode === 'prompt' && line ? (
+        <PromptFinder
+          host={line.host}
+          initialQuery={carried}
+          onRun={line.run}
+          onEdit={(text) => change('line', text)}
+          onBack={() => change('commands')}
+        />
+      ) : mode === 'line' && line ? (
         <LineFinder
           host={line.host}
           initialQuery={carried}
@@ -101,7 +103,7 @@ export function CommandPalette({
           active={active}
           directory={directory}
           onClose={onClose}
-          mode={mode === 'line' ? 'commands' : mode}
+          mode={mode === 'line' || mode === 'prompt' ? 'commands' : mode}
           initialQuery={carried}
           onMode={change}
         />
@@ -160,10 +162,12 @@ function CommandFinder({
       <CommandResults
         query={query}
         onQuery={(text) => {
-          if (mode === 'commands' && text.startsWith(settingsPrefix))
-            onMode('settings', text.slice(settingsPrefix.length).trimStart());
-          else if (mode === 'commands' && text.startsWith(linePrefix))
-            onMode('line', text.slice(linePrefix.length));
+          if (mode === 'commands' && text.startsWith(palettePrefixes.settings))
+            onMode('settings', text.slice(palettePrefixes.settings.length).trimStart());
+          else if (mode === 'commands' && text.startsWith(palettePrefixes.line))
+            onMode('line', text.slice(palettePrefixes.line.length));
+          else if (mode === 'commands' && text.startsWith(palettePrefixes.prompt))
+            onMode('prompt', text.slice(palettePrefixes.prompt.length).trimStart());
           else setQuery(text);
         }}
         rows={rows}
@@ -224,7 +228,7 @@ function CommandFinder({
               {directory}
             </span>
             <span className="palette-hint">
-              <kbd>{settingsPrefix}</kbd> settings
+              <kbd>{palettePrefixes.settings}</kbd> settings
             </span>
           </>
         )}

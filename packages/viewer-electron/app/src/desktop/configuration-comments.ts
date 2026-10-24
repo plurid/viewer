@@ -215,6 +215,9 @@ const descriptions: Record<string, string[]> = {
     'Tiling lays planes out as tmux lays out panes. splitWith: same | folder | terminal | scratch, what a split adds.',
     'defaultLayout: even-horizontal | even-vertical | main-vertical | main-horizontal | tiled.',
   ],
+  'settings.prompts': [
+    'Prompts (> in the palette) ask providerID\'s model to turn words into a command line; "" asks the first provider.',
+  ],
   'settings.themes': [
     'Colour themes: {id,name,look,shell,syntax,terminal}, each a map of tokens to #rrggbb colours.',
     'shell: space surface raised field ink muted subtle accent line selection danger. syntax: comment string keyword number function.',

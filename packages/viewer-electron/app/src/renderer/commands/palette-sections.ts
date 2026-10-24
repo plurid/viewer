@@ -18,8 +18,6 @@ export interface PaletteView {
 export const moreSettingsID = 'palette:more-settings';
 /** A setting's choices folded into one row: choosing it lists them. */
 export const choicesPrefix = 'palette:choices:';
-/** The settings search's prefix in the palette: `,`, as ⌘, opens Settings. */
-export const settingsPrefix = ',';
 /** Words of a setting's label that say what its command does, not what it is. */
 const verbs = new Set(['turn', 'on', 'off', 'show', 'hide', 'change', 'this', 'workspace']);
 const words = (text: string) =>

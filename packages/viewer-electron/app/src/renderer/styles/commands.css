@@ -426,3 +426,16 @@
 .command-value + .command-line-hint {
   margin-left: 0;
 }
+/* a request in words (2026-10-24): words in the text face; the line it gives in the code face */
+.prompt-finder .command-search-field input,
+.prompt-finder .command-result-text > span {
+  font-family: inherit;
+  font-size: inherit;
+}
+.prompt-finder.has-line .command-results > div:first-child .command-result-text > span {
+  font:
+    12.5px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}

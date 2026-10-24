@@ -72,9 +72,32 @@ const agentCommands = new Set([
   'reset-list-columns',
   'reset-folder-view',
 ]);
-const agentCommandPrefixes = ['view-', 'column.', 'group.', 'recipe.'];
+const agentCommandPrefixes = ['view-', 'column.', 'group.', 'sort.', 'recipe.'];
 const externalCommands = new Set(['open-default', 'open-with', 'open-selection']);
 
+/**
+ * What a model may not put in a line it proposes for a person to run (2026-10-24): what agents may
+ * never do (terminals, external apps, emptying Trash, file Undo, paste from outside the view, a
+ * custom action that runs programs), and the Trash itself, which agents reach only with each path
+ * reviewed. The person reads the line before Enter runs it; the rest is theirs to accept.
+ */
+export function modelLineCommandProblem(
+  id: string,
+  actions: readonly CustomAction[],
+): string | undefined {
+  if (id.startsWith('custom.')) {
+    const action = actions.find((item) => 'custom.' + item.id === id);
+    if (action && ['shell', 'executable', 'terminal'].includes(action.executor.kind))
+      return 'it runs a program';
+    return undefined;
+  }
+  if (terminalCommands.has(id)) return 'it uses a terminal';
+  if (externalCommands.has(id)) return 'it opens another application';
+  if (forbiddenTrashCommands.has(id) || id === 'trash') return 'it moves files to the Trash';
+  if (id === 'undo-file') return 'it undoes file operations';
+  if (id === 'paste' || id === 'paste-move') return 'it pastes from the clipboard';
+  return undefined;
+}
 /** Resolve aliases before review; opaque code cannot promise recoverable file removal. */
 export function agentCommandID(id: string, actions: readonly CustomAction[]): string {
   let command = id;

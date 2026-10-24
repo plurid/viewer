@@ -1,5 +1,6 @@
 import type { CommandContext, CommandRegistry } from '../commands/registry';
 import type { WorkspaceController } from '../workspace/context';
+import type { PaletteMode } from '../commands/palette-modes';
 
 /** What a line runs against: the window's commands and workspace, given by App (2026-10-23). */
 export interface LineHost {
@@ -13,7 +14,7 @@ export interface LineHost {
   newWorkspace(name: string): Promise<void>;
   switchWorkspace(id: string): Promise<void>;
   /** The palette in a mode, with text typed: `:help` and `:history` open the command line. */
-  palette(mode: 'commands' | 'settings' | 'line', query?: string): void;
+  palette(mode: PaletteMode, query?: string): void;
 }
 /** A line stopped where the person chose to (Cancel in a question): nothing to report. */
 export class Stopped extends Error {

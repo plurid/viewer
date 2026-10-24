@@ -3174,6 +3174,31 @@ async function verifyCommandLine(): Promise<void> {
     'Tab completed',
   );
   await snapshot('line-completions.png');
+  // > asks in words: without a model (or its permission), the way to one is offered
+  await key('Escape', 'Escape');
+  await key('Escape', 'Escape');
+  await closed();
+  await click('[aria-label="Commands (⌘K)"]');
+  await until(
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    Boolean,
+    'the palette',
+  );
+  await command('Input.insertText', { text: '>sort by year' });
+  await until(
+    () =>
+      evaluate<string>(
+        "document.querySelector('.prompt-finder .command-result')?.textContent ?? ''",
+      ),
+    (text) => /Add a model|receive file names/.test(text),
+    'the > mode offering a model',
+  );
+  await snapshot('prompt-mode.png');
+  await key('Escape', 'Escape');
+  await key('Escape', 'Escape');
+  await open();
+  await command('Input.insertText', { text: 'help' });
   // a line that does not parse points at its column and runs nothing
   await evaluate(
     '(() => { const input = document.querySelector(\'input[aria-label="Command line"]\'); input.select(); })()',

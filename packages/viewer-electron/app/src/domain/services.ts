@@ -109,6 +109,8 @@ export interface ApplicationSettings {
     /** The layout tiling starts with. */
     defaultLayout: TileLayout;
   };
+  /** `>` prompts in the palette (2026-10-24): the model they ask; "" is the first. */
+  prompts: { providerID: string };
   /** Colour themes (2026-10-23): domain/themes.ts. */
   themes: Theme[];
   /** The theme for each appearance; empty is the built-in one. */
@@ -389,6 +391,7 @@ export function defaultSettings(home: string): ApplicationSettings {
     layouts: [],
     profiles: [],
     themes: [],
+    prompts: { providerID: '' },
     theme: { dark: '', light: '' },
     tour: { dwell: 3000, duration: 900, loop: true },
     search: {

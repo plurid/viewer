@@ -1,3 +1,4 @@
+import type { PaletteMode } from '../palette-modes';
 import { activeWorkspace, getState } from '../../state/store';
 import type { WorkspaceController } from '../../workspace/context';
 import type { CommandContext } from '../registry';
@@ -5,7 +6,7 @@ import type { CommandContext } from '../registry';
 export interface WindowActions {
   workspace: WorkspaceController;
   ready: boolean;
-  palette(mode: 'commands' | 'files' | 'workspaces' | 'settings' | 'line', query?: string): void;
+  palette(mode: PaletteMode, query?: string): void;
   settings(): void;
   workspaceDialog(kind: 'new' | 'rename' | 'delete' | 'background'): void;
   renameShortcut(path: string, name: string): void;

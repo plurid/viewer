@@ -6,8 +6,20 @@ import {
   updateFolderPresentation,
   applyFolderAsDefaults,
   getState,
+  updatePane,
 } from '../state/store';
 import type { CommandContext, CommandDefinition } from './registry';
+import type { SortKey } from '../../domain/contracts';
+
+const sortKeys: readonly SortKey[] = ['name', 'modified', 'created', 'size', 'kind', 'extension'];
+const sortLabels: Readonly<Record<SortKey, string>> = {
+  name: 'name',
+  modified: 'date modified',
+  created: 'date created',
+  size: 'size',
+  kind: 'kind',
+  extension: 'extension',
+};
 export const columnCommandIDs = [
   ...listColumns.filter((column) => column.id !== 'name').map((column) => 'column.' + column.id),
   'wrap-file-names',
@@ -17,6 +29,7 @@ export const columnCommandIDs = [
   'group.none',
   'group.kind',
   'group.modified',
+  ...['name', 'modified', 'created', 'size', 'kind', 'extension'].map((key) => 'sort.' + key),
 ];
 export function columnCommands(): CommandDefinition[] {
   const list = (context: CommandContext) =>
@@ -57,6 +70,30 @@ export function columnCommands(): CommandDefinition[] {
       icon: group === 'modified' ? 'clock' : group === 'kind' ? 'data' : 'list',
       when: (context) => !!context.folder,
       run: (context) => updateFolderPresentation(context.folder!.path, { group }),
+    })),
+    // sorting as the column headers sort (2026-10-24): again the same key reverses it
+    ...sortKeys.map((key): CommandDefinition => ({
+      id: 'sort.' + key,
+      label: (context) =>
+        context.folder?.sort === key
+          ? `Sort by ${sortLabels[key]}, ${context.folder.descending ? 'ascending' : 'descending'}`
+          : `Sort by ${sortLabels[key]}`,
+      group: 'View',
+      icon: key === 'modified' || key === 'created' ? 'clock' : key === 'size' ? 'info' : 'list',
+      // the key's name is in the label: a column's toggle keeps "date created" to itself
+      aliases: ['sort', 'order'],
+      when: (context) => !!context.folder,
+      run: (context) => {
+        const folder = context.folder!;
+        updatePane(folder.id, {
+          sort: key,
+          // the newest and the largest first, as Finder's date and size columns start
+          descending:
+            folder.sort === key
+              ? !folder.descending
+              : ['modified', 'created', 'size'].includes(key),
+        });
+      },
     })),
     ...listColumns
       .filter((column) => column.id !== 'name')

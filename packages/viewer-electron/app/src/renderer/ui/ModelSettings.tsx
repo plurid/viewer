@@ -48,6 +48,29 @@ export function ModelSettings({
       <p className="settings-note">
         Choose a provider and model for each recipe. Requests run only when you invoke an action.
       </p>
+      {snapshot.settings.providers.length > 0 && (
+        // `>` in the palette (2026-10-24): which model turns words into a command line
+        <label className="settings-row">
+          <span>Ask in words (&gt;) with</span>
+          <ChoiceButton
+            label="Ask in words with"
+            value={
+              snapshot.settings.providers.some(
+                (provider) => provider.id === snapshot.settings.prompts.providerID,
+              )
+                ? snapshot.settings.prompts.providerID
+                : snapshot.settings.providers[0]!.id
+            }
+            choices={snapshot.settings.providers.map((provider) => ({
+              value: provider.id,
+              label: `${provider.name} · ${provider.model || 'no model'}`,
+            }))}
+            onChoose={(providerID) =>
+              save(() => [{ path: 'settings.prompts', value: { providerID } }])
+            }
+          />
+        </label>
+      )}
       <div className="settings-actions settings-provider-add">
         <ChoiceButton
           label="New model provider"

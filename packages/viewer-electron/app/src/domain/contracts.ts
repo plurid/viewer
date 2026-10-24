@@ -1,3 +1,4 @@
+import type { PromptAnswer, PromptRequest } from './command-line/prompt';
 import type { SessionKeys } from './session-keys';
 import type { WorkspaceOverrides } from './overrides';
 import type { Tiling } from './tiling';
@@ -469,6 +470,9 @@ export interface ViewerAPI {
   openSettings(focus?: string): Promise<void>;
   settingsGet(): Promise<SettingsSnapshot>;
   settingsPatch(patches: SettingsPatch[], revision: number): Promise<SettingsSnapshot>;
+  /** `>` in the palette (2026-10-24): a request in words, answered with a line to review. */
+  promptLine(request: PromptRequest): Promise<PromptAnswer>;
+  promptCancel(id: string): Promise<void>;
   /** `:bind` and `:alias` of this session (2026-10-23): kept in memory until quit. */
   sessionKeys(): Promise<SessionKeys>;
   sessionKeysSet(session: SessionKeys): Promise<SessionKeys>;

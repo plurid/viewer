@@ -289,6 +289,10 @@ export const settingsSchema = z
       })
       .strict()
       .default({ splitWith: 'same', defaultLayout: 'even-horizontal' }),
+    prompts: z
+      .object({ providerID: z.string().max(200).default('') })
+      .strict()
+      .default({ providerID: '' }),
     themes: z
       .array(themeSchema)
       .max(30)

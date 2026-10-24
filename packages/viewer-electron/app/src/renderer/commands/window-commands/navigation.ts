@@ -89,6 +89,15 @@ export function navigationCommands({
       run: () => actions.palette('line'),
     },
     {
+      id: 'ask-in-words',
+      label: 'Ask in words…',
+      group: 'App',
+      icon: 'command',
+      aliases: ['>', 'prompt', 'ai', 'model', 'natural language'],
+      when: windowScope,
+      run: () => actions.palette('prompt'),
+    },
+    {
       id: 'palette-settings',
       label: 'Search settings…',
       group: 'App',
