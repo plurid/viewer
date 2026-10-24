@@ -217,6 +217,23 @@ export function ComparisonControls() {
                   <span className="comparison-name" role="cell">
                     {row.path}
                     <span className="settings-actions">
+                      {(row.left?.kind === 'file' || row.right?.kind === 'file') && (
+                        <button
+                          onClick={() => {
+                            workspace.openDiff(
+                              row.left?.kind === 'file'
+                                ? { kind: 'file', path: row.left.path }
+                                : { kind: 'empty', name: 'Absent on left' },
+                              row.right?.kind === 'file'
+                                ? { kind: 'file', path: row.right.path }
+                                : { kind: 'empty', name: 'Absent on right' },
+                            );
+                            close();
+                          }}
+                        >
+                          Open diff
+                        </button>
+                      )}
                       {row.left?.kind === 'file' && (
                         <button
                           onClick={() => workspace.open(row.left!, undefined, { another: true })}

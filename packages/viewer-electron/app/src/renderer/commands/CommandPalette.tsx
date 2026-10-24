@@ -25,7 +25,13 @@ import { PromptFinder } from '../command-line/PromptFinder';
 import { lineHint } from '../command-line/hints';
 import { quoteWord } from '../../domain/command-line/lex';
 import type { LineHost } from '../command-line/host';
-import { choicesPrefix, moreSettingsID, paletteRows, settingRows } from './palette-sections';
+import {
+  choicesPrefix,
+  moreSettingsID,
+  paletteRows,
+  paletteSuggestions,
+  settingRows,
+} from './palette-sections';
 import { palettePrefixes, type PaletteMode } from './palette-modes';
 
 export function CommandPalette({
@@ -41,7 +47,7 @@ export function CommandPalette({
   /** Text the palette opens with (`:help` opens the command line at `help`). */
   initialQuery?: string;
   /** The command line: what a line runs against, and running one (App closes the palette first). */
-  line?: { host: LineHost; run(text: string): void };
+  line?: { host: LineHost; run(text: string, model?: boolean): void };
 }) {
   const registry = useCommands();
   // what was typed, carried into the mode it chose: `,wrap` searches the settings for "wrap"
@@ -77,9 +83,16 @@ export function CommandPalette({
         <PromptFinder
           host={line.host}
           initialQuery={carried}
-          onRun={line.run}
+          onRun={(text) => line.run(text, true)}
           onEdit={(text) => change('line', text)}
           onBack={() => change('commands')}
+          onChat={(text) => {
+            const paths = context.selection.length
+              ? context.selection.map((file) => file.path)
+              : [directory];
+            onClose();
+            void line.host.workspace.newChat(paths, text).catch(report);
+          }}
         />
       ) : mode === 'line' && line ? (
         <LineFinder
@@ -156,7 +169,7 @@ function CommandFinder({
     : settings
       ? settingRows(commands, query)
       : paletteRows(commands, query, recent);
-  const rows = [...smart, ...view.rows];
+  const rows = paletteSuggestions(view.rows, smart, query);
   return (
     <>
       <CommandResults

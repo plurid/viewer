@@ -34,6 +34,17 @@ const file = (name: string): QueryEntry => ({
 });
 
 describe('a filter', () => {
+  it('stays stable across unrelated renders so the command palette can subscribe without a loop', () => {
+    const view = renderHook(({ text }) => useFileQuery(text, '/fixtures'), {
+      initialProps: { text: 'ext:md' },
+    });
+    const initial = view.result.current;
+    view.rerender({ text: 'ext:md' });
+    expect(view.result.current).toBe(initial);
+    view.rerender({ text: 'ext:png' });
+    expect(view.result.current).not.toBe(initial);
+    expect(matchesQuery(view.result.current.query, file('photo.png'))).toBe(true);
+  });
   it('keeps the last query that read while the next is typed, saying what is wrong', () => {
     const view = renderHook(({ text }) => useFileQuery(text, '/fixtures'), {
       initialProps: { text: 'ext:md' },

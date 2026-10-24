@@ -1,4 +1,13 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   sameTextVersion,
@@ -16,6 +25,7 @@ import { registerEditingPlane, type EditorHandle } from './planes';
 import { continueEditing, sessionContinues, takeSession } from './sessions';
 
 const TextEditor = lazy(() => import('../previews/editor/TextEditor'));
+import type { TextEditorProps } from '../previews/editor/TextEditor';
 
 /**
  * EDITING A PREVIEWED FILE (2026-10-23). The file opens for editing where it is, when the desktop
@@ -30,6 +40,8 @@ export function FileEditor({
   header,
   focus = false,
   onClose,
+  editor: CustomEditor,
+  onSaveAs,
 }: {
   resourceID: string;
   paneID: string;
@@ -39,6 +51,8 @@ export function FileEditor({
   /** Asked for (Edit, Save As): takes the keys. Edits restored at launch leave the focus alone. */
   focus?: boolean;
   onClose(): void;
+  editor?: ComponentType<TextEditorProps>;
+  onSaveAs?(file: string): void;
 }) {
   const [loaded, setLoaded] = useState<{
     document: TextDocument;
@@ -58,6 +72,7 @@ export function FileEditor({
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const session = useMemo(() => takeSession(paneID) ?? crypto.randomUUID(), [paneID]);
   const settings = useViewer((state) => state.settings.settings.editor);
+  const Editor = CustomEditor ?? TextEditor;
   const document = loaded?.document;
   const name = document ? baseName(document.file) : 'this file';
   const language = document
@@ -209,7 +224,8 @@ export function FileEditor({
     await forget();
     // the plane shows the new file, still edited in this session
     continueEditing(paneID, session);
-    updatePane(paneID, { path: result.file });
+    if (onSaveAs) onSaveAs(result.file);
+    else updatePane(paneID, { path: result.file });
     return true;
   };
   /** Saved in another app: shown again when nothing is unsaved, as other editors do; with unsaved
@@ -320,7 +336,7 @@ export function FileEditor({
         </p>
       )}
       <Suspense fallback={<Loading label="Opening the editor…" />}>
-        <TextEditor
+        <Editor
           key={loaded.generation}
           text={loaded.text}
           language={language?.id}

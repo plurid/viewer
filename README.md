@@ -2,6 +2,10 @@
 
 A macOS-first file manager in the Plurid family. Folders and read-only previews live in linked spatial planes; dock a plane for focused browsing. The active application is [`packages/viewer-electron/app`](packages/viewer-electron/app). The 2021 predecessor is summarized in [docs/old-app.md](docs/old-app.md).
 
+See [Git, comparisons, Chat and native windows](docs/spatial-tools.md) for the
+opt-in Git and shortcut controls, comparison planes, `viewer` shell command,
+read-only conversations, workspace profiles and individual tile resizing.
+
 ## Run and build
 
 Use Node ≥22.13 and pnpm 11. Verified with Node 26.8.2 and pnpm 11.3.0 on Apple Silicon macOS.
@@ -34,7 +38,17 @@ pnpm make          # locally signed macOS .app and ZIP
 pnpm test:desktop  # verifies the packaged app in hidden background windows
 ```
 
-The app is built under `packages/viewer-electron/app/out/Viewer-darwin-<architecture>/Viewer.app`; ZIPs are under `out/make/zip/darwin/<architecture>/`. `pnpm start`, `pnpm package` and `pnpm make` replace earlier outputs: Electron Forge's Vite plugin removes `.vite/` before it builds, and packaging replaces `out/Viewer-darwin-<architecture>/`. Under this repository's [removal policy](AGENTS.md), an agent runs them only with your approval; `tools/build-preserving.ts` builds without removing earlier outputs. Bundles use ad-hoc signing for local execution. Certificate signing, notarization and public distribution need a release configuration. Windows/Linux adapters and packaging are future work.
+The app is built under
+`packages/viewer-electron/app/out/Viewer-darwin-<architecture>/Viewer.app`; ZIPs
+are under `out/make/zip/darwin/<architecture>/`. Before `pnpm package` or
+`pnpm make`, `tools/trash-previous-build.ts` moves exactly the previous `.vite`
+and platform/architecture package output to the operating system Trash. It refuses
+links and stops if Trash fails. This has a standing exception in the repository's
+[removal policy](AGENTS.md). Other removals, including those from `pnpm start`,
+still need exact-path approval; `tools/build-preserving.ts` retains earlier
+outputs. Bundles use ad-hoc signing for local execution. Certificate signing,
+notarization and public distribution need a release configuration. Windows/Linux
+adapters and packaging are future work.
 
 To install a local build, extract the ZIP and drag `Viewer.app` into Applications. The native Swift helpers inherit the bundled Electron runtime's minimum macOS version (currently 13.0), rather than the build machine's SDK default.
 

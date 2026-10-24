@@ -34,7 +34,7 @@ export function KeyCapture({
 }: {
   label: string;
   value: string;
-  kind: 'shortcut' | 'leader' | 'sequence';
+  kind: 'shortcut' | 'global-shortcut' | 'leader' | 'sequence';
   onChange(value: string): void;
   /** What has a chord already, other than this. */
   owner?(value: string): string | undefined;
@@ -85,7 +85,7 @@ export function KeyCapture({
       }
       const chord = chordFrom(event);
       if (!chord) return;
-      if (!event.ctrlKey && !event.metaKey) {
+      if (!event.ctrlKey && !event.metaKey && !(kind === 'global-shortcut' && event.altKey)) {
         setMessage('Hold ⌃ or ⌘ with the key');
         return;
       }

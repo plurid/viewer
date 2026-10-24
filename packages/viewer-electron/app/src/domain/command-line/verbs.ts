@@ -248,7 +248,7 @@ export const verbs: readonly Verb[] = [
     usage: '-L|-R|-U|-D [n]',
     flags: LRUD,
     args: [0, 1],
-    help: 'Shrink (-L, -U) or grow (-R, -D) the main tile, n steps',
+    help: 'Grow the active tile toward a neighbor, n steps',
     tmux: true,
   },
   {

@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { ApiMethod, ApiResult, DesktopEvent, ViewerAPI } from './domain/contracts';
+
+const eventListeners = new Set<(event: DesktopEvent) => void>();
+const publish = (_event: Electron.IpcRendererEvent, event: DesktopEvent) => {
+  for (const listener of [...eventListeners]) {
+    try {
+      listener(event);
+    } catch (error) {
+      console.error('Viewer event listener failed', error);
+    }
+  }
+};
 async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   const result = (await ipcRenderer.invoke('viewer:request', method, args)) as ApiResult<T>;
   // Electron drops custom Error properties when crossing contextBridge. A
@@ -8,6 +19,14 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  chat: (request) => invoke('chat', request),
+  shellCommand: (action) => invoke('shellCommand', action),
+  hotkeyStatus: () => invoke('hotkeyStatus'),
+  restoreWindow: () => invoke('restoreWindow'),
+  workspaceClaim: (id) => invoke('workspaceClaim', id),
+  newWindow: () => invoke('newWindow'),
+  git: (request) => invoke('git', request),
+  gitResource: (source) => invoke('gitResource', source),
   watchRules: (request) => invoke('watchRules', request),
   relationships: (request) => invoke('relationships', request),
   workflow: (request) => invoke('workflow', request),
@@ -146,9 +165,13 @@ const api: ViewerAPI = {
   bufferWrite: (buffer) => invoke('bufferWrite', buffer),
   bufferDiscard: (id) => invoke('bufferDiscard', id),
   onEvent: (listener) => {
-    const handler = (_event: Electron.IpcRendererEvent, event: DesktopEvent) => listener(event);
-    ipcRenderer.on('viewer:event', handler);
-    return () => ipcRenderer.removeListener('viewer:event', handler);
+    if (!eventListeners.size) ipcRenderer.on('viewer:event', publish);
+    const subscription = (event: DesktopEvent) => listener(event);
+    eventListeners.add(subscription);
+    return () => {
+      eventListeners.delete(subscription);
+      if (!eventListeners.size) ipcRenderer.removeListener('viewer:event', publish);
+    };
   },
 };
 contextBridge.exposeInMainWorld('viewerNative', Object.freeze(api));

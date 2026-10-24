@@ -1,5 +1,6 @@
 // Saving workspace state: engine arrangements, retained preview values and the debounced save.
 import { flushBuffers } from '../editing/buffers';
+import { flushChatDrafts } from '../chat/drafts';
 import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../domain/contracts';
 import { previewValuesSchema, type JSONValue } from '../../domain/project';
 import { activeWorkspace, getState, replaceState, report } from './core';
@@ -60,6 +61,7 @@ export async function flushState(flushEngine = true): Promise<void> {
   if (flushEngine) window.dispatchEvent(new Event('pagehide'));
   // unsaved text first: a quit waits for this flush
   await flushBuffers();
+  await flushChatDrafts();
   // After the engine's synchronous flush: a save it scheduled is covered by this one.
   clearTimeout(persistTimer);
   await flushPreferences();

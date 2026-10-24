@@ -22,6 +22,7 @@ import { useWorkspace } from './context';
 import { baseName } from '../../domain/planes';
 import { hostID } from './tree';
 import { buffersGeneration, heldBuffer, subscribeBuffers } from '../editing/buffers';
+import { GitBranch } from '../git/status';
 
 /** Chooses and edits a folder's lenses; shown once the folder has one, and on the Map. */
 function LensButton({
@@ -80,7 +81,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
   const unsaved =
     pane?.type === 'scratch'
       ? !!heldBuffer(pane.bufferID)?.text
-      : pane?.type === 'preview' && !!pane.bufferID;
+      : (pane?.type === 'preview' || pane?.type === 'diff') && !!pane.bufferID;
   const dragging = useViewer((state) => state.saved.ui.space.dragging);
   const controls = useViewer((state) => state.saved.ui.space.headerControls);
   const registry = useCommands();
@@ -225,13 +226,19 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
         <span className="plane-title">
           {pane?.type === 'scratch'
             ? (pane.title ?? 'Untitled')
-            : pane?.type === 'collection'
-              ? (collection?.name ?? 'Collection')
-              : pane?.type === 'search'
-                ? pane.name
-                : pane?.type === 'terminal'
-                  ? 'Terminal · ' + baseName(pane.path)
-                  : (pane && baseName(pane.path)) || 'Plane'}
+            : pane?.type === 'chat'
+              ? 'Chat'
+              : pane?.type === 'diff'
+                ? 'Compare · ' + baseName(pane.path)
+                : pane?.type === 'git-changes'
+                  ? 'Git changes · ' + baseName(pane.path)
+                  : pane?.type === 'collection'
+                    ? (collection?.name ?? 'Collection')
+                    : pane?.type === 'search'
+                      ? pane.name
+                      : pane?.type === 'terminal'
+                        ? 'Terminal · ' + baseName(pane.path)
+                        : (pane && baseName(pane.path)) || 'Plane'}
         </span>
         {unsaved && (
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
@@ -252,6 +259,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       </span>
       {pane?.type === 'folder' ? (
         <>
+          <GitBranch path={pane.path} />
           {controls.view && (
             <button
               className="plane-view-button"

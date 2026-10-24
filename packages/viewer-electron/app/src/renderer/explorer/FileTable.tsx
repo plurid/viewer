@@ -41,8 +41,12 @@ export function FileTable({
   const presentation = useFolderPresentation(folder?.type === 'folder' ? folder.path : '');
   const preferences = presentation.list;
   const { visible, order } = preferences;
+  const gitEnabled = useViewer((state) => state.settings.settings.git.enabled);
   // Widths change while resizing; only visibility and order decide the columns.
-  const columns = useMemo(() => visibleListColumns({ visible, order }), [visible, order]);
+  const columns = useMemo(
+    () => visibleListColumns({ visible, order }, gitEnabled),
+    [visible, order, gitEnabled],
+  );
   const table = useRef<HTMLDivElement>(null);
   const resize = useRef<{
     column: ListColumn;
@@ -118,13 +122,15 @@ export function FileTable({
                     return;
                   event.preventDefault();
                   event.stopPropagation();
-                  const order = visibleListColumns(preferences).filter((item) => item !== moved);
+                  const order = visibleListColumns(preferences, gitEnabled).filter(
+                    (item) => item !== moved,
+                  );
                   order.splice(order.indexOf(column), 0, moved);
                   if (folder?.type === 'folder')
                     updateFolderPresentation(folder.path, { list: { ...preferences, order } });
                 }}
               >
-                {onSort ? (
+                {onSort && column !== 'git' ? (
                   <button
                     className="column-label"
                     draggable={column !== 'name'}

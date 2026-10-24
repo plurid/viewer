@@ -1,6 +1,7 @@
 import { overridablePaths } from '../../domain/overrides';
 import { settingCatalog, settingValue } from '../../domain/setting-catalog';
-import { activeWorkspace, useViewer } from '../state/store';
+import { activeWorkspace, changeWorkspace, useViewer } from '../state/store';
+import { builtInProfiles } from '../../domain/profiles';
 import { setWorkspaceOverride, setWorkspaceSpaceColor } from '../state/workspaces';
 import { looks } from '../workspace/look';
 import { ChoiceButton } from './ChoiceMenu';
@@ -15,6 +16,7 @@ export function WorkspaceBackgroundDialog({ onClose }: { onClose(): void }) {
   const workspace = useViewer(activeWorkspace);
   const look = useViewer((state) => state.saved.look);
   const ui = useViewer((state) => state.saved.ui);
+  const profiles = useViewer((state) => state.settings.settings.profiles);
   const general = ui.space.color;
   const toggles = overridablePaths.flatMap((path) => {
     const definition = settingCatalog.find((item) => item.path === path && item.kind === 'boolean');
@@ -23,6 +25,23 @@ export function WorkspaceBackgroundDialog({ onClose }: { onClose(): void }) {
   return (
     <Dialog title="Workspace look" onClose={onClose} className="workspace-background-dialog">
       <div className="workspace-look">
+        <div className="workspace-look-row">
+          <span className="workspace-look-label">Default profile</span>
+          <ChoiceButton
+            label="Workspace default profile"
+            value={workspace.profileID ?? ''}
+            choices={[
+              { value: '', label: 'General' },
+              ...[...builtInProfiles, ...profiles].map((profile) => ({
+                value: profile.id,
+                label: profile.name,
+              })),
+            ]}
+            onChoose={(profileID) =>
+              changeWorkspace((space) => ({ ...space, profileID: profileID || undefined }))
+            }
+          />
+        </div>
         <span className="workspace-look-label">Background</span>
         <ColorField
           label="Workspace background"

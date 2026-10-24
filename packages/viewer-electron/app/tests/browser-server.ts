@@ -215,6 +215,20 @@ function scoped(file: string): string {
 }
 async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
   switch (method) {
+    case 'hotkeyStatus':
+      return {
+        registered: false,
+        shortcut: 'Alt+Space',
+        problem: 'Global shortcuts require the desktop build.',
+      };
+    case 'shellCommand':
+      return {
+        installed: false,
+        path: '~/.local/bin/viewer',
+        problem: 'Shell installation requires the desktop build.',
+      };
+    case 'workspaceClaim':
+      return true;
     case 'watchRules':
       return watchRules.request(args[0] as WatchRuleRequest);
     case 'relationships':

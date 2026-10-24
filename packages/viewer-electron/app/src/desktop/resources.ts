@@ -38,6 +38,41 @@ export class Resources {
   grant(file: string): Promise<Resource> {
     return this.work.track([file], (scope) => this.grantFile(file, scope));
   }
+  /** Immutable repository bytes are readable resources, never editable filesystem files. */
+  async grantBytes(authority: string, name: string, data: Buffer): Promise<Resource> {
+    await this.access([authority]);
+    if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
+    const held = [...this.grants.values()].reduce(
+      (size, grant) => size + (grant.data?.length ?? 0),
+      0,
+    );
+    if (data.length > 64 * 1024 * 1024 || held + data.length > 128 * 1024 * 1024)
+      throw new Error(
+        'The comparison resource budget is full. Close a comparison before opening another.',
+      );
+    const id = randomUUID();
+    const resource: Resource = {
+      id,
+      url: `viewer-resource://${id}/asset/${encodeURIComponent(path.basename(name))}`,
+      dimensions: imageDimensions(data),
+      entry: {
+        path: path.join(authority, name),
+        name: path.basename(name),
+        parent: authority,
+        extension: path.extname(name).slice(1).toLowerCase(),
+        kind: 'file',
+        directory: false,
+        size: data.length,
+        modified: 0,
+        created: 0,
+        hidden: false,
+        mime: lookup(name) || 'application/octet-stream',
+        identity: id,
+      },
+    };
+    this.grants.set(id, { resource, authority, data, archiveChildren: new Set() });
+    return resource;
+  }
   private async grantFile(file: string, scope: PreviewScope): Promise<Resource> {
     await this.access([file]);
     const actual = await realpath(file);

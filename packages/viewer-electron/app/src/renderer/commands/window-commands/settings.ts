@@ -11,6 +11,7 @@ import type { UIPreferences } from '../../../domain/contracts';
 import { activeWorkspace, changePreferences, getState, receiveSettings } from '../../state/store';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
+import { effectiveWindowUI } from '../../state/effective-ui';
 
 /** Settings whose command is their own: they keep its name and shortcut, with no second one. */
 const ownCommands = new Set(['ui.sidebar.visible', 'ui.titlebar.visible']);
@@ -23,7 +24,7 @@ export const settingName = (definition: SettingDefinition) => {
   return context ? `${context} › ${definition.label}` : definition.label;
 };
 const current = (path: string) =>
-  settingValue({ settings: getState().settings.settings, ui: getState().saved.ui }, path);
+  settingValue({ settings: getState().settings.settings, ui: effectiveWindowUI(getState()) }, path);
 /** A copy of `value` with `keys` set, the rest shared. */
 function withPath<T>(value: T, keys: readonly string[], next: unknown): T {
   if (!keys.length) return next as T;
@@ -41,6 +42,14 @@ export async function changeSetting(path: string, value: unknown): Promise<void>
     return;
   }
   if (keys[0] === 'ui') {
+    if (
+      overridable(path) &&
+      (typeof value === 'boolean' || typeof value === 'number') &&
+      (getState().saved.profile || activeWorkspace().profileID)
+    ) {
+      setWorkspaceOverride(path, value);
+      return;
+    }
     changePreferences((ui) => withPath<UIPreferences>(ui, keys.slice(1), value));
     return;
   }

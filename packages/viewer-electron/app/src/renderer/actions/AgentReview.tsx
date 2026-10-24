@@ -7,14 +7,20 @@ export function AgentReview() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
-    void window.viewer.agentReviewList().then(setProposals).catch(report);
-    return window.viewer.onEvent((event) => {
+    const refresh = () => void window.viewer.agentReviewList().then(setProposals).catch(report);
+    refresh();
+    window.addEventListener('viewer:agent-review', refresh);
+    const unsubscribe = window.viewer.onEvent((event) => {
       if (event.type === 'agent-proposal')
         setProposals((items) => [
           ...items.filter((item) => item.id !== event.proposal.id),
           event.proposal,
         ]);
     });
+    return () => {
+      window.removeEventListener('viewer:agent-review', refresh);
+      unsubscribe();
+    };
   }, []);
   const proposal = proposals.find((item) => item.status === 'review');
   if (!proposal || busy) return null;

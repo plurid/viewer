@@ -123,6 +123,7 @@ export const folderOverrideSchema = z
             kind: z.boolean(),
             extension: z.boolean(),
             size: z.boolean(),
+            git: z.boolean(),
           })
           .partial()
           .strict()
@@ -135,14 +136,15 @@ export const folderOverrideSchema = z
             kind: z.number().min(60).max(600),
             extension: z.number().min(60).max(600),
             size: z.number().min(60).max(600),
+            git: z.number().min(60).max(600),
           })
           .partial()
           .strict()
           .optional(),
         wrapNames: z.boolean().optional(),
         order: z
-          .array(z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size']))
-          .max(6)
+          .array(z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size', 'git']))
+          .max(7)
           .refine((items) => items[0] === 'name' && new Set(items).size === items.length)
           .optional(),
       })
@@ -151,7 +153,30 @@ export const folderOverrideSchema = z
   })
   .strict();
 const planeBase = { id, target: projectPathSchema, state: previewValuesSchema.optional() };
+const portableDiffSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('file'), target: projectPathSchema }).strict(),
+  z
+    .object({
+      kind: z.literal('git'),
+      target: projectPathSchema,
+      commit: z.string().regex(/^[0-9a-f]{40,64}$/),
+      path: z.string().min(1).max(32768),
+    })
+    .strict(),
+  z.object({ kind: z.literal('empty'), name: z.string().max(255) }).strict(),
+]);
+export type PortableDiffSource = z.infer<typeof portableDiffSourceSchema>;
 const projectPlaneSchema = z.discriminatedUnion('type', [
+  z.object({ ...planeBase, type: z.literal('git-changes') }).strict(),
+  z
+    .object({
+      ...planeBase,
+      type: z.literal('diff'),
+      left: portableDiffSourceSchema,
+      right: portableDiffSourceSchema,
+      mode: z.enum(['split', 'unified', 'slider', 'onion', 'side', 'difference']).optional(),
+    })
+    .strict(),
   z.object({ ...planeBase, type: z.literal('folder') }).strict(),
   z
     .object({ ...planeBase, type: z.literal('preview'), state: previewValuesSchema.optional() })

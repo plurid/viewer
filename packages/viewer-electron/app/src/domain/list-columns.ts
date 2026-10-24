@@ -7,6 +7,7 @@ export const listColumns: { id: ListColumn; label: string; width: number; visibl
   { id: 'kind', label: 'Kind', width: 96, visible: true },
   { id: 'extension', label: 'Extension', width: 80, visible: false },
   { id: 'size', label: 'Size', width: 95, visible: true },
+  { id: 'git', label: 'Git', width: 80, visible: false },
 ];
 export const columnMinimum = (column: ListColumn) => (column === 'name' ? 120 : 60);
 export const columnMaximum = (column: ListColumn) => (column === 'name' ? 1600 : 600);
@@ -15,9 +16,14 @@ export function columnWidth(column: ListColumn, width: number): number {
 }
 export function visibleListColumns(
   preferences: Pick<UIPreferences['list'], 'visible'> & { order?: ListColumn[] },
+  gitEnabled = false,
 ): ListColumn[] {
   const columns = listColumns
-    .filter((column) => column.id === 'name' || preferences.visible[column.id])
+    .filter(
+      (column) =>
+        (column.id !== 'git' || gitEnabled) &&
+        (column.id === 'name' || preferences.visible[column.id]),
+    )
     .map((column) => column.id);
   if (!preferences.order) return columns;
   return [...new Set(['name' as const, ...preferences.order, ...columns])].filter((column) =>

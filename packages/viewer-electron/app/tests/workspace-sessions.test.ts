@@ -1,0 +1,64 @@
+import { describe, expect, it } from 'vitest';
+import { WorkspaceSessions } from '../src/desktop/workspace-sessions';
+
+describe('native workspace ownership', () => {
+  it('merges overlapping saves without replacing another window or reviving a removed favorite', () => {
+    const sessions = new WorkspaceSessions();
+    const first = sessions.create('/fixtures', 'First');
+    const second = sessions.create('/fixtures', 'Second');
+    const a = sessions.open(1, '/fixtures', first);
+    const b = sessions.open(2, '/fixtures', second);
+    a.workspaces.find((space) => space.id === first)!.name = 'Edited first';
+    b.workspaces.find((space) => space.id === second)!.name = 'Edited second';
+    a.favorites = [{ path: '/a', name: 'A' }];
+    b.favorites = [{ path: '/b', name: 'B' }];
+    sessions.save(1, a);
+    sessions.save(2, b);
+    expect(sessions.snapshot()?.workspaces.map((space) => space.name)).toEqual([
+      'Edited first',
+      'Edited second',
+    ]);
+    expect(
+      sessions
+        .snapshot()
+        ?.favorites.map((favorite) => favorite.path)
+        .sort(),
+    ).toEqual(['/a', '/b']);
+    expect(sessions.claim(1, second)).toBe(false);
+    expect(sessions.owner(second)).toBe(2);
+    a.workspaces = a.workspaces.filter((space) => space.id !== second);
+    expect(() => sessions.save(1, a)).toThrow('other window');
+  });
+
+  it('keeps explicit profiles in their workspace window and restores each after restart', () => {
+    const sessions = new WorkspaceSessions();
+    const first = sessions.create('/fixtures');
+    const second = sessions.create('/fixtures');
+    const a = sessions.open(1, '/fixtures', first);
+    a.profile = { id: 'focus', previous: {} };
+    sessions.save(1, a);
+    const b = sessions.open(2, '/fixtures', second);
+    expect(b.profile).toBeUndefined();
+    b.profile = { id: 'present', previous: {} };
+    sessions.save(2, b);
+    const restarted = new WorkspaceSessions();
+    restarted.seed(sessions.snapshot()!);
+    expect(restarted.open(3, '/fixtures', first).profile?.id).toBe('focus');
+    expect(restarted.open(4, '/fixtures', second).profile?.id).toBe('present');
+  });
+
+  it('does not advance its baseline when a durable write fails', async () => {
+    const sessions = new WorkspaceSessions();
+    const workspace = sessions.create('/fixtures', 'Original');
+    const input = sessions.open(1, '/fixtures', workspace);
+    input.workspaces[0]!.name = 'Changed';
+    await expect(
+      sessions.persist(1, input, async () => {
+        throw new Error('Disk full');
+      }),
+    ).rejects.toThrow('Disk full');
+    expect(sessions.snapshot()?.workspaces[0]?.name).toBe('Original');
+    await sessions.persist(1, input, async () => {});
+    expect(sessions.snapshot()?.workspaces[0]?.name).toBe('Changed');
+  });
+});

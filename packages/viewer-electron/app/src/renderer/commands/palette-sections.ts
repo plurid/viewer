@@ -14,6 +14,20 @@ export interface PaletteView {
   /** Section headings, by the id of the row each comes before. */
   headings: ReadonlyMap<string, string>;
 }
+
+/** An explicitly named action wins over interpreting its remaining words as an argument. */
+export function paletteSuggestions(
+  commands: readonly ResolvedCommand[],
+  suggestions: readonly ResolvedCommand[],
+  query: string,
+): ResolvedCommand[] {
+  const named = (label: string) => normalize(label.replace(/[.…]+$/u, '').trim());
+  const needle = named(query);
+  if (!needle) return [...suggestions, ...commands];
+  const exact = commands.filter((command) => named(command.label) === needle);
+  const ids = new Set(exact.map((command) => command.id));
+  return [...exact, ...suggestions, ...commands.filter((command) => !ids.has(command.id))];
+}
 /** The row that searches every matching setting. */
 export const moreSettingsID = 'palette:more-settings';
 /** A setting's choices folded into one row: choosing it lists them. */

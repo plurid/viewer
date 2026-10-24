@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { portablePath as localPath } from '../domain/schemas';
 const sections = z.enum(['locations', 'favorites', 'recents']);
-const fields = z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size']);
+const fields = z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size', 'git']);
 const boolean = z.boolean();
 /** A space colour; empty follows the appearance. */
 const color = z.union([z.literal(''), z.string().regex(/^#[0-9a-f]{6}$/i)]);
@@ -63,6 +63,7 @@ export const preferencesSchema = z
             kind: boolean,
             extension: boolean,
             size: boolean,
+            git: z.boolean().default(false),
           })
           .strict(),
         widths: z
@@ -73,12 +74,13 @@ export const preferencesSchema = z
             kind: z.number().min(60).max(600),
             extension: z.number().min(60).max(600),
             size: z.number().min(60).max(600),
+            git: z.number().min(60).max(600).default(80),
           })
           .strict(),
         wrapNames: boolean,
         order: z
           .array(fields)
-          .max(6)
+          .max(7)
           .refine((items) => items[0] === 'name' && new Set(items).size === items.length)
           .optional(),
       })

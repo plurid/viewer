@@ -12,6 +12,22 @@ export const shellTokens = [
   'line',
   'selection',
   'danger',
+  'selectionMuted',
+  'mediaStage',
+  'overlay',
+  'familyDocument',
+  'familyArchive',
+  'tagGray',
+  'tagGreen',
+  'tagPurple',
+  'tagBlue',
+  'tagYellow',
+  'tagRed',
+  'tagOrange',
+  'imageRegion',
+  'shadowColor',
+  'softShadowColor',
+  'strongShadowColor',
 ] as const;
 export const syntaxTokens = ['comment', 'string', 'keyword', 'number', 'function'] as const;
 export const terminalTokens = [
@@ -50,13 +66,33 @@ export interface Theme {
   shell: Partial<Record<ShellToken, string>>;
   syntax: Partial<Record<SyntaxToken, string>>;
   terminal: Partial<Record<TerminalToken, string>>;
+  metrics?: { fontFamily?: string; density?: 'compact' | 'comfortable'; radius?: number };
 }
+const sharedShell = {
+  mediaStage: '#17191e',
+  overlay: '#101319a6',
+  tagGray: '#92969e',
+  tagGreen: '#70ac75',
+  tagPurple: '#a78ac2',
+  tagBlue: '#7fa9ce',
+  tagYellow: '#d1ba6b',
+  tagRed: '#cf8585',
+  tagOrange: '#ca9a70',
+  imageRegion: '#3399ff66',
+  shadowColor: '#00000055',
+  softShadowColor: '#00000033',
+  strongShadowColor: '#00000066',
+};
 export const builtInThemes: readonly [Theme, Theme] = [
   {
     id: 'viewer-dark',
     name: 'Viewer Dark',
     look: 'dark',
     shell: {
+      ...sharedShell,
+      selectionMuted: '#c4d7e3',
+      familyDocument: '#b7ba93',
+      familyArchive: '#b4aecf',
       space: '#272a30',
       surface: '#31353d',
       raised: '#393e47',
@@ -104,6 +140,11 @@ export const builtInThemes: readonly [Theme, Theme] = [
     name: 'Viewer Light',
     look: 'light',
     shell: {
+      ...sharedShell,
+      selectionMuted: '#546071',
+      familyDocument: '#686d32',
+      familyArchive: '#6c5d9c',
+      shadowColor: '#20304025',
       space: '#eef0f4',
       surface: '#ffffff',
       raised: '#f4f6f8',
@@ -163,14 +204,22 @@ export function themeFor(
     shell: { ...base.shell, ...chosen.shell },
     syntax: { ...base.syntax, ...chosen.syntax },
     terminal: { ...base.terminal, ...chosen.terminal },
+    metrics: { ...base.metrics, ...chosen.metrics },
   };
 }
 const kebab = (name: string) => name.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase());
 /** A theme as CSS variables: `--space`, `--syntax-string`, `--terminal-red`. */
 export function themeVariables(theme: Theme): Record<string, string> {
+  const radius = theme.metrics?.radius ?? 5;
   return {
+    '--interface-font':
+      theme.metrics?.fontFamily || "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    '--density-scale': theme.metrics?.density === 'compact' ? '0.92' : '1',
+    '--radius-control': `${radius}px`,
+    '--radius-panel': `${radius + 3}px`,
+    '--radius-dialog': `${radius + 5}px`,
     ...Object.fromEntries(
-      Object.entries(theme.shell).map(([token, color]) => [`--${token}`, color]),
+      Object.entries(theme.shell).map(([token, color]) => [`--${kebab(token)}`, color]),
     ),
     ...Object.fromEntries(
       Object.entries(theme.syntax).map(([token, color]) => [`--syntax-${token}`, color]),

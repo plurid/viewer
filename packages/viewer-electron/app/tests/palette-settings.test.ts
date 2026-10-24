@@ -10,6 +10,7 @@ import { createElement, useState } from 'react';
 import {
   moreSettingsID,
   paletteRows,
+  paletteSuggestions,
   settingRows,
 } from '../src/renderer/commands/palette-sections';
 import { CommandPalette } from '../src/renderer/commands/CommandPalette';
@@ -25,6 +26,28 @@ import { WorkspaceContext, type WorkspaceController } from '../src/renderer/work
 import { activeWorkspace, initialize } from '../src/renderer/state/store';
 
 const context = {} as CommandContext;
+
+it('puts an explicitly named action before an inferred rename argument', () => {
+  const command = {
+    id: 'recipe.book',
+    label: 'Rename as book…',
+    context,
+  } as ResolvedCommand;
+  const suggestion = {
+    id: 'smart:rename',
+    label: 'Rename Book.epub to as book',
+    context,
+  } as ResolvedCommand;
+  expect(
+    paletteSuggestions([command], [suggestion], 'Rename as book').map((row) => row.id),
+  ).toEqual(['recipe.book', 'smart:rename']);
+  expect(
+    paletteSuggestions([command], [suggestion], 'Rename New title').map((row) => row.id),
+  ).toEqual(['smart:rename', 'recipe.book']);
+  const settings = { ...command, id: 'settings', label: 'Settings…' };
+  const search = { ...command, id: 'search-settings', label: 'Search settings…' };
+  expect(paletteSuggestions([search, settings], [], 'Settings')[0]?.id).toBe('settings');
+});
 const command = (id: string, label: string, extra: Partial<ResolvedCommand> = {}) =>
   ({
     id,

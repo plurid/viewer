@@ -14,6 +14,8 @@ import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import { getState, initialize } from '../src/renderer/state/store';
+import { effectiveWindowUI } from '../src/renderer/state/effective-ui';
+import { changeWorkspace } from '../src/renderer/state/core';
 
 const settingsPatch = vi.fn(async () => getState().settings);
 beforeEach(() => {
@@ -40,9 +42,19 @@ const label = (id: string) => {
   const value = find(id).label;
   return typeof value === 'string' ? value : value(context);
 };
-const space = () => getState().saved.ui.space;
+const space = () => effectiveWindowUI(getState()).space;
 
 describe('profiles', () => {
+  it('layers a workspace default, an explicit profile, then that workspace’s overrides', async () => {
+    act(() => changeWorkspace((space) => ({ ...space, profileID: 'focus' })));
+    expect(space().toolbar).toBe(false);
+    expect(getState().saved.ui.space.toolbar).toBe(true);
+    await act(async () => find('profile.full').run(context));
+    expect(space().toolbar).toBe(true);
+    act(() => changeWorkspace((space) => ({ ...space, overrides: { 'ui.space.toolbar': false } })));
+    expect(space().toolbar).toBe(false);
+    expect(getState().saved.ui.space.toolbar).toBe(true);
+  });
   it('are sets of settings the workspace may change, the built-in ones valid', () => {
     for (const profile of builtInProfiles)
       expect(profileSchema.safeParse(profile).success).toBe(true);
@@ -60,7 +72,9 @@ describe('profiles', () => {
     expect(label('focus-mode')).toBe('Focus mode');
     await act(async () => find('focus-mode').run(context));
     expect(space()).toMatchObject({ toolbar: false, minimap: false, viewcube: false, grid: false });
-    expect(getState().saved.ui.titlebar.visible).toBe(false);
+    expect(effectiveWindowUI(getState()).titlebar.visible).toBe(false);
+    expect(getState().saved.ui.titlebar.visible).toBe(true);
+    expect(settingsPatch).not.toHaveBeenCalled();
     expect(label('focus-mode')).toBe('Leave focus mode');
     await act(async () => find('focus-mode').run(context));
     expect(space()).toMatchObject({ toolbar: true, minimap: true, viewcube: true, grid: true });

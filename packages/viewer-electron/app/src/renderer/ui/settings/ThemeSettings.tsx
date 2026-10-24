@@ -91,6 +91,8 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
   const saveThemes = (next: Theme[]) => patch('settings.themes', next);
   const change = (id: string, update: (theme: Theme) => Theme) =>
     saveThemes(themes.map((theme) => (theme.id === id ? update(theme) : theme)));
+  const changeMetrics = (id: string, metrics: Partial<NonNullable<Theme['metrics']>>) =>
+    change(id, (theme) => ({ ...theme, metrics: { ...theme.metrics, ...metrics } }));
   const add = (theme: Theme, use = true) => {
     saveThemes([...themes, theme]);
     if (use) patch('settings.theme', { ...settings.theme, [theme.look]: theme.id });
@@ -175,6 +177,45 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
                 save={(name) =>
                   name.trim() && change(theme.id, (item) => ({ ...item, name: name.trim() }))
                 }
+              />
+            </label>
+            <label className="settings-row">
+              <span>Interface font</span>
+              <Field
+                label="Theme interface font"
+                value={theme.metrics?.fontFamily ?? ''}
+                placeholder="System font"
+                save={(fontFamily) =>
+                  changeMetrics(theme.id, { fontFamily: fontFamily.trim() || undefined })
+                }
+              />
+            </label>
+            <label className="settings-row">
+              <span>Interface density</span>
+              <ChoiceButton
+                label="Theme interface density"
+                value={theme.metrics?.density ?? 'comfortable'}
+                choices={[
+                  { value: 'comfortable', label: 'Comfortable' },
+                  { value: 'compact', label: 'Compact' },
+                ]}
+                onChoose={(density) =>
+                  changeMetrics(theme.id, { density: density as 'compact' | 'comfortable' })
+                }
+              />
+            </label>
+            <label className="settings-row">
+              <span>Corner radius</span>
+              <input
+                type="range"
+                aria-label="Theme corner radius"
+                min={0}
+                max={16}
+                value={theme.metrics?.radius ?? 5}
+                onChange={(event) => {
+                  const radius = Number(event.target.value);
+                  changeMetrics(theme.id, { radius });
+                }}
               />
             </label>
             {groups.map(([group, title, tokens]) => (

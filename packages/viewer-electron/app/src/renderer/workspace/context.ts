@@ -3,8 +3,16 @@ import type { ProjectLayout } from '../../domain/project';
 import type { CapturedTarget } from '../../domain/automation';
 import type { PlaneLayoutEdit, PlaneLayoutTarget } from '../../domain/plane-layout';
 import { createContext, useContext } from 'react';
+import type { DiffSource } from '../../domain/diff';
 import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
+import type { Tiling } from '../../domain/tiling';
 export interface WorkspaceController {
+  newChat(paths: string[], draft?: string): Promise<void>;
+  openChat(id: string): Promise<void>;
+  openDiff(left: DiffSource, right: DiffSource): void;
+  openGitDiff(file: string): Promise<void>;
+  openGitChanges(path: string): void;
+  present(): void;
   openCollection(id: string): void;
   openEvidence(evidence: EvidenceNavigation, parentPaneID?: string): Promise<void>;
   captureLayout(): ProjectLayout;
@@ -73,7 +81,7 @@ export interface WorkspaceController {
   /** Closes the planes Explode folder opened from a plane. */
   collapse(hostID: string): void;
   /** Lays the workspace's tiled planes out again in their layout (workspace/tiling.ts). */
-  retile(): void;
+  retile(previous?: Tiling): void;
   renameBookmark(from: string, to: string): void;
   dock(hostID?: string): void;
   closePane(hostID: string): void;

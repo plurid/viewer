@@ -92,12 +92,14 @@ export const defaultKeymap: Keymap = {
   modes: {
     resize: {
       bindings: {
-        h: 'tile-main-shrink',
-        l: 'tile-main-grow',
-        j: 'tile-swap-next',
-        k: 'tile-swap-previous',
-        Left: 'tile-main-shrink',
-        Right: 'tile-main-grow',
+        h: 'tile-resize-left',
+        l: 'tile-resize-right',
+        j: 'tile-resize-down',
+        k: 'tile-resize-up',
+        Left: 'tile-resize-left',
+        Right: 'tile-resize-right',
+        Up: 'tile-resize-up',
+        Down: 'tile-resize-down',
         Space: 'tile-next-layout',
         '=': 'tile-visible',
       },

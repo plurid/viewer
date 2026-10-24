@@ -68,6 +68,19 @@ export const categories = [
 ];
 export const settingCatalog: SettingDefinition[] = [
   {
+    path: 'settings.hotkey.enabled',
+    category: 'Navigation',
+    label: 'Global Viewer shortcut',
+    kind: 'boolean',
+  },
+  {
+    path: 'settings.git.enabled',
+    category: 'Browsing',
+    label: 'Show Git status',
+    detail: 'Read local repository status. Available in the direct build only.',
+    kind: 'boolean',
+  },
+  {
     path: 'settings.terminals.scrollback',
     category: 'Terminals',
     label: 'Terminal scrollback lines',

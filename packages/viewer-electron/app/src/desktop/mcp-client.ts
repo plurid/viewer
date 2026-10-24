@@ -20,9 +20,17 @@ export async function runMCPClient(
 ): Promise<void> {
   const token = transport.token;
   if (!token) throw new Error('Set VIEWER_AGENT_TOKEN to the token shown in Viewer Settings.');
-  const connection = JSON.parse(
-    await readFile(path.join(dataPath, 'agent-connection-v1.json'), 'utf8'),
-  ) as { socket: string };
+  const connectionFile = path.join(dataPath, 'agent-connection-v1.json');
+  let connection: { socket: string };
+  try {
+    connection = JSON.parse(await readFile(connectionFile, 'utf8')) as { socket: string };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      throw new Error(
+        'Viewer’s agent connection is unavailable. Open Viewer and approve agent access in Settings → Agents.',
+      );
+    throw error;
+  }
   const socket = connect(connection.socket);
   await new Promise<void>((resolve, reject) => {
     socket.once('connect', resolve);

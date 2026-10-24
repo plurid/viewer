@@ -34,6 +34,7 @@ export async function answerPrompt(
   settings: ApplicationSettings,
   generate: Generate,
   signal: AbortSignal,
+  userCommands: ReadonlyMap<string, readonly string[]> = new Map(),
 ): Promise<PromptAnswer> {
   const provider = promptProvider(settings);
   if (!provider) throw new Error('Add a model in Settings → Models to ask in words.');
@@ -54,7 +55,7 @@ export async function answerPrompt(
         line,
         new Set(request.context.commands.map((command) => command.id)),
         settings.customActions,
-        new Set(request.context.userCommands),
+        userCommands,
       )
     : undefined;
   return { line, explanation, ...(problem ? { problem } : {}) };

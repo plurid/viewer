@@ -14,6 +14,24 @@ export function navigationCommands({
   sidebar,
 }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [
+    {
+      id: 'new-native-window',
+      label: 'New window',
+      group: 'Window',
+      icon: 'plus',
+      aliases: ['independent window'],
+      when: windowScope,
+      run: () => window.viewer.newWindow(),
+    },
+    {
+      id: 'restore-window',
+      label: 'Restore normal window placement',
+      group: 'Window',
+      icon: 'frame',
+      aliases: ['drop down', 'hotkey window'],
+      when: windowScope,
+      run: () => window.viewer.restoreWindow(),
+    },
     ...(
       [
         ['create', 'Create project…'],

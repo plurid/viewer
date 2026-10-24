@@ -17,6 +17,7 @@ import { Icon } from './Icon';
 import type { CommandRequest } from '../commands/registry';
 import { measureLocalX, type Point } from './projectedResize';
 import { baseName } from '../../domain/planes';
+import { effectiveWindowUI } from '../state/effective-ui';
 
 const titles = { locations: 'Locations', favorites: 'Favorites', recents: 'Recent' };
 export const SIDEBAR_DRAG = 'application/x-viewer-sidebar';
@@ -43,7 +44,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   const space = useViewer(activeWorkspace);
   const active = useViewer((state) => state.activePane);
   const workspace = useWorkspace();
-  const sidebar = saved.ui.sidebar;
+  const sidebar = useViewer(effectiveWindowUI).sidebar;
   const owner = space.panes.find((pane) => pane.id === (paneID || active));
   const layout = paneID
     ? owner?.type === 'folder'

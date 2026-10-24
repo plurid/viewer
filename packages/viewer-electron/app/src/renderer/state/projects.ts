@@ -7,7 +7,9 @@ import {
   type ProjectDocument,
   type ProjectAssociation,
   type ProjectLayout,
+  type PortableDiffSource,
 } from '../../domain/project';
+import type { DiffSource } from '../../domain/diff';
 import { activeWorkspace, changeWorkspace, getState, savePatch, update, uuid } from './core';
 import { folderPane } from './panes';
 import { adapters, flushState } from './persistence';
@@ -31,9 +33,25 @@ export async function installProject(
   }
   const association: ProjectAssociation = { ...document, bindings, folders, dirty: false };
   const id = existing?.id ?? uuid();
+  const resolveSource = (source: PortableDiffSource): DiffSource | undefined => {
+    if (source.kind === 'empty') return source;
+    const resolved = resolveProjectPath(document.root, source.target, bindings);
+    if (!resolved) return undefined;
+    return source.kind === 'file'
+      ? { kind: 'file', path: resolved }
+      : { kind: 'git', repository: resolved, commit: source.commit, path: source.path };
+  };
   const panes: Pane[] = document.definition.planes.flatMap((plane): Pane[] => {
     const path = resolveProjectPath(document.root, plane.target, bindings);
     if (!path) return [];
+    if (plane.type === 'git-changes') return [{ id: plane.id, type: 'git-changes', path }];
+    if (plane.type === 'diff') {
+      const left = resolveSource(plane.left);
+      const right = resolveSource(plane.right);
+      return left && right
+        ? [{ id: plane.id, type: 'diff', path, left, right, mode: plane.mode }]
+        : [];
+    }
     if (plane.type === 'folder')
       return [
         {

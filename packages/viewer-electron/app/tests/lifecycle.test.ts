@@ -112,6 +112,8 @@ vi.mock('electron', () => ({
   app: application,
   BrowserWindow: TestWindow,
   nativeTheme: new EventEmitter(),
+  globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
+  systemPreferences: { getAnimationSettings: () => ({ prefersReducedMotion: true }) },
   screen: {
     getAllDisplays: () => [{ id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } }],
     getPrimaryDisplay: () => ({ id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } }),
@@ -143,8 +145,16 @@ vi.mock('../src/desktop/bridge', () => ({
     };
     prepareSettings = async () => {};
     resources = { response: vi.fn() };
+    workspaceSessions = {
+      snapshot: () => undefined,
+      create: () => 'workspace',
+      owner: () => undefined,
+    };
     attach = vi.fn();
     open = vi.fn();
+    openIn = vi.fn();
+    launchIn = vi.fn();
+    windowForWorkspace = vi.fn();
     emit = vi.fn();
     flush = native.flush;
     flushSettings = native.flushSettings;

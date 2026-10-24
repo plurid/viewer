@@ -37,6 +37,10 @@ import { folderPairArea, folderPairGeometry } from './folder-pair';
 import { frontPlaneDepth, planeLayoutGeometry } from './plane-layout';
 import type { WorkspaceController } from './context';
 import { openWorkspacePath } from './open-path';
+import { startTour } from './tour';
+import { announce } from '../state/core';
+import { addContentPane } from '../state/panes';
+import { rememberTiling, restoreTiling } from './tiling-history';
 /** Owns host-plane identity and creation. Engine routes/IDs stay inside the adapter. */
 /**
  * Makes a plane the active one, as following a link does: it takes the wheel (plurid's
@@ -68,6 +72,77 @@ export function useWorkspaceController({
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
+      async newChat(paths, draft) {
+        const owner = activeWorkspace().id;
+        const document = await window.viewer.chat({ kind: 'create', paths });
+        if (Array.isArray(document)) throw new Error('The conversation could not be created.');
+        if (draft)
+          await window.viewer.chat({ kind: 'draft', id: document.id, text: draft, revision: 1 });
+        if (owner !== activeWorkspace().id) return;
+        const id = crypto.randomUUID();
+        addContentPane({ id, type: 'chat', path: document.path, conversationID: document.id });
+        controller.focusPane(id, { activate: true });
+      },
+      async openChat(conversationID) {
+        const owner = activeWorkspace().id;
+        const existing = activeWorkspace().panes.find(
+          (pane) => pane.type === 'chat' && pane.conversationID === conversationID,
+        );
+        if (existing) {
+          controller.focusPane(existing.id, { activate: true });
+          return;
+        }
+        const document = await window.viewer.chat({ kind: 'open', id: conversationID });
+        if (Array.isArray(document)) throw new Error('The conversation could not be opened.');
+        if (owner !== activeWorkspace().id) return;
+        const id = crypto.randomUUID();
+        addContentPane({ id, type: 'chat', path: document.path, conversationID });
+        controller.focusPane(id, { activate: true });
+      },
+      openDiff(left, right) {
+        const id = crypto.randomUUID();
+        const sourcePath = (source: typeof left): string | undefined => {
+          if (source.kind === 'file') return source.path;
+          if (source.kind === 'git')
+            return source.repository.replace(/\/$/, '') + '/' + source.path;
+          return undefined;
+        };
+        const path = sourcePath(right) ?? sourcePath(left) ?? getState().bootstrap.home;
+        addContentPane({ id, type: 'diff', path, left, right, mode: 'split' });
+        controller.focusPane(id);
+      },
+      async openGitDiff(file) {
+        const owner = activeWorkspace().id;
+        const result = await window.viewer.git({ kind: 'head', path: file });
+        if (owner !== activeWorkspace().id) return;
+        if (result.kind !== 'head') throw new Error('Git comparison is unavailable.');
+        let exists = true;
+        try {
+          await window.viewer.stat(file);
+        } catch {
+          exists = false;
+        }
+        if (owner !== activeWorkspace().id) return;
+        controller.openDiff(
+          result.source ?? { kind: 'empty', name: 'Absent at HEAD' },
+          exists ? { kind: 'file', path: file } : { kind: 'empty', name: 'Deleted working file' },
+        );
+      },
+      openGitChanges(path) {
+        const existing = activeWorkspace().panes.find(
+          (pane) => pane.type === 'git-changes' && pane.path === path,
+        );
+        const id = existing?.id ?? crypto.randomUUID();
+        if (!existing) addContentPane({ id, type: 'git-changes', path });
+        controller.focusPane(id);
+      },
+      present() {
+        if (!controller.bookmarks().length) {
+          announce('Save a view to start a Tour.');
+          return;
+        }
+        startTour(controller, getState().settings.settings.tour);
+      },
       // Rows ask whether a linked plane exists; only tree changes can alter that, not
       // the camera updates the engine store also publishes every frame.
       subscribeLinks: (listener) => {
@@ -508,7 +583,10 @@ export function useWorkspaceController({
         return true;
       },
       removeBookmark: (name) => engine.current?.bookmarks.remove(name),
-      retile: () => applyTiling(engine, surface),
+      retile: (previous) => {
+        if (engine.current) rememberTiling(engine.current.tree.get(), previous);
+        applyTiling(engine, surface);
+      },
       async explode(id, depth) {
         const api = engine.current;
         const space = activeWorkspace();
@@ -755,11 +833,17 @@ export function useWorkspaceController({
       subscribeEngine: (listener) => engine.current?.store.subscribe(listener) ?? (() => {}),
       undo: () => {
         engine.current?.history.undo();
-        if (engine.current) reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
+        if (engine.current) {
+          reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
+          restoreTiling(engine.current.tree.get());
+        }
       },
       redo: () => {
         engine.current?.history.redo();
-        if (engine.current) reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
+        if (engine.current) {
+          reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
+          restoreTiling(engine.current.tree.get());
+        }
       },
     }),
     [engine, readyRef, surface],

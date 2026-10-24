@@ -19,6 +19,7 @@ import { formatBytes } from '../src/domain/files';
 import { panelDrawing } from './dxf-fixtures';
 import { reactCommitProbe } from './react-commits';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
+import type { AgentAccessState } from '../src/domain/agent-clients';
 import { trashTemporary, trashFixtureEntry } from '../tools/temporary';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,6 +31,37 @@ const binary =
   process.env.VIEWER_TEST_BINARY ||
   path.join(appRoot, `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`);
 const fixture = await createFixtures();
+if (process.env.VIEWER_TEST_SCENARIO === 'milestones') {
+  const git = (...args: string[]) => execNative('/usr/bin/git', ['-C', fixture.files, ...args]);
+  await git('init', '--initial-branch=main');
+  await git('add', '--', 'README.md');
+  await git(
+    '-c',
+    'user.name=Viewer QA',
+    '-c',
+    'user.email=qa@example.invalid',
+    'commit',
+    '-m',
+    'Fixture',
+  );
+  await writeFile(
+    path.join(fixture.files, 'README.md'),
+    '# Working version\n\nA changed file for comparison.\n',
+  );
+  const leftImage = path.join(fixture.files, 'Images', 'Comparison before.png');
+  const rightImage = path.join(fixture.files, 'Images', 'Comparison.png');
+  await writeFile(leftImage, sizedImageFixture(64, 64));
+  await writeFile(rightImage, sizedImageFixture(128, 96));
+  fixture.state.workspaces[0]!.panes.push({
+    id: 'milestone-image',
+    type: 'diff',
+    path: rightImage,
+    left: { kind: 'file', path: leftImage },
+    right: { kind: 'file', path: rightImage },
+    mode: 'slider',
+  });
+  fixture.state.workspaces[0]!.roots.push('milestone-image');
+}
 if (process.env.VIEWER_TEST_SCENARIO === 'daily-file-work')
   await writeFile(path.join(fixture.files, 'Images', 'Wide.png'), sizedImageFixture(2048, 1280));
 if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
@@ -118,6 +150,7 @@ await writeFile(
     settings: {
       ...defaultSettings(fixture.files),
       appearance: fixture.state.look,
+      ...(process.env.VIEWER_TEST_SCENARIO === 'milestones' ? { git: { enabled: true } } : {}),
       ...(process.env.VIEWER_TEST_SCENARIO === 'foundations'
         ? {
             terminals: {
@@ -428,13 +461,19 @@ async function click(selector: string, count = 1, modifiers = 0): Promise<void> 
     );
     await evaluate('new Promise(resolve=>requestAnimationFrame(resolve))');
   }
-  const point = await evaluate<{ x: number; y: number; hit: boolean }>(
-    `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) throw new Error('Missing control: ' + ${JSON.stringify(selector)}); const rect = element.getBoundingClientRect(); const x=rect.x+rect.width/2,y=rect.y+rect.height/2; return { x, y, hit:element.contains(document.elementFromPoint(x,y)) }; })()`,
-  );
+  const point = await evaluate<{ x: number; y: number; hit: boolean; target?: string }>(`(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!element) throw new Error('Missing control: ' + ${JSON.stringify(selector)});
+    const rect = element.getBoundingClientRect();
+    const x = rect.x + rect.width / 2;
+    const y = rect.y + rect.height / 2;
+    const target = document.elementFromPoint(x, y);
+    return { x, y, hit: element.contains(target), target: target?.outerHTML.slice(0, 1000) };
+  })()`);
   assert.equal(
     point.hit,
     true,
-    `Control must be hit-testable: ${selector} at ${point.x}, ${point.y}`,
+    `Control must be hit-testable: ${selector} at ${point.x}, ${point.y}; hit ${point.target}`,
   );
   for (let clickCount = 1; clickCount <= count; clickCount++) {
     await command('Input.dispatchMouseEvent', {
@@ -3696,6 +3735,172 @@ async function verifyKeys(): Promise<void> {
     'Keys: ⌃B and which-key, a terminal by ⌃B c, plane hints and the next plane, the calculator, a recorded macro, and the prefix set in Settings by pressing it.',
   );
 }
+async function verifyMilestones(): Promise<void> {
+  const note = path.join(fixture.files, 'README.md');
+  await until(
+    () => evaluate<string>('document.querySelector(".git-branch")?.textContent ?? ""'),
+    (value) => value.includes('main'),
+    'Git branch in the folder header',
+  );
+  const status = await evaluate<{
+    kind: string;
+    snapshot?: { changes: { path: string; status: string }[] };
+  }>(`window.viewer.git({kind:'status',path:${JSON.stringify(fixture.files)}})`);
+  assert.equal(status.kind, 'ready');
+  assert.ok(
+    status.snapshot?.changes.some(
+      (change) => change.path === 'README.md' && change.status === 'modified',
+    ),
+  );
+  await click('.git-branch');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".git-change button")'),
+    Boolean,
+    'Git changes plane',
+  );
+  await settleCamera();
+  await click('.git-change button');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".cm-merge-b .cm-content")'),
+    Boolean,
+    'editable working file comparison',
+  );
+  await settleCamera();
+  await snapshot('desktop-native-git-diff.png');
+  const before = await evaluate<string>(
+    'document.querySelector(".cm-merge-b .cm-content").textContent',
+  );
+  assert.ok(before.includes('Working version'));
+  await click('.cm-merge-b .cm-content');
+  await command('Input.insertText', { text: 'Retained diff edit ' });
+  await until(
+    () => evaluate<string>('document.querySelector(".cm-merge-b .cm-content").textContent'),
+    (value) => value.includes('Retained diff edit'),
+    'right comparison side accepts edits',
+  );
+  await click('.diff-plane:has(.diff-text-editor) button[aria-label="Comparison mode"]');
+  await click('.choice-menu [data-menu-id="choice:unified"]');
+  await until(
+    () =>
+      evaluate<boolean>(
+        '!document.querySelector(".cm-mergeView") && document.querySelector(".diff-text-editor")?.textContent.includes("Retained diff edit") === true',
+      ),
+    Boolean,
+    'unified mode preserves right-side edits',
+  );
+  assert.equal(
+    await readFile(note, 'utf8'),
+    '# Working version\n\nA changed file for comparison.\n',
+  );
+  await snapshot('desktop-native-unified-diff.png');
+  const rootID = fixture.state.workspaces[0]!.panes[0]!.id;
+  await evaluate(
+    `window.__qaEngine.camera.dock(window.__qaEngine.tree.get().find(node => node.routeDivisions.plane.parameters.id === ${JSON.stringify(rootID)}).planeID, {animate:false})`,
+  );
+  await settleCamera();
+  await click(`[data-viewer-plane="${rootID}"] .plane-heading`);
+  await paletteCommand('Chat about files');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector('textarea[aria-label="Chat message"]')`),
+    Boolean,
+    'Chat plane',
+  );
+  await settleCamera();
+  await click('textarea[aria-label="Chat message"]');
+  await command('Input.insertText', { text: 'Draft kept across reloads' });
+  await until(
+    async () => {
+      const names = await readdir(path.join(profile, 'chat-documents')).catch(() => [] as string[]);
+      if (!names[0]) return '';
+      return JSON.parse(await readFile(path.join(profile, 'chat-documents', names[0]), 'utf8'))
+        .draft as string;
+    },
+    (draft) => draft === 'Draft kept across reloads',
+    'durable Chat draft',
+  );
+  await snapshot('desktop-native-chat.png');
+  await reloadPage();
+  await captureEngine();
+  await until(
+    () =>
+      evaluate<string>(
+        `document.querySelector('textarea[aria-label="Chat message"]')?.value ?? ""`,
+      ),
+    (value) => value === 'Draft kept across reloads',
+    'Chat draft recovered after reload',
+  );
+  await evaluate(
+    `window.__qaEngine.camera.dock(window.__qaEngine.tree.get().find(node => node.routeDivisions.plane.parameters.id === 'milestone-image').planeID, {animate:false})`,
+  );
+  await settleCamera();
+  const imagePlane = '.pane-marker[data-viewer-pane="milestone-image"]';
+  await until(
+    () =>
+      evaluate<boolean>(
+        `!!document.querySelector('${imagePlane} [aria-label="Comparison divider"]')`,
+      ),
+    Boolean,
+    'image slider comparison',
+  );
+  for (const mode of ['onion', 'side', 'difference']) {
+    await click(`${imagePlane} button[aria-label="Comparison mode"]`);
+    await click(`.choice-menu [data-menu-id="choice:${mode}"]`);
+    if (mode === 'onion')
+      await until(
+        () =>
+          evaluate<boolean>(
+            `!!document.querySelector('${imagePlane} [aria-label="Right image opacity"]')`,
+          ),
+        Boolean,
+        'onion skin control',
+      );
+    if (mode === 'side')
+      assert.equal(
+        await evaluate<number>(
+          `document.querySelectorAll('${imagePlane} .image-diff-pair img').length`,
+        ),
+        2,
+      );
+    if (mode === 'difference')
+      await until(
+        () =>
+          evaluate<number>(`document.querySelector('${imagePlane} .image-difference')?.width ?? 0`),
+        (width) => width === 128,
+        'bounded pixel difference worker',
+      );
+  }
+  await snapshot('desktop-native-image-difference.png');
+  await execNative(binary, ['--new-window'], {
+    env: {
+      ...process.env,
+      VIEWER_DATA_DIRECTORY: profile,
+      VIEWER_RENDER_TEST: '1',
+      VIEWER_BACKGROUND_TEST: '1',
+    },
+    timeout: 10000,
+  });
+  await until(
+    async () =>
+      (
+        (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as { url: string }[]
+      ).filter(
+        (target) =>
+          target.url.startsWith('viewer-app://app/index.html') &&
+          !target.url.includes('window=settings'),
+      ).length,
+    (count) => count === 2,
+    'two independent native windows',
+  );
+  await until(
+    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
+    (state) => (state.openWindows?.length ?? 0) === 2 && new Set(state.openWindows).size === 2,
+    'independent workspace owners persisted',
+  );
+  console.log(
+    'Milestones: hardened Git status, editable HEAD diff, unified mode retention, durable Chat drafts, and independent native windows.',
+  );
+}
+
 async function verifyTextEditing(): Promise<void> {
   const note = path.join(fixture.files, 'Edited note.md');
   await writeFile(note, '# Before\n');
@@ -4054,9 +4259,7 @@ async function appearance(look: 'dark' | 'light'): Promise<void> {
     (present) => present,
     'appearance setting',
   );
-  await settingsEvaluate(
-    `(() => { const field = document.querySelector('[aria-label="Appearance"]'); field.value=${JSON.stringify(look)}; field.dispatchEvent(new Event('change', { bubbles:true })); })()`,
-  );
+  await choose('Appearance', look, settingsEvaluate);
   await until(
     () => evaluate<string>('document.documentElement.dataset.look'),
     (value) => value === look,
@@ -4794,11 +4997,11 @@ async function verifyServiceWorkflows(): Promise<void> {
     await tab(category);
     await snapshot('settings-' + category.toLowerCase() + '-native.png');
   }
-  await patchInSettings(
-    `[{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(documents)}]}]`,
-  );
+  await patchInSettings(`[{path:'settings.agents.enabled',value:true}]`);
   const configuration = JSON.parse(
-    await settingsEvaluate<string>('window.viewer.agentToken()'),
+    await settingsEvaluate<string>(
+      `window.viewer.agentClients({kind:'create',client:{name:'Smoke metadata',roots:[${JSON.stringify(documents)}],capabilities:['metadata'],budgets:{maxReadBytes:1048576,maxTasks:1}}}).then(value=>value.configuration)`,
+    ),
   ) as {
     mcpServers: { viewer: { env: Record<string, string> } };
   };
@@ -4857,24 +5060,24 @@ async function verifyServiceWorkflows(): Promise<void> {
         throw new Error('Packaged MCP client timed out');
       }),
     ]);
-    assert.equal(code, 0, agentErrors);
-    assert.ok(agentOutput.trim(), `Packaged MCP client answered nothing. ${agentErrors}`);
-    const replies = agentOutput
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line));
-    assert.equal(replies.find((reply) => reply.id === 1)?.result.serverInfo.name, 'viewer');
-    const tools = replies
-      .find((reply) => reply.id === 2)
-      ?.result.tools.map((tool: { name: string }) => tool.name);
-    assert.ok(tools.includes('run_action'));
-    assert.ok(!tools.some((name: string) => /apply|trash|delete/.test(name)));
-    assert.equal(
-      JSON.parse(replies.find((reply) => reply.id === 3).result.content[0].text).path,
-      book,
+    const access = await settingsEvaluate<AgentAccessState>(
+      `window.viewer.agentAccess({kind:'state'})`,
     );
-    assert.ok(
-      replies.find((reply) => reply.id === 4)?.error.message.includes('authorized folders'),
+    assert.equal(access.enabled, false);
+    assert.equal(access.pending.enable, true);
+    assert.notEqual(
+      code,
+      0,
+      'Configuration and named credentials cannot grant native broker approval.',
+    );
+    assert.equal(
+      agentOutput.trim(),
+      '',
+      'An unapproved connection exposes no tools or file metadata.',
+    );
+    assert.ok(agentErrors.includes('approve agent access'), agentErrors);
+    console.log(
+      'Agent smoke: native approval remains pending; named credentials cannot enable the broker. Authorized protocol checks run in the service suite.',
     );
   } finally {
     if (agent.exitCode === null && agent.signalCode === null) agent.kill('SIGKILL');
@@ -5119,6 +5322,108 @@ async function verifyPreviewOwnership(): Promise<void> {
     'Preview ownership: independent same-file children in two roots, same-root reuse and exact restoration without duplicates.',
   );
 }
+async function verifyResourceBoundaries(source: string): Promise<void> {
+  const grant = await evaluate<{ id: string; url: string }>(
+    `window.viewer.resource(${JSON.stringify(source)})`,
+  );
+  const scopeResult = await evaluate<{
+    range: number;
+    csp: string;
+    escaped: number;
+    network: boolean;
+  }>(
+    `(async()=>{ const response=await fetch(${JSON.stringify(grant.url)}, {headers:{Range:'bytes=0-3'}}); const escaped=await fetch(${JSON.stringify(`viewer-resource://${grant.id}/asset/%2e%2e%2foutside`)}); let network=false; try{await fetch('https://example.com');network=true}catch{} return {range:response.status,csp:response.headers.get('content-security-policy'),escaped:escaped.status,network};})()`,
+  );
+  assert.equal(scopeResult.range, 206);
+  // A single-file grant exposes only its exact name, including for traversal requests.
+  assert.equal(scopeResult.escaped, 404);
+  assert.equal(scopeResult.network, false);
+  assert.match(scopeResult.csp, /sandbox/);
+  await evaluate(`window.viewer.release(${JSON.stringify(grant.id)})`);
+  // Model grants can resolve companions, so their directory boundary rejects escape explicitly.
+  const model = await evaluate<{ id: string }>(
+    `window.viewer.resource(${JSON.stringify(path.join(fixture.files, 'Models', 'Triangle.gltf'))})`,
+  );
+  try {
+    assert.equal(
+      await evaluate<number>(
+        `fetch(${JSON.stringify(`viewer-resource://${model.id}/asset/%2e%2e%2foutside`)})
+          .then(response => response.status)`,
+      ),
+      403,
+    );
+  } finally {
+    await evaluate(`window.viewer.release(${JSON.stringify(model.id)})`);
+  }
+  const validation = await evaluate<boolean>(
+    `window.viewer.stat('relative-path').then(()=>false,()=>true)`,
+  );
+  assert.equal(validation, true);
+}
+
+async function verifyCapturedMenus(): Promise<void> {
+  const readme = path.join(fixture.files, 'README.md');
+  await contextMenu(fileSelector(readme));
+  assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none');
+  assert.equal(await evaluate('getComputedStyle(document.activeElement).boxShadow'), 'none');
+  await command('Input.insertText', { text: 'rn' });
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".command-result[aria-selected=true]")?.textContent || ""',
+      ),
+    (value) => value.startsWith('Rename'),
+    'two-letter Rename alias',
+  );
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    (value) => value === 'README.md',
+    'clicked target captured for rename',
+  );
+  await click('dialog [aria-label="Close"]');
+  await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
+  assert.match(
+    await evaluate<string>(
+      'document.querySelector(".context-menu .command-result")?.textContent || ""',
+    ),
+    /^Rename/,
+  );
+  // Recent is an extra shortcut; the action also keeps its ordinary menu position.
+  assert.deepEqual(
+    await evaluate(
+      `Array.from(document.querySelectorAll('.context-menu .command-result'))
+        .filter(item => item.querySelector('.command-result-text > span')?.textContent === 'Rename…')
+        .map(item => item.getAttribute('data-menu-id'))
+        .sort()`,
+    ),
+    ['recent.rename', 'rename'],
+  );
+  await snapshot('context-native.png');
+  await key('Escape', 'Escape');
+  await until(
+    () => evaluate<boolean>('!document.querySelector(".context-menu-layer")'),
+    Boolean,
+    'context menu closed before header action',
+  );
+  // Frame can place a spatial header beneath the minimap's interactive dots.
+  // Docking gives the captured-command check an unobstructed header.
+  await paletteCommand('Dock plane');
+  await settleCamera();
+  // The header actions resolve the current selection through the same registry.
+  await click('[aria-label="Folder actions"]');
+  await command('Input.insertText', { text: 'rn' });
+  await key('Enter', 'Enter');
+  await until(
+    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    (value) => value === 'Models',
+    'header menu uses selected folder',
+  );
+  await click('dialog [aria-label="Close"]');
+  await paletteCommand('Reveal space');
+  await settleCamera();
+}
+
 async function verifyRootPlanes(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
@@ -5788,6 +6093,40 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
+  if (process.env.VIEWER_TEST_SCENARIO === 'context-menu') {
+    await paletteCommand('Frame plane');
+    await settleCamera();
+    await verifyCapturedMenus();
+    assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    console.log('Packaged contextual command capture verified.');
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'resources') {
+    await verifyResourceBoundaries(path.join(fixture.files, 'README.md'));
+    assert.deepEqual(exceptions, []);
+    console.log('Packaged resource ranges and confinement verified.');
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'appearance') {
+    await appearance('light');
+    await appearance('dark');
+    assert.deepEqual(exceptions, []);
+    console.log('Packaged appearance choice applies through Settings.');
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'milestones') {
+    await verifyMilestones();
+    await verifyBackgroundApp();
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'services') {
+    await verifyServiceWorkflows();
+    await verifyBackgroundApp();
+    assert.deepEqual(exceptions, []);
+    return;
+  }
   if (process.env.VIEWER_TEST_SCENARIO === 'daily-file-work') {
     await verifyDailyFileWork();
     await verifyBackgroundApp();
@@ -6012,7 +6351,7 @@ async function verify(): Promise<void> {
   assert.ok((dimensions[0] as number[])[0] >= 760);
   await snapshot('settings-native.png');
   for (const [label, selector] of [
-    ['Show bottom toolbar', '[data-plurid-entity="PluridToolbar"]'],
+    ['Show space toolbar', '[data-plurid-entity="PluridToolbar"]'],
     ['Show minimap', '[data-plurid-minimap]'],
     ['Show viewcube', '[data-plurid-overlay="viewcube"]'],
   ]) {
@@ -6052,8 +6391,7 @@ async function verify(): Promise<void> {
   );
   await paletteCommand('Settings');
   await tab('Space');
-  for (const label of ['Show bottom toolbar', 'Show minimap', 'Show viewcube'])
-    await setting(label);
+  for (const label of ['Show space toolbar', 'Show minimap', 'Show viewcube']) await setting(label);
   await setting('Show resize handles');
   assert.equal(await evaluate(`!!document.querySelector('[aria-label^="resize plane"]')`), false);
   await setting('Show resize handles');
@@ -6118,51 +6456,7 @@ async function verify(): Promise<void> {
     'Plane controls and navigation preserve every fixture file',
   );
 
-  const readme = path.join(fixture.files, 'README.md');
-  await contextMenu(fileSelector(readme));
-  assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none');
-  assert.equal(await evaluate('getComputedStyle(document.activeElement).boxShadow'), 'none');
-  await command('Input.insertText', { text: 'rn' });
-  await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".command-result[aria-selected=true]")?.textContent || ""',
-      ),
-    (value) => value.startsWith('Rename'),
-    'two-letter Rename alias',
-  );
-  await key('Enter', 'Enter');
-  await until(
-    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
-    (value) => value === 'README.md',
-    'clicked target captured for rename',
-  );
-  await click('dialog [aria-label="Close"]');
-  await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
-  assert.match(
-    await evaluate<string>(
-      'document.querySelector(".context-menu .command-result")?.textContent || ""',
-    ),
-    /^Rename/,
-  );
-  assert.equal(
-    await evaluate(
-      'Array.from(document.querySelectorAll(".context-menu .command-result-text > span")).filter(item => item.textContent === "Rename…").length',
-    ),
-    1,
-  );
-  await snapshot('context-native.png');
-  await key('Escape', 'Escape');
-  // The header actions resolve the current selection through the same registry.
-  await click('[aria-label="Folder actions"]');
-  await command('Input.insertText', { text: 'rn' });
-  await key('Enter', 'Enter');
-  await until(
-    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
-    (value) => value === 'Models',
-    'header menu uses selected folder',
-  );
-  await click('dialog [aria-label="Close"]');
+  await verifyCapturedMenus();
 
   const sidebarJobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
   const favorites = '.app-main > .location-sidebar .sidebar-group[aria-label="Favorites"]';
@@ -6466,26 +6760,7 @@ async function verify(): Promise<void> {
     await readFile(path.join(destination, 'README.md'), 'utf8'),
     '# Studio\n\nSynthetic files for local Viewer verification.\n',
   );
-  const grant = await evaluate<{ id: string; url: string }>(
-    `window.viewer.resource(${JSON.stringify(source)})`,
-  );
-  const scopeResult = await evaluate<{
-    range: number;
-    csp: string;
-    escaped: number;
-    network: boolean;
-  }>(
-    `(async()=>{ const response=await fetch(${JSON.stringify(grant.url)}, {headers:{Range:'bytes=0-3'}}); const escaped=await fetch(${JSON.stringify(`viewer-resource://${grant.id}/asset/%2e%2e%2foutside`)}); let network=false; try{await fetch('https://example.com');network=true}catch{} return {range:response.status,csp:response.headers.get('content-security-policy'),escaped:escaped.status,network};})()`,
-  );
-  assert.equal(scopeResult.range, 206);
-  assert.equal(scopeResult.escaped, 403);
-  assert.equal(scopeResult.network, false);
-  assert.match(scopeResult.csp, /sandbox/);
-  await evaluate(`window.viewer.release(${JSON.stringify(grant.id)})`);
-  const validation = await evaluate<boolean>(
-    `window.viewer.stat('relative-path').then(()=>false,()=>true)`,
-  );
-  assert.equal(validation, true);
+  await verifyResourceBoundaries(source);
 
   await paletteCommand('Grid view');
   assert.equal(await evaluate('document.querySelectorAll(".file-tile").length > 0'), true);

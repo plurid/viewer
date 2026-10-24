@@ -21,6 +21,7 @@ import {
   menuShortcuts,
   shortcutKey,
   validShortcut,
+  validGlobalShortcut,
 } from '../domain/shortcuts';
 import fs from 'node:fs/promises';
 import { JsoncConfiguration, configChanges, overlaps } from './configuration';
@@ -64,6 +65,20 @@ export const themeSchema = z
     shell: z.partialRecord(z.enum(shellTokens), themeColorSchema),
     syntax: z.partialRecord(z.enum(syntaxTokens), themeColorSchema),
     terminal: z.partialRecord(z.enum(terminalTokens), themeColorSchema),
+    metrics: z
+      .object({
+        fontFamily: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .refine((value) => !/[;{}\x00-\x1f]/.test(value)),
+        density: z.enum(['compact', 'comfortable']),
+        radius: z.number().finite().min(0).max(16),
+      })
+      .partial()
+      .strict()
+      .optional(),
   })
   .strict();
 /** A setting profile (2026-10-23): settings the workspace may change, and their values. */
@@ -293,6 +308,17 @@ export const settingsSchema = z
       .object({ providerID: z.string().max(200).default('') })
       .strict()
       .default({ providerID: '' }),
+    git: z
+      .object({ enabled: z.boolean().default(false) })
+      .strict()
+      .default({ enabled: false }),
+    hotkey: z
+      .object({
+        enabled: z.boolean().default(false),
+        shortcut: z.string().min(1).max(80).refine(validGlobalShortcut).default('Alt+Space'),
+      })
+      .strict()
+      .default({ enabled: false, shortcut: 'Alt+Space' }),
     themes: z
       .array(themeSchema)
       .max(30)

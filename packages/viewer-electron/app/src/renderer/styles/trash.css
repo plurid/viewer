@@ -104,7 +104,7 @@
 .trash-search {
   padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   color: var(--muted);
 }
 .trash-search input {

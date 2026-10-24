@@ -96,6 +96,8 @@ export function modelLineCommandProblem(
   if (forbiddenTrashCommands.has(id) || id === 'trash') return 'it moves files to the Trash';
   if (id === 'undo-file') return 'it undoes file operations';
   if (id === 'paste' || id === 'paste-move') return 'it pastes from the clipboard';
+  if (['rename', 'save-file', 'save-file-as', 'save-all', 'move-to-pair'].includes(id))
+    return 'it changes files';
   return undefined;
 }
 /** Resolve aliases before review; opaque code cannot promise recoverable file removal. */

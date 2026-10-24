@@ -13,6 +13,7 @@ import { withArguments } from '../../domain/command-line/lex';
 import { sessionKeys } from '../keys/session';
 import { getState } from '../state/store';
 import { verbRuns } from './verbs';
+import { namedLines, promptLineProblem } from '../../domain/command-line/prompt';
 
 export interface PlannedStep {
   step: Step;
@@ -32,15 +33,7 @@ export interface LineResult {
  * `:alias`es over them. Each name runs its lines.
  */
 export function userCommands(): Map<string, string[]> {
-  const commands = new Map<string, string[]>();
-  for (const action of getState().settings.settings.customActions)
-    if (action.executor.kind === 'sequence' && action.executor.command)
-      commands.set(action.executor.command, action.executor.commands);
-  // in order: an :unalias of this session hides a named sequence too
-  for (const { name, line } of sessionKeys().aliases)
-    if (line === null) commands.delete(name);
-    else commands.set(name, [line]);
-  return commands;
+  return namedLines(getState().settings.settings.customActions, sessionKeys().aliases);
 }
 /**
  * A line checked before any of it runs: each step's name known and its words right, so a typo in
@@ -123,9 +116,18 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
  * (so `cd ~/x | e %` opens what `cd` arrived at), a count running its step again. It stops at the
  * first step that cannot run, saying which.
  */
-export async function runLine(text: string, host: LineHost): Promise<LineResult> {
+export async function runLine(text: string, host: LineHost, model = false): Promise<LineResult> {
   let planned: PlannedStep[];
   try {
+    if (model) {
+      const problem = promptLineProblem(
+        text,
+        new Set(host.registry.ids()),
+        getState().settings.settings.customActions,
+        userCommands(),
+      );
+      if (problem) return { ok: false, message: problem };
+    }
     planned = planLine(text, host);
   } catch (error) {
     if (error instanceof LineError) return { ok: false, message: error.message, at: error.at };

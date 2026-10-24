@@ -289,11 +289,15 @@ export class AgentRequests {
     if (contents.size) this.contents.set(proposal.id, contents);
     return { id: proposal.id, requiresUserReview: true };
   }
-  configuration(patches: SettingsPatch[]): { id: string; requiresUserReview: true } {
+  configuration(
+    patches: SettingsPatch[],
+    target?: CapturedTarget,
+  ): { id: string; requiresUserReview: true } {
     for (const patch of patches) agentConfigurationPath(patch.keys ?? patch.path.split('.'));
     this.settings.preview(patches);
     const proposal = this.add({
       kind: 'configuration',
+      target: target && structuredClone(target),
       title: 'Update configuration',
       patches,
       revision: this.settings.snapshot().revision,

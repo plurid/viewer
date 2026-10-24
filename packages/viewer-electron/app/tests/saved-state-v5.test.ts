@@ -33,17 +33,17 @@ const state = (version: number, panes: unknown[]) => ({
   look: 'dark',
 });
 
-it('is version 5', () => {
-  expect(CURRENT_STATE_VERSION).toBe(5);
+it('uses the current plane format', () => {
+  expect(CURRENT_STATE_VERSION).toBe(6);
 });
 it('backs up a version 4 file before migrating it, leaving the original as it was', async () => {
   const storage = new Storage(path.join(root, 'state.json'));
   const original = JSON.stringify(state(4, []));
   await writeFile(storage.file, original);
   const loaded = (await storage.load()).state!;
-  expect(loaded.version).toBe(5);
+  expect(loaded.version).toBe(CURRENT_STATE_VERSION);
   expect(await readFile(storage.file, 'utf8')).toBe(original);
-  const backup = (await readdir(root)).find((file) => file.includes('before-scratch-v5'))!;
+  const backup = (await readdir(root)).find((file) => file.includes('before-planes-v6'))!;
   expect(await readFile(path.join(root, backup), 'utf8')).toBe(original);
 });
 it('keeps scratch planes and the unsaved edits of a preview', async () => {

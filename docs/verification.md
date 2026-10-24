@@ -1,5 +1,68 @@
 # Verification
 
+## October 24 Git, comparisons, Chat and native windows
+
+The [feature guide](spatial-tools.md) describes opt-in Git status, editable text
+and image comparisons, the global shortcut and shell command, private Chat,
+workspace profiles, theme metrics and individual tile resizing. Changed TypeScript
+and JSX use the repository formatter and multiline fields and controls.
+
+Verification used Node 26.8.2, pnpm 11.3.0 and Apple Silicon macOS. Every test run
+set `VIEWER_TEST_PRESERVE=1`; synthetic folders, logs and captures remain available.
+Package rebuilds used only the exact build-output Trash exception in `AGENTS.md`.
+
+| Check | Result and retained evidence |
+| --- | --- |
+| Complete unit and service suite | **1,182 passed, two native binding cases skipped**, no failures; `/private/tmp/viewer-final-suite.json` |
+| Static checks | Main, preload, renderer and tooling TypeScript targets pass; ESLint, application formatting and `git diff HEAD --check` pass |
+| Direct package | Final Apple Silicon macOS package succeeds; `/private/tmp/viewer-package-8.log` |
+| Shell integration | Two targeted cases pass after the final uninstall correction; `/private/tmp/viewer-shell-final.log` |
+| Packaged feature scenario | Git badges/header, pinned HEAD text comparison, editable right buffer, split/unified retention, all four image modes, Chat draft reload and real second-process `--new-window` pass on the final package; `/private/tmp/viewer-native-milestones-final.log` |
+| Complete packaged smoke | Explorer views, models/documents/media, operations and rename Undo, resource confinement, workspace deletion/recovery, reload and native quit/flush pass; `/private/tmp/viewer-native-full-final-7.log` |
+| Packaged services | PDF extraction/OCR, reviewed book rename and Undo, indexed search, Settings and pending native agent approval pass; `/private/tmp/viewer-native-services-final.log` |
+| Captured menu commands | Context-menu targets and header selection pass with native mouse input; `/private/tmp/viewer-native-menu-2.log` |
+| Packaged appearance | Light and dark both apply through the current Settings choice menu; `/private/tmp/viewer-native-appearance-final.log` |
+| Packaged resource boundary | Byte ranges, network blocking, single-file traversal denial (404) and model companion escape denial (403) pass; `/private/tmp/viewer-native-resources-final.log` |
+| Browser theme check | Custom Georgia interface font and compact density apply (`--ui-scale: 0.92`); the Settings layout was visually inspected and browser errors are absent |
+
+The unattended agent step now asserts that enabling configuration and creating
+named credentials leave the broker unavailable until native approval. It checks
+the pending approval state, nonzero MCP exit, empty protocol output and a useful
+setup message. It neither approves a native dialog nor adds an authentication
+bypass. Authorized transport, capability and scope behavior remain covered by
+service tests.
+
+The full smoke run also exposed a file-query snapshot identity loop and stale
+palette expectations. The query snapshot is memoized with a regression test;
+explicit command labels precede inferred rename arguments. The native check uses
+the current space-toolbar label and verifies independent Recent and ordinary
+Rename menu rows. Preload event fan-out now retains one native IPC subscription
+for many mounted views.
+
+Appearance verification now selects the Settings choice-menu row rather than
+dispatching a native-select change event to its button.
+Resource checks distinguish an unknown name in an exact-file grant (404) from
+an escape outside a model's companion directory (403), testing both through the
+packaged protocol.
+
+The isolated menu case identified an interactive minimap dot over the framed
+header's Actions button. The command-capture case docks the plane before clicking
+the header and then restores the spatial view; hit-testing stays enabled. The
+existing spatial HUD overlap is not changed or claimed resolved by this work.
+
+The installed pnpm metadata still requests dependency reconciliation after adding
+the pinned `@codemirror/merge` package. Its registry tarball integrity and package
+cache were verified without replacing the dependency tree. Checks invoked the
+installed tools directly; packaging used
+`pnpm_config_verify_deps_before_run=warn pnpm package`, preserving the installation.
+Existing bundler and large-chunk warnings remain.
+
+Physical global shortcut behavior, positive native agent approval, live model
+provider conversations, installation into the owner's real shell environment,
+Store signing/sandbox qualification and Windows/Linux runtime are not established
+by these checks. No live provider request, affirmative removal approval or real
+shell-command installation was performed.
+
 ## October 18 published Plurid consumer
 
 The coordinated 13-package Plurid release is published and verified on `latest`. Viewer now pins

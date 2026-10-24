@@ -1,6 +1,11 @@
 import { routeFileKeyboard } from './explorer/selection';
 import { AgentReview } from './actions/AgentReview';
 import { captureTarget } from './commands/programs';
+import { agentCatalog } from './commands/agent-catalog';
+import { effectiveWindowUI } from './state/effective-ui';
+import { receiveWorkspaces } from './state/workspaces';
+import type { LaunchRequest } from '../domain/launch';
+import { parentPath } from '../domain/planes';
 import { useWorkspaceController } from './workspace/controller';
 import { executeAgentNavigation } from './workspace/agent-navigation';
 import { programCommands } from './commands/programs';
@@ -128,6 +133,7 @@ function AppWindow() {
   const surface = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
+  const pendingPresentation = useRef<string | undefined>(undefined);
   readyRef.current = ready;
   // once, at launch: unsaved text no plane holds comes back as planes (2026-10-23)
   const recovered = useRef(false);
@@ -179,12 +185,8 @@ function AppWindow() {
   const initialOpenHandled = useRef(false);
   const saved = useViewer((state) => state.saved);
   // ⌥⌘T hides the title bar; it comes back at the window's top edge (ui/titlebar.ts)
-  const titlebarOverride = useViewer(
-    (state) => activeWorkspace(state).overrides?.['ui.titlebar.visible'],
-  );
-  const titlebar = useTitlebar(
-    typeof titlebarOverride === 'boolean' ? titlebarOverride : saved.ui.titlebar.visible,
-  );
+  const windowUI = useViewer(effectiveWindowUI);
+  const titlebar = useTitlebar(windowUI.titlebar.visible);
   const activePane = useViewer((state) => state.activePane);
   const space = useViewer(activeWorkspace);
   const bootstrap = useViewer((state) => state.bootstrap);
@@ -232,10 +234,12 @@ function AppWindow() {
   );
   const transitionWorkspace = useCallback(
     async (change: () => Promise<void>) => {
+      const previous = getState().saved.activeWorkspace;
       setReady(false);
       spatialTool(null);
       try {
         await change();
+        if (getState().saved.activeWorkspace === previous) setReady(!!engine.current);
       } catch (error) {
         setReady(!!engine.current);
         throw error;
@@ -246,7 +250,12 @@ function AppWindow() {
   const switchTo = useCallback(
     async (id: string) => {
       if (id === getState().saved.activeWorkspace) return;
+      pendingPresentation.current =
+        getState().saved.workspaces.find((space) => space.id === id)?.profileID === 'present'
+          ? id
+          : undefined;
       await transitionWorkspace(() => switchWorkspace(id));
+      if (getState().saved.activeWorkspace !== id) pendingPresentation.current = undefined;
     },
     [transitionWorkspace],
   );
@@ -365,19 +374,13 @@ function AppWindow() {
         const commands =
           target.selection.length > 2000
             ? []
-            : registry
-                .list({
-                  paneID: context.paneID,
-                  scope: context.selection.length ? 'files' : 'folder',
-                  context,
-                })
-                .map(({ id, label, group, aliases, shortcut }) => ({
-                  id,
-                  label,
-                  group,
-                  aliases: [...aliases],
-                  shortcut,
-                }));
+            : agentCatalog(registry, context).map(({ id, label, group, aliases, shortcut }) => ({
+                id,
+                label,
+                group,
+                aliases: [...aliases],
+                shortcut,
+              }));
         if (target.selection.length > 2000) target.selection = [];
         void window.viewer.commandsPublish(target, commands, workspaces).catch(report);
       }, 80);
@@ -478,13 +481,13 @@ function AppWindow() {
   // the prefix, root and leader keys and the modes (keys/sequences.ts): before App's own key handler
   useKeySequences(runLines);
   lineRunRef.current = (text) => runLine(text, lineHost);
-  const runFromPalette = (text: string) => {
+  const runFromPalette = (text: string, model = false) => {
     recordLine(text);
     setPalette(null);
     // the palette is a dialog, and commands wait while one is open: run once it has gone
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        void runLine(text, lineHost)
+        void runLine(text, lineHost, model)
           .then((result) => {
             if (!result.message) return;
             if (result.ok) announce(result.message);
@@ -506,6 +509,36 @@ function AppWindow() {
     const label = registry.label(id, context);
     return label ? { label, available: false } : undefined;
   };
+  const handleLaunch = useCallback(
+    async (request: LaunchRequest) => {
+      const origin = getState().saved.activeWorkspace;
+      const deadline = performance.now() + 5000;
+      while (!readyRef.current) {
+        if (performance.now() > deadline)
+          throw new Error('The workspace is still opening. Retry the command.');
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      }
+      if (getState().saved.activeWorkspace !== origin) return;
+      if (request.terminal) {
+        for (const requested of request.paths.length
+          ? request.paths
+          : [windowContext().directory ?? getState().bootstrap.home]) {
+          const item = await window.viewer.stat(requested);
+          if (getState().saved.activeWorkspace !== origin) return;
+          controller.newTerminal({
+            workspaceID: origin,
+            rootID: 'none',
+            paneID: 'none',
+            directory: item.directory ? item.path : parentPath(item.path),
+            selection: [],
+          });
+        }
+      } else {
+        for (const file of request.paths) await controller.openPath(file);
+      }
+    },
+    [controller, windowContext],
+  );
   useEffect(() => {
     let syncing: Promise<void> | undefined;
     let resyncAgain = false;
@@ -537,6 +570,8 @@ function AppWindow() {
         window.dispatchEvent(new Event('viewer:refresh'));
       } else if (event.type === 'settings') receiveSettings(event.snapshot);
       else if (event.type === 'session-keys') receiveSessionKeys(event.session);
+      else if (event.type === 'workspaces') receiveWorkspaces(event.state);
+      else if (event.type === 'launch') void handleLaunch(event.request).catch(report);
       else if (event.type === 'file-changes') {
         receiveFileChanges(event.changes);
         for (const change of event.changes) {
@@ -602,21 +637,17 @@ function AppWindow() {
             finish('The originating plane is unavailable.');
             return;
           }
-          void registry
-            .invoke(event.command, {
-              paneID: target.paneID,
-              scope: target.selection.length ? 'files' : 'folder',
-              remember: false,
-              context: {
-                workspaceID: target.workspaceID,
-                rootID: target.rootID,
-                paneID: target.paneID,
-                directory: target.directory,
-                selection: target.selection,
-                path: pane.path,
-                folder: pane.type === 'folder' ? pane : undefined,
-              },
-            })
+          const command = agentCatalog(registry, {
+            ...windowContext(),
+            workspaceID: target.workspaceID,
+            rootID: target.rootID,
+            paneID: target.paneID,
+            directory: target.directory,
+            selection: target.selection,
+            path: pane.path,
+            folder: pane.type === 'folder' ? pane : undefined,
+          }).find((item) => item.id === event.command);
+          void (command ? registry.run(command, false) : Promise.resolve(false))
             .then((executed) =>
               finish(executed ? undefined : 'The command is no longer available for this context.'),
             )
@@ -638,13 +669,14 @@ function AppWindow() {
       remove();
       window.removeEventListener('focus', focus);
     };
-  }, [controller, registry, switchTo]);
+  }, [controller, registry, switchTo, handleLaunch, windowContext]);
   useEffect(() => {
     if (ready && !initialOpenHandled.current) {
       initialOpenHandled.current = true;
       for (const path of bootstrap.openPaths) void controller.openPath(path).catch(report);
+      for (const request of bootstrap.launches ?? []) void handleLaunch(request).catch(report);
     }
-  }, [ready, bootstrap.openPaths, controller]);
+  }, [ready, bootstrap.openPaths, bootstrap.launches, controller, handleLaunch]);
   // the theme's colours as the page's variables (2026-10-23)
   useThemeVariables(
     useTheme(
@@ -659,7 +691,7 @@ function AppWindow() {
   // A see-through space (2026-10-23): the window lets what is behind it through (backdrop.ts); the
   // page draws the space at the chosen opacity, the planes opaque over it.
   const backdrop = saved.ui.space.backdrop;
-  const backdropOpacity = saved.ui.space.backdropOpacity;
+  const backdropOpacity = windowUI.space.backdropOpacity;
   useEffect(() => {
     document.documentElement.dataset.backdrop = backdrop;
     document.documentElement.style.setProperty('--space-opacity', `${backdropOpacity}%`);
@@ -759,8 +791,8 @@ function AppWindow() {
           <div className="traffic-space" />
           <IconButton
             icon="sidebar"
-            label={saved.ui.sidebar.visible ? 'Hide window navigation' : 'Show window navigation'}
-            aria-pressed={saved.ui.sidebar.visible}
+            label={windowUI.sidebar.visible ? 'Hide window navigation' : 'Show window navigation'}
+            aria-pressed={windowUI.sidebar.visible}
             onClick={() => {
               void registry.invoke('toggle-sidebar', { sources: ['window'] }).catch(report);
             }}
@@ -822,7 +854,17 @@ function AppWindow() {
           <Sidebar />
           <main className="workspace-main">
             <ErrorBoundary>
-              <WorkspaceSurface engine={engine} surface={surface} onReady={() => setReady(true)} />
+              <WorkspaceSurface
+                engine={engine}
+                surface={surface}
+                onReady={() => {
+                  setReady(true);
+                  if (pendingPresentation.current === activeWorkspace().id) {
+                    pendingPresentation.current = undefined;
+                    controller.present();
+                  }
+                }}
+              />
             </ErrorBoundary>
           </main>
         </div>

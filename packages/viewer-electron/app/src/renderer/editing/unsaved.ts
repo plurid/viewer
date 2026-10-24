@@ -31,7 +31,8 @@ export function scratchFileName(
 async function unsaved(pane: Pane): Promise<boolean> {
   const plane = editingPlane(pane.id);
   if (plane?.save) return plane.dirty();
-  if (pane.type === 'preview') return !!pane.bufferID && !!(await readBuffer(pane.bufferID));
+  if (pane.type === 'preview' || pane.type === 'diff')
+    return !!pane.bufferID && !!(await readBuffer(pane.bufferID));
   if (pane.type !== 'scratch') return false;
   const buffer = await readBuffer(pane.bufferID);
   if (buffer?.text) return true;
@@ -60,7 +61,7 @@ async function save(pane: Pane): Promise<boolean> {
     await discardBuffer(pane.bufferID);
     return true;
   }
-  if (pane.type !== 'preview' || !pane.bufferID) return true;
+  if ((pane.type !== 'preview' && pane.type !== 'diff') || !pane.bufferID) return true;
   const buffer = await readBuffer(pane.bufferID);
   if (!buffer) return true;
   if (!buffer.file || !buffer.base) {
@@ -91,7 +92,7 @@ async function discard(pane: Pane): Promise<void> {
   const plane = editingPlane(pane.id);
   if (plane?.discard) return plane.discard();
   if (pane.type === 'scratch') await discardBuffer(pane.bufferID);
-  else if (pane.type === 'preview' && pane.bufferID) {
+  else if ((pane.type === 'preview' || pane.type === 'diff') && pane.bufferID) {
     await discardBuffer(pane.bufferID);
     updatePane(pane.id, { bufferID: undefined });
   }
@@ -152,7 +153,8 @@ export async function recoverBuffers(): Promise<number> {
   const held = new Set(
     getState().saved.workspaces.flatMap((space) =>
       space.panes.flatMap((pane) =>
-        pane.type === 'scratch' || (pane.type === 'preview' && pane.bufferID)
+        pane.type === 'scratch' ||
+        ((pane.type === 'preview' || pane.type === 'diff') && pane.bufferID)
           ? [pane.bufferID!]
           : [],
       ),

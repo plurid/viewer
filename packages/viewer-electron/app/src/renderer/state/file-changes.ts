@@ -3,9 +3,15 @@ import { remapSessions } from '../workspace/sessions';
 import { pathMapper, type FileChange } from '../../domain/changes';
 import { getState, replaceState, update } from './core';
 import { pendingPreferences, schedulePreferences } from './preferences';
+import type { DiffSource } from '../../domain/diff';
 
 export function receiveFileChanges(changes: FileChange[]): void {
   const map = pathMapper(changes);
+  const mapSource = (source: DiffSource): DiffSource => {
+    if (source.kind === 'file') return { ...source, path: map(source.path) };
+    if (source.kind === 'git') return { ...source, repository: map(source.repository) };
+    return source;
+  };
   const saved = getState().saved;
   const quick = getState().quickPreview;
   update(
@@ -29,7 +35,14 @@ export function receiveFileChanges(changes: FileChange[]): void {
           panes: space.panes.map((pane) =>
             pane.type === 'folder'
               ? { ...pane, path: map(pane.path), history: pane.history.map(map) }
-              : { ...pane, path: map(pane.path) },
+              : pane.type === 'diff'
+                ? {
+                    ...pane,
+                    path: map(pane.path),
+                    left: mapSource(pane.left),
+                    right: mapSource(pane.right),
+                  }
+                : { ...pane, path: map(pane.path) },
           ),
           // A project's folder views follow their folders, as its planes do.
           ...(space.project

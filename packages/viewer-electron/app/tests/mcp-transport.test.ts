@@ -6,6 +6,20 @@ import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const { connect } = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock('node:net', () => ({ connect }));
 import { runMCPClient } from '../src/desktop/mcp-client';
+it('explains the native setup gate when no broker connection has been approved', async () => {
+  const root = await temporaryRoot('viewer-mcp-unapproved-');
+  const input = new PassThrough();
+  const output = new PassThrough();
+  try {
+    await expect(runMCPClient(root, { input, output, token: 'fixture-token' })).rejects.toThrow(
+      'approve agent access in Settings',
+    );
+  } finally {
+    input.destroy();
+    output.destroy();
+    await trashTemporary(root);
+  }
+});
 it('drains pending replies after stdio EOF and preserves split Unicode', async () => {
   const root = await temporaryRoot('viewer-mcp-transport-');
   try {

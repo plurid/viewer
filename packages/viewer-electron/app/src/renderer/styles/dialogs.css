@@ -6,12 +6,12 @@
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-dialog);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
 .dialog::backdrop {
-  background: #101319a6;
+  background: var(--overlay);
 }
 .dialog > header {
   display: flex;
@@ -189,7 +189,7 @@
   color: var(--ink);
   background: var(--field);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   padding: 8px 9px;
   font: inherit;
 }
@@ -255,25 +255,25 @@
   border: 1px solid var(--subtle);
 }
 .tag-color-1 {
-  background: #92969e;
+  background: var(--tag-gray);
 }
 .tag-color-2 {
-  background: #70ac75;
+  background: var(--tag-green);
 }
 .tag-color-3 {
-  background: #a78ac2;
+  background: var(--tag-purple);
 }
 .tag-color-4 {
-  background: #7fa9ce;
+  background: var(--tag-blue);
 }
 .tag-color-5 {
-  background: #d1ba6b;
+  background: var(--tag-yellow);
 }
 .tag-color-6 {
-  background: #cf8585;
+  background: var(--tag-red);
 }
 .tag-color-7 {
-  background: #ca9a70;
+  background: var(--tag-orange);
 }
 .field-label {
   display: flex;
@@ -356,7 +356,7 @@
   padding: 12px 15px;
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: 7px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow);
 }
 .notice > svg {
@@ -381,7 +381,7 @@
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow);
 }
 .operations-panel > header {

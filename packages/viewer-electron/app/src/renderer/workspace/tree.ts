@@ -15,6 +15,9 @@ const routeKinds: Record<Pane['type'], string> = {
   preview: 'previews',
   // a scratch plane renders where a preview does, so Save As turns it into one in place
   scratch: 'previews',
+  diff: 'diffs',
+  'git-changes': 'git-changes',
+  chat: 'chats',
 };
 /** The engine route that renders a host pane; `hostID` maps a plane back to its pane. */
 export function paneRoute(type: Pane['type'], id: string): string {

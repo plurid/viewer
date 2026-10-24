@@ -49,6 +49,7 @@ import {
   type ViewSections,
 } from './sections';
 import { useLensGrouping } from './folder-sections';
+import { GitBadge, GitColumn } from '../git/status';
 
 export interface FileViewProps {
   paneID?: string;
@@ -82,6 +83,7 @@ export function FileIcon({ entry, size = 18 }: { entry: FileEntry; size?: number
     <span className={`file-icon family-${family}`}>
       {hasBundleIcon(entry) ? <AppIcon entry={entry} size={size} fallback={symbol} /> : symbol}
       {entry.kind === 'symlink' && <Icon name="alias" size={11} className="symlink-mark" />}
+      <GitBadge entry={entry} />
     </span>
   );
 }
@@ -156,7 +158,9 @@ export const FileRow = memo(function FileRow({
               data-column={column}
               className={`file-${column} ${column === 'modified' ? 'file-date' : ''} ${column === 'size' ? 'tabular' : ''}`}
             >
-              {column === 'modified' || column === 'created' ? (
+              {column === 'git' ? (
+                <GitColumn entry={entry} />
+              ) : column === 'modified' || column === 'created' ? (
                 entry[column] ? (
                   date.format(entry[column])
                 ) : (
@@ -278,7 +282,11 @@ export function ListView(props: FileViewProps) {
   const defaultList = useViewer((state) => state.saved.ui.list);
   const list = props.presentation?.list || defaultList;
   const { visible, order } = list;
-  const columns = useMemo(() => visibleListColumns({ visible, order }), [visible, order]);
+  const gitEnabled = useViewer((state) => state.settings.settings.git.enabled);
+  const columns = useMemo(
+    () => visibleListColumns({ visible, order }, gitEnabled),
+    [visible, order, gitEnabled],
+  );
   const rows = useMemo(
     () => sectionRows(props.entries, props.sections, props.depths),
     [props.entries, props.sections, props.depths],
@@ -413,7 +421,10 @@ export function Thumbnail({ entry }: { entry: FileEntry }) {
     };
   }, [entry.path, entry.modified, entry.extension, entry.size]);
   return url && !error ? (
-    <img src={url} alt="" loading="lazy" draggable={false} onError={() => setError(true)} />
+    <span className="git-thumbnail">
+      <img src={url} alt="" loading="lazy" draggable={false} onError={() => setError(true)} />
+      <GitBadge entry={entry} />
+    </span>
   ) : (
     <FileIcon entry={entry} size={44} />
   );

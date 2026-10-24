@@ -4,25 +4,22 @@ import { getState, receiveSettings } from '../../state/store';
 import { savePatch } from '../../state/core';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
-import { changeSetting, changeSettings, settingNow } from './settings';
+import { changeSetting, settingNow } from './settings';
 import { builtInTheme } from '../../../domain/themes';
+import { stopTour } from '../../workspace/tour';
 
 const profiles = () => [...builtInProfiles, ...getState().settings.settings.profiles];
 /** Applies a profile, keeping what it replaces, from before the first profile, to leave it again. */
 export async function applyProfile(profile: SettingProfile): Promise<void> {
-  const active = getState().saved.profile;
-  const previous: Record<string, JSONValue> = { ...active?.previous };
-  for (const path of Object.keys(profile.values))
-    if (!(path in previous)) previous[path] = (settingNow(path) ?? null) as JSONValue;
-  savePatch({ profile: { id: profile.id, previous } });
-  await changeSettings(profile.values);
+  stopTour();
+  savePatch({ profile: { id: profile.id, previous: {} } });
 }
 /** Back to what was there before the first profile. */
 export async function leaveProfile(): Promise<void> {
   const active = getState().saved.profile;
   if (!active) return;
   savePatch({ profile: undefined });
-  await changeSettings(active.previous);
+  stopTour();
 }
 /** The current values of what a profile holds, as a new profile. */
 export function captureProfile(name: string): SettingProfile {
@@ -77,7 +74,10 @@ export function profileCommands({
       icon: active?.id === profile.id ? 'check' : 'settings',
       aliases: ['profile', 'mode', profile.name],
       when: windowScope,
-      run: () => applyProfile(profile),
+      run: async () => {
+        await applyProfile(profile);
+        if (profile.id === 'present') await actions.workspace.present();
+      },
     })),
     {
       id: 'profile-restore',

@@ -280,18 +280,18 @@
   color: var(--accent);
 }
 .family-image {
-  color: #b7ba93;
+  color: var(--family-document);
 }
 .family-code,
 .family-data {
-  color: #b4aecf;
+  color: var(--family-archive);
 }
 :root[data-look='light'] .family-image {
-  color: #686d32;
+  color: var(--family-document);
 }
 :root[data-look='light'] .family-code,
 :root[data-look='light'] .family-data {
-  color: #6c5d9c;
+  color: var(--family-archive);
 }
 .symlink-mark {
   position: absolute;
@@ -342,7 +342,7 @@
 }
 .file-tile {
   height: 133px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   display: flex;
   flex-direction: column;
   align-items: center;

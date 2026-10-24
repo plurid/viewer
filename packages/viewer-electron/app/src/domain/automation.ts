@@ -1,5 +1,7 @@
 import type { FileEntry } from './contracts';
 export interface CapturedTarget {
+  /** Assigned by the desktop; a reopened window cannot inherit a pending proposal. */
+  originID?: string;
   workspaceID: string;
   rootID: string;
   paneID: string;

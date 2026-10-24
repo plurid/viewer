@@ -310,13 +310,21 @@ export const verbRuns: Record<string, VerbRun> = {
     await run(host, id, 'No plane that way.');
   },
   'resize-pane': async ({ flags, args }, host) => {
-    const grow = flags.R || flags.D;
-    if (!grow && !flags.L && !flags.U) throw new Error('resize-pane needs -L, -R, -U or -D.');
+    const direction = flags.L
+      ? 'left'
+      : flags.R
+        ? 'right'
+        : flags.U
+          ? 'up'
+          : flags.D
+            ? 'down'
+            : undefined;
+    if (!direction) throw new Error('resize-pane needs -L, -R, -U or -D.');
     const steps = Number(args[0]?.text ?? 1);
     if (!Number.isInteger(steps) || steps < 1 || steps > 12)
       throw new Error('resize-pane takes 1 to 12 steps.');
     for (let step = 0; step < steps; step++)
-      await run(host, grow ? 'tile-main-grow' : 'tile-main-shrink', 'Nothing is tiled.');
+      await run(host, `tile-resize-${direction}`, 'Nothing is tiled.');
   },
   'display-panes': async (_input, host) => run(host, 'plane-hints', 'No planes in view.'),
   'command-prompt': async (_input, host) => host.palette('line'),

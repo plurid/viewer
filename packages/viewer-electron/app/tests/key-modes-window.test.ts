@@ -84,7 +84,7 @@ describe('a mode', () => {
     press(document.body, '3');
     press(document.body, 'l');
     await act(async () => {});
-    expect(run).toHaveBeenCalledWith(['tile-main-grow'], 3);
+    expect(run).toHaveBeenCalledWith(['tile-resize-right'], 3);
     // a key the mode does not bind is taken, said, and the mode stays
     expect(press(document.body, 'x').defaultPrevented).toBe(true);
     expect(view.container.textContent).toContain('-- RESIZE --');

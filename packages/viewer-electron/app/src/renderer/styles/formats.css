@@ -122,7 +122,7 @@
   max-width: calc(100% - 20px);
   padding: 6px 9px;
   background: var(--surface);
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -220,7 +220,7 @@
 }
 .pdf-thumbnails canvas {
   background: white;
-  box-shadow: 0 1px 4px #0003;
+  box-shadow: 0 1px 4px var(--soft-shadow-color);
 }
 .pdf-thumbnails button.selected canvas {
   outline: 2px solid var(--accent);
@@ -244,7 +244,7 @@
   justify-content: space-between;
   padding: 3px 6px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   background: none;
   color: var(--ink);
   text-align: start;
@@ -280,7 +280,7 @@
   margin-inline: auto;
   position: relative;
   background: white;
-  box-shadow: 0 2px 12px #0003;
+  box-shadow: 0 2px 12px var(--soft-shadow-color);
 }
 .pdf-sheet canvas {
   display: block;
@@ -318,7 +318,7 @@
   transform-origin: 0 0;
 }
 .textLayer ::selection {
-  background: #3399ff66;
+  background: var(--image-region);
   color: transparent;
 }
 .code-scroll,
@@ -443,7 +443,7 @@ button.markdown-link {
   background: var(--field);
   padding: 14px;
   overflow: auto;
-  border-radius: 5px;
+  border-radius: var(--radius-control);
 }
 .markdown code {
   font:

@@ -11,8 +11,12 @@ import {
   screen,
   shell,
   crashReporter,
+  globalShortcut,
+  systemPreferences,
 } from 'electron';
 import path from 'node:path';
+import os from 'node:os';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { lookup } from 'mime-types';
@@ -30,6 +34,8 @@ import { DiagnosticLog } from './desktop/diagnostics';
 import { planeAlignments, planeSizePresets } from './domain/plane-layout';
 import { applicationCSP } from './desktop/application-csp';
 import { debuggingAllowed } from './desktop/debugging';
+import { HotkeyWindow } from './desktop/hotkey-window';
+import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/launch';
 import { askNatively } from './desktop/native-confirmation';
 protocol.registerSchemesAsPrivileged([
   {
@@ -108,6 +114,9 @@ app.on('child-process-gone', (_event, details) => {
   void diagnostics.record('process-gone', `${name}: ${details.reason} (exit ${details.exitCode})`);
 });
 let window: BrowserWindow | null = null;
+const viewerWindows = new Set<BrowserWindow>();
+const windowFrames = new Map<BrowserWindow, WindowState>();
+let hotkey: HotkeyWindow | undefined;
 let desktop: Desktop | null = null;
 let windowState: WindowState | undefined;
 /** The Settings window's frame and last category: private, never config.jsonc (2026-10-20). */
@@ -115,7 +124,30 @@ let settingsWindowState: WindowState | undefined;
 let settingsWindow: BrowserWindow | null = null;
 let settingsClosing: Promise<void> | undefined;
 const mcpMode = process.argv.includes('--mcp');
-const ownsInstance = mcpMode || app.requestSingleInstanceLock();
+let initialLaunch: LaunchRequest | undefined;
+let launchError: string | undefined;
+if (!mcpMode) {
+  try {
+    initialLaunch = parseLaunch(
+      process.argv
+        .slice(app.isPackaged ? 1 : 2)
+        .filter(
+          (argument) =>
+            !renderTest ||
+            !/^--(?:remote-debugging-port|remote-debugging-address|remote-allow-origins|disable-features|disable-renderer-backgrounding|disable-background-timer-throttling)(?:=|$)/.test(
+              argument,
+            ),
+        ),
+      process.cwd(),
+      os.homedir(),
+      (directory, file) => path.resolve(directory, file),
+    );
+  } catch (error) {
+    launchError = errorMessage(error);
+  }
+}
+const ownsInstance =
+  mcpMode || app.requestSingleInstanceLock({ request: initialLaunch, error: launchError });
 if (!ownsInstance) app.quit();
 let closing = false;
 let quitting = false;
@@ -200,6 +232,7 @@ function menu(): void {
       {
         label: 'File',
         submenu: [
+          { label: 'New Window', click: command('new-native-window') },
           { label: 'Create Project…', click: command('project-create') },
           { label: 'Workflows…', click: command('workflows') },
           { label: 'Open Project…', click: command('project-open') },
@@ -536,40 +569,51 @@ function menu(): void {
   );
 }
 /** The backdrop the window was made with: a clear one cannot be switched on or off in place. */
-let createdBackdrop: UIPreferences['space']['backdrop'] = 'opaque';
+const createdBackdrops = new Map<BrowserWindow, UIPreferences['space']['backdrop']>();
 /** Blur and solid apply at once; clear waits for the window to open again (backdrop.ts). */
 function applyBackdrop(): void {
-  if (!window || window.isDestroyed() || !desktop || process.platform !== 'darwin') return;
+  if (!desktop || process.platform !== 'darwin') return;
   const snapshot = desktop.settings.snapshot();
   const next = snapshot.ui.space.backdrop;
-  if (createdBackdrop === 'clear' || backdropChange(createdBackdrop, next) !== 'live') return;
   const options = backdropWindowOptions(next, snapshot.look);
-  window.setVibrancy(next === 'blur' ? 'under-window' : null);
-  window.setBackgroundColor(options.backgroundColor);
+  for (const [window, created] of createdBackdrops) {
+    if (window.isDestroyed() || created === 'clear' || backdropChange(created, next) !== 'live')
+      continue;
+    window.setVibrancy(next === 'blur' ? 'under-window' : null);
+    window.setBackgroundColor(options.backgroundColor);
+  }
 }
-async function createWindow(): Promise<void> {
-  if (window || quitPending || quitting) return;
+function workspaceFrame(workspaceID?: string): WindowState {
+  const name =
+    createHash('sha256')
+      .update(workspaceID ?? 'initial')
+      .digest('hex') + '.json';
+  return new WindowState(path.join(app.getPath('userData'), 'window-states', name));
+}
+
+async function createWindow(workspaceID?: string): Promise<BrowserWindow | undefined> {
+  if ((window && !workspaceID) || quitPending || quitting) return window ?? undefined;
   // the backdrop is set as the window is made: its settings first
   await desktop?.prepareSettings().catch(() => {});
-  if (window || quitPending || quitting) return;
-  closing = false;
+  if ((window && !workspaceID) || quitPending || quitting) return window ?? undefined;
+  const desiredWorkspace = workspaceID ?? desktop?.workspaceSessions.snapshot()?.activeWorkspace;
+  const frame = workspaceFrame(desiredWorkspace);
+  await frame.load();
   const restored = restoreWindowFrame(
-    windowState?.value ?? null,
+    frame.value ?? windowState?.value ?? null,
     screen.getAllDisplays(),
     screen.getPrimaryDisplay(),
   );
+  const backdrop =
+    process.platform === 'darwin'
+      ? (desktop?.settings.snapshot().ui.space.backdrop ?? 'opaque')
+      : 'opaque';
   window = new BrowserWindow({
     ...restored.bounds,
     minWidth: restored.minWidth,
     minHeight: restored.minHeight,
     title: 'Viewer',
-    ...backdropWindowOptions(
-      (createdBackdrop =
-        process.platform === 'darwin'
-          ? (desktop?.settings.snapshot().ui.space.backdrop ?? 'opaque')
-          : 'opaque'),
-      desktop?.settings.snapshot().look ?? 'dark',
-    ),
+    ...backdropWindowOptions(backdrop, desktop?.settings.snapshot().look ?? 'dark'),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 20 },
     show: false,
@@ -588,6 +632,12 @@ async function createWindow(): Promise<void> {
     },
   });
   const createdWindow = window;
+  createdBackdrops.set(createdWindow, backdrop);
+  viewerWindows.add(createdWindow);
+  windowFrames.set(createdWindow, frame);
+  createdWindow.on('focus', () => {
+    window = createdWindow;
+  });
   const remember = () => rememberWindow(createdWindow);
   createdWindow.on('move', remember);
   createdWindow.on('resize', remember);
@@ -597,29 +647,36 @@ async function createWindow(): Promise<void> {
   createdWindow.on('leave-full-screen', remember);
   createdWindow.on('restore', remember);
   let closePending = false;
+  let allowedClose = false;
   const services = desktop!;
-  services.attach(window, 'viewer');
-  services.open(pendingPaths.splice(0));
+  services.attach(createdWindow, 'viewer', desiredWorkspace);
+  services.openIn(createdWindow.webContents.id, pendingPaths.splice(0));
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => {
     if (!trusted(url)) event.preventDefault();
   });
   window.on('close', (event) => {
-    if (closing) return;
+    if (allowedClose || closing || quitting) return;
     event.preventDefault();
     if (closePending) return;
     closePending = true;
     remember();
     void Promise.all([
       services.flush().catch((error) => console.error('Workspace flush failed', error)),
-      windowState?.flush().catch((error) => console.error('Window placement save failed', error)),
+      windowFrames
+        .get(createdWindow)
+        ?.flush()
+        .catch((error) => console.error('Window placement save failed', error)),
     ]).finally(() => {
-      closing = true;
+      allowedClose = true;
       if (!createdWindow.isDestroyed()) createdWindow.close();
     });
   });
   window.on('closed', () => {
-    window = null;
+    viewerWindows.delete(createdWindow);
+    createdBackdrops.delete(createdWindow);
+    windowFrames.delete(createdWindow);
+    if (window === createdWindow) window = [...viewerWindows].at(-1) ?? null;
   });
   menu();
   try {
@@ -633,12 +690,13 @@ async function createWindow(): Promise<void> {
     createdWindow.show();
     if (restored.fullscreen) createdWindow.setFullScreen(true);
   }
+  return createdWindow;
 }
 function rememberWindow(created: BrowserWindow): void {
-  if (created.isDestroyed() || created.isMinimized()) return;
-  windowState?.remember(
-    captureWindowFrame(created, screen.getDisplayMatching(created.getBounds())),
-  );
+  if (created.isDestroyed() || created.isMinimized() || hotkey?.isDropped(created)) return;
+  const frame = captureWindowFrame(created, screen.getDisplayMatching(created.getBounds()));
+  windowFrames.get(created)?.remember(frame);
+  if (created === window) windowState?.remember(frame);
 }
 async function openSettingsWindow(focus?: string): Promise<void> {
   await settingsClosing;
@@ -729,14 +787,37 @@ async function openSettingsWindow(focus?: string): Promise<void> {
   }
   if (!backgroundTest) created.show();
 }
-app.on('second-instance', () => {
+async function launch(request: LaunchRequest): Promise<void> {
+  if (!desktop || quitPending || quitting) return;
+  let target = window ?? undefined;
+  if (request.workspace) {
+    const spaces = desktop.workspaceSessions.snapshot()?.workspaces ?? [];
+    const matches = spaces.filter(
+      (space) => space.id === request.workspace || space.name === request.workspace,
+    );
+    if (matches.length !== 1)
+      throw new Error('Name one existing workspace by ID or its unique name.');
+    const workspace = matches[0]!;
+    target = desktop.windowForWorkspace(workspace.id) ?? (await createWindow(workspace.id));
+  } else if (request.newWindow) {
+    const workspaceID = desktop.workspaceSessions.create(os.homedir());
+    target = await createWindow(workspaceID);
+  } else if (!target) target = await createWindow();
+  if (!target) return;
+  desktop.launchIn(target.webContents.id, request);
+  if (!backgroundTest) {
+    target.show();
+    target.focus();
+  }
+}
+
+app.on('second-instance', (_event, _argv, _cwd, additionalData) => {
   if (quitPending || quitting) return;
-  if (window) {
-    if (!backgroundTest) {
-      window.show();
-      window.focus();
-    }
-  } else void createWindow();
+  const request = launchRequestSchema.safeParse((additionalData as { request?: unknown })?.request);
+  if (!request.success) return;
+  void launch(request.data).catch((error) =>
+    desktop?.emit({ type: 'service-error', service: 'launch', message: errorMessage(error) }),
+  );
 });
 app.on('open-file', (event, file) => {
   event.preventDefault();
@@ -750,6 +831,7 @@ app
   .whenReady()
   .then(async () => {
     if (!ownsInstance || quitPending || quitting) return;
+    if (launchError) throw new Error(launchError);
     if (mcpMode) {
       app.dock?.hide();
       try {
@@ -781,6 +863,23 @@ app
     if (quitPending || quitting) return;
     desktop = new Desktop(app.getPath('userData'), trusted, {
       openSettings: openSettingsWindow,
+      newWindow: async (workspaceID) => {
+        await createWindow(workspaceID);
+      },
+      workspaceChanged: (window, workspaceID) => {
+        if (window.isDestroyed()) return;
+        const previous = windowFrames.get(window);
+        const next = workspaceFrame(workspaceID);
+        next.remember(previous?.value ?? null);
+        windowFrames.set(window, next);
+        rememberWindow(window);
+        void previous
+          ?.flush()
+          .catch((error) => diagnostics.record('main-rejection', failure(error)));
+      },
+      quitting: () => quitting,
+      hotkeyStatus: () => hotkey?.snapshot() ?? { registered: false, shortcut: 'Alt+Space' },
+      restoreWindow: () => hotkey?.restore(),
       settingsCategory: (category) => {
         if (!settingsWindow || settingsWindow.isDestroyed()) return;
         const frame = captureWindowFrame(
@@ -792,6 +891,9 @@ app
       settingsChanged: () => {
         menu();
         applyBackdrop();
+        const settings = desktop?.settings.snapshot().settings.hotkey;
+        if (settings)
+          hotkey?.configure(settings.enabled, accelerator(settings.shortcut) ?? settings.shortcut);
       },
       diagnose: (detail) => void diagnostics.record('renderer-error', detail),
       worker: path.join(__dirname, 'worker.cjs'),
@@ -805,6 +907,14 @@ app
         ? path.join(process.resourcesPath, 'viewer-applications')
         : path.resolve('assets/viewer-applications'),
     });
+    hotkey = new HotkeyWindow(
+      globalShortcut,
+      async () => window ?? (await createWindow()),
+      () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea,
+      () => !systemPreferences.getAnimationSettings().prefersReducedMotion && !backgroundTest,
+      () => {},
+      !backgroundTest,
+    );
     protocol.handle('viewer-resource', (request) => desktop!.resources.response(request));
     nativeTheme.on('updated', () => desktop?.settings.announce());
     protocol.handle('viewer-app', async (request) => {
@@ -854,7 +964,17 @@ app
           ['127.0.0.1', 'localhost'].includes(url.hostname));
       callback({ cancel: !allowed });
     });
-    await createWindow();
+    await desktop.prepareSettings();
+    const saved = desktop.workspaceSessions.snapshot();
+    const restoreWindows = desktop.settings.snapshot().settings.browsing.restoreSession
+      ? (saved?.openWindows?.filter((id) => saved.workspaces.some((space) => space.id === id)) ??
+        [])
+      : [];
+    if (!initialLaunch?.workspace && !initialLaunch?.newWindow) {
+      await createWindow(restoreWindows[0]);
+      for (const workspaceID of restoreWindows.slice(1)) await createWindow(workspaceID);
+    }
+    if (initialLaunch) await launch(initialLaunch);
   })
   .catch((error: unknown) => {
     // A startup failure must not leave a windowless process running silently.
@@ -872,10 +992,11 @@ function beginQuit(): void {
   quitPending = true;
   // Keep the bridge and services alive until every renderer has saved and
   // Electron has closed its windows. Cleanup belongs to will-quit.
-  if (window) rememberWindow(window);
+  for (const created of viewerWindows) rememberWindow(created);
   void Promise.all([
     desktop?.flush().catch((error) => console.error(error)),
     windowState?.flush().catch((error) => console.error('Window placement save failed', error)),
+    ...[...windowFrames.values()].map((frame) => frame.flush()),
   ]).finally(() => {
     quitting = true;
     closing = true;
@@ -920,6 +1041,7 @@ app.on('before-quit', (event) => {
     });
 });
 app.on('will-quit', (event) => {
+  hotkey?.close();
   if (disposed || !desktop) return;
   event.preventDefault();
   if (disposalPending) return;

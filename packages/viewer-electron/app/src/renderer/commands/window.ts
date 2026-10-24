@@ -1,4 +1,5 @@
 import { pairCommands } from './window-commands/pair';
+import { comparisonCommands } from './window-commands/comparison';
 import { actionCommands } from '../actions/commands';
 import type { CommandDefinition } from './registry';
 import { toolsCommands } from './window-commands/tools';
@@ -40,6 +41,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     ...viewsCommands(scopes),
     ...tilingCommands(scopes),
     ...pairCommands(scopes),
+    ...comparisonCommands(scopes),
     ...templateCommands(scopes),
     ...explodeCommands(scopes),
     ...profileCommands(scopes),

@@ -55,14 +55,15 @@ const actions = [
 ] as unknown as CustomAction[];
 
 describe('a line a model proposes', () => {
-  const problem = (line: string) => promptLineProblem(line, ids, actions, new Set(['Dev']));
+  const problem = (line: string) =>
+    promptLineProblem(line, ids, actions, new Map([['Dev', ['frame-all']]]));
   it('may set, filter, sort, select and lay out, and run the person’s commands', () => {
     for (const line of [
       'sort.modified',
       'set nogrid | filter ext:pdf modified<7d',
       'select *.png',
       'vs ~/Documents | frame-all',
-      'Dev viewer',
+      'Dev',
     ])
       expect(problem(line), line).toBeUndefined();
   });
@@ -270,7 +271,7 @@ describe('the palette’s > mode', () => {
       { id: 'sort.modified', label: 'Sort by date modified' },
     ]);
     fireEvent.keyDown(field, { key: 'Enter' });
-    expect(run).toHaveBeenCalledWith('sort.modified');
+    expect(run).toHaveBeenCalledWith('sort.modified', true);
     expect(getState().saved.lineHistory).toEqual(['sort.modified']);
   });
   it('opens the line in the command line with Tab, to change it', async () => {

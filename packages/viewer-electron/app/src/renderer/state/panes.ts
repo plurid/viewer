@@ -6,6 +6,9 @@ import type {
   NewRootFolderTarget,
   ScratchPane,
   TerminalPane,
+  DiffPane,
+  GitChangesPane,
+  ChatPane,
 } from '../../domain/contracts';
 import { normalizePreferences } from '../../domain/preferences';
 import { trimSessions } from '../workspace/sessions';
@@ -183,6 +186,19 @@ export function addPane(
   }));
   if (options?.remember !== false) remember(path);
   return pane;
+}
+
+/** Register a typed content plane before the spatial adapter mounts its route. */
+export function addContentPane(pane: DiffPane | GitChangesPane | ChatPane): void {
+  if (activeWorkspace().panes.length >= 200)
+    throw new Error('Close a plane before opening another.');
+  changeWorkspace((space) => ({
+    ...space,
+    panes: [...space.panes, pane],
+    roots: [...space.roots, pane.id],
+    activePane: pane.id,
+  }));
+  setActivePane(pane.id);
 }
 /** An explicit new explorer is a fresh root, independent even when its path is already open. */
 export function addRootFolder(target: NewRootFolderTarget = {}): FolderPane | undefined {

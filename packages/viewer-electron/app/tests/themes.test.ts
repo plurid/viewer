@@ -65,6 +65,9 @@ describe('themes', () => {
     expect(variables['--space']).toBe('#272a30');
     expect(variables['--syntax-string']).toBe('#b7c79e');
     expect(variables['--terminal-red']).toBe('#e06c75');
+    expect(variables['--media-stage']).toBe(builtInThemes[0]!.shell.mediaStage);
+    expect(variables['--selection-muted']).toBe(builtInThemes[0]!.shell.selectionMuted);
+    expect(variables['--shadow-color']).toBe(builtInThemes[0]!.shell.shadowColor);
   });
 });
 

@@ -1,5 +1,5 @@
 import { useTheme } from '../ui/theme';
-import { effectiveUI } from '../../domain/overrides';
+import { effectiveWindowUI } from '../state/effective-ui';
 import {
   lazy,
   Suspense,
@@ -101,6 +101,44 @@ function PreviewContent() {
   );
 }
 const LazyScratchPlane = lazy(() => import('../editing/ScratchPlane'));
+const LazyDiffPlane = lazy(() => import('../diff/DiffPlane'));
+const LazyGitChanges = lazy(() => import('../git/GitChanges'));
+const LazyChatPlane = lazy(() => import('../chat/ChatPlane'));
+
+function ChatContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'chat') return <Empty title="Chat unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening Chat…" />}>
+        <LazyChatPlane pane={pane} />
+      </Suspense>
+    </PreviewFrame>
+  );
+}
+
+function ComparisonContent() {
+  const plane = usePluridPlane();
+  const record = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (record?.type !== 'diff' && record?.type !== 'git-changes')
+    return <Empty title="Comparison unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(record.id)}>
+      <Suspense fallback={<Empty title="Opening comparison…" />}>
+        {record.type === 'diff' ? (
+          <LazyDiffPlane pane={record} />
+        ) : (
+          <LazyGitChanges path={record.path} />
+        )}
+      </Suspense>
+    </PreviewFrame>
+  );
+}
 const LazyTerminalPlane = lazy(() =>
   import('../terminals/TerminalPlane').then((module) => ({ default: module.TerminalPlane })),
 );
@@ -158,6 +196,9 @@ const marked = (Content: React.ComponentType): React.ComponentType =>
     );
   };
 const planes: PluridPlane<React.ComponentType>[] = [
+  { route: '/chats/:id', component: marked(ChatContent) },
+  { route: '/diffs/:id', component: marked(ComparisonContent) },
+  { route: '/git-changes/:id', component: marked(ComparisonContent) },
   { route: '/terminals/:id', component: marked(TerminalContent) },
   { route: '/folders/:id', component: marked(FolderContent) },
   { route: '/searches/:id', component: marked(SearchContent) },
@@ -177,7 +218,7 @@ export function WorkspaceSurface({
   const look = useViewer((state) => state.saved.look);
   const workspace = useWorkspace();
   // this workspace's own settings over the general ones (domain/overrides.ts)
-  const general = useViewer((state) => state.saved.ui);
+  const general = useViewer(effectiveWindowUI);
   // the theme's colours for plurid, only a custom theme's: the built-in ones are plurid's look already
   const theme = useTheme(
     useViewer((state) => state.settings.settings),
@@ -195,10 +236,7 @@ export function WorkspaceSurface({
           },
     [theme],
   );
-  const preferences = useMemo(
-    () => effectiveUI(general, space.overrides).space,
-    [general, space.overrides],
-  );
+  const preferences = useMemo(() => general.space, [general]);
   const [size, setSize] = useState({ width: 992, height: 692 });
   const [api, setApi] = useState<PluridApi | null>(null);
   useEffect(() => {

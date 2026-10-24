@@ -1,5 +1,5 @@
 import { overridablePaths } from '../domain/overrides';
-import { tileLayouts } from '../domain/tiling';
+import { tileLayouts, tileSplitSchema } from '../domain/tiling';
 import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -21,8 +21,22 @@ import {
 } from '../domain/preferences';
 import { discardOwnTemporaryFile } from './removal';
 import { localPath, id } from './schemas';
+import { diffModes, diffSourceSchema } from '../domain/diff';
 
 const pane = z.discriminatedUnion('type', [
+  z.object({ id, type: z.literal('git-changes'), path: localPath }).strict(),
+  z.object({ id, type: z.literal('chat'), path: localPath, conversationID: z.uuid() }).strict(),
+  z
+    .object({
+      id,
+      type: z.literal('diff'),
+      path: localPath,
+      left: diffSourceSchema,
+      right: diffSourceSchema,
+      mode: z.enum(diffModes).optional(),
+      bufferID: z.uuid().optional(),
+    })
+    .strict(),
   z.object({ id, type: z.literal('collection'), path: localPath, collectionID: z.uuid() }),
   z.object({
     id,
@@ -83,9 +97,11 @@ const savedStateSchema = z
       z.literal(2),
       z.literal(3),
       z.literal(4),
+      z.literal(5),
       z.literal(CURRENT_STATE_VERSION),
     ]),
     previewStates: z.record(id, previewValuesSchema).optional(),
+    openWindows: z.array(id).max(30).optional(),
     preferencesRevision: z.number().int().min(0).optional(),
     workspaces: z
       .array(
@@ -104,11 +120,13 @@ const savedStateSchema = z
               z.union([z.boolean(), z.number().min(0).max(100)]),
             )
             .optional(),
+          profileID: id.optional(),
           tiling: z
             .object({
               panes: z.array(id).min(1).max(30),
               layout: z.enum(tileLayouts),
               main: z.number().min(0.2).max(0.8),
+              tree: tileSplitSchema.optional(),
             })
             .strict()
             .optional(),
@@ -143,6 +161,18 @@ const savedStateSchema = z
         previous: z.record(z.string().max(200), z.json()),
       })
       .strict()
+      .optional(),
+    windowProfiles: z
+      .record(
+        id,
+        z
+          .object({
+            id: z.string().max(100),
+            previous: z.record(z.string().max(200), z.json()),
+          })
+          .strict(),
+      )
+      .refine((profiles) => Object.keys(profiles).length <= 30)
       .optional(),
     visits: z
       .record(
@@ -284,9 +314,9 @@ export class Storage {
         await backup.close();
       }
     } else if (state.version < CURRENT_STATE_VERSION) {
-      // An older Viewer sets a version 5 file aside, unread: this copy is what it can open.
+      // Older Viewers cannot read the new plane types. Preserve their original session bytes.
       const backup = await open(
-        this.file + '.before-scratch-v5-' + randomUUID() + '.bak',
+        this.file + '.before-planes-v6-' + randomUUID() + '.bak',
         'wx',
         0o600,
       );

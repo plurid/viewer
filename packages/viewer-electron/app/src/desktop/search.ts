@@ -27,6 +27,7 @@ export class Search {
       tag: string,
       signal: AbortSignal,
     ) => Promise<string[]> = spotlightTagged,
+    private authorize: (file: string) => Promise<void> = async () => {},
   ) {}
   cancel(id: string): void {
     this.requests.get(id)?.abort();
@@ -83,6 +84,7 @@ export class Search {
       for (const tag of query.tags)
         tags.set(tag, new Set(await this.tagged(request.root, tag, abort.signal)));
     } catch (error) {
+      errors++;
       flush(true);
       throw error;
     }
@@ -102,6 +104,7 @@ export class Search {
           if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue;
           if (hiddenPart(relative)) continue;
           try {
+            await this.authorize(file);
             const item = await entry(file);
             if (!matchesQuery(query, item, facts)) continue;
             entries.push(item);
@@ -120,6 +123,7 @@ export class Search {
       while (queue.length && !abort.signal.aborted) {
         const folder = queue.shift()!;
         try {
+          await this.authorize(folder);
           const directory = await opendir(folder);
           for await (const child of directory) {
             if (abort.signal.aborted) break;
@@ -144,6 +148,7 @@ export class Search {
               };
               if (query.needsStat || matchesQuery(query, light, facts))
                 try {
+                  await this.authorize(file);
                   const item = await entry(file);
                   if (!query.needsStat || matchesQuery(query, item, facts)) {
                     entries.push(item);

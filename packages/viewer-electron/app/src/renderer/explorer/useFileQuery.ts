@@ -59,5 +59,8 @@ export function useFileQuery(
     }),
     [tagged, key],
   );
-  return { query, facts, problem: read.problem ?? tagProblem };
+  return useMemo(
+    () => ({ query, facts, problem: read.problem ?? tagProblem }),
+    [query, facts, read.problem, tagProblem],
+  );
 }

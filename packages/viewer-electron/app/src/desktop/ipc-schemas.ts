@@ -12,6 +12,8 @@ import { projectDefinitionSchema } from '../domain/project';
 import { lensGroupIDSchema, lensOpSchema } from '../domain/lenses';
 import { rootKey, validKeymapKey } from '../domain/keymap';
 import { lineSchema } from './keymap-schema';
+import { gitSourceSchema } from '../domain/git';
+import { chatRequestSchema } from '../domain/chat';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
@@ -94,7 +96,17 @@ const workspaceSnapshotSchema = z.object({
           .array(
             z.object({
               id,
-              type: z.enum(['folder', 'preview', 'search', 'terminal', 'collection', 'scratch']),
+              type: z.enum([
+                'folder',
+                'preview',
+                'search',
+                'terminal',
+                'collection',
+                'scratch',
+                'diff',
+                'chat',
+                'git-changes',
+              ]),
               path: localPath,
               mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']).optional(),
               allLocations: z.boolean().optional(),
@@ -115,6 +127,7 @@ const contextSchema = z.object({
   recursive: z.boolean().optional(),
 });
 const targetSchema = z.object({
+  originID: z.uuid().optional(),
   workspaceID: id,
   rootID: id,
   paneID: id,
@@ -142,6 +155,21 @@ const targetSchema = z.object({
     .max(2000),
 });
 export const schemas = {
+  chat: z.tuple([chatRequestSchema]),
+  shellCommand: z.tuple([z.enum(['status', 'install', 'uninstall'])]),
+  hotkeyStatus: z.tuple([]),
+  restoreWindow: z.tuple([]),
+  workspaceClaim: z.tuple([id]),
+  newWindow: z.tuple([]),
+  git: z.tuple([
+    z.discriminatedUnion('kind', [
+      z
+        .object({ kind: z.literal('status'), path: localPath, refresh: z.boolean().optional() })
+        .strict(),
+      z.object({ kind: z.literal('head'), path: localPath }).strict(),
+    ]),
+  ]),
+  gitResource: z.tuple([gitSourceSchema.extend({ repository: localPath })]),
   watchRules: z.tuple([watchRuleRequestSchema]),
   relationships: z.tuple([
     z.discriminatedUnion('kind', [
@@ -602,6 +630,14 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  chat: 'viewer',
+  shellCommand: 'settings',
+  hotkeyStatus: 'both',
+  restoreWindow: 'viewer',
+  workspaceClaim: 'viewer',
+  newWindow: 'viewer',
+  git: 'viewer',
+  gitResource: 'viewer',
   watchRules: 'viewer',
   relationships: 'viewer',
   workflow: 'viewer',

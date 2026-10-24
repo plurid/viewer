@@ -1,9 +1,9 @@
 import { modelLineCommandProblem } from '../agent-safety';
 import type { CustomAction } from '../automation';
 import { queryTypes } from '../file-query';
-import { LineError } from './lex';
+import { LineError, withArguments } from './lex';
 import { settingByName, settingNames } from './set';
-import { parseCommandLine, resolveName, verbName, verbs } from './verbs';
+import { bindStep, parseCommandLine, resolveName, verbName, verbs } from './verbs';
 
 /**
  * PROMPTS (2026-10-24): `>` in the palette asks a model to turn a request ("sort by year", "the
@@ -50,6 +50,21 @@ export const promptSchema = {
   required: ['line', 'explanation'],
   additionalProperties: false,
 } as const;
+
+/** Resolve the same configuration and session overlay used by the line runner. */
+export function namedLines(
+  actions: readonly CustomAction[],
+  aliases: readonly { name: string; line: string | null }[],
+): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  for (const action of actions)
+    if (action.executor.kind === 'sequence' && action.executor.command)
+      result.set(action.executor.command, action.executor.commands);
+  for (const alias of aliases)
+    if (alias.line === null) result.delete(alias.name);
+    else result.set(alias.name, [alias.line]);
+  return result;
+}
 /** Verbs a model may not propose: what removes, renames, saves text, types or binds. */
 const refusedVerbs = new Set([
   'trash',
@@ -72,32 +87,64 @@ export function promptLineProblem(
   line: string,
   commands: ReadonlySet<string>,
   actions: readonly CustomAction[],
-  userCommands: ReadonlySet<string> = new Set(),
+  userCommands: ReadonlyMap<string, readonly string[]> = new Map(),
 ): string | undefined {
-  let steps;
+  let total = 0;
+  const inspect = (text: string, depth: number): string | undefined => {
+    if (depth > 10) return 'Commands call each other too deeply.';
+    const steps = parseCommandLine(text);
+    if (!steps.length) return 'The model gave no line.';
+    for (const step of steps) {
+      if ((total += step.count ?? 1) > 50) return 'The expanded request exceeds 50 steps.';
+      const name = resolveName(step.name);
+      if (step.bang) return `A model may not propose :${step.name}!, which drops unsaved text.`;
+      if (name.kind === 'user') {
+        const lines = userCommands.get(name.name);
+        if (!lines) return `No command :${name.name}.`;
+        for (const inner of lines) {
+          const problem = inspect(
+            withArguments(
+              inner,
+              step.words.map((word) => word.text),
+              name.name,
+            ),
+            depth + 1,
+          );
+          if (problem) return problem;
+        }
+        continue;
+      }
+      if (name.kind === 'verb') {
+        bindStep(step, name.verb);
+        if (refusedVerbs.has(name.verb.key))
+          return `A model may not propose :${verbName(name.verb)}; type it yourself.`;
+        continue;
+      }
+      if (step.words.length) return `A command takes no words: ${name.id}.`;
+      if (!commands.has(name.id)) return `Not a command here: ${name.id}.`;
+      if (name.id.startsWith('custom.')) {
+        const action = actions.find((item) => 'custom.' + item.id === name.id);
+        if (!action) return `Not a command here: ${name.id}.`;
+        if (action.executor.kind === 'builtin') {
+          const problem = inspect(action.executor.command, depth + 1);
+          if (problem) return problem;
+        } else if (action.executor.kind === 'sequence') {
+          for (const inner of action.executor.commands) {
+            const problem = inspect(inner, depth + 1);
+            if (problem) return problem;
+          }
+        }
+      }
+      const problem = modelLineCommandProblem(name.id, actions);
+      if (problem) return `A model may not propose ${name.id}: ${problem}.`;
+    }
+    return undefined;
+  };
   try {
-    steps = parseCommandLine(line);
+    return inspect(line, 0);
   } catch (error) {
     return error instanceof LineError ? error.message : String(error);
   }
-  if (!steps.length) return 'The model gave no line.';
-  for (const step of steps) {
-    const name = resolveName(step.name);
-    if (step.bang) return `A model may not propose :${step.name}!, which drops unsaved text.`;
-    if (name.kind === 'user') {
-      if (!userCommands.has(name.name)) return `No command :${name.name}.`;
-      continue;
-    }
-    if (name.kind === 'verb') {
-      if (refusedVerbs.has(name.verb.key))
-        return `A model may not propose :${verbName(name.verb)}; type it yourself.`;
-      continue;
-    }
-    if (!commands.has(name.id)) return `Not a command here: ${name.id}.`;
-    const problem = modelLineCommandProblem(name.id, actions);
-    if (problem) return `A model may not propose ${name.id}: ${problem}.`;
-  }
-  return undefined;
 }
 const settingLines = () =>
   Object.entries(settingNames)

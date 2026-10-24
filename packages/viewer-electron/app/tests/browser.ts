@@ -20,6 +20,14 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  chat: (request) => invoke('chat', request),
+  shellCommand: (action) => invoke('shellCommand', action),
+  hotkeyStatus: () => invoke('hotkeyStatus'),
+  restoreWindow: () => invoke('restoreWindow'),
+  workspaceClaim: (id) => invoke('workspaceClaim', id),
+  newWindow: () => invoke('newWindow'),
+  git: (request) => invoke('git', request),
+  gitResource: (source) => invoke('gitResource', source),
   watchRules: (request) => invoke('watchRules', request),
   relationships: (request) => invoke('relationships', request),
   workflow: (request) => invoke('workflow', request),

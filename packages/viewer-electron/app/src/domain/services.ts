@@ -111,6 +111,8 @@ export interface ApplicationSettings {
   };
   /** `>` prompts in the palette (2026-10-24): the model they ask; "" is the first. */
   prompts: { providerID: string };
+  git: { enabled: boolean };
+  hotkey: { enabled: boolean; shortcut: string };
   /** Colour themes (2026-10-23): domain/themes.ts. */
   themes: Theme[];
   /** The theme for each appearance; empty is the built-in one. */
@@ -392,6 +394,8 @@ export function defaultSettings(home: string): ApplicationSettings {
     profiles: [],
     themes: [],
     prompts: { providerID: '' },
+    git: { enabled: false },
+    hotkey: { enabled: false, shortcut: 'Alt+Space' },
     theme: { dark: '', light: '' },
     tour: { dwell: 3000, duration: 900, loop: true },
     search: {

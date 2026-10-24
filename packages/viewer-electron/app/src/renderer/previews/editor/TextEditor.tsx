@@ -43,7 +43,7 @@ import { findMarks, findOpen, showFind } from './find';
 import { EditorFind, type FindRequest } from './EditorFind';
 
 /** Prism's token classes, so text reads and edits in the same colours, in both looks. */
-const tokens = HighlightStyle.define([
+export const editorTokens = HighlightStyle.define([
   { tag: [tags.comment, tags.meta, tags.processingInstruction], class: 'token comment' },
   {
     tag: [tags.string, tags.special(tags.string), tags.regexp, tags.attributeValue, tags.url],
@@ -69,7 +69,7 @@ const tokens = HighlightStyle.define([
 ]);
 
 /** What the editor settings configure in CodeMirror; the font is CSS, set on the host. */
-const presentation = (settings: ApplicationSettings['editor']) => [
+export const editorPresentation = (settings: ApplicationSettings['editor']) => [
   ...(settings.lineNumbers ? [lineNumbers(), highlightActiveLineGutter()] : []),
   EditorState.tabSize.of(settings.tabSize),
   indentUnit.of(settings.insertSpaces ? ' '.repeat(settings.tabSize) : '\t'),
@@ -80,6 +80,16 @@ const presentation = (settings: ApplicationSettings['editor']) => [
  * file's line breaks (`\r\n` stays `\r\n`) and tells its owner when the text changes; the owner reads
  * it through the handle, so a large file is not copied on every keystroke.
  */
+export interface TextEditorProps {
+  text: string;
+  language?: string;
+  label: string;
+  settings: ApplicationSettings['editor'];
+  onChange(): void;
+  onFinal?(text: string): void;
+  onHandle(handle: EditorHandle | null): void;
+}
+
 export default function TextEditor({
   text,
   language,
@@ -88,17 +98,7 @@ export default function TextEditor({
   onChange,
   onFinal,
   onHandle,
-}: {
-  text: string;
-  /** A language id from the highlighting table. */
-  language?: string;
-  label: string;
-  settings: ApplicationSettings['editor'];
-  onChange(): void;
-  /** The text as the editor closes, so its owner keeps the last keystrokes. */
-  onFinal?(text: string): void;
-  onHandle(handle: EditorHandle | null): void;
-}) {
+}: TextEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const languages = useRef(new Compartment());
@@ -154,7 +154,7 @@ export default function TextEditor({
         doc: initial.current,
         extensions: [
           ...(crlf ? [EditorState.lineSeparator.of('\r\n')] : []),
-          configured.current.of(presentation(initialSettings.current)),
+          configured.current.of(editorPresentation(initialSettings.current)),
           highlightSpecialChars(),
           history(),
           drawSelection(),
@@ -165,7 +165,7 @@ export default function TextEditor({
           // the search state and commands only: CodeMirror's own panel is never opened
           search({ createPanel: () => ({ dom: document.createElement('div') }) }),
           findMarks,
-          syntaxHighlighting(tokens),
+          syntaxHighlighting(editorTokens),
           languages.current.of([]),
           EditorView.contentAttributes.of({ 'aria-label': label }),
           keymap.of([
@@ -260,7 +260,9 @@ export default function TextEditor({
     };
   }, [language]);
   useEffect(() => {
-    view.current?.dispatch({ effects: configured.current.reconfigure(presentation(settings)) });
+    view.current?.dispatch({
+      effects: configured.current.reconfigure(editorPresentation(settings)),
+    });
   }, [settings]);
   return (
     <div className="text-editor-frame">

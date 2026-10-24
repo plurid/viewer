@@ -7,9 +7,11 @@ import {
   type ProjectDefinition,
   type ProjectDocument,
   type ProjectLayout,
+  type PortableDiffSource,
 } from '../../domain/project';
 import { parentPath } from '../../domain/planes';
-import type { Pane, ScratchPane } from '../../domain/contracts';
+import type { Pane, ScratchPane, ChatPane } from '../../domain/contracts';
+import type { DiffSource } from '../../domain/diff';
 import {
   activeWorkspace,
   associateProject,
@@ -138,13 +140,23 @@ export function ProjectFileNotice() {
  * plane's folder is only where Save As starts, so it binds nothing. */
 export function projectBindings(root: string, panes: readonly Pane[]): Record<string, string> {
   const bindings: Record<string, string> = {};
-  for (const pane of panes) {
-    if (pane.type === 'scratch') continue;
+  const bind = (path: string, directory: boolean) => {
     try {
-      projectReference(root, pane.path, bindings);
+      projectReference(root, path, bindings);
     } catch {
-      bindings['external-' + (Object.keys(bindings).length + 1)] =
-        pane.type === 'folder' ? pane.path : parentPath(pane.path);
+      bindings['external-' + (Object.keys(bindings).length + 1)] = directory
+        ? path
+        : parentPath(path);
+    }
+  };
+  for (const pane of panes) {
+    if (pane.type === 'scratch' || pane.type === 'chat') continue;
+    bind(pane.path, pane.type === 'folder' || pane.type === 'git-changes');
+    if (pane.type === 'diff') {
+      for (const source of [pane.left, pane.right]) {
+        if (source.kind === 'file') bind(source.path, false);
+        if (source.kind === 'git') bind(source.repository, true);
+      }
     }
   }
   return bindings;
@@ -158,8 +170,20 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
   const space = activeWorkspace();
   // A scratch plane's text is private, kept in the profile: it stays out of the project file.
   const shared = space.panes.filter(
-    (pane): pane is Exclude<Pane, ScratchPane> => pane.type !== 'scratch',
+    (pane): pane is Exclude<Pane, ScratchPane | ChatPane> =>
+      pane.type !== 'scratch' && pane.type !== 'chat',
   );
+  const source = (value: DiffSource): PortableDiffSource => {
+    if (value.kind === 'empty') return value;
+    if (value.kind === 'file')
+      return { kind: 'file', target: projectReference(project.root, value.path, project.bindings) };
+    return {
+      kind: 'git',
+      target: projectReference(project.root, value.repository, project.bindings),
+      commit: value.commit,
+      path: value.path,
+    };
+  };
   const planes: ProjectDefinition['planes'] = shared.map((pane) => {
     const target = projectReference(project.root, pane.path, project.bindings);
     const state = Object.fromEntries(
@@ -171,6 +195,17 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       return { id: pane.id, type: pane.type, target, state, profileID: pane.profileID };
     if (pane.type === 'collection')
       return { id: pane.id, type: pane.type, target, state, collectionID: pane.collectionID };
+    if (pane.type === 'git-changes') return { id: pane.id, type: pane.type, target, state };
+    if (pane.type === 'diff')
+      return {
+        id: pane.id,
+        type: pane.type,
+        target,
+        state,
+        left: source(pane.left),
+        right: source(pane.right),
+        mode: pane.mode,
+      };
     return {
       id: pane.id,
       type: pane.type,

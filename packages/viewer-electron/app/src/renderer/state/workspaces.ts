@@ -26,6 +26,7 @@ import { folderPane } from './panes';
 import { adapters, closedPanes, flushState, resetPersistence } from './persistence';
 import { resetPreferences } from './preferences';
 import { scopedPresentation } from './presentation';
+import { stopTour } from '../workspace/tour';
 
 export function initialize(bootstrap: Bootstrap): void {
   resetPersistence();
@@ -119,7 +120,9 @@ export async function switchWorkspace(id: string): Promise<void> {
   if (id === getState().saved.activeWorkspace) return;
   if (!getState().saved.workspaces.some((space) => space.id === id)) return;
   await flushState();
-  savePatch({ activeWorkspace: id });
+  if (window.viewer.workspaceClaim && !(await window.viewer.workspaceClaim(id))) return;
+  stopTour();
+  savePatch({ activeWorkspace: id, profile: undefined });
   update({
     ...getState(),
     activePane: activeWorkspace().activePane || activeWorkspace().panes[0]?.id || '',
@@ -127,10 +130,32 @@ export async function switchWorkspace(id: string): Promise<void> {
   });
   await flushState(false);
 }
+
+/** Refresh shared workspaces without replacing this window's unsaved active workspace. */
+export function receiveWorkspaces(saved: SavedState): void {
+  const current = getState();
+  const active = activeWorkspace();
+  const workspaces = saved.workspaces.map((space) => (space.id === active.id ? active : space));
+  if (!workspaces.some((space) => space.id === active.id)) workspaces.push(active);
+  for (const space of workspaces) {
+    if (space.id !== active.id) adapters.set(space.id, new Map(Object.entries(space.arrangement)));
+  }
+  update({
+    ...current,
+    saved: {
+      ...current.saved,
+      workspaces,
+      favorites: saved.favorites,
+      recents: saved.recents,
+      lineHistory: saved.lineHistory,
+    },
+  });
+}
 export async function newWorkspace(name: string): Promise<void> {
   if (getState().saved.workspaces.length >= 30)
     throw new Error('The maximum of 30 workspaces has been reached.');
   await flushState();
+  stopTour();
   const pane = folderPane(getState().bootstrap.home, {
     visible: getState().saved.ui.sidebar.inNewPlanes,
     width: 210,
@@ -147,6 +172,7 @@ export async function newWorkspace(name: string): Promise<void> {
   savePatch({
     workspaces: [...getState().saved.workspaces, workspace],
     activeWorkspace: workspace.id,
+    profile: undefined,
   });
   update({ ...getState(), activePane: pane.id });
   await flushState(false);

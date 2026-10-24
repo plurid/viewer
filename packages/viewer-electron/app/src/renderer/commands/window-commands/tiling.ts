@@ -1,6 +1,12 @@
 import type { Pane } from '../../../domain/contracts';
 import { parentPath } from '../../../domain/planes';
-import { nextLayout, tileLayoutLabels, tileLayouts, type TileLayout } from '../../../domain/tiling';
+import {
+  nextLayout,
+  resizeTile,
+  tileLayoutLabels,
+  tileLayouts,
+  type TileLayout,
+} from '../../../domain/tiling';
 import {
   activeWorkspace,
   addRootFolder,
@@ -10,7 +16,7 @@ import {
 } from '../../state/store';
 import { setTiling } from '../../state/workspaces';
 import { readingOrder, visiblePlanes } from '../../keys/planes';
-import type { CommandDefinition } from '../registry';
+import type { CommandDefinition, CommandContext } from '../registry';
 import type { WindowScopes } from './scope';
 import type { WorkspaceController } from '../../workspace/context';
 
@@ -74,7 +80,7 @@ export function splitTile(
         : (tiling?.layout ?? settings.defaultLayout),
     main: tiling?.main ?? 0.6,
   });
-  workspace.retile();
+  workspace.retile(tiling);
   return true;
 }
 /**
@@ -91,7 +97,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     windowScope(context) && actions.ready && !!tiling;
   const apply = (next: Parameters<typeof setTiling>[0]) => {
     setTiling(next);
-    actions.workspace.retile();
+    actions.workspace.retile(tiling);
   };
   const split = (direction: 'right' | 'down') => () => {
     splitTile(actions.workspace, direction);
@@ -103,16 +109,29 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     if (index < 0) return;
     const other = (index + delta + panes.length) % panes.length;
     [panes[index], panes[other]] = [panes[other]!, panes[index]!];
-    apply({ ...tiling, panes });
+    apply({ ...tiling, panes, tree: undefined });
   };
-  const layout = (next: TileLayout) => () => tiling && apply({ ...tiling, layout: next });
+  const layout = (next: TileLayout) => () =>
+    tiling && apply({ ...tiling, layout: next, tree: undefined });
   const main = (delta: number) => () =>
-    tiling && apply({ ...tiling, main: Math.min(0.8, Math.max(0.2, tiling.main + delta)) });
+    tiling &&
+    apply({ ...tiling, main: Math.min(0.8, Math.max(0.2, tiling.main + delta)), tree: undefined });
   const command = (definition: Omit<CommandDefinition, 'group'>): CommandDefinition => ({
     ...definition,
     group: 'Space',
   });
   return [
+    ...(['left', 'right', 'up', 'down'] as const).map((direction) => ({
+      id: `tile-resize-${direction}`,
+      label: `Grow tile ${direction}`,
+      group: 'Space',
+      icon: 'frame' as const,
+      aliases: ['resize', 'tile'],
+      when: (context: CommandContext) => tiled(context) && !!tiling?.panes.includes(active),
+      run: () => {
+        if (tiling) apply(resizeTile(tiling, active, direction));
+      },
+    })),
     command({
       id: 'tile-split-right',
       label: 'Split right',
@@ -152,7 +171,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
       icon: 'grid',
       aliases: ['layout', 'tmux', 'cycle'],
       when: tiled,
-      run: () => tiling && apply({ ...tiling, layout: nextLayout(tiling.layout) }),
+      run: () => tiling && apply({ ...tiling, layout: nextLayout(tiling.layout), tree: undefined }),
     }),
     ...tileLayouts.map((name) =>
       command({
@@ -188,7 +207,11 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
       when: (context) => tiled(context) && !!tiling?.panes.includes(active),
       run: () =>
         tiling &&
-        apply({ ...tiling, panes: [active, ...tiling.panes.filter((id) => id !== active)] }),
+        apply({
+          ...tiling,
+          panes: [active, ...tiling.panes.filter((id) => id !== active)],
+          tree: undefined,
+        }),
     }),
     command({
       id: 'tile-main-grow',

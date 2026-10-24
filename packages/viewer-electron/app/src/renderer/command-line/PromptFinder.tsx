@@ -54,12 +54,14 @@ export function PromptFinder({
   onRun,
   onEdit,
   onBack,
+  onChat,
 }: {
   host: LineHost;
   initialQuery: string;
   onRun(line: string): void;
   onEdit(line: string): void;
   onBack(): void;
+  onChat(text: string): void;
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [state, setState] = useState<
@@ -245,6 +247,7 @@ export function PromptFinder({
             ? `${provider.name} · Enter asks, then runs the line · Tab edits it`
             : 'Ask in words with a model from Settings → Models'}
         </span>
+        {!!query.trim() && <button onClick={() => onChat(query.trim())}>Continue in Chat</button>}
       </div>
     </div>
   );

@@ -1,13 +1,14 @@
 import type { RefObject } from 'react';
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC, type TreePlane } from '@plurid/plurid-data';
-import { tileRects } from '../../domain/tiling';
+import { tilingRects } from '../../domain/tiling';
 import { activeWorkspace } from '../state/store';
 import { setTiling } from '../state/workspaces';
 import { flattenTree, hostID } from './tree';
 import { cancelWorkspaceFraming, frameWorkspace } from './framing';
 import { folderPairArea } from './folder-pair';
 import { frontPlaneDepth } from './plane-layout';
+import { rememberTiling } from './tiling-history';
 
 /**
  * TILING IN THE SPACE (2026-10-23): the active workspace's tiled planes placed face-on in the space's
@@ -42,7 +43,7 @@ export function applyTiling(
   // the same grid as the plane layout commands: the camera's pivot and pan at natural scale
   const originX = camera.pivot.x + area.x - element.clientWidth / 2 - camera.offset.x;
   const originY = camera.pivot.y + area.y - element.clientHeight / 2 - camera.offset.y;
-  const rects = tileRects(panes.length, tiling.layout, area, tiling.main);
+  const rects = tilingRects({ ...tiling, panes }, area);
   const placed = new Map(panes.map((id, index) => [byPane.get(id)!.planeID, rects[index]!]));
   // in front of every other plane; not of the tiles themselves, or each resize would move them nearer
   const others = nodes.filter((node) => !placed.has(node.planeID));
@@ -82,6 +83,7 @@ export function applyTiling(
   } finally {
     api.store.dispatch(pluridStateModules.space.actions.historyEnd());
   }
+  rememberTiling(api.tree.get(), { ...tiling, panes });
   frameWorkspace(engine, surface, panes, {
     camera: {
       absolute: {

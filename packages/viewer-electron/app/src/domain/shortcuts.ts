@@ -120,6 +120,15 @@ export function validShortcut(value: string): boolean {
     )
   );
 }
+
+/** Global shortcuts may use Option alone; ordinary application shortcuts retain their rules. */
+export function validGlobalShortcut(value: string): boolean {
+  return (
+    !!value &&
+    (validShortcut(value) ||
+      (shortcutParts(value).includes('alt') && validShortcut('Ctrl+' + value)))
+  );
+}
 const codePunctuation: Readonly<Record<string, string>> = {
   Period: '.',
   Comma: ',',

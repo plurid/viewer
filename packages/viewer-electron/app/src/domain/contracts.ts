@@ -1,4 +1,8 @@
 import type { PromptAnswer, PromptRequest } from './command-line/prompt';
+import type { DiffSource } from './diff';
+import type { GitRequest, GitReply, GitSource } from './git';
+import type { LaunchRequest } from './launch';
+import type { ChatRequest, ChatReply, ChatDocument } from './chat';
 import type { SessionKeys } from './session-keys';
 import type { WorkspaceOverrides } from './overrides';
 import type { Tiling } from './tiling';
@@ -84,7 +88,7 @@ export interface FolderListing {
 }
 export type ViewMode = 'list' | 'grid' | 'columns' | 'gallery' | 'map';
 export type SortKey = 'name' | 'modified' | 'created' | 'size' | 'kind' | 'extension';
-export type ListColumn = SortKey;
+export type ListColumn = SortKey | 'git';
 export interface FolderPane {
   id: string;
   type: 'folder';
@@ -159,8 +163,36 @@ export interface CollectionPane {
   path: string;
   collectionID: string;
 }
+export interface DiffPane {
+  id: string;
+  type: 'diff';
+  path: string;
+  left: DiffSource;
+  right: DiffSource;
+  mode?: 'split' | 'unified' | 'slider' | 'onion' | 'side' | 'difference';
+  bufferID?: string;
+}
+export interface GitChangesPane {
+  id: string;
+  type: 'git-changes';
+  path: string;
+}
+export interface ChatPane {
+  id: string;
+  type: 'chat';
+  path: string;
+  conversationID: string;
+}
 export type Pane =
-  FolderPane | PreviewPane | SearchPane | TerminalPane | CollectionPane | ScratchPane;
+  | FolderPane
+  | PreviewPane
+  | SearchPane
+  | TerminalPane
+  | CollectionPane
+  | ScratchPane
+  | DiffPane
+  | GitChangesPane
+  | ChatPane;
 export interface Workspace {
   id: string;
   name: string;
@@ -178,21 +210,26 @@ export interface Workspace {
   spaceColor?: string;
   /** This workspace's own chrome and space settings over the general ones (2026-10-23). */
   overrides?: WorkspaceOverrides;
+  /** Presentation profile used when this workspace is entered. */
+  profileID?: string;
   /** Planes tiled as tmux's panes (2026-10-23): kept in their layout as the window resizes. */
   tiling?: Tiling;
 }
 /** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
-export const CURRENT_STATE_VERSION = 5 as const;
+export const CURRENT_STATE_VERSION = 6 as const;
 export interface SavedState {
-  version: 1 | 2 | 3 | 4 | typeof CURRENT_STATE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
   preferencesRevision?: number;
   workspaces: Workspace[];
   activeWorkspace: string;
+  openWindows?: string[];
   favorites: { name: string; path: string }[];
   recents: string[];
   /** The profile applied, and the values it replaced, to leave it again (2026-10-23). */
   profile?: { id: string; previous: Record<string, JSONValue> };
+  /** Explicit presentation choices restored only in their owning workspace window. */
+  windowProfiles?: Record<string, { id: string; previous: Record<string, JSONValue> }>;
   /** Folders' visits for `z` in the palette (2026-10-23): how many, and the last. */
   visits?: Record<string, { count: number; last: number }>;
   /** Lines run from the command line, the latest first (2026-10-23). */
@@ -258,6 +295,7 @@ export interface UIPreferences {
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
+  launches?: LaunchRequest[];
   freshSession?: boolean;
   home: string;
   platform: 'darwin' | 'win32' | 'linux';
@@ -375,6 +413,9 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'chat'; document: ChatDocument }
+  | { type: 'launch'; request: LaunchRequest }
+  | { type: 'workspaces'; state: SavedState }
   | { type: 'watch-rule'; rule: WatchRule }
   /** Settings shows this setting: a command for a setting the workspace does not change itself. */
   | { type: 'settings-focus'; path: string }
@@ -412,6 +453,18 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  chat(request: ChatRequest): Promise<ChatReply>;
+  shellCommand(action: 'status' | 'install' | 'uninstall'): Promise<{
+    path: string;
+    installed: boolean;
+    problem?: string;
+  }>;
+  hotkeyStatus(): Promise<{ registered: boolean; shortcut: string; problem?: string }>;
+  restoreWindow(): Promise<void>;
+  workspaceClaim(id: string): Promise<boolean>;
+  newWindow(): Promise<void>;
+  git(request: GitRequest): Promise<GitReply>;
+  gitResource(source: GitSource): Promise<Resource>;
   watchRules(request: WatchRuleRequest): Promise<WatchRuleReply>;
   relationships(request: RelationshipsRequest): Promise<RelationshipsReply>;
   workflow(request: WorkflowRequest): Promise<WorkflowReply>;
