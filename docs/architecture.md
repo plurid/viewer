@@ -242,6 +242,10 @@ explicit popover when no corner fits. Empty map background ignores pointer input
 map buttons remain navigable. Placement coalesces to animation frames and stays
 stable during pointer interaction. The host restores focus, attributes, observers
 and subscriptions on dismissal/disposal; Plurid retains projection/navigation.
+The Viewcube also retains its engine-owned corner, conceal and hover behavior;
+the host only suppresses it while its visible portion covers a protected control.
+Toolbar protection uses actual controls and menus rather than the empty
+click-through band across the bottom of the viewport.
 See [ADR 0004](adr/0004-collision-aware-spatial-overview.md).
 
 ## Durable save and close

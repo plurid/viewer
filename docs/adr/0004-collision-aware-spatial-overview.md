@@ -17,6 +17,14 @@ valid corner to avoid camera-induced jitter. Visible plane controls, the viewcub
 and engine toolbar are obstacles. If no safe corner fits, the host collapses the
 map to an explicit Overview entry rather than covering a control.
 
+The Viewcube keeps the engine's corner anchors, conceal offsets, responsive rules
+and hover transition. Viewer never writes its position or transition styles.
+If its visible, viewport-clipped portion overlaps a protected control, the host
+temporarily suppresses its visibility and restores it when the obstruction clears.
+The toolbar's full-width, click-through band is not an obstacle: only its actual
+controls and open menus participate. Hover and completed transitions invalidate
+the measurement as well as engine and viewport changes.
+
 `SpatialOverview.ts` adapts only public Plurid DOM attributes and engine
 subscriptions. Measurements coalesce to an animation frame after engine, resize
 or relevant child changes; active pointer gestures and an expanded Overview hold

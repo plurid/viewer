@@ -22,12 +22,17 @@ export interface SpatialOverviewPorts {
 
 const mapSelector = '[data-plurid-overlay="minimap"]';
 const cubeSelector = '[data-plurid-overlay="viewcube"]';
+const toolbarSelector = '[data-plurid-entity="PluridToolbar"]';
+// The toolbar root is a full-width, click-through band. Protect its controls and open menus,
+// otherwise the empty bottom corners would suppress the cube even in a completely clear space.
+const toolbarControlsSelector =
+  `${toolbarSelector} [data-plurid-control], ` +
+  `${toolbarSelector} [role="dialog"], ${toolbarSelector} [role="menu"]`;
 // Only fixed, explicitly opted-in control areas participate; changing file rows do not.
 const protectedAreaAttribute = 'data-viewer-overlay-protected';
 const obstacleSelector =
-  `.plane-controls, ${cubeSelector}, ` +
-  `[data-plurid-entity="PluridToolbar"], [${protectedAreaAttribute}]`;
-const observedSelector = `${mapSelector}, ${obstacleSelector}`;
+  `.plane-controls, ${cubeSelector}, ` + `${toolbarControlsSelector}, [${protectedAreaAttribute}]`;
+const observedSelector = `${mapSelector}, ${toolbarSelector}, ${obstacleSelector}`;
 const ownedStyles = [
   'position',
   'left',

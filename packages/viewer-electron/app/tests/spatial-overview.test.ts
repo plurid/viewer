@@ -139,10 +139,14 @@ describe('engine overlay adapter', () => {
         new DOMRect(
           element.style.left
             ? Number.parseFloat(element.style.left)
-            : view.root.getBoundingClientRect().right - 150 - Number.parseFloat(element.style.right),
+            : view.root.getBoundingClientRect().right -
+                150 -
+                Number.parseFloat(element.style.right),
           element.style.top
             ? Number.parseFloat(element.style.top)
-            : view.root.getBoundingClientRect().bottom - 175 - Number.parseFloat(element.style.bottom),
+            : view.root.getBoundingClientRect().bottom -
+                175 -
+                Number.parseFloat(element.style.bottom),
           150,
           175,
         ),
@@ -196,6 +200,37 @@ describe('engine overlay adapter', () => {
     expect(element.style.visibility).toBe('');
     expect(element.style.transition).toBe('');
     expect(frames.size).toBe(0);
+  });
+
+  it('ignores the toolbar click-through band but protects its actual controls', () => {
+    const view = fixture();
+    view.map.remove();
+    const element = cube(view);
+    const band = document.createElement('div');
+    band.dataset.pluridEntity = 'PluridToolbar';
+    band.style.pointerEvents = 'none';
+    vi.spyOn(band, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 525, 1000, 75));
+    const button = document.createElement('button');
+    button.dataset.pluridControl = 'toolbar-more';
+    const bounds = vi
+      .spyOn(button, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(600, 535, 40, 46));
+    band.append(button);
+    view.root.append(band);
+    frame();
+    expect(element.style.visibility).toBe('');
+    expect(element.style.left).toBe('');
+    expect(element.style.top).toBe('');
+
+    bounds.mockReturnValue(new DOMRect(900, 535, 40, 46));
+    view.emit();
+    frame();
+    expect(element.style.visibility).toBe('hidden');
+
+    bounds.mockReturnValue(new DOMRect(600, 535, 40, 46));
+    view.emit();
+    frame();
+    expect(element.style.visibility).toBe('');
   });
 
   it('preserves the engine conceal offsets and reveals its expanded cube only when safe', () => {

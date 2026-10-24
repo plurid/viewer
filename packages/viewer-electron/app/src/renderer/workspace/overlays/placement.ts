@@ -63,7 +63,11 @@ export function solveOverviewPlacement({
         : viewport.y + overviewInset,
       ...size,
     };
-    if (!obstacles.some((obstacle) => validOverlayRect(obstacle) && overlaysIntersect(bounds, obstacle)))
+    if (
+      !obstacles.some(
+        (obstacle) => validOverlayRect(obstacle) && overlaysIntersect(bounds, obstacle),
+      )
+    )
       return { kind: 'corner', corner, bounds };
   }
   return { kind: 'fallback' };
