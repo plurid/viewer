@@ -6,6 +6,9 @@ See [Git, comparisons, Chat and native windows](docs/spatial-tools.md) for the
 opt-in Git and shortcut controls, comparison planes, `viewer` shell command,
 read-only conversations, workspace profiles and individual tile resizing.
 
+See [Preview formats](docs/preview-formats.md) for the current file-type inventory,
+partial support and proposed major/medium additions.
+
 ## Run and build
 
 Use Node ≥22.13 and pnpm 11. Verified with Node 26.8.2 and pnpm 11.3.0 on Apple Silicon macOS.

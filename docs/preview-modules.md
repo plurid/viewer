@@ -1,5 +1,8 @@
 # Adding a preview module
 
+See the [preview format inventory](preview-formats.md) for current coverage and
+proposed formats, and [format priorities](preview-roadmap.md) for the roadmap.
+
 Built-in previews live in `packages/viewer-electron/app/src/renderer/previews`. The registry selects the highest `detect()` score, then loads that module on demand. Registration is an in-repository code extension; installing third-party plugins is outside the current scope.
 
 1. Add a component under `modules/` with the `PreviewContext` contract.
