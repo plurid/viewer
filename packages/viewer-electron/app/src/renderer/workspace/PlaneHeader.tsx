@@ -62,6 +62,14 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
   const node = context.treePlane as TreePlane;
   const id = hostID(node);
   const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id));
+  const partner = useViewer((state) => {
+    const panes = activeWorkspace(state).panes;
+    const other =
+      pane?.type === 'folder' && pane.pair
+        ? panes.find((item) => item.id === pane.pair)
+        : undefined;
+    return other?.type === 'folder' && other.pair === id ? other : undefined;
+  });
   const collection = useViewer((state) =>
     activeWorkspace(state).collections?.find(
       (value) => pane?.type === 'collection' && value.id === pane.collectionID,
@@ -227,6 +235,19 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
         </span>
         {unsaved && (
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
+        )}
+        {partner && (
+          // a commander's pair (2026-10-24): which plane ⌃⌘C copies to
+          <span
+            className="plane-pair"
+            role="img"
+            aria-label={`Paired with ${baseName(partner.path)}`}
+            title={`Paired with ${baseName(partner.path)}: ⌃⌘C copies there, ⌃⌘X moves${
+              pane?.type === 'folder' && pane.pairSync ? '; they follow each other' : ''
+            }`}
+          >
+            {pane?.type === 'folder' && pane.pairSync ? '⇉' : '⇄'}
+          </span>
         )}
       </span>
       {pane?.type === 'folder' ? (

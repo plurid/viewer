@@ -487,6 +487,35 @@ export function withoutTopWords(query: FileQuery): FileQuery {
     root: !nodes.length ? null : nodes.length === 1 ? nodes[0]! : { kind: 'and', nodes },
   };
 }
+/**
+ * A pattern, as a commander selects by one (2026-10-24): globs, each word one and any matching
+ * (`*.md *.txt`, `IMG_????.jpg`), or else a query (`ext:md modified<7d`).
+ */
+export function parsePattern(text: string, now = Date.now()): FileQuery {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const glob =
+    words.length > 0 && words.every((word) => /[*?]/.test(word) && !/^[-~(]|[:<>="]/.test(word));
+  if (!glob) return parseFileQuery(text, now);
+  const nodes: QueryNode[] = words.map((word) => ({
+    kind: 'regex',
+    regex: new RegExp(
+      '^' +
+        word
+          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+          .replace(/\*/g, '.*')
+          .replace(/\?/g, '.') +
+        '$',
+      'iu',
+    ),
+    source: word,
+  }));
+  return {
+    root: nodes.length === 1 ? nodes[0]! : { kind: 'or', nodes },
+    words: [],
+    tags: [],
+    needsStat: false,
+  };
+}
 /** A query's error said where: the message, and the column. */
 export function queryProblem(text: string): { message: string; at: number } | undefined {
   try {

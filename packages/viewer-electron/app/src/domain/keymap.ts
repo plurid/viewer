@@ -79,6 +79,10 @@ export const defaultKeymap: Keymap = {
     // a folder's subfolders as planes, and back
     e: 'explode-folder',
     E: 'collapse-folder',
+    // a commander's pair: > copies to the other folder, < swaps them, Tab goes to the other
+    '>': 'copy-to-pair',
+    '<': 'swap-pair-folders',
+    Tab: 'focus-pair',
     // a mode for the tiles: h and l size the main tile, j and k swap, until Escape
     R: 'mode resize',
   },

@@ -17,6 +17,7 @@ import {
   installProject,
   consumeProjectLayout,
   updatePane,
+  pairPanes,
   changePreferences,
   report,
   reconcilePanes,
@@ -317,6 +318,8 @@ export function useWorkspaceController({
         try {
           const copy = addPane(folder.path, 'folder', true);
           copyID = copy.id;
+          // the two as a commander's panels: ⌃⌘C copies to the other (2026-10-24)
+          pairPanes(folder.id, copy.id);
           updatePane(copy.id, {
             sidebar: folder.sidebar ? { ...folder.sidebar } : undefined,
           });

@@ -1,4 +1,11 @@
-import { parseFileQuery, QueryError } from '../../domain/file-query';
+import {
+  matchesQuery,
+  parseFileQuery,
+  parsePattern,
+  QueryError,
+  type FileQuery,
+} from '../../domain/file-query';
+import { folderHandle } from '../explorer/folder-handles';
 import { browseSession, updateBrowseSession } from '../workspace/sessions';
 import { expandPath, type Step, type Word } from '../../domain/command-line/lex';
 import { didYouMean, parseCommandLine } from '../../domain/command-line/verbs';
@@ -252,6 +259,9 @@ export const verbRuns: Record<string, VerbRun> = {
     readQuery(text);
     host.workspace.newSearch(text, text, places(host).folder, true, false);
   },
+  // a commander's select by pattern (2026-10-24): globs or a query, added or taken out
+  select: async ({ step }, host) => choose(host, step.rest?.text ?? '', true),
+  deselect: async ({ step }, host) => choose(host, step.rest?.text ?? '', false),
   // the Trash command itself: its confirmation, as Settings has it; `!` is not taken
   trash: async (_input, host) => run(host, 'trash', 'Select something to move to the Trash.'),
   tabnew: async ({ flags, args }, host) =>
@@ -361,6 +371,34 @@ export const verbRuns: Record<string, VerbRun> = {
     await window.viewer.terminalWrite(pane.id, args.map((word) => terminalInput(word)).join(''));
   },
 };
+/** The folder plane's items matching a pattern, added to its selection or taken out. */
+async function choose(host: LineHost, text: string, adding: boolean): Promise<string> {
+  const verb = adding ? 'select' : 'deselect';
+  if (!text) throw new Error(`:${verb} needs a pattern: *.md, or a query.`);
+  const handle = folderHandle(host.context().paneID);
+  if (!handle) throw new Error(`:${verb} works in a folder plane.`);
+  let query: FileQuery;
+  try {
+    query = parsePattern(text);
+  } catch (error) {
+    throw error instanceof QueryError ? new Error(error.message) : error;
+  }
+  const tagged = new Map<string, Set<string>>();
+  for (const tag of query.tags)
+    tagged.set(
+      tag,
+      new Set((await window.viewer.taggedFiles(tag, [handle.path()])).map((entry) => entry.path)),
+    );
+  const matching = handle
+    .entries()
+    .filter((entry) => matchesQuery(query, entry, { tagged: (tag) => tagged.get(tag) }));
+  const chosen = new Set(handle.selected().map((entry) => entry.path));
+  for (const entry of matching)
+    if (adding) chosen.add(entry.path);
+    else chosen.delete(entry.path);
+  handle.select(handle.entries().filter((entry) => chosen.has(entry.path)));
+  return `${matching.length} matching; ${chosen.size} selected.`;
+}
 /** A query that does not read, said as the line's error. */
 function readQuery(text: string): void {
   try {

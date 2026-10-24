@@ -20,6 +20,17 @@ The Trash confirmation lists selected folders' full contents (file and folder co
 
 Drag across blank space in list or grid view to select the items under the rectangle. Hold Shift or Command to add them to the current selection. The view scrolls when the pointer nears its top or bottom edge, and the click that ends the drag keeps the selection. Rows outside the visible window are selected too, by their measured positions.
 
+**Select by pattern** (⌃⌘=) and **Deselect by pattern** (⌃⌘-) open the command line at `select ` or `deselect `. Each takes either globs, one per word and any matching (`*.md *.txt`, `IMG_????.jpg`), or a file query (`ext:md modified<7d`; see [search.md](search.md)). The matching items in the folder plane are added to the selection, or taken out of it.
+
+## A commander's pair
+
+Two folder planes can work as Norton or Midnight Commander's two panels:
+- **Pairing.** **View side by side** and **View stacked** pair the two planes they show. **Pair with…** labels the planes in view and pairs the one you choose. A paired plane shows ⇄ beside its title.
+- **Copying and moving.** **Copy to …** (⌃⌘C, prefix `>`) and **Move to …** (⌃⌘X) send the selection to the other folder. They use the same transfers, conflicts and Undo as Paste. The keys are ⌃⌘ with copy's and cut's letters rather than F5 and F6.
+- **Moving between the two.** **Swap the pair's folders** (prefix `<`) trades them. **The other folder of the pair** (prefix Tab) makes the other plane active.
+- **Following.** **Follow each other into folders** makes the two go into the same subfolder together, and back up together; ⇉ shows it. A jump elsewhere stays one plane's own, and a subfolder the other folder lacks is said, not made.
+- **Unpairing.** **Unpair** ends the pair, and so does closing either plane.
+
 ## Creating
 
 New file… (Folder menu) creates an empty file through the operation service, exclusively: a name that already exists can only keep both or be skipped, never replaced. Undo moves the new file to the Trash. New folder follows the same rule.

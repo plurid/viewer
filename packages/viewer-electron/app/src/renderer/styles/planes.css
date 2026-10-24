@@ -133,3 +133,10 @@
 .pane-marker {
   display: contents;
 }
+/* a commander's pair (2026-10-24): the other folder ⌃⌘C copies to */
+.plane-pair {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1;
+}

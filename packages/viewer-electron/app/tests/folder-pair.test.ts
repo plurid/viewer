@@ -447,7 +447,9 @@ describe('folder pair workspace integration', () => {
       await act(async () => controller.splitFolder(target(), axis));
       const copy = activeWorkspace().panes[1] as FolderPane;
       expect(activeWorkspace().roots).toEqual([folder.id, copy.id]);
-      expect(activeWorkspace().panes[0]).toEqual(before);
+      // the two are a commander's pair (2026-10-24); the source is otherwise as it was
+      expect(activeWorkspace().panes[0]).toEqual({ ...before, pair: copy.id });
+      expect(copy.pair).toBe(folder.id);
       expect(getState().activePane).toBe(folder.id);
       expect(copy).toMatchObject({
         path: '/fixtures/project',

@@ -13,7 +13,15 @@ import { parentPath } from '../../domain/planes';
 import { languageFor } from '../../domain/text-languages';
 import { defaultSettings, newPlaneFolder } from '../../domain/services';
 import { panePresentation, resolveFolderPresentation } from '../../domain/folder-presentation';
-import { activeWorkspace, changeWorkspace, getState, savePatch, update, uuid } from './core';
+import {
+  activeWorkspace,
+  announce,
+  changeWorkspace,
+  getState,
+  savePatch,
+  update,
+  uuid,
+} from './core';
 import { closedPanes } from './persistence';
 import { remember } from './places';
 import { folderPresentation, updateFolderPresentation } from './presentation';
@@ -65,9 +73,10 @@ export function updatePane(id: string, patch: Partial<Pane>): void {
     panes: space.panes.map((pane) => (pane.id === id ? ({ ...pane, ...patch } as Pane) : pane)),
   }));
 }
-export function navigate(id: string, path: string): void {
+export function navigate(id: string, path: string, fromPair = false): void {
   const pane = activeWorkspace().panes.find((item) => item.id === id);
   if (!pane || pane.type !== 'folder' || pane.path === path) return;
+  const previous = pane.path;
   const history = [...pane.history.slice(0, pane.historyIndex + 1), path].slice(-200);
   updatePane(id, {
     path,
@@ -76,6 +85,64 @@ export function navigate(id: string, path: string): void {
     ...panePresentation(folderPresentation(path)),
   });
   remember(path);
+  if (!fromPair) followPair(id, previous, path);
+}
+/**
+ * A folder plane's partner (2026-10-24), as a commander's other panel: the folder plane it is
+ * paired with, while each names the other.
+ */
+export function pairOf(id: string): FolderPane | undefined {
+  const panes = activeWorkspace().panes;
+  const pane = panes.find((item) => item.id === id);
+  if (pane?.type !== 'folder' || !pane.pair) return undefined;
+  const partner = panes.find((item) => item.id === pane.pair);
+  return partner?.type === 'folder' && partner.pair === id ? partner : undefined;
+}
+/** Two folder planes paired; a plane paired before with another lets it go. */
+export function pairPanes(first: string, second: string): void {
+  if (first === second) return;
+  for (const id of [first, second]) {
+    const before = pairOf(id);
+    if (before && before.id !== first && before.id !== second)
+      updatePane(before.id, { pair: undefined, pairSync: undefined });
+  }
+  updatePane(first, { pair: second, pairSync: undefined });
+  updatePane(second, { pair: first, pairSync: undefined });
+}
+export function unpairPane(id: string): void {
+  const partner = pairOf(id);
+  updatePane(id, { pair: undefined, pairSync: undefined });
+  if (partner) updatePane(partner.id, { pair: undefined, pairSync: undefined });
+}
+/** Whether the pair follows each other into subfolders and back up. */
+export function setPairSync(id: string, on: boolean): void {
+  const partner = pairOf(id);
+  if (!partner) return;
+  for (const pane of [id, partner.id]) updatePane(pane, { pairSync: on || undefined });
+}
+/**
+ * The partner going where its pair went, when they follow each other: into the same subfolder,
+ * or as many folders up. A jump elsewhere (Go to, a location) is the plane's own.
+ */
+function followPair(id: string, from: string, to: string): void {
+  const pane = activeWorkspace().panes.find((item) => item.id === id);
+  const partner = pairOf(id);
+  if (pane?.type !== 'folder' || !pane.pairSync || !partner) return;
+  const base = from.replace(/\/$/, '');
+  const target = to.startsWith(base + '/')
+    ? partner.path.replace(/\/$/, '') + to.slice(base.length)
+    : from.startsWith(to.replace(/\/$/, '') + '/')
+      ? Array.from({
+          length: from.slice(to.replace(/\/$/, '').length + 1).split('/').length,
+        }).reduce<string>((folder) => parentPath(folder), partner.path)
+      : undefined;
+  if (!target || target === partner.path) return;
+  void window.viewer
+    .stat(target)
+    .then((entry) => {
+      if (entry.directory && pairOf(id)?.id === partner.id) navigate(partner.id, entry.path, true);
+    })
+    .catch(() => announce(`The other folder has no ${target.split('/').pop()}.`));
 }
 export function historyNavigate(id: string, delta: number): void {
   const pane = activeWorkspace().panes.find((item) => item.id === id);

@@ -3079,11 +3079,48 @@ async function verifyFileQueries(): Promise<void> {
   await snapshot('filter-line.png');
   await line('filter');
   await until(shown, (names) => names.length === 11, ':filter cleared');
+  // a commander's pair: side by side, the other plane in Documents, ⌃⌘C copies there, < swaps
+  await paletteCommand('View side by side');
+  await until(
+    () => evaluate<number>("document.querySelectorAll('.plane-pair').length"),
+    (count) => count === 2,
+    'the two planes paired',
+  );
+  // a line runs once the palette has gone: each waits for what it did
+  const titles = () =>
+    evaluate<string[]>(
+      "Array.from(document.querySelectorAll('.plane-title')).map((title) => title.textContent)",
+    );
+  const notice = () => evaluate<string>("document.querySelector('.notice')?.textContent ?? ''");
+  await line('focus-pair');
+  await line('cd Documents');
+  await until(titles, (names) => names.includes('Documents'), ':cd Documents in the other plane');
+  await line('focus-pair');
+  await line('select README.md');
+  await until(notice, (text) => text.includes('1 selected'), ':select README.md');
+  await key('c', 'KeyC', 6);
+  await until(
+    () =>
+      evaluate<boolean>('!!document.querySelector(\'[data-file-path$="/Documents/README.md"]\')'),
+    Boolean,
+    '⌃⌘C copied README.md to the other folder',
+  );
+  await snapshot('pair.png');
+  const before = await titles();
+  await key('b', 'KeyB', 2);
+  await key('<', 'Comma', 8);
+  await until(
+    titles,
+    (after) => after.join() === [...before].reverse().join(),
+    'prefix < swapped the pair’s folders',
+  );
   const planes = () => evaluate<number>("document.querySelectorAll('[data-viewer-pane]').length");
-  const before = await planes();
+  const planeCount = await planes();
   await line('find ext:md');
-  await until(planes, (count) => count === before + 1, ':find opened a results plane');
-  console.log('File queries: ext:, kind:, OR, a half-typed term, :filter and :find.');
+  await until(planes, (count) => count === planeCount + 1, ':find opened a results plane');
+  console.log(
+    'File queries: ext:, kind:, OR, a half-typed term, :filter, a pair copying and swapping, :find.',
+  );
 }
 /** The command line (2026-10-23): prefix : opens it; lines split, set, repeat, report errors and
  * close every plane, unsaved text and all, with :qa!. */

@@ -64,7 +64,7 @@ Viewer has one small language for its command line, its keys, its macros and its
 | `:command Name line` | `command-alias`, `bind-key`, `unbind-key` | Your commands and keys, for the session |
 | | `send-keys 'ls -la' Enter` | Type into the terminal plane: words as text, key names (Enter, Tab, C-c, M-x) as keys |
 
-Viewer's own verbs are `filter query` (the folder plane's filter: `:filter ext:md modified<7d`, none clears it), `find query` (this folder and its subfolders, as a results plane), both in the file query language ([search.md](search.md), `:help query`), `mkdir name`, `touch name`, `mv name` (rename the selection), `trash` (the system Trash, asking as Settings says), `profile name` and `layout name` (a tiling layout or a layout template).
+Viewer's own verbs are `filter query` (the folder plane's filter: `:filter ext:md modified<7d`, none clears it), `find query` (this folder and its subfolders, as a results plane), `select pattern` and `deselect pattern` (globs such as `*.md *.txt`, or a query, added to or taken out of the selection), all in the file query language ([search.md](search.md), `:help query`), `mkdir name`, `touch name`, `mv name` (rename the selection), `trash` (the system Trash, asking as Settings says), `profile name` and `layout name` (a tiling layout or a layout template).
 
 ## Keys
 

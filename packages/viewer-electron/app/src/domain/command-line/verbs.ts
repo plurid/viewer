@@ -134,6 +134,22 @@ export const verbs: readonly Verb[] = [
     complete: 'query',
     help: 'Search this folder and its subfolders; the results open as a plane',
   },
+  {
+    key: 'select',
+    names: ['select', 'sel'],
+    usage: '{glob|query}',
+    rest: true,
+    complete: 'query',
+    help: 'Add the items matching to the selection: *.md *.txt, or a query',
+  },
+  {
+    key: 'deselect',
+    names: ['deselect', 'unselect'],
+    usage: '{glob|query}',
+    rest: true,
+    complete: 'query',
+    help: 'Take the items matching out of the selection',
+  },
   { key: 'trash', names: ['trash'], help: 'Move the selection to the Trash' },
   {
     key: 'tabnew',

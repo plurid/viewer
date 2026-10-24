@@ -97,6 +97,11 @@ export interface FolderPane {
   sidebar?: PaneSidebar;
   /** Opened by Explode folder from that plane (2026-10-23): Collapse closes it again. */
   exploded?: string;
+  /** The folder plane it is paired with, as a commander's two panels (2026-10-24): copies and
+   * moves go there; each names the other. */
+  pair?: string;
+  /** The pair follows each other into subfolders and back up. */
+  pairSync?: boolean;
 }
 export interface PaneSidebar {
   visible: boolean;

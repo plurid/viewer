@@ -40,6 +40,11 @@ export const defaultShortcuts: Record<string, string> = {
   'save-file-as': 'Cmd+Shift+S',
   // the chrome away and back (2026-10-23); not ⌃⌘F, the Mac's full screen
   'focus-mode': 'Cmd+Shift+F',
+  // a commander's pair (2026-10-24): ⌃⌘ with copy's and cut's letters, not F5/F6
+  'copy-to-pair': 'Ctrl+Cmd+C',
+  'move-to-pair': 'Ctrl+Cmd+X',
+  'select-by-pattern': 'Ctrl+Cmd+=',
+  'deselect-by-pattern': 'Ctrl+Cmd+-',
   // the space's views (2026-10-23): ⌥⌘ goes to one, ⌃⌥⌘ saves the camera as one
   ...Object.fromEntries(
     [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((slot) => [

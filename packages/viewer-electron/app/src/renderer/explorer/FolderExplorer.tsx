@@ -1,3 +1,4 @@
+import { registerFolderHandle } from './folder-handles';
 import { matchesQuery } from '../../domain/file-query';
 import { useFileQuery } from './useFileQuery';
 import { nativeOpening } from './opening';
@@ -315,6 +316,19 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       commandLens,
       commandResolved,
     ],
+  );
+  // what :select and :deselect reach (2026-10-24): the items shown and the selection
+  const handleState = useRef({ entries, selected, selecting, path });
+  handleState.current = { entries, selected, selecting, path };
+  useEffect(
+    () =>
+      registerFolderHandle(id, {
+        path: () => handleState.current.path,
+        entries: () => handleState.current.entries,
+        selected: () => handleState.current.selected,
+        select: (chosen) => handleState.current.selecting.all(chosen),
+      }),
+    [id],
   );
   useContextPublish(id, activeID === id, selected, path);
   const command = (name: string) => {
