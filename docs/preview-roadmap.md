@@ -5,6 +5,10 @@ extensions, partial coverage and proposed major/medium additions, including
 fonts, notebooks, email and scientific/ML data. This roadmap adds domain-specific
 priorities and shared preview capabilities; it is not the support matrix.
 
+The [professional ecosystem catalog](preview-format-ecosystems.md) expands that
+backlog with BIM, medical/scientific data, vendor CAD, point clouds, publishing,
+web captures, packages and inspectable binaries. Its entries remain proposed.
+
 These are proposed additions, not claims of implemented support. The current registry already covers common raster images/SVG, Chromium media, PDF, EPUB, DjVu, DOCX/XLSX ([Office previews](office-previews.md)), Markdown/code/text, JSON/CSV, ZIP/TAR and GLB/glTF/OBJ/STL/FBX. TIFF, HEIC/HEIF, PSD composites, camera RAW, JPEG 2000, OpenEXR, TGA and ICNS render as bitmaps through Quick Look. ASCII DXF adds 2D drawing tools. STEP/STP, IGES/IGS, 3MF and PLY now have geometry previews, dimensions and surface-distance measurement. See [DXF support](drawings.md) and [model previews](model-previews.md) for their exact boundaries.
 
 The next preview should make a file useful without launching a specialist app. Share the existing resource grants, host lifetime, search/command registration and header controls; keep format readers independent of the explorer and spatial engine. Add a format only with representative good/bad fixtures and explicit partial-support feedback.
@@ -23,6 +27,39 @@ The next preview should make a file useful without launching a specialist app. S
 | 3        | Additional archives: `.7z`, `.rar`, `.zst`, disk/package metadata                                 | Safe listing, bounded nested previews and explicit extraction through existing operation jobs. Respect encryption, bomb limits and format licenses.                                                                                                                |
 
 For the current fabrication workflow, deeper CAD inspection and G-code toolpath viewing remain valuable next additions. For general file-manager adoption, office and imaging support have broader day-to-day value. DWG requires a deliberate licensed decoder or local conversion backend rather than the DXF parser.
+
+## Professional tracks promoted for investigation
+
+These tracks address whole workflows rather than increasing an extension count.
+They sit alongside the general-user priorities above, with no delivery schedule.
+
+| Track                    | Candidates brought forward                                       | First useful semantic result                                                                               |
+| ------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| BIM/construction         | IFC/IFCZIP as a separate family; LAS/LAZ/E57                     | Building/entity/property navigation and linked geometry; bounded point-cloud inspection.                   |
+| Mechanical/manufacturing | Parasolid/ACIS/JT, native CAD research and slicer/project 3MF    | Qualified structure/topology/PMI views and manufacturing metadata, beyond the existing geometry preview.   |
+| Medical/scientific       | DICOM/volumes, NetCDF/GRIB/Zarr, PDB/CIF/molecular SDF           | Slices, dimensions, fields, records and spatial structure with native coordinate/unit provenance.          |
+| General/media coverage   | Subtitles and XLSB/XLSM/DOCM/PPTM and template/show variants     | Cue timelines and supported document content; shared package readers do not replace per-format validation. |
+| Developer/data/admin     | HAR/WARC/MHTML, ORC/Avro, certificates, executables and packages | Request/trace inspection, typed record windows and metadata/manifest structure without payload execution.  |
+| Robotics/CAE             | URDF/SDFormat and VTK-family meshes/results                      | Links/joints, meshes and supported scalar/vector fields without starting a simulator.                      |
+
+The expanded catalog retains the proposed specialist sequence and decoder/version
+questions. Proprietary/native formats, medical transfer syntaxes, disk readers and
+mailbox stores need their own feasibility work; a container or XML resemblance
+does not establish that an integration is straightforward.
+
+## Generic decoding, semantic inspection and binary structure
+
+One shared archive decoder can underpin ZIP browsing, an APK package inspector,
+a Word document reader and a slicer-project viewer. Their semantic data models,
+views and qualification remain distinct. HDF5, IFC, ONNX and certificate/binary
+structures likewise deserve hierarchy/fact inspection instead of an opaque-file
+fallback where a suitable reader exists.
+
+Keep stable source/entity identity across the scene, table, property, timeline
+and comparison views so Plurid links express the file's relationships. Identify
+ambiguous extensions from bounded content/schema evidence, and support package
+folders and multi-file stores explicitly. See the
+[semantic model and routing catalog](preview-format-ecosystems.md#ambiguous-suffixes-and-content-aware-routing).
 
 ## Capabilities that make the system more than a collection of viewers
 

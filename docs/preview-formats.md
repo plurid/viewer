@@ -5,6 +5,11 @@ current preview coverage, limitations within supported formats, and proposed
 major and medium additions. Implementation status is separate from the
 candidate-specific results in [verification](verification.md).
 
+The expanded [professional format ecosystems](preview-format-ecosystems.md)
+catalog covers BIM, scanning, medical/scientific data, vendor CAD, media,
+publishing, packages and inspectable binaries. It adds domain-specific proposals
+without changing the current support lists below.
+
 ## Reading the inventory
 
 - **Dedicated preview:** Viewer has a registered format viewer with the behavior
@@ -22,6 +27,11 @@ declared extension lists are descriptive; detection, content, codecs and decoder
 limits decide whether an individual file can actually be previewed. An icon,
 thumbnail, embedded bitmap or file-information fallback does not establish full
 format support.
+
+Generic decoding and semantic inspection are separate capabilities: listing ZIP
+entries is different from inspecting an APK manifest, Word document, slicer 3MF
+project or scientific hierarchy. The [semantic inspection model](preview-format-ecosystems.md#generic-decoding-and-semantic-inspection)
+records these distinctions, including file packages and directory-backed sources.
 
 ## Current document, image, media and model previews
 
@@ -144,6 +154,12 @@ routing so video transport streams are distinguished from TypeScript source.
 
 ## Proposed medium and specialist additions
 
+Some specialist ecosystems have major value in their own domain. Promote IFC/BIM,
+point clouds, DICOM/volumetric imaging, mechanical-kernel/JT research and binary/
+package inspection into explicit [professional investigation tracks](preview-format-ecosystems.md#roadmap-promotion-and-feasibility).
+BIM is a separate semantic family; it is not covered by the current mesh/CAD
+previews or subsumed by the generic additional-CAD row below.
+
 | Family                    | Extensions                                                                                | Proposed preview                                                                                                        |
 | ------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Email                     | `.eml`, `.msg`, `.mbox`                                                                   | Message headers/body, conversation navigation and attachments.                                                          |
@@ -165,6 +181,14 @@ embedded image may be a useful labeled fallback, but is not equivalent to
 decoding layers, assemblies or editable geometry. Similarly, `.db` needs signature
 detection because that extension does not identify one database format.
 
+The [expanded ecosystem catalog](preview-format-ecosystems.md) additionally records
+Office variants, subtitles/playlists, web captures, additional scientific and
+serialized data, molecular/bioinformatics formats, robotics/CAE, certificates,
+executables, firmware, packages, VM/container images, references and knowledge data.
+It also documents suffix collisions such as `.vcf`, `.sdf`, `.xyz`, `.nc`, `.key`
+and `.pub`; registration must identify content and the semantic view, rather than
+assign one reader solely from an extension.
+
 ## Suggested delivery order
 
 For broad file-manager coverage:
@@ -180,6 +204,10 @@ For fabrication workflows, G-code viewing and deeper CAD inspection can move
 ahead of this sequence. DWG and other native CAD formats need a deliberate
 decoder/conversion choice. [Format priorities](preview-roadmap.md) records the
 domain-specific roadmap; this inventory records coverage.
+
+The professional review adds [separate specialist tracks](preview-format-ecosystems.md#roadmap-promotion-and-feasibility).
+Its candidate sequence is recorded without replacing this general-user order;
+decoder feasibility and the chosen audience decide what is scheduled.
 
 A delivered preview should have representative valid/malformed fixtures, explicit
 partial-support feedback, bounded work and resource cleanup, and a native
