@@ -1,3 +1,5 @@
+import { parseFileQuery, QueryError } from '../../domain/file-query';
+import { browseSession, updateBrowseSession } from '../workspace/sessions';
 import { expandPath, type Step, type Word } from '../../domain/command-line/lex';
 import { didYouMean, parseCommandLine } from '../../domain/command-line/verbs';
 import { canonicalKey, keyGlyphs, rootKey } from '../../domain/keymap';
@@ -235,6 +237,21 @@ export const verbRuns: Record<string, VerbRun> = {
       sources: [selection[0]!.path],
     });
   },
+  // the file query language (domain/file-query.ts), in the folder plane's filter row
+  filter: async ({ step }, host) => {
+    const text = step.rest?.text ?? '';
+    if (text) readQuery(text);
+    const pane = activeWorkspace().panes.find((item) => item.id === host.context().paneID);
+    if (pane?.type !== 'folder') throw new Error(':filter needs a folder plane.');
+    browseSession(pane.id, pane.path);
+    updateBrowseSession(pane.id, pane.path, { query: text, searchOpen: !!text, subtree: false });
+  },
+  find: async ({ step }, host) => {
+    const text = step.rest?.text ?? '';
+    if (!text) throw new Error(':find needs a query.');
+    readQuery(text);
+    host.workspace.newSearch(text, text, places(host).folder, true, false);
+  },
   // the Trash command itself: its confirmation, as Settings has it; `!` is not taken
   trash: async (_input, host) => run(host, 'trash', 'Select something to move to the Trash.'),
   tabnew: async ({ flags, args }, host) =>
@@ -344,6 +361,14 @@ export const verbRuns: Record<string, VerbRun> = {
     await window.viewer.terminalWrite(pane.id, args.map((word) => terminalInput(word)).join(''));
   },
 };
+/** A query that does not read, said as the line's error. */
+function readQuery(text: string): void {
+  try {
+    parseFileQuery(text);
+  } catch (error) {
+    throw error instanceof QueryError ? new Error(error.message) : error;
+  }
+}
 /** Where `:bind` and `:unbind` put keys: the prefix's table, the root (-n) or a mode's (-T). */
 function bindingPlace(flags: Record<string, string | true>, word: Word) {
   const table = flags.n ? 'root' : typeof flags.T === 'string' ? flags.T : 'prefix';

@@ -11,6 +11,7 @@ export type CompleteKind =
   | 'layout'
   | 'mode'
   | 'help'
+  | 'query'
   | 'command';
 /**
  * A VERB OF THE COMMAND LINE (2026-10-23). Its names are vim's, in vim's notation (`q[uit]`: `q`,
@@ -117,6 +118,22 @@ export const verbs: readonly Verb[] = [
   },
   { key: 'touch', names: ['touch'], usage: '{name}', args: [1, 1], help: 'A new file here' },
   { key: 'mv', names: ['mv'], usage: '{name}', args: [1, 1], help: 'Rename the selected item' },
+  {
+    key: 'filter',
+    names: ['filter'],
+    usage: '[query]',
+    rest: true,
+    complete: 'query',
+    help: 'Filter this folder plane: words, ext:md, size>10mb, modified<7d, tag:red; none clears',
+  },
+  {
+    key: 'find',
+    names: ['find'],
+    usage: '{query}',
+    rest: true,
+    complete: 'query',
+    help: 'Search this folder and its subfolders; the results open as a plane',
+  },
   { key: 'trash', names: ['trash'], help: 'Move the selection to the Trash' },
   {
     key: 'tabnew',
@@ -334,7 +351,8 @@ export function bindStep(step: Step, verb: Verb): BoundStep {
   if (step.bang && !verb.bang) throw new LineError(`:${name} does not take !.`, step.at);
   const flags: Record<string, string | true> = {};
   const words = [...step.words];
-  while (words[0] && !words[0].quoted && /^-[A-Za-z]+$/.test(words[0].text)) {
+  // a verb without flags takes `-word` as a word: `:filter -draft`
+  while (verb.flags && words[0] && !words[0].quoted && /^-[A-Za-z]+$/.test(words[0].text)) {
     const word = words.shift()!;
     for (const letter of word.text.slice(1)) {
       const kind = verb.flags?.[letter];

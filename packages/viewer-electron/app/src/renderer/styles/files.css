@@ -553,3 +553,10 @@
   height: 100%;
   color: var(--ink);
 }
+/* a filter that does not read yet (2026-10-24): said under it, the last that did still filtering */
+.search-problem {
+  margin: 0;
+  padding: 4px 12px 6px 38px;
+  color: var(--danger);
+  font-size: 11.5px;
+}

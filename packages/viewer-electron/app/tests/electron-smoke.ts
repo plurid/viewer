@@ -3010,6 +3010,81 @@ async function paletteCommand(label: string): Promise<void> {
  * replaced in the Trash and back with Undo, and a scratch plane's text kept in the profile as it is
  * typed. Save As uses the native save panel, which this harness does not drive.
  */
+/** The file query language (2026-10-24): the folder filter reads terms, OR and -, keeps the
+ * last query that read while one is half typed; :filter and :find take a query. */
+async function verifyFileQueries(): Promise<void> {
+  const shown = () =>
+    evaluate<string[]>(
+      "Array.from(document.querySelectorAll('[data-file-path]')).map((row) => row.getAttribute('data-file-path').split('/').pop()).sort()",
+    );
+  const filter = async (text: string) => {
+    await evaluate(
+      '(() => { const input = document.querySelector(\'[aria-label="Find files"]\'); input.focus(); input.select(); })()',
+    );
+    await command('Input.insertText', { text });
+  };
+  await click('[aria-label="Search this folder"]');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(\'[aria-label="Find files"]\')'),
+    Boolean,
+    'the folder filter',
+  );
+  await filter('ext:md');
+  await until(shown, (names) => names.join() === 'README.md', 'ext:md');
+  await filter('kind:folder');
+  await until(shown, (names) => names.length === 7 && !names.includes('README.md'), 'kind:folder');
+  await filter('ext:tar OR ext:zip');
+  await until(
+    shown,
+    (names) => names.join() === 'Reference files.tar,Reference files.zip',
+    'ext:tar OR ext:zip',
+  );
+  // half typed: said under the filter, the last query that read still filtering
+  await filter('ext:tar OR ext:zip size>');
+  await until(
+    () => evaluate<string>("document.querySelector('.search-problem')?.textContent ?? ''"),
+    (text) => text.includes('size>10mb'),
+    'the problem said under the filter',
+  );
+  assert.deepEqual(await shown(), ['Reference files.tar', 'Reference files.zip']);
+  await snapshot('filter-problem.png');
+  await key('Escape', 'Escape');
+  // the command line: :filter -kind:folder, then :find ext:md as a results plane
+  const line = async (text: string) => {
+    await evaluate(
+      'document.activeElement instanceof HTMLElement && document.activeElement.blur()',
+    );
+    await key('b', 'KeyB', 2);
+    await key(':', 'Semicolon', 8);
+    await until(
+      () =>
+        evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Command line"'),
+      Boolean,
+      'the command line',
+    );
+    await command('Input.insertText', { text });
+    await key('Enter', 'Enter');
+    await until(
+      () => evaluate<boolean>('!document.querySelector(\'input[aria-label="Command line"]\')'),
+      Boolean,
+      `ran :${text}`,
+    );
+  };
+  await line('filter -kind:folder');
+  await until(
+    shown,
+    (names) => names.length === 4 && names.every((name) => name.includes('.')),
+    ':filter -kind:folder',
+  );
+  await snapshot('filter-line.png');
+  await line('filter');
+  await until(shown, (names) => names.length === 11, ':filter cleared');
+  const planes = () => evaluate<number>("document.querySelectorAll('[data-viewer-pane]').length");
+  const before = await planes();
+  await line('find ext:md');
+  await until(planes, (count) => count === before + 1, ':find opened a results plane');
+  console.log('File queries: ext:, kind:, OR, a half-typed term, :filter and :find.');
+}
 /** The command line (2026-10-23): prefix : opens it; lines split, set, repeat, report errors and
  * close every plane, unsaved text and all, with :qa!. */
 async function verifyCommandLine(): Promise<void> {
@@ -5738,6 +5813,12 @@ async function verify(): Promise<void> {
     await verifyPublishedPlaneInput();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (process.env.VIEWER_TEST_SCENARIO === 'files') {
+    await verifyFileQueries();
+    await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }

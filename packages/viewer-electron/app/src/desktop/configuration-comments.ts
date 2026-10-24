@@ -261,6 +261,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.savedSearches': [
     'Named queries: {id,name,query,root?,recursive?,content?}. IDs are unique; root is an absolute path.',
+    'query is the file query language: words, ext:md, kind:image, size>10mb, modified<7d, tag:red, OR, -.',
     'Omit root for all indexed roots. content:true still requires permission in search.contentRoots.',
   ],
   'settings.settingsWindow': [

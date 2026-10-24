@@ -1,3 +1,5 @@
+import { matchesQuery } from '../../domain/file-query';
+import { useFileQuery } from './useFileQuery';
 import { nativeOpening } from './opening';
 import {
   memo,
@@ -89,21 +91,22 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const descending = pane?.descending;
   // Typing stays responsive in large folders; the filtered list follows a moment later.
   const filter = useDeferredValue(query);
+  // the file query language (domain/file-query.ts): ext:md, size>10mb, modified<7d, tag:red
+  const filterQuery = useFileQuery(filter, path);
   const visible = useMemo(() => {
-    const needle = filter.toLocaleLowerCase();
     return sort
       ? sortEntries(
           sources.filter(
             (entry) =>
               (showHidden || !entry.hidden) &&
-              (subtree || !filter || entry.name.toLocaleLowerCase().includes(needle)),
+              (subtree || matchesQuery(filterQuery.query, entry, filterQuery.facts)),
           ),
           sort,
           descending ?? false,
           foldersFirst,
         )
       : [];
-  }, [sources, showHidden, sort, descending, subtree, filter, foldersFirst]);
+  }, [sources, showHidden, sort, descending, subtree, filterQuery, foldersFirst]);
   // Results from subfolders are not this folder's items, so a lens cannot group them.
   const groupBy =
     presentation.group === 'lens' && subtree && query.trim() ? 'none' : presentation.group;
@@ -561,7 +564,11 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           <input
             ref={input}
             aria-label="Find files"
-            placeholder={subtree ? 'Search this folder and subfolders' : 'Filter this folder'}
+            placeholder={
+              subtree
+                ? 'Search subfolders: name ext:md size>10mb modified<7d tag:red'
+                : 'Filter: name ext:md size>10mb modified<7d tag:red'
+            }
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -578,6 +585,11 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             <IconButton icon="pause" label="Cancel search" onClick={search.cancel} />
           )}
         </div>
+      )}
+      {searchOpen && query && filterQuery.problem && (
+        <p className="search-problem" role="status">
+          {filterQuery.problem}
+        </p>
       )}
       {listing.error && (
         <div className="folder-error" role="alert">

@@ -582,7 +582,8 @@ describe('background filename and metadata index', () => {
       );
       expect(index.status().count).toBe(17000);
       index.remove(files[0].path);
-      expect(index.query({ query: 'Record 0.pdf' }).entries).toEqual([]);
+      // words match apart (2026-10-24): the phrase is quoted
+      expect(index.query({ query: '"Record 0.pdf"' }).entries).toEqual([]);
     } finally {
       await index.close();
     }

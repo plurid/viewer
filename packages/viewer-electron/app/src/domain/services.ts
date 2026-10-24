@@ -181,6 +181,8 @@ export interface IndexStatus {
 }
 export interface IndexedQuery {
   query: string;
+  /** The paths of each Finder tag the query names, looked up before (main only, 2026-10-24). */
+  tagged?: Record<string, string[]>;
   root?: string;
   offset?: number;
   limit?: number;

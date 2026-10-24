@@ -3,6 +3,8 @@ import type { DrawingGeometryOptions, DrawingGeometryPage } from '../domain/draw
 import path from 'node:path';
 import { UtilityClient } from './utility-client';
 import { entry } from './filesystem';
+import { spotlightTagged } from './spotlight';
+import { parseFileQuery } from '../domain/file-query';
 import { sameSourceVersion, sourceVersion, type InspectionResult } from '../domain/inspection';
 import type { FolderSizeTask } from '../domain/metadata';
 import type {
@@ -129,10 +131,33 @@ export class FileServices {
         }
       : value;
   }
+  /** The paths of each Finder tag a query names, from Spotlight, under its root or the indexed
+   * roots (2026-10-24); a query that does not read is left to the index to explain. */
+  private async tagged(value: IndexedQuery): Promise<IndexedQuery> {
+    let tags: string[];
+    try {
+      tags = parseFileQuery(value.query).tags;
+    } catch {
+      return value;
+    }
+    if (!tags.length) return value;
+    const roots = value.root ? [value.root] : (this.configuration?.roots ?? []);
+    const tagged: Record<string, string[]> = {};
+    for (const tag of tags) {
+      const paths = new Set<string>();
+      for (const root of roots)
+        for (const file of await spotlightTagged(root, tag)) {
+          if (paths.size >= 20000) break;
+          paths.add(file);
+        }
+      tagged[tag] = [...paths];
+    }
+    return { ...value, tagged };
+  }
   async query(value: IndexedQuery) {
     const revision = this.revision;
     if (value.root) await this.options.access?.([value.root]);
-    const result = await this.index.call<IndexedResult>('query', [value]);
+    const result = await this.index.call<IndexedResult>('query', [await this.tagged(value)]);
     if (revision !== this.revision) throw new Error('Search configuration changed. Search again.');
     if (value.root) await this.options.access?.([value.root]);
     await this.options.access?.(result.entries.map((entry) => entry.path));
@@ -141,7 +166,9 @@ export class FileServices {
   async snapshot(value: IndexedQuery) {
     const revision = this.revision;
     if (value.root) await this.options.access?.([value.root]);
-    const snapshot = await this.index.call<QuerySnapshot>('query-snapshot', [value]);
+    const snapshot = await this.index.call<QuerySnapshot>('query-snapshot', [
+      await this.tagged(value),
+    ]);
     await this.options.access?.(snapshot.entries.map((item) => item.path));
     let cursor = 0;
     await Promise.all(

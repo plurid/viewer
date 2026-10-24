@@ -9,7 +9,7 @@ import { settingNow } from '../commands/window-commands/settings';
 import { getState, rememberLine, useViewer } from '../state/store';
 import { IconButton } from '../ui/primitives';
 import type { IconName } from '../ui/Icon';
-import { lineCompletions, type Completion } from './complete';
+import { lineCompletions, queryTerms, type Completion } from './complete';
 import type { LineHost } from './host';
 import { planLine, userCommands } from './run';
 import { effectiveKeymap } from '../keys/session';
@@ -72,6 +72,16 @@ function helpRows(topic: string): Row[] {
         insert: `${name} -${flag} `,
       })),
     ];
+  }
+  if (topic === 'query') {
+    // the file query language's terms, each with an example, to try in :filter
+    return Object.entries(queryTerms).map(([term, example]) => ({
+      id: `help:query:${term}`,
+      label: term,
+      detail: example,
+      icon: 'search' as const,
+      insert: `filter ${term}`,
+    }));
   }
   if (topic === 'keys') {
     // every key of every table, as the line it runs

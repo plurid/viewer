@@ -1,3 +1,5 @@
+import { matchesQuery, topWords, withoutTopWords } from '../../domain/file-query';
+import { useFileQuery } from '../explorer/useFileQuery';
 import { useEffect, useMemo, useState } from 'react';
 import { CommandResults } from './CommandResults';
 import { useCommands, useCommandRevision, useCommandSource } from './context';
@@ -434,26 +436,30 @@ function FileFinder({
     context.folder?.showHidden || false,
   );
   const sourceID = useMemo(() => `finder:${crypto.randomUUID()}`, []);
-  const matches = useMemo(
-    () =>
-      indexedMode
-        ? indexed.result?.entries || []
-        : subtree && query.trim()
-          ? search.entries
-          : rankFiles(
-              listing.entries.filter((entry) => context.folder?.showHidden || !entry.hidden),
-              query,
-            ),
-    [
-      listing.entries,
-      search.entries,
-      indexed.result,
-      indexedMode,
-      subtree,
-      query,
-      context.folder?.showHidden,
-    ],
-  );
+  // the file query language here too (2026-10-24): terms filter, the words rank the names
+  const finderQuery = useFileQuery(query, directory);
+  const matches = useMemo(() => {
+    if (indexedMode) return indexed.result?.entries || [];
+    if (subtree && query.trim()) return search.entries;
+    const terms = withoutTopWords(finderQuery.query);
+    return rankFiles(
+      listing.entries.filter(
+        (entry) =>
+          (context.folder?.showHidden || !entry.hidden) &&
+          (!terms.root || matchesQuery(terms, entry, finderQuery.facts)),
+      ),
+      terms.root ? topWords(finderQuery.query).join(' ') : query,
+    );
+  }, [
+    listing.entries,
+    search.entries,
+    indexed.result,
+    indexedMode,
+    subtree,
+    query,
+    finderQuery,
+    context.folder?.showHidden,
+  ]);
   const fileCommands: CommandDefinition[] = matches.map((entry) => ({
     id: `find-result:${entry.path}`,
     label: entry.name,

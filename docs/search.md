@@ -4,17 +4,37 @@ The desktop runs SQLite FTS5 in a utility process (a worker thread in the Mac Ap
 
 Command-F starts at the active folder. Subfolder search uses the background index when that location is indexed; unindexed folders retain streamed filesystem search. **All indexed locations** searches configured roots. **Document text** includes extracted text from explicitly granted locations. Search results are bounded to 150 per page, with at most 500 through the desktop query API.
 
-## Filters
+## The query language
 
-| Filter | Example |
+One language reads queries everywhere: the folder filter (the search icon in a plane's header), the search through subfolders, Find file (⌘F), **All indexed locations**, saved searches and smart folders, and the command line's `:filter` and `:find`.
+
+**Words.** Words are in the name, each anywhere and in any order: `draft notes` finds "notes (draft).md". A quoted phrase is in the name as written: `"draft notes"`. Matching folds case and Latin diacritics: `resume` finds "Résumé.pdf".
+
+**Terms:**
+
+| Term | Example |
 | --- | --- |
 | Extension | `ext:pdf,epub` |
-| Files/folders | `kind:file`, `kind:folder` (plurals and `kind:directory` too; any other kind is an error) |
-| Path substring | `path:Books`, `path:"Research papers"` |
-| Byte size | `size:>10mb`, `size:<500kb` |
-| Modified date | `modified:>2025-01-01` |
+| Kind | `kind:file`, `kind:folder`, `kind:link`, `kind:app`, `kind:image`, `kind:video`, `kind:audio`, `kind:text`, `kind:document`, `kind:archive` (plurals too; another kind is an error) |
+| Name, path | `name:draft`, `path:Books`, `path:"Research papers"` |
+| Size | `size>10mb`, `size<=500kb`, `size=0` (b, kb, mb, gb, tb; folders have none) |
+| Modified, created | `modified<7d` (within a week), `modified>1y` (older), `modified:today`, `modified:yesterday`, `created>=2026-01-01`, `modified=2026-10` (durations h, d, w, mo, y; dates in local time, a day, a month or a year) |
+| Finder tag | `tag:red`, `tag:"Project X"` |
+| Hidden, links | `is:hidden`, `is:link`, `is:file`, `is:folder` |
+| Name pattern | `~^IMG_\d+` (a regular expression, case aside) |
 
-Combine filters with literal text, such as `fire ext:epub`. Matching folds case and Latin diacritics. This is substring search with structured filters, not arbitrary FTS/SQL syntax. Text of three or more characters uses the trigram index; shorter filename fragments use a bounded result query but can scan the index. Short text fragments do not search document bodies. Broad terms, deep offsets and restrictive paths can cost more than selective first-page queries.
+**Combining terms.**
+- Terms side by side must all match. `OR` between them means either; `-` turns one down; parentheses group: `(ext:png OR ext:jpg) -tag:done size>1mb`.
+- The index's older form, `size:>10mb` and `modified:>2025-01-01`, still reads.
+- A quote left open runs to the end, so a filter typed letter by letter keeps filtering.
+
+**Errors.** A query that does not read says why, with the column: under the folder filter, in Find file and on the command line. The filter keeps the last query that did read until the next one does.
+
+**How each place runs a query.**
+- **The index** narrows in SQL by the terms every match has: top-level words, extensions, file or folder, size and modified date. The query then decides each row, reading at most 20,000 rows for one page, so OR, `-`, patterns, created dates, kinds by content and tags read as they do elsewhere.
+- **Text.** Text of three or more characters uses the trigram index. Shorter fragments use a bounded result query but can scan the index, and do not search document bodies. With **Document text**, the words at the top match a document's text or its name; the other terms still apply.
+- **The search through subfolders** reads only names, extensions and kinds from each folder, and asks for sizes and dates only when the query needs them.
+- **Tags** come from Spotlight, so `tag:` needs the direct build: the App Store sandbox has no Spotlight.
 
 ## Text permission
 

@@ -30,6 +30,30 @@ export interface LineCompletions {
   /** The folder a path being typed is in: to list, then complete from. */
   directory?: string;
 }
+/** The file query language's terms, as completion offers them. */
+export const queryTerms: Readonly<Record<string, string>> = {
+  'ext:': 'ext:md,txt',
+  'kind:folder': 'Folders',
+  'kind:file': 'Files',
+  'kind:image': 'Images',
+  'kind:video': 'Videos',
+  'kind:audio': 'Audio',
+  'kind:document': 'Documents',
+  'kind:archive': 'Archives',
+  'kind:app': 'Applications',
+  'name:': 'In the name',
+  'path:': 'In the path',
+  'size>': 'size>10mb',
+  'size<': 'size<1kb',
+  'modified<': 'modified<7d: within a week',
+  'modified>': 'modified>2026-01-01',
+  'modified:today': 'Today',
+  'created>': 'created>=2026-01',
+  'tag:': 'tag:red, tag:"Project X"',
+  'is:hidden': 'Hidden items',
+  'is:link': 'Links',
+  OR: 'Either side: a OR b',
+};
 /** A word written so a line reads it back as it is; paths keep `~` working (no quotes). */
 const escaped = (text: string) => text.replace(/([\s'"\\|;])/g, '\\$1');
 /** Where the step being typed starts, or undefined inside an unclosed quote. */
@@ -197,9 +221,15 @@ function complete(
       return named(sources.modes ?? [], () => 'Key mode');
     case 'help':
       return named(
-        [...verbs.map(verbName), ...Object.keys(settingNames), 'keys'],
-        (name) => findVerb(name)?.help ?? settingByName(name)?.label ?? 'Prefix keys',
+        [...verbs.map(verbName), ...Object.keys(settingNames), 'keys', 'query'],
+        (name) =>
+          findVerb(name)?.help ??
+          settingByName(name)?.label ??
+          (name === 'query' ? 'The file query language' : 'Prefix keys'),
       );
+    case 'query':
+      // the file query language's terms (domain/file-query.ts), with an example each
+      return named(Object.keys(queryTerms), (term) => queryTerms[term]);
     case 'command':
       return named(
         sources.commands.map((command) => command.id),

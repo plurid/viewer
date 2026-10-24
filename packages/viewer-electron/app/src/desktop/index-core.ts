@@ -1,3 +1,10 @@
+import {
+  matchesQuery,
+  parseFileQuery,
+  QueryError,
+  withoutTopWords,
+  type FileQuery,
+} from '../domain/file-query';
 import type { QuerySnapshot } from '../domain/collections';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
@@ -240,55 +247,45 @@ export class FileIndex {
     const indexed =
       !root ||
       !!this.config?.roots.some((indexedRoot) => inside(root, indexedRoot) && !this.excluded(root));
-    let text = request.query.trim();
+    // THE FILE QUERY LANGUAGE (2026-10-24): domain/file-query.ts, as the folder filter reads it
+    let parsed: FileQuery;
+    try {
+      parsed = parseFileQuery(request.query.trim());
+    } catch (error) {
+      if (error instanceof QueryError) throw new Error(error.message);
+      throw error;
+    }
+    const text = parsed.words.join(' ');
     const { where, params } = this.scope();
-    text = text
-      .replace(
-        /\b(ext|kind|path|size|modified):("[^"]*"|\S+)/g,
-        (_all, key: string, raw: string) => {
-          const value = raw.replace(/^"|"$/g, '');
-          if (key === 'ext') {
-            const ext = value.toLowerCase().replace(/^\./, '').split(',');
-            where.push(`files.extension IN (${ext.map(() => '?').join(',')})`);
-            params.push(...ext);
-          }
-          if (key === 'kind') {
-            // any value but folder or directory meant files, so kind:folders listed files (2026-10-20)
-            const kind = value.toLowerCase();
-            const folder = /^(folders?|director(y|ies))$/.test(kind);
-            if (!folder && !/^files?$/.test(kind))
-              throw new Error('Kind filters use kind:file or kind:folder.');
-            where.push('files.directory=?');
-            params.push(folder ? 1 : 0);
-          }
-          if (key === 'path') {
-            where.push('instr(files.path,?)>0');
-            params.push(value);
-          }
-          if (key === 'size') {
-            const m = value.match(/^([<>]?)(\d+(?:\.\d+)?)([kmgt]?b)?$/i);
-            if (!m) throw new Error('Size filters use size:>10mb.');
-            where.push('files.size' + (m[1] || '=') + '?');
-            params.push(
-              Number(m[2]) *
-                ({ kb: 1024, mb: 1048576, gb: 1073741824, tb: 1099511627776 }[
-                  m[3]?.toLowerCase() as 'kb'
-                ] || 1),
-            );
-          }
-          if (key === 'modified') {
-            const op = /^[<>]/.test(value) ? value[0] : '>';
-            const date = Date.parse(value.replace(/^[<>]/, ''));
-            if (!Number.isFinite(date))
-              throw new Error('Modified filters use modified:>2025-01-01.');
-            where.push('files.modified' + op + '?');
-            params.push(date);
-          }
-          return '';
-        },
-      )
-      .trim()
-      .replace(/^"|"$/g, '');
+    // SQL narrows by what every match has, the terms side by side at the top; the query then
+    // decides each row, so OR, -, patterns, tags and created dates read as they do elsewhere
+    const top = !parsed.root ? [] : parsed.root.kind === 'and' ? parsed.root.nodes : [parsed.root];
+    const words: string[] = [];
+    let exact = true;
+    for (const node of top) {
+      if (node.kind === 'text') words.push(node.text);
+      else if (node.kind === 'ext') {
+        where.push(`files.extension IN (${node.extensions.map(() => '?').join(',')})`);
+        params.push(...node.extensions);
+      } else if (node.kind === 'type' && (node.type === 'file' || node.type === 'folder')) {
+        where.push('files.directory=?');
+        params.push(node.type === 'folder' ? 1 : 0);
+        // an app is a folder on disk and not one here: the query decides
+        if (node.type === 'folder') exact = false;
+      } else if (node.kind === 'size') {
+        where.push('files.directory=0 AND files.size' + node.op + '?');
+        params.push(node.bytes);
+      } else if (node.kind === 'date' && node.field === 'modified') {
+        if (node.from !== undefined) {
+          where.push('files.modified>=?');
+          params.push(node.from);
+        }
+        if (node.to !== undefined) {
+          where.push('files.modified<?');
+          params.push(node.to);
+        }
+      } else exact = false;
+    }
     if (root) {
       const prefix = root.replace(/\/$/, '') + '/';
       if (request.recursive === false) {
@@ -301,8 +298,12 @@ export class FileIndex {
     }
     if (!request.showHidden) where.push('files.hidden=0');
     let join = '';
-    if (text.length >= 3) {
-      const term = (request.content ? '' : 'name:') + '"' + fold(text).replace(/"/g, '""') + '"';
+    const long = words.filter((word) => word.length >= 3);
+    const short = words.filter((word) => word.length < 3);
+    if (long.length) {
+      const term = long
+        .map((word) => (request.content ? '' : 'name:') + '"' + word.replace(/"/g, '""') + '"')
+        .join(' ');
       // Frequent terms should stop at a page, rather than sort hundreds of thousands of hits.
       // Sparse terms keep the FTS-driven plan. The probe is bounded and never copies file data.
       const frequent =
@@ -320,27 +321,58 @@ export class FileIndex {
         : ' JOIN names ON names.rowid=files.rowid ';
       where.push('names MATCH ?');
       params.push(term);
-    } else if (text) {
-      if (request.content) {
-        join = ' JOIN names ON names.rowid=files.rowid ';
-        where.push('(instr(files.name,?)>0 OR instr(names.content,?)>0)');
-        params.push(fold(text), fold(text));
-      } else {
-        where.push('instr(files.name,?)>0');
-        params.push(fold(text));
-      }
+    } else if (short.length) join = ' JOIN names ON names.rowid=files.rowid ';
+    for (const word of short) {
+      where.push(
+        request.content
+          ? '(instr(names.name,?)>0 OR instr(names.content,?)>0)'
+          : 'instr(names.name,?)>0',
+      );
+      params.push(...(request.content ? [word, word] : [word]));
     }
+    // words in document text are SQL's alone: the query checks the rest
+    const check = request.content ? withoutTopWords(parsed) : parsed;
+    if (request.content && check.root) exact = false;
+    const facts = {
+      tagged: (tag: string) => (request.tagged?.[tag] ? new Set(request.tagged[tag]) : undefined),
+    };
     const limit = Math.max(1, Math.min(limitCap, request.limit ?? 150));
-    const rows = this.db
-      .prepare(
-        'SELECT files.data FROM files' +
-          join +
-          ' WHERE ' +
-          where.join(' AND ') +
-          ' ORDER BY files.name,files.path LIMIT ? OFFSET ?',
-      )
-      .all(...params, limit + 1, Math.max(0, request.offset ?? 0)) as { data: string }[];
-    const entries = rows.slice(0, limit).map((row) => JSON.parse(row.data) as FileEntry);
+    const offset = Math.max(0, request.offset ?? 0);
+    const select = (count: number, from: number) =>
+      this.db
+        .prepare(
+          'SELECT files.data FROM files' +
+            join +
+            ' WHERE ' +
+            where.join(' AND ') +
+            ' ORDER BY files.name,files.path LIMIT ? OFFSET ?',
+        )
+        .all(...params, count, from) as { data: string }[];
+    let entries: FileEntry[];
+    let more: boolean;
+    if (exact) {
+      const rows = select(limit + 1, offset);
+      entries = rows.slice(0, limit).map((row) => JSON.parse(row.data) as FileEntry);
+      more = rows.length > limit;
+    } else {
+      // the query decides each row: read pages until enough match, at most 20,000 rows
+      const wanted = offset + limit + 1;
+      const matched: FileEntry[] = [];
+      let read = 0;
+      for (;;) {
+        const rows = select(500, read);
+        read += rows.length;
+        for (const row of rows) {
+          const item = JSON.parse(row.data) as FileEntry;
+          if (matchesQuery(check, item, facts)) matched.push(item);
+        }
+        if (rows.length < 500 || matched.length >= wanted || read >= 20000) {
+          more = matched.length > offset + limit || (rows.length === 500 && read >= 20000);
+          break;
+        }
+      }
+      entries = matched.slice(offset, offset + limit);
+    }
     const evidence =
       request.content && includeEvidence
         ? entries.flatMap((item) => {
@@ -354,7 +386,7 @@ export class FileIndex {
     return {
       entries,
       evidence,
-      more: rows.length > limit,
+      more,
       indexed,
       status: this.status(),
     };
@@ -378,7 +410,8 @@ export class FileIndex {
       );
     return {
       id: randomUUID(),
-      query: { ...request, offset: undefined, limit: undefined },
+      // the tags' paths were looked up for this query: the snapshot keeps the query only
+      query: { ...request, offset: undefined, limit: undefined, tagged: undefined },
       entries: result.entries,
       created: Date.now(),
       coverage: 'indexed-matches',
