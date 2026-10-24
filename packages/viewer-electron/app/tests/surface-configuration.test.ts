@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TOOLBAR_DRAWERS } from '@plurid/plurid-data';
 import { surfaceConfiguration } from '../src/renderer/workspace/surface-configuration';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 
 describe('the plurid configuration of a workspace (2026-10-21)', () => {
   const configuration = (toolbar = true) =>

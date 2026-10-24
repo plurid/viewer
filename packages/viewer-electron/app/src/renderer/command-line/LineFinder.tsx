@@ -13,7 +13,7 @@ import { lineCompletions, queryTerms, type Completion } from './complete';
 import type { LineHost } from './host';
 import { planLine, userCommands } from './run';
 import { effectiveKeymap } from '../keys/session';
-import { bindingRows, keyGlyphs, type KeymapBinding } from '../../domain/keymap';
+import { bindingRows, keyGlyphs, type KeymapBinding } from '../../domain/preferences/keymap';
 
 interface Row {
   id: string;

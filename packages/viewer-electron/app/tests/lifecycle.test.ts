@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const native = vi.hoisted(() => ({
@@ -108,10 +108,12 @@ const application = Object.assign(new EventEmitter(), {
     if (!will.prevented) this.terminated = true;
   },
 });
+const theme = new EventEmitter();
+let processListeners: Map<string | symbol, Set<(...args: never[]) => unknown>>;
 vi.mock('electron', () => ({
   app: application,
   BrowserWindow: TestWindow,
-  nativeTheme: new EventEmitter(),
+  nativeTheme: theme,
   globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
   systemPreferences: { getAnimationSettings: () => ({ prefersReducedMotion: true }) },
   screen: {
@@ -132,7 +134,7 @@ vi.mock('electron', () => ({
     },
   },
 }));
-vi.mock('../src/desktop/mcp-client', () => ({ runMCPClient: vi.fn() }));
+vi.mock('../src/desktop/agents/mcp-client', () => ({ runMCPClient: vi.fn() }));
 vi.mock('../src/desktop/bridge', () => ({
   Desktop: class {
     settings = {
@@ -144,6 +146,9 @@ vi.mock('../src/desktop/bridge', () => ({
       load: async () => {},
     };
     prepareSettings = async () => {};
+    windowPreferences = () => this.settings.snapshot();
+    workspaceForWindow = () => undefined;
+    createWorkspace = () => 'workspace';
     resources = { response: vi.fn() };
     workspaceSessions = {
       snapshot: () => undefined,
@@ -157,6 +162,7 @@ vi.mock('../src/desktop/bridge', () => ({
     windowForWorkspace = vi.fn();
     emit = vi.fn();
     flush = native.flush;
+    flushWindow = native.flush;
     flushSettings = native.flushSettings;
     pendingOperations = () => native.pending;
     operationsDrained = () => native.drained;
@@ -177,6 +183,9 @@ function gate() {
   return { promise, resolve };
 }
 beforeEach(async () => {
+  processListeners = new Map(
+    process.eventNames().map((event) => [event, new Set(process.rawListeners(event))]),
+  );
   vi.resetModules();
   vi.stubGlobal('MAIN_WINDOW_VITE_DEV_SERVER_URL', undefined);
   vi.stubGlobal('MAIN_WINDOW_VITE_NAME', 'main_window');
@@ -201,6 +210,12 @@ afterEach(async () => {
   application.quit();
   await vi.waitFor(() => expect(application.terminated).toBe(true));
   application.removeAllListeners();
+  theme.removeAllListeners();
+  for (const event of process.eventNames()) {
+    const previous = processListeners.get(event);
+    for (const listener of process.rawListeners(event))
+      if (!previous?.has(listener)) process.removeListener(event, listener);
+  }
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   await trashTemporary(native.profile);
@@ -342,5 +357,44 @@ describe('native window and application shutdown', () => {
     application.emit('activate');
     await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(2));
     expect(TestWindow.windows[1].destroyed).toBe(false);
+  });
+
+  it('keeps a workspace open when its save fails, and permits a later successful close', async () => {
+    native.flush.mockRejectedValueOnce(new Error('Draft storage is full'));
+    const window = TestWindow.windows[0];
+    window.close();
+    await vi.waitFor(() => expect(native.ask).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(window.destroyed).toBe(false);
+    expect(native.dispose).not.toHaveBeenCalled();
+    native.flush.mockResolvedValue(undefined);
+    window.close();
+    await vi.waitFor(() => expect(window.destroyed).toBe(true));
+  });
+
+  it('cancels Quit on failed persistence and keeps the application available for retry', async () => {
+    native.flush.mockRejectedValueOnce(new Error('Chat draft could not be saved'));
+    application.quit();
+    await vi.waitFor(() => expect(native.ask).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(application.terminated).toBe(false);
+    expect(TestWindow.windows[0].destroyed).toBe(false);
+    expect(native.dispose).not.toHaveBeenCalled();
+    native.flush.mockResolvedValue(undefined);
+    application.quit();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+  });
+
+  it('joins a retried save before a native close can succeed', async () => {
+    const retried = gate();
+    native.flush.mockRejectedValueOnce(new Error('Temporary storage failure'));
+    native.flush.mockReturnValueOnce(retried.promise);
+    native.ask.mockResolvedValueOnce({ response: 0 });
+    const window = TestWindow.windows[0];
+    window.close();
+    await vi.waitFor(() => expect(native.flush).toHaveBeenCalledTimes(2));
+    expect(window.destroyed).toBe(false);
+    retried.resolve();
+    await vi.waitFor(() => expect(window.destroyed).toBe(true));
   });
 });

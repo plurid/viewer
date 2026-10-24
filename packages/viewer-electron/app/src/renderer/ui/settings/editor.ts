@@ -1,5 +1,5 @@
 import type { SettingsPatch, SettingsSnapshot } from '../../../domain/services';
-import type { SettingsChange } from '../settings-edits';
+import type { SettingsChange } from './settings-edits';
 
 /** What a Settings page edits with: the latest snapshot and serialized, revision-checked writes. */
 export interface SettingsEditor {

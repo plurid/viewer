@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { isPackage } from '../../domain/files';
+import { isPackage } from '../../domain/files/entries';
 
 const icons = new Map<string, string>();
 let reported = false;

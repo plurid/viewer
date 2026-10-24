@@ -19,6 +19,13 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  htmlPreview: (resourceID) => invoke('htmlPreview', resourceID),
+  htmlPreviewClose: (id) => invoke('htmlPreviewClose', id),
+  localServerStart: (root, paneID, sourceIdentity) =>
+    invoke('localServerStart', root, paneID, sourceIdentity),
+  localServers: () => invoke('localServers'),
+  localServerInspect: (id) => invoke('localServerInspect', id),
+  localServerAction: (id, action) => invoke('localServerAction', id, action),
   chat: (request) => invoke('chat', request),
   shellCommand: (action) => invoke('shellCommand', action),
   hotkeyStatus: () => invoke('hotkeyStatus'),

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { watchDirectory } from '../src/desktop/directory-watch';
+import { watchDirectory } from '../src/desktop/files/directory-watch';
 
 const native = vi.hoisted(() => vi.fn());
 vi.mock('node:fs', () => ({ watch: native }));

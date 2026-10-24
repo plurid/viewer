@@ -1,6 +1,63 @@
 # Verification
 
-## October 24 Git, comparisons, Chat and native windows
+## October 24 stabilization, HTML previews and local servers
+
+This is the current direct-build evidence. It supersedes the earlier October 24
+dependency warning and unresolved minimap overlap recorded below. Verification
+used Apple Silicon macOS 15.1, Node 26.8.2 and pnpm 11.3.0. All generated profiles,
+fixtures and captures are retained. Unattended native checks set
+`VIEWER_TEST_NO_REMOVAL=1`; package rebuilds use only the exact build-output Trash
+exception in `AGENTS.md`.
+
+| Check                            | Result and retained evidence                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Complete unit and service suite  | **1,452 passed, four skipped**, 203 passing test files; `/private/tmp/viewer-final-idle-unit.log`                                                                                                                                                                                                                                                                                                                                    |
+| Static checks                    | All four TypeScript targets, ESLint, Prettier and `git diff HEAD --check` pass; `/private/tmp/viewer-final-complete-types.log`, `/private/tmp/viewer-final-source-lint.log`, `/private/tmp/viewer-final-source-format.log`                                                                                                                                                                                                           |
+| Ordinary install and package     | Fresh source/store installation and direct packaging pass; the approved replacement of the checkout's stale dependency folders also restores ordinary `pnpm install --frozen-lockfile` and `pnpm package`, without disabling metadata verification; `/private/tmp/viewer-repro-20261024-843u71fq/final-install.log`, `/private/tmp/viewer-repro-20261024-843u71fq/final-package.log`, `/private/tmp/viewer-package-native-final.log` |
+| Published Plurid provenance      | All ten installed packages match registry integrity and distribution bytes, with data `0.0.0-28` and React `0.0.0-42`; `/private/tmp/viewer-repro-20261024-843u71fq/final-plurid-check.log`                                                                                                                                                                                                                                          |
+| Complete packaged smoke          | Explorer views, previews, operations and guarded Undo, resource boundaries, independent roots, Settings, workspace restoration and native shutdown pass; `/private/tmp/viewer-native-full-final.log`; captures in `packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-24T08-55-35-656Z-5587d5d9-438f-4ed1-ac98-4d4a85c27347`                                                                                    |
+| HTML and local-server acceptance | The supplied `/Users/ly3xqhl8g9/Downloads/index.html` renders without modification; local assets/scripts and Source work. Opaque sandbox isolation, blocked cross-capability/network access, the actual linked Start command, request logs/filter/clear, Stop/Restart and plane-close shutdown pass; `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-web-oKBTxV/result.json`                                 |
+| Compact error layout             | At 780×560, a real missing-file notice begins below the workspace; the docked preview's external-app footer button remains visible and hit-testable. The HTML/server result above retains measurements and screenshots.                                                                                                                                                                                                              |
+| Native window recovery           | Real owned windows pass repeated controller show/hide/show, minimized/app-hide recovery and independent window dispatch; `/private/tmp/viewer-native-hotkey-final.log` and `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-hotkey-HzML8O/result.json`. This does not simulate or establish physical shortcut acceptance.                                                                                     |
+| Foreground timing                | Matching harness and display conditions, five samples per workload: median menu p95 9.3→8.4ms; camera p95 8.5→8.5ms; no observed long tasks. See [performance](performance.md) for raw evidence and limitations.                                                                                                                                                                                                                     |
+
+The direct candidate is
+`packages/viewer-electron/app/out/Viewer-darwin-arm64/Viewer.app`. Its executable
+SHA-256 is `b8f907a78f34466e5decac167829f1bd402c14e6591780a4a4e5817b72df62e9`;
+its ASAR SHA-256 is
+`64ac04c38a9512fecfc9c30b930a60c860c06658317631144eebc337c54a0027`.
+Native HTML and timing evidence bind these same bytes. Local strict/deep code
+signature verification passes; this is not notarization or Store qualification.
+
+The persistence regressions cover workspace/default/explicit profile precedence,
+independent windows, durable flushes and concurrent preference revisions. Own
+write acknowledgments cannot falsely conflict with unrelated queued changes or
+rebase an older parent snapshot over a peer's sibling edit. Failed edits remain
+available to retry. Collision-aware minimap placement protects plane headers and
+spatial controls, with an Overview fallback when no safe corner fits.
+
+One full unit run concurrent with packaging timed out the filesystem-heavy
+operation-log stress case. The complete idle rerun above passed without changing
+the assertion or timeout. The earlier failure remains at
+`/private/tmp/viewer-final-complete-unit.log`. Existing bundle externalization and
+chunk-size warnings, and Node's experimental localStorage warning, remain distinct
+from the resolved pnpm metadata warning.
+
+Physical ⌥Space, Dock/native-menu recovery, live Gemini Chat and affirmative agent
+consent remain operator checks. The current isolated session has already passed
+real shell-script concurrent launch, named-workspace handoff and independent
+`--new-window`; it is waiting for physical shortcut confirmation. No API key,
+positive provider/agent consent or shell uninstall has been supplied in this
+session. A previously approved terminal was visually confirmed; normal terminals
+retain the configured login shell and startup files. Installation into the owner's
+real PATH, other operating systems and final distribution qualification remain
+unverified.
+
+## Earlier October 24 Git, comparisons, Chat and native windows
+
+Historical evidence for the preceding candidate follows. Its test counts,
+dependency reconciliation warning and minimap limitation are superseded by the
+stabilization evidence above.
 
 The [feature guide](spatial-tools.md) describes opt-in Git status, editable text
 and image comparisons, the global shortcut and shell command, private Chat,
@@ -11,19 +68,19 @@ Verification used Node 26.8.2, pnpm 11.3.0 and Apple Silicon macOS. Every test r
 set `VIEWER_TEST_PRESERVE=1`; synthetic folders, logs and captures remain available.
 Package rebuilds used only the exact build-output Trash exception in `AGENTS.md`.
 
-| Check | Result and retained evidence |
-| --- | --- |
-| Complete unit and service suite | **1,182 passed, two native binding cases skipped**, no failures; `/private/tmp/viewer-final-suite.json` |
-| Static checks | Main, preload, renderer and tooling TypeScript targets pass; ESLint, application formatting and `git diff HEAD --check` pass |
-| Direct package | Final Apple Silicon macOS package succeeds; `/private/tmp/viewer-package-8.log` |
-| Shell integration | Two targeted cases pass after the final uninstall correction; `/private/tmp/viewer-shell-final.log` |
-| Packaged feature scenario | Git badges/header, pinned HEAD text comparison, editable right buffer, split/unified retention, all four image modes, Chat draft reload and real second-process `--new-window` pass on the final package; `/private/tmp/viewer-native-milestones-final.log` |
-| Complete packaged smoke | Explorer views, models/documents/media, operations and rename Undo, resource confinement, workspace deletion/recovery, reload and native quit/flush pass; `/private/tmp/viewer-native-full-final-7.log` |
-| Packaged services | PDF extraction/OCR, reviewed book rename and Undo, indexed search, Settings and pending native agent approval pass; `/private/tmp/viewer-native-services-final.log` |
-| Captured menu commands | Context-menu targets and header selection pass with native mouse input; `/private/tmp/viewer-native-menu-2.log` |
-| Packaged appearance | Light and dark both apply through the current Settings choice menu; `/private/tmp/viewer-native-appearance-final.log` |
-| Packaged resource boundary | Byte ranges, network blocking, single-file traversal denial (404) and model companion escape denial (403) pass; `/private/tmp/viewer-native-resources-final.log` |
-| Browser theme check | Custom Georgia interface font and compact density apply (`--ui-scale: 0.92`); the Settings layout was visually inspected and browser errors are absent |
+| Check                           | Result and retained evidence                                                                                                                                                                                                                                |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Complete unit and service suite | **1,182 passed, two native binding cases skipped**, no failures; `/private/tmp/viewer-final-suite.json`                                                                                                                                                     |
+| Static checks                   | Main, preload, renderer and tooling TypeScript targets pass; ESLint, application formatting and `git diff HEAD --check` pass                                                                                                                                |
+| Direct package                  | Final Apple Silicon macOS package succeeds; `/private/tmp/viewer-package-8.log`                                                                                                                                                                             |
+| Shell integration               | Two targeted cases pass after the final uninstall correction; `/private/tmp/viewer-shell-final.log`                                                                                                                                                         |
+| Packaged feature scenario       | Git badges/header, pinned HEAD text comparison, editable right buffer, split/unified retention, all four image modes, Chat draft reload and real second-process `--new-window` pass on the final package; `/private/tmp/viewer-native-milestones-final.log` |
+| Complete packaged smoke         | Explorer views, models/documents/media, operations and rename Undo, resource confinement, workspace deletion/recovery, reload and native quit/flush pass; `/private/tmp/viewer-native-full-final-7.log`                                                     |
+| Packaged services               | PDF extraction/OCR, reviewed book rename and Undo, indexed search, Settings and pending native agent approval pass; `/private/tmp/viewer-native-services-final.log`                                                                                         |
+| Captured menu commands          | Context-menu targets and header selection pass with native mouse input; `/private/tmp/viewer-native-menu-2.log`                                                                                                                                             |
+| Packaged appearance             | Light and dark both apply through the current Settings choice menu; `/private/tmp/viewer-native-appearance-final.log`                                                                                                                                       |
+| Packaged resource boundary      | Byte ranges, network blocking, single-file traversal denial (404) and model companion escape denial (403) pass; `/private/tmp/viewer-native-resources-final.log`                                                                                            |
+| Browser theme check             | Custom Georgia interface font and compact density apply (`--ui-scale: 0.92`); the Settings layout was visually inspected and browser errors are absent                                                                                                      |
 
 The unattended agent step now asserts that enabling configuration and creating
 named credentials leave the broker unavailable until native approval. It checks
@@ -99,15 +156,15 @@ server `0.0.0-20`. Publishing remains a maintainer action. See the [release hand
 
 Local verification on Node 26.8.2, pnpm 11.3.0 and Apple Silicon macOS passed:
 
-| Check | Evidence |
-| --- | --- |
-| Plurid preserving production builds | All 13 packages; `/private/tmp/plurid-release-build-20261018.log` |
-| Plurid tests and release planner/artifact checks | 1,199 package tests with configured coverage floors; 11 release-tooling regressions; `/private/tmp/plurid-release-tests-20261018.log`, `/private/tmp/plurid-release-tool-tests-final-20261018.log` |
-| Plurid types, lint, modules, budgets and generated docs | Workspace and harness checks; all entry points of 13 packages; ESM/CommonJS rendering parity (143 classes); 18 budgeted entries; generated tables current |
-| Plurid browser behavior | 182 cases, including eight native wheel/preview/isolation regressions; `/private/tmp/plurid-release-browser-all-20261018.log` |
-| Plurid performance and visual comparisons | 13 performance/virtualization cases run without other test/build jobs; 50 committed Darwin visual baselines; `/private/tmp/plurid-release-perf-20261018.log`, `/private/tmp/plurid-release-visual-20261018.log` |
-| Packed consumer | All 13 prepared tarballs install with lifecycle scripts disabled; ESM/CommonJS imports; 17 typed NodeNext entry points; generated app TypeScript 5/6 checks; production/dev hydration, desktop/mobile; `/private/tmp/plurid-release-smoke-20261018-preserving.log` |
-| Viewer source gates | Types, lint and formatting; 690 tests passed, two native binding tests skipped; `/private/tmp/viewer-plurid-release-tests-complete-20261018.log` |
+| Check                                                   | Evidence                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Plurid preserving production builds                     | All 13 packages; `/private/tmp/plurid-release-build-20261018.log`                                                                                                                                                                                                  |
+| Plurid tests and release planner/artifact checks        | 1,199 package tests with configured coverage floors; 11 release-tooling regressions; `/private/tmp/plurid-release-tests-20261018.log`, `/private/tmp/plurid-release-tool-tests-final-20261018.log`                                                                 |
+| Plurid types, lint, modules, budgets and generated docs | Workspace and harness checks; all entry points of 13 packages; ESM/CommonJS rendering parity (143 classes); 18 budgeted entries; generated tables current                                                                                                          |
+| Plurid browser behavior                                 | 182 cases, including eight native wheel/preview/isolation regressions; `/private/tmp/plurid-release-browser-all-20261018.log`                                                                                                                                      |
+| Plurid performance and visual comparisons               | 13 performance/virtualization cases run without other test/build jobs; 50 committed Darwin visual baselines; `/private/tmp/plurid-release-perf-20261018.log`, `/private/tmp/plurid-release-visual-20261018.log`                                                    |
+| Packed consumer                                         | All 13 prepared tarballs install with lifecycle scripts disabled; ESM/CommonJS imports; 17 typed NodeNext entry points; generated app TypeScript 5/6 checks; production/dev hydration, desktop/mobile; `/private/tmp/plurid-release-smoke-20261018-preserving.log` |
+| Viewer source gates                                     | Types, lint and formatting; 690 tests passed, two native binding tests skipped; `/private/tmp/viewer-plurid-release-tests-complete-20261018.log`                                                                                                                   |
 
 The full Viewer run exposed an existing marquee test's unawaited React `act` thenable. It now
 flushes a requested animation frame explicitly and awaits React; the complete rerun has no unhandled
@@ -211,6 +268,7 @@ Adopting the new plurid handle methods waits for a plurid release; npm still lis
 **607 unit tests across 84 files pass** (2 skipped). All five TypeScript targets pass, including `tsconfig.strict.json`, and ESLint and formatting pass. The renderer bundles, and the native addon compiles. The packaged app was not built or run.
 
 **Added:**
+
 - Quick Look renderings for TIFF, HEIC, PSD and camera RAW, decoded outside Viewer, in previews and grid thumbnails.
 - New File as an exclusive, undoable operation.
 - Open With document types (direct build) and a Help menu.
@@ -218,10 +276,12 @@ Adopting the new plurid handle methods waits for a plurid release; npm still lis
 - DjVu through `djvu-rs` 0.40.0 (MIT) in a renderer worker.
 
 **Changed:**
+
 - IPC handlers and window permissions are tables typed over every method.
 - `noUncheckedIndexedAccess` now covers `domain/`, `desktop/` and `main.ts`. One real edge case was fixed: drawing measurements with too few points. `resolveProjectPath` now treats an undefined workflow input as unbound.
 
 **New regressions cover:**
+
 - Renditions and their release; printable resources.
 - New File collisions and Undo.
 - Document types.
@@ -230,6 +290,7 @@ Adopting the new plurid handle methods waits for a plurid release; npm still lis
 - The DjVu worker against a synthetic page: size, render, text, page bounds, the pixel limit and invalid files.
 
 Physical checks still needed in the app:
+
 - The print sheet.
 - Quick Look renderings of real TIFF/HEIC/RAW files.
 - A real DjVu book.
@@ -240,6 +301,7 @@ Physical checks still needed in the app:
 **593 unit tests across 79 files pass** (2 skipped), run with `VIEWER_TEST_PRESERVE=1`. All four TypeScript targets, ESLint and formatting pass. The renderer bundles. The packaged app was not built or run.
 
 **File splits, no behaviour change:**
+
 - The renderer store became twelve modules behind the unchanged `state/store.ts` API.
 - Window commands became eight modules, keeping their original order, which the palette and menus depend on.
 - Settings became one component per category.
@@ -250,12 +312,14 @@ Physical checks still needed in the app:
 - The stylesheet became eleven ordered sections. The built CSS is byte-identical to before.
 
 **Smaller fixes and cleanup:**
+
 - Shared `dialogOpen`/`overlayOpen` helpers.
 - A released preview resource aborts its in-flight document extraction.
 - The shared agent connection is a first-class client (`sharedClientID`); stored grants under the earlier ID still apply.
 - The React alias workaround in the test configuration was removed after a clean install.
 
 **New features:**
+
 - Marquee selection.
 - Select All across indexed search pages, up to 10,000 matches.
 - Smart folders that follow the index.
@@ -263,6 +327,7 @@ Physical checks still needed in the app:
 - Image quick actions (rotated copies, JPEG/PNG copies, images to PDF) as an undoable `convert` operation that never changes sources.
 
 **New regressions cover:**
+
 - Marquee geometry, the selection model and the hook under jsdom.
 - Tag query escaping.
 - Quick actions through real file operations with a recording converter, including Undo and refusals.
@@ -280,10 +345,11 @@ The 2021 predecessor is documented in `docs/old-app.md`. Its files were removed,
 **579 unit tests across 76 files pass** (2 skipped), run with `VIEWER_TEST_PRESERVE=1`. All four TypeScript targets, ESLint and formatting pass. The packaged app was not built or run.
 
 **Changes**
+
 - Operation receipts moved to append-only per-job logs, `operation-journal-v2/`; earlier journals migrate on first launch.
 - `eslint-plugin-react-hooks` 7.1.1 is enforced in renderer code. All 41 findings were fixed or documented with a reason.
 - DOM tests run under jsdom 30.1.1 with `@testing-library/react` 16.3.3. `vitest.config.ts` points `react` at the hoisted copy, because an older `node_modules` inside `app/` still holds pnpm store links.
-- IPC handlers receive schema-typed arguments, via `ApiCall` in `desktop/ipc-schemas.ts`, instead of casts.
+- IPC handlers receive schema-typed arguments, via `ApiCall` in `desktop/ipc/schemas.ts`, instead of casts.
 - New features: file Redo, folder contents in the Trash confirmation, New Folder with Selection, ⇧⌘G, relative Markdown links, Find duplicates, a Spotlight first pass in folder search, Connect to Server, and agent request outcomes in the activity log.
 - Fixes:
   - Agent-revealed terminals wait for a start.
@@ -301,6 +367,7 @@ The 2021 predecessor is documented in `docs/old-app.md`. Its files were removed,
   - Engine handles confined to the workspace controller.
 
 **New regressions cover:**
+
 - Log replay, a torn final line, quarantine and migration.
 - Linear log writes, Redo, refused rename swaps, protected folders and DOM hooks.
 - The duplicate finder service and dialog, Spotlight deduplication, link resolution and server addresses.
@@ -314,6 +381,7 @@ A full review fixed file-operation, agent-boundary and persistence issues; see [
 Test and tool cleanup no longer deletes anything permanently. `tools/temporary.ts` creates owned `viewer-…` folders and moves them to the user Trash after identity and location checks, keeping them on any doubt. `VIEWER_TEST_PRESERVE=1` keeps every folder and lists it in `$TMPDIR/viewer-kept-test-folders.log`; agents use it so removal waits for the owner. `tools/mas.ts` keeps an earlier build as `<arch>-previous-<time>`, and `tools/direct-release.ts` keeps its disk-image staging.
 
 New regressions cover:
+
 - Replace safety: same-item spellings through a symbolic link and a case variant, a destination containing the source, Replace ordering with a failed extraction, and a destination changed while the prompt was open.
 - New Folder Replace and protected folders.
 - Staging cleanup through Trash, keep-and-report, unreadable-journal quarantine and reporting of Trash receipt failures.

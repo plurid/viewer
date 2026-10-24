@@ -4,8 +4,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { normalizePreferences } from '../src/domain/preferences';
-import { backdropWindowOptions, backdropChange } from '../src/desktop/backdrop';
+import { normalizePreferences } from '../src/domain/preferences/ui';
+import { backdropWindowOptions, backdropChange } from '../src/desktop/windows/backdrop';
 
 describe('the space backdrop preference', () => {
   it('is opaque by default, at 60% when made see-through', () => {

@@ -1,7 +1,7 @@
-import type { ComparisonRequest } from '../src/domain/comparison';
-import type { OperationPlanRequest } from '../src/domain/operation-plan';
-import type { FileInformationPatch } from '../src/domain/file-information';
-import type { AgentClientRequest } from '../src/domain/agent-clients';
+import type { ComparisonRequest } from '../src/domain/comparison/folders';
+import type { OperationPlanRequest } from '../src/domain/operations/operation-plan';
+import type { FileInformationPatch } from '../src/domain/files/information';
+import type { AgentClientRequest } from '../src/domain/agents/clients';
 import type { ReadableStream } from 'node:stream/web';
 import { createServer } from 'vite';
 import { rename, mkdir } from 'node:fs/promises';
@@ -11,35 +11,37 @@ import { Readable } from 'node:stream';
 import type { ServerResponse } from 'node:http';
 import rendererConfig from '../vite.renderer.config';
 import { createFixtures } from './fixtures';
-import { Resources } from '../src/desktop/resources';
-import { Operations } from '../src/desktop/operations';
-import { TextFiles } from '../src/desktop/text-files';
-import { TextBuffers, type TextBuffer } from '../src/desktop/text-buffers';
-import type { TextVersion } from '../src/domain/text-documents';
-import { Watchers } from '../src/desktop/watchers';
-import { FolderSizes } from '../src/desktop/folder-sizes';
-import { Search } from '../src/desktop/search';
-import { Storage } from '../src/desktop/storage';
-import { Projects } from '../src/desktop/projects';
-import { Workflows } from '../src/desktop/workflows';
-import { WatchRules } from '../src/desktop/watch-rules';
-import type { WatchRuleRequest } from '../src/domain/watch-rules';
-import { Relationships } from '../src/desktop/relationships';
-import type { RelationshipsRequest } from '../src/domain/relationships';
-import { inspectFile } from '../src/desktop/inspection';
-import type { WorkflowRequest } from '../src/domain/workflows';
-import { Checkpoints } from '../src/desktop/checkpoints';
-import { AgentClients } from '../src/desktop/agent-clients';
-import { Comparisons } from '../src/desktop/comparison';
-import { OperationPlans } from '../src/desktop/operation-plans';
-import type { CheckpointRequest } from '../src/domain/change-plan';
-import type { ProjectRequest } from '../src/domain/project';
-import { entry, list } from '../src/desktop/filesystem';
-import { SettingsService } from '../src/desktop/settings';
-import { FileInformationService } from '../src/desktop/file-information';
-import { FileIndex } from '../src/desktop/index-core';
+import { Resources } from '../src/desktop/previews/resources';
+import { WebPreviews } from '../src/desktop/previews/web/service';
+import type { LocalServerAction } from '../src/domain/previews/web';
+import { Operations } from '../src/desktop/operations/operations';
+import { TextFiles } from '../src/desktop/editing/text-files';
+import { TextBuffers, type TextBuffer } from '../src/desktop/editing/text-buffers';
+import type { TextVersion } from '../src/domain/editing/documents';
+import { Watchers } from '../src/desktop/files/watchers';
+import { FolderSizes } from '../src/desktop/files/folder-sizes';
+import { Search } from '../src/desktop/search/search';
+import { Storage } from '../src/desktop/persistence/storage';
+import { Projects } from '../src/desktop/workspaces/projects';
+import { Workflows } from '../src/desktop/automation/workflows';
+import { WatchRules } from '../src/desktop/automation/watch-rules';
+import type { WatchRuleRequest } from '../src/domain/automation/watch-rules';
+import { Relationships } from '../src/desktop/workspaces/relationships';
+import type { RelationshipsRequest } from '../src/domain/files/relationships';
+import { inspectFile } from '../src/desktop/files/inspection';
+import type { WorkflowRequest } from '../src/domain/automation/workflows';
+import { Checkpoints } from '../src/desktop/operations/checkpoints';
+import { AgentClients } from '../src/desktop/agents/agent-clients';
+import { Comparisons } from '../src/desktop/comparison/comparison';
+import { OperationPlans } from '../src/desktop/operations/operation-plans';
+import type { CheckpointRequest } from '../src/domain/operations/change-plan';
+import type { ProjectRequest } from '../src/domain/workspaces/project';
+import { entry, list } from '../src/desktop/files/filesystem';
+import { SettingsService } from '../src/desktop/preferences/settings';
+import { FileInformationService } from '../src/desktop/files/file-information';
+import { FileIndex } from '../src/desktop/search/index-core';
 import { ActionPlanner } from '../src/desktop/actions/planner';
-import { extractDocument } from '../src/desktop/formats';
+import { extractDocument } from '../src/desktop/previews/formats';
 import type {
   SettingsPatch,
   IndexedQuery,
@@ -69,6 +71,12 @@ const emit = (event: DesktopEvent) => {
   for (const client of clients) client.write(`data: ${JSON.stringify(event)}\n\n`);
 };
 const resources = new Resources();
+const webPreviews = new WebPreviews(
+  async (files) => {
+    files.forEach(scoped);
+  },
+  (_owner, servers) => emit({ type: 'local-servers', servers }),
+);
 const information = new FileInformationService(
   async (paths) => {
     paths.forEach(scoped);
@@ -215,6 +223,31 @@ function scoped(file: string): string {
 }
 async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
   switch (method) {
+    case 'htmlPreview':
+      throw new Error('Rendered HTML previews use the desktop’s isolated browser.');
+    case 'htmlPreviewClose':
+      return;
+    case 'localServerStart':
+      return webPreviews.start(
+        1,
+        scoped(args[0] as string),
+        args[1] as string,
+        args[2] as string | undefined,
+      );
+    case 'localServers':
+      return webPreviews.list(1);
+    case 'localServerInspect':
+      return webPreviews.inspect(1, args[0] as string);
+    case 'localServerAction': {
+      const id = args[0] as string;
+      const action = args[1] as LocalServerAction;
+      if (action === 'stop') await webPreviews.stop(1, id);
+      else if (action === 'restart') await webPreviews.restart(1, id);
+      else if (action === 'clear-log') webPreviews.clearLog(1, id);
+      else if (action === 'close') await webPreviews.dispose(1, id);
+      else if (action === 'open-browser' || action === 'copy-url') webPreviews.get(1, id);
+      return;
+    }
     case 'hotkeyStatus':
       return {
         registered: false,
@@ -633,6 +666,7 @@ console.log(
   `Viewer synthetic workspace: ${fixtureOrigin}/tests/browser.html\nFixtures: ${fixture.files}`,
 );
 async function close() {
+  await webPreviews.close();
   sizes.close();
   resources.clear();
   search.close();

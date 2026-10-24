@@ -1,7 +1,11 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import type { PreviewContext } from './contracts';
 import type { FileEntry } from '../../domain/contracts';
-import { sameSourceVersion, sourceVersion, type SourceVersion } from '../../domain/inspection';
+import {
+  sameSourceVersion,
+  sourceVersion,
+  type SourceVersion,
+} from '../../domain/files/inspection';
 import { activeWorkspace, getState, previewValues, savePreviewValue } from '../state/store';
 const views = new Map<string, Map<string, unknown>>();
 export function previewState(id: string, file?: FileEntry): NonNullable<PreviewContext['state']> {

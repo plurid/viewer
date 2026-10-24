@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdir, realpath, readFile, writeFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { ownedApp, until } from './owned-app';
-import { workflowDefinitionSchema, type WorkflowRun } from '../src/domain/workflows';
-import type { WatchRule } from '../src/domain/watch-rules';
+import { workflowDefinitionSchema, type WorkflowRun } from '../src/domain/automation/workflows';
+import type { WatchRule } from '../src/domain/automation/watch-rules';
 import type { SavedState } from '../src/domain/contracts';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 

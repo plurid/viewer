@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { tagQuery } from '../src/desktop/spotlight';
-import { collectionSchema } from '../src/domain/collections';
+import { tagQuery } from '../src/desktop/search/spotlight';
+import { collectionSchema } from '../src/domain/workspaces/collections';
 
 describe('finding files by Finder tag', () => {
   it('matches a tag by exact name, escaping quotes and refusing control characters', () => {

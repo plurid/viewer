@@ -2,8 +2,12 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { strToU8, zipSync, type Zippable } from 'fflate';
-import { createArchive, extractArchive, type ArchiveWork } from '../src/desktop/archive-jobs';
-import { Archives } from '../src/desktop/archives';
+import {
+  createArchive,
+  extractArchive,
+  type ArchiveWork,
+} from '../src/desktop/operations/archive-jobs';
+import { Archives } from '../src/desktop/previews/archives';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 const work = (): ArchiveWork => ({

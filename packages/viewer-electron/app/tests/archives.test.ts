@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { crc32, gzipSync } from 'node:zlib';
 import { strToU8, zipSync } from 'fflate';
-import { Archives, zipName } from '../src/desktop/archives';
+import { Archives, zipName } from '../src/desktop/previews/archives';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;

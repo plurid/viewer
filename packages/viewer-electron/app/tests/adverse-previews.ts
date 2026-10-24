@@ -8,7 +8,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { createFixtures } from './fixtures';
 import { ownedApp, until } from './owned-app';
 import { defaultSettings } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 import { trashTemporary } from '../tools/temporary';
 
 const binary = process.env.VIEWER_TEST_BINARY!,

@@ -1,11 +1,18 @@
+import { WindowDialogs, type WindowDialog } from './app/WindowDialogs';
 import { routeFileKeyboard } from './explorer/selection';
 import { AgentReview } from './actions/AgentReview';
-import { captureTarget } from './commands/programs';
-import { agentCatalog } from './commands/agent-catalog';
-import { effectiveWindowUI } from './state/effective-ui';
+import { useAgentCatalog } from './app/useAgentCatalog';
+import { commandAtAgentOrigin, resolveAgentOrigin } from './app/agent-origin';
+import {
+  effectiveWindowLook,
+  effectiveWindowSettings,
+  effectiveWindowUI,
+} from './state/effective-ui';
+import type { SpatialOverviewHandle } from './workspace/overlays/useSpatialOverview';
+import { failedFlush } from '../domain/persistence/flush';
 import { receiveWorkspaces } from './state/workspaces';
-import type { LaunchRequest } from '../domain/launch';
-import { parentPath } from '../domain/planes';
+import type { LaunchRequest } from '../domain/workspaces/launch';
+import { parentPath } from '../domain/workspaces/planes';
 import { useWorkspaceController } from './workspace/controller';
 import { executeAgentNavigation } from './workspace/agent-navigation';
 import { programCommands } from './commands/programs';
@@ -16,12 +23,11 @@ import { explorerCommandIDs, keyCommand } from './explorer/input';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { type PluridApplicationHandle } from '@plurid/plurid-react';
 import type { FolderPane } from '../domain/contracts';
-import { agentDispatchRefusal } from '../domain/agent-safety';
+import { agentDispatchRefusal } from '../domain/agents/safety';
 import { selectedFiles } from './workspace/sessions';
 import {
   activeWorkspace,
   announce,
-  deleteWorkspace,
   dismissNotice,
   flushState,
   getState,
@@ -33,10 +39,7 @@ import {
   receiveFileChanges,
   receiveProgress,
   rememberCommand,
-  renameShortcut,
-  renameWorkspace,
   report,
-  saveCollection,
   restoreWorkspace,
   setJobs,
   setOperationsOpen,
@@ -47,16 +50,16 @@ import {
 import { WorkspaceContext, type SpatialTool } from './workspace/context';
 import { WorkspaceSurface } from './workspace/WorkspaceSurface';
 import { Icon } from './ui/Icon';
-import { Dialog, ErrorBoundary, IconButton, NameDialog } from './ui/primitives';
+import { ErrorBoundary, IconButton } from './ui/primitives';
 import { ProjectControls, ProjectFileNotice } from './workspace/projects';
-import { InspectionControls } from './ui/Inspection';
-import { CheckpointControls } from './ui/Checkpoints';
-import { OperationReviewControls } from './ui/OperationReview';
-import { ComparisonControls } from './ui/Comparison';
-import { DuplicateControls } from './ui/Duplicates';
-import { CollectionControls } from './ui/Collections';
-import { WorkflowControls } from './ui/Workflows';
-import { RelationshipControls } from './ui/Relationships';
+import { InspectionControls } from './ui/inspection/Inspection';
+import { CheckpointControls } from './ui/operations/Checkpoints';
+import { OperationReviewControls } from './ui/operations/OperationReview';
+import { ComparisonControls } from './ui/comparison/Comparison';
+import { DuplicateControls } from './ui/comparison/Duplicates';
+import { CollectionControls } from './ui/collections/Collections';
+import { WorkflowControls } from './ui/automation/Workflows';
+import { RelationshipControls } from './ui/relationships/Relationships';
 import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
@@ -64,13 +67,8 @@ import { useTitlebar } from './ui/titlebar';
 import { useTheme, useThemeVariables } from './ui/theme';
 import { useKeySequences } from './keys/sequences';
 import { recordCommand, recordLine, useMacroRecording } from './keys/macro';
-import type { CustomAction } from '../domain/automation';
 import { WhichKey } from './keys/WhichKey';
 import { PlaneHints } from './keys/PlaneHints';
-import { WorkspaceBackgroundDialog } from './ui/WorkspaceBackgroundDialog';
-import { ViewsDialog } from './ui/ViewsDialog';
-import { captureCurrentLayout, saveLayoutTemplate } from './commands/window-commands/templates';
-import { captureProfile, saveProfile } from './commands/window-commands/profiles';
 import { openTerminalFind } from './terminals/find';
 import { CommandsContext, useCommands, useCommandSource } from './commands/context';
 import { CommandRegistry, type CommandContext } from './commands/registry';
@@ -78,21 +76,20 @@ import { windowCommands } from './commands/window';
 import { CommandPalette } from './commands/CommandPalette';
 import type { PaletteMode } from './commands/palette-modes';
 import type { LineHost } from './command-line/host';
-import { runLine, userCommands, type LineResult } from './command-line/run';
-import { commandName } from './command-line/names';
+import { runLine, type LineResult } from './command-line/run';
 import { receiveSessionKeys } from './keys/session';
 import { editable, textEditFor } from './commands/editing';
 import { routeToEditor, subscribeEditingPlanes } from './editing/planes';
 import { recoverBuffers } from './editing/unsaved';
-import { Sidebar } from './ui/Sidebar';
+import { Sidebar } from './ui/navigation/Sidebar';
 
 import { ContextMenu } from './ui/ContextMenu';
-import { OpenWithDialog } from './ui/OpenWithDialog';
-import { Volumes } from './ui/Volumes';
-import { Trash } from './ui/Trash';
+import { OpenWithDialog } from './ui/navigation/OpenWithDialog';
+import { Volumes } from './ui/navigation/Volumes';
+import { Trash } from './ui/trash/Trash';
 import { openWorkspacePath } from './workspace/open-path';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
-import { commandShortcutID } from '../domain/shortcuts';
+import { commandShortcutID } from '../domain/preferences/shortcuts';
 import { dialogOpen, overlayOpen } from './ui/modal';
 
 export function App() {
@@ -142,15 +139,7 @@ function AppWindow() {
     recovered.current = true;
     void recoverBuffers().catch(report);
   }, [ready]);
-  const [workspaceDialog, setWorkspaceDialog] = useState<{
-    kind: 'new' | 'rename' | 'delete' | 'background';
-    id: string;
-  } | null>(null);
-  const [shortcutDialog, setShortcutDialog] = useState<{ path: string; name: string } | null>(null);
-  const [macroDraft, setMacroDraft] = useState<string[] | null>(null);
-  const [viewDialog, setViewDialog] = useState<'save' | 'manage' | null>(null);
-  const [templateDialog, setTemplateDialog] = useState(false);
-  const [profileDialog, setProfileDialog] = useState(false);
+  const [windowDialog, setWindowDialog] = useState<WindowDialog>();
   const recordingMacro = useMacroRecording();
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -161,9 +150,6 @@ function AppWindow() {
     setPaletteQuery((previous) => ({ text: query, opening: previous.opening + 1 }));
     setPalette(mode);
   }, []);
-  const [goTo, setGoTo] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [tagging, setTagging] = useState(false);
   const [terminalName, setTerminalName] = useState<string>();
   const terminalConfig = useViewer((state) => state.settings.settings.terminals);
   useEffect(() => {
@@ -180,7 +166,6 @@ function AppWindow() {
       live = false;
     };
   }, [terminalConfig.application]);
-  const [busy, setBusy] = useState(false);
   const [showWorkspaceUndo, setShowWorkspaceUndo] = useState(false);
   const initialOpenHandled = useRef(false);
   const saved = useViewer((state) => state.saved);
@@ -189,6 +174,9 @@ function AppWindow() {
   const titlebar = useTitlebar(windowUI.titlebar.visible);
   const activePane = useViewer((state) => state.activePane);
   const space = useViewer(activeWorkspace);
+  const look = useViewer(effectiveWindowLook);
+  const settings = useViewer(effectiveWindowSettings);
+  const [overview, setOverview] = useState<SpatialOverviewHandle>();
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
   const noticeKind = useViewer((state) => state.noticeKind);
@@ -201,7 +189,7 @@ function AppWindow() {
     return () => clearTimeout(timer);
   }, [notice, noticeKind]);
   const quick = useViewer((state) => state.quickPreview);
-  const density = useViewer((state) => state.settings.settings.browsing.density);
+  const density = settings.browsing.density;
   const jobs = useViewer((state) => state.jobs);
   const jobsSignature =
     jobs.length +
@@ -268,7 +256,8 @@ function AppWindow() {
       rootID: controller.rootID(state.activePane),
       paneID: state.activePane || undefined,
       path: pane?.path,
-      directory: pane?.type === 'folder' ? pane.path : undefined,
+      directory:
+        pane && ['folder', 'terminal', 'server'].includes(pane.type) ? pane.path : undefined,
       folder: pane?.type === 'folder' ? (pane as FolderPane) : undefined,
       selection: selectedFiles(state.activePane),
       jobs: state.jobs,
@@ -293,24 +282,27 @@ function AppWindow() {
         ...windowCommands({
           workspace: controller,
           ready,
+          overview: () => overview?.open(),
+          overviewAvailable: overview?.available ?? false,
           tool,
           palette: openPalette,
           settings: () => {
             void window.viewer.openSettings().catch(report);
           },
-          workspaceDialog: (kind) => setWorkspaceDialog({ kind, id: activeWorkspace().id }),
-          renameShortcut: (path, name) => setShortcutDialog({ path, name }),
+          workspaceDialog: (kind) =>
+            setWindowDialog({ type: 'workspace', kind, id: activeWorkspace().id }),
+          renameShortcut: (path, name) => setWindowDialog({ type: 'shortcut', path, name }),
           switchWorkspace: switchTo,
           restoreWorkspace: () => transitionWorkspace(restoreWorkspace),
           spatialTool,
-          goTo: () => setGoTo(true),
-          connectServer: () => setConnecting(true),
-          findTagged: () => setTagging(true),
+          goTo: () => setWindowDialog({ type: 'go-to' }),
+          connectServer: () => setWindowDialog({ type: 'connect' }),
+          findTagged: () => setWindowDialog({ type: 'tag' }),
           openWith: setOpenWithPaths,
-          saveMacro: setMacroDraft,
-          viewDialog: setViewDialog,
-          templateDialog: () => setTemplateDialog(true),
-          profileDialog: () => setProfileDialog(true),
+          saveMacro: (commands) => setWindowDialog({ type: 'macro', commands }),
+          viewDialog: (kind) => setWindowDialog({ type: 'view', kind }),
+          templateDialog: () => setWindowDialog({ type: 'template' }),
+          profileDialog: () => setWindowDialog({ type: 'profile' }),
         }),
       ],
       valid: (invocation) =>
@@ -324,74 +316,9 @@ function AppWindow() {
     },
     // Progress ticks replace `jobs` many times a second; commands only care whether
     // jobs exist and which can be undone, and read those from the live context.
-    [saved, ready, tool, jobsSignature, terminalName],
+    [saved, ready, tool, jobsSignature, terminalName, overview],
   );
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const publish = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        const workspaces = {
-          activeWorkspace: getState().saved.activeWorkspace,
-          workspaces: getState().saved.workspaces.map((space) => ({
-            id: space.id,
-            name: space.name,
-            roots: space.roots,
-            panes: space.panes.map((pane) => ({
-              id: pane.id,
-              type: pane.type,
-              path: pane.path,
-              ...(pane.type === 'folder' ? { mode: pane.mode } : {}),
-              ...(pane.type === 'search' ? { allLocations: pane.allLocations } : {}),
-            })),
-          })),
-        };
-        const context = registry.context(getState().activePane) || windowContext();
-        if (!context.directory && !context.folder) {
-          const space = activeWorkspace();
-          const pane = space.panes.find((pane) => pane.id === getState().activePane);
-          void window.viewer
-            .commandsPublish(
-              {
-                workspaceID: space.id,
-                rootID: (pane && controller.rootID(pane.id)) || 'none',
-                paneID: pane?.id || 'none',
-                panePath: pane?.path,
-                directory: pane
-                  ? pane.type === 'preview'
-                    ? pane.path.slice(0, pane.path.lastIndexOf('/')) || '/'
-                    : pane.path
-                  : getState().bootstrap.home,
-                selection: [],
-              },
-              [],
-              workspaces,
-            )
-            .catch(report);
-          return;
-        }
-        const target = captureTarget(context, controller);
-        const commands =
-          target.selection.length > 2000
-            ? []
-            : agentCatalog(registry, context).map(({ id, label, group, aliases, shortcut }) => ({
-                id,
-                label,
-                group,
-                aliases: [...aliases],
-                shortcut,
-              }));
-        if (target.selection.length > 2000) target.selection = [];
-        void window.viewer.commandsPublish(target, commands, workspaces).catch(report);
-      }, 80);
-    };
-    const off = registry.subscribe(publish);
-    publish();
-    return () => {
-      off();
-      clearTimeout(timer);
-    };
-  }, [registry, controller, activePane, windowContext]);
+  useAgentCatalog({ registry, controller, activePane, context: windowContext });
   // a plane that starts or stops editing changes which text commands apply
   useEffect(() => subscribeEditingPlanes(() => registry.touch()), [registry]);
   useEffect(() => {
@@ -584,7 +511,13 @@ function AppWindow() {
         for (const path of event.paths) void controller.openPath(path).catch(report);
       else if (event.type === 'flush')
         void flushState()
-          .then(() => window.viewer.flushed(event.token))
+          .then(
+            () => window.viewer.flushed(event.token, { ok: true }),
+            (error) => {
+              report(error);
+              return window.viewer.flushed(event.token, failedFlush(error));
+            },
+          )
           .catch(report);
       else if (event.type === 'agent-command') {
         const finish = (error?: string) => {
@@ -606,20 +539,8 @@ function AppWindow() {
             return;
           }
           const { target } = event;
-          const space = activeWorkspace();
-          const pane = space.panes.find((pane) => pane.id === target.paneID);
-          const emptyOrigin =
-            event.navigation &&
-            !space.panes.length &&
-            target.paneID === 'none' &&
-            target.rootID === 'none';
-          if (
-            space.id !== target.workspaceID ||
-            (!emptyOrigin &&
-              (!pane ||
-                (target.panePath && pane.path !== target.panePath) ||
-                controller.rootID(pane.id) !== target.rootID))
-          ) {
+          const origin = resolveAgentOrigin(target, activeWorkspace(), controller);
+          if (!origin) {
             report('The originating plane is no longer available. Request a new proposal.');
             finish('The originating plane or folder changed.');
             return;
@@ -633,20 +554,13 @@ function AppWindow() {
               });
             return;
           }
-          if (!pane) {
-            finish('The originating plane is unavailable.');
-            return;
-          }
-          const command = agentCatalog(registry, {
-            ...windowContext(),
-            workspaceID: target.workspaceID,
-            rootID: target.rootID,
-            paneID: target.paneID,
-            directory: target.directory,
-            selection: target.selection,
-            path: pane.path,
-            folder: pane.type === 'folder' ? pane : undefined,
-          }).find((item) => item.id === event.command);
+          const command = commandAtAgentOrigin(
+            registry,
+            event.command,
+            target,
+            origin,
+            windowContext(),
+          );
           void (command ? registry.run(command, false) : Promise.resolve(false))
             .then((executed) =>
               finish(executed ? undefined : 'The command is no longer available for this context.'),
@@ -678,19 +592,14 @@ function AppWindow() {
     }
   }, [ready, bootstrap.openPaths, bootstrap.launches, controller, handleLaunch]);
   // the theme's colours as the page's variables (2026-10-23)
-  useThemeVariables(
-    useTheme(
-      useViewer((state) => state.settings.settings),
-      saved.look,
-    ),
-  );
+  useThemeVariables(useTheme(settings, look));
   useEffect(() => {
-    document.documentElement.dataset.look = saved.look;
-    document.documentElement.style.colorScheme = saved.look;
-  }, [saved.look]);
+    document.documentElement.dataset.look = look;
+    document.documentElement.style.colorScheme = look;
+  }, [look]);
   // A see-through space (2026-10-23): the window lets what is behind it through (backdrop.ts); the
   // page draws the space at the chosen opacity, the planes opaque over it.
-  const backdrop = saved.ui.space.backdrop;
+  const backdrop = windowUI.space.backdrop;
   const backdropOpacity = windowUI.space.backdropOpacity;
   useEffect(() => {
     document.documentElement.dataset.backdrop = backdrop;
@@ -753,9 +662,7 @@ function AppWindow() {
     window.addEventListener('keydown', keydown, true);
     return () => window.removeEventListener('keydown', keydown, true);
   }, [tool, registry, spatialTool, windowContext]);
-  const targetWorkspace = saved.workspaces.find(
-    (workspace) => workspace.id === workspaceDialog?.id,
-  );
+
   const inProgress = jobs.filter((job) =>
     ['queued', 'running', 'collision'].includes(job.status),
   ).length;
@@ -772,7 +679,7 @@ function AppWindow() {
       <RelationshipControls />
       <div
         className="app-shell"
-        data-look={saved.look}
+        data-look={look}
         data-density={density}
         data-titlebar={titlebar.state}
       >
@@ -829,6 +736,16 @@ function AppWindow() {
             }}
           />
           <span className="toolbar-spacer" />
+          {overview?.available && overview.collapsed && (
+            <button
+              aria-label="Overview"
+              aria-haspopup="dialog"
+              aria-expanded={overview.expanded}
+              onClick={(event) => overview.open(event.currentTarget)}
+            >
+              Overview
+            </button>
+          )}
           <ActionHub />
           {showOperations && (
             <button
@@ -857,6 +774,7 @@ function AppWindow() {
               <WorkspaceSurface
                 engine={engine}
                 surface={surface}
+                onOverviewChange={setOverview}
                 onReady={() => {
                   setReady(true);
                   if (pendingPresentation.current === activeWorkspace().id) {
@@ -929,214 +847,12 @@ function AppWindow() {
             }
           />
         )}
-        {workspaceDialog?.kind === 'background' && (
-          <WorkspaceBackgroundDialog onClose={() => setWorkspaceDialog(null)} />
-        )}
-        {workspaceDialog &&
-          workspaceDialog.kind !== 'delete' &&
-          workspaceDialog.kind !== 'background' && (
-            <NameDialog
-              title={workspaceDialog.kind === 'new' ? 'New workspace' : 'Rename workspace'}
-              maxLength={100}
-              initial={workspaceDialog.kind === 'rename' ? targetWorkspace?.name : ''}
-              action={workspaceDialog.kind === 'new' ? 'Create' : 'Rename'}
-              onClose={() => setWorkspaceDialog(null)}
-              onSubmit={async (name) => {
-                name = name.trim();
-                if (!name) throw new Error('Enter a workspace name.');
-                if (workspaceDialog.kind === 'new') {
-                  await transitionWorkspace(() => newWorkspace(name));
-                } else if (targetWorkspace?.id === activeWorkspace().id) renameWorkspace(name);
-              }}
-            />
-          )}
-        {workspaceDialog?.kind === 'delete' && targetWorkspace && (
-          <Dialog
-            title="Delete workspace?"
-            onClose={() => {
-              if (!busy) setWorkspaceDialog(null);
-            }}
-          >
-            <div className="dialog-copy">
-              <p>
-                Delete “{targetWorkspace.name}” and its {targetWorkspace.panes.length} open{' '}
-                {targetWorkspace.panes.length === 1 ? 'plane' : 'planes'}?
-              </p>
-              <p>
-                Your files and folders stay where they are. File operations continue. You can undo
-                this deletion during this session.
-              </p>
-            </div>
-            <footer>
-              <button disabled={busy} onClick={() => setWorkspaceDialog(null)}>
-                Cancel
-              </button>
-              <button
-                className="danger"
-                disabled={busy}
-                onClick={() => {
-                  setBusy(true);
-                  void transitionWorkspace(() => deleteWorkspace(targetWorkspace.id))
-                    .then(() => setWorkspaceDialog(null))
-                    .catch(report)
-                    .finally(() => setBusy(false));
-                }}
-              >
-                Delete workspace
-              </button>
-            </footer>
-          </Dialog>
-        )}
-        {viewDialog === 'save' && (
-          <NameDialog
-            title="Save view"
-            label="View name"
-            maxLength={100}
-            action="Save"
-            onClose={() => setViewDialog(null)}
-            onSubmit={(name) => {
-              name = name.trim();
-              if (!name) throw new Error('Enter a name for the view.');
-              controller.saveBookmark(name);
-              setViewDialog(null);
-            }}
-          />
-        )}
-        {profileDialog && (
-          <NameDialog
-            title="Save profile as"
-            label="Profile name"
-            maxLength={100}
-            action="Save"
-            onClose={() => setProfileDialog(false)}
-            onSubmit={async (name) => {
-              name = name.trim();
-              if (!name) throw new Error('Enter a name for the profile.');
-              await saveProfile(captureProfile(name));
-              setProfileDialog(false);
-            }}
-          />
-        )}
-        {templateDialog && (
-          <NameDialog
-            title="Save layout as template"
-            label="Layout name"
-            maxLength={100}
-            action="Save"
-            onClose={() => setTemplateDialog(false)}
-            onSubmit={async (name) => {
-              name = name.trim();
-              if (!name) throw new Error('Enter a name for the layout.');
-              await saveLayoutTemplate(captureCurrentLayout(name));
-              setTemplateDialog(false);
-            }}
-          />
-        )}
-        {viewDialog === 'manage' && (
-          <ViewsDialog workspace={controller} onClose={() => setViewDialog(null)} />
-        )}
-        {macroDraft && (
-          <NameDialog
-            title="Save macro"
-            label="Macro name"
-            initial="Macro"
-            maxLength={100}
-            action="Save"
-            onClose={() => setMacroDraft(null)}
-            onSubmit={async (name) => {
-              name = name.trim();
-              if (!name) throw new Error('Enter a name for the macro.');
-              const actions = getState().settings.settings.customActions;
-              const slug = name
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/^-|-$/g, '');
-              const command = commandName(name);
-              // a command sequence: it can be given a shortcut or a prefix key in Settings
-              const action: CustomAction = {
-                id: `macro-${slug || 'macro'}-${Date.now().toString(36)}`,
-                name,
-                aliases: ['macro'],
-                icon: 'command',
-                shortcut: '',
-                order: actions.length,
-                pinned: false,
-                when: { target: 'any', extensions: [], min: 0, max: 10000 },
-                // its name as a command too, `:OpenDocs`, when no other has it (2026-10-23)
-                executor: {
-                  kind: 'sequence',
-                  commands: macroDraft,
-                  ...(command && !userCommands().has(command) ? { command } : {}),
-                },
-              };
-              receiveSettings(
-                await window.viewer.settingsPatch(
-                  [{ path: 'settings.customActions', value: [...actions, action] }],
-                  getState().settings.revision,
-                ),
-              );
-              setMacroDraft(null);
-              const kept = action.executor.kind === 'sequence' && action.executor.command;
-              announce(kept ? `Saved “${name}”; run it with :${kept}.` : `Saved “${name}”.`);
-            }}
-          />
-        )}
-        {shortcutDialog && (
-          <NameDialog
-            title="Rename shortcut"
-            initial={shortcutDialog.name}
-            maxLength={200}
-            action="Rename"
-            onClose={() => setShortcutDialog(null)}
-            onSubmit={(name) => renameShortcut(shortcutDialog.path, name)}
-          />
-        )}
-        {goTo && (
-          <NameDialog
-            title="Go to folder"
-            label="Folder path"
-            maxLength={32768}
-            initial={bootstrap.home}
-            action="Go"
-            onClose={() => setGoTo(false)}
-            onSubmit={async (path) => {
-              const resolved =
-                path === '~' || path.startsWith('~/') ? bootstrap.home + path.slice(1) : path;
-              const entry = await window.viewer.stat(resolved);
-              if (!entry.directory) throw new Error('Choose a folder.');
-              await controller.openPath(entry.path);
-            }}
-          />
-        )}
-        {connecting && (
-          <NameDialog
-            title="Connect to server"
-            label="Server address"
-            maxLength={2048}
-            initial="smb://"
-            action="Connect"
-            onClose={() => setConnecting(false)}
-            onSubmit={(address) => window.viewer.connectServer(address.trim())}
-          />
-        )}
-        {tagging && (
-          <NameDialog
-            title="Find files with tag"
-            label="Tag"
-            action="Find"
-            onClose={() => setTagging(false)}
-            onSubmit={async (name) => {
-              const tag = name.trim();
-              const roots = getState().settings.settings.search.roots;
-              const sources = roots.length ? roots : [getState().bootstrap.home];
-              // Spotlight is asked first, so an unusable tag or build reports here.
-              await window.viewer.taggedFiles(tag, sources);
-              const id = crypto.randomUUID();
-              saveCollection({ id, name: tag, kind: 'tag', tag, sources });
-              controller.openCollection(id);
-            }}
-          />
-        )}
+        <WindowDialogs
+          dialog={windowDialog}
+          onClose={() => setWindowDialog(undefined)}
+          workspace={controller}
+          transitionWorkspace={transitionWorkspace}
+        />
       </div>
     </WorkspaceContext.Provider>
   );

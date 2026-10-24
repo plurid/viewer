@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { readDrawingGeometry } from '../src/desktop/drawing-geometry';
-import { drawingGeometryPage, drawingGeometryOptionsSchema } from '../src/domain/drawing-geometry';
-import { parseDrawing } from '../src/domain/dxf/geometry';
+import { readDrawingGeometry } from '../src/desktop/previews/drawing-geometry';
+import {
+  drawingGeometryPage,
+  drawingGeometryOptionsSchema,
+} from '../src/domain/previews/drawings/geometry';
+import { parseDrawing } from '../src/domain/previews/drawings/dxf/geometry';
 import { entity, dxf, panelDrawing } from './dxf-fixtures';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;

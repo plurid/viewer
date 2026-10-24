@@ -1,5 +1,5 @@
 import type { FileEntry, FolderPane } from '../../domain/contracts';
-import { panePresentation } from '../../domain/folder-presentation';
+import { panePresentation } from '../../domain/preferences/folder-presentation';
 import { activeWorkspace, folderPresentation, remember, updatePane } from '../state/store';
 import { browseSession, updateBrowseSession } from '../workspace/sessions';
 import { SpringNavigation } from './drag-navigation';

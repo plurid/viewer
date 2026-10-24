@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { OperationJob, OperationRequest } from '../src/domain/contracts';
-import { Operations } from '../src/desktop/operations';
+import { Operations } from '../src/desktop/operations/operations';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string, trash: string, operations: Operations;

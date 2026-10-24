@@ -6,11 +6,12 @@ import {
   terminalTokens,
   themeColor,
   type Theme,
-} from '../../../domain/themes';
-import { importItermColors, importVSCodeTheme } from '../../../domain/theme-import';
+} from '../../../domain/preferences/themes';
+import { importItermColors, importVSCodeTheme } from '../../../domain/preferences/theme-import';
 import { ChoiceButton } from '../ChoiceMenu';
-import { Field } from '../SettingField';
+import { Field } from './SettingField';
 import type { SettingsEditor } from './editor';
+import type { SettingsPatch, SettingsSnapshot } from '../../../domain/services';
 
 const words: Record<string, string> = {
   space: 'Space',
@@ -43,8 +44,19 @@ const newID = (name: string) =>
     name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'theme'
-  }-${Date.now().toString(36)}`;
+      .replace(/^-|-$/g, '')
+      .slice(0, 60) || 'theme'
+  }-${crypto.randomUUID()}`;
+
+/** Insertion and choosing the inserted theme are one revisioned edit. */
+function appendTheme(snapshot: SettingsSnapshot, theme: Theme, use: boolean): SettingsPatch[] {
+  return [
+    { path: 'settings.themes', value: [...snapshot.settings.themes, theme] },
+    ...(use
+      ? [{ path: 'settings.theme', value: { ...snapshot.settings.theme, [theme.look]: theme.id } }]
+      : []),
+  ];
+}
 /** One colour of a theme: the system picker and its hex, the built-in colour where it has none. */
 function ThemeColor({
   label,
@@ -73,7 +85,10 @@ function ThemeColor({
         label={`${label} hex`}
         value={value ?? ''}
         placeholder={fallback}
-        save={(text) => onChange(text.trim() ? (themeColor(text) ?? value) : undefined)}
+        save={(text) => {
+          const color = themeColor(text.trim());
+          if (!text.trim() || color) onChange(color);
+        }}
       />
     </div>
   );
@@ -83,20 +98,40 @@ function ThemeColor({
  * preset or a VS Code theme, edited colour by colour, renamed, copied as JSON or removed.
  */
 export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
-  const { snapshot, patch, error } = editor;
+  const { snapshot, save, error } = editor;
   const settings = snapshot.settings;
   const themes = settings.themes;
   const file = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const saveThemes = (next: Theme[]) => patch('settings.themes', next);
   const change = (id: string, update: (theme: Theme) => Theme) =>
-    saveThemes(themes.map((theme) => (theme.id === id ? update(theme) : theme)));
+    save((current) => {
+      if (!current.settings.themes.some((theme) => theme.id === id)) return [];
+      return [
+        {
+          path: 'settings.themes',
+          value: current.settings.themes.map((theme) => (theme.id === id ? update(theme) : theme)),
+        },
+      ];
+    });
   const changeMetrics = (id: string, metrics: Partial<NonNullable<Theme['metrics']>>) =>
     change(id, (theme) => ({ ...theme, metrics: { ...theme.metrics, ...metrics } }));
   const add = (theme: Theme, use = true) => {
-    saveThemes([...themes, theme]);
-    if (use) patch('settings.theme', { ...settings.theme, [theme.look]: theme.id });
+    save((current) => appendTheme(current, theme, use));
     setOpen(theme.id);
+  };
+  const duplicate = (theme: Theme) => {
+    const id = newID(theme.name);
+    save((current) => {
+      const latest = current.settings.themes.find((item) => item.id === theme.id);
+      return latest
+        ? appendTheme(
+            current,
+            { ...structuredClone(latest), id, name: `${latest.name} copy` },
+            false,
+          )
+        : [];
+    });
+    setOpen(id);
   };
   const chooser = (look: 'dark' | 'light') => (
     <label className="settings-row">
@@ -108,10 +143,12 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
           (theme) => ({ value: theme.id, label: theme.name }),
         )}
         onChoose={(id) =>
-          patch('settings.theme', {
-            ...settings.theme,
-            [look]: id === builtInTheme(look).id ? '' : id,
-          })
+          save((current) => [
+            {
+              path: 'settings.theme',
+              value: { ...current.settings.theme, [look]: id === builtInTheme(look).id ? '' : id },
+            },
+          ])
         }
       />
     </label>
@@ -123,8 +160,16 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
       <div className="settings-actions">
         <button
           onClick={() => {
-            const base = builtInTheme(snapshot.look);
-            add({ ...structuredClone(base), id: newID('Custom'), name: `Custom ${base.name}` });
+            const id = newID('Custom');
+            save((current) => {
+              const base = builtInTheme(current.look);
+              return appendTheme(
+                current,
+                { ...structuredClone(base), id, name: `Custom ${base.name}` },
+                true,
+              );
+            });
+            setOpen(id);
           }}
         >
           New theme
@@ -240,20 +285,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
               </section>
             ))}
             <div className="settings-actions">
-              <button
-                onClick={() =>
-                  add(
-                    {
-                      ...structuredClone(theme),
-                      id: newID(theme.name),
-                      name: `${theme.name} copy`,
-                    },
-                    false,
-                  )
-                }
-              >
-                Duplicate
-              </button>
+              <button onClick={() => duplicate(theme)}>Duplicate</button>
               <button
                 onClick={() =>
                   void navigator.clipboard.writeText(JSON.stringify(theme, null, 2)).catch(() => {})
@@ -263,9 +295,18 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
               </button>
               <button
                 onClick={() => {
-                  saveThemes(themes.filter((item) => item.id !== theme.id));
-                  if (settings.theme[theme.look] === theme.id)
-                    patch('settings.theme', { ...settings.theme, [theme.look]: '' });
+                  save((current) => {
+                    const selected = { ...current.settings.theme };
+                    for (const look of ['dark', 'light'] as const)
+                      if (selected[look] === theme.id) selected[look] = '';
+                    return [
+                      {
+                        path: 'settings.themes',
+                        value: current.settings.themes.filter((item) => item.id !== theme.id),
+                      },
+                      { path: 'settings.theme', value: selected },
+                    ];
+                  });
                 }}
               >
                 Remove

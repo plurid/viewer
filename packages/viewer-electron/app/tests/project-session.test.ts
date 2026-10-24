@@ -1,7 +1,7 @@
 /** Private state only: closing a project never invokes file mutations. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ProjectAssociation } from '../src/domain/project';
-import { stateSchema } from '../src/desktop/storage';
+import type { ProjectAssociation } from '../src/domain/workspaces/project';
+import { stateSchema } from '../src/desktop/persistence/storage';
 import {
   activeWorkspace,
   addCollectionPane,

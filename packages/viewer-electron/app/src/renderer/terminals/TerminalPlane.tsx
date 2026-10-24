@@ -1,3 +1,4 @@
+import { effectiveWindowSettings, effectiveWindowLook } from '../state/effective-ui';
 import { useTheme } from '../ui/theme';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
@@ -22,8 +23,8 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
   const [found, setFound] = useState<{ index: number; count: number } | null>(null);
   const workspace = useWorkspace();
   const settings = useViewer((state) => state.settings.settings.terminals);
-  const font = useViewer((state) => state.settings.settings.terminalFont);
-  const look = useViewer((state) => state.saved.look);
+  const font = useViewer((state) => effectiveWindowSettings(state).terminalFont);
+  const look = useViewer(effectiveWindowLook);
   const palette = useTheme(
     useViewer((state) => state.settings.settings),
     look,
@@ -50,7 +51,7 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
         session.terminal.options.theme = terminalTheme(getState().saved.look);
         Object.assign(
           session.terminal.options,
-          terminalFontOptions(getState().settings.settings.terminalFont),
+          terminalFontOptions(effectiveWindowSettings(getState()).terminalFont),
         );
         session.attach(container.current);
         setReady(true);

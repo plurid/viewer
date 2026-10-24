@@ -1,6 +1,6 @@
 import type { TreePlane } from '@plurid/plurid-data';
 import type { Workspace } from '../../domain/contracts';
-import { normalizedPanePath } from '../../domain/planes';
+import { normalizedPanePath } from '../../domain/workspaces/planes';
 
 const hostID = (node: TreePlane) =>
   node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id || '';

@@ -1,12 +1,12 @@
 import { beforeEach, afterEach, describe, it, expect } from 'vitest';
 import { writeFile, symlink } from 'node:fs/promises';
 import path from 'node:path';
-import { extractDocument } from '../src/desktop/formats';
-import { inspectFile } from '../src/desktop/inspection';
-import { FileIndex } from '../src/desktop/index-core';
-import { entry } from '../src/desktop/filesystem';
+import { extractDocument } from '../src/desktop/previews/formats';
+import { inspectFile } from '../src/desktop/files/inspection';
+import { FileIndex } from '../src/desktop/search/index-core';
+import { entry } from '../src/desktop/files/filesystem';
 import { defaultSettings } from '../src/domain/services';
-import { columnName } from '../src/domain/office';
+import { columnName } from '../src/domain/previews/documents/office';
 import { officeFixture, workbookSheet } from './office-fixtures';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;

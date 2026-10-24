@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ExecutionTask } from '../../domain/automation';
+import type { ExecutionTask } from '../../domain/automation/actions';
 import { report } from '../state/store';
 import { IconButton } from '../ui/primitives';
 export function ExecutionPanel() {

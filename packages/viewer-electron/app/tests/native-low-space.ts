@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { createFixtures } from './fixtures';
 import { ownedApp, until } from './owned-app';
 import { defaultSettings } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 import type { OperationJob, OperationRequest } from '../src/domain/contracts';
 import { trashTemporary } from '../tools/temporary';
 

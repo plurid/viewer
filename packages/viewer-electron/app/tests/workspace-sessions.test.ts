@@ -1,7 +1,52 @@
 import { describe, expect, it } from 'vitest';
-import { WorkspaceSessions } from '../src/desktop/workspace-sessions';
+import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 
 describe('native workspace ownership', () => {
+  it('protects a window reservation from peer claims and saves before renderer bootstrap', () => {
+    const sessions = new WorkspaceSessions();
+    const first = sessions.create('/fixtures', 'First');
+    const second = sessions.create('/fixtures', 'Opening');
+    const input = sessions.open(1, '/fixtures', first);
+    sessions.reserve(2, second);
+    expect(sessions.owner(second)).toBe(2);
+    expect(sessions.claim(1, second)).toBe(false);
+    expect(() => sessions.reserve(3, second)).toThrow('another window');
+    input.workspaces = input.workspaces.filter((item) => item.id !== second);
+    expect(() => sessions.save(1, input)).toThrow('other window');
+    expect(sessions.open(2, '/fixtures', second).activeWorkspace).toBe(second);
+    expect(sessions.owner(second)).toBe(2);
+  });
+
+  it('releases an unbootstrapped reservation when its native window closes', () => {
+    const sessions = new WorkspaceSessions();
+    const first = sessions.create('/fixtures');
+    const second = sessions.create('/fixtures');
+    sessions.open(1, '/fixtures', first);
+    sessions.reserve(2, second);
+    sessions.close(2);
+    expect(sessions.owner(second)).toBeUndefined();
+    expect(sessions.claim(1, second)).toBe(true);
+  });
+
+  it('exposes a detached presentation snapshot without file or preview data', () => {
+    const sessions = new WorkspaceSessions();
+    const id = sessions.create('/private-fixture', 'Private workspace');
+    const state = sessions.open(1, '/private-fixture', id);
+    state.workspaces[0]!.profileID = 'full';
+    state.workspaces[0]!.overrides = { 'settings.editor.tabSize': 8 };
+    state.profile = { id: 'focus', previous: {} };
+    state.previewStates = { 'private-preview': { privateText: 'Retained private preview data' } };
+    sessions.save(1, state);
+    const presentation = sessions.presentation(id);
+    expect(presentation).toEqual({
+      workspace: { profileID: 'full', overrides: { 'settings.editor.tabSize': 8 } },
+      profileID: 'focus',
+    });
+    expect(JSON.stringify(presentation)).not.toContain('private');
+    presentation.workspace.overrides!['settings.editor.tabSize'] = 2;
+    expect(sessions.presentation(id).workspace.overrides?.['settings.editor.tabSize']).toBe(8);
+  });
+
   it('merges overlapping saves without replacing another window or reviving a removed favorite', () => {
     const sessions = new WorkspaceSessions();
     const first = sessions.create('/fixtures', 'First');

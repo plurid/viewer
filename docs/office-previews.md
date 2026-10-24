@@ -59,7 +59,7 @@ are capped at 10,000 characters. Out-of-budget container/XML fails explicitly;
 bounded content output is marked truncated. All Office inspection/search results
 report partial coverage rather than claiming complete Word/Excel fidelity.
 
-Implementation: `desktop/office.ts`, `desktop/office-xml.ts`, `domain/office.ts`,
+Implementation: `desktop/previews/office.ts`, `desktop/previews/office-xml.ts`, `domain/previews/documents/office.ts`,
 `previews/modules/OfficePreview.tsx` and the shared `previews/DataTable.tsx`.
 The package relationship/cell model follows Microsoft's
 [SpreadsheetML structure](https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/structure-of-a-spreadsheetml-document),

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { KeySequence, keyName, type KeymapBinding } from '../../domain/keymap';
-import { matchesShortcut } from '../../domain/shortcuts';
+import { KeySequence, keyName, type KeymapBinding } from '../../domain/preferences/keymap';
+import { matchesShortcut } from '../../domain/preferences/shortcuts';
 import { editable } from '../commands/editing';
 import { overlayOpen } from '../ui/modal';
 import { report } from '../state/store';

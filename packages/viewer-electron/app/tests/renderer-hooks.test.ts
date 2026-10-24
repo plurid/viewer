@@ -9,7 +9,7 @@ import { WorkspaceContext, type WorkspaceController } from '../src/renderer/work
 import { initialize, receiveJob, setOperationsOpen } from '../src/renderer/state/store';
 import type { OperationJob } from '../src/domain/contracts';
 import { OperationsPanel } from '../src/renderer/operations/OperationsPanel';
-import { DuplicateControls } from '../src/renderer/ui/Duplicates';
+import { DuplicateControls } from '../src/renderer/ui/comparison/Duplicates';
 import { TrashContents, groupSelection } from '../src/renderer/explorer/FileDialogs';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import { Thumbnail } from '../src/renderer/explorer/views';

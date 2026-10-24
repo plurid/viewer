@@ -1,5 +1,5 @@
 import type { CommandDefinition } from '../registry';
-import { baseName } from '../../../domain/planes';
+import { baseName } from '../../../domain/workspaces/planes';
 import type { WindowScopes } from './scope';
 
 /** Dynamic entries: workspaces, open planes, places and saved searches. */

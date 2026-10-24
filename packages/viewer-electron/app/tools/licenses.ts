@@ -1,14 +1,13 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, readdir, writeFile, mkdir, stat } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { ensureElectronRuntime } from './native-build/runtime';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url),
-  exec = promisify(execFile);
+const exec = promisify(execFile);
 type Package = {
   name: string;
   versions: string[];
@@ -80,13 +79,10 @@ export async function licenseInventory() {
       notices,
     });
   }
-  const electronRoot = path.dirname(require.resolve('electron/package.json'));
-  const electron = JSON.parse(await readFile(path.join(electronRoot, 'package.json'), 'utf8')) as {
-    version: string;
-  };
+  const runtime = await ensureElectronRuntime({ appRoot: root });
   await mkdir(path.join(root, 'assets/licenses'), { recursive: true });
   for (const file of ['LICENSE', 'LICENSES.chromium.html']) {
-    const content = await readFile(path.join(electronRoot, 'dist', file));
+    const content = await readFile(path.join(runtime.distRoot, file));
     await writeFile(
       path.join(root, 'assets/licenses', file === 'LICENSE' ? 'electron.txt' : file),
       content,
@@ -94,7 +90,7 @@ export async function licenseInventory() {
   }
   const inventory = {
     version: 1,
-    electron: electron.version,
+    electron: runtime.version,
     packages: entries,
     unresolved: entries
       .filter((entry) => entry.license === 'Unknown' || !entry.notices.length)
@@ -108,7 +104,7 @@ export async function licenseInventory() {
   if (inventory.unresolved.length)
     throw new Error('License notices need review: ' + inventory.unresolved.join(', '));
   console.log(
-    `Bundled license notices: ${entries.length} production packages plus Electron ${electron.version}, Chromium and existing CAD notices.`,
+    `Bundled license notices: ${entries.length} production packages plus Electron ${runtime.version}, Chromium and existing CAD notices.`,
   );
   return inventory;
 }

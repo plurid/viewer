@@ -1,5 +1,75 @@
 # Performance analysis
 
+## Isolated foreground workload runner
+
+The native performance scenario shares the existing menu-wheel and camera-wheel
+workload implementation in `tests/native/scenarios/performance.ts`. It requires
+explicit foreground mode before any fixture preparation or application launch and
+returns after those workloads; it does not run the rest of the functional suite.
+An idle index and settled renderer provide its starting conditions.
+
+```sh
+VIEWER_TEST_SCENARIO=performance \
+VIEWER_TEST_FOREGROUND=1 \
+VIEWER_TEST_PRESERVE=1 \
+VIEWER_TEST_BINARY=/absolute/path/to/Viewer.app/Contents/MacOS/Viewer \
+pnpm test:desktop
+```
+
+Use the same harness for baseline and candidate binaries. Each run records five
+menu samples and five camera samples, with the same 24-event sequences and camera
+reset between rotation samples. Unique `out/native-evidence/electron-smoke-…`
+directories retain process logs and
+`screenshots/native-reliability-performance.json`. The report includes executable,
+ASAR and Info.plist hashes before/after, harness-source hashes, viewport/screen
+metadata, ordered raw RAF intervals, long-task durations, commit/emission counts
+and summaries. The initial RAF interval is retained but excluded from summaries,
+as in the original probe. Partial failures retain completed samples and their
+failure status rather than manufacturing a successful measurement.
+
+Comparing results requires matching workload/harness versions, display, window,
+fixture and instrumentation conditions. Each dated observation applies only to
+its recorded candidates.
+
+## October 24 paired foreground measurements
+
+The baseline and final stabilization candidate used workload version 1 and
+identical harness-source hashes and environment metadata. Both ran visibly at
+1440×940 CSS pixels, device scale 2, on the same 1512×982 display with one plane.
+Five samples of each workload ran without concurrent builds or other native
+acceptance jobs. Before/after executable, ASAR and Info.plist hashes match within
+each run.
+
+| Workload                                        | Baseline                | Final candidate         |
+| ----------------------------------------------- | ----------------------- | ----------------------- |
+| Menu p95 RAF interval, median of five samples   | 9.3ms                   | 8.4ms                   |
+| Menu largest retained interval                  | 175.1ms, first sample   | 16.3ms                  |
+| Camera p95 RAF interval, median of five samples | 8.5ms                   | 8.5ms                   |
+| Camera largest retained interval                | 16.8ms                  | 16.8ms                  |
+| Observed long tasks                             | Zero in all ten samples | Zero in all ten samples |
+| Camera commits / emissions, median              | 252 / 100               | 252 / 100               |
+
+The baseline's 175.1ms outlier is retained. These warm, single-machine samples
+show no observed regression in these two workloads; they do not establish a
+general speedup, input latency, compositor diagnosis, many-plane GPU behavior or
+a long-running resource bound. The first RAF interval remains in raw output and
+is excluded from summaries in both runs.
+
+Raw reports, relative to `packages/viewer-electron/app/out/native-evidence/`:
+
+- Baseline: `electron-smoke-2026-10-24T08-02-39-321Z-aab8ab66-6ceb-486b-b94c-629ab3eb1b23/screenshots/native-reliability-performance.json`.
+- Candidate: `electron-smoke-2026-10-24T08-54-39-575Z-b3f61b5b-3d6b-489f-91e1-fd5b5ffcfe0e/screenshots/native-reliability-performance.json`.
+
+The final executable SHA-256 is
+`b8f907a78f34466e5decac167829f1bd402c14e6591780a4a4e5817b72df62e9`,
+ASAR `64ac04c38a9512fecfc9c30b930a60c860c06658317631144eebc337c54a0027`,
+and aggregate candidate
+`249fd20a0c78b8b668d68acffefc29f4cac2a83a964dcc35aada9ae9eb75016f`.
+Run logs remain at `/private/tmp/viewer-performance-baseline-20261024.log` and
+`/private/tmp/viewer-performance-candidate-final.log`.
+
+## Earlier October 11 observations
+
 Measured on October 11, 2026, in the packaged Apple Silicon app on macOS 15.1. The first table records the preceding interface pass; the service/root-isolation measurements below describe this implementation. The menu's sluggish scrolling came from hover-driven scrolling fighting the wheel. A separate quadratic selection lookup caused a visible stall in large folders. Both are fixed. Operation source pruning and repeated full-job progress messages also scaled poorly and have been replaced.
 
 ## Method and scope
@@ -68,7 +138,17 @@ The change preserves serial ownership, exclusive publication, source revalidatio
 
 ### Persistence
 
-UI preferences use version 3 independently of core saved-state version 5, which adds scratch planes (version 4 added projects); a file of an earlier version is backed up before it is read as the current version. Core version 1 is read with an additive, backed-up migration for virtual search roots. The version-3 whole-state migration enables existing plane navigation and hides window navigation once after an exclusive synced metadata backup; subsequent choices remain authoritative. Unversioned profiles restore toolbar, minimap and viewcube once; versioned false choices survive reload. Optional malformed fields fall back individually. Folder-plane navigation stores only visibility and width; order, labels, Favorites and folding remain shared. Native tests check persistence and unchanged fixture inventories for UI-only actions.
+UI preferences keep their independent version 3. Core saved workspace state
+currently uses version **7**: version 5 added scratch/buffers, 6 added comparison,
+Git/Chat planes and window presentation, and 7 makes profiles window-local.
+Versions 1–6 receive an untouched, exclusive and synced
+`.before-profile-overlays-v7-<uuid>.bak` before migration; earlier additive backup
+paths remain applicable. The version-3 navigation migration enables existing plane
+navigation and hides window navigation once; subsequent versioned choices remain
+authoritative. Malformed optional UI fields fall back independently. Folder-plane
+navigation stores only visibility and width; aliases, Favorites and folding remain
+shared. The profile resolver shares unchanged groups, and native appearance reads
+clone only presentation metadata instead of a full saved workspace.
 
 Persistence debounces at 400ms, captures dirty workspace arrangements and uses validated atomic writes. Settings use a separate revisioned document with coalesced field patches. Closing native Settings waits for its queued edits to flush. The bridge's request schema and the storage service both validate the state; preload only forwards it. Large arrangements can therefore create a renderer serialization pause and main-process validation/serialization work. The final saved-state document still serializes the complete layout. Large arrangements and cold storage remain profiling targets; validation is retained.
 

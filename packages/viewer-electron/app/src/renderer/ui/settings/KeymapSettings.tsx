@@ -9,13 +9,13 @@ import {
   type BindingRow,
   type Keymap,
   type KeymapBinding,
-} from '../../../domain/keymap';
-import { defaultShortcuts, shortcutOwner } from '../../../domain/shortcuts';
-import { settingCatalog } from '../../../domain/setting-catalog';
+} from '../../../domain/preferences/keymap';
+import { defaultShortcuts, shortcutOwner } from '../../../domain/preferences/shortcuts';
+import { settingCatalog } from '../../../domain/preferences/catalog';
 import { report } from '../../state/store';
 import { useSessionKeys } from '../../keys/session';
 import { ChoiceButton } from '../ChoiceMenu';
-import { Field } from '../SettingField';
+import { Field } from './SettingField';
 import { KeyCapture } from './KeyCapture';
 import type { SettingsEditor } from './editor';
 

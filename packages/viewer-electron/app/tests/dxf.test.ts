@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { angleAt, bulgeArc, distance, parseDrawing, polygonArea } from '../src/domain/dxf/geometry';
-import { convertUnits, measurementValue, unitInfo } from '../src/domain/dxf/units';
+import {
+  angleAt,
+  bulgeArc,
+  distance,
+  parseDrawing,
+  polygonArea,
+} from '../src/domain/previews/drawings/dxf/geometry';
+import {
+  convertUnits,
+  measurementValue,
+  unitInfo,
+} from '../src/domain/previews/drawings/dxf/units';
 import { dxf, entity, panelDrawing } from './dxf-fixtures';
-import { decodeDXF } from '../src/domain/dxf/decode';
+import { decodeDXF } from '../src/domain/previews/drawings/dxf/decode';
 
 describe('DXF geometry and measurements', () => {
   it('loads a millimetre drawing and computes geometry bounds instead of stale header bounds', () => {

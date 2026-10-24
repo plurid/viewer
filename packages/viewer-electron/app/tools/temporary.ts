@@ -21,7 +21,8 @@ import path from 'node:path';
 // Synchronous node:fs keeps these checks independent of tests that mock node:fs/promises.
 export const keptManifest = path.join(os.tmpdir(), 'viewer-kept-test-folders.log');
 const owned = new Map<string, { dev: number; ino: number }>();
-const preserve = () => process.env.VIEWER_TEST_PRESERVE === '1';
+const preserve = () =>
+  process.env.VIEWER_TEST_PRESERVE === '1' || process.env.VIEWER_TEST_NO_REMOVAL === '1';
 
 /** Resolve the parent only, so a symbolic link at `file` itself is never followed. */
 function canonical(file: string): string {
@@ -91,6 +92,35 @@ export async function ownedDirectory(directory: string): Promise<string> {
   return directory;
 }
 
+/** Read-only proof that this directory belongs to a root created by this process. */
+export function assertOwnedFixtureDirectory(directory: string): string {
+  const requested = path.resolve(directory);
+  const actual = canonical(requested);
+  const owner = [...owned.entries()]
+    .filter(([root]) => actual === root || actual.startsWith(root + path.sep))
+    .sort(([left], [right]) => right.length - left.length)[0];
+  if (!owner) throw new Error(`The native profile is not inside a generated fixture: ${directory}`);
+  const [root, identity] = owner;
+  const current = lstatSync(root);
+  if (
+    current.isSymbolicLink() ||
+    !current.isDirectory() ||
+    current.dev !== identity.dev ||
+    current.ino !== identity.ino
+  )
+    throw new Error(`The generated fixture changed identity: ${root}`);
+  let cursor = requested;
+  while (true) {
+    const info = lstatSync(cursor);
+    if (info.isSymbolicLink() || !info.isDirectory())
+      throw new Error(`The native fixture profile must use ordinary directories: ${cursor}`);
+    if (realpathSync.native(cursor) === root) return actual;
+    const parent = path.dirname(cursor);
+    if (parent === cursor) throw new Error(`The native profile escaped its fixture: ${directory}`);
+    cursor = parent;
+  }
+}
+
 /** Move a folder created by `temporaryRoot` to the Trash. It never deletes and
  * keeps the folder when its identity, type or location is in doubt. */
 export async function trashTemporary(root: string | undefined): Promise<void> {
@@ -136,6 +166,10 @@ export async function trashTemporary(root: string | undefined): Promise<void> {
  * goes to the Trash, or with VIEWER_TEST_PRESERVE=1 or without a Trash command into a
  * separate kept folder; either way its path disappears. Failures throw, like `rm`. */
 export async function trashFixtureEntry(file: string): Promise<void> {
+  if (process.env.VIEWER_TEST_NO_REMOVAL === '1')
+    throw Object.assign(new Error('Fixture removal is blocked for this native check: ' + file), {
+      code: 'TEST_REMOVAL_BLOCKED',
+    });
   const actual = canonical(file);
   lstatSync(actual);
   if (![...owned.keys()].some((root) => actual.startsWith(root + path.sep)))

@@ -6,11 +6,11 @@ import {
   searchEvidence,
   sourceVersion,
   sameSourceVersion,
-} from '../src/domain/inspection';
-import { FileIndex } from '../src/desktop/index-core';
+} from '../src/domain/files/inspection';
+import { FileIndex } from '../src/desktop/search/index-core';
 import { defaultSettings, type DocumentData } from '../src/domain/services';
-import { entry } from '../src/desktop/filesystem';
-import { inspectFile } from '../src/desktop/inspection';
+import { entry } from '../src/desktop/files/filesystem';
+import { inspectFile } from '../src/desktop/files/inspection';
 import { entity, dxf } from './dxf-fixtures';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;

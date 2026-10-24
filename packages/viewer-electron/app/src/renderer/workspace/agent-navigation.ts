@@ -1,5 +1,5 @@
-import type { AgentNavigation } from '../../domain/agent-requests';
-import type { CapturedTarget } from '../../domain/automation';
+import type { AgentNavigation } from '../../domain/agents/requests';
+import type { CapturedTarget } from '../../domain/automation/actions';
 import { activeWorkspace, getState, navigate } from '../state/store';
 import { browseSession, updateBrowseSession } from './sessions';
 import type { WorkspaceController } from './context';

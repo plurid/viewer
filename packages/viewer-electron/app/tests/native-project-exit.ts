@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SavedState } from '../src/domain/contracts';
-import type { ProjectAssociation } from '../src/domain/project';
+import type { ProjectAssociation } from '../src/domain/workspaces/project';
 import { ownedApp, until } from './owned-app';
 import { temporaryRoot } from '../tools/temporary';
 

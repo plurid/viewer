@@ -1,7 +1,7 @@
 /** Synthetic index benchmark; never crawls or reads a user's filesystem. */
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { FileIndex } from '../src/desktop/index-core';
+import { FileIndex } from '../src/desktop/search/index-core';
 import type { FileEntry } from '../src/domain/contracts';
 import { temporaryRoot, trashTemporary } from './temporary';
 const root = await temporaryRoot('viewer-index-benchmark-');

@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
-import { OperationPlans } from '../src/desktop/operation-plans';
-import { Operations } from '../src/desktop/operations';
-import { DocumentStore } from '../src/desktop/document-store';
-import { Checkpoints } from '../src/desktop/checkpoints';
-import type { OperationPlan } from '../src/domain/operation-plan';
-import { sourceVersion } from '../src/domain/inspection';
-import { entry } from '../src/desktop/filesystem';
+import { OperationPlans } from '../src/desktop/operations/operation-plans';
+import { Operations } from '../src/desktop/operations/operations';
+import { DocumentStore } from '../src/desktop/persistence/document-store';
+import { Checkpoints } from '../src/desktop/operations/checkpoints';
+import type { OperationPlan } from '../src/domain/operations/operation-plan';
+import { sourceVersion } from '../src/domain/files/inspection';
+import { entry } from '../src/desktop/files/filesystem';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 async function fixture() {
   const root = await temporaryRoot('viewer-operation-plan-');

@@ -1,6 +1,6 @@
-import { parseDrawing } from '../../../domain/dxf/geometry';
-import { DXF_MAX_BYTES, type Drawing } from '../../../domain/dxf/math';
-import { decodeDXF } from '../../../domain/dxf/decode';
+import { parseDrawing } from '../../../domain/previews/drawings/dxf/geometry';
+import { DXF_MAX_BYTES, type Drawing } from '../../../domain/previews/drawings/dxf/math';
+import { decodeDXF } from '../../../domain/previews/drawings/dxf/decode';
 export type DrawingResult =
   { drawing: Drawing; error?: never } | { error: string; drawing?: never };
 self.onmessage = async (event: MessageEvent<{ url: string }>) => {

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Watchers } from '../src/desktop/watchers';
+import { Watchers } from '../src/desktop/files/watchers';
 
 const watch = vi.hoisted(() => vi.fn());
-vi.mock('../src/desktop/directory-watch', () => ({ watchDirectory: watch }));
+vi.mock('../src/desktop/files/directory-watch', () => ({ watchDirectory: watch }));
 class Watch {
   close = vi.fn(async () => {});
 }

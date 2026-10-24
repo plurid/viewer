@@ -9,7 +9,7 @@ import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
-import { defaultShortcuts } from '../src/domain/shortcuts';
+import { defaultShortcuts } from '../src/domain/preferences/shortcuts';
 import { initialize } from '../src/renderer/state/store';
 import { startTour, tourActive } from '../src/renderer/workspace/tour';
 

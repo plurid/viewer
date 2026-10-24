@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import type { FolderSizeTask } from '../../domain/metadata';
-import { formatBytes } from '../../domain/files';
-import { parentPath } from '../../domain/planes';
+import type { FolderSizeTask } from '../../domain/files/metadata';
+import { formatBytes } from '../../domain/files/entries';
+import { parentPath } from '../../domain/workspaces/planes';
 import { getState, report } from '../state/store';
 import { IconButton } from '../ui/primitives';
 import { errorMessage } from '../../domain/errors';

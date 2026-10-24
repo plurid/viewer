@@ -4,8 +4,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SavedState } from '../src/domain/contracts';
-import type { TextBuffer, TextBufferSummary } from '../src/domain/text-documents';
-import { stateSchema } from '../src/desktop/storage';
+import type { TextBuffer, TextBufferSummary } from '../src/domain/editing/documents';
+import { stateSchema } from '../src/desktop/persistence/storage';
 import {
   activeWorkspace,
   addPane,
@@ -19,7 +19,7 @@ import {
 } from '../src/renderer/state/store';
 import { discardBuffer, keepBuffer, readBuffer } from '../src/renderer/editing/buffers';
 import { confirmClose, recoverBuffers, scratchFileName } from '../src/renderer/editing/unsaved';
-import { untitledFileName } from '../src/domain/text-languages';
+import { untitledFileName } from '../src/domain/editing/languages';
 
 const kept = new Map<string, TextBuffer>();
 const viewer = {

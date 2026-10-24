@@ -7,11 +7,11 @@ import {
   ExternalTerminals,
   shellQuote,
   type ExternalTerminalAdapter,
-} from '../src/desktop/terminal-launch';
-import { Terminals } from '../src/desktop/terminals';
-import { Executions } from '../src/desktop/executions';
-import { AgentRequests } from '../src/desktop/agent-requests';
-import { SettingsService } from '../src/desktop/settings';
+} from '../src/desktop/terminals/terminal-launch';
+import { Terminals } from '../src/desktop/terminals/terminals';
+import { Executions } from '../src/desktop/actions/executions';
+import { AgentRequests } from '../src/desktop/agents/agent-requests';
+import { SettingsService } from '../src/desktop/preferences/settings';
 import { defaultSettings } from '../src/domain/services';
 import {
   actionArguments,
@@ -19,8 +19,8 @@ import {
   terminalDirectory,
   type CapturedTarget,
   type CustomAction,
-} from '../src/domain/automation';
-import { entry } from '../src/desktop/filesystem';
+} from '../src/domain/automation/actions';
+import { entry } from '../src/desktop/files/filesystem';
 import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 let root: string;
 let config: ReturnType<typeof defaultSettings>;

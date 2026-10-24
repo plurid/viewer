@@ -3,9 +3,9 @@ import type {
   AgentAccessRequest,
   AgentAccessState,
   AgentCapability,
-} from '../../../domain/agent-clients';
-import { AgentClientSettings } from '../AgentClients';
-import { AgentGrants } from '../AgentGrants';
+} from '../../../domain/agents/clients';
+import { AgentClientSettings } from '../agents/AgentClients';
+import { AgentGrants } from '../agents/AgentGrants';
 import { IconButton } from '../primitives';
 import type { SettingsEditor } from './editor';
 
@@ -52,6 +52,13 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
           onChange={(event) => change({ kind: 'enable', enabled: event.target.checked })}
         />
       </label>
+      {access?.requiresReapproval && (
+        <p className="settings-note" role="status">
+          Agent access needs a new confirmation after this update. Turn it on to review the folders
+          and capabilities in a system dialog. Connections stay paused until you approve. Your saved
+          clients and credentials are kept.
+        </p>
+      )}
       {access?.pending.enable && (
         <p className="settings-note">
           config.jsonc turns agents on; they stay off until you allow it here.
@@ -90,6 +97,12 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
           </button>
         </div>
         <h2>What the connection may do</h2>
+        {access && !access.capabilities.length && (
+          <p className="settings-note" role="status">
+            The shared connection has no capabilities yet. Choose what it may do below; named
+            clients keep their own capability choices.
+          </p>
+        )}
         {sharedCapabilities.map(([capability, label]) => (
           <label className="settings-row" key={capability}>
             <span>{label}</span>

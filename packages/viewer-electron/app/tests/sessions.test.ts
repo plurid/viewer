@@ -1,5 +1,5 @@
 import { it, expect, beforeEach } from 'vitest';
-import { pathMapper } from '../src/domain/changes';
+import { pathMapper } from '../src/domain/files/changes';
 import {
   browseSession,
   clearSessions,

@@ -39,7 +39,7 @@ Settings → Models has a provider picker for OpenAI, Anthropic, z.ai, DeepSeek,
 
 All returned proposals pass the same local shape, evidence and scope validation before review, including providers that cannot enforce the schema themselves. Refused or truncated responses are rejected. Named cloud profiles use supported API hosts and do not forward credentials through redirects. Provider keys are encrypted through Electron's platform secure storage and written in mode-0600 metadata; renderers receive credential IDs rather than saved key values.
 
-Before any model request, including a filename-only one, a stored approval must cover the provider endpoint and data level. It is given once, in Settings → Models or the action dialog, each time confirmed in a system dialog, and covers later requests until it is revoked or the endpoint changes. Settings → Models and the action review disclose the provider endpoint and selected data level: names, excerpts or extracted text. Actions agents start need that approval to cover agents too: a separate **Actions agents start may send this data too** in Settings → Models, also confirmed in a system dialog and cleared whenever the level is approved anew. `desktop/model-permissions.ts` stores that approval privately for the exact provider configuration; JSONC and Viewer’s agent API cannot grant it. Endpoint/kind changes, key removal and revocation invalidate consent and cancel requests. A legacy `allowContent` preference does not authorize sharing. Filename-only recipes other than book naming do not extract document content; book naming always reads local publication metadata and text. Local content indexing and model sharing remain separate permissions. OpenAI requests specify `store: false`; Viewer does not control provider retention of already transmitted information. No cloud provider/model is enabled by default.
+Before any model request, including a filename-only one, a stored approval must cover the provider endpoint and data level. It is given once, in Settings → Models or the action dialog, each time confirmed in a system dialog, and covers later requests until it is revoked or the endpoint changes. Settings → Models and the action review disclose the provider endpoint and selected data level: names, excerpts or extracted text. Actions agents start need that approval to cover agents too: a separate **Actions agents start may send this data too** in Settings → Models, also confirmed in a system dialog and cleared whenever the level is approved anew. `desktop/models/model-permissions.ts` stores that approval privately for the exact provider configuration; JSONC and Viewer’s agent API cannot grant it. Endpoint/kind changes, key removal and revocation invalidate consent and cancel requests. A legacy `allowContent` preference does not authorize sharing. Filename-only recipes other than book naming do not extract document content; book naming always reads local publication metadata and text. Local content indexing and model sharing remain separate permissions. OpenAI requests specify `store: false`; Viewer does not control provider retention of already transmitted information. No cloud provider/model is enabled by default.
 
 ## Apply, Undo and recovery
 
@@ -51,7 +51,21 @@ Planning reads at most 2,000 selected/collected files, visits at most 100,000 di
 
 ## MCP
 
-Settings → Agents enables the local server, grants folders and generates client configuration. That switch and those folders are your approval, kept in private app metadata (`agent-access-v1.json`); `settings.agents` in `config.jsonc` mirrors them and can only narrow them. Turning agents off or removing a folder there applies at once; turning agents on or adding a folder there waits in Settings → Agents, where you allow it in a system confirmation. Choosing a folder in Settings is itself the approval. An import or an external edit therefore cannot widen what an agent token reaches. The shared connection's capabilities are kept with that approval too: it holds them all until you narrow them in Settings → Agents (without document text, for example, it can neither search document text nor run actions that read it; reading a file's contents directly always needs a named client), and giving one back is confirmed in a system dialog. The configuration contains a protected token: keep it private. This local token is stored in mode-0600 app metadata and does not use macOS Keychain. Browsing, previews, indexing and agent verification never access Keychain. Provider-key encryption uses it only when explicitly storing or using a provider key; locally rebuilt ad-hoc bundles can trigger renewed OS access prompts.
+Settings → Agents requests the shared local connection, folder scopes and client
+configuration. Enabling access, adding a folder or expanding capabilities requires
+a native confirmation. Private `agent-access-v2.json` is the authority;
+`settings.agents` in JSONC can narrow that approval but cannot expand it. Choosing
+a folder does not replace the subsequent agent review. Version-1 approval records
+are preserved and require one explicit reapproval because their origin is
+ambiguous. Imports, profile changes and saved execution grants cannot grant access.
+
+The shared connection starts with explicit metadata, navigation and proposal
+capabilities. Named clients have their own credentials and scopes. File contents,
+terminal output and model data have separate permissions; changes remain reviewed
+proposals. The local token is stored in mode-0600 app metadata without Keychain.
+Browsing, previews, indexing and agent verification never access Keychain.
+Provider-key encryption uses it only when explicitly storing or using a key;
+locally rebuilt ad-hoc bundles can trigger renewed OS access prompts.
 
 When updating from a build that encrypted its local agent token, generate fresh client configuration in Settings → Agents. The new local token has a separate storage file.
 
@@ -103,7 +117,7 @@ cannot be trashed through the agent API.
 
 Agents may propose only an allow-listed set of built-in commands that act on the
 captured folder and selection, open a dialog the person completes, or change the
-view (`domain/agent-safety.ts`). Paste and Move Here are refused because they act
+view (`domain/agents/safety.ts`). Paste and Move Here are refused because they act
 on clipboard items outside the captured selection; new commands are refused until
 they are added deliberately. Configuration proposals may change only presentation
 and preview settings, folder views, recipes and saved searches: custom actions,

@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { AgentClients } from '../src/desktop/agent-clients';
+import { AgentClients } from '../src/desktop/agents/agent-clients';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
-import { sharedClientID, storedClientID, type AgentClientInput } from '../src/domain/agent-clients';
+import {
+  sharedClientID,
+  storedClientID,
+  type AgentClientInput,
+} from '../src/domain/agents/clients';
 const input: AgentClientInput = {
   name: 'Research',
   roots: ['/tmp'],

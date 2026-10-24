@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import type { TrashItem } from '../src/domain/trash';
-import { originalTrashFolder, sortTrashItems, trashDateColumn } from '../src/domain/trash';
+import type { TrashItem } from '../src/domain/files/trash';
+import { originalTrashFolder, sortTrashItems, trashDateColumn } from '../src/domain/files/trash';
 const item = (name: string, extra: Partial<TrashItem> = {}): TrashItem => ({
   id: name,
   name,

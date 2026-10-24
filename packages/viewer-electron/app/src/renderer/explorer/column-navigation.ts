@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { browsable } from '../../domain/files';
+import { browsable } from '../../domain/files/entries';
 import { browseSession, useBrowseField } from '../workspace/sessions';
 import type { FileModifiers, FileSelection } from './selection';
 

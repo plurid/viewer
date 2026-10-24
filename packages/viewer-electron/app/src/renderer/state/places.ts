@@ -1,6 +1,6 @@
 // Sidebar favorites, shortcut labels and recent folders.
 import { recordVisit } from '../commands/smart-palette';
-import { reorder } from '../../domain/preferences';
+import { reorder } from '../../domain/preferences/ui';
 import { getState, savePatch } from './core';
 import { changePreferences } from './preferences';
 

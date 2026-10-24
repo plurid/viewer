@@ -2,9 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
-import type { ExecutionGrant } from '../src/domain/agent-requests';
+import type { ExecutionGrant } from '../src/domain/agents/requests';
 import { defaultSettings } from '../src/domain/services';
-import { AgentGrants } from '../src/renderer/ui/AgentGrants';
+import { AgentGrants } from '../src/renderer/ui/agents/AgentGrants';
 
 afterEach(cleanup);
 

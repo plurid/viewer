@@ -1,6 +1,6 @@
 import type { TreePlane } from '@plurid/plurid-data';
 import type { FileEntry, Pane, Workspace } from '../../domain/contracts';
-import { normalizedPanePath } from '../../domain/planes';
+import { normalizedPanePath } from '../../domain/workspaces/planes';
 export function flattenTree(tree: TreePlane[]): TreePlane[] {
   return tree.flatMap((node) => [node, ...flattenTree(node.children ?? [])]);
 }
@@ -18,6 +18,7 @@ const routeKinds: Record<Pane['type'], string> = {
   diff: 'diffs',
   'git-changes': 'git-changes',
   chat: 'chats',
+  server: 'servers',
 };
 /** The engine route that renders a host pane; `hostID` maps a plane back to its pane. */
 export function paneRoute(type: Pane['type'], id: string): string {

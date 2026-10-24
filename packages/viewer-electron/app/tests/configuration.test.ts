@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
-import { SettingsService } from '../src/desktop/settings';
+import { SettingsService } from '../src/desktop/preferences/settings';
 import { defaultSettings } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 import type { FolderPane } from '../src/domain/contracts';
-import { documentConfiguration } from '../src/desktop/configuration-comments';
+import { documentConfiguration } from '../src/desktop/preferences/configuration-comments';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;

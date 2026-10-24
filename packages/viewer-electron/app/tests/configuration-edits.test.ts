@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from 'jsonc-parser';
-import { applyConfigEdits, configEdits } from '../src/desktop/configuration-edits';
+import { applyConfigEdits, configEdits } from '../src/desktop/preferences/configuration-edits';
 
 const options = { insertSpaces: true, tabSize: 2 };
 const edit = (text: string, after: unknown) => {

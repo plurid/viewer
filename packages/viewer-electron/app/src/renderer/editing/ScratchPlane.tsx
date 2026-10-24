@@ -1,7 +1,8 @@
+import { effectiveWindowSettings } from '../state/effective-ui';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ScratchPane } from '../../domain/contracts';
-import { textLanguages } from '../../domain/text-languages';
+import { textLanguages } from '../../domain/editing/languages';
 import { Loading } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { usePreviewControlsSlot } from '../previews/controls';
@@ -33,7 +34,7 @@ export default function ScratchPlane({
   const text = useRef('');
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const session = useMemo(() => takeSession(pane.id) ?? crypto.randomUUID(), [pane.id]);
-  const settings = useViewer((state) => state.settings.settings.editor);
+  const settings = useViewer((state) => effectiveWindowSettings(state).editor);
   const current = useRef(pane);
   current.current = pane;
   // a plane made active (⌘T) takes the keys once it is shown; one restored at launch does not
@@ -90,7 +91,7 @@ export default function ScratchPlane({
   };
   const saveAs = async (suggested?: string): Promise<boolean> => {
     const { id, bufferID, title, language } = current.current;
-    if (getState().settings.settings.editor.trimTrailingWhitespace)
+    if (effectiveWindowSettings(getState()).editor.trimTrailingWhitespace)
       editor.current?.trimTrailingWhitespace();
     const value = editor.current?.text() ?? text.current;
     const result = await window.viewer.textSaveAs(

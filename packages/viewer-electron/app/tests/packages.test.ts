@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, renderHook } from '@testing-library/react';
 import { createElement } from 'react';
 import type { FileEntry } from '../src/domain/contracts';
-import { browsable, fileGroup, kindLabel, sortEntries } from '../src/domain/files';
+import { browsable, fileGroup, kindLabel, sortEntries } from '../src/domain/files/entries';
 import { defaultSettings } from '../src/domain/services';
 import { nativeOpening } from '../src/renderer/explorer/opening';
 import { folderCommands, type FolderActions } from '../src/renderer/commands/folder';

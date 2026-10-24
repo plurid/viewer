@@ -6,9 +6,9 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { effectiveUI, overridablePaths } from '../src/domain/overrides';
-import { normalizePreferences } from '../src/domain/preferences';
-import { stateSchema } from '../src/desktop/storage';
+import { effectiveUI, overridablePaths } from '../src/domain/preferences/overrides';
+import { normalizePreferences } from '../src/domain/preferences/ui';
+import { stateSchema } from '../src/desktop/persistence/storage';
 import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';
@@ -30,10 +30,10 @@ describe('the effective settings', () => {
     });
     expect(effective.space.minimap).toBe(false);
     expect(effective.titlebar.visible).toBe(false);
-    // the window's backdrop is set as it opens: not a workspace's
-    expect(effective.space.backdrop).toBe('opaque');
+    // Desired backdrop is local; the native adapter decides whether reopening is needed.
+    expect(effective.space.backdrop).toBe('clear');
     expect(effectiveUI(ui, undefined)).toBe(ui);
-    expect(overridablePaths).not.toContain('ui.space.backdrop');
+    expect(overridablePaths).toContain('ui.space.backdrop');
   });
 });
 

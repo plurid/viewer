@@ -1,7 +1,8 @@
+import { effectiveWindowSettings } from '../state/effective-ui';
 import type { Pane } from '../../domain/contracts';
-import { textChangedCode, trimTrailingWhitespace } from '../../domain/text-documents';
-import { languageByID } from '../../domain/text-languages';
-import { baseName } from '../../domain/planes';
+import { textChangedCode, trimTrailingWhitespace } from '../../domain/editing/documents';
+import { languageByID } from '../../domain/editing/languages';
+import { baseName } from '../../domain/workspaces/planes';
 import {
   activeWorkspace,
   addPane,
@@ -22,7 +23,7 @@ export const unsavedName = (pane: Pane) =>
 export function scratchFileName(
   title: string,
   language: string | undefined,
-  preferred = getState().settings.settings.browsing.newFileExtension,
+  preferred = effectiveWindowSettings(getState()).browsing.newFileExtension,
 ): string {
   const extensions = (languageByID(language) ?? languageByID('plaintext'))?.extensions ?? ['txt'];
   return `${title}.${extensions.includes(preferred.toLowerCase()) ? preferred : extensions[0]}`;
@@ -46,7 +47,7 @@ async function save(pane: Pane): Promise<boolean> {
   if (plane?.save) return plane.save();
   // a save from the close prompt trims as the editor's own does
   const prepared = (text: string) =>
-    getState().settings.settings.editor.trimTrailingWhitespace
+    effectiveWindowSettings(getState()).editor.trimTrailingWhitespace
       ? trimTrailingWhitespace(text)
       : text;
   if (pane.type === 'scratch') {

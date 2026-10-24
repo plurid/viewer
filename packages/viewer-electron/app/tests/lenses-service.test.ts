@@ -11,8 +11,8 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
-import { Lenses } from '../src/desktop/lenses';
-import { formatLens, type LensFolder } from '../src/domain/lenses';
+import { Lenses } from '../src/desktop/workspaces/lenses';
+import { formatLens, type LensFolder } from '../src/domain/files/lenses';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string, data: string, folder: string, lenses: Lenses, clock: number;

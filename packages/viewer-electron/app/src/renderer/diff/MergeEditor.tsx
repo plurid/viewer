@@ -17,7 +17,7 @@ import { editorPresentation, editorTokens } from '../previews/editor/TextEditor'
 import { syntaxHighlighting } from '@codemirror/language';
 import { editorFont } from '../editing/font';
 import { editorLanguages } from '../previews/editor/languages';
-import { trimTrailingWhitespace } from '../../domain/text-documents';
+import { trimTrailingWhitespace } from '../../domain/editing/documents';
 import { report } from '../state/store';
 
 export interface DiffNavigation {

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { EvidenceAnchor } from '../../domain/inspection';
-import type { WorkbookCell, WorkbookRow } from '../../domain/office';
-import { columnName } from '../../domain/office';
-import { parseDelimited } from '../../domain/delimited';
+import type { EvidenceAnchor } from '../../domain/files/inspection';
+import type { WorkbookCell, WorkbookRow } from '../../domain/previews/documents/office';
+import { columnName } from '../../domain/previews/documents/office';
+import { parseDelimited } from '../../domain/previews/data/delimited';
 type CellAnchor = Extract<EvidenceAnchor, { kind: 'cells' }>;
 
 /** CSV and worksheets share virtual rows while retaining original source addresses. */

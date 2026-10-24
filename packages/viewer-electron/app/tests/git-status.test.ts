@@ -4,8 +4,8 @@ import { promisify } from 'node:util';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GitReader, runGit } from '../src/desktop/git';
-import { gitSourceSchema, parseGitStatus } from '../src/domain/git';
+import { GitReader, runGit } from '../src/desktop/comparison/git';
+import { gitSourceSchema, parseGitStatus } from '../src/domain/comparison/git';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const execute = promisify(execFile);

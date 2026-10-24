@@ -1,4 +1,4 @@
-import { reorder } from '../../../domain/preferences';
+import { reorder } from '../../../domain/preferences/ui';
 import { addFavorite, changePreferences, getState, removeFavorite } from '../../state/store';
 import type { CommandContext, CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';

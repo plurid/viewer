@@ -10,7 +10,7 @@ import {
 } from '../../domain/contracts';
 import type { SettingsSnapshot } from '../../domain/services';
 import { errorMessage } from '../../domain/errors';
-import { schedulePersist } from './persistence';
+import { requestPersistence } from './persistence-request';
 
 export interface ViewerState {
   settings: SettingsSnapshot;
@@ -40,7 +40,7 @@ export function emit(): void {
 export function update(next: ViewerState, persist = false): void {
   current = next;
   emit();
-  if (persist) schedulePersist(true);
+  if (persist) requestPersistence(true);
 }
 export const getState = () => current;
 /** Replaces the state without notifying subscribers, for saves and high-frequency values. */

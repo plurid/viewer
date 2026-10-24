@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LineError } from '../../domain/command-line/lex';
 import type { PromptAnswer, PromptContext } from '../../domain/command-line/prompt';
-import { modelPermissionCovers } from '../../domain/model-permissions';
+import { modelPermissionCovers } from '../../domain/models/permissions';
 import { CommandResults } from '../commands/CommandResults';
 import type { ResolvedCommand } from '../commands/registry';
 import { activeWorkspace, getState, rememberLine, useViewer } from '../state/store';
 import { IconButton } from '../ui/primitives';
 import type { IconName } from '../ui/Icon';
-import { useModelPermission } from '../ui/ModelDataPermission';
+import { useModelPermission } from '../ui/models/ModelDataPermission';
 import type { LineHost } from './host';
 import { planLine, userCommands } from './run';
 

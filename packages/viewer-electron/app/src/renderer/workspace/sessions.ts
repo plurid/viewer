@@ -1,4 +1,4 @@
-import { pathMapper, type FileChange } from '../../domain/changes';
+import { pathMapper, type FileChange } from '../../domain/files/changes';
 import { useCallback, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
 import { dialogOpen } from '../ui/modal';

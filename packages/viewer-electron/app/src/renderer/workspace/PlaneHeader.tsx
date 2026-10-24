@@ -10,7 +10,7 @@ import {
 } from '../state/store';
 import { activeLens, useLenses } from '../state/lenses';
 import { lensMenuIDs } from '../commands/lenses';
-import { planeLayoutCommandIDs } from '../../domain/plane-layout';
+import { planeLayoutCommandIDs } from '../../domain/workspaces/plane-layout';
 import { focusFiles } from './sessions';
 import { useCommands, useCommandRevision } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
@@ -19,7 +19,7 @@ import { IconButton } from '../ui/primitives';
 import { ContextMenu } from '../ui/ContextMenu';
 import { setPreviewControlsSlot } from '../previews/controls';
 import { useWorkspace } from './context';
-import { baseName } from '../../domain/planes';
+import { baseName } from '../../domain/workspaces/planes';
 import { hostID } from './tree';
 import { buffersGeneration, heldBuffer, subscribeBuffers } from '../editing/buffers';
 import { GitBranch } from '../git/status';
@@ -219,7 +219,13 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       >
         <Icon
           name={
-            pane?.type === 'folder' ? 'folder' : pane?.type === 'terminal' ? 'terminal' : 'file'
+            pane?.type === 'folder'
+              ? 'folder'
+              : pane?.type === 'terminal'
+                ? 'terminal'
+                : pane?.type === 'server'
+                  ? 'code'
+                  : 'file'
           }
           size={16}
         />
@@ -228,17 +234,19 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
             ? (pane.title ?? 'Untitled')
             : pane?.type === 'chat'
               ? 'Chat'
-              : pane?.type === 'diff'
-                ? 'Compare · ' + baseName(pane.path)
-                : pane?.type === 'git-changes'
-                  ? 'Git changes · ' + baseName(pane.path)
-                  : pane?.type === 'collection'
-                    ? (collection?.name ?? 'Collection')
-                    : pane?.type === 'search'
-                      ? pane.name
-                      : pane?.type === 'terminal'
-                        ? 'Terminal · ' + baseName(pane.path)
-                        : (pane && baseName(pane.path)) || 'Plane'}
+              : pane?.type === 'server'
+                ? 'Server · ' + baseName(pane.path)
+                : pane?.type === 'diff'
+                  ? 'Compare · ' + baseName(pane.path)
+                  : pane?.type === 'git-changes'
+                    ? 'Git changes · ' + baseName(pane.path)
+                    : pane?.type === 'collection'
+                      ? (collection?.name ?? 'Collection')
+                      : pane?.type === 'search'
+                        ? pane.name
+                        : pane?.type === 'terminal'
+                          ? 'Terminal · ' + baseName(pane.path)
+                          : (pane && baseName(pane.path)) || 'Plane'}
         </span>
         {unsaved && (
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
@@ -334,7 +342,9 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
                 ? 'Search actions'
                 : pane?.type === 'terminal'
                   ? 'Terminal actions'
-                  : 'Preview actions'
+                  : pane?.type === 'server'
+                    ? 'Server actions'
+                    : 'Preview actions'
           }
           aria-haspopup="dialog"
           aria-expanded={menu?.kind === 'actions'}

@@ -1,4 +1,4 @@
-import { planeAlignments, planeSizePresets } from '../../../domain/plane-layout';
+import { planeAlignments, planeSizePresets } from '../../../domain/workspaces/plane-layout';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 

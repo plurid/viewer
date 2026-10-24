@@ -1,5 +1,5 @@
 import type { CameraDelta, CameraState, TreePlane, TreePlaneLocation } from '@plurid/plurid-data';
-import type { PlaneLayoutEdit, PlaneSizeFraction } from '../../domain/plane-layout';
+import type { PlaneLayoutEdit, PlaneSizeFraction } from '../../domain/workspaces/plane-layout';
 
 /** The same gutters as the two-folder views, so independently sized planes tile exactly. */
 const gap = 12;

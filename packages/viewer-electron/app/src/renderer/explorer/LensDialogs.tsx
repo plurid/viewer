@@ -9,7 +9,7 @@ import {
   type LensOp,
   type LensRect,
   type LensRule,
-} from '../../domain/lenses';
+} from '../../domain/files/lenses';
 import { createLens, editLens, trashLens } from '../state/lenses';
 import { folderPresentation, report, updateFolderPresentation } from '../state/store';
 import { Dialog, NameDialog } from '../ui/primitives';

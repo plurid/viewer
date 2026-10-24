@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CapturedTarget } from '../src/domain/automation';
+import type { CapturedTarget } from '../src/domain/automation/actions';
 import type { FileEntry, FolderPane, Workspace } from '../src/domain/contracts';
 import { executeAgentNavigation } from '../src/renderer/workspace/agent-navigation';
 import type { WorkspaceController } from '../src/renderer/workspace/context';

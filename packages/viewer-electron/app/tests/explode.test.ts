@@ -4,7 +4,7 @@
  */
 import { expect, it } from 'vitest';
 import type { FileEntry } from '../src/domain/contracts';
-import { explodePlan } from '../src/domain/explode';
+import { explodePlan } from '../src/domain/workspaces/explode';
 
 const folder = (path: string, extra: Partial<FileEntry> = {}): FileEntry =>
   ({

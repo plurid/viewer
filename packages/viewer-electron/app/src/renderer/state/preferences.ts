@@ -1,13 +1,26 @@
 // Two-way sync of settings and interface preferences with the desktop configuration.
 import type { UIPreferences } from '../../domain/contracts';
 import type { SettingsSnapshot } from '../../domain/services';
-import { panePresentation } from '../../domain/folder-presentation';
+import { panePresentation } from '../../domain/preferences/folder-presentation';
 import { getState, report, savePatch, update } from './core';
-import { scopedPresentation } from './presentation';
+import { scopedPresentation } from './folder-presentation';
 
 let preferenceTimer: ReturnType<typeof setTimeout> | undefined;
 export const pendingPreferences = new Map<string, unknown>();
+const pendingRevisions = new Map<string, number>();
 let preferenceWrite: Promise<void> | undefined;
+let activePreferences: ReadonlyMap<string, unknown> = new Map();
+function preferenceKeys(path: string): string[] {
+  return path.startsWith('@') ? (JSON.parse(path.slice(1)) as string[]) : path.split('.');
+}
+function containsPreference(parent: string, child: string): boolean {
+  const parentKeys = preferenceKeys(parent);
+  const childKeys = preferenceKeys(child);
+  return (
+    parentKeys.length <= childKeys.length &&
+    parentKeys.every((key, index) => key === childKeys[index])
+  );
+}
 /** Sends queued preference patches after a short pause, merging rapid edits. */
 export function schedulePreferences(): void {
   clearTimeout(preferenceTimer);
@@ -18,6 +31,12 @@ export function schedulePreferences(): void {
 export function resetPreferences(): void {
   clearTimeout(preferenceTimer);
   pendingPreferences.clear();
+  pendingRevisions.clear();
+}
+/** An explicit edit replaces any earlier failed intent for this field. */
+export function queuePreference(path: string, value: unknown): void {
+  pendingPreferences.set(path, value);
+  pendingRevisions.set(path, getState().settings.revision);
 }
 export async function flushPreferences(): Promise<void> {
   clearTimeout(preferenceTimer);
@@ -27,17 +46,54 @@ export async function flushPreferences(): Promise<void> {
     return;
   }
   if (!pendingPreferences.size || !window.viewer.settingsPatch) return;
-  const patches = [...pendingPreferences].map(([path, value]) =>
+  const revisions = new Map(
+    [...pendingPreferences.keys()].map((path) => [
+      path,
+      pendingRevisions.get(path) ?? getState().settings.revision,
+    ]),
+  );
+  const revision = Math.min(...revisions.values());
+  // A patch has one base revision. Keep intents from different snapshots in
+  // separate writes so an older unrelated field cannot invalidate our own edit.
+  const batch = new Map(
+    [...pendingPreferences].filter(([path]) => revisions.get(path) === revision),
+  );
+  const patches = [...batch].map(([path, value]) =>
     path.startsWith('@')
       ? { path: 'settings.folders', keys: JSON.parse(path.slice(1)) as string[], value }
       : { path, value },
   );
-  pendingPreferences.clear();
+  activePreferences = batch;
+  for (const path of batch.keys()) {
+    pendingPreferences.delete(path);
+    pendingRevisions.delete(path);
+  }
   preferenceWrite = window.viewer
-    .settingsPatch(patches, getState().settings.revision)
-    .then(receiveSettings)
-    .catch(report)
+    .settingsPatch(patches, revision)
+    .then((snapshot) => {
+      // A successful write replaces its entire field, so queued descendants may
+      // build on its acknowledgement. Ancestors keep their original baseline:
+      // advancing them could hide a peer's change to a sibling we did not write.
+      for (const [path, base] of pendingRevisions) {
+        if (
+          base <= snapshot.revision &&
+          [...batch.keys()].some((written) => containsPreference(written, path))
+        )
+          pendingRevisions.set(path, snapshot.revision);
+      }
+      activePreferences = new Map();
+      receiveSettings(snapshot);
+    })
+    .catch((error) => {
+      for (const [path, value] of batch) {
+        if (pendingPreferences.has(path)) continue;
+        pendingPreferences.set(path, value);
+        pendingRevisions.set(path, revisions.get(path)!);
+      }
+      throw error;
+    })
     .finally(() => {
+      activePreferences = new Map();
       preferenceWrite = undefined;
     });
   await preferenceWrite;
@@ -50,11 +106,10 @@ export function changePreferences(transform: (ui: UIPreferences) => UIPreference
   savePatch({ ui });
   for (const group of ['sidebar', 'titlebar', 'space', 'list'] as const)
     for (const key of Object.keys(ui[group]) as (keyof (typeof ui)[typeof group])[]) {
-      if (old[group][key] !== ui[group][key])
-        pendingPreferences.set(`ui.${group}.${key}`, ui[group][key]);
+      if (old[group][key] !== ui[group][key]) queuePreference(`ui.${group}.${key}`, ui[group][key]);
     }
   if (old.recentCommands !== ui.recentCommands)
-    pendingPreferences.set('ui.recentCommands', ui.recentCommands);
+    queuePreference('ui.recentCommands', ui.recentCommands);
   schedulePreferences();
 }
 export function rememberCommand(id: string): void {
@@ -72,17 +127,14 @@ export function rememberLine(line: string): void {
 }
 export function setLook(look: 'dark' | 'light'): void {
   savePatch({ look });
-  if (window.viewer.settingsPatch)
-    void window.viewer
-      .settingsPatch([{ path: 'settings.appearance', value: look }], getState().settings.revision)
-      .then(receiveSettings)
-      .catch(report);
+  queuePreference('settings.appearance', look);
+  schedulePreferences();
 }
 export function receiveSettings(snapshot: SettingsSnapshot): void {
   if (snapshot.revision < getState().settings.revision) return;
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const next = structuredClone({ ui: snapshot.ui, settings: snapshot.settings });
-  for (const [path, value] of pendingPreferences) {
+  for (const [path, value] of new Map([...activePreferences, ...pendingPreferences])) {
     const keys: string[] = path.startsWith('@') ? JSON.parse(path.slice(1)) : path.split('.');
     let object = next as unknown as Record<string, unknown>;
     for (const key of keys.slice(0, -1)) {
@@ -107,7 +159,15 @@ export function receiveSettings(snapshot: SettingsSnapshot): void {
     let changed = false;
     const panes = space.panes.map((pane) => {
       if (pane.type !== 'folder') return pane;
-      const value = panePresentation(scopedPresentation(pane.path, settings, ui, space));
+      const value = panePresentation(
+        scopedPresentation(pane.path, settings, ui, space, {
+          profileID:
+            space.id === getState().saved.activeWorkspace
+              ? getState().saved.profile?.id
+              : undefined,
+          systemLook: snapshot.systemLook ?? snapshot.look,
+        }),
+      );
       if (Object.entries(value).every(([key, value]) => pane[key as keyof typeof pane] === value))
         return pane;
       changed = true;

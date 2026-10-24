@@ -1,5 +1,5 @@
 import type { FolderPane } from '../../domain/contracts';
-import { parentPath } from '../../domain/planes';
+import { parentPath } from '../../domain/workspaces/planes';
 
 /** The mouse's back (4) and forward (5) side buttons, as `MouseEvent.button` reports them. */
 export function mouseHistoryDirection(button: number): -1 | 1 | 0 {

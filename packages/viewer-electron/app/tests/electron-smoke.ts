@@ -4,220 +4,60 @@ import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmod, lstat, mkdir, readFile, readdir, readlink, writeFile } from 'node:fs/promises';
 import net from 'node:net';
-import { createRequire } from 'node:module';
-import { zipSync, strToU8 } from 'fflate';
 import path from 'node:path';
 import { parse } from 'jsonc-parser';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
-import { createFixtures, sizedImageFixture } from './fixtures';
-import { defaultSettings } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
 import { repeatedPreviewFixture } from './workspace-fixtures';
-import { formatBytes } from '../src/domain/files';
-import { panelDrawing } from './dxf-fixtures';
+import { formatBytes } from '../src/domain/files/entries';
 import { reactCommitProbe } from './react-commits';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
-import type { AgentAccessState } from '../src/domain/agent-clients';
+import type { AgentAccessState } from '../src/domain/agents/clients';
 import { trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { prepareOwnedApplication } from './native/runtime/owned-application';
+import {
+  createScenarioFixtures,
+  longFilename,
+  scenarioSettings,
+} from './native/fixtures/scenarios';
+import { assertPerformanceMode, profileNativeInteractions } from './native/scenarios/performance';
+import { verifyMilestones } from './native/scenarios/milestones';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Routine functional checks never show or activate the test app. Physical
 // compositor profiling requires a separately requested foreground run.
 const foreground = process.env.VIEWER_TEST_FOREGROUND === '1';
+const scenario = process.env.VIEWER_TEST_SCENARIO;
+assertPerformanceMode(scenario, foreground);
 const execNative = promisify(execFile);
 const binary =
   process.env.VIEWER_TEST_BINARY ||
   path.join(appRoot, `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`);
-const fixture = await createFixtures();
-if (process.env.VIEWER_TEST_SCENARIO === 'milestones') {
-  const git = (...args: string[]) => execNative('/usr/bin/git', ['-C', fixture.files, ...args]);
-  await git('init', '--initial-branch=main');
-  await git('add', '--', 'README.md');
-  await git(
-    '-c',
-    'user.name=Viewer QA',
-    '-c',
-    'user.email=qa@example.invalid',
-    'commit',
-    '-m',
-    'Fixture',
-  );
-  await writeFile(
-    path.join(fixture.files, 'README.md'),
-    '# Working version\n\nA changed file for comparison.\n',
-  );
-  const leftImage = path.join(fixture.files, 'Images', 'Comparison before.png');
-  const rightImage = path.join(fixture.files, 'Images', 'Comparison.png');
-  await writeFile(leftImage, sizedImageFixture(64, 64));
-  await writeFile(rightImage, sizedImageFixture(128, 96));
-  fixture.state.workspaces[0]!.panes.push({
-    id: 'milestone-image',
-    type: 'diff',
-    path: rightImage,
-    left: { kind: 'file', path: leftImage },
-    right: { kind: 'file', path: rightImage },
-    mode: 'slider',
-  });
-  fixture.state.workspaces[0]!.roots.push('milestone-image');
-}
-if (process.env.VIEWER_TEST_SCENARIO === 'daily-file-work')
-  await writeFile(path.join(fixture.files, 'Images', 'Wide.png'), sizedImageFixture(2048, 1280));
-if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
-  const require = createRequire(import.meta.url);
-  await writeFile(
-    path.join(fixture.files, 'Cube.step'),
-    await readFile(
-      path.join(
-        path.dirname(require.resolve('occt-import-js/package.json')),
-        'test/testfiles/simple-basic-cube/cube.stp',
-      ),
-    ),
-  );
-  await writeFile(path.join(fixture.files, 'Broken.step'), 'not a STEP file');
-  await writeFile(
-    path.join(fixture.files, 'Printed.3mf'),
-    zipSync({
-      '_rels/.rels': strToU8(
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model"/></Relationships>',
-      ),
-      '3D/3dmodel.model': strToU8(
-        '<model unit="inch" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/><vertex x="0" y="0" z="1"/></vertices><triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="1" v3="3"/><triangle v1="0" v2="3" v3="2"/><triangle v1="1" v2="2" v3="3"/></triangles></mesh></object></resources><build><item objectid="1"/></build></model>',
-      ),
-    }),
-  );
-  await writeFile(
-    path.join(fixture.files, 'Triangle.ply'),
-    'ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\nelement face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n3 0 1 2\n',
-  );
-  if (process.env.VIEWER_TEST_STEP_FILE)
-    await writeFile(
-      path.join(fixture.files, 'User panel.step'),
-      await readFile(process.env.VIEWER_TEST_STEP_FILE),
-    );
-}
-if (process.env.VIEWER_TEST_SCENARIO === 'model-lighting') {
-  const require = createRequire(import.meta.url);
-  const model =
-    process.env.VIEWER_TEST_STEP_FILE ||
-    path.join(
-      path.dirname(require.resolve('occt-import-js/package.json')),
-      'test/testfiles/simple-basic-cube/cube.stp',
-    );
-  await writeFile(path.join(fixture.files, 'Models', 'Lighting.step'), await readFile(model));
-}
-if (process.env.VIEWER_TEST_SCENARIO === 'drawings-workspaces') {
-  await writeFile(path.join(fixture.files, 'Panel.dxf'), panelDrawing);
-  await writeFile(path.join(fixture.files, 'Broken.dxf'), '0\nSECTION\n');
-  if (process.env.VIEWER_TEST_DXF_FILE)
-    await writeFile(
-      path.join(fixture.files, 'User panel.dxf'),
-      await readFile(process.env.VIEWER_TEST_DXF_FILE),
-    );
-  fixture.state.workspaces.push({
-    id: 'engineering-fixture',
-    name: 'Engineering',
-    panes: [],
-    roots: [],
-    arrangement: {},
-  });
-}
-const longFilename =
-  '2000, J. E. Rehder, The mastery and uses of fire in antiquity, McGill-Queen’s University Press, notes and references for the publication naming workflow.txt';
-if (process.env.VIEWER_TEST_SCENARIO === 'chrome')
-  await writeFile(
-    path.join(fixture.files, longFilename),
-    'Generated long-filename layout fixture.',
-  );
-if (process.env.VIEWER_TEST_SCENARIO === 'file-workflows') {
-  for (const folder of ['Source', 'Target', 'Peer'])
-    await mkdir(path.join(fixture.files, 'Transfers', folder));
-  await writeFile(
-    path.join(fixture.files, 'Transfers', 'Source', 'Note.txt'),
-    'Generated clipboard and drag fixture.',
-  );
-}
+const fixture = await createScenarioFixtures({
+  scenario,
+  stepFile: process.env.VIEWER_TEST_STEP_FILE,
+  dxfFile: process.env.VIEWER_TEST_DXF_FILE,
+});
 const profile = path.join(fixture.root, 'profile');
-await mkdir(profile);
+const owned = await prepareOwnedApplication({
+  binary,
+  profile,
+  mode: foreground ? 'foreground' : 'hidden',
+  label: 'electron-smoke',
+  evidenceRoot: path.join(appRoot, 'out/native-evidence'),
+  environment: scenario === 'store-file-services' ? { VIEWER_TEST_FILE_THREADS: '1' } : undefined,
+});
 const stateFile = path.join(profile, 'viewer-state-v1.json');
 await writeFile(stateFile, JSON.stringify(fixture.state));
 await writeFile(
   path.join(profile, 'settings-v1.json'),
-  JSON.stringify({
-    version: 1,
-    revision: 0,
-    settings: {
-      ...defaultSettings(fixture.files),
-      appearance: fixture.state.look,
-      ...(process.env.VIEWER_TEST_SCENARIO === 'milestones' ? { git: { enabled: true } } : {}),
-      ...(process.env.VIEWER_TEST_SCENARIO === 'foundations'
-        ? {
-            terminals: {
-              ...defaultSettings(fixture.files).terminals,
-              profiles: [
-                { id: 'login', name: 'Fixture shell', executable: '/bin/sh', args: [], env: {} },
-              ],
-            },
-            customActions: [
-              {
-                id: 'inspect-path',
-                name: 'Inspect path',
-                aliases: ['ip'],
-                icon: 'code',
-                shortcut: '',
-                order: 0,
-                pinned: true,
-                when: { target: 'any', extensions: [], min: 0, max: 10000 },
-                executor: {
-                  kind: 'executable',
-                  executable: '/usr/bin/printf',
-                  args: ['%s\\n', '{directory}'],
-                  perItem: false,
-                },
-              },
-            ],
-          }
-        : {}),
-    },
-    ui: normalizePreferences(fixture.state.ui),
-  }),
+  JSON.stringify(scenarioSettings(fixture, scenario)),
 );
-const captureRoot = path.resolve(appRoot, '../../..', '.impeccable/review');
+const captureRoot = path.join(owned.evidenceDirectory, 'screenshots');
 await mkdir(captureRoot, { recursive: true });
-const listener = net.createServer();
-await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
-const port = (listener.address() as net.AddressInfo).port;
-await new Promise<void>((resolve) => listener.close(() => resolve()));
-const child = spawn(
-  binary,
-  [
-    `--remote-debugging-port=${port}`,
-    '--remote-debugging-address=127.0.0.1',
-    '--disable-features=MacWebContentsOcclusion',
-    '--disable-renderer-backgrounding',
-    '--disable-background-timer-throttling',
-  ],
-  {
-    env: {
-      ...process.env,
-      VIEWER_DATA_DIRECTORY: profile,
-      VIEWER_RENDER_TEST: '1',
-      VIEWER_BACKGROUND_TEST: foreground ? '0' : '1',
-      ...(process.env.VIEWER_TEST_SCENARIO === 'store-file-services'
-        ? { VIEWER_TEST_FILE_THREADS: '1' }
-        : {}),
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  },
-);
-let log = '';
-child.stdout.on('data', (value) => {
-  log += String(value);
-});
-child.stderr.on('data', (value) => {
-  log += String(value);
-});
+const launched = await owned.launch();
+const { child, port } = launched;
 let socket: WebSocket | undefined;
 let nextID = 0;
 const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
@@ -242,7 +82,7 @@ async function until<T>(
     }
     if (child.exitCode !== null || child.signalCode !== null)
       throw new Error(
-        `Viewer exited unexpectedly (${child.exitCode ?? child.signalCode}): ${log.slice(-3000)}`,
+        `Viewer exited unexpectedly (${child.exitCode ?? child.signalCode}): ${launched.output().slice(-3000)}`,
       );
     await delay(100);
   }
@@ -715,7 +555,7 @@ async function verifyDailyFileWork(): Promise<void> {
   );
   await paletteCommand('Calculate Size');
   const measured = await until(
-    () => evaluate<import('../src/domain/metadata').FolderSizeTask[]>('window.__qaSizes'),
+    () => evaluate<import('../src/domain/files/metadata').FolderSizeTask[]>('window.__qaSizes'),
     (tasks) => tasks.some((task) => task.status === 'completed'),
     'folder size',
   ).then((tasks) => tasks.find((task) => task.status === 'completed')!);
@@ -992,7 +832,7 @@ async function verifySelectionReliability(): Promise<void> {
   );
   await paletteCommand('Calculate Size');
   const measured = await until(
-    () => evaluate<import('../src/domain/metadata').FolderSizeTask[]>('window.__qaSizes'),
+    () => evaluate<import('../src/domain/files/metadata').FolderSizeTask[]>('window.__qaSizes'),
     (tasks) => tasks.some((task) => task.status === 'completed'),
     'background folder measurement',
   ).then((tasks) => tasks.find((task) => task.status === 'completed')!);
@@ -1803,7 +1643,7 @@ async function verifyListAlignment(): Promise<void> {
 
 async function verifyPreviewFooter(): Promise<void> {
   const file = path.join(fixture.files, 'README.md');
-  const choices = await evaluate<import('../src/domain/metadata').ApplicationChoices>(
+  const choices = await evaluate<import('../src/domain/files/metadata').ApplicationChoices>(
     `window.viewer.applications([${JSON.stringify(file)}])`,
   );
   await preview(file, 'Synthetic files for local Viewer verification.');
@@ -2065,99 +1905,6 @@ async function verifyAnchoredPreviews(): Promise<void> {
   );
 }
 
-/** Observations, not timing assertions: compositor stalls can occur without a JS long task. */
-async function profileNativeInteractions(): Promise<void> {
-  const samples: Record<string, unknown>[] = [];
-  const begin = () =>
-    evaluate(`(() => {
-    const probe = window.__qaPerf = {frames:[],tasks:[],commits:window.__qaCommits,emissions:0,started:performance.now(),stopped:false};
-    let last=performance.now();
-    const frame=time=>{if(probe.stopped)return;probe.frames.push(time-last);last=time;probe.raf=requestAnimationFrame(frame);};
-    probe.raf=requestAnimationFrame(frame);
-    probe.off=window.__qaEngine.store.subscribe(()=>probe.emissions++);
-    probe.observer=new PerformanceObserver(list=>probe.tasks.push(...list.getEntries().map(entry=>entry.duration)));
-    probe.observer.observe({entryTypes:['longtask']});
-  })()`);
-  const finish = async (workload: string) => {
-    const result = await evaluate<Record<string, unknown>>(`(() => {
-      const probe=window.__qaPerf;probe.stopped=true;cancelAnimationFrame(probe.raf);probe.off();
-      probe.tasks.push(...probe.observer.takeRecords().map(entry=>entry.duration));probe.observer.disconnect();
-      const frames=probe.frames.slice(1).sort((a,b)=>a-b);
-      const result={milliseconds:performance.now()-probe.started,commits:window.__qaCommits-probe.commits,emissions:probe.emissions,frames:frames.length,p95:frames[Math.floor((frames.length-1)*.95)]||0,worst:frames.at(-1)||0,longTasks:probe.tasks.length,longestTask:Math.max(0,...probe.tasks)};
-      delete window.__qaPerf;return result;
-    })()`);
-    samples.push({ workload, ...result });
-    console.log('Native performance:', JSON.stringify({ workload, ...result }));
-  };
-  for (let sample = 1; sample <= 3; sample++) {
-    const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
-    await begin();
-    await contextMenu(fileSelector(path.join(fixture.files, 'README.md')));
-    const point = await evaluate<{ x: number; y: number }>(
-      `(() => { const r=document.querySelector('.context-menu .command-results').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`,
-    );
-    for (let i = 0; i < 24; i++) {
-      await command('Input.dispatchMouseEvent', {
-        type: 'mouseMoved',
-        buttons: 0,
-        x: point.x + (i % 2),
-        y: point.y,
-      });
-      await command('Input.dispatchMouseEvent', {
-        type: 'mouseWheel',
-        deltaX: 0,
-        deltaY: i % 12 < 6 ? 60 : -60,
-        ...point,
-      });
-      await delay(20);
-    }
-    await finish(`menu-wheel-${sample}`);
-    assert.equal(
-      await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
-      camera,
-      'Contextual wheel scrolling cannot move the spatial camera',
-    );
-    await key('Escape', 'Escape');
-  }
-  const before = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
-  const point = await evaluate<{ x: number; y: number }>(
-    `(() => { const r=document.querySelector('.workspace-surface').getBoundingClientRect();return {x:r.x+14,y:r.y+r.height/2}; })()`,
-  );
-  await begin();
-  for (let i = 0; i < 24; i++) {
-    await command('Input.dispatchMouseEvent', {
-      type: 'mouseWheel',
-      modifiers: 8,
-      deltaX: 4,
-      deltaY: 8,
-      ...point,
-    });
-    await delay(20);
-  }
-  await settleCamera();
-  await finish('camera-wheel');
-  assert.notEqual(
-    await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
-    before,
-    'Camera profile must exercise actual rotation',
-  );
-  await paletteCommand('Frame plane');
-  await settleCamera();
-  await key('Escape', 'Escape');
-  await writeFile(
-    path.join(captureRoot, 'native-reliability-performance.json'),
-    JSON.stringify(
-      {
-        capturedAt: new Date().toISOString(),
-        platform: process.platform,
-        architecture: process.arch,
-        samples,
-      },
-      null,
-      2,
-    ),
-  );
-}
 async function restoredEngine(count: number): Promise<void> {
   await until(
     () => evaluate<boolean>('!!document.querySelector("[data-viewer-plane]")'),
@@ -3735,172 +3482,6 @@ async function verifyKeys(): Promise<void> {
     'Keys: ⌃B and which-key, a terminal by ⌃B c, plane hints and the next plane, the calculator, a recorded macro, and the prefix set in Settings by pressing it.',
   );
 }
-async function verifyMilestones(): Promise<void> {
-  const note = path.join(fixture.files, 'README.md');
-  await until(
-    () => evaluate<string>('document.querySelector(".git-branch")?.textContent ?? ""'),
-    (value) => value.includes('main'),
-    'Git branch in the folder header',
-  );
-  const status = await evaluate<{
-    kind: string;
-    snapshot?: { changes: { path: string; status: string }[] };
-  }>(`window.viewer.git({kind:'status',path:${JSON.stringify(fixture.files)}})`);
-  assert.equal(status.kind, 'ready');
-  assert.ok(
-    status.snapshot?.changes.some(
-      (change) => change.path === 'README.md' && change.status === 'modified',
-    ),
-  );
-  await click('.git-branch');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".git-change button")'),
-    Boolean,
-    'Git changes plane',
-  );
-  await settleCamera();
-  await click('.git-change button');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".cm-merge-b .cm-content")'),
-    Boolean,
-    'editable working file comparison',
-  );
-  await settleCamera();
-  await snapshot('desktop-native-git-diff.png');
-  const before = await evaluate<string>(
-    'document.querySelector(".cm-merge-b .cm-content").textContent',
-  );
-  assert.ok(before.includes('Working version'));
-  await click('.cm-merge-b .cm-content');
-  await command('Input.insertText', { text: 'Retained diff edit ' });
-  await until(
-    () => evaluate<string>('document.querySelector(".cm-merge-b .cm-content").textContent'),
-    (value) => value.includes('Retained diff edit'),
-    'right comparison side accepts edits',
-  );
-  await click('.diff-plane:has(.diff-text-editor) button[aria-label="Comparison mode"]');
-  await click('.choice-menu [data-menu-id="choice:unified"]');
-  await until(
-    () =>
-      evaluate<boolean>(
-        '!document.querySelector(".cm-mergeView") && document.querySelector(".diff-text-editor")?.textContent.includes("Retained diff edit") === true',
-      ),
-    Boolean,
-    'unified mode preserves right-side edits',
-  );
-  assert.equal(
-    await readFile(note, 'utf8'),
-    '# Working version\n\nA changed file for comparison.\n',
-  );
-  await snapshot('desktop-native-unified-diff.png');
-  const rootID = fixture.state.workspaces[0]!.panes[0]!.id;
-  await evaluate(
-    `window.__qaEngine.camera.dock(window.__qaEngine.tree.get().find(node => node.routeDivisions.plane.parameters.id === ${JSON.stringify(rootID)}).planeID, {animate:false})`,
-  );
-  await settleCamera();
-  await click(`[data-viewer-plane="${rootID}"] .plane-heading`);
-  await paletteCommand('Chat about files');
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('textarea[aria-label="Chat message"]')`),
-    Boolean,
-    'Chat plane',
-  );
-  await settleCamera();
-  await click('textarea[aria-label="Chat message"]');
-  await command('Input.insertText', { text: 'Draft kept across reloads' });
-  await until(
-    async () => {
-      const names = await readdir(path.join(profile, 'chat-documents')).catch(() => [] as string[]);
-      if (!names[0]) return '';
-      return JSON.parse(await readFile(path.join(profile, 'chat-documents', names[0]), 'utf8'))
-        .draft as string;
-    },
-    (draft) => draft === 'Draft kept across reloads',
-    'durable Chat draft',
-  );
-  await snapshot('desktop-native-chat.png');
-  await reloadPage();
-  await captureEngine();
-  await until(
-    () =>
-      evaluate<string>(
-        `document.querySelector('textarea[aria-label="Chat message"]')?.value ?? ""`,
-      ),
-    (value) => value === 'Draft kept across reloads',
-    'Chat draft recovered after reload',
-  );
-  await evaluate(
-    `window.__qaEngine.camera.dock(window.__qaEngine.tree.get().find(node => node.routeDivisions.plane.parameters.id === 'milestone-image').planeID, {animate:false})`,
-  );
-  await settleCamera();
-  const imagePlane = '.pane-marker[data-viewer-pane="milestone-image"]';
-  await until(
-    () =>
-      evaluate<boolean>(
-        `!!document.querySelector('${imagePlane} [aria-label="Comparison divider"]')`,
-      ),
-    Boolean,
-    'image slider comparison',
-  );
-  for (const mode of ['onion', 'side', 'difference']) {
-    await click(`${imagePlane} button[aria-label="Comparison mode"]`);
-    await click(`.choice-menu [data-menu-id="choice:${mode}"]`);
-    if (mode === 'onion')
-      await until(
-        () =>
-          evaluate<boolean>(
-            `!!document.querySelector('${imagePlane} [aria-label="Right image opacity"]')`,
-          ),
-        Boolean,
-        'onion skin control',
-      );
-    if (mode === 'side')
-      assert.equal(
-        await evaluate<number>(
-          `document.querySelectorAll('${imagePlane} .image-diff-pair img').length`,
-        ),
-        2,
-      );
-    if (mode === 'difference')
-      await until(
-        () =>
-          evaluate<number>(`document.querySelector('${imagePlane} .image-difference')?.width ?? 0`),
-        (width) => width === 128,
-        'bounded pixel difference worker',
-      );
-  }
-  await snapshot('desktop-native-image-difference.png');
-  await execNative(binary, ['--new-window'], {
-    env: {
-      ...process.env,
-      VIEWER_DATA_DIRECTORY: profile,
-      VIEWER_RENDER_TEST: '1',
-      VIEWER_BACKGROUND_TEST: '1',
-    },
-    timeout: 10000,
-  });
-  await until(
-    async () =>
-      (
-        (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as { url: string }[]
-      ).filter(
-        (target) =>
-          target.url.startsWith('viewer-app://app/index.html') &&
-          !target.url.includes('window=settings'),
-      ).length,
-    (count) => count === 2,
-    'two independent native windows',
-  );
-  await until(
-    async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
-    (state) => (state.openWindows?.length ?? 0) === 2 && new Set(state.openWindows).size === 2,
-    'independent workspace owners persisted',
-  );
-  console.log(
-    'Milestones: hardened Git status, editable HEAD diff, unified mode retention, durable Chat drafts, and independent native windows.',
-  );
-}
-
 async function verifyTextEditing(): Promise<void> {
   const note = path.join(fixture.files, 'Edited note.md');
   await writeFile(note, '# Before\n');
@@ -5151,12 +4732,12 @@ async function verifyIndependentPreviewRevocation(): Promise<void> {
 
 async function verifyStoreFileServices(): Promise<void> {
   await verifyIndependentPreviewRevocation();
-  const task = await evaluate<import('../src/domain/metadata').FolderSizeTask>(
+  const task = await evaluate<import('../src/domain/files/metadata').FolderSizeTask>(
     `window.viewer.folderSizeStart([${JSON.stringify(path.join(fixture.files, 'Models'))}])`,
   );
   const measured = await until(
     () =>
-      evaluate<import('../src/domain/metadata').FolderSizeTask>(
+      evaluate<import('../src/domain/files/metadata').FolderSizeTask>(
         `window.viewer.folderSizeGet(${JSON.stringify(task.id)})`,
       ),
     (value) => value.status === 'completed',
@@ -5575,6 +5156,20 @@ async function verifyRootPlanes(): Promise<void> {
   );
   const previewID = state.workspaces[0].panes.find((pane) => pane.type === 'preview')!.id;
   const face = async (hostID: string, keyboard = false) => {
+    const collapsed = await evaluate<boolean>(
+      'document.querySelector(".app-titlebar [aria-label=Overview]")?.getAttribute("aria-expanded") === "false"',
+    );
+    if (collapsed) {
+      await click('.app-titlebar [aria-label="Overview"]');
+      await until(
+        () =>
+          evaluate<boolean>(
+            'document.querySelector("[data-plurid-overlay=minimap]")?.matches(":popover-open") === true',
+          ),
+        Boolean,
+        'crowded workspace overview opens through its titlebar control',
+      );
+    }
     const engineID = await evaluate<string>(
       `window.__qaEngine.inspect().planes.find(plane => plane.route.endsWith('/' + ${JSON.stringify(hostID)})).planeID`,
     );
@@ -5983,6 +5578,22 @@ async function verifyShutdown(): Promise<void> {
   assert.deepEqual(exceptions, []);
   console.log('Shutdown: the owned stalled worker cannot strand a window without its IPC bridge.');
 }
+const performanceHarness = {
+  evaluate,
+  command,
+  until,
+  key,
+  contextMenu,
+  paletteCommand,
+  settleCamera,
+};
+const performanceContext = {
+  foreground,
+  binary,
+  files: fixture.files,
+  evidenceDirectory: captureRoot,
+};
+
 async function verify(): Promise<void> {
   const target = await until(
     async () => {
@@ -6072,6 +5683,13 @@ async function verify(): Promise<void> {
   );
   await until(text, (value) => value.includes('Reference files.zip'), 'initial fixture folder');
   await settleCamera();
+  if (scenario === 'performance') {
+    await captureEngine();
+    await profileNativeInteractions(performanceHarness, performanceContext);
+    assert.deepEqual(exceptions, []);
+    console.log('Packaged foreground performance workloads recorded.');
+    return;
+  }
   assert.equal(await evaluate('location.protocol'), 'viewer-app:');
   assert.deepEqual(
     await evaluate(
@@ -6093,7 +5711,13 @@ async function verify(): Promise<void> {
     1,
   );
   await captureEngine();
-  if (process.env.VIEWER_TEST_SCENARIO === 'context-menu') {
+  if (process.env.VIEWER_TEST_SCENARIO === 'root-planes') {
+    await verifyRootPlanes();
+    await verifyBackgroundApp();
+    assert.deepEqual(exceptions, []);
+    return;
+  }
+  if (scenario === 'context-menu') {
     await paletteCommand('Frame plane');
     await settleCamera();
     await verifyCapturedMenus();
@@ -6102,81 +5726,101 @@ async function verify(): Promise<void> {
     console.log('Packaged contextual command capture verified.');
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'resources') {
+  if (scenario === 'resources') {
     await verifyResourceBoundaries(path.join(fixture.files, 'README.md'));
     assert.deepEqual(exceptions, []);
     console.log('Packaged resource ranges and confinement verified.');
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'appearance') {
+  if (scenario === 'appearance') {
     await appearance('light');
     await appearance('dark');
     assert.deepEqual(exceptions, []);
     console.log('Packaged appearance choice applies through Settings.');
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'milestones') {
-    await verifyMilestones();
+  if (scenario === 'milestones') {
+    await verifyMilestones(
+      {
+        evaluate,
+        until,
+        click,
+        command,
+        settleCamera,
+        snapshot,
+        paletteCommand,
+        reloadPage,
+        captureEngine,
+      },
+      {
+        files: fixture.files,
+        profile,
+        stateFile,
+        binary,
+        debuggerOrigin: launched.debuggerOrigin,
+        initialRootID: fixture.state.workspaces[0]!.panes[0]!.id,
+      },
+    );
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'services') {
+  if (scenario === 'services') {
     await verifyServiceWorkflows();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'daily-file-work') {
+  if (scenario === 'daily-file-work') {
     await verifyDailyFileWork();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'model-lighting') {
+  if (scenario === 'model-lighting') {
     await verifyModelLighting();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'refinements') {
+  if (scenario === 'refinements') {
     await verifyRefinements();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'drawings-workspaces') {
+  if (scenario === 'drawings-workspaces') {
     await verifyDrawingsAndWorkspaces();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'menus-models') {
+  if (scenario === 'menus-models') {
     await verifyGroupedMenuAndModels();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'foundations') {
+  if (scenario === 'foundations') {
     await verifyFoundations();
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'store-file-services') {
+  if (scenario === 'store-file-services') {
     await verifyStoreFileServices();
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'file-workflows') {
+  if (scenario === 'file-workflows') {
     await verifyColumnWorkflows();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'chrome') {
+  if (scenario === 'chrome') {
     await verifyConfiguredChrome();
     await verifyListAlignment();
     await verifyBackgroundApp();
@@ -6184,76 +5828,76 @@ async function verify(): Promise<void> {
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'shutdown') {
+  if (scenario === 'shutdown') {
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
     await verifyShutdown();
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'alignment') {
+  if (scenario === 'alignment') {
     await verifyListAlignment();
     await verifyPreviewFooter();
     await verifySettingsScroll();
     await verifyBackgroundApp();
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'size') {
+  if (scenario === 'size') {
     await verifyIndependentSizeCalculation();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'entry') {
+  if (scenario === 'entry') {
     await verifyEntryAndPalette();
     await verifyAnchoredPreviews();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'published-plane-input') {
+  if (scenario === 'published-plane-input') {
     await verifyPublishedPlaneInput();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'files') {
+  if (scenario === 'files') {
     await verifyFileQueries();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'line') {
+  if (scenario === 'line') {
     await verifyCommandLine();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'look') {
+  if (scenario === 'look') {
     await verifyLook();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'space') {
+  if (scenario === 'space') {
     await verifySpace();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'keys') {
+  if (scenario === 'keys') {
     await verifyKeys();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'text-editing') {
+  if (scenario === 'text-editing') {
     await verifyTextEditing();
     await verifyBackgroundApp();
     assert.deepEqual(exceptions, []);
     return;
   }
-  if (process.env.VIEWER_TEST_SCENARIO === 'spatial') {
+  if (scenario === 'spatial') {
     await verifySpatialTools();
     await verifyBackgroundApp();
     assert.deepEqual(await inventory(), untouched);
@@ -6267,7 +5911,7 @@ async function verify(): Promise<void> {
   await verifyIndependentSizeCalculation();
   await verifyEntryAndPalette();
   await verifySelectionReliability();
-  if (foreground) await profileNativeInteractions();
+  if (foreground) await profileNativeInteractions(performanceHarness, performanceContext);
   await verifyAnchoredPreviews();
   await verifyServiceWorkflows();
   await verifyPreviewOwnership();
@@ -7056,7 +6700,7 @@ try {
 } catch (error) {
   console.error(error);
   console.error('Renderer diagnostics:', rendererLog.slice(-10), exceptions);
-  console.error(log.slice(-3500));
+  console.error(launched.output().slice(-3500));
   if (socket?.readyState === WebSocket.OPEN) {
     console.error(
       await evaluate(
@@ -7078,13 +6722,7 @@ try {
   }
   settingsSocket?.close();
   socket?.close();
-  if (child.exitCode === null && child.signalCode === null) {
-    child.kill('SIGTERM');
-    await Promise.race([
-      new Promise<void>((resolve) => child.once('exit', () => resolve())),
-      delay(5000),
-    ]);
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-  }
-  await trashTemporary(fixture.root);
+  await launched.stop();
+  console.log('Native fixtures preserved:', fixture.root);
+  console.log('Native evidence preserved:', owned.evidenceDirectory);
 }

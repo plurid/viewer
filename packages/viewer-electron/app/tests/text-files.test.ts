@@ -16,10 +16,10 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
-import { Operations } from '../src/desktop/operations';
-import { TextFiles } from '../src/desktop/text-files';
-import { FileAccessRequired } from '../src/desktop/file-access';
-import { textChangedCode, type TextDocument } from '../src/domain/text-documents';
+import { Operations } from '../src/desktop/operations/operations';
+import { TextFiles } from '../src/desktop/editing/text-files';
+import { FileAccessRequired } from '../src/desktop/files/file-access';
+import { textChangedCode, type TextDocument } from '../src/domain/editing/documents';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string, trash: string, operations: Operations, texts: TextFiles;

@@ -1,13 +1,13 @@
 // The workspace basket and saved collections.
 import type { FileEntry } from '../../domain/contracts';
-import { parentPath } from '../../domain/planes';
+import { parentPath } from '../../domain/workspaces/planes';
 import {
   collectionSchema,
   basketItemSchema,
   type Collection,
   type BasketItem,
-} from '../../domain/collections';
-import { sourceVersion } from '../../domain/inspection';
+} from '../../domain/workspaces/collections';
+import { sourceVersion } from '../../domain/files/inspection';
 import { activeWorkspace, changeWorkspace, uuid } from './core';
 import { setActivePane } from './panes';
 

@@ -7,25 +7,39 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import type { FileEntry, Resource } from '../src/domain/contracts';
+import type { PreviewModule } from '../src/renderer/previews/contracts';
 
-vi.mock('../src/renderer/previews/PreviewHost', async () => ({
-  PreviewHost: ({
-    path,
-    renderFooter,
-  }: {
-    path: string;
-    renderFooter(resource: Resource, module: { id: string; label: string }): unknown;
-  }) => {
-    const name = path.split('/').pop()!;
-    const extension = name.split('.').pop()!;
-    const size = name.startsWith('large') ? 5 * 1024 * 1024 : 12;
-    const entry = { path, name, extension, size } as FileEntry;
-    return renderFooter({ id: 'resource', url: '', entry } as Resource, {
-      id: extension === 'png' ? 'image' : 'text',
-      label: extension === 'png' ? 'Image' : 'Text / code / data',
-    });
-  },
-}));
+vi.mock('../src/renderer/previews/PreviewHost', async () => {
+  const { choosePreview } = await import('../src/renderer/previews/registry');
+  return {
+    PreviewHost: ({
+      path,
+      renderFooter,
+    }: {
+      path: string;
+      renderFooter(resource: Resource, module: PreviewModule): unknown;
+    }) => {
+      const name = path.split('/').pop()!;
+      const extension = name.split('.').pop()!;
+      const size = name.startsWith('large') ? 5 * 1024 * 1024 : 12;
+      const entry: FileEntry = {
+        path,
+        name,
+        parent: '/fixtures',
+        extension,
+        size,
+        kind: 'file',
+        directory: false,
+        modified: 1,
+        created: 1,
+        hidden: false,
+        mime: extension === 'png' ? 'image/png' : 'text/plain',
+        identity: path,
+      };
+      return renderFooter({ id: 'resource', url: '', entry }, choosePreview(entry));
+    },
+  };
+});
 import { QuickPreview, quickPreviewEdit } from '../src/renderer/previews/QuickPreview';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
 import { getState, initialize, quickPreview } from '../src/renderer/state/store';
@@ -62,20 +76,24 @@ const show = (path: string) => {
   );
 };
 
-it('opens a text file as its plane, active and editing, and closes', async () => {
-  const view = show('/fixtures/notes.md');
-  fireEvent.click(view.getByRole('button', { name: 'Edit' }));
-  await waitFor(() =>
-    expect(workspace.openPath).toHaveBeenCalledWith('/fixtures/notes.md', {
-      workspaceID: getState().saved.activeWorkspace,
-      paneID: 'folder',
-      linked: true,
-      activate: true,
-      edit: true,
-    }),
-  );
-  await waitFor(() => expect(getState().quickPreview).toBeNull());
-});
+it.each(['notes.md', 'index.html'])(
+  'opens %s as its plane, active and editing, and closes',
+  async (name) => {
+    const path = '/fixtures/' + name;
+    const view = show(path);
+    fireEvent.click(view.getByRole('button', { name: 'Edit' }));
+    await waitFor(() =>
+      expect(workspace.openPath).toHaveBeenCalledWith(path, {
+        workspaceID: getState().saved.activeWorkspace,
+        paneID: 'folder',
+        linked: true,
+        activate: true,
+        edit: true,
+      }),
+    );
+    await waitFor(() => expect(getState().quickPreview).toBeNull());
+  },
+);
 it('offers no Edit for a file that is not text, or too large to edit', () => {
   expect(show('/fixtures/photo.png').queryByRole('button', { name: 'Edit' })).toBeNull();
   cleanup();

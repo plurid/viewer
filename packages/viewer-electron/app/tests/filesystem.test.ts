@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { absolute, entry, list, validName } from '../src/desktop/filesystem';
-import { selectedRange, sortEntries } from '../src/domain/files';
+import { absolute, entry, list, validName } from '../src/desktop/files/filesystem';
+import { selectedRange, sortEntries } from '../src/domain/files/entries';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {

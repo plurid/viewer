@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { FileIndex } from '../src/desktop/index-core';
+import { FileIndex } from '../src/desktop/search/index-core';
 import type { FileEntry } from '../src/domain/contracts';
-import { entry } from '../src/desktop/filesystem';
-import { collectionSchema, basketItemSchema } from '../src/domain/collections';
-import { sourceVersion } from '../src/domain/inspection';
+import { entry } from '../src/desktop/files/filesystem';
+import { collectionSchema, basketItemSchema } from '../src/domain/workspaces/collections';
+import { sourceVersion } from '../src/domain/files/inspection';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 describe('cross-page collection snapshots', () => {
   it('captures every indexed match beyond the visible page and rejects oversized snapshots without returning a partial selection', async () => {

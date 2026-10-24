@@ -5,7 +5,7 @@ import path from 'node:path';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const { connect } = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock('node:net', () => ({ connect }));
-import { runMCPClient } from '../src/desktop/mcp-client';
+import { runMCPClient } from '../src/desktop/agents/mcp-client';
 it('explains the native setup gate when no broker connection has been approved', async () => {
   const root = await temporaryRoot('viewer-mcp-unapproved-');
   const input = new PassThrough();

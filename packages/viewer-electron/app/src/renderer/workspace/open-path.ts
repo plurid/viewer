@@ -1,5 +1,5 @@
 import type { FileEntry } from '../../domain/contracts';
-import { needsFolderAccess } from '../../domain/file-access';
+import { needsFolderAccess } from '../../domain/files/access';
 import { activeWorkspace, getState, navigate } from '../state/store';
 import type { WorkspaceController } from './context';
 

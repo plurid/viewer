@@ -13,8 +13,8 @@ import {
   resolveLens,
   type Lens,
   type LensGroup,
-} from '../src/domain/lenses';
-import { decodeDefinition } from '../src/desktop/definition-files';
+} from '../src/domain/files/lenses';
+import { decodeDefinition } from '../src/desktop/persistence/definition-files';
 
 const id = '0b6c3f3e-2a5e-4a8e-9a43-0d1c2b3a4f5e';
 const entry = (name: string, extra: Partial<FileEntry> = {}): FileEntry => ({

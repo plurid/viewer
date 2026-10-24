@@ -11,9 +11,9 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import type { SearchBatch, SavedState, DesktopEvent } from '../src/domain/contracts';
-import { Search } from '../src/desktop/search';
-import { Watchers } from '../src/desktop/watchers';
-import { Storage } from '../src/desktop/storage';
+import { Search } from '../src/desktop/search/search';
+import { Watchers } from '../src/desktop/files/watchers';
+import { Storage } from '../src/desktop/persistence/storage';
 import { folderPane } from '../src/renderer/state/store';
 import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 let root: string;

@@ -1,3 +1,4 @@
+import { effectiveWindowSettings } from '../state/effective-ui';
 import {
   memo,
   useCallback,
@@ -11,7 +12,7 @@ import {
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry, ListColumn } from '../../domain/contracts';
-import { visibleListColumns } from '../../domain/list-columns';
+import { visibleListColumns } from '../../domain/preferences/list-columns';
 import { getState, report, useFolderPresentation, useViewer } from '../state/store';
 import {
   browsable,
@@ -20,23 +21,23 @@ import {
   groupEntries,
   kindLabel,
   sortEntries,
-} from '../../domain/files';
+} from '../../domain/files/entries';
 import { Icon, type IconName } from '../ui/Icon';
 import { PreviewHost } from '../previews/PreviewHost';
 import { useFolder } from './useFolder';
 import { Empty, Loading } from '../ui/primitives';
-import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
+import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
 import { useFileReveal } from './anchors';
 import type { ColumnNavigation } from './column-navigation';
 import { keepPreviewKeys, type FileModifiers } from './selection';
 
-import type { FolderPresentation } from '../../domain/folder-presentation';
+import type { FolderPresentation } from '../../domain/preferences/folder-presentation';
 import { BrowserColumn } from './BrowserColumn';
 import { FolderSizeValue } from './sizes';
 import { LinkedPlaneButton } from '../workspace/LinkedPlaneButton';
 import { rowsUnder, useMarquee, type MarqueeSelect } from './marquee';
-import { renderedImageFormats } from '../../domain/rendered-images';
-import { thumbnailByteLimit } from '../../domain/thumbnails';
+import { renderedImageFormats } from '../../domain/previews/images/rendered';
+import { thumbnailByteLimit } from '../../domain/previews/images/thumbnails';
 import { PreviewActivity } from '../previews/activity';
 import { AppIcon, hasBundleIcon } from './app-icon';
 import {
@@ -276,7 +277,7 @@ export function ListView(props: FileViewProps) {
     [actions, props.toggle, props.expanded, props.depths, props.paneID],
   );
   const defaultCompact = useViewer(
-    (state) => state.settings.settings.browsing.density === 'compact',
+    (state) => effectiveWindowSettings(state).browsing.density === 'compact',
   );
   const compact = props.presentation ? props.presentation.density === 'compact' : defaultCompact;
   const defaultList = useViewer((state) => state.saved.ui.list);
@@ -628,7 +629,7 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
   // One stable object, so memoized rows skip re-rendering when nothing they show changed.
   const rowProps = useMemo(() => ({ ...actions, paneID: props.paneID }), [actions, props.paneID]);
   const defaultCompact = useViewer(
-    (state) => state.settings.settings.browsing.density === 'compact',
+    (state) => effectiveWindowSettings(state).browsing.density === 'compact',
   );
   const compact = props.presentation ? props.presentation.density === 'compact' : defaultCompact;
   const scroll = useRef<HTMLDivElement>(null);

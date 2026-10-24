@@ -5,8 +5,8 @@
  * may propose a sequence only if it could propose each step.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { agentCommandID } from '../src/domain/agent-safety';
-import type { CustomAction } from '../src/domain/automation';
+import { agentCommandID } from '../src/domain/agents/safety';
+import type { CustomAction } from '../src/domain/automation/actions';
 import { programCommands } from '../src/renderer/commands/programs';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';

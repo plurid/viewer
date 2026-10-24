@@ -8,7 +8,7 @@ export {
   languageNames,
   textLanguages,
   type TextLanguage,
-} from '../../domain/text-languages';
+} from '../../domain/editing/languages';
 
 /** Each grammar's dependencies, as `prismjs/components.json` declares them: loaded first, in order. */
 export const prismRequires: Record<string, string[]> = {

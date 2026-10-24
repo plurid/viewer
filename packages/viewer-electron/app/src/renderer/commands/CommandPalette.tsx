@@ -1,4 +1,4 @@
-import { matchesQuery, topWords, withoutTopWords } from '../../domain/file-query';
+import { matchesQuery, topWords, withoutTopWords } from '../../domain/search/query';
 import { useFileQuery } from '../explorer/useFileQuery';
 import { useEffect, useMemo, useState } from 'react';
 import { CommandResults } from './CommandResults';

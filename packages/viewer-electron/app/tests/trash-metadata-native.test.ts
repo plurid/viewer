@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { lstat, mkdir, realpath, symlink, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { MacFiles } from '../src/desktop/macos-files';
+import type { MacFiles } from '../src/desktop/native/macos-files';
 import { temporaryRoot } from '../tools/temporary';
 
 it.skipIf(process.platform !== 'darwin' || !process.env.VIEWER_TEST_MAC_BINDING)(

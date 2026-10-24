@@ -3,12 +3,11 @@
  * uses Finder's clipboard. Only newly generated folders and profiles are used.
  */
 import assert from 'node:assert/strict';
-import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
+import { execFileSync, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import net from 'node:net';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -18,8 +17,9 @@ import type {
   SavedState,
   ViewerAPI,
 } from '../src/domain/contracts';
-import { stateSchema } from '../src/desktop/storage';
-import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { stateSchema } from '../src/desktop/persistence/storage';
+import { temporaryRoot } from '../tools/temporary';
+import { prepareOwnedApplication, type OwnedLaunch } from './native/runtime/owned-application';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundle =
@@ -58,7 +58,6 @@ const candidate = {
   ),
 };
 const id = randomUUID();
-const evidenceDirectory = path.join(appRoot, 'out/native-acceptance', id);
 const source = path.join(
   os.homedir(),
   'Library/Mobile Documents/com~apple~CloudDocs',
@@ -72,6 +71,14 @@ const profile = path.join(
   'Library/Containers/com.pluridviewer.app/Data/Library/Application Support/Viewer',
   'native-acceptance-' + id,
 );
+const owned = await prepareOwnedApplication({
+  binary: path.join(bundle, 'Contents/MacOS/Viewer'),
+  profile,
+  mode: 'foreground',
+  label: 'manual-native-acceptance',
+  evidenceRoot: path.join(appRoot, 'out/native-acceptance'),
+});
+const evidenceDirectory = owned.evidenceDirectory;
 const marker = '.viewer-generated-qa';
 const generated = 'Generated Viewer native acceptance content.\n'.repeat(4096);
 const checks: { id: string; result: 'passed'; detail: string }[] = [];
@@ -81,7 +88,6 @@ const observations: {
   picker?: { requested: string; cancelExpected: boolean; result: string | null };
   clipboard?: { items: number; expectedSelection: boolean; cut?: boolean };
 }[] = [];
-await mkdir(evidenceDirectory, { recursive: true });
 await mkdir(source, { mode: 0o700 });
 await writeFile(path.join(source, marker), id, { flag: 'wx', mode: 0o600 });
 await writeFile(path.join(local, marker), id, { flag: 'wx', mode: 0o600 });
@@ -97,7 +103,6 @@ await writeFile(path.join(outside, 'Denied.txt'), 'Generated sibling permission 
   flag: 'wx',
   mode: 0o600,
 });
-await mkdir(profile, { recursive: true, mode: 0o700 });
 // Start inside the test profile so the window does not offer a separate
 // "Allow folder access" action before the scripted cancellation picker.
 const instructions = path.join(profile, 'Native acceptance');
@@ -165,7 +170,7 @@ const input = createInterface({ input: process.stdin, output: process.stdout });
 let child: ChildProcess | undefined,
   socket: WebSocket | undefined,
   next = 0;
-let output = '';
+let launched: OwnedLaunch | undefined;
 let debuggerOrigin = '',
   workspaceDebugger = '';
 const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
@@ -176,7 +181,7 @@ async function cleanup() {
       (await readFile(path.join(root, marker), 'utf8')) !== id
     )
       throw new Error('Generated folder ownership changed; manual cleanup is required: ' + root);
-    await trashTemporary(root);
+    console.log('Generated native acceptance folder preserved:', root);
   }
 }
 async function wait<T>(
@@ -188,7 +193,7 @@ async function wait<T>(
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     if (child && child.exitCode !== null)
-      throw new Error('Owned Viewer exited: ' + output.slice(-1500));
+      throw new Error('Owned Viewer exited: ' + launched?.output().slice(-1500));
     const value = await read();
     if (accept(value)) return value;
     await delay(100);
@@ -291,22 +296,9 @@ async function connectRenderer(url: string) {
   });
 }
 async function launch() {
-  const listener = net.createServer();
-  await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
-  const port = (listener.address() as net.AddressInfo).port;
-  await new Promise<void>((resolve) => listener.close(() => resolve()));
-  debuggerOrigin = `http://127.0.0.1:${port}`;
-  child = spawn(
-    path.join(bundle, 'Contents/MacOS/Viewer'),
-    [`--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1'],
-    { env: { ...process.env, VIEWER_DATA_DIRECTORY: profile }, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  child.stdout!.on('data', (value) => {
-    output += String(value);
-  });
-  child.stderr!.on('data', (value) => {
-    output += String(value);
-  });
+  launched = await owned.launch();
+  child = launched.child;
+  debuggerOrigin = launched.debuggerOrigin;
   workspaceDebugger = await rendererTarget();
   await connectRenderer(workspaceDebugger);
   await wait(
@@ -641,13 +633,12 @@ try {
   await save();
   await writeFile(
     path.join(evidenceDirectory, 'failure.txt'),
-    (error instanceof Error ? error.stack : String(error)) + '\n' + output.slice(-2500),
+    (error instanceof Error ? error.stack : String(error)) + '\n' + launched?.output().slice(-2500),
   );
   throw error;
 } finally {
   input.close();
-  await quit().catch(() => {
-    child?.kill('SIGTERM');
-  });
+  await quit().catch(() => launched?.stop());
+  await launched?.stop();
   await cleanup();
 }

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { defaultSettings } from '../src/domain/services';
-import type { WindowFrame } from '../src/desktop/window-state';
+import type { WindowFrame } from '../src/desktop/windows/window-state';
 import { createFixtures } from './fixtures';
 import { trashTemporary } from '../tools/temporary';
 

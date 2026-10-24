@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createFixtures } from './fixtures';
 import { defaultSettings } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 import { ownedApp, until } from './owned-app';
 import { trashTemporary } from '../tools/temporary';
 

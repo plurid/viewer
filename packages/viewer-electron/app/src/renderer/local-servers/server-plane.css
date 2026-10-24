@@ -1,0 +1,146 @@
+.server-plane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.server-summary,
+.server-address,
+.server-log-controls,
+.server-log-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  flex: none;
+}
+
+.server-summary,
+.server-address,
+.server-log-controls {
+  border-bottom: 1px solid var(--line);
+}
+
+.server-state {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.server-state[data-state='running'] {
+  color: var(--accent);
+}
+
+.server-folder {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.server-address input,
+.server-log-controls input[type='search'] {
+  min-width: 100px;
+  flex: 1;
+}
+
+.server-address input {
+  font-family: var(--font-mono, monospace);
+}
+
+.server-log-controls {
+  flex-wrap: wrap;
+}
+
+.server-log-controls strong {
+  font-size: inherit;
+}
+
+.server-log-controls .choice-button {
+  max-width: 150px;
+}
+
+.server-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.server-error {
+  flex: none;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--danger);
+  border-bottom: 1px solid var(--line);
+}
+
+.server-log-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.server-log {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.server-log th,
+.server-log td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.server-log th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--raised);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.server-log .server-log-path {
+  width: 100%;
+  min-width: 120px;
+  max-width: 480px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.server-log-path small {
+  display: block;
+  margin-top: 3px;
+  color: var(--danger);
+}
+
+.server-log tr[data-failed='true'] td:nth-child(4) {
+  color: var(--danger);
+}
+
+.server-log-empty {
+  padding: 24px 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.server-log-footer {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}

@@ -4,8 +4,8 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ownedApp, until } from './owned-app';
 import type { SavedState, OperationJob } from '../src/domain/contracts';
-import { entry } from '../src/desktop/filesystem';
-import { sourceVersion } from '../src/domain/inspection';
+import { entry } from '../src/desktop/files/filesystem';
+import { sourceVersion } from '../src/domain/files/inspection';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const root = await temporaryRoot('viewer-native-collections-'),
   profile = path.join(root, 'Profile'),

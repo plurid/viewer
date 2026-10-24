@@ -1,6 +1,6 @@
 import type { FileEntry } from '../../domain/contracts';
 import type { ApplicationSettings } from '../../domain/services';
-import { isPackage } from '../../domain/files';
+import { isPackage } from '../../domain/files/entries';
 import { choosePreview } from '../previews/registry';
 /** Opening policy is shared by folder and search explorers; explicit linked-open always wins. */
 export function nativeOpening(

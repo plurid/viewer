@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { ModelPermissions } from '../src/desktop/model-permissions';
-import { DocumentStore } from '../src/desktop/document-store';
-import { newModelProvider } from '../src/domain/model-providers';
-import { Credentials, Providers } from '../src/desktop/providers';
+import { ModelPermissions } from '../src/desktop/models/model-permissions';
+import { DocumentStore } from '../src/desktop/persistence/document-store';
+import { newModelProvider } from '../src/domain/models/providers';
+import { Credentials, Providers } from '../src/desktop/models/providers';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;

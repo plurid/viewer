@@ -1,4 +1,4 @@
-import { builtInTheme, type Theme } from '../../domain/themes';
+import { builtInTheme, type Theme } from '../../domain/preferences/themes';
 import type { ApplicationSettings } from '../../domain/services';
 
 /**

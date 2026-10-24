@@ -1,12 +1,13 @@
 /** Compiles native guards against a no-op unlinkat. No files are erased. */
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import os from 'node:os';
 import { createRequire } from 'node:module';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
 import { temporaryRoot } from '../tools/temporary';
+import { ensureElectronHeaders } from '../tools/native-build/headers';
 const run = promisify(execFile);
 if (process.platform !== 'darwin') throw new Error('This native guard check requires macOS.');
 const created = await temporaryRoot('viewer-trash-guard-');
@@ -22,6 +23,11 @@ await writeFile(outside, 'Generated external sentinel — must remain unchanged'
 await symlink(path.join(root, 'Documents'), path.join(trash, 'Documents link'));
 const before = await readFile(outside);
 const binary = path.join(root, 'guard-test');
+const headers = await ensureElectronHeaders({
+  appRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+  electronVersion: createRequire(import.meta.url)('electron/package.json').version,
+  arch: process.arch,
+});
 await run(
   'xcrun',
   [
@@ -30,14 +36,7 @@ await run(
     '-fobjc-arc',
     '-O1',
     '-I',
-    // the headers of the Electron this app builds against, as build-helpers.ts finds them: a fixed
-    // version went stale with every Electron update (2026-10-20)
-    path.join(
-      os.homedir(),
-      '.electron-gyp',
-      createRequire(import.meta.url)('electron/package.json').version,
-      'include/node',
-    ),
+    headers,
     '-framework',
     'Foundation',
     '-framework',

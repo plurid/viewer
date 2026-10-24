@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef } from 'react';
-import { settingValue, type SettingDefinition } from '../../../domain/setting-catalog';
+import { settingValue, type SettingDefinition } from '../../../domain/preferences/catalog';
 import { Icon, type IconName } from '../Icon';
 import type { SettingsEditor } from './editor';
 import { ChoiceButton } from '../ChoiceMenu';

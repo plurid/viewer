@@ -1,5 +1,10 @@
 import { useTheme } from '../ui/theme';
-import { effectiveWindowUI } from '../state/effective-ui';
+import {
+  effectiveWindowLook,
+  effectiveWindowSettings,
+  effectiveWindowUI,
+} from '../state/effective-ui';
+import { useSpatialOverview, type SpatialOverviewHandle } from './overlays/useSpatialOverview';
 import {
   lazy,
   Suspense,
@@ -27,7 +32,7 @@ import { PreviewHost } from '../previews/PreviewHost';
 import { PreviewActivity } from '../previews/activity';
 import { PreviewFrame } from './preview-frame';
 import { Empty } from '../ui/primitives';
-import { Sidebar } from '../ui/Sidebar';
+import { Sidebar } from '../ui/navigation/Sidebar';
 import { PlaneHeader } from './PlaneHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
 export { frameWorkspace } from './framing';
@@ -104,6 +109,22 @@ const LazyScratchPlane = lazy(() => import('../editing/ScratchPlane'));
 const LazyDiffPlane = lazy(() => import('../diff/DiffPlane'));
 const LazyGitChanges = lazy(() => import('../git/GitChanges'));
 const LazyChatPlane = lazy(() => import('../chat/ChatPlane'));
+const LazyServerPlane = lazy(() => import('../local-servers/ServerPlane'));
+
+function ServerContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'server') return <Empty title="Server unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening server controls…" />}>
+        <LazyServerPlane pane={pane} active={plane.shown && plane.culled === 'visible'} />
+      </Suspense>
+    </PreviewFrame>
+  );
+}
 
 function ChatContent() {
   const plane = usePluridPlane();
@@ -196,6 +217,7 @@ const marked = (Content: React.ComponentType): React.ComponentType =>
     );
   };
 const planes: PluridPlane<React.ComponentType>[] = [
+  { route: '/servers/:id', component: marked(ServerContent) },
   { route: '/chats/:id', component: marked(ChatContent) },
   { route: '/diffs/:id', component: marked(ComparisonContent) },
   { route: '/git-changes/:id', component: marked(ComparisonContent) },
@@ -209,21 +231,20 @@ export function WorkspaceSurface({
   engine,
   surface,
   onReady,
+  onOverviewChange,
 }: {
   engine: RefObject<PluridApplicationHandle | null>;
   surface: RefObject<HTMLDivElement | null>;
   onReady: () => void;
+  onOverviewChange?: (overview: SpatialOverviewHandle | undefined) => void;
 }) {
   const space = useViewer(activeWorkspace);
-  const look = useViewer((state) => state.saved.look);
+  const look = useViewer(effectiveWindowLook);
   const workspace = useWorkspace();
-  // this workspace's own settings over the general ones (domain/overrides.ts)
+  // this workspace's own settings over the general ones (domain/preferences/overrides.ts)
   const general = useViewer(effectiveWindowUI);
   // the theme's colours for plurid, only a custom theme's: the built-in ones are plurid's look already
-  const theme = useTheme(
-    useViewer((state) => state.settings.settings),
-    look,
-  );
+  const theme = useTheme(useViewer(effectiveWindowSettings), look);
   const palette = useMemo(
     () =>
       theme.id.startsWith('viewer-')
@@ -239,6 +260,35 @@ export function WorkspaceSurface({
   const preferences = useMemo(() => general.space, [general]);
   const [size, setSize] = useState({ width: 992, height: 692 });
   const [api, setApi] = useState<PluridApi | null>(null);
+  const overview = useSpatialOverview({
+    root: surface,
+    enabled: preferences.minimap && !!api,
+    epoch: space.id + ':' + (space.epoch ?? 0),
+    labelsVersion: space.panes,
+    subscribeEngine: (listener) => workspace.subscribeEngine(listener),
+    isDocked: () => workspace.isDocked(),
+    labelForPlane: (engineID) => {
+      const node = engine.current
+        ? flattenTree(engine.current.tree.get()).find((item) => item.planeID === engineID)
+        : undefined;
+      const pane = node ? space.panes.find((item) => item.id === hostID(node)) : undefined;
+      if (!pane) return undefined;
+      return {
+        label: pane.path.split('/').filter(Boolean).at(-1) ?? pane.type,
+        path: pane.path,
+      };
+    },
+    onNavigate: (engineID) => {
+      const node = engine.current
+        ? flattenTree(engine.current.tree.get()).find((item) => item.planeID === engineID)
+        : undefined;
+      if (!node || !activeWorkspace().panes.some((item) => item.id === hostID(node))) return;
+      setActivePane(hostID(node));
+      focusFiles(hostID(node));
+    },
+  });
+  useEffect(() => onOverviewChange?.(overview), [overview, onOverviewChange]);
+  useEffect(() => () => onOverviewChange?.(undefined), [onOverviewChange]);
   useEffect(() => {
     let retiling: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(([entry]) => {
@@ -401,6 +451,7 @@ export function WorkspaceSurface({
         hit.click();
       }}
       onClickCapture={(event) => {
+        if (overview.expanded) return;
         const hit = (event.target as Element).closest<HTMLElement>('[data-plurid-minimap-plane]');
         if (!hit || !engine.current) return;
         const node = flattenTree(engine.current.tree.get()).find(

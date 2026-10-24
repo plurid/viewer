@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Credentials, Providers, providerBinding } from '../src/desktop/providers';
+import { Credentials, Providers, providerBinding } from '../src/desktop/models/providers';
 import {
   newModelProvider,
   providerKinds,
   providerPresets,
   validProviderEndpoint,
-} from '../src/domain/model-providers';
-import { SettingsService } from '../src/desktop/settings';
-import { ModelPermissions } from '../src/desktop/model-permissions';
+} from '../src/domain/models/providers';
+import { SettingsService } from '../src/desktop/preferences/settings';
+import { ModelPermissions } from '../src/desktop/models/model-permissions';
 import type { ModelProvider } from '../src/domain/services';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 

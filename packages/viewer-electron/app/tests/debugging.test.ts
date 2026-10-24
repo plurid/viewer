@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { debuggingAllowed } from '../src/desktop/debugging';
+import { debuggingAllowed } from '../src/desktop/diagnostics/debugging';
 
 const profile = '/Users/person/Library/Application Support/Viewer';
 describe('DevTools-protocol switches in a packaged build (2026-10-20)', () => {

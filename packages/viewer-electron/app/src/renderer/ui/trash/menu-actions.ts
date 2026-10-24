@@ -1,4 +1,4 @@
-import type { TrashItem } from '../../../domain/trash';
+import type { TrashItem } from '../../../domain/files/trash';
 import type { MenuAction } from './items';
 
 export interface TrashMenuHandlers {

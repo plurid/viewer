@@ -1,10 +1,20 @@
-import { mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Chats } from '../src/desktop/chat';
+import { Chats } from '../src/desktop/chat/service';
+import { ChatDocumentStore } from '../src/desktop/chat/documents';
 import { defaultSettings, type ModelProvider } from '../src/domain/services';
-import type { ChatDocument, ChatReply, ChatStep } from '../src/domain/chat';
-import type { CapturedTarget } from '../src/domain/automation';
+import type { ChatDocument, ChatReply, ChatStep } from '../src/domain/models/chat';
+import type { CapturedTarget } from '../src/domain/automation/actions';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const provider: ModelProvider = {
@@ -97,6 +107,126 @@ async function send(id: string): Promise<void> {
 }
 
 describe('read-only Chat', () => {
+  it('records the generating model on replies and proposal messages', async () => {
+    const file = path.join(root, 'context', 'notes.txt');
+    rename.mockResolvedValue({ id: '10a21b40-72b2-46d4-85ad-d76cfba84d7a' });
+    generate
+      .mockResolvedValueOnce(step('rename', { renames: [{ path: file, name: 'Proposed.txt' }] }))
+      .mockResolvedValue(step('reply', { text: 'Review the proposed name.' }));
+    const conversation = await create();
+    await send(conversation.id);
+    const result = await settled(conversation.id);
+    const answers = result.messages.filter((message) => message.role === 'assistant');
+    expect(answers).toHaveLength(2);
+    for (const message of answers)
+      expect(message.provider).toEqual({
+        id: provider.id,
+        name: provider.name,
+        model: provider.model,
+      });
+    expect(result.version).toBe(2);
+  });
+
+  it('preserves exact legacy bytes before migrating and leaves old attribution unknown', async () => {
+    const conversation = await create();
+    await chat.close();
+    const folder = path.join(root, 'private', 'chat-documents');
+    const file = path.join(folder, conversation.id + '.json');
+    const legacy = {
+      ...conversation,
+      version: 1,
+      messages: [{ id: crypto.randomUUID(), role: 'assistant', text: 'Historical answer', at: 1 }],
+    };
+    const original = Buffer.from(JSON.stringify(legacy, null, 2).replaceAll('\n', '\r\n') + '\r\n');
+    await writeFile(file, original);
+    chat = new Chats(path.join(root, 'private'), ports);
+    const migrated = document(await chat.request({ kind: 'open', id: conversation.id }, 1, origin));
+    expect(migrated.version).toBe(2);
+    expect(migrated.messages[0]?.provider).toBeUndefined();
+    const backups = (await readdir(folder)).filter((name) => name.includes('.before-chat-v2-'));
+    expect(backups).toHaveLength(1);
+    const backup = path.join(folder, backups[0]!);
+    expect(await readFile(backup)).toEqual(original);
+    expect((await stat(backup)).mode & 0o777).toBe(0o600);
+    expect(JSON.parse(await readFile(file, 'utf8')).version).toBe(2);
+    await chat.request({ kind: 'open', id: conversation.id }, 1, origin);
+    expect((await readdir(folder)).filter((name) => name.includes('.before-chat-v2-'))).toEqual(
+      backups,
+    );
+  });
+
+  it('keeps draft authority after stopping a window and flushes before closing', async () => {
+    const conversation = await create();
+    generate.mockImplementation(
+      async (_provider, _instructions, _input, _schema, signal: AbortSignal) => {
+        await new Promise<void>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+      },
+    );
+    await send(conversation.id);
+    await vi.waitFor(() => expect(generate).toHaveBeenCalled());
+    await chat.stopOwner(1);
+    const stopped = document(await chat.request({ kind: 'open', id: conversation.id }, 1, origin));
+    expect(stopped.status).toBe('stopped');
+    await chat.request(
+      { kind: 'draft', id: conversation.id, text: 'Still authorized', revision: 1 },
+      1,
+    );
+    await chat.flush();
+    const saved = JSON.parse(
+      await readFile(
+        path.join(root, 'private', 'chat-documents', conversation.id + '.json'),
+        'utf8',
+      ),
+    );
+    expect(saved.draft).toBe('Still authorized');
+  });
+
+  it('propagates failed persistence through flush and permits a later successful retry', async () => {
+    const conversation = await create();
+    const save = vi
+      .spyOn(ChatDocumentStore.prototype, 'save')
+      .mockRejectedValueOnce(new Error('Disk full'));
+    try {
+      await expect(
+        chat.request({ kind: 'draft', id: conversation.id, text: 'Recover me', revision: 1 }, 1),
+      ).rejects.toThrow('Disk full');
+      await expect(chat.flush()).rejects.toThrow('Disk full');
+    } finally {
+      save.mockRestore();
+    }
+    await chat.request({ kind: 'draft', id: conversation.id, text: 'Recovered', revision: 1 }, 1);
+    await chat.flush();
+    expect(
+      document(await chat.request({ kind: 'open', id: conversation.id }, 1, origin)).draft,
+    ).toBe('Recovered');
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'preserves a legacy document when its backup cannot be written',
+    async () => {
+      const conversation = await create();
+      await chat.close();
+      const folder = path.join(root, 'private', 'chat-documents');
+      const file = path.join(folder, conversation.id + '.json');
+      const original = Buffer.from(JSON.stringify({ ...conversation, version: 1 }, null, 2));
+      await writeFile(file, original);
+      await chmod(folder, 0o500);
+      try {
+        const store = new ChatDocumentStore(file);
+        await expect(store.load()).rejects.toThrow();
+        expect(await readFile(file)).toEqual(original);
+      } finally {
+        await chmod(folder, 0o700);
+      }
+      chat = new Chats(path.join(root, 'private'), ports);
+      expect(
+        document(await chat.request({ kind: 'open', id: conversation.id }, 1, origin)).version,
+      ).toBe(2);
+    },
+  );
+
   it('bounds an inspection loop and reports a damaged conversation without hiding intact ones', async () => {
     const conversation = await create();
     generate.mockResolvedValue(step('metadata', { path: path.join(root, 'context', 'notes.txt') }));

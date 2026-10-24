@@ -6,6 +6,8 @@ import type { CommandContext } from '../registry';
 export interface WindowActions {
   workspace: WorkspaceController;
   ready: boolean;
+  overview?(): void;
+  overviewAvailable?: boolean;
   palette(mode: PaletteMode, query?: string): void;
   settings(): void;
   workspaceDialog(kind: 'new' | 'rename' | 'delete' | 'background'): void;

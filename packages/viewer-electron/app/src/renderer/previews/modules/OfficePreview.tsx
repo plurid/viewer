@@ -1,6 +1,6 @@
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 import type { DocumentData } from '../../../domain/services';
-import { columnName } from '../../../domain/office';
+import { columnName } from '../../../domain/previews/documents/office';
 import type { PreviewContext } from '../contracts';
 import { usePreviewState } from '../state';
 import { PreviewToolbar, usePreviewCommands } from '../controls';

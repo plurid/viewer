@@ -1,25 +1,26 @@
 import type { PromptAnswer, PromptRequest } from './command-line/prompt';
-import type { DiffSource } from './diff';
-import type { GitRequest, GitReply, GitSource } from './git';
-import type { LaunchRequest } from './launch';
-import type { ChatRequest, ChatReply, ChatDocument } from './chat';
-import type { SessionKeys } from './session-keys';
-import type { WorkspaceOverrides } from './overrides';
-import type { Tiling } from './tiling';
-import type { TextBuffer, TextBufferSummary, TextOpening, TextVersion } from './text-documents';
-import type { EvidenceNavigation, SourceVersion, InspectionResult } from './inspection';
-import type { WorkflowRequest, WorkflowReply } from './workflows';
-import type { WatchRule, WatchRuleRequest, WatchRuleReply } from './watch-rules';
-import type { RelationshipsRequest, RelationshipsReply } from './relationships';
+import type { FlushResult } from './persistence/flush';
+import type { DiffSource } from './comparison/diff';
+import type { GitRequest, GitReply, GitSource } from './comparison/git';
+import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
+import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
+import type { SessionKeys } from './preferences/session-keys';
+import type { WorkspaceOverrides } from './preferences/overrides';
+import type { Tiling } from './workspaces/tiling';
+import type { TextBuffer, TextBufferSummary, TextOpening, TextVersion } from './editing/documents';
+import type { EvidenceNavigation, SourceVersion, InspectionResult } from './files/inspection';
+import type { WorkflowRequest, WorkflowReply } from './automation/workflows';
+import type { WatchRule, WatchRuleRequest, WatchRuleReply } from './automation/watch-rules';
+import type { RelationshipsRequest, RelationshipsReply } from './files/relationships';
 import type {
   ProjectAssociation,
   ProjectLayout,
   JSONValue,
   ProjectRequest,
   ProjectReply,
-} from './project';
-import type { LensReply, LensRequest } from './lenses';
-import type { Collection, BasketItem, QuerySnapshot } from './collections';
+} from './workspaces/project';
+import type { LensReply, LensRequest } from './files/lenses';
+import type { Collection, BasketItem, QuerySnapshot } from './workspaces/collections';
 import type {
   SettingsSnapshot,
   IndexStatus,
@@ -38,31 +39,37 @@ import type {
   CommandDescriptor,
   AgentWorkspaceSnapshot,
   ExecutionGrant,
-} from './agent-requests';
+} from './agents/requests';
 import type {
   CapturedTarget,
   CustomAction,
   TerminalEvent,
   ExecutionTask,
   TerminalStart,
-} from './automation';
-import type { FolderSizeTask, ApplicationChoices, NativeApplication } from './metadata';
-import type { FileChange } from './changes';
-import type { ComparisonRequest, ComparisonResult } from './comparison';
-import type { DuplicateRequest, DuplicateResult } from './duplicates';
-import type { OperationPlanRequest, OperationPlanReply } from './operation-plan';
-import type { CheckpointRequest, CheckpointReply } from './change-plan';
+} from './automation/actions';
+import type { FolderSizeTask, ApplicationChoices, NativeApplication } from './files/metadata';
+import type { FileChange } from './files/changes';
+import type { ComparisonRequest, ComparisonResult } from './comparison/folders';
+import type { DuplicateRequest, DuplicateResult } from './comparison/duplicates';
+import type { OperationPlanRequest, OperationPlanReply } from './operations/operation-plan';
+import type { CheckpointRequest, CheckpointReply } from './operations/change-plan';
 import type {
   AgentAccessRequest,
   AgentAccessState,
   AgentClientRequest,
   AgentClientReply,
   AgentAudit,
-} from './agent-clients';
-import type { ModelDataPermission, ModelDataLevel } from './model-permissions';
-import type { FileInformation, FileInformationPatch } from './file-information';
-import type { Volume } from './volumes';
-import type { TrashSnapshot, TrashRestoreResult } from './trash';
+} from './agents/clients';
+import type { ModelDataPermission, ModelDataLevel } from './models/permissions';
+import type { FileInformation, FileInformationPatch } from './files/information';
+import type { Volume } from './files/volumes';
+import type { TrashSnapshot, TrashRestoreResult } from './files/trash';
+import type {
+  HtmlPreview,
+  LocalServer,
+  LocalServerAction,
+  LocalServerDetail,
+} from './previews/web';
 /** Serializable contracts shared by main, preload and renderer. */
 export type FileKind = 'directory' | 'file' | 'symlink' | 'other';
 export interface FileEntry {
@@ -183,6 +190,13 @@ export interface ChatPane {
   path: string;
   conversationID: string;
 }
+/** A local server's folder reference; listening sockets and logs remain runtime state. */
+export interface ServerPane {
+  id: string;
+  type: 'server';
+  path: string;
+  sourceIdentity?: string;
+}
 export type Pane =
   | FolderPane
   | PreviewPane
@@ -192,7 +206,8 @@ export type Pane =
   | ScratchPane
   | DiffPane
   | GitChangesPane
-  | ChatPane;
+  | ChatPane
+  | ServerPane;
 export interface Workspace {
   id: string;
   name: string;
@@ -216,9 +231,9 @@ export interface Workspace {
   tiling?: Tiling;
 }
 /** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
-export const CURRENT_STATE_VERSION = 6 as const;
+export const CURRENT_STATE_VERSION = 7 as const;
 export interface SavedState {
-  version: 1 | 2 | 3 | 4 | 5 | typeof CURRENT_STATE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
   preferencesRevision?: number;
   workspaces: Workspace[];
@@ -413,6 +428,7 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'local-servers'; servers: LocalServer[] }
   | { type: 'chat'; document: ChatDocument }
   | { type: 'launch'; request: LaunchRequest }
   | { type: 'workspaces'; state: SavedState }
@@ -453,12 +469,14 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  htmlPreview(resourceID: string): Promise<HtmlPreview>;
+  htmlPreviewClose(id: string): Promise<void>;
+  localServerStart(root: string, paneID: string, sourceIdentity?: string): Promise<LocalServer>;
+  localServers(): Promise<LocalServer[]>;
+  localServerInspect(id: string): Promise<LocalServerDetail>;
+  localServerAction(id: string, action: LocalServerAction): Promise<void>;
   chat(request: ChatRequest): Promise<ChatReply>;
-  shellCommand(action: 'status' | 'install' | 'uninstall'): Promise<{
-    path: string;
-    installed: boolean;
-    problem?: string;
-  }>;
+  shellCommand(action: 'status' | 'install' | 'uninstall'): Promise<ShellCommandStatus>;
   hotkeyStatus(): Promise<{ registered: boolean; shortcut: string; problem?: string }>;
   restoreWindow(): Promise<void>;
   workspaceClaim(id: string): Promise<boolean>;
@@ -602,7 +620,7 @@ export interface ViewerAPI {
   /** Opens the system print sheet for a previewed PDF stored as a file. */
   printPDF(id: string, password?: string): Promise<void>;
   save(state: SavedState): Promise<void>;
-  flushed(token: string): Promise<void>;
+  flushed(token: string, result?: FlushResult): Promise<void>;
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
   copyPaths(paths: string[]): Promise<void>;
   clipboardRead(): Promise<{ paths: string[]; cut: boolean } | null>;

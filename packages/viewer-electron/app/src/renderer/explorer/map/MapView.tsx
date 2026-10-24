@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from 'react';
 import type { FileEntry } from '../../../domain/contracts';
-import { browsable } from '../../../domain/files';
+import { browsable } from '../../../domain/files/entries';
 import {
   emptyLens,
   resolveLens,
@@ -17,7 +17,7 @@ import {
   type LensDocument,
   type LensOp,
   type LensRect,
-} from '../../../domain/lenses';
+} from '../../../domain/files/lenses';
 import {
   layoutLens,
   MapIndex,
@@ -32,7 +32,7 @@ import {
   type MapDirection,
   type MapRegion,
   type MapTile,
-} from '../../../domain/lens-layout';
+} from '../../../domain/files/lens-layout';
 import { measureLocalPoint, type Point } from '../../ui/projectedResize';
 import { createLens, editLens } from '../../state/lenses';
 import { announce, report, updateFolderPresentation } from '../../state/store';

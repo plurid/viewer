@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC, type TreePlane } from '@plurid/plurid-data';
-import { tilingRects } from '../../domain/tiling';
+import { tilingRects } from '../../domain/workspaces/tiling';
 import { activeWorkspace } from '../state/store';
 import { setTiling } from '../state/workspaces';
 import { flattenTree, hostID } from './tree';

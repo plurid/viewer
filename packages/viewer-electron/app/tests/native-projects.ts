@@ -4,9 +4,9 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SavedState } from '../src/domain/contracts';
-import type { ProjectDefinition, ProjectDocument } from '../src/domain/project';
+import type { ProjectDefinition, ProjectDocument } from '../src/domain/workspaces/project';
 import { ownedApp, until } from './owned-app';
-import { decodeProject } from '../src/desktop/projects';
+import { decodeProject } from '../src/desktop/workspaces/projects';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const root = await temporaryRoot('viewer-native-project-');
 const profile = path.join(root, 'profile'),

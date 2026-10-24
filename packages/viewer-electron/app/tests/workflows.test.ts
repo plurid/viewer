@@ -1,18 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mkdir, readFile, writeFile, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
-import { Workflows } from '../src/desktop/workflows';
-import { Comparisons } from '../src/desktop/comparison';
-import { Checkpoints } from '../src/desktop/checkpoints';
-import { OperationPlans } from '../src/desktop/operation-plans';
-import { Operations } from '../src/desktop/operations';
-import { inspectFile } from '../src/desktop/inspection';
+import { Workflows } from '../src/desktop/automation/workflows';
+import { Comparisons } from '../src/desktop/comparison/comparison';
+import { Checkpoints } from '../src/desktop/operations/checkpoints';
+import { OperationPlans } from '../src/desktop/operations/operation-plans';
+import { Operations } from '../src/desktop/operations/operations';
+import { inspectFile } from '../src/desktop/files/inspection';
 import {
   workflowDefinitionSchema,
   type WorkflowDocument,
   type WorkflowRun,
-} from '../src/domain/workflows';
-import type { OperationPlan } from '../src/domain/operation-plan';
+} from '../src/domain/automation/workflows';
+import type { OperationPlan } from '../src/domain/operations/operation-plan';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const definition = () =>
   workflowDefinitionSchema.parse({

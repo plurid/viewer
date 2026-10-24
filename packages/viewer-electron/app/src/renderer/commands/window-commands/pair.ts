@@ -1,4 +1,4 @@
-import { baseName } from '../../../domain/planes';
+import { baseName } from '../../../domain/workspaces/planes';
 import { startPlaneHints } from '../../keys/PlaneHints';
 import {
   activeWorkspace,

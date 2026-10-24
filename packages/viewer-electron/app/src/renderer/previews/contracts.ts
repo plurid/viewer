@@ -1,7 +1,8 @@
-import type { EvidenceNavigation } from '../../domain/inspection';
+import type { EvidenceNavigation } from '../../domain/files/inspection';
 import type { DocumentData } from '../../domain/services';
 import type { ComponentType } from 'react';
 import type { ArchiveListing, FileEntry, Resource, ResourceRead } from '../../domain/contracts';
+import type { HtmlPreview } from '../../domain/previews/web';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {
@@ -29,6 +30,8 @@ export interface PreviewContext {
   /** Opens a local file the preview refers to (a relative link) beside its plane. */
   openRelated?(path: string): void;
   services: {
+    htmlPreview(resourceID: string): Promise<HtmlPreview>;
+    htmlPreviewClose(id: string): Promise<void>;
     thumbnail(file: string, size: number): Promise<string>;
     document(id: string): Promise<DocumentData>;
     read(id: string, limit?: number): Promise<ResourceRead>;
@@ -41,6 +44,8 @@ export interface PreviewContext {
 export interface PreviewModule {
   id: string;
   label: string;
+  /** The module can open its underlying source in Viewer's text editor. */
+  editing?: 'text';
   formats: readonly string[];
   detect(entry: FileEntry): number;
   load(): Promise<{ default: ComponentType<PreviewContext> }>;

@@ -1,25 +1,29 @@
-import { answerPrompt } from './prompts';
+import { createEditingHandlers } from './ipc/editing-handlers';
+import { createModelHandlers } from './ipc/model-handlers';
+import { createWebHandlers } from './ipc/web-handlers';
+import { WebPreviews } from './previews/web/service';
+import { answerPrompt } from './models/prompts';
 import { namedLines } from '../domain/command-line/prompt';
 import {
   emptySessionKeys,
   keepAliases,
   withSessionKeys,
   type SessionKeys,
-} from '../domain/session-keys';
-import type { FileChange } from '../domain/changes';
-import { AgentRequests } from './agent-requests';
-import { agentCommandID } from '../domain/agent-safety';
-import type { CapturedTarget } from '../domain/automation';
+} from '../domain/preferences/session-keys';
+import type { FileChange } from '../domain/files/changes';
+import { AgentRequests } from './agents/agent-requests';
+import { agentCommandID } from '../domain/agents/safety';
+import type { CapturedTarget } from '../domain/automation/actions';
 import type {
   AgentNavigation,
   AgentWorkspaceSnapshot,
   CommandDescriptor,
-} from '../domain/agent-requests';
-import { Executions } from './executions';
-import { ExecutionConfirmations } from './execution-confirmations';
-import { ProtectedPaths } from './protected-paths';
-import { Terminals } from './terminals';
-import { ExternalTerminals } from './terminal-launch';
+} from '../domain/agents/requests';
+import { Executions } from './actions/executions';
+import { ExecutionConfirmations } from './actions/execution-confirmations';
+import { ProtectedPaths } from './files/protected-paths';
+import { Terminals } from './terminals/terminals';
+import { ExternalTerminals } from './terminals/terminal-launch';
 import {
   app,
   nativeTheme,
@@ -29,68 +33,75 @@ import {
   shell,
   type BrowserWindow,
 } from 'electron';
-import type { AgentProposal } from '../domain/agent-requests';
-import { FileServices } from './file-services';
-import { Applications } from './applications';
-import { SettingsService } from './settings';
-import { Credentials, Providers, providerBinding } from './providers';
-import { ModelPermissions } from './model-permissions';
-import { modelDataLabels, modelEndpoint } from '../domain/model-permissions';
-import { macFiles } from './macos-files';
-import { Thumbnails } from './thumbnails';
-import { AppIcons } from './app-icons';
-import { nativeAppIcon } from './native-app-icon';
+import type { AgentProposal } from '../domain/agents/requests';
+import { FileServices } from './files/file-services';
+import { Applications } from './native/applications';
+import { SettingsService } from './preferences/settings';
+import { Credentials, Providers } from './models/providers';
+import { ModelPermissions } from './models/model-permissions';
+import { macFiles } from './native/macos-files';
+import { guardTestTrash } from './native/test-removal-policy';
+import { Thumbnails } from './previews/thumbnails';
+import { AppIcons } from './native/app-icons';
+import { nativeAppIcon } from './native/native-app-icon';
 import { ActionPlanner } from './actions/planner';
-import { AgentBroker } from './agent-broker';
-import { Comparisons } from './comparison';
-import { Duplicates } from './duplicates';
-import { OperationPlans } from './operation-plans';
-import { sourceVersion } from '../domain/inspection';
-import { sharedClientID, type AgentAccessRequest, type AgentClient } from '../domain/agent-clients';
-import type { ActionContext, ApplicationSettings } from '../domain/services';
+import { AgentBroker } from './agents/agent-broker';
+import { Comparisons } from './comparison/comparison';
+import { Duplicates } from './comparison/duplicates';
+import { OperationPlans } from './operations/operation-plans';
+import { sourceVersion } from '../domain/files/inspection';
+import {
+  sharedClientID,
+  type AgentAccessRequest,
+  type AgentClient,
+} from '../domain/agents/clients';
+import { newPlaneFolder, type ActionContext, type ApplicationSettings } from '../domain/services';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import type { ApiMethod, ApiResult, DesktopEvent, FileEntry } from '../domain/contracts';
-import { absolute, entry, list } from './filesystem';
-import { isPackage } from '../domain/files';
-import { spotlightTagged } from './spotlight';
-import { nativeImageConverter } from './native-image-convert';
-import { quickLookRender } from './quick-look-render';
-import { Operations } from './operations';
-import { TextFiles } from './text-files';
-import { TextBuffers } from './text-buffers';
-import { Resources } from './resources';
-import { Search } from './search';
-import { Storage } from './storage';
-import { Watchers } from './watchers';
-import { Trash } from './trash';
-import { applicationsPath } from './trash-locations';
-import { trashLocation, trashName, type DesktopPlatform } from '../domain/trash';
-import { FileAccess } from './file-access';
-import { NativeSelections } from './native-selections';
-import { Pasteboard } from './pasteboard';
-import { askNatively, confirmAgentProposal, confirmNatively } from './native-confirmation';
-import { AgentAccess } from './agent-access';
-import { fileCoordination } from './file-coordination';
-import { FileInformationService } from './file-information';
-import { Projects } from './projects';
-import { Lenses } from './lenses';
-import { Checkpoints } from './checkpoints';
-import { Workflows } from './workflows';
-import { WatchRules } from './watch-rules';
-import { Relationships } from './relationships';
-import { boundedRename } from './rename-preview';
-import { methodWindows, schemas, settingsEvents, type ApiHandlers } from './ipc-schemas';
-import { serverAddress } from '../domain/volumes';
+import { absolute, entry, list } from './files/filesystem';
+import { isPackage } from '../domain/files/entries';
+import { spotlightTagged } from './search/spotlight';
+import { nativeImageConverter } from './native/native-image-convert';
+import { quickLookRender } from './native/quick-look-render';
+import { Operations } from './operations/operations';
+import { TextFiles } from './editing/text-files';
+import { TextBuffers } from './editing/text-buffers';
+import { Resources } from './previews/resources';
+import { Search } from './search/search';
+import { Storage } from './persistence/storage';
+import { Watchers } from './files/watchers';
+import { Trash } from './operations/trash';
+import { applicationsPath } from './operations/trash-locations';
+import { trashLocation, trashName, type DesktopPlatform } from '../domain/files/trash';
+import { FileAccess } from './files/file-access';
+import { NativeSelections } from './native/native-selections';
+import { Pasteboard } from './native/pasteboard';
+import { confirmAgentProposal, confirmNatively } from './native/native-confirmation';
+import { AgentAccess } from './agents/agent-access';
+import { fileCoordination } from './files/file-coordination';
+import { FileInformationService } from './files/file-information';
+import { Projects } from './workspaces/projects';
+import { Lenses } from './workspaces/lenses';
+import { Checkpoints } from './operations/checkpoints';
+import { Workflows } from './automation/workflows';
+import { WatchRules } from './automation/watch-rules';
+import { Relationships } from './workspaces/relationships';
+import { boundedRename } from './actions/rename-preview';
+import { methodWindows, schemas, settingsEvents, type ApiHandlers } from './ipc/schemas';
+import { serverAddress } from '../domain/files/volumes';
 import { errorMessage } from '../domain/errors';
-import { GitReader } from './git';
-import { WorkspaceSessions } from './workspace-sessions';
-import { ShellCommand } from './shell-command';
-import type { HotkeyStatus } from './hotkey-window';
-import type { LaunchRequest } from '../domain/launch';
-import { Chats } from './chat';
-import { profilePaths } from '../domain/profiles';
+import { GitReader } from './comparison/git';
+import { WorkspaceSessions } from './windows/workspace-sessions';
+import { ShellCommand } from './windows/shell-command';
+import type { HotkeyStatus } from './windows/hotkey-window';
+import type { LaunchRequest } from '../domain/workspaces/launch';
+import { Chats } from './chat/service';
+import { planLegacyProfileRestoration } from './preferences/profile-migration';
+import { resolveWindowPreferences } from '../domain/preferences/presentation/resolver';
+import { modelEndpoint } from '../domain/models/permissions';
+import { WindowFlushRequests } from './windows/flush-requests';
 
 export class Desktop {
   readonly chats: Chats;
@@ -113,6 +124,7 @@ export class Desktop {
   readonly externalTerminals: ExternalTerminals;
   readonly executions: Executions;
   readonly resources: Resources;
+  readonly webPreviews: WebPreviews;
   readonly fileAccess: FileAccess;
   readonly information: FileInformationService;
   readonly projects: Projects;
@@ -172,7 +184,7 @@ export class Desktop {
   >();
   private agentsEnabled?: boolean;
   private agentsConfiguration: Promise<void> = Promise.resolve();
-  private flushes = new Map<string, { owner: number; finish(): void }>();
+  private readonly flushes = new WindowFlushRequests();
   private flushing?: Promise<void>;
   private disposal?: Promise<void>;
   /** Saved state read early for the window's settings, handed to the first bootstrap unread again:
@@ -186,16 +198,45 @@ export class Desktop {
       this.storedEarly = this.storage.load();
       const stored = await this.storedEarly;
       await this.settings.load(stored.state || undefined);
-      if (stored.state?.profile && Object.keys(stored.state.profile.previous).length) {
-        const paths = new Set<string>(profilePaths);
-        const patches = Object.entries(stored.state.profile.previous)
-          .filter(([path]) => paths.has(path))
-          .map(([path, value]) => ({ path, value }));
-        if (patches.length) await this.settings.patch(patches, this.settings.snapshot().revision);
-        stored.state.profile = { id: stored.state.profile.id, previous: {} };
+      if (stored.state) {
+        const snapshot = this.settings.snapshot();
+        const restoration = planLegacyProfileRestoration(stored.state, snapshot);
+        try {
+          if (restoration.patches.length)
+            await this.settings.patch(restoration.patches, snapshot.revision, 'workspace');
+          stored.state = restoration.state;
+        } catch (error) {
+          restoration.warnings.push(
+            'Earlier profile preferences were retained because their restoration could not be saved.',
+          );
+          this.options.diagnose?.(String(error));
+        }
+        if (restoration.warnings.length)
+          stored.recovery = [stored.recovery, ...restoration.warnings].filter(Boolean).join('\n');
       }
       this.workspaceSessions.seed(stored.state);
     })());
+  }
+  /** Native chrome uses the same canonical preferences and local overlay as its renderer. */
+  windowPreferences(workspaceID?: string) {
+    const snapshot = this.settings.snapshot();
+    const presentation = this.workspaceSessions.presentation(workspaceID);
+    return resolveWindowPreferences({
+      settings: snapshot.settings,
+      ui: snapshot.ui,
+      systemLook: snapshot.systemLook ?? snapshot.look,
+      ...presentation,
+    });
+  }
+  workspaceForWindow(window: BrowserWindow): string | undefined {
+    return this.windows.get(window.webContents.id)?.workspaceID;
+  }
+  /** A new window starts from general preferences, without another window's profile overlay. */
+  createWorkspace(): string {
+    return this.workspaceSessions.create(this.initialFolder());
+  }
+  private initialFolder(): string {
+    return newPlaneFolder(this.settings.snapshot().settings.browsing, this.home, undefined, true);
   }
   constructor(
     dataPath: string,
@@ -212,6 +253,7 @@ export class Desktop {
       ocr: string;
       applications: string;
       fileBackend?: 'process' | 'thread';
+      shellCommandHome?: string;
       settingsChanged?(): void;
       /** Remembers the Settings window's category with its frame. */
       settingsCategory?(category: string): void;
@@ -250,9 +292,9 @@ export class Desktop {
       access,
     );
     this.shellCommand = new ShellCommand(
-      this.home,
+      options.shellCommandHome ?? this.home,
       process.execPath,
-      (file) => shell.trashItem(file),
+      (reviewed) => this.operations.trashReviewedFile(reviewed),
       (file) =>
         confirmNatively(
           [...this.windows.values()].find((item) => item.role === 'settings')?.window,
@@ -260,7 +302,7 @@ export class Desktop {
           `Move this exact script to the Trash:\n${file}\n\nNo folder or shell startup file is changed.`,
           'Move to Trash',
         ),
-      !process.mas,
+      !process.mas && process.platform === 'darwin',
     );
     this.projects = new Projects(access);
     this.comparisons = new Comparisons(access);
@@ -277,6 +319,11 @@ export class Desktop {
       void this.files.update(file).catch(() => {});
     });
     this.resources = new Resources(access, (file) => quickLookRender(file));
+    this.webPreviews = new WebPreviews(access, (owner, servers) => {
+      const target = this.windows.get(owner)?.window;
+      if (target && !target.isDestroyed())
+        target.webContents.send('viewer:event', { type: 'local-servers', servers });
+    });
     this.applications = new Applications(options.applications);
     this.settings = new SettingsService(
       dataPath,
@@ -410,11 +457,12 @@ export class Desktop {
         this.appIcons.forget(change.destination);
       }
     };
+    const fallbackTrash = guardTestTrash((file: string) => shell.trashItem(file));
     this.operations = new Operations(
-      (file) =>
+      (file, expected) =>
         process.platform === 'darwin'
-          ? macFiles().trash(file, fileCoordination.purpose())
-          : shell.trashItem(file),
+          ? macFiles().trash(file, fileCoordination.purpose(), expected)
+          : fallbackTrash(file),
       (job) => {
         emit({ type: 'job', job });
         this.agentRequests?.operation(job);
@@ -438,7 +486,7 @@ export class Desktop {
           ? macFiles()
               .trash(file, fileCoordination.purpose())
               .then(() => {})
-          : shell.trashItem(file),
+          : fallbackTrash(file),
       changed: (folder) => emit({ type: 'lens-changed', folder }),
     });
     this.operationPlans = new OperationPlans(dataPath, this.operations, this.checkpoints, access);
@@ -555,7 +603,9 @@ export class Desktop {
         // nothing is requested while config.jsonc and its last valid copy cannot be read
         agentAccess: new AgentAccess(dataPath, () => {
           const snapshot = this.settings.snapshot();
-          return snapshot.config?.fallback === 'defaults' ? undefined : snapshot.settings.agents;
+          return snapshot.config?.fallback === 'defaults'
+            ? undefined
+            : { ...snapshot.settings.agents, revision: snapshot.revision };
         }),
         relationships: async (file, content) => {
           const result = await this.relationships.request({ kind: 'read', file, content });
@@ -688,6 +738,8 @@ export class Desktop {
     if (request.kind === 'capabilities') {
       const current = await access.capabilities();
       const added = request.capabilities.filter((capability) => !current.includes(capability));
+      const change = { capabilities: request.capabilities };
+      const review = added.length ? await access.captureReview(change) : undefined;
       if (
         added.length &&
         !(await confirmNatively(
@@ -698,7 +750,8 @@ export class Desktop {
         ))
       )
         return;
-      await access.approve({ capabilities: request.capabilities });
+      await access.approve(change, review);
+      await this.configureAgents();
       return;
     }
     if (request.kind === 'enable' && !request.enabled) {
@@ -709,7 +762,14 @@ export class Desktop {
       if (agents().roots.includes(request.root))
         await mirror({ roots: agents().roots.filter((root) => root !== request.root) });
     } else if (request.kind === 'enable') {
-      const { roots } = await access.state();
+      const { roots, capabilities } = await access.state();
+      const change = {
+        enabled: true,
+        capabilities: capabilities.length
+          ? capabilities
+          : (['metadata', 'navigation', 'propose'] as const),
+      };
+      const review = await access.captureReview(change);
       if (
         !(await confirmNatively(
           window,
@@ -718,17 +778,19 @@ export class Desktop {
             ? 'Clients with Viewer’s agent token can read and search these folders and propose changes for your review:\n\n' +
               roots.join('\n')
             : 'No folder is authorized yet: add one in Settings → Agents.') +
-            '\n\nYou can turn this off at any time.',
+            `\n\nShared capabilities: ${change.capabilities.join(', ')}.\n\nYou can turn this off at any time.`,
           'Allow',
         ))
       )
         return;
+      await access.approve(change, review);
       if (!agents().enabled) await mirror({ enabled: true });
-      await access.approve({ enabled: true });
     } else if (request.kind === 'allow') {
       const { pending } = await access.state();
       const roots = request.roots.filter((root) => pending.roots.includes(root));
       if (!roots.length) return;
+      const change = { add: roots };
+      const review = await access.captureReview(change);
       if (
         !(await confirmNatively(
           window,
@@ -739,13 +801,15 @@ export class Desktop {
         ))
       )
         return;
-      await access.approve({ add: roots });
+      await access.approve(change, review);
     } else {
       const root = await this.chooseFolder(senderID);
       if (!root) return;
       await this.agents.checkFolders([root]);
+      const change = { add: [root] };
+      const review = await access.captureReview(change);
+      await access.approve(change, review);
       if (!agents().roots.includes(root)) await mirror({ roots: [...agents().roots, root] });
-      await access.approve({ add: [root] });
     }
     await this.configureAgents();
   }
@@ -776,6 +840,7 @@ export class Desktop {
   }
   attach(window: BrowserWindow, role: 'viewer' | 'settings', workspaceID?: string): void {
     const sender = window.webContents.id;
+    if (role === 'viewer' && workspaceID) this.workspaceSessions.reserve(sender, workspaceID);
     this.windows.set(sender, {
       window,
       originID: randomUUID(),
@@ -789,8 +854,12 @@ export class Desktop {
       if (role === 'viewer') this.selectWindow(sender);
     });
     window.on('closed', () => {
+      this.flushes.disconnected(sender);
       this.chats.retain(sender, new Set());
       this.terminals.stopOwner(sender);
+      void this.webPreviews
+        .stopOwner(sender)
+        .catch((error) => this.options.diagnose?.(String(error)));
       for (const request of this.agentCommands.values())
         if (request.owner === sender)
           request.finish('The workspace closed before completing the action.');
@@ -866,23 +935,29 @@ export class Desktop {
   }
   async flushSettings(window: BrowserWindow): Promise<void> {
     if (window.isDestroyed()) return;
-    const token = randomUUID();
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        this.flushes.delete(token);
-        resolve();
-      }, 5000);
-      this.flushes.set(token, {
-        owner: window.webContents.id,
-        finish: () => {
-          clearTimeout(timer);
-          this.flushes.delete(token);
-          resolve();
-        },
-      });
+    await this.flushes.request(window.webContents.id, 'flush-settings', (token) => {
       window.webContents.send('viewer:event', { type: 'flush-settings', token });
     });
     await this.settings.flush();
+  }
+
+  async flushWindow(window: BrowserWindow): Promise<void> {
+    if (window.isDestroyed()) throw new Error('The window closed before its changes were saved.');
+    const owner = window.webContents.id;
+    const record = this.windows.get(owner);
+    if (!record || record.role !== 'viewer')
+      throw new Error('The workspace window is unavailable.');
+    await this.chats.stopOwner(owner);
+    if (record.ready)
+      await this.flushes.request(owner, 'flush', (token) => {
+        window.webContents.send('viewer:event', { type: 'flush', token });
+      });
+    await Promise.all([
+      this.storage.flush(),
+      this.settings.flush(),
+      this.buffers.flush(),
+      this.chats.flush(),
+    ]);
   }
   flush(): Promise<void> {
     if (this.flushing) return this.flushing;
@@ -900,25 +975,7 @@ export class Desktop {
     await Promise.all(
       [...this.windows.values()]
         .filter((item) => item.role === 'viewer' && item.ready)
-        .map(async ({ window }) => {
-          if (window.isDestroyed()) return;
-          const token = randomUUID();
-          await new Promise<void>((resolve) => {
-            const timeout = setTimeout(() => {
-              this.flushes.delete(token);
-              resolve();
-            }, 3000);
-            this.flushes.set(token, {
-              owner: window.webContents.id,
-              finish: () => {
-                clearTimeout(timeout);
-                this.flushes.delete(token);
-                resolve();
-              },
-            });
-            window.webContents.send('viewer:event', { type: 'flush', token });
-          });
-        }),
+        .map(({ window }) => this.flushWindow(window)),
     );
     await Promise.all([this.storage.flush(), this.settings.flush(), this.buffers.flush()]);
   }
@@ -952,6 +1009,7 @@ export class Desktop {
       this.search.close(),
       this.executions.close(),
       this.resources.close(),
+      this.webPreviews.close(),
       this.thumbnails.close(),
       this.information.close(),
       this.projects.flush(),
@@ -1046,6 +1104,12 @@ export class Desktop {
   /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
   private createHandlers(): ApiHandlers {
     return {
+      ...createWebHandlers({
+        previews: this.webPreviews,
+        resources: this.resources,
+        openURL: (url) => shell.openExternal(url),
+        copyURL: (url) => this.pasteboard.copyText([url]),
+      }),
       chat: ([request], sender) =>
         this.chats.request(request, sender, this.windows.get(sender)?.catalog),
       shellCommand: ([action]) => this.shellCommand[action](),
@@ -1067,7 +1131,7 @@ export class Desktop {
       },
       newWindow: async () => {
         if (!this.options.newWindow) throw new Error('New windows are unavailable.');
-        await this.options.newWindow(this.workspaceSessions.create(this.home));
+        await this.options.newWindow(this.createWorkspace());
       },
       git: ([request]) =>
         request.kind === 'status'
@@ -1279,6 +1343,7 @@ export class Desktop {
           await Promise.all([
             fileCoordination.quiesce(root),
             this.resources.quiesce(root),
+            this.webPreviews.quiesce(root),
             this.thumbnails.quiesce(root),
             this.watchers.revoke(root),
             this.watchRules.revoke(root),
@@ -1325,6 +1390,7 @@ export class Desktop {
             resources = await this.resources.affected(root);
             this.emit({ type: 'file-access', path: root, resources });
             const previews = this.resources.quiesce(root);
+            const webPreviews = this.webPreviews.quiesce(root);
             const thumbnails = this.thumbnails.quiesce(root);
             const coordinated = fileCoordination.quiesce(root);
             await this.actions.quiesce(root);
@@ -1335,7 +1401,7 @@ export class Desktop {
             await this.watchers.revoke(root);
             await this.search.quiesce();
             await this.files.reset();
-            await Promise.all([previews, thumbnails, coordinated]);
+            await Promise.all([previews, webPreviews, thumbnails, coordinated]);
             await macFiles().eject(root);
           });
         } finally {
@@ -1407,74 +1473,14 @@ export class Desktop {
           credentials: this.credentials.ids(),
         };
       },
-      providerCredential: async (args) => {
-        const provider = this.settings
-          .snapshot()
-          .settings.providers.find((item) => item.id === args[0]);
-        if (!args[1]) {
-          if (provider) await this.modelPermissions.set(provider, null);
-          this.emit({ type: 'model-permission', providerID: args[0] });
-        } else if (!provider)
-          // a key is tied to its provider's endpoint as it is saved: one without a provider was not
-          throw new Error('Save the provider in Settings → Models before entering its key.');
-        await this.credentials.set(
-          args[0],
-          args[1],
-          provider ? providerBinding(provider) : undefined,
-        );
-        this.settings.announce();
-        return;
-      },
-      providerModels: (args) => {
-        const provider = this.settings
-          .snapshot()
-          .settings.providers.find((provider) => provider.id === args[0]);
-        if (!provider) throw new Error('Provider is unavailable.');
-        return this.providers.models(provider);
-      },
-      providerPermissionGet: ([id]) => this.modelPermissions.get(this.provider(id)),
-      providerPermissionSet: async ([id, endpoint, level], senderID) => {
-        const provider = this.provider(id);
-        if (modelEndpoint(provider) !== modelEndpoint({ endpoint }))
-          throw new Error(
-            'The provider endpoint changed. Review its new address before allowing data access.',
-          );
-        // A renderer could store this approval by itself, and with it send document text to any
-        // https host it had configured (2026-10-20): the person grants it here, natively.
-        if (
-          level &&
-          !(await confirmNatively(
-            this.windows.get(senderID)?.window,
-            `Allow Viewer to send ${modelDataLabels[level]} to ${provider.name}?`,
-            `Actions using this provider send your instructions and that data to:\n${modelEndpoint(provider)}\n\nYou can revoke this in Settings → Models.`,
-            'Allow',
-          ))
-        )
-          throw new Error('Model data access was not allowed.');
-        await this.modelPermissions.set(provider, level);
-        this.emit({ type: 'model-permission', providerID: provider.id });
-      },
-      providerPermissionAgents: async ([id, endpoint, allow], senderID) => {
-        const provider = this.provider(id);
-        if (modelEndpoint(provider) !== modelEndpoint({ endpoint }))
-          throw new Error(
-            'The provider endpoint changed. Review its new address before allowing data access.',
-          );
-        const permission = await this.modelPermissions.get(provider);
-        if (
-          allow &&
-          permission &&
-          !(await confirmNatively(
-            this.windows.get(senderID)?.window,
-            `Let actions agents start send ${modelDataLabels[permission.level]} to ${provider.name}?`,
-            `An agent's request to run an action then sends your files' data to:\n${modelEndpoint(provider)}\n\nYou can turn this off in Settings → Models.`,
-            'Allow',
-          ))
-        )
-          throw new Error('Agent access to model data was not allowed.');
-        await this.modelPermissions.allowAgents(provider, allow);
-        this.emit({ type: 'model-permission', providerID: provider.id });
-      },
+      ...createModelHandlers({
+        settings: this.settings,
+        credentials: this.credentials,
+        providers: this.providers,
+        modelPermissions: this.modelPermissions,
+        window: (sender) => this.windows.get(sender)?.window,
+        emit: (event) => this.emit(event),
+      }),
       indexedQuery: (args) => this.files.query(args[0]),
       querySnapshot: (args) => this.files.snapshot(args[0]),
       watchRules: (args) => this.watchRules.request(args[0]),
@@ -1610,7 +1616,7 @@ export class Desktop {
         this.workspaceSessions.seed(stored.state);
         stored.state = this.workspaceSessions.open(
           sender,
-          home,
+          this.initialFolder(),
           this.windows.get(sender)?.workspaceID,
         );
         this.assignWorkspace(sender, stored.state.activeWorkspace);
@@ -1639,7 +1645,7 @@ export class Desktop {
           home,
           freshSession,
           settings: this.settings.snapshot(this.credentials.ids()),
-          platform: process.platform,
+          platform: process.platform as DesktopPlatform,
           locations: [
             { name: 'Home', path: home },
             ...['Desktop', 'Documents', 'Downloads', 'Pictures', 'Movies', 'Music'].map((name) => ({
@@ -1784,9 +1790,10 @@ export class Desktop {
       redo: (args) => this.operations.redo(args[0]),
       resource: (args) => this.resources.grant(args[0]),
       read: (args) => this.resources.read(args[0], args[1]),
-      release: (args) => {
+      release: async (args) => {
         this.gitResources.delete(args[0]);
-        return this.resources.release(args[0]);
+        this.resources.release(args[0]);
+        await this.webPreviews.releaseResource(args[0]);
       },
       archive: (args) => this.resources.archive(args[0]),
       archiveEntry: (args) => this.resources.archiveEntry(args[0], args[1]),
@@ -1816,10 +1823,10 @@ export class Desktop {
         );
         this.emit({ type: 'workspaces', state });
         this.assignWorkspace(sender, args[0].activeWorkspace);
+        this.options.settingsChanged?.();
       },
       flushed: (args, sender) => {
-        const request = this.flushes.get(args[0]);
-        if (request?.owner === sender) request.finish();
+        this.flushes.acknowledge(args[0], sender, args[1] ?? { ok: true });
       },
       clipboardWrite: (args) => this.pasteboard.write(args[0], args[1]),
       clipboardRead: () => this.pasteboard.read(),
@@ -1837,78 +1844,16 @@ export class Desktop {
         window.webContents.startDrag({ file: first, files: paths, icon });
         return;
       },
-      textEdit: (args, senderID) => {
-        const command = args[0];
-        this.windows.get(senderID)!.window.webContents[command]();
-        return;
-      },
-      textOpen: async (args) => {
-        let file: string;
-        try {
-          file = this.resources.editableFile(args[0]);
-        } catch (error) {
-          return { editable: false, reason: errorMessage(error) };
-        }
-        return this.texts.open(file);
-      },
-      textSave: (args) => this.texts.save(args[0], args[1], args[2], args[3], args[4]),
-      textSaveAs: async (args, senderID) => {
-        const [text, name, session] = args;
-        const window = this.windows.get(senderID)?.window;
-        const options = {
-          title: 'Save As',
-          // `:w path` opens the dialog there (2026-10-23); a name alone starts on the Desktop
-          defaultPath: path.isAbsolute(name)
-            ? path.normalize(name)
-            : path.join(this.home, 'Desktop', path.basename(name)),
-          securityScopedBookmarks: this.fileAccess.scoped,
-        };
-        const { canceled, filePath, bookmark } = window
-          ? await dialog.showSaveDialog(window, options)
-          : await dialog.showSaveDialog(options);
-        if (canceled || !filePath) return null;
-        await this.fileAccess.allowOnce(filePath, bookmark);
-        await this.fileAccess.require([filePath]);
-        const version = await this.texts.saveAs(filePath, text, session);
-        this.emit({ type: 'folder-changed', path: path.dirname(filePath) });
-        return { file: filePath, version };
-      },
-      textEditEnd: (args) => this.texts.end(args[0]),
-      textPrompt: async (args, senderID) => {
-        const [kind, name] = args;
-        const window = this.windows.get(senderID)?.window;
-        if (kind === 'revert')
-          return (await askNatively(window, {
-            message: `Revert “${name}” to the saved version?`,
-            detail: 'Your unsaved edits are discarded. The saved file is not changed.',
-            buttons: ['Cancel', 'Revert'],
-            defaultId: 0,
-            cancelId: 0,
-          })) === 1
-            ? 'discard'
-            : 'cancel';
-        const choice = await askNatively(window, {
-          message: `Save the changes to “${name}” before closing it?`,
-          detail: 'If you don’t save, your changes are discarded.',
-          buttons: ['Save', 'Don’t Save', 'Cancel'],
-          defaultId: 0,
-          cancelId: 2,
-        });
-        return (['save', 'discard', 'cancel'] as const)[choice] ?? 'cancel';
-      },
-      bufferList: async () => ({
-        buffers: await this.buffers.list(),
-        problems: this.buffers.problems(),
+      ...createEditingHandlers({
+        home: this.home,
+        resources: this.resources,
+        fileAccess: this.fileAccess,
+        texts: this.texts,
+        buffers: this.buffers,
+        window: (sender) => this.windows.get(sender)?.window,
+        emit: (event) => this.emit(event),
       }),
-      bufferRead: (args) => this.buffers.read(args[0]),
-      bufferWrite: (args) => this.buffers.write(args[0]),
-      bufferDiscard: (args) => this.buffers.discard(args[0]),
     };
-  }
-  private provider(id: string) {
-    const provider = this.settings.snapshot().settings.providers.find((item) => item.id === id);
-    if (!provider) throw new Error('Provider is unavailable.');
-    return provider;
   }
   private handlerTable?: ApiHandlers;
   /** Runs a method's handler with arguments its schema produced. */

@@ -1,5 +1,5 @@
-import type { TrashItem } from '../../../domain/trash';
-import { formatBytes } from '../../../domain/files';
+import type { TrashItem } from '../../../domain/files/trash';
+import { formatBytes } from '../../../domain/files/entries';
 import { Dialog } from '../primitives';
 import { originUnavailable, trashDate } from './items';
 

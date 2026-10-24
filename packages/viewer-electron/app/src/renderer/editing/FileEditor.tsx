@@ -1,3 +1,4 @@
+import { effectiveWindowSettings } from '../state/effective-ui';
 import {
   lazy,
   Suspense,
@@ -7,6 +8,7 @@ import {
   useRef,
   useState,
   type ComponentType,
+  type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -14,11 +16,11 @@ import {
   textChangedCode,
   type TextDocument,
   type TextVersion,
-} from '../../domain/text-documents';
-import { languageFor } from '../../domain/text-languages';
-import { baseName } from '../../domain/planes';
+} from '../../domain/editing/documents';
+import { languageFor } from '../../domain/editing/languages';
+import { baseName } from '../../domain/workspaces/planes';
 import { Empty, Loading } from '../ui/primitives';
-import { FolderAccessButton } from '../ui/FolderAccessButton';
+import { FolderAccessButton } from '../ui/permissions/FolderAccessButton';
 import { report, updatePane, useViewer } from '../state/store';
 import { discardBuffer, keepBuffer, readBuffer } from './buffers';
 import { registerEditingPlane, type EditorHandle } from './planes';
@@ -42,6 +44,7 @@ export function FileEditor({
   onClose,
   editor: CustomEditor,
   onSaveAs,
+  unavailable,
 }: {
   resourceID: string;
   paneID: string;
@@ -53,6 +56,8 @@ export function FileEditor({
   onClose(): void;
   editor?: ComponentType<TextEditorProps>;
   onSaveAs?(file: string): void;
+  /** A readable, non-editable source can still be shown by its comparison host. */
+  unavailable?(reason: string): ReactNode;
 }) {
   const [loaded, setLoaded] = useState<{
     document: TextDocument;
@@ -71,7 +76,7 @@ export function FileEditor({
   const editor = useRef<EditorHandle | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const session = useMemo(() => takeSession(paneID) ?? crypto.randomUUID(), [paneID]);
-  const settings = useViewer((state) => state.settings.settings.editor);
+  const settings = useViewer((state) => effectiveWindowSettings(state).editor);
   const Editor = CustomEditor ?? TextEditor;
   const document = loaded?.document;
   const name = document ? baseName(document.file) : 'this file';
@@ -281,6 +286,8 @@ export function FileEditor({
       }),
     [paneID],
   );
+  if (refusal && unavailable && !buffer.current && !dirtyNow.current)
+    return unavailable(refusal.reason);
   if (refusal)
     return (
       <Empty icon="warning" title="This file is not edited here" detail={refusal.reason}>

@@ -6,11 +6,14 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import store from './mac-app-store.json' with { type: 'json' };
 import { macChannel, storeConfiguration, storeInputs } from './tools/mas-configuration';
 import { documentTypes } from './tools/document-types';
 import { copyPDFRuntime } from './tools/pdf-runtime';
+import { prepareNativeRebuild } from './tools/native-build/rebuild';
 const require = createRequire(import.meta.url);
+const appRoot = path.dirname(fileURLToPath(import.meta.url));
 const channel = macChannel(process.env.VIEWER_MAC_CHANNEL);
 const storeConfig = storeConfiguration.parse(store);
 const inputs = channel === 'direct' ? undefined : storeInputs(process.env, channel);
@@ -86,6 +89,15 @@ const config: ForgeConfig = {
   },
   rebuildConfig: { onlyModules: ['node-pty'], force: true },
   hooks: {
+    resolveForgeConfig: async (_config, resolved) => {
+      // Forge start rebuilds before preStart. Resolve headers before either start or package.
+      await prepareNativeRebuild({
+        appRoot,
+        electronVersion: require('electron/package.json').version,
+        arch: process.arch,
+      });
+      return resolved;
+    },
     packageAfterExtract: async (_config, _buildPath, _electronVersion, platform) => {
       if ((platform === 'mas') !== (channel !== 'direct'))
         throw new Error(
@@ -94,7 +106,8 @@ const config: ForgeConfig = {
     },
     // Vite packages its bundles only. Preserve external PDF.js ESM and native
     // modules for Node resolution, Electron's rebuild and ASAR unpacking.
-    packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {
+    packageAfterCopy: async (_config, buildPath, electronVersion, platform, arch) => {
+      await prepareNativeRebuild({ appRoot, electronVersion, arch });
       await copyPDFRuntime(buildPath, platform, arch);
       for (const dependency of ['node-pty', 'node-addon-api']) {
         const source = path.dirname(require.resolve(dependency + '/package.json'));
@@ -125,18 +138,22 @@ const config: ForgeConfig = {
       build: [
         { entry: 'src/main.ts', config: 'vite.main.config.ts', target: 'main' },
         {
-          entry: 'src/desktop/terminal-worker.ts',
-          config: 'vite.services.config.ts',
-          target: 'main',
-        },
-        { entry: 'src/desktop/worker.ts', config: 'vite.services.config.ts', target: 'main' },
-        {
-          entry: 'src/desktop/rename-worker.ts',
+          entry: 'src/desktop/terminals/terminal-worker.ts',
           config: 'vite.services.config.ts',
           target: 'main',
         },
         {
-          entry: 'src/desktop/folder-size-worker.ts',
+          entry: 'src/desktop/workers/worker.ts',
+          config: 'vite.services.config.ts',
+          target: 'main',
+        },
+        {
+          entry: 'src/desktop/actions/rename-worker.ts',
+          config: 'vite.services.config.ts',
+          target: 'main',
+        },
+        {
+          entry: 'src/desktop/files/folder-size-worker.ts',
           config: 'vite.services.config.ts',
           target: 'main',
         },

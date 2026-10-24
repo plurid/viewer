@@ -1,3 +1,4 @@
+import { effectiveWindowSettings } from '../state/effective-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CommandContext } from '../commands/registry';
 import type { FolderActions } from '../commands/folder';
@@ -6,11 +7,11 @@ import { FileInformation } from './FileInformation';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { getState, report, settledJob } from '../state/store';
 import { useWorkspace } from '../workspace/context';
-import { OpenWithDialog } from '../ui/OpenWithDialog';
+import { OpenWithDialog } from '../ui/navigation/OpenWithDialog';
 import { RenameActions } from '../actions/RenameActions';
-import { sourceVersion } from '../../domain/inspection';
-import { formatBytes } from '../../domain/files';
-import { untitledFileName } from '../../domain/text-languages';
+import { sourceVersion } from '../../domain/files/inspection';
+import { formatBytes } from '../../domain/files/entries';
+import { untitledFileName } from '../../domain/editing/languages';
 import { calculateSize, cancelFolderSize, useFolderSize } from './sizes';
 const moveToTrash = async (context: CommandContext) => {
   await window.viewer.operate({
@@ -166,7 +167,7 @@ export function useFileDialogs(): {
       info: setInfo,
       openWith: setApplications,
       trash: (context) => {
-        if (getState().settings.settings.browsing.confirmTrash) setTrash(context);
+        if (effectiveWindowSettings(getState()).browsing.confirmTrash) setTrash(context);
         else return moveToTrash(context);
       },
     },
@@ -197,7 +198,9 @@ export function useFileDialogs(): {
                   : name.kind === 'group'
                     ? 'New Folder With Items'
                     : name.kind === 'mkfile'
-                      ? untitledFileName(getState().settings.settings.browsing.newFileExtension)
+                      ? untitledFileName(
+                          effectiveWindowSettings(getState()).browsing.newFileExtension,
+                        )
                       : ''
             }
             maxLength={name.kind === 'go-to' ? 32768 : 255}

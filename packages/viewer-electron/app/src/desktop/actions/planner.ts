@@ -14,15 +14,15 @@ import {
   type ModelProvider,
   type ProposedChange,
 } from '../../domain/services';
-import type { FileChange } from '../../domain/changes';
-import { absolute, entry, exists, validName } from '../filesystem';
-import { DocumentStore } from '../document-store';
-import { renameNames, type RenameInput } from '../../domain/batch-rename';
-import { localBookFields } from '../formats';
-import type { Operations } from '../operations';
-import { fileCoordination } from '../file-coordination';
+import type { FileChange } from '../../domain/files/changes';
+import { absolute, entry, exists, validName } from '../files/filesystem';
+import { DocumentStore } from '../persistence/document-store';
+import { renameNames, type RenameInput } from '../../domain/operations/batch-rename';
+import { localBookFields } from '../previews/formats';
+import type { Operations } from '../operations/operations';
+import { fileCoordination } from '../files/file-coordination';
 import { errorMessage } from '../../domain/errors';
-import { removePrivateData } from '../removal';
+import { removePrivateData } from '../operations/removal';
 const output = z.object({
   rows: z
     .array(

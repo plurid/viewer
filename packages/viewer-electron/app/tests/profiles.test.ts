@@ -6,16 +6,23 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { builtInProfiles, profilePaths } from '../src/domain/profiles';
-import { defaultShortcuts } from '../src/domain/shortcuts';
-import { agentCommandID } from '../src/domain/agent-safety';
-import { profileSchema } from '../src/desktop/settings';
+import { builtInProfiles, profilePaths } from '../src/domain/preferences/profiles';
+import { defaultShortcuts } from '../src/domain/preferences/shortcuts';
+import { agentCommandID } from '../src/domain/agents/safety';
+import { profileSchema } from '../src/desktop/preferences/settings';
 import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';
-import { getState, initialize } from '../src/renderer/state/store';
-import { effectiveWindowUI } from '../src/renderer/state/effective-ui';
-import { changeWorkspace } from '../src/renderer/state/core';
+import {
+  activeWorkspace,
+  getState,
+  initialize,
+  switchWorkspace,
+} from '../src/renderer/state/store';
+import { effectiveWindowSettings, effectiveWindowUI } from '../src/renderer/state/effective-ui';
+import { changeWorkspace, replaceState, savePatch } from '../src/renderer/state/core';
+import { folderPresentation } from '../src/renderer/state/presentation';
+import { applyProfile } from '../src/renderer/commands/window-commands/profiles';
 
 const settingsPatch = vi.fn(async () => getState().settings);
 beforeEach(() => {
@@ -54,6 +61,75 @@ describe('profiles', () => {
     act(() => changeWorkspace((space) => ({ ...space, overrides: { 'ui.space.toolbar': false } })));
     expect(space().toolbar).toBe(false);
     expect(getState().saved.ui.space.toolbar).toBe(true);
+  });
+  it('applies editor and list preferences at their actual consumer seams', async () => {
+    const state = getState();
+    const profile = {
+      id: 'mine',
+      name: 'Mine',
+      values: {
+        'settings.editor.tabSize': 8,
+        'ui.list.visible.kind': false,
+        'settings.browsing.mode': 'columns',
+      },
+    };
+    replaceState({
+      ...state,
+      settings: {
+        ...state.settings,
+        settings: {
+          ...state.settings.settings,
+          profiles: [profile],
+        },
+      },
+    });
+    const canonical = getState().settings.settings;
+    await act(async () => applyProfile(profile));
+    expect(effectiveWindowSettings(getState()).editor.tabSize).toBe(8);
+    expect(folderPresentation('/fixtures').list.visible.kind).toBe(false);
+    expect(folderPresentation('/fixtures').mode).toBe('columns');
+    expect(getState().settings.settings).toBe(canonical);
+    expect(canonical.editor.tabSize).toBe(4);
+    expect(settingsPatch).not.toHaveBeenCalled();
+  });
+  it('keeps window commands truthful while a profile hides chrome', async () => {
+    await act(async () => find('profile.focus').run(context));
+    expect(label('toggle-titlebar')).toBe('Show title bar');
+    expect(label('setting.ui.space.grid@workspace')).toBe('This workspace: Show background grid');
+    await act(async () => find('toggle-titlebar').run(context));
+    expect(effectiveWindowUI(getState()).titlebar.visible).toBe(true);
+    expect(getState().saved.ui.titlebar.visible).toBe(true);
+    await act(async () => find('setting.ui.space.grid@workspace').run(context));
+    expect(space().grid).toBe(true);
+    expect(label('setting.ui.space.grid@workspace')).toBe('This workspace: Hide background grid');
+    await act(async () => find('setting.ui.space.grid@workspace').run(context));
+    expect(space().grid).toBe(false);
+    expect(activeWorkspace().overrides).not.toHaveProperty('ui.space.grid');
+    expect(settingsPatch).not.toHaveBeenCalled();
+  });
+  it('uses each workspace default across A/B switches without carrying the explicit profile', async () => {
+    const state = getState();
+    const first = activeWorkspace().id;
+    const second = {
+      ...structuredClone(activeWorkspace()),
+      id: 'second',
+      name: 'Second',
+      profileID: 'full',
+    };
+    savePatch({ workspaces: [{ ...activeWorkspace(), profileID: 'focus' }, second] });
+    const canonical = state.settings.settings;
+    expect(effectiveWindowUI(getState()).space.grid).toBe(false);
+    await act(async () => find('profile.present').run(context));
+    expect(effectiveWindowUI(getState()).space.planeHeaders).toBe(false);
+    await act(async () => switchWorkspace(second.id));
+    expect(getState().saved.profile).toBeUndefined();
+    expect(effectiveWindowUI(getState()).sidebar.visible).toBe(true);
+    expect(effectiveWindowUI(getState()).space.grid).toBe(true);
+    await act(async () => switchWorkspace(first));
+    expect(effectiveWindowUI(getState()).space.grid).toBe(false);
+    expect(effectiveWindowUI(getState()).space.planeHeaders).toBe(true);
+    expect(getState().settings.settings).toBe(canonical);
+    expect(settingsPatch).not.toHaveBeenCalled();
   });
   it('are sets of settings the workspace may change, the built-in ones valid', () => {
     for (const profile of builtInProfiles)

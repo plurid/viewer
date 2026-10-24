@@ -5,9 +5,9 @@ import { createRequire } from 'node:module';
 import { mkdir, readFile, lstat, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
-import type { FileAccess } from '../src/desktop/file-access';
-import type { MacFiles } from '../src/desktop/macos-files';
-import { Trash } from '../src/desktop/trash';
+import type { FileAccess } from '../src/desktop/files/file-access';
+import type { MacFiles } from '../src/desktop/native/macos-files';
+import { Trash } from '../src/desktop/operations/trash';
 import { temporaryRoot } from '../tools/temporary';
 
 vi.mock('electron', () => ({
@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
   shell: { openExternal: vi.fn() },
 }));
-vi.mock('../src/desktop/macos-files', () => ({
+vi.mock('../src/desktop/native/macos-files', () => ({
   macFiles: () => {
     const binding = createRequire(import.meta.url)(
       path.resolve(process.env.VIEWER_TEST_MAC_BINDING!),

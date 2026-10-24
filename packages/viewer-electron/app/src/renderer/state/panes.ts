@@ -1,3 +1,4 @@
+import { effectiveWindowSettings } from './effective-ui';
 // Planes in the active workspace: creation, navigation, history and removal.
 import type {
   FolderPane,
@@ -9,13 +10,17 @@ import type {
   DiffPane,
   GitChangesPane,
   ChatPane,
+  ServerPane,
 } from '../../domain/contracts';
-import { normalizePreferences } from '../../domain/preferences';
+import { normalizePreferences } from '../../domain/preferences/ui';
 import { trimSessions } from '../workspace/sessions';
-import { parentPath } from '../../domain/planes';
-import { languageFor } from '../../domain/text-languages';
+import { parentPath } from '../../domain/workspaces/planes';
+import { languageFor } from '../../domain/editing/languages';
 import { defaultSettings, newPlaneFolder } from '../../domain/services';
-import { panePresentation, resolveFolderPresentation } from '../../domain/folder-presentation';
+import {
+  panePresentation,
+  resolveFolderPresentation,
+} from '../../domain/preferences/folder-presentation';
 import {
   activeWorkspace,
   announce,
@@ -200,6 +205,16 @@ export function addContentPane(pane: DiffPane | GitChangesPane | ChatPane): void
   }));
   setActivePane(pane.id);
 }
+
+/** Server panes retain a folder identity only; their listening session is never saved. */
+export function addServerPane(path: string, sourceIdentity: string): ServerPane {
+  if (activeWorkspace().panes.length >= 200)
+    throw new Error('Close a plane before opening another.');
+  const pane: ServerPane = { id: uuid(), type: 'server', path, sourceIdentity };
+  changeWorkspace((space) => ({ ...space, panes: [...space.panes, pane] }));
+  setActivePane(pane.id);
+  return pane;
+}
 /** An explicit new explorer is a fresh root, independent even when its path is already open. */
 export function addRootFolder(target: NewRootFolderTarget = {}): FolderPane | undefined {
   const space = activeWorkspace();
@@ -209,9 +224,9 @@ export function addRootFolder(target: NewRootFolderTarget = {}): FolderPane | un
   const path =
     target.path ??
     newPlaneFolder(
-      getState().settings.settings.browsing,
+      effectiveWindowSettings(getState()).browsing,
       getState().bootstrap.home,
-      owner?.type === 'folder' || owner?.type === 'terminal'
+      owner?.type === 'folder' || owner?.type === 'terminal' || owner?.type === 'server'
         ? owner.path
         : owner
           ? parentPath(owner.path)
@@ -257,8 +272,10 @@ export function addScratchPane(
     // the language of the configured new-file extension: Markdown by default
     language:
       options.language ??
-      languageFor({ name: '', extension: getState().settings.settings.browsing.newFileExtension })
-        ?.id ??
+      languageFor({
+        name: '',
+        extension: effectiveWindowSettings(getState()).browsing.newFileExtension,
+      })?.id ??
       'plaintext',
   };
   changeWorkspace((space) => ({

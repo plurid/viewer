@@ -8,10 +8,10 @@ vi.mock('electron', () => ({
   app: { getFileIcon: native.fileIcon },
   nativeImage: { createThumbnailFromPath: native.thumbnail },
 }));
-import { AppIcons } from '../src/desktop/app-icons';
-import { nativeAppIcon } from '../src/desktop/native-app-icon';
+import { AppIcons } from '../src/desktop/native/app-icons';
+import { nativeAppIcon } from '../src/desktop/native/native-app-icon';
 import { hasBundleIcon } from '../src/renderer/explorer/app-icon';
-import { isPackage } from '../src/domain/files';
+import { isPackage } from '../src/domain/files/entries';
 
 describe('application icons', () => {
   it('render once per bundle, size and version, sharing concurrent requests', async () => {

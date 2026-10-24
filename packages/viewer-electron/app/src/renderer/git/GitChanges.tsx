@@ -1,4 +1,4 @@
-import { gitBadge } from '../../domain/git';
+import { gitBadge } from '../../domain/comparison/git';
 import { Empty, Loading } from '../ui/primitives';
 import { useWorkspace } from '../workspace/context';
 import { useGitStatus } from './status';

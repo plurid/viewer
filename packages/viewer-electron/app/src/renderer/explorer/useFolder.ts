@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { needsFolderAccess } from '../../domain/file-access';
+import { needsFolderAccess } from '../../domain/files/access';
 interface Dataset {
   entries: FileEntry[];
   loading: boolean;

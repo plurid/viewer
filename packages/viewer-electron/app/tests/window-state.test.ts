@@ -6,7 +6,7 @@ import {
   restoreWindowFrame,
   WindowState,
   type WindowFrame,
-} from '../src/desktop/window-state';
+} from '../src/desktop/windows/window-state';
 import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 
 const primary = { id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } };

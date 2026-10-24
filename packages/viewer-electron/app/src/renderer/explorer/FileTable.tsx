@@ -7,7 +7,7 @@ import {
   listColumns,
   listLayout,
   visibleListColumns,
-} from '../../domain/list-columns';
+} from '../../domain/preferences/list-columns';
 import { columnCommandIDs } from '../commands/columns';
 import {
   activeWorkspace,

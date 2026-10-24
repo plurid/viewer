@@ -20,7 +20,7 @@ import {
 import { pairCommands } from '../src/renderer/commands/window-commands/pair';
 import { windowScopes, type WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext, CommandDefinition } from '../src/renderer/commands/registry';
-import { parsePattern, matchesQuery } from '../src/domain/file-query';
+import { parsePattern, matchesQuery } from '../src/domain/search/query';
 import { registerFolderHandle } from '../src/renderer/explorer/folder-handles';
 import { runLine } from '../src/renderer/command-line/run';
 import type { LineHost } from '../src/renderer/command-line/host';

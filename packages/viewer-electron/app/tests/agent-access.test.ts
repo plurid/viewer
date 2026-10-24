@@ -1,14 +1,39 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { AgentAccess, type RequestedAgentAccess } from '../src/desktop/agent-access';
+import {
+  AgentAccess,
+  type AgentAccessChange,
+  type AgentAccessReview,
+  type RequestedAgentAccess,
+} from '../src/desktop/agents/agent-access';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+
+const canonicalOverrides = vi.hoisted(() => new Map<string, string>());
+vi.mock('node:fs/promises', async (original) => {
+  const actual = await original<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    realpath: async (file: string) => canonicalOverrides.get(file) ?? actual.realpath(file),
+  };
+});
 
 let root: string;
 let a: string;
 let b: string;
 let requested: RequestedAgentAccess | undefined;
 const create = () => new AgentAccess(path.join(root, 'profile'), () => requested);
+const authorityFile = () => path.join(root, 'profile', 'agent-access-v2.json');
+const legacyFile = () => path.join(root, 'profile', 'agent-access-v1.json');
+
+async function allow(access: AgentAccess, change: AgentAccessChange) {
+  await access.approve(change, await access.captureReview(change));
+}
+
+async function enable(access: AgentAccess) {
+  await allow(access, { enabled: true, add: [a], capabilities: ['metadata'] });
+}
+
 beforeEach(async () => {
   root = await temporaryRoot('viewer-agent-access-');
   a = path.join(root, 'A');
@@ -16,64 +41,161 @@ beforeEach(async () => {
   await fs.mkdir(a);
   await fs.mkdir(b);
   await fs.mkdir(path.join(root, 'profile'));
-  requested = { enabled: true, roots: [a] };
+  requested = { enabled: true, roots: [a], revision: 1 };
 });
 afterEach(async () => {
+  canonicalOverrides.clear();
   await trashTemporary(root);
 });
 
-describe('agent access approval (2026-10-20)', () => {
-  it('starts from what config.jsonc already had in effect, kept privately', async () => {
+describe('private version-2 agent authority', () => {
+  it('does not infer approval or capabilities from cold-start configuration', async () => {
+    expect(await create().state()).toMatchObject({
+      enabled: false,
+      roots: [],
+      capabilities: [],
+      pending: { enable: true, roots: [a] },
+      requiresReapproval: false,
+    });
+    await expect(fs.access(authorityFile())).rejects.toThrow();
+    await expect(fs.access(legacyFile())).rejects.toThrow();
+  });
+
+  it('preserves ambiguous legacy bytes and requires one native review', async () => {
+    const legacy = JSON.stringify({ version: 1, enabled: true, roots: [a] });
+    await fs.writeFile(legacyFile(), legacy, { mode: 0o600 });
     const access = create();
-    expect(await access.state()).toMatchObject({ enabled: true, roots: [a] });
-    const file = path.join(root, 'profile', 'agent-access-v1.json');
-    expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
-    expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual({
-      version: 1,
+    expect(await access.state()).toMatchObject({
+      enabled: false,
+      roots: [],
+      capabilities: [],
+      requiresReapproval: true,
+    });
+    expect(await fs.readFile(legacyFile(), 'utf8')).toBe(legacy);
+    await enable(access);
+    expect(await fs.readFile(legacyFile(), 'utf8')).toBe(legacy);
+    expect((await fs.stat(authorityFile())).mode & 0o777).toBe(0o600);
+    expect(await create().state()).toMatchObject({
       enabled: true,
-      roots: [await fs.realpath(a)],
+      roots: [a],
+      capabilities: ['metadata'],
+      requiresReapproval: false,
     });
   });
-  it('lets config.jsonc narrow access, never widen it', async () => {
+
+  it('requires the captured native review for every widening and consumes it once', async () => {
     const access = create();
-    await access.state();
-    requested = { enabled: true, roots: [a, b] };
+    const change = { enabled: true, add: [a] };
+    await expect(access.approve(change)).rejects.toThrow('native confirmation');
+    await expect(access.approve(change, {} as AgentAccessReview)).rejects.toThrow(
+      'native confirmation',
+    );
+    const review = await access.captureReview(change);
+    await access.approve(change, review);
+    await expect(access.approve(change, review)).rejects.toThrow('native confirmation');
+    expect(await access.capabilities()).toEqual([]);
+  });
+
+  it('lets configuration narrow access and never widens it on restart', async () => {
+    const access = create();
+    await enable(access);
+    requested = { enabled: true, roots: [a, b], revision: 2 };
     expect(await access.state()).toMatchObject({
       enabled: true,
       roots: [a],
       pending: { enable: false, roots: [b] },
     });
-    expect((await access.state()).protectedRoots).toEqual([a, b]);
-    requested = { enabled: false, roots: [a, b] };
-    expect((await access.state()).enabled).toBe(false);
+    requested = { enabled: false, roots: [a, b], revision: 3 };
     await access.narrow();
-    requested = { enabled: true, roots: [a, b] };
-    // turned off in config.jsonc, it is a request again when turned back on there
-    expect(await access.state()).toMatchObject({ enabled: false, pending: { enable: true } });
-    await access.approve({ enabled: true, add: [b] });
+    requested = { enabled: true, roots: [a, b], revision: 4 };
+    expect(await create().state()).toMatchObject({
+      enabled: false,
+      roots: [a],
+      pending: { enable: true, roots: [b] },
+    });
+    await allow(access, { enabled: true, add: [b] });
     expect(await create().state()).toMatchObject({ enabled: true, roots: [a, b] });
   });
-  it('narrows the approval when config.jsonc removes a folder', async () => {
-    requested = { enabled: true, roots: [a, b] };
+
+  it('rejects stale configuration and private revocation while native review is open', async () => {
     const access = create();
-    await access.state();
-    requested = { enabled: true, roots: [a] };
-    await access.narrow();
-    requested = { enabled: true, roots: [a, b] };
-    expect(await access.state()).toMatchObject({ roots: [a], pending: { roots: [b] } });
+    const change = { enabled: true, add: [a] };
+    const outdated = await access.captureReview(change);
+    requested = { ...requested!, revision: 2 };
+    await expect(access.approve(change, outdated)).rejects.toThrow('changed');
+    const revoked = await access.captureReview(change);
+    await access.approve({ enabled: false });
+    await expect(access.approve(change, revoked)).rejects.toThrow('native confirmation');
+    expect((await access.state()).enabled).toBe(false);
   });
-  it('turns agents off while config.jsonc cannot be read, and narrows nothing', async () => {
+
+  it('rejects a canonical root changed while native review is open', async () => {
+    const alias = path.join(root, 'Alias');
+    canonicalOverrides.set(alias, a);
+    requested = { enabled: true, roots: [alias], revision: 1 };
     const access = create();
-    await access.state();
+    const change = { enabled: true, add: [alias] };
+    const review = await access.captureReview(change);
+    canonicalOverrides.set(alias, b);
+    await expect(access.approve(change, review)).rejects.toThrow('changed');
+    expect((await access.state()).enabled).toBe(false);
+  });
+
+  it('rejects caller edits to the change after its review was captured', async () => {
+    const access = create();
+    const change = { enabled: true, add: [a] };
+    const review = await access.captureReview(change);
+    change.add.push(b);
+    await expect(access.approve(change, review)).rejects.toThrow('changed');
+    expect((await access.state()).roots).toEqual([]);
+  });
+
+  it('removes private folder approval when configuration removes the folder', async () => {
+    requested = { enabled: true, roots: [a, b], revision: 1 };
+    const access = create();
+    await allow(access, { enabled: true, add: [a, b], capabilities: ['metadata'] });
+    requested = { enabled: true, roots: [a], revision: 2 };
+    await access.narrow();
+    requested = { enabled: true, roots: [a, b], revision: 3 };
+    expect(await create().state()).toMatchObject({ roots: [a], pending: { roots: [b] } });
+  });
+
+  it('narrows explicit capabilities without restoring an implicit all-capability grant', async () => {
+    const access = create();
+    await enable(access);
+    await allow(access, { capabilities: ['metadata', 'navigation'] });
+    await access.approve({ capabilities: ['metadata'] });
+    expect(await create().capabilities()).toEqual(['metadata']);
+    await expect(access.approve({ capabilities: ['metadata', 'content'] })).rejects.toThrow(
+      'native confirmation',
+    );
+  });
+
+  it('fails closed on corrupt v2 and preserves it before an explicit replacement', async () => {
+    await fs.writeFile(legacyFile(), JSON.stringify({ version: 1, enabled: true, roots: [a] }));
+    await fs.writeFile(authorityFile(), 'Unparseable authority bytes');
+    const access = create();
+    expect(await access.state()).toMatchObject({ enabled: false, requiresReapproval: true });
+    expect(await fs.readFile(authorityFile(), 'utf8')).toBe('Unparseable authority bytes');
+    await enable(access);
+    const backups = (await fs.readdir(path.dirname(authorityFile()))).filter((file) =>
+      file.startsWith('agent-access-v2.json.before-review-'),
+    );
+    expect(backups).toHaveLength(1);
+    expect(await fs.readFile(path.join(root, 'profile', backups[0]!), 'utf8')).toBe(
+      'Unparseable authority bytes',
+    );
+    expect((await create().state()).enabled).toBe(true);
+  });
+
+  it('disables access while configuration is unreadable without losing prior explicit grants', async () => {
+    const access = create();
+    await enable(access);
     requested = undefined;
     expect((await access.state()).enabled).toBe(false);
     await access.narrow();
-    requested = { enabled: true, roots: [a] };
+    await expect(access.captureReview({ enabled: true })).rejects.toThrow('valid configuration');
+    requested = { enabled: true, roots: [a], revision: 2 };
     expect(await access.state()).toMatchObject({ enabled: true, roots: [a] });
-  });
-  it('seeds nothing while config.jsonc cannot be read', async () => {
-    requested = undefined;
-    expect((await create().state()).enabled).toBe(false);
-    await expect(fs.access(path.join(root, 'profile', 'agent-access-v1.json'))).rejects.toThrow();
   });
 });

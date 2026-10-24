@@ -13,10 +13,10 @@ import {
   type PromptContext,
   type PromptRequest,
 } from '../src/domain/command-line/prompt';
-import { answerPrompt } from '../src/desktop/prompts';
+import { answerPrompt } from '../src/desktop/models/prompts';
 import { defaultSettings, type ApplicationSettings } from '../src/domain/services';
-import { newModelProvider } from '../src/domain/model-providers';
-import type { CustomAction } from '../src/domain/automation';
+import { newModelProvider } from '../src/domain/models/providers';
+import type { CustomAction } from '../src/domain/automation/actions';
 import { CommandPalette } from '../src/renderer/commands/CommandPalette';
 import type { PaletteMode } from '../src/renderer/commands/palette-modes';
 import { CommandsContext } from '../src/renderer/commands/context';

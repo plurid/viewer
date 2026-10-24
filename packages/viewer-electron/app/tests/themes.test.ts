@@ -3,9 +3,9 @@
  * theme per appearance, editable and importable from an iTerm colour preset or a VS Code theme.
  */
 import { describe, expect, it } from 'vitest';
-import { builtInThemes, themeVariables, themeFor } from '../src/domain/themes';
-import { importItermColors, importVSCodeTheme } from '../src/domain/theme-import';
-import { themeSchema } from '../src/desktop/settings';
+import { builtInThemes, themeVariables, themeFor } from '../src/domain/preferences/themes';
+import { importItermColors, importVSCodeTheme } from '../src/domain/preferences/theme-import';
+import { themeSchema } from '../src/desktop/preferences/settings';
 import { defaultSettings } from '../src/domain/services';
 
 const component = (name: string, r: number, g: number, b: number) =>

@@ -16,7 +16,7 @@ shows the branch and available ahead/behind counts. Click it, or run
 Viewer does not manufacture missing filesystem entries. Folder badges roll up
 changes beneath them.
 
-`desktop/git.ts` uses a fixed executable, literal arguments, sanitized environment
+`desktop/comparison/git.ts` uses a fixed executable, literal arguments, sanitized environment
 and read-only commands. Hooks, fsmonitor, optional locks, replacement objects,
 credential prompts, lazy fetch and network protocols are disabled. Processes have
 time and output limits; at most two Git commands run concurrently. Incomplete,
@@ -113,8 +113,12 @@ fixed. A normalized split tree retains individual proportions across resizing an
 session saves; minimum sizes and gutters contract together in crowded layouts.
 Arrangement Undo/Redo restores the corresponding tiling policy.
 
-Session format 6 adds the new plane types and window presentation records.
-Formats 1–5 remain readable and receive an untouched backup before migration.
+Session format 6 added the new plane types and window presentation records.
+Current format **7** separates window-local profiles from shared configuration.
+Formats 1–6 remain readable and receive an untouched
+`.before-profile-overlays-v7-<uuid>.bak` backup before migration. Earlier global
+profile values are restored only when compare-and-set checks preserve newer edits;
+conflicts retain their records and report diagnostics.
 
 ## Verification
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { FileEntry, Workspace } from '../src/domain/contracts';
-import { fileGroup, indexEntries, reconcileSelection } from '../src/domain/files';
-import { matchingPane, normalizedPanePath, parentPath } from '../src/domain/planes';
+import { fileGroup, indexEntries, reconcileSelection } from '../src/domain/files/entries';
+import { matchingPane, normalizedPanePath, parentPath } from '../src/domain/workspaces/planes';
 import { rankFiles } from '../src/renderer/commands/registry';
-import { operationRoots } from '../src/desktop/operations';
+import { operationRoots } from '../src/desktop/operations/operations';
 import { repeatedPreviews } from '../src/renderer/workspace/recovery';
 import { repeatedPreviewFixture } from './workspace-fixtures';
 import type { TreePlane } from '@plurid/plurid-data';
@@ -185,7 +185,7 @@ describe('modified-date grouping', () => {
 });
 describe('shortcut matching', () => {
   it('matches Option and Shift punctuation combinations by physical key', async () => {
-    const { matchesShortcut } = await import('../src/domain/shortcuts');
+    const { matchesShortcut } = await import('../src/domain/preferences/shortcuts');
     const event = (key: string, code: string, alt = false, shift = false) => ({
       metaKey: true,
       ctrlKey: false,
@@ -203,7 +203,7 @@ describe('shortcut matching', () => {
 });
 describe('relative document links', () => {
   it('resolves relative links beside the document and leaves others inert', async () => {
-    const { relativeLinkTarget } = await import('../src/domain/planes');
+    const { relativeLinkTarget } = await import('../src/domain/workspaces/planes');
     const doc = '/Users/fixture/Notes/Guide.md';
     expect(relativeLinkTarget(doc, 'images/plan%20A.png')).toBe(
       '/Users/fixture/Notes/images/plan A.png',
@@ -226,7 +226,7 @@ describe('relative document links', () => {
 
 describe('server addresses', () => {
   it('accepts file-sharing addresses only', async () => {
-    const { serverAddress } = await import('../src/domain/volumes');
+    const { serverAddress } = await import('../src/domain/files/volumes');
     expect(serverAddress(' smb://nas.local/Media ')).toBe('smb://nas.local/Media');
     expect(serverAddress('afp://studio')).toBe('afp://studio');
     for (const value of [
@@ -241,7 +241,7 @@ describe('server addresses', () => {
 });
 describe('path names', () => {
   it('names the last component, ignoring a trailing separator', async () => {
-    const { baseName } = await import('../src/domain/planes');
+    const { baseName } = await import('../src/domain/workspaces/planes');
     expect(baseName('/Users/fixture/Report.pdf')).toBe('Report.pdf');
     expect(baseName('/Users/fixture/Folder/')).toBe('Folder');
     expect(baseName('C:\\Data\\Notes.txt')).toBe('Notes.txt');

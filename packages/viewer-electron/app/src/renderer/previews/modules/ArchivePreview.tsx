@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ArchiveListing, Resource } from '../../../domain/contracts';
-import { formatBytes } from '../../../domain/files';
+import { formatBytes } from '../../../domain/files/entries';
 import type { PreviewContext } from '../contracts';
 import { PreviewHost } from '../PreviewHost';
 import { Empty, IconButton, Loading } from '../../ui/primitives';

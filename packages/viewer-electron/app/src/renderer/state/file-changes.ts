@@ -1,15 +1,21 @@
 // Path changes from file operations applied to saved state, sessions and preferences.
 import { remapSessions } from '../workspace/sessions';
-import { pathMapper, type FileChange } from '../../domain/changes';
+import { pathMapper, type FileChange } from '../../domain/files/changes';
 import { getState, replaceState, update } from './core';
 import { pendingPreferences, schedulePreferences } from './preferences';
-import type { DiffSource } from '../../domain/diff';
+import type { DiffSource } from '../../domain/comparison/diff';
 
 export function receiveFileChanges(changes: FileChange[]): void {
   const map = pathMapper(changes);
   const mapSource = (source: DiffSource): DiffSource => {
-    if (source.kind === 'file') return { ...source, path: map(source.path) };
-    if (source.kind === 'git') return { ...source, repository: map(source.repository) };
+    if (source.kind === 'file') {
+      const path = map(source.path);
+      return path === source.path ? source : { ...source, path };
+    }
+    if (source.kind === 'git') {
+      const repository = map(source.repository);
+      return repository === source.repository ? source : { ...source, repository };
+    }
     return source;
   };
   const saved = getState().saved;

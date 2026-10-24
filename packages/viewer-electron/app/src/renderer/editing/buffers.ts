@@ -1,5 +1,6 @@
-import type { TextBuffer } from '../../domain/text-documents';
+import type { TextBuffer } from '../../domain/editing/documents';
 import { report } from '../state/core';
+import { RevisionedWriteQueue } from '../persistence/revisioned-write-queue';
 
 /**
  * UNSAVED TEXT (2026-10-23). The renderer's copy of each buffer it holds: written to the profile half
@@ -11,6 +12,9 @@ interface Held {
   timer?: ReturnType<typeof setTimeout>;
 }
 const held = new Map<string, Held>();
+const writes = new RevisionedWriteQueue<string, TextBuffer>((_id, buffer) =>
+  window.viewer.bufferWrite(buffer),
+);
 const listeners = new Set<() => void>();
 let generation = 0;
 function changed(): void {
@@ -43,25 +47,23 @@ export function keepBuffer(next: Omit<TextBuffer, 'revision' | 'updated'>): void
   const entry: Held = {
     buffer: { ...next, revision: (previous?.buffer.revision ?? 0) + 1, updated: Date.now() },
   };
-  entry.timer = setTimeout(() => void write(next.id).catch(report), 500);
+  if (!writes.put(next.id, entry.buffer)) return;
+  entry.timer = setTimeout(() => void writes.flushKey(next.id).catch(report), 500);
   held.set(next.id, entry);
   changed();
 }
-async function write(id: string): Promise<void> {
-  const entry = held.get(id);
-  if (!entry?.timer) return;
-  clearTimeout(entry.timer);
-  entry.timer = undefined;
-  await window.viewer.bufferWrite(entry.buffer);
-}
 /** Writes every change not yet in the profile: at a flush, before a quit. */
 export async function flushBuffers(): Promise<void> {
-  await Promise.all([...held.keys()].map((id) => write(id)));
+  for (const entry of held.values()) {
+    clearTimeout(entry.timer);
+    entry.timer = undefined;
+  }
+  await writes.flush();
 }
 /** Removes unsaved text a person chose to discard, or saved. */
 export async function discardBuffer(id: string): Promise<void> {
   clearTimeout(held.get(id)?.timer);
+  await writes.retire(id, () => window.viewer.bufferDiscard(id));
   held.delete(id);
   changed();
-  await window.viewer.bufferDiscard(id);
 }

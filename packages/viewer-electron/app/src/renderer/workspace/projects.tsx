@@ -8,10 +8,10 @@ import {
   type ProjectDocument,
   type ProjectLayout,
   type PortableDiffSource,
-} from '../../domain/project';
-import { parentPath } from '../../domain/planes';
-import type { Pane, ScratchPane, ChatPane } from '../../domain/contracts';
-import type { DiffSource } from '../../domain/diff';
+} from '../../domain/workspaces/project';
+import { parentPath } from '../../domain/workspaces/planes';
+import type { Pane, ScratchPane, ChatPane, ServerPane } from '../../domain/contracts';
+import type { DiffSource } from '../../domain/comparison/diff';
 import {
   activeWorkspace,
   associateProject,
@@ -150,7 +150,7 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
     }
   };
   for (const pane of panes) {
-    if (pane.type === 'scratch' || pane.type === 'chat') continue;
+    if (pane.type === 'scratch' || pane.type === 'chat' || pane.type === 'server') continue;
     bind(pane.path, pane.type === 'folder' || pane.type === 'git-changes');
     if (pane.type === 'diff') {
       for (const source of [pane.left, pane.right]) {
@@ -168,10 +168,10 @@ async function readProject(file: string): Promise<ProjectDocument> {
 }
 function definition(project: ProjectAssociation, layout: ProjectLayout): ProjectDefinition {
   const space = activeWorkspace();
-  // A scratch plane's text is private, kept in the profile: it stays out of the project file.
+  // Private documents and runtime server controls stay in this Mac's workspace.
   const shared = space.panes.filter(
-    (pane): pane is Exclude<Pane, ScratchPane | ChatPane> =>
-      pane.type !== 'scratch' && pane.type !== 'chat',
+    (pane): pane is Exclude<Pane, ScratchPane | ChatPane | ServerPane> =>
+      pane.type !== 'scratch' && pane.type !== 'chat' && pane.type !== 'server',
   );
   const source = (value: DiffSource): PortableDiffSource => {
     if (value.kind === 'empty') return value;

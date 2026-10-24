@@ -15,8 +15,8 @@ import type {
   OperationJob,
   OperationRequest,
 } from '../src/domain/contracts';
-import type { TerminalEvent } from '../src/domain/automation';
-import type { Volume } from '../src/domain/volumes';
+import type { TerminalEvent } from '../src/domain/automation/actions';
+import type { Volume } from '../src/domain/files/volumes';
 import type { IndexedResult, IndexStatus, SettingsSnapshot } from '../src/domain/services';
 import { AwakeClock, QualificationInterrupted } from './awake-clock';
 import {
@@ -25,7 +25,7 @@ import {
   trashTemporary,
   trashFixtureEntry,
 } from '../tools/temporary';
-import { terminalConfirmation } from '../src/desktop/execution-confirmations';
+import { terminalConfirmation } from '../src/desktop/actions/execution-confirmations';
 
 assert.equal(process.platform, 'darwin', 'The signed MAS check requires macOS.');
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

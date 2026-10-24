@@ -12,7 +12,7 @@ import {
   type LensFolder,
   type LensOp,
   type LensRequest,
-} from '../src/domain/lenses';
+} from '../src/domain/files/lenses';
 import {
   fixedSections,
   gridRows,

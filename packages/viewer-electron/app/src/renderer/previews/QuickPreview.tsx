@@ -1,15 +1,15 @@
 import { memo, useCallback, useEffect } from 'react';
 import type { Resource } from '../../domain/contracts';
-import { formatBytes } from '../../domain/files';
+import { formatBytes } from '../../domain/files/entries';
 import { getState, quickPreview, report, stepQuickPreview } from '../state/store';
 import { editable } from '../commands/editing';
 import { useWorkspace } from '../workspace/context';
 import { Dialog, IconButton } from '../ui/primitives';
-import { OpenDefaultButton } from '../ui/OpenDefaultButton';
+import { OpenDefaultButton } from '../ui/navigation/OpenDefaultButton';
 import { PreviewHost } from './PreviewHost';
 import type { PreviewModule } from './contracts';
-import { baseName } from '../../domain/planes';
-import { MAX_TEXT_BYTES } from '../../domain/text-documents';
+import { baseName } from '../../domain/workspaces/planes';
+import { MAX_TEXT_BYTES } from '../../domain/editing/documents';
 
 /** Quick Preview's Edit while it shows a text file: ⌘E reaches it through the window's commands. */
 let editShown: (() => void) | undefined;
@@ -74,7 +74,7 @@ export const QuickPreview = memo(function QuickPreview({
   );
   const footer = useCallback(
     (resource: Resource, module: PreviewModule) => {
-      const editable = module.id === 'text' && resource.entry.size <= MAX_TEXT_BYTES;
+      const editable = module.editing === 'text' && resource.entry.size <= MAX_TEXT_BYTES;
       editShown = editable ? () => open(resource.entry.path, true) : undefined;
       return (
         <footer className="quick-preview-footer">

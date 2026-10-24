@@ -1,15 +1,19 @@
-import { backdropChange, backdropWindowOptions } from './desktop/backdrop';
+import { installApplicationMenu } from './desktop/windows/application-menu';
+import {
+  activateApplication,
+  createIndependentWindow,
+  dispatchApplicationCommand,
+} from './desktop/windows/application-dispatch';
+import { backdropChange, backdropWindowOptions } from './desktop/windows/backdrop';
 import type { UIPreferences } from './domain/contracts';
 import {
   nativeTheme,
   app,
   BrowserWindow,
   dialog,
-  Menu,
   protocol,
   session,
   screen,
-  shell,
   crashReporter,
   globalShortcut,
   systemPreferences,
@@ -18,25 +22,31 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { existsSync, mkdirSync, realpathSync } from 'node:fs';
+import { mkdirSync, realpathSync } from 'node:fs';
 import { lookup } from 'mime-types';
-import {
-  defaultShortcuts,
-  accelerator,
-  menuShortcuts,
-  nativeMenuBindings,
-} from './domain/shortcuts';
-import { runMCPClient } from './desktop/mcp-client';
+import { accelerator, nativeMenuBindings } from './domain/preferences/shortcuts';
+import { runMCPClient } from './desktop/agents/mcp-client';
 import { Desktop } from './desktop/bridge';
-import { WindowState, captureWindowFrame, restoreWindowFrame } from './desktop/window-state';
+import {
+  WindowState,
+  captureWindowFrame,
+  restoreWindowFrame,
+} from './desktop/windows/window-state';
 import { errorMessage } from './domain/errors';
-import { DiagnosticLog } from './desktop/diagnostics';
-import { planeAlignments, planeSizePresets } from './domain/plane-layout';
-import { applicationCSP } from './desktop/application-csp';
-import { debuggingAllowed } from './desktop/debugging';
-import { HotkeyWindow } from './desktop/hotkey-window';
-import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/launch';
-import { askNatively } from './desktop/native-confirmation';
+import { DiagnosticLog } from './desktop/diagnostics/diagnostics';
+import { applicationCSP } from './desktop/windows/application-csp';
+import { debuggingAllowed } from './desktop/diagnostics/debugging';
+import { HotkeyWindow } from './desktop/windows/hotkey-window';
+import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/workspaces/launch';
+import { askNatively } from './desktop/native/native-confirmation';
+import { saveBeforeClose, type SaveFailureChoice } from './desktop/windows/save-before-close';
+import { WindowCreationRequests } from './desktop/windows/creation-requests';
+import { isolatedShellHome } from './desktop/windows/test-integration';
+import {
+  frameLocationURLs,
+  frameNavigationAllowed,
+  rendererRequestAllowed,
+} from './desktop/windows/web-content-policy';
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -44,6 +54,16 @@ protocol.registerSchemesAsPrivileged([
   },
   {
     scheme: 'viewer-resource',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+  {
+    scheme: 'viewer-html',
     privileges: {
       standard: true,
       secure: true,
@@ -74,6 +94,12 @@ const resolved = (directory: string) => {
     return path.resolve(directory);
   }
 };
+const shellCommandHome = isolatedShellHome({
+  requested: process.env.VIEWER_TEST_SHELL_HOME && resolved(process.env.VIEWER_TEST_SHELL_HOME),
+  renderTest,
+  dataDirectory: process.env.VIEWER_DATA_DIRECTORY && resolved(process.env.VIEWER_DATA_DIRECTORY),
+  defaultDataDirectory: resolved(defaultUserData),
+});
 if (
   !debuggingAllowed({
     packaged: app.isPackaged,
@@ -155,6 +181,24 @@ let quitPending = false;
 let disposalPending = false;
 let disposed = false;
 const pendingPaths: string[] = [];
+
+async function saveFailure(
+  error: unknown,
+  parent?: BrowserWindow,
+  applicationQuit = false,
+): Promise<SaveFailureChoice> {
+  console.error('Viewer could not finish saving', error);
+  desktop?.emit({ type: 'service-error', service: 'persistence', message: errorMessage(error) });
+  if (backgroundTest || (quitPending && !applicationQuit)) return 'keep-open';
+  const choice = await askNatively(parent, {
+    message: 'Viewer could not save your changes',
+    detail: `${errorMessage(error)}\n\nYour window will stay open. Retry saving, or keep working and try again later.`,
+    buttons: ['Retry', 'Keep Open'],
+    defaultId: 1,
+    cancelId: 1,
+  });
+  return choice === 0 ? 'retry' : 'keep-open';
+}
 const devURL = MAIN_WINDOW_VITE_DEV_SERVER_URL;
 const rendererRoot = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
 const trusted = (url: string) => {
@@ -175,408 +219,34 @@ function menu(): void {
   if (bindings === menuBindings) return;
   menuBindings = bindings;
   const command = (value: string) => () => {
-    if (value === 'settings') {
-      void openSettingsWindow();
-      return;
-    }
-    const focused = BrowserWindow.getFocusedWindow();
-    if (focused === settingsWindow) {
-      const edits: Record<string, string> = {
-        'undo-file': 'undo',
-        'redo-file': 'redo',
-        cut: 'cut',
-        copy: 'copy',
-        paste: 'paste',
-        'select-all': 'selectAll',
-      };
-      const method = edits[value];
-      if (method) {
-        const contents = focused!.webContents;
-        if (method === 'selectAll') contents.selectAll();
-        else if (method === 'copy') contents.copy();
-        else if (method === 'cut') contents.cut();
-        else if (method === 'paste') contents.paste();
-        else if (method === 'undo') contents.undo();
-        else contents.redo();
-      }
-      return;
-    }
-    desktop?.emit({ type: 'command', command: value });
+    void dispatchApplicationCommand(value, {
+      openSettings: openSettingsWindow,
+      newWindow: async () => {
+        await createIndependentViewerWindow();
+      },
+      focusedWindow: () => BrowserWindow.getFocusedWindow(),
+      settingsWindow: () => settingsWindow,
+      workspaceCommand: (id) => desktop?.emit({ type: 'command', command: id }),
+    }).catch(reportApplicationCommandFailure);
   };
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
-      ...(process.platform === 'darwin'
-        ? [
-            {
-              role: 'appMenu' as const,
-              submenu: [
-                { role: 'about' as const },
-                { type: 'separator' as const },
-                {
-                  label: 'Settings…',
-                  accelerator: accelerator(settings?.shortcuts['settings'] ?? 'Cmd+,'),
-                  click: command('settings'),
-                },
-                { type: 'separator' as const },
-                { role: 'services' as const },
-                { type: 'separator' as const },
-                { role: 'hide' as const },
-                { role: 'hideOthers' as const },
-                { role: 'unhide' as const },
-                { type: 'separator' as const },
-                { role: 'quit' as const },
-              ],
-            },
-          ]
-        : []),
-      {
-        label: 'File',
-        submenu: [
-          { label: 'New Window', click: command('new-native-window') },
-          { label: 'Create Project…', click: command('project-create') },
-          { label: 'Workflows…', click: command('workflows') },
-          { label: 'Open Project…', click: command('project-open') },
-          { label: 'Save Project', click: command('project-save') },
-          { label: 'Reload Project…', click: command('project-reload') },
-          { type: 'separator' },
-          {
-            label: 'New Folder Plane',
-            accelerator: accelerator(settings?.shortcuts['new-root-folder'] ?? 'Cmd+N'),
-            click: command('new-root-folder'),
-          },
-          {
-            label: 'New Scratch Plane',
-            accelerator: accelerator(
-              settings?.shortcuts['new-scratch-plane'] ??
-                defaultShortcuts['new-scratch-plane'] ??
-                '',
-            ),
-            click: command('new-scratch-plane'),
-          },
-          {
-            label: 'New Terminal Plane',
-            accelerator: accelerator(settings?.shortcuts['new-terminal-plane'] ?? ''),
-            click: command('new-terminal-plane'),
-          },
-          {
-            label: 'Open Folder…',
-            accelerator: accelerator(
-              settings?.shortcuts['choose-folder'] ?? menuShortcuts['choose-folder'] ?? '',
-            ),
-            click: command('choose-folder'),
-          },
-          {
-            label: 'New Folder…',
-            accelerator: accelerator(
-              settings?.shortcuts['new-folder'] ?? defaultShortcuts['new-folder'] ?? 'Cmd+Shift+N',
-            ),
-            click: command('new-folder'),
-          },
-          {
-            label: 'Open Selection',
-            accelerator: accelerator(
-              settings?.shortcuts['open-selection'] ??
-                defaultShortcuts['open-selection'] ??
-                'Cmd+O',
-            ),
-            click: command('open-selection'),
-          },
-          { label: 'Open in Default App', click: command('open-default') },
-          { label: 'Open With…', click: command('open-with') },
-          { label: 'Quick Preview', click: command('quick-preview') },
-          {
-            label: 'Get Info…',
-            accelerator: accelerator(
-              settings?.shortcuts['info'] ?? defaultShortcuts['info'] ?? 'Cmd+I',
-            ),
-            click: command('info'),
-          },
-          { label: 'Calculate Size', click: command('calculate-size') },
-          { type: 'separator' },
-          {
-            label: 'Edit Text',
-            accelerator: accelerator(
-              settings?.shortcuts['edit-file'] ?? defaultShortcuts['edit-file'] ?? '',
-            ),
-            click: command('edit-file'),
-          },
-          {
-            label: 'Save',
-            accelerator: accelerator(
-              settings?.shortcuts['save-file'] ?? defaultShortcuts['save-file'] ?? '',
-            ),
-            click: command('save-file'),
-          },
-          {
-            label: 'Save As…',
-            accelerator: accelerator(
-              settings?.shortcuts['save-file-as'] ?? defaultShortcuts['save-file-as'] ?? '',
-            ),
-            click: command('save-file-as'),
-          },
-          { label: 'Revert to Saved…', click: command('revert-file') },
-          { type: 'separator' },
-          {
-            label: 'Duplicate',
-            accelerator: accelerator(
-              settings?.shortcuts['duplicate'] ?? defaultShortcuts['duplicate'] ?? 'Cmd+D',
-            ),
-            click: command('duplicate'),
-          },
-          { label: 'Copy To…', click: command('copy-to') },
-          { label: 'Move To…', click: command('move-to') },
-          {
-            label: settings?.browsing.confirmTrash === false ? 'Move to Trash' : 'Move to Trash…',
-            accelerator: accelerator(
-              settings?.shortcuts['trash'] ?? defaultShortcuts['trash'] ?? 'Cmd+Backspace',
-            ),
-            click: command('trash'),
-          },
-          { type: 'separator' },
-          { label: 'Recent File Operations', click: command('recent-operations') },
-          { type: 'separator' },
-          { role: 'close' },
-        ],
-      },
-      {
-        label: 'Edit',
-        submenu: [
-          {
-            label: 'Undo',
-            accelerator: accelerator(
-              settings?.shortcuts['undo-file'] ?? menuShortcuts['undo-file'] ?? '',
-            ),
-            click: command('undo-file'),
-          },
-          {
-            label: 'Redo',
-            accelerator: accelerator(
-              settings?.shortcuts['redo-file'] ?? menuShortcuts['redo-file'] ?? '',
-            ),
-            click: command('redo-file'),
-          },
-          { type: 'separator' },
-          {
-            label: 'Cut',
-            accelerator: accelerator(
-              settings?.shortcuts['cut'] ?? defaultShortcuts['cut'] ?? 'Cmd+X',
-            ),
-            click: command('cut'),
-          },
-          {
-            label: 'Copy',
-            accelerator: accelerator(
-              settings?.shortcuts['copy'] ?? defaultShortcuts['copy'] ?? 'Cmd+C',
-            ),
-            click: command('copy'),
-          },
-          {
-            label: 'Paste',
-            accelerator: accelerator(
-              settings?.shortcuts['paste'] ?? defaultShortcuts['paste'] ?? 'Cmd+V',
-            ),
-            click: command('paste'),
-          },
-          {
-            label: 'Move Copied Items Here',
-            accelerator: accelerator(
-              settings?.shortcuts['paste-move'] ?? defaultShortcuts['paste-move'] ?? '',
-            ),
-            click: command('paste-move'),
-          },
-          {
-            label: 'Select All',
-            accelerator: accelerator(
-              settings?.shortcuts['select-all'] ?? defaultShortcuts['select-all'] ?? 'Cmd+A',
-            ),
-            click: command('select-all'),
-          },
-        ],
-      },
-      {
-        label: 'View',
-        submenu: [
-          {
-            label: 'Commands…',
-            accelerator: accelerator(settings?.shortcuts['palette'] ?? 'Cmd+K'),
-            click: command('palette'),
-          },
-          {
-            label: 'Find File…',
-            accelerator: accelerator(settings?.shortcuts['find-file'] ?? 'Cmd+F'),
-            click: command('find-file'),
-          },
-          {
-            label: 'Go to Folder…',
-            accelerator: accelerator(settings?.shortcuts['go-to'] ?? 'Cmd+L'),
-            click: command('go-to'),
-          },
-          {
-            label: 'Show / Hide Window Navigation',
-            accelerator: accelerator(settings?.shortcuts['toggle-sidebar'] ?? 'Cmd+Alt+S'),
-            click: command('toggle-sidebar'),
-          },
-          {
-            label: 'Show / Hide Title Bar',
-            accelerator: accelerator(settings?.shortcuts['toggle-titlebar'] ?? 'Cmd+Alt+T'),
-            click: command('toggle-titlebar'),
-          },
-          // every setting is a command (2026-10-23): the space's own chrome, here too
-          {
-            label: 'Show / Hide Space Toolbar',
-            accelerator: accelerator(settings?.shortcuts['setting.ui.space.toolbar'] ?? ''),
-            click: command('setting.ui.space.toolbar'),
-          },
-          {
-            label: 'Show / Hide Minimap',
-            accelerator: accelerator(settings?.shortcuts['setting.ui.space.minimap'] ?? ''),
-            click: command('setting.ui.space.minimap'),
-          },
-          {
-            label: 'Show / Hide Viewcube',
-            accelerator: accelerator(settings?.shortcuts['setting.ui.space.viewcube'] ?? ''),
-            click: command('setting.ui.space.viewcube'),
-          },
-          {
-            label: 'Show / Hide Background Grid',
-            accelerator: accelerator(settings?.shortcuts['setting.ui.space.grid'] ?? ''),
-            click: command('setting.ui.space.grid'),
-          },
-          { label: 'Show / Hide Plane Navigation', click: command('plane-sidebar') },
-          { label: 'View Side by Side', click: command('view-side-by-side') },
-          { label: 'View Stacked', click: command('view-stacked') },
-          {
-            label: 'Size & Position',
-            submenu: [
-              { label: 'Move Plane', click: command('plane-move') },
-              { label: 'Resize Plane', click: command('plane-resize') },
-              { label: 'Fill Workspace', click: command('plane-fill') },
-              { type: 'separator' },
-              ...(['width', 'height'] as const).map((axis) => ({
-                label: axis === 'width' ? 'Width' : 'Height',
-                submenu: planeSizePresets.map((preset) => ({
-                  label: `${preset.label} ${axis}`,
-                  click: command(`plane-${axis}-${preset.id}`),
-                })),
-              })),
-              {
-                label: 'Position',
-                submenu: planeAlignments.map((alignment) => ({
-                  label: alignment.label,
-                  click: command(`plane-align-${alignment.id}`),
-                })),
-              },
-            ],
-          },
-          {
-            label: 'Show / Hide Hidden Files',
-            accelerator: accelerator(
-              settings?.shortcuts['toggle-hidden'] ?? defaultShortcuts['toggle-hidden'] ?? '',
-            ),
-            click: command('hidden'),
-          },
-          { type: 'separator' },
-          {
-            label: 'Frame All Planes',
-            accelerator: accelerator(settings?.shortcuts['frame-all'] ?? 'Cmd+0'),
-            click: command('frame-all'),
-          },
-          {
-            label: 'Dock / Reveal',
-            accelerator: accelerator(settings?.shortcuts['dock'] ?? 'Cmd+Return'),
-            click: command('dock'),
-          },
-          {
-            label: 'Undo Arrangement',
-            accelerator: accelerator(
-              settings?.shortcuts['undo-arrangement'] ?? menuShortcuts['undo-arrangement'] ?? '',
-            ),
-            click: command('undo-arrangement'),
-          },
-          {
-            label: 'Redo Arrangement',
-            accelerator: accelerator(
-              settings?.shortcuts['redo-arrangement'] ?? menuShortcuts['redo-arrangement'] ?? '',
-            ),
-            click: command('redo-arrangement'),
-          },
-          { label: 'Arrange Horizontally', click: command('arrange-horizontal') },
-          { label: 'Arrange Vertically', click: command('arrange-vertical') },
-          { type: 'separator' },
-          ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }]),
-          { role: 'togglefullscreen' },
-        ],
-      },
-      {
-        label: 'Actions',
-        submenu: [
-          ...(settings?.customActions || [])
-            .toSorted((a, b) => a.order - b.order)
-            .map((action) => ({
-              label: action.name,
-              accelerator: accelerator(action.shortcut),
-              click: command('custom.' + action.id),
-            })),
-          ...(settings?.recipes || []).map((recipe) => ({
-            label: recipe.name + '…',
-            accelerator: accelerator(recipe.shortcut || ''),
-            click: command('recipe.' + recipe.id),
-          })),
-          { type: 'separator' as const },
-          { label: 'Action Tasks…', click: command('tasks') },
-        ],
-      },
-      {
-        label: 'Workspace',
-        submenu: [
-          { label: 'New Workspace…', click: command('new-workspace') },
-          { label: 'Rename Workspace…', click: command('rename-workspace') },
-          { label: 'Delete Workspace…', click: command('delete-workspace') },
-          { label: 'Undo Workspace Deletion', click: command('restore-workspace') },
-        ],
-      },
-      { role: 'windowMenu' },
-      {
-        role: 'help',
-        submenu: [
-          { label: 'Commands…', click: command('palette') },
-          { type: 'separator' },
-          {
-            label: 'Report an Issue…',
-            click: () => void shell.openExternal('https://github.com/plurid/viewer/issues'),
-          },
-          {
-            label: 'Viewer Website',
-            click: () => void shell.openExternal('https://plurid.com/viewer'),
-          },
-          { type: 'separator' },
-          {
-            // A local file the person can attach to a support request if they choose.
-            label: 'Show Diagnostic Log',
-            click: () => {
-              if (existsSync(diagnostics.file)) shell.showItemInFolder(diagnostics.file);
-              else
-                void dialog.showMessageBox({
-                  type: 'info',
-                  message: 'No problems have been recorded.',
-                  detail: 'Viewer keeps a local log of errors here for support. It is never sent.',
-                });
-            },
-          },
-        ],
-      },
-    ]),
-  );
+  installApplicationMenu(settings, command, diagnostics.file);
+}
+
+function reportApplicationCommandFailure(error: unknown): void {
+  const message = errorMessage(error);
+  void diagnostics.record('main-rejection', failure(error));
+  desktop?.emit({ type: 'service-error', service: 'window', message });
+  if (!backgroundTest) dialog.showErrorBox('Viewer could not complete this command', message);
 }
 /** The backdrop the window was made with: a clear one cannot be switched on or off in place. */
 const createdBackdrops = new Map<BrowserWindow, UIPreferences['space']['backdrop']>();
 /** Blur and solid apply at once; clear waits for the window to open again (backdrop.ts). */
 function applyBackdrop(): void {
   if (!desktop || process.platform !== 'darwin') return;
-  const snapshot = desktop.settings.snapshot();
-  const next = snapshot.ui.space.backdrop;
-  const options = backdropWindowOptions(next, snapshot.look);
   for (const [window, created] of createdBackdrops) {
+    const preferences = desktop.windowPreferences(desktop.workspaceForWindow(window));
+    const next = preferences.ui.space.backdrop;
+    const options = backdropWindowOptions(next, preferences.look);
     if (window.isDestroyed() || created === 'clear' || backdropChange(created, next) !== 'live')
       continue;
     window.setVibrancy(next === 'blur' ? 'under-window' : null);
@@ -591,12 +261,30 @@ function workspaceFrame(workspaceID?: string): WindowState {
   return new WindowState(path.join(app.getPath('userData'), 'window-states', name));
 }
 
+const windowCreations = new WindowCreationRequests<BrowserWindow | undefined>();
+async function createIndependentViewerWindow(): Promise<BrowserWindow | undefined> {
+  const services = desktop;
+  if (!services) return;
+  return createIndependentWindow({
+    available: () => desktop === services && !quitPending && !quitting,
+    prepare: () => services.prepareSettings(),
+    createWorkspace: () => services.createWorkspace(),
+    create: createWindow,
+  });
+}
+
 async function createWindow(workspaceID?: string): Promise<BrowserWindow | undefined> {
   if ((window && !workspaceID) || quitPending || quitting) return window ?? undefined;
-  // the backdrop is set as the window is made: its settings first
-  await desktop?.prepareSettings().catch(() => {});
+  await desktop?.prepareSettings();
+  const desired = workspaceID ?? desktop?.workspaceSessions.snapshot()?.activeWorkspace;
+  const existing = desired ? desktop?.windowForWorkspace(desired) : undefined;
+  if (existing && !existing.isDestroyed()) return existing;
+  return windowCreations.create(desired ?? 'initial', () => createViewerWindow(desired));
+}
+async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow | undefined> {
   if ((window && !workspaceID) || quitPending || quitting) return window ?? undefined;
   const desiredWorkspace = workspaceID ?? desktop?.workspaceSessions.snapshot()?.activeWorkspace;
+  const preferences = desktop?.windowPreferences(desiredWorkspace);
   const frame = workspaceFrame(desiredWorkspace);
   await frame.load();
   const restored = restoreWindowFrame(
@@ -605,15 +293,13 @@ async function createWindow(workspaceID?: string): Promise<BrowserWindow | undef
     screen.getPrimaryDisplay(),
   );
   const backdrop =
-    process.platform === 'darwin'
-      ? (desktop?.settings.snapshot().ui.space.backdrop ?? 'opaque')
-      : 'opaque';
+    process.platform === 'darwin' ? (preferences?.ui.space.backdrop ?? 'opaque') : 'opaque';
   window = new BrowserWindow({
     ...restored.bounds,
     minWidth: restored.minWidth,
     minHeight: restored.minHeight,
     title: 'Viewer',
-    ...backdropWindowOptions(backdrop, desktop?.settings.snapshot().look ?? 'dark'),
+    ...backdropWindowOptions(backdrop, preferences?.look ?? 'dark'),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 20 },
     show: false,
@@ -649,34 +335,62 @@ async function createWindow(workspaceID?: string): Promise<BrowserWindow | undef
   let closePending = false;
   let allowedClose = false;
   const services = desktop!;
-  services.attach(createdWindow, 'viewer', desiredWorkspace);
+  createdWindow.on('closed', () => {
+    viewerWindows.delete(createdWindow);
+    createdBackdrops.delete(createdWindow);
+    windowFrames.delete(createdWindow);
+    if (window === createdWindow) window = [...viewerWindows].at(-1) ?? null;
+  });
+  try {
+    services.attach(createdWindow, 'viewer', desiredWorkspace);
+  } catch (error) {
+    createdWindow.destroy();
+    throw error;
+  }
   services.openIn(createdWindow.webContents.id, pendingPaths.splice(0));
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', (event, url) => {
+  createdWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  createdWindow.webContents.on('will-navigate', (event, url) => {
     if (!trusted(url)) event.preventDefault();
   });
-  window.on('close', (event) => {
+  createdWindow.webContents.on('will-frame-navigate', (event) => {
+    const allowed = frameNavigationAllowed(
+      {
+        url: event.url,
+        mainFrame: event.isMainFrame,
+        frameURLs: frameLocationURLs(event.frame),
+        initiatorURLs: frameLocationURLs(event.initiator),
+      },
+      {
+        trustedDocument: trusted,
+        ownsHtmlURL: (url) => services.webPreviews.ownsHtmlURL(createdWindow.webContents.id, url),
+      },
+    );
+    if (!allowed) event.preventDefault();
+  });
+  createdWindow.on('close', (event) => {
     if (allowedClose || closing || quitting) return;
     event.preventDefault();
     if (closePending) return;
     closePending = true;
     remember();
-    void Promise.all([
-      services.flush().catch((error) => console.error('Workspace flush failed', error)),
-      windowFrames
-        .get(createdWindow)
-        ?.flush()
-        .catch((error) => console.error('Window placement save failed', error)),
-    ]).finally(() => {
-      allowedClose = true;
-      if (!createdWindow.isDestroyed()) createdWindow.close();
-    });
-  });
-  window.on('closed', () => {
-    viewerWindows.delete(createdWindow);
-    createdBackdrops.delete(createdWindow);
-    windowFrames.delete(createdWindow);
-    if (window === createdWindow) window = [...viewerWindows].at(-1) ?? null;
+    void saveBeforeClose(
+      async () => {
+        await Promise.all([
+          services.flushWindow(createdWindow),
+          windowFrames.get(createdWindow)?.flush(),
+        ]);
+      },
+      (error) => saveFailure(error, createdWindow),
+    )
+      .then((saved) => {
+        if (!saved) return;
+        allowedClose = true;
+        if (!createdWindow.isDestroyed()) createdWindow.close();
+      })
+      .catch((error) => console.error('Workspace close failed', error))
+      .finally(() => {
+        closePending = false;
+      });
   });
   menu();
   try {
@@ -748,12 +462,18 @@ async function openSettingsWindow(focus?: string): Promise<void> {
     event.preventDefault();
     if (closePending) return;
     closePending = true;
-    settingsClosing = services
-      .flushSettings(created)
-      .catch((error) => console.error('Settings flush failed', error))
-      .finally(() => {
+    settingsClosing = saveBeforeClose(
+      () => services.flushSettings(created),
+      (error) => saveFailure(error, created),
+    )
+      .then((saved) => {
+        if (!saved) return;
         allowedClose = true;
         if (!created.isDestroyed()) created.close();
+      })
+      .catch((error) => console.error('Settings close failed', error))
+      .finally(() => {
+        closePending = false;
         settingsClosing = undefined;
       });
   });
@@ -800,8 +520,7 @@ async function launch(request: LaunchRequest): Promise<void> {
     const workspace = matches[0]!;
     target = desktop.windowForWorkspace(workspace.id) ?? (await createWindow(workspace.id));
   } else if (request.newWindow) {
-    const workspaceID = desktop.workspaceSessions.create(os.homedir());
-    target = await createWindow(workspaceID);
+    target = await createIndependentViewerWindow();
   } else if (!target) target = await createWindow();
   if (!target) return;
   desktop.launchIn(target.webContents.id, request);
@@ -862,6 +581,7 @@ app
     await settingsWindowState.load();
     if (quitPending || quitting) return;
     desktop = new Desktop(app.getPath('userData'), trusted, {
+      shellCommandHome,
       openSettings: openSettingsWindow,
       newWindow: async (workspaceID) => {
         await createWindow(workspaceID);
@@ -873,6 +593,7 @@ app
         next.remember(previous?.value ?? null);
         windowFrames.set(window, next);
         rememberWindow(window);
+        applyBackdrop();
         void previous
           ?.flush()
           .catch((error) => diagnostics.record('main-rejection', failure(error)));
@@ -916,6 +637,7 @@ app
       !backgroundTest,
     );
     protocol.handle('viewer-resource', (request) => desktop!.resources.response(request));
+    protocol.handle('viewer-html', (request) => desktop!.webPreviews.response(request));
     nativeTheme.on('updated', () => desktop?.settings.announce());
     protocol.handle('viewer-app', async (request) => {
       const url = new URL(request.url);
@@ -956,12 +678,22 @@ app
       }),
     );
     session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-      const url = new URL(details.url);
-      const allowed =
-        ['viewer-app:', 'viewer-resource:', 'devtools:', 'blob:', 'data:'].includes(url.protocol) ||
-        (!!devURL &&
-          ['http:', 'ws:'].includes(url.protocol) &&
-          ['127.0.0.1', 'localhost'].includes(url.hostname));
+      const owner = details.webContentsId ?? details.webContents?.id;
+      const allowed = rendererRequestAllowed(
+        {
+          url: details.url,
+          frameURLs: frameLocationURLs(details.frame),
+          resourceType: details.resourceType,
+          initiatorOrigin: details.initiatorOrigin,
+          referrer: details.referrer,
+        },
+        {
+          development: !!devURL,
+          trustedDocument: trusted,
+          ownsHtmlURL: (url) =>
+            owner !== undefined && !!desktop?.webPreviews.ownsHtmlURL(owner, url),
+        },
+      );
       callback({ cancel: !allowed });
     });
     await desktop.prepareSettings();
@@ -984,7 +716,17 @@ app
     app.exit(1);
   });
 app.on('activate', () => {
-  if (!mcpMode && desktop && !window && !quitPending && !quitting) void createWindow();
+  void activateApplication({
+    available: () => !mcpMode && !!desktop && !quitPending && !quitting,
+    present: !backgroundTest,
+    restoreHotkey: () => hotkey?.restore() ?? false,
+    currentWindow: () => {
+      if (window?.isDestroyed())
+        window = [...viewerWindows].toReversed().find((item) => !item.isDestroyed()) ?? null;
+      return window ?? undefined;
+    },
+    createWindow: () => createWindow(),
+  }).catch(reportApplicationCommandFailure);
 });
 /** Asking whether to quit with file operations in progress, or waiting for them to finish. */
 let quitAsking = false;
@@ -993,15 +735,29 @@ function beginQuit(): void {
   // Keep the bridge and services alive until every renderer has saved and
   // Electron has closed its windows. Cleanup belongs to will-quit.
   for (const created of viewerWindows) rememberWindow(created);
-  void Promise.all([
-    desktop?.flush().catch((error) => console.error(error)),
-    windowState?.flush().catch((error) => console.error('Window placement save failed', error)),
-    ...[...windowFrames.values()].map((frame) => frame.flush()),
-  ]).finally(() => {
-    quitting = true;
-    closing = true;
-    app.quit();
-  });
+  void saveBeforeClose(
+    async () => {
+      await Promise.all([
+        desktop?.flush(),
+        windowState?.flush(),
+        ...[...windowFrames.values()].map((frame) => frame.flush()),
+      ]);
+    },
+    (error) => saveFailure(error, window ?? undefined, true),
+  )
+    .then((saved) => {
+      if (!saved) {
+        quitPending = false;
+        return;
+      }
+      quitting = true;
+      closing = true;
+      app.quit();
+    })
+    .catch((error) => {
+      quitPending = false;
+      console.error('Viewer could not finish quitting', error);
+    });
 }
 app.on('before-quit', (event) => {
   if (quitting) return;

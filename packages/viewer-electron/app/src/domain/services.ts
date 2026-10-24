@@ -1,16 +1,16 @@
-import type { Theme } from './themes';
-import type { SettingProfile } from './profiles';
-import type { LayoutTemplate } from './layout-templates';
-import type { TileLayout } from './tiling';
-import { defaultKeymap, type Keymap } from './keymap';
-import type { SearchEvidence, EvidenceAnchor } from './inspection';
+import type { Theme } from './preferences/themes';
+import type { SettingProfile } from './preferences/profiles';
+import type { LayoutTemplate } from './workspaces/layout-templates';
+import type { TileLayout } from './workspaces/tiling';
+import { defaultKeymap, type Keymap } from './preferences/keymap';
+import type { SearchEvidence, EvidenceAnchor } from './files/inspection';
 import type { FileEntry, UIPreferences, ViewMode, SortKey } from './contracts';
-import type { FolderOverride } from './folder-presentation';
-import type { CustomAction, TerminalProfile } from './automation';
-import type { ProviderKind } from './model-providers';
-import type { ChangePlan } from './change-plan';
-import type { OfficeContent } from './office';
-export type { ProviderKind } from './model-providers';
+import type { FolderOverride } from './preferences/folder-presentation';
+import type { CustomAction, TerminalProfile } from './automation/actions';
+import type { ProviderKind } from './models/providers';
+import type { ChangePlan } from './operations/change-plan';
+import type { OfficeContent } from './previews/documents/office';
+export type { ProviderKind } from './models/providers';
 export interface ModelProvider {
   id: string;
   name: string;
@@ -113,13 +113,13 @@ export interface ApplicationSettings {
   prompts: { providerID: string };
   git: { enabled: boolean };
   hotkey: { enabled: boolean; shortcut: string };
-  /** Colour themes (2026-10-23): domain/themes.ts. */
+  /** Colour themes (2026-10-23): domain/preferences/themes.ts. */
   themes: Theme[];
   /** The theme for each appearance; empty is the built-in one. */
   theme: { dark: string; light: string };
-  /** Named sets of settings applied at once (2026-10-23): domain/profiles.ts. */
+  /** Named sets of settings applied at once (2026-10-23): domain/preferences/profiles.ts. */
   profiles: SettingProfile[];
-  /** Named sets of planes and their tiling, to open anywhere (2026-10-23): domain/layout-templates.ts. */
+  /** Named sets of planes and their tiling, to open anywhere (2026-10-23): domain/workspaces/layout-templates.ts. */
   layouts: LayoutTemplate[];
   /** Tour: flying through the space's views in turn (2026-10-23). */
   tour: {
@@ -135,7 +135,7 @@ export interface ApplicationSettings {
   recipes: ActionRecipe[];
   agents: { enabled: boolean; roots: string[]; allowLayout: boolean };
   shortcuts: Record<string, string>;
-  /** The prefix and leader keys and their sequences (2026-10-23): domain/keymap.ts. */
+  /** The prefix and leader keys and their sequences (2026-10-23): domain/preferences/keymap.ts. */
   keymap: Keymap;
   savedSearches: {
     id: string;
@@ -153,6 +153,8 @@ export interface SettingsSnapshot {
   settings: ApplicationSettings;
   ui: UIPreferences;
   look: 'dark' | 'light';
+  /** The OS appearance, independent of the shared appearance preference. */
+  systemLook?: 'dark' | 'light';
   credentials: string[];
   config?: {
     path: string;

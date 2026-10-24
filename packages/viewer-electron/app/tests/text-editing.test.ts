@@ -9,8 +9,12 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { createElement } from 'react';
 import { EditorView } from '@codemirror/view';
 import type { SavedState } from '../src/domain/contracts';
-import { textChangedCode, type TextBuffer, type TextVersion } from '../src/domain/text-documents';
-import { stateSchema } from '../src/desktop/storage';
+import {
+  textChangedCode,
+  type TextBuffer,
+  type TextVersion,
+} from '../src/domain/editing/documents';
+import { stateSchema } from '../src/desktop/persistence/storage';
 import {
   activeWorkspace,
   addPane,
@@ -298,7 +302,7 @@ describe('the editor settings (2026-10-23)', () => {
     );
   });
   it("keeps a CRLF file's line breaks when trimming", async () => {
-    const { trimTrailingWhitespace } = await import('../src/domain/text-documents');
+    const { trimTrailingWhitespace } = await import('../src/domain/editing/documents');
     expect(trimTrailingWhitespace('a  \r\nb \t\nc')).toBe('a\r\nb\nc');
   });
 });

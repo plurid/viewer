@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mkdir, writeFile, utimes, symlink } from 'node:fs/promises';
 import path from 'node:path';
-import { Comparisons } from '../src/desktop/comparison';
+import { Comparisons } from '../src/desktop/comparison/comparison';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 describe('bounded folder comparison', () => {
   it('distinguishes matching metadata from verified content and keeps child symlinks unknown', async () => {

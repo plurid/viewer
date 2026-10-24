@@ -57,9 +57,9 @@ Lenses never move, rename or remove the items they group. Moving a lens to the T
 
 ## Code
 
-- `src/domain/lenses.ts`: schema, edits, matching, rules, resolution and the file format.
-- `src/domain/lens-layout.ts`: deterministic Map layout, hit-testing and spatial navigation.
-- `src/desktop/lenses.ts`: storage, fallback, healing, private state and rename remapping.
+- `src/domain/files/lenses.ts`: schema, edits, matching, rules, resolution and the file format.
+- `src/domain/files/lens-layout.ts`: deterministic Map layout, hit-testing and spatial navigation.
+- `src/desktop/workspaces/lenses.ts`: storage, fallback, healing, private state and rename remapping.
 - `src/renderer/state/lenses.ts`: per-folder loading, optimistic edits and the shared Undo history.
 - `src/renderer/explorer/sections.ts`, `folder-sections.ts`, `map/MapView.tsx`, `LensDialogs.tsx` and `src/renderer/commands/lenses.ts`: views, dialogs and commands.
 

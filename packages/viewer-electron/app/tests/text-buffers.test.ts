@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { TextBuffers, type TextBuffer } from '../src/desktop/text-buffers';
+import { TextBuffers, type TextBuffer } from '../src/desktop/editing/text-buffers';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string, buffers: TextBuffers;

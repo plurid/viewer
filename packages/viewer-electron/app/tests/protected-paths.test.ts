@@ -18,7 +18,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     lstat: vi.fn(async (file: string) => mounted[file] ?? actual.lstat(file)),
   };
 });
-const { ProtectedPaths } = await import('../src/desktop/protected-paths');
+const { ProtectedPaths } = await import('../src/desktop/files/protected-paths');
 
 describe('protected folders (2026-10-20)', () => {
   it('protects a mounted volume’s root, not the folders inside it', async () => {

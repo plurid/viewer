@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { NativeSelections } from '../src/desktop/native-selections';
+import { NativeSelections } from '../src/desktop/native/native-selections';
 
 const root = path.resolve('/selection'),
   file = path.join(root, 'Generated.txt');

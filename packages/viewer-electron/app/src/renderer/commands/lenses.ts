@@ -5,8 +5,8 @@ import {
   type LensGroup,
   type LensOp,
   type ResolvedLens,
-} from '../../domain/lenses';
-import { parentPath } from '../../domain/planes';
+} from '../../domain/files/lenses';
+import { parentPath } from '../../domain/workspaces/planes';
 import { createLens, editLens, setCollapsedGroups, shareLens } from '../state/lenses';
 import { updateFolderPresentation } from '../state/store';
 import type { LensPrompt } from '../explorer/LensDialogs';

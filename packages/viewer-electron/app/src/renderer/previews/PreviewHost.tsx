@@ -10,8 +10,9 @@ import {
   type ReactNode,
 } from 'react';
 import { WorkspaceContext } from '../workspace/context';
+import { effectiveWindowLook } from '../state/effective-ui';
 import type { FileEntry, Resource } from '../../domain/contracts';
-import { formatBytes } from '../../domain/files';
+import { formatBytes } from '../../domain/files/entries';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
 import { activeWorkspace, getState, report, useViewer } from '../state/store';
 import { useCommands } from '../commands/context';
@@ -19,14 +20,14 @@ import { usePreviewControlsSlot } from './controls';
 import type { PreviewContext, PreviewModule } from './contracts';
 import { previewState } from './state';
 import { choosePreview } from './registry';
-import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
+import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
 import {
   sameSourceVersion,
   sourceVersion,
   type EvidenceNavigation,
   type SourceVersion,
-} from '../../domain/inspection';
-import { parentPath } from '../../domain/planes';
+} from '../../domain/files/inspection';
+import { parentPath } from '../../domain/workspaces/planes';
 import { editingPlane } from '../editing/planes';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
@@ -39,6 +40,8 @@ function componentFor(module: PreviewModule) {
   return component;
 }
 const services: PreviewContext['services'] = {
+  htmlPreview: (id) => window.viewer.htmlPreview(id),
+  htmlPreviewClose: (id) => window.viewer.htmlPreviewClose(id),
   thumbnail: (file, size) => window.viewer.thumbnail(file, size),
   document: (id) => window.viewer.document(id),
   read: (id, limit) => window.viewer.read(id, limit),
@@ -150,7 +153,7 @@ export const PreviewHost = memo(function PreviewHost({
     () => (editable && paneID && !supplied ? { paneID } : undefined),
     [editable, paneID, supplied],
   );
-  const look = useViewer((state) => state.saved.look);
+  const look = useViewer(effectiveWindowLook);
   // One controller per resource effect run: a new `supplied` object re-runs that effect.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const abort = useMemo(() => new AbortController(), [path, supplied, retry]);

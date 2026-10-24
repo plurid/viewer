@@ -1,59 +1,17 @@
 /** Reproducible release evidence. A passing automated run is not Store approval. */
-import { createHash } from 'node:crypto';
 import { spawn, execFile } from 'node:child_process';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { cp, lstat, mkdir, open, readdir, readlink, writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { cp, lstat, mkdir, open, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { hashFile, sourceHash, treeHash } from './qualification/source';
+
+export { treeHash } from './qualification/source';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exec = promisify(execFile);
-async function hashFile(file: string) {
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(file)) hash.update(chunk);
-  return hash.digest('hex');
-}
-export async function treeHash(directory: string) {
-  const hash = createHash('sha256');
-  async function visit(relative: string) {
-    const file = path.join(directory, relative),
-      info = await lstat(file);
-    hash.update(
-      JSON.stringify([
-        relative,
-        info.mode & 0o777,
-        info.isSymbolicLink() ? 'link' : info.isDirectory() ? 'directory' : 'file',
-      ]),
-    );
-    if (info.isSymbolicLink()) hash.update(await readlink(file));
-    else if (info.isDirectory())
-      for (const name of (await readdir(file)).sort()) await visit(path.join(relative, name));
-    else hash.update(await hashFile(file));
-  }
-  await visit('');
-  return hash.digest('hex');
-}
-async function sourceHash() {
-  const hash = createHash('sha256');
-  for (const name of ['src', 'tests', 'tools'])
-    hash.update(name + (await treeHash(path.join(root, name))));
-  for (const file of [
-    'assets/icon.png',
-    'assets/icon.icns',
-    'assets/512x512.png',
-    'assets/entitlements.mac.plist',
-    'assets/licenses/README.txt',
-    'assets/licenses/opencascade.txt',
-    'assets/licenses/occt-import-js.txt',
-  ])
-    hash.update(file + (await hashFile(path.join(root, file))));
-  const files = (await readdir(root)).filter((name) => /\.(ts|json|mjs|html)$/.test(name)).sort();
-  for (const file of [...files, '../../../pnpm-lock.yaml', '../../../package.json'])
-    hash.update(file + (await hashFile(path.join(root, file))));
-  return hash.digest('hex');
-}
 type Check = {
   id: string;
   result: 'passed' | 'failed' | 'blocked';
@@ -138,7 +96,7 @@ async function main() {
   const checks: Check[] = [],
     candidates: Candidate[] = [],
     started = new Date().toISOString(),
-    source = await sourceHash();
+    source = await sourceHash(root);
   const report = {
     version: 1,
     started,
@@ -386,7 +344,7 @@ async function main() {
           result: 'failed',
           reason: 'Candidate changed during qualification.',
         });
-    if ((await sourceHash()) !== source)
+    if ((await sourceHash(root)) !== source)
       checks.push({
         id: 'source-immutable',
         result: 'failed',

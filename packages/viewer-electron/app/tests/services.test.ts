@@ -3,18 +3,18 @@ import { mkdir, writeFile, readFile, readdir, symlink, rename } from 'node:fs/pr
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
-import { SettingsService } from '../src/desktop/settings';
-import { FileIndex } from '../src/desktop/index-core';
+import { SettingsService } from '../src/desktop/preferences/settings';
+import { FileIndex } from '../src/desktop/search/index-core';
 import { defaultSettings, newPlaneFolder } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
-import { extractDocument, localBookFields } from '../src/desktop/formats';
-import { Credentials, Providers, providerBinding } from '../src/desktop/providers';
-import { ModelPermissions } from '../src/desktop/model-permissions';
-import { imageDimensions } from '../src/desktop/image-dimensions';
+import { normalizePreferences } from '../src/domain/preferences/ui';
+import { extractDocument, localBookFields } from '../src/desktop/previews/formats';
+import { Credentials, Providers, providerBinding } from '../src/desktop/models/providers';
+import { ModelPermissions } from '../src/desktop/models/model-permissions';
+import { imageDimensions } from '../src/desktop/previews/image-dimensions';
 import { imageFixture } from './media-fixtures';
-import { entry } from '../src/desktop/filesystem';
+import { entry } from '../src/desktop/files/filesystem';
 import type { FileEntry } from '../src/domain/contracts';
-import { shortcutKey, matchesShortcut } from '../src/domain/shortcuts';
+import { shortcutKey, matchesShortcut } from '../src/domain/preferences/shortcuts';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {

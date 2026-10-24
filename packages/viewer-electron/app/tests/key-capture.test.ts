@@ -7,8 +7,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { createElement } from 'react';
 import { KeyCapture } from '../src/renderer/ui/settings/KeyCapture';
-import { keyGlyphs } from '../src/domain/keymap';
-import { shortcutLabel, shortcutOwner } from '../src/domain/shortcuts';
+import { keyGlyphs } from '../src/domain/preferences/keymap';
+import { shortcutLabel, shortcutOwner } from '../src/domain/preferences/shortcuts';
 import { defaultSettings } from '../src/domain/services';
 
 afterEach(() => {

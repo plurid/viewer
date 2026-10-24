@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CustomAction } from '../src/domain/automation';
-import { ExecutionConfirmations, executionSummary } from '../src/desktop/execution-confirmations';
+import type { CustomAction } from '../src/domain/automation/actions';
+import {
+  ExecutionConfirmations,
+  executionSummary,
+} from '../src/desktop/actions/execution-confirmations';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;

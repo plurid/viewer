@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CollisionDecision, OperationKind } from '../../domain/contracts';
-import { formatBytes } from '../../domain/files';
+import { formatBytes } from '../../domain/files/entries';
 import { report, setOperationsOpen, useViewer } from '../state/store';
 import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
-import { baseName } from '../../domain/planes';
+import { baseName } from '../../domain/workspaces/planes';
 import { dialogOpen } from '../ui/modal';
 
 const operationLabels: Record<OperationKind, string> = {

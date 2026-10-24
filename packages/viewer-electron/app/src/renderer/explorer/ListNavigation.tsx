@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { sortEntries } from '../../domain/files';
+import { sortEntries } from '../../domain/files/entries';
 import { browseSession, useBrowseField } from '../workspace/sessions';
 import { folderPresentation } from '../state/store';
 import { useFolder } from './useFolder';

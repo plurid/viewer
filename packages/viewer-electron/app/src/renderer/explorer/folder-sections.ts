@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import type { FolderPresentation } from '../../domain/folder-presentation';
-import { baseName, parentPath } from '../../domain/planes';
+import type { FolderPresentation } from '../../domain/preferences/folder-presentation';
+import { baseName, parentPath } from '../../domain/workspaces/planes';
 import {
   resolveLens,
   type LensDocument,
   type LensOp,
   type ResolvedLens,
-} from '../../domain/lenses';
+} from '../../domain/files/lenses';
 import {
   activeLens,
   editLens,

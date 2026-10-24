@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { SavedState } from '../src/domain/contracts';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 
 /** The reported topology and camera, with generated IDs and synthetic image paths only. */
 export function repeatedPreviewFixture(files: string): SavedState {

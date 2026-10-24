@@ -1,5 +1,6 @@
+import { panePresentation } from '../../domain/preferences/folder-presentation';
 import { registerFolderHandle } from './folder-handles';
-import { matchesQuery } from '../../domain/file-query';
+import { matchesQuery } from '../../domain/search/query';
 import { useFileQuery } from './useFileQuery';
 import { nativeOpening } from './opening';
 import {
@@ -13,7 +14,12 @@ import {
   type MouseEvent,
 } from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
-import { groupEntries, indexEntries, reconcileSelection, sortEntries } from '../../domain/files';
+import {
+  groupEntries,
+  indexEntries,
+  reconcileSelection,
+  sortEntries,
+} from '../../domain/files/entries';
 import {
   activeWorkspace,
   getState,
@@ -30,7 +36,7 @@ import { browseSession, useBrowseField } from '../workspace/sessions';
 import { useWorkspace } from '../workspace/context';
 import { IconButton, Empty, Loading } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
-import { FolderAccessButton, needsFolderAccess } from '../ui/FolderAccessButton';
+import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
 import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
 import { useFolder } from './useFolder';
 import { recordScroll, useScrollRestore } from './scroll-restore';
@@ -58,16 +64,21 @@ import { lensCommands, lensGroupMenuIDs } from '../commands/lenses';
 import { useLensDialogs } from './LensDialogs';
 import { MapView, type MapControls } from './map/MapView';
 import { activeLens } from '../state/lenses';
-import { resolveLens } from '../../domain/lenses';
+import { resolveLens } from '../../domain/files/lenses';
 
 export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string }) {
-  const pane = useViewer((state) => activeWorkspace(state).panes.find((item) => item.id === id)) as
-    FolderPane | undefined;
+  const storedPane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === id),
+  ) as FolderPane | undefined;
   const workspace = useWorkspace();
   const registry = useCommands();
   const activeID = useViewer((state) => state.activePane);
   const recipes = useViewer((state) => state.settings.settings.recipes);
-  const presentation = useFolderPresentation(pane?.path || '');
+  const presentation = useFolderPresentation(storedPane?.path || '');
+  const pane = useMemo(
+    () => (storedPane ? { ...storedPane, ...panePresentation(presentation) } : undefined),
+    [storedPane, presentation],
+  );
   const foldersFirst = presentation.foldersFirst;
   const listing = useFolder(pane?.path || getState().bootstrap.home);
   const path = pane?.path || '';
@@ -92,7 +103,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const descending = pane?.descending;
   // Typing stays responsive in large folders; the filtered list follows a moment later.
   const filter = useDeferredValue(query);
-  // the file query language (domain/file-query.ts): ext:md, size>10mb, modified<7d, tag:red
+  // the file query language (domain/search/query.ts): ext:md, size>10mb, modified<7d, tag:red
   const filterQuery = useFileQuery(filter, path);
   const visible = useMemo(() => {
     return sort

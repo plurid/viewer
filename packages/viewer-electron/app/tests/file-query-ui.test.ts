@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useFileQuery } from '../src/renderer/explorer/useFileQuery';
-import { matchesQuery, type QueryEntry } from '../src/domain/file-query';
+import { matchesQuery, type QueryEntry } from '../src/domain/search/query';
 import { runLine } from '../src/renderer/command-line/run';
 import type { LineHost } from '../src/renderer/command-line/host';
 import { lineCompletions } from '../src/renderer/command-line/complete';

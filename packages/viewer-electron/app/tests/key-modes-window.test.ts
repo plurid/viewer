@@ -16,8 +16,8 @@ import { runLine } from '../src/renderer/command-line/run';
 import type { LineHost } from '../src/renderer/command-line/host';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
-import { emptySessionKeys, type SessionKeys } from '../src/domain/session-keys';
-import type { Keymap } from '../src/domain/keymap';
+import { emptySessionKeys, type SessionKeys } from '../src/domain/preferences/session-keys';
+import type { Keymap } from '../src/domain/preferences/keymap';
 import { quoteWord } from '../src/domain/command-line/lex';
 
 let session: SessionKeys;

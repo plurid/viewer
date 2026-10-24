@@ -8,7 +8,7 @@ import {
   parseFileQuery,
   QueryError,
   type QueryEntry,
-} from '../src/domain/file-query';
+} from '../src/domain/search/query';
 
 const now = new Date(2026, 9, 24, 12).getTime();
 const day = 86_400_000;

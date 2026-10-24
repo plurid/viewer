@@ -1,11 +1,11 @@
-import type { EvidenceNavigation } from '../../domain/inspection';
-import type { ProjectLayout } from '../../domain/project';
-import type { CapturedTarget } from '../../domain/automation';
-import type { PlaneLayoutEdit, PlaneLayoutTarget } from '../../domain/plane-layout';
+import type { EvidenceNavigation } from '../../domain/files/inspection';
+import type { ProjectLayout } from '../../domain/workspaces/project';
+import type { CapturedTarget } from '../../domain/automation/actions';
+import type { PlaneLayoutEdit, PlaneLayoutTarget } from '../../domain/workspaces/plane-layout';
 import { createContext, useContext } from 'react';
-import type { DiffSource } from '../../domain/diff';
+import type { DiffSource } from '../../domain/comparison/diff';
 import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
-import type { Tiling } from '../../domain/tiling';
+import type { Tiling } from '../../domain/workspaces/tiling';
 export interface WorkspaceController {
   newChat(paths: string[], draft?: string): Promise<void>;
   openChat(id: string): Promise<void>;
@@ -18,6 +18,8 @@ export interface WorkspaceController {
   captureLayout(): ProjectLayout;
   restoreLayout(layout: ProjectLayout): void;
   newTerminal(target: CapturedTarget, profileID?: string): void;
+  /** Serve one captured folder in a linked, explicitly started plane. */
+  newServer(target: CapturedTarget): Promise<void>;
   rootID(paneID: string): string | undefined;
   parentPaneID(paneID: string): string | undefined;
   linkedPaneID(paneID: string, entry: Pick<FileEntry, 'path' | 'directory'>): string | undefined;

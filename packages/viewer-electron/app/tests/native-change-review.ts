@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SavedState, OperationJob } from '../src/domain/contracts';
 import type { ActionPlan } from '../src/domain/services';
-import type { CheckpointRecord } from '../src/domain/change-plan';
+import type { CheckpointRecord } from '../src/domain/operations/change-plan';
 import { ownedApp, until } from './owned-app';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const root = await temporaryRoot('viewer-native-review-');

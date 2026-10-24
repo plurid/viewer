@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { keyGlyphs, keyName } from '../../../domain/keymap';
+import { keyGlyphs, keyName } from '../../../domain/preferences/keymap';
 
 /** The unmodified key from its place: Option and Shift change the character. */
 const placeKey = (event: KeyboardEvent) =>

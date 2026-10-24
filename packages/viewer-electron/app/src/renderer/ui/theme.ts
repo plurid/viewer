@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { themeFor, themeVariables, type Theme } from '../../domain/themes';
+import { themeFor, themeVariables, type Theme } from '../../domain/preferences/themes';
 import type { ApplicationSettings } from '../../domain/services';
 
 /** The theme for an appearance, the same object while its settings are (2026-10-23). */

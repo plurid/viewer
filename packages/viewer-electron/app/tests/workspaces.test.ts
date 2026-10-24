@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SavedState } from '../src/domain/contracts';
-import { stateSchema } from '../src/desktop/storage';
+import { stateSchema } from '../src/desktop/persistence/storage';
 import {
   activeWorkspace,
   addPane,

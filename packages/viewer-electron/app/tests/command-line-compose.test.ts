@@ -8,7 +8,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import { withArguments, LineError, quoteWord } from '../src/domain/command-line/lex';
-import { keepAliases, emptySessionKeys, type SessionKeys } from '../src/domain/session-keys';
+import {
+  keepAliases,
+  emptySessionKeys,
+  type SessionKeys,
+} from '../src/domain/preferences/session-keys';
 import { runLine } from '../src/renderer/command-line/run';
 import type { LineHost } from '../src/renderer/command-line/host';
 import { lineHint } from '../src/renderer/command-line/hints';
@@ -27,9 +31,9 @@ import {
   initialize,
   receiveSettings,
 } from '../src/renderer/state/store';
-import { importChanges } from '../src/desktop/settings';
+import { importChanges } from '../src/desktop/preferences/settings';
 import { defaultSettings } from '../src/domain/services';
-import type { CustomAction } from '../src/domain/automation';
+import type { CustomAction } from '../src/domain/automation/actions';
 
 let session: SessionKeys;
 const viewer = {

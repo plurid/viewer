@@ -3,7 +3,7 @@ import { usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
-import { NativeOpenActions } from '../../ui/NativeOpenActions';
+import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
 import { usePreviewState } from '../state';
 
 export default function MediaPreview(context: PreviewContext) {

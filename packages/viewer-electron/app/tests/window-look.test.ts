@@ -7,10 +7,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react';
 import { createElement } from 'react';
-import { normalizePreferences } from '../src/domain/preferences';
-import { preferencesSchema } from '../src/desktop/preferences-schema';
-import { stateSchema } from '../src/desktop/storage';
-import { defaultShortcuts } from '../src/domain/shortcuts';
+import { normalizePreferences } from '../src/domain/preferences/ui';
+import { preferencesSchema } from '../src/desktop/preferences/preferences-schema';
+import { stateSchema } from '../src/desktop/persistence/storage';
+import { defaultShortcuts } from '../src/domain/preferences/shortcuts';
 import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
 import { setWorkspaceSpaceColor } from '../src/renderer/state/workspaces';
 import { looks, spaceLook } from '../src/renderer/workspace/look';

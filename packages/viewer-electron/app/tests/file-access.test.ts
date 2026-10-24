@@ -1,8 +1,8 @@
 import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FileAccess } from '../src/desktop/file-access';
-import { Operations } from '../src/desktop/operations';
+import { FileAccess } from '../src/desktop/files/file-access';
+import { Operations } from '../src/desktop/operations/operations';
 import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 
 let root: string;

@@ -3,7 +3,7 @@
  * (even across, even down, a main one beside or above the rest, a grid), with gutters between.
  */
 import { describe, expect, it } from 'vitest';
-import { nextLayout, tileRects, type TileLayout } from '../src/domain/tiling';
+import { nextLayout, tileRects, type TileLayout } from '../src/domain/workspaces/tiling';
 
 const area = { width: 1212, height: 812 };
 const round = (rects: { x: number; y: number; width: number; height: number }[]) =>

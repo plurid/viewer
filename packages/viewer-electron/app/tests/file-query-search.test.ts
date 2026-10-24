@@ -6,9 +6,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { FileIndex } from '../src/desktop/index-core';
-import { Search } from '../src/desktop/search';
-import { entry } from '../src/desktop/filesystem';
+import { FileIndex } from '../src/desktop/search/index-core';
+import { Search } from '../src/desktop/search/search';
+import { entry } from '../src/desktop/files/filesystem';
 import type { FileEntry, SearchBatch } from '../src/domain/contracts';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 

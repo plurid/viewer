@@ -1,5 +1,5 @@
 import type { TreePlane } from '@plurid/plurid-data';
-import type { Tiling } from '../../domain/tiling';
+import type { Tiling } from '../../domain/workspaces/tiling';
 import { activeWorkspace } from '../state/store';
 import { setTiling } from '../state/workspaces';
 import { flattenTree, hostID } from './tree';

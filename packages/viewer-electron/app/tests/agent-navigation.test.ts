@@ -1,20 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, readFile, realpath, rename, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { AgentNavigation, AgentWorkspaceSnapshot } from '../src/domain/agent-requests';
-import type { CapturedTarget } from '../src/domain/automation';
-import { AgentBroker } from '../src/desktop/agent-broker';
-import { AgentRequests } from '../src/desktop/agent-requests';
-import { SettingsService } from '../src/desktop/settings';
-import type { FileServices } from '../src/desktop/file-services';
+import type { AgentNavigation, AgentWorkspaceSnapshot } from '../src/domain/agents/requests';
+import type { CapturedTarget } from '../src/domain/automation/actions';
+import { AgentBroker } from '../src/desktop/agents/agent-broker';
+import { AgentRequests } from '../src/desktop/agents/agent-requests';
+import type { AgentAccessChange } from '../src/desktop/agents/agent-access';
+import { SettingsService } from '../src/desktop/preferences/settings';
+import type { FileServices } from '../src/desktop/files/file-services';
 import type { ActionPlanner } from '../src/desktop/actions/planner';
 import type { ActionPlan, ActionRequest } from '../src/domain/services';
-import type { FileRelation } from '../src/domain/relationships';
-import { readDrawingGeometry } from '../src/desktop/drawing-geometry';
+import type { FileRelation } from '../src/domain/files/relationships';
+import { readDrawingGeometry } from '../src/desktop/previews/drawing-geometry';
 import { panelDrawing } from './dxf-fixtures';
 import { officeFixture } from './office-fixtures';
-import { extractDocument } from '../src/desktop/formats';
+import { extractDocument } from '../src/desktop/previews/formats';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import type * as Coordination from '../src/desktop/files/file-coordination';
+
+// These service regressions exercise authorization, real readers and parsers. Native provider
+// coordination has its own acceptance; an OS prompt must not decide the broker's unit results.
+vi.mock('../src/desktop/files/file-coordination', async (importOriginal) => {
+  const original = await importOriginal<typeof Coordination>();
+  return {
+    ...original,
+    fileCoordination: new original.FileCoordination(() => ({
+      coordinateStart: async (_id, intents) => intents.map((intent) => intent.path),
+      coordinateEnd: async () => {},
+      coordinateCancel: () => {},
+      coordinateSameItem: () => false,
+    })),
+  };
+});
 
 let root: string, files: string, secret: string, token: string;
 let settings: SettingsService, broker: AgentBroker, requests: AgentRequests;
@@ -52,6 +69,8 @@ const call = async <T = unknown>(name: string, args: Record<string, unknown> = {
   })) as { content: { text: string }[] };
   return JSON.parse(result.content[0].text) as T;
 };
+const allowAgentAccess = async (change: AgentAccessChange) =>
+  broker.access.approve(change, await broker.access.captureReview(change));
 beforeEach(async () => {
   actionTasks = [];
   relationshipRows = [];
@@ -194,6 +213,11 @@ beforeEach(async () => {
       },
     },
   );
+  await allowAgentAccess({
+    enabled: true,
+    add: [files],
+    capabilities: ['metadata', 'content', 'navigation', 'propose', 'terminal-read'],
+  });
   token = await broker.credential();
 });
 afterEach(async () => {
@@ -718,7 +742,7 @@ describe('reviewed MCP workspace navigation', () => {
       settings.snapshot().revision,
     );
     await expect(broker.authorize(file)).rejects.toThrow('outside the agent’s authorized folders');
-    await broker.access.approve({ add: [secret] });
+    await allowAgentAccess({ add: [secret] });
     expect(await broker.authorize(file)).toBe(await realpath(file));
     await settings.patch(
       [{ path: 'settings.agents.enabled', value: false }],

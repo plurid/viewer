@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import type { Resource } from '../../domain/contracts';
 import { useViewer } from '../state/store';
 import { Empty, Loading } from '../ui/primitives';
+import type { ImageComparisonMode } from './modes';
 
 export default function ImageDiff({
   left,
@@ -11,7 +12,7 @@ export default function ImageDiff({
 }: {
   left: Resource | null;
   right: Resource | null;
-  mode: string;
+  mode: ImageComparisonMode;
 }) {
   const [position, setPosition] = useState(50);
   const [error, setError] = useState('');

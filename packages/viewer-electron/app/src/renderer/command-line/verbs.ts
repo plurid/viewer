@@ -1,16 +1,17 @@
+import { inheritedWindowPreferences } from '../state/effective-ui';
 import {
   matchesQuery,
   parseFileQuery,
   parsePattern,
   QueryError,
   type FileQuery,
-} from '../../domain/file-query';
+} from '../../domain/search/query';
 import { folderHandle } from '../explorer/folder-handles';
 import { browseSession, updateBrowseSession } from '../workspace/sessions';
 import { expandPath, type Step, type Word } from '../../domain/command-line/lex';
 import { didYouMean, parseCommandLine } from '../../domain/command-line/verbs';
-import { canonicalKey, keyGlyphs, rootKey } from '../../domain/keymap';
-import type { SessionAlias, SessionBinding } from '../../domain/session-keys';
+import { canonicalKey, keyGlyphs, rootKey } from '../../domain/preferences/keymap';
+import type { SessionAlias, SessionBinding } from '../../domain/preferences/session-keys';
 import { enterKeyMode, leaveKeyMode } from '../keys/sequences';
 import { effectiveKeymap, receiveSessionKeys } from '../keys/session';
 import {
@@ -19,12 +20,12 @@ import {
   settingShortName,
   settingText,
 } from '../../domain/command-line/set';
-import { effectiveUI, overridable } from '../../domain/overrides';
-import { parentPath } from '../../domain/planes';
-import { normalizePreferences } from '../../domain/preferences';
+import { overridable } from '../../domain/preferences/overrides';
+import { parentPath } from '../../domain/workspaces/planes';
+import { normalizePreferences } from '../../domain/preferences/ui';
 import { defaultSettings } from '../../domain/services';
-import { settingValue, workspaceMayChange } from '../../domain/setting-catalog';
-import { tileLayouts } from '../../domain/tiling';
+import { settingValue, workspaceMayChange } from '../../domain/preferences/catalog';
+import { tileLayouts } from '../../domain/workspaces/tiling';
 import { closePlanes, otherPlanes, rootPlanes } from '../commands/closing';
 import { changeSetting, settingNow } from '../commands/window-commands/settings';
 import { savedText } from '../commands/window-commands/text';
@@ -135,9 +136,8 @@ async function setSettings(words: Word[], host: LineHost, local: boolean): Promi
     if (local && !overridable(path))
       throw new Error(`${name} is not a workspace’s own; :set it for all.`);
     const general = settingNow(path);
-    const current = local
-      ? settingValue({ ui: effectiveUI(getState().saved.ui, activeWorkspace().overrides) }, path)
-      : general;
+    const current = general;
+    const inherited = settingValue(inheritedWindowPreferences(getState()), path);
     if (operation.op === 'show') {
       messages.push(settingText(definition, current));
       continue;
@@ -169,7 +169,9 @@ async function setSettings(words: Word[], host: LineHost, local: boolean): Promi
     if (local)
       setWorkspaceOverride(
         path,
-        value === undefined || value === general ? undefined : (value as boolean | number),
+        value === undefined || JSON.stringify(value) === JSON.stringify(inherited)
+          ? undefined
+          : value,
       );
     else await changeSetting(path, value);
   }
@@ -244,7 +246,7 @@ export const verbRuns: Record<string, VerbRun> = {
       sources: [selection[0]!.path],
     });
   },
-  // the file query language (domain/file-query.ts), in the folder plane's filter row
+  // the file query language (domain/search/query.ts), in the folder plane's filter row
   filter: async ({ step }, host) => {
     const text = step.rest?.text ?? '';
     if (text) readQuery(text);

@@ -1,4 +1,4 @@
-import { settingCatalog, type SettingDefinition } from '../setting-catalog';
+import { settingCatalog, type SettingDefinition } from '../preferences/catalog';
 import { LineError, type Word } from './lex';
 
 /**

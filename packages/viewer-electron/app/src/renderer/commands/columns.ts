@@ -1,5 +1,5 @@
-import { listColumns } from '../../domain/list-columns';
-import { normalizePreferences } from '../../domain/preferences';
+import { listColumns } from '../../domain/preferences/list-columns';
+import { normalizePreferences } from '../../domain/preferences/ui';
 import {
   changePreferences,
   folderPresentation,

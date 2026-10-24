@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import type { SavedState } from '../src/domain/contracts';
-import type { TrashSnapshot } from '../src/domain/trash';
+import type { TrashSnapshot } from '../src/domain/files/trash';
 import { ownedApp, until } from './owned-app';
 import { temporaryRoot } from '../tools/temporary';
 const root = await temporaryRoot('viewer-trash-readonly-');

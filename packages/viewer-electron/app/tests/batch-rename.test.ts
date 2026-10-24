@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renameNames } from '../src/domain/batch-rename';
+import { renameNames } from '../src/domain/operations/batch-rename';
 describe('reviewed naming policy', () => {
   it('preserves extensions and dotted folder names while transforming case and padded numbering', () => {
     expect(

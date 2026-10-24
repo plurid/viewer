@@ -3,12 +3,12 @@ import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promise
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { OperationJob } from '../src/domain/contracts';
-import { Operations } from '../src/desktop/operations';
+import { Operations } from '../src/desktop/operations/operations';
 import {
   OperationLog,
   operationJournal,
   type OperationReceipt,
-} from '../src/desktop/operation-journal';
+} from '../src/desktop/operations/operation-journal';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string, data: string;

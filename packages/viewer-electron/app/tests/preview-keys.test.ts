@@ -4,7 +4,7 @@ import { cleanup, render } from '@testing-library/react';
 import { createElement, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { FileEntry } from '../src/domain/contracts';
 import { defaultSettings } from '../src/domain/services';
-import { parseDrawing } from '../src/domain/dxf/geometry';
+import { parseDrawing } from '../src/domain/previews/drawings/dxf/geometry';
 import { panelDrawing } from './dxf-fixtures';
 
 // A preview with what answers keys in one: a focusable drawing, an image that answers none, and a

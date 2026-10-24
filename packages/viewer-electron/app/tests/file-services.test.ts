@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FileServices } from '../src/desktop/file-services';
+import { FileServices } from '../src/desktop/files/file-services';
 import { defaultSettings } from '../src/domain/services';
-import { FileAccessRequired } from '../src/desktop/file-access';
+import { FileAccessRequired } from '../src/desktop/files/file-access';
 
 const fork = vi.hoisted(() => vi.fn());
 vi.mock('electron', () => ({ utilityProcess: { fork } }));

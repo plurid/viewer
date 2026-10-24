@@ -1,4 +1,4 @@
-import { bindingChoices, keyGlyphs, type KeymapBinding } from '../../domain/keymap';
+import { bindingChoices, keyGlyphs, type KeymapBinding } from '../../domain/preferences/keymap';
 import { getState } from '../state/store';
 import { plainCommandID } from '../../domain/command-line/verbs';
 import { useSequenceView } from './sequences';

@@ -1,5 +1,5 @@
 import { basketEntries, addToBasket, saveCollection } from '../../state/store';
-import { sourceVersion } from '../../../domain/inspection';
+import { sourceVersion } from '../../../domain/files/inspection';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 

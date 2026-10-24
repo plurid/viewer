@@ -1,8 +1,8 @@
 import type { FileEntry } from '../../domain/contracts';
 import type { PreviewModule } from './contracts';
-import { modelFormats } from '../../domain/model-formats';
-import { renderedImageFormats } from '../../domain/rendered-images';
-import { languageExtensions, languageFor } from '../../domain/text-languages';
+import { modelFormats } from '../../domain/previews/models/formats';
+import { renderedImageFormats } from '../../domain/previews/images/rendered';
+import { languageExtensions, languageFor } from '../../domain/editing/languages';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
   formats.includes(entry.extension) ? 100 : 0;
@@ -66,6 +66,14 @@ const textFormats = [
   ...languageExtensions,
 ].filter((format, index, all) => all.indexOf(format) === index);
 export const previewModules: PreviewModule[] = [
+  {
+    id: 'html',
+    editing: 'text',
+    label: 'HTML document',
+    formats: ['html', 'htm', 'xhtml'],
+    detect: (entry) => (['html', 'htm', 'xhtml'].includes(entry.extension.toLowerCase()) ? 110 : 0),
+    load: () => import('./web/HTMLPreview'),
+  },
   {
     id: 'office',
     label: 'Office document',
@@ -151,6 +159,7 @@ export const previewModules: PreviewModule[] = [
   },
   {
     id: 'text',
+    editing: 'text',
     label: 'Text / code / data',
     formats: textFormats,
     detect: (entry) =>

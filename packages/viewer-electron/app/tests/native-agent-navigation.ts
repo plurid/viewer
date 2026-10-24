@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { AgentProposal, AgentWorkspace } from '../src/domain/agent-requests';
+import type { AgentProposal, AgentWorkspace } from '../src/domain/agents/requests';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';

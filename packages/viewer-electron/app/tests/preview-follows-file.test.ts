@@ -20,7 +20,7 @@ vi.mock('../src/renderer/previews/registry', () => ({
 import { PreviewHost } from '../src/renderer/previews/PreviewHost';
 import { registerEditingPlane } from '../src/renderer/editing/planes';
 import { initialize } from '../src/renderer/state/store';
-import { formatBytes } from '../src/domain/files';
+import { formatBytes } from '../src/domain/files/entries';
 import { CommandsContext } from '../src/renderer/commands/context';
 import { CommandRegistry } from '../src/renderer/commands/registry';
 

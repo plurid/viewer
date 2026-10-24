@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { formatBytes } from '../../domain/files';
+import { formatBytes } from '../../domain/files/entries';
 import {
   informationChanges,
   tagColors,
   type FileInformation as Information,
-} from '../../domain/file-information';
+} from '../../domain/files/information';
 import { Dialog, IconButton } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { SelectionSize, calculateSize } from './sizes';

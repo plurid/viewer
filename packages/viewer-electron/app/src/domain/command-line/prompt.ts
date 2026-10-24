@@ -1,6 +1,6 @@
-import { modelLineCommandProblem } from '../agent-safety';
-import type { CustomAction } from '../automation';
-import { queryTypes } from '../file-query';
+import { modelLineCommandProblem } from '../agents/safety';
+import type { CustomAction } from '../automation/actions';
+import { queryTypes } from '../search/query';
 import { LineError, withArguments } from './lex';
 import { settingByName, settingNames } from './set';
 import { bindStep, parseCommandLine, resolveName, verbName, verbs } from './verbs';

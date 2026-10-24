@@ -1,28 +1,16 @@
+import { effectiveWindowSettings } from '../state/effective-ui';
 import { plainCommandID } from '../../domain/command-line/verbs';
 import { withArguments } from '../../domain/command-line/lex';
 import type { CommandContext, CommandDefinition } from './registry';
-import type { CapturedTarget } from '../../domain/automation';
-import { actionAvailable, terminalDirectory } from '../../domain/automation';
+import { actionAvailable, terminalDirectory } from '../../domain/automation/actions';
 import { activeWorkspace, getState } from '../state/store';
 import { newPlaneFolder } from '../../domain/services';
 import type { WorkspaceController } from '../workspace/context';
 import { requestAction } from '../actions/commands';
 import type { IconName } from '../ui/Icon';
-export function captureTarget(
-  context: CommandContext,
-  workspace: WorkspaceController,
-): CapturedTarget {
-  const directory = context.directory || context.folder?.path;
-  if (!directory) throw new Error('Choose a folder for this action.');
-  return structuredClone({
-    workspaceID: context.workspaceID,
-    rootID: context.rootID || workspace.rootID(context.paneID || '') || context.paneID || '',
-    paneID: context.paneID || '',
-    panePath: context.path || context.folder?.path,
-    directory,
-    selection: [...context.selection],
-  });
-}
+import { captureTarget } from './target';
+import { localServerCommands } from '../local-servers/commands';
+export { captureTarget } from './target';
 export function programCommands(
   workspace: WorkspaceController,
   /** `false` when no command of that ID is available here. */
@@ -39,6 +27,7 @@ export function programCommands(
     return { ...captured, directory: terminalDirectory(captured.directory, captured.selection) };
   };
   return [
+    ...localServerCommands(workspace),
     {
       id: 'open-terminal',
       label: terminalName ? 'Open in ' + terminalName : 'Open Terminal',
@@ -90,7 +79,7 @@ export function programCommands(
           paneID: '',
           // where new planes start: Settings → Browsing
           directory: newPlaneFolder(
-            getState().settings.settings.browsing,
+            effectiveWindowSettings(getState()).browsing,
             getState().bootstrap.home,
             current,
             space.panes.length === 0,

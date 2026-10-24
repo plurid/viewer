@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
-import { Relationships } from '../src/desktop/relationships';
-import { Operations } from '../src/desktop/operations';
-import { entry } from '../src/desktop/filesystem';
-import { sourceVersion } from '../src/domain/inspection';
+import { Relationships } from '../src/desktop/workspaces/relationships';
+import { Operations } from '../src/desktop/operations/operations';
+import { entry } from '../src/desktop/files/filesystem';
+import { sourceVersion } from '../src/domain/files/inspection';
 import {
   declaredReferences,
   type FileRelation,
   type RelationshipsResult,
-} from '../src/domain/relationships';
+} from '../src/domain/files/relationships';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 async function fixture() {
   const root = await temporaryRoot('viewer-relations-'),

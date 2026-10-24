@@ -4,7 +4,7 @@ import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { ownedApp, until } from './owned-app';
-import type { FileInformation } from '../src/domain/file-information';
+import type { FileInformation } from '../src/domain/files/information';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const binary =

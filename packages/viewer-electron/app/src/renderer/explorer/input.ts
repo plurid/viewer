@@ -4,7 +4,7 @@ import {
   defaultShortcuts,
   matchesShortcut,
   shortcutCommandID,
-} from '../../domain/shortcuts';
+} from '../../domain/preferences/shortcuts';
 import { editable } from '../commands/editing';
 import { fileControlOwnsKey, type FileKey } from './selection';
 import { overlayOpen } from '../ui/modal';

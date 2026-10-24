@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applicationCSP } from '../src/desktop/application-csp';
+import { applicationCSP } from '../src/desktop/windows/application-csp';
 
 describe('application content security policy', () => {
   it('allows OCCT dynamic bindings only in its disposable CAD worker', () => {
@@ -39,5 +39,15 @@ describe('application content security policy', () => {
     expect(applicationCSP('/index.html', true)).not.toContain("'unsafe-eval'");
     expect(applicationCSP('/index.html', true)).toContain('ws://127.0.0.1:*');
     expect(applicationCSP(worker, true)).not.toContain('ws:');
+  });
+
+  it('frames private HTML without permitting inline application scripts or arbitrary frames', () => {
+    const directives = applicationCSP('/index.html').split('; ');
+    expect(directives.find((directive) => directive.startsWith('frame-src '))).toBe(
+      'frame-src viewer-html:',
+    );
+    expect(directives.find((directive) => directive.startsWith('script-src '))).not.toContain(
+      "'unsafe-inline'",
+    );
   });
 });

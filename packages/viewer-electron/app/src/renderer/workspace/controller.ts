@@ -1,10 +1,15 @@
-import type { PlanePlacement } from '../../domain/project';
+import { effectiveWindowSettings } from '../state/effective-ui';
+import type { PlanePlacement } from '../../domain/workspaces/project';
 import { useMemo, useRef, type RefObject } from 'react';
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC, type TreePlane, type TreePlaneLocation } from '@plurid/plurid-data';
 import type { FileEntry } from '../../domain/contracts';
-import { sameSourceVersion, sourceVersion, type EvidenceNavigation } from '../../domain/inspection';
-import { baseName, matchingPane, normalizedPanePath } from '../../domain/planes';
+import {
+  sameSourceVersion,
+  sourceVersion,
+  type EvidenceNavigation,
+} from '../../domain/files/inspection';
+import { baseName, matchingPane, normalizedPanePath } from '../../domain/workspaces/planes';
 import {
   activeWorkspace,
   addPane,
@@ -32,14 +37,15 @@ import { repeatedPreviews } from './recovery';
 import { flattenTree, hostID, paneRoute, parentPaneID, linkedPaneID } from './tree';
 import { cancelWorkspaceFraming, frameWorkspace } from './framing';
 import { applyTiling } from './tiling';
-import { explodePlan } from '../../domain/explode';
+import { explodePlan } from '../../domain/workspaces/explode';
 import { folderPairArea, folderPairGeometry } from './folder-pair';
 import { frontPlaneDepth, planeLayoutGeometry } from './plane-layout';
 import type { WorkspaceController } from './context';
 import { openWorkspacePath } from './open-path';
 import { startTour } from './tour';
 import { announce } from '../state/core';
-import { addContentPane } from '../state/panes';
+import { addContentPane, addServerPane } from '../state/panes';
+import { connectLocalServers, localServerSessions } from '../local-servers/runtime';
 import { rememberTiling, restoreTiling } from './tiling-history';
 /** Owns host-plane identity and creation. Engine routes/IDs stay inside the adapter. */
 /**
@@ -70,6 +76,8 @@ export function useWorkspaceController({
   readyRef: RefObject<boolean>;
 }): WorkspaceController {
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
+  const serverStarts = useRef(new Map<string, Promise<void>>());
+  const serverParents = useRef(new Map<string, { workspaceID: string; parentID: string }>());
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
       async newChat(paths, draft) {
@@ -141,7 +149,7 @@ export function useWorkspaceController({
           announce('Save a view to start a Tour.');
           return;
         }
-        startTour(controller, getState().settings.settings.tour);
+        startTour(controller, effectiveWindowSettings(getState()).tour);
       },
       // Rows ask whether a linked plane exists; only tree changes can alter that, not
       // the camera updates the engine store also publishes every frame.
@@ -294,12 +302,20 @@ export function useWorkspaceController({
       },
       newTerminal(target, profileID) {
         const api = engine.current;
-        if (!api || !readyRef.current || target.workspaceID !== activeWorkspace().id) return;
-        const parent = flattenTree(api.tree.get()).find((node) => hostID(node) === target.paneID);
-        if (target.paneID && !parent)
+        const space = activeWorkspace();
+        if (!api || !readyRef.current || target.workspaceID !== space.id) return;
+        const rootTarget =
+          ((target.paneID === 'none' && target.rootID === 'none') ||
+            (target.paneID === '' && target.rootID === '')) &&
+          target.panePath === undefined &&
+          target.selection.length === 0;
+        const parent = rootTarget
+          ? undefined
+          : flattenTree(api.tree.get()).find((node) => hostID(node) === target.paneID);
+        const origin = space.panes.find((pane) => pane.id === target.paneID);
+        if (!rootTarget && (!parent || !origin || controller.rootID(origin.id) !== target.rootID))
           throw new Error('The originating plane is no longer available.');
-        const origin = activeWorkspace().panes.find((pane) => pane.id === target.paneID);
-        if (target.panePath && origin?.path !== target.panePath)
+        if (target.panePath !== undefined && origin?.path !== target.panePath)
           throw new Error('The originating folder changed.');
         const pane = addTerminalPane(
           target.directory,
@@ -319,6 +335,115 @@ export function useWorkspaceController({
             },
           });
         frameWorkspace(engine, surface, [pane.id]);
+      },
+      newServer(target) {
+        const captured = structuredClone(target);
+        const key = JSON.stringify([
+          captured.workspaceID,
+          captured.paneID,
+          normalizedPanePath(captured.directory, getState().bootstrap.platform),
+        ]);
+        const pending = serverStarts.current.get(key);
+        if (pending) return pending;
+        const origin = () => {
+          const api = engine.current;
+          const space = activeWorkspace();
+          const pane = space.panes.find((item) => item.id === captured.paneID);
+          const parent =
+            api && flattenTree(api.tree.get()).find((node) => hostID(node) === pane?.id);
+          if (
+            !api ||
+            !readyRef.current ||
+            space.id !== captured.workspaceID ||
+            !pane ||
+            !parent ||
+            controller.rootID(pane.id) !== captured.rootID ||
+            (captured.panePath !== undefined && captured.panePath !== pane.path)
+          )
+            throw new Error('The originating folder changed or closed. Start the server again.');
+          return { api, space, pane, parent };
+        };
+        const work = (async () => {
+          const initial = origin();
+          const [selected] = captured.selection;
+          if (
+            captured.selection.length > 1 ||
+            (selected && (!selected.directory || selected.path !== captured.directory)) ||
+            (!selected && initial.pane.type !== 'folder')
+          )
+            throw new Error('Choose one folder to serve.');
+          const folder = await window.viewer.stat(captured.directory);
+          if (folder.kind !== 'directory' || !folder.directory)
+            throw new Error('Choose a regular folder to serve.');
+          if (selected && selected.identity !== folder.identity)
+            throw new Error(
+              'The selected folder changed. Select it again before starting a server.',
+            );
+          const { api, space, parent } = origin();
+          const nodes = flattenTree(api.tree.get());
+          const children = new Set((parent.children ?? []).map(hostID));
+          const live = new Set(
+            getState().saved.workspaces.flatMap((workspace) =>
+              workspace.panes.map((pane) => pane.id),
+            ),
+          );
+          for (const [id, owner] of serverParents.current)
+            if (
+              !live.has(id) ||
+              (owner.workspaceID === space.id && nodes.some((node) => hostID(node) === id))
+            )
+              serverParents.current.delete(id);
+          const existing = space.panes.find(
+            (pane) =>
+              pane.type === 'server' &&
+              (children.has(pane.id) ||
+                serverParents.current.get(pane.id)?.parentID === captured.paneID) &&
+              normalizedPanePath(pane.path, getState().bootstrap.platform) ===
+                normalizedPanePath(folder.path, getState().bootstrap.platform),
+          );
+          if (
+            existing?.type === 'server' &&
+            existing.sourceIdentity &&
+            existing.sourceIdentity !== folder.identity
+          )
+            throw new Error(
+              'This folder was replaced. Close its old server plane and start again.',
+            );
+          const pane =
+            existing?.type === 'server' ? existing : addServerPane(folder.path, folder.identity);
+          connectLocalServers();
+          if (!existing) {
+            const owners = pendingOwners.current.get(space.id) ?? new Map<string, string>();
+            pendingOwners.current.set(space.id, owners);
+            owners.set(pane.id, captured.rootID);
+            serverParents.current.set(pane.id, {
+              workspaceID: space.id,
+              parentID: captured.paneID,
+            });
+            try {
+              api.pubsub.publish({
+                topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
+                data: {
+                  route: paneRoute('server', pane.id),
+                  parentPlaneID: parent.planeID,
+                  framing: 'none',
+                },
+              });
+            } catch (error) {
+              removePanes([pane.id]);
+              serverParents.current.delete(pane.id);
+              throw error;
+            }
+            frameWorkspace(engine, surface, [pane.id]);
+          } else controller.focusPane(pane.id);
+          await localServerSessions().start(pane.id);
+        })();
+        serverStarts.current.set(key, work);
+        const finished = () => {
+          if (serverStarts.current.get(key) === work) serverStarts.current.delete(key);
+        };
+        void work.then(finished, finished);
+        return work;
       },
       rootID(id) {
         const space = activeWorkspace();
@@ -480,23 +605,36 @@ export function useWorkspaceController({
         const tree = api.tree.get();
         const parent =
           parentPaneID && flattenTree(tree).find((node) => hostID(node) === parentPaneID);
-        if (parentPaneID && !parent)
-          throw new Error('The originating plane is no longer available.');
         const pending = pendingOwners.current.get(space.id) ?? new Map<string, string>();
         pendingOwners.current.set(space.id, pending);
         const owners = rootOwners(tree, hostID, space.roots, pending);
-        const rootID = parent ? owners.get(hostID(parent)) : undefined;
+        const pendingParent =
+          parentPaneID &&
+          pending.has(parentPaneID) &&
+          space.panes.some((pane) => pane.id === parentPaneID);
+        if (parentPaneID && !parent && !pendingParent)
+          throw new Error('The originating plane is no longer available.');
+        const type = entry.directory ? 'folder' : 'preview';
+        const platform = getState().bootstrap.platform;
+        const path = normalizedPanePath(entry.path, platform);
+        const rootMatches = !parentPaneID
+          ? space.panes.filter(
+              (pane) =>
+                space.roots.includes(pane.id) &&
+                pane.type === type &&
+                normalizedPanePath(pane.path, platform) === path,
+            )
+          : [];
+        const existingRoot =
+          rootMatches.find((pane) => pane.id === getState().activePane) ?? rootMatches.at(-1);
+        const rootID = parentPaneID ? owners.get(parentPaneID) : existingRoot?.id;
         const existing =
           !options?.another &&
           rootID &&
-          matchingPane(
-            space,
-            entry.path,
-            entry.directory ? 'folder' : 'preview',
-            getState().activePane,
-            getState().bootstrap.platform,
-            { rootID, owners },
-          );
+          matchingPane(space, entry.path, type, getState().activePane, platform, {
+            rootID,
+            owners,
+          });
         if (existing) {
           if (existing.type === 'preview' && options?.evidence)
             updatePane(existing.id, { evidence: options.evidence });
@@ -504,6 +642,8 @@ export function useWorkspaceController({
           if (options?.edit) editingPlane(existing.id)?.edit?.();
           return;
         }
+        if (parentPaneID && !parent)
+          throw new Error('The originating plane is no longer available.');
         const linked = !!parent && !options?.another;
         const pane = addPane(entry.path, entry.directory ? 'folder' : 'preview', !linked, {
           keepSeparate: options?.another,
@@ -512,7 +652,7 @@ export function useWorkspaceController({
         if (pane.type === 'preview' && options?.evidence)
           updatePane(pane.id, { evidence: options.evidence });
         // its text preview starts editing when it mounts; any other preview has no editor to start
-        if (options?.edit && pane.type === 'preview' && choosePreview(entry).id === 'text')
+        if (options?.edit && pane.type === 'preview' && choosePreview(entry).editing === 'text')
           continueEditing(pane.id, crypto.randomUUID());
         setActivePane(pane.id);
         if (api && linked) {
@@ -659,8 +799,12 @@ export function useWorkspaceController({
         const api = engine.current;
         const node = api && flattenTree(api.tree.get()).find((node) => hostID(node) === id);
         if (!node) return;
+        const removed = new Set(flattenTree([node]).map(hostID));
+        for (const [child, owner] of serverParents.current)
+          if (owner.workspaceID === activeWorkspace().id && removed.has(owner.parentID))
+            removed.add(child);
         api!.tree.remove(node.planeID);
-        removePanes(flattenTree([node]).map(hostID));
+        removePanes([...removed]);
       },
       consolidatePreviews: () => {
         const api = engine.current;

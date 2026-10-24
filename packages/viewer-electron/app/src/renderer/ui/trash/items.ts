@@ -1,5 +1,5 @@
 import type { FileEntry } from '../../../domain/contracts';
-import type { TrashItem } from '../../../domain/trash';
+import type { TrashItem } from '../../../domain/files/trash';
 import type { IconName } from '../Icon';
 
 /** A Trash item in the shape the shared selection model and file icons expect. */

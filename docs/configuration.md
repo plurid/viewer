@@ -75,13 +75,81 @@ Every setting in Settings is also a command, in the palette (⌘K) and for a sho
 
 `ui.space.backdrop` sets what the space shows between planes: `opaque` (its colour, the default), `blur` (what is behind Viewer's window, blurred) or `clear` (what is behind, as it is; this applies when the window next opens, as macOS makes a window transparent only as it is created). `ui.space.backdropOpacity` (0 to 100, default 60) is how much of the space's colour covers what is behind. Planes stay opaque.
 
-A workspace can also have its own **title bar, space toolbar, minimap, viewcube, grid, plane headers, origin and backdrop opacity** over the general settings (`ui.titlebar.visible` and the `ui.space` keys of those names). **Workspace look…** offers General, On or Off for each; every such setting is also a command for the workspace in view (**This workspace: Hide minimap**, id `setting.<path>@workspace`), and **Use the general settings in this workspace** clears them. They are kept with the workspace in the saved state, not in `config.jsonc`. The backdrop itself stays general: macOS makes a window transparent only as it is created.
+## Workspace profiles and local choices
 
-`settings.profiles` holds **setting profiles**: `{ id, name, values }`, where `values` maps setting paths a workspace may change (`ui.space.minimap`, `ui.titlebar.visible`, `settings.editor.wrap` …) to their values; at most 30. Three are built in: **Focus** (no title bar, sidebar, space toolbar, minimap, viewcube or grid; plane headers kept), **Present** (the same, and no plane headers) and **Full** (everything shown). **Focus mode** (⇧⌘F) toggles Focus; **Profile: …** applies one, keeping the values it replaced, and **Leave profile …** puts them back. **Save profile as…** captures the current values of the space and window settings as a new profile. Agents may propose the built-in profiles, Focus mode and Leave profile, with review.
+**Workspace look…** chooses a workspace default profile and local presentation
+choices. Resolution is shared general preferences → workspace default profile →
+explicitly selected profile → local workspace overrides. For a folder, its shared
+path-specific view then applies, followed by project folder views when that project
+is open. Selection, cursor and navigation stay independent in every explorer.
+
+Settings always edits shared defaults. A profile pins only the leaves it names;
+other shared edits still appear immediately. Applying or leaving a profile never
+rewrites `config.jsonc`. Supported presentation commands invoked in a workspace
+write local choices while a profile is active; without one they retain their
+ordinary shared behavior. Explicit **This workspace: …** commands
+(`setting.<path>@workspace`) and `:setlocal` always stay local. A choice equal to
+its inherited profile value removes that local override. **Use profile defaults in
+this workspace** clears local choices; without a profile it is **Use the general
+settings in this workspace**.
+
+Local presentation includes title bar/sidebar, space toolbar, minimap, viewcube,
+grid, headers, origin, colour and backdrop choices. A native effect such as clear
+transparency still requires reopening the window. The window is created from the
+same effective preferences as its renderer.
+
+`settings.profiles` holds up to 30 shared definitions, `{ id, name, values }`:
+
+```jsonc
+"profiles": [
+  {
+    "id": "reading",
+    "name": "Reading",
+    "values": {
+      "ui.space.minimap": false,
+      "settings.editor.fontSize": 20,
+      "settings.editor.wordWrap": true
+    }
+  }
+]
+```
+
+Supported leaves are UI sidebar/titlebar/space/list presentation,
+`settings.appearance`, browsing defaults, editor settings, terminal font, tiling,
+Tour and chosen theme IDs. Session restoration and Trash confirmation stay shared.
+Providers, agent scopes, permissions, hotkey/process settings and reusable catalogs
+cannot be profile values. Validation uses the same type/range schemas as Settings;
+unknown paths and malformed values are rejected. Parent-object shorthand expands
+only through supported leaves, and an explicit leaf wins independent of JSON order.
+A profile supports at most 100 input entries and 128 expanded leaves.
+
+Built-ins **Focus**, **Present** and **Full** have reserved IDs. Focus hides title
+bar, sidebar, space toolbar, minimap, viewcube and grid. Present also hides plane
+headers and starts Tour only when explicitly invoked with saved views available.
+Full shows the chrome, including sidebar. **Focus mode** (⇧⌘F) toggles the explicit
+Focus overlay. **Leave profile …** clears the explicit selection and reveals the
+workspace default and retained local choices. **Save profile as…** captures the
+current effective chrome/look values as a new shared definition. It does not
+capture credentials or consent.
+
+Profile definitions update live in every window referencing their ID. Removing a
+definition keeps those references and shows an unavailable-profile notice with
+inherited fallback; Workspace look can clear or repair it. Unsupported legacy
+values remain readable with warnings so an existing file can be repaired. New
+invalid profiles/imports are rejected. Old globally applied profiles migrate with
+compare-and-set restoration; newer shared edits and unresolved previous values
+are preserved with diagnostics. Saved workspace format 7 keeps these local records
+separate from configuration; versions 1–6 are backed up before migration.
 
 `settings.prompts.providerID` names the model provider that answers requests in words (`>` in the palette, [command-line.md](command-line.md)); `""` uses the first provider. Settings → Models chooses it.
 
-`settings.themes` holds **colour themes**: `{ id, name, look, shell, syntax, terminal }`, where `look` is `dark` or `light` and each group maps tokens to `#rrggbb` colours (or `#rrggbbaa`, `#rgb`). `shell` has `space`, `surface`, `raised`, `field`, `ink`, `muted`, `subtle`, `accent`, `line`, `selection` and `danger`; `syntax` has `comment`, `string`, `keyword`, `number` and `function`, the code colours of previews and editors; `terminal` has `background`, `foreground`, `cursor`, `selectionBackground` and the sixteen ANSI colours (`black` … `brightWhite`). A theme leaves out what it keeps from the built-in Viewer Dark or Viewer Light. `settings.theme` is `{ "dark": id, "light": id }`, the theme for each appearance; `""` is the built-in one. Settings → Themes picks them, makes a new theme from the built-in one, edits each colour with the system picker or as hex, duplicates, copies a theme as JSON and removes it, and **Import…** reads an iTerm colour preset (`.itermcolors`: the terminal palette, and the space, text and accent from it) or a VS Code colour theme (`.json`, comments allowed: the workbench, token and terminal colours). The palette offers **Theme: …** for each theme of the appearance in use. plurid's grid, minimap and controls follow a custom theme's space, surface, text and accent.
+`settings.themes` holds **themes**: `{ id, name, look, shell, syntax, terminal, metrics? }`, where `look` is `dark` or `light` and each group maps tokens to `#rrggbb` colours (or `#rrggbbaa`, `#rgb`). `shell` has `space`, `surface`, `raised`, `field`, `ink`, `muted`, `subtle`, `accent`, `line`, `selection` and `danger`; `syntax` has `comment`, `string`, `keyword`, `number` and `function`, the code colours of previews and editors; `terminal` has `background`, `foreground`, `cursor`, `selectionBackground` and the sixteen ANSI colours (`black` … `brightWhite`). A theme leaves out what it keeps from the built-in Viewer Dark or Viewer Light. `settings.theme` is `{ "dark": id, "light": id }`, the theme for each appearance; `""` is the built-in one. Settings → Themes picks them, makes a new theme from the built-in one, edits each colour with the system picker or as hex, duplicates, copies a theme as JSON and removes it, and **Import…** reads an iTerm colour preset (`.itermcolors`: the terminal palette, and the space, text and accent from it) or a VS Code colour theme (`.json`, comments allowed: the workbench, token and terminal colours). The palette offers **Theme: …** for each theme of the appearance in use. plurid's grid, minimap and controls follow a custom theme's space, surface, text and accent.
+
+Optional `metrics` supplies `fontFamily`, `density` (`comfortable` or `compact`)
+and `radius` (0–16 pixels). These apply to core interface typography, spacing and
+control/panel/dialog corners. An empty family or omitted metric inherits the
+built-in theme. Theme insertion and choosing it publish one revisioned Settings
+edit, so two windows cannot observe a selected ID before its definition exists.
 
 `settings.browsing.newFileExtension` (default `md`) is the extension, without the dot, that **New file…** names a file with; a new scratch plane starts in its language, and Save As offers it when it is one of that language. Settings → Browsing offers each language of the highlighting table.
 

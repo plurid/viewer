@@ -14,7 +14,7 @@ import {
   type RenderedPlurid,
 } from '@plurid/plurid-react/testing';
 import type { FolderPane } from '../src/domain/contracts';
-import { stateSchema } from '../src/desktop/storage';
+import { stateSchema } from '../src/desktop/persistence/storage';
 import {
   activeWorkspace,
   addPane,

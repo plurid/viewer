@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Resource } from '../../../domain/contracts';
-import type { TrashItem } from '../../../domain/trash';
-import { formatBytes } from '../../../domain/files';
+import type { TrashItem } from '../../../domain/files/trash';
+import { formatBytes } from '../../../domain/files/entries';
 import { PreviewHost } from '../../previews/PreviewHost';
 import { Dialog, Empty, IconButton, Loading } from '../primitives';
 

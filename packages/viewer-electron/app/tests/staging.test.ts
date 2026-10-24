@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { privateStage } from '../src/desktop/staging';
+import { privateStage } from '../src/desktop/operations/staging';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {

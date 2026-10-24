@@ -1,10 +1,10 @@
 /** Missing/empty definition semantics, with all file reads simulated. */
 import { beforeEach, expect, it, vi } from 'vitest';
 import type * as FileSystem from 'node:fs/promises';
-import { Projects } from '../src/desktop/projects';
+import { Projects } from '../src/desktop/workspaces/projects';
 import { missingDefinitionCode } from '../src/domain/definitions';
 const fixture = vi.hoisted(() => ({ missing: true, close: vi.fn() }));
-vi.mock('../src/desktop/file-coordination', () => ({
+vi.mock('../src/desktop/files/file-coordination', () => ({
   fileCoordination: {
     path: (file: string) => file,
     run: async (_claims: unknown, read: () => unknown) => read(),

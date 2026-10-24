@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { IndexStatus } from '../../../domain/services';
-import { Field } from '../SettingField';
+import { Field } from './SettingField';
 import { IconButton } from '../primitives';
 import type { SettingsEditor } from './editor';
 

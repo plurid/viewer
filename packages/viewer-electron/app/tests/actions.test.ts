@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { DocumentStore } from '../src/desktop/document-store';
+import { DocumentStore } from '../src/desktop/persistence/document-store';
 import {
   mkdir,
   writeFile,
@@ -13,12 +13,12 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { ActionPlanner } from '../src/desktop/actions/planner';
-import { Operations } from '../src/desktop/operations';
-import { AgentBroker } from '../src/desktop/agent-broker';
+import { Operations } from '../src/desktop/operations/operations';
+import { AgentBroker } from '../src/desktop/agents/agent-broker';
 import { defaultSettings, type ActionPlan, type ApplicationSettings } from '../src/domain/services';
 import { epubFixture } from './fixtures';
-import { extractDocument } from '../src/desktop/formats';
-import type { FileServices } from '../src/desktop/file-services';
+import { extractDocument } from '../src/desktop/previews/formats';
+import type { FileServices } from '../src/desktop/files/file-services';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string,
   files: string,
@@ -331,6 +331,12 @@ describe('scoped proposal-only MCP broker', () => {
       } as unknown as FileServices,
       planner,
     );
+    const consent = {
+      enabled: true,
+      add: [files],
+      capabilities: ['metadata', 'propose'] as const,
+    };
+    await broker.access.approve(consent, await broker.access.captureReview(consent));
     const token = await broker.credential();
     await Promise.all([broker.start(), broker.start()]);
     const connection = JSON.parse(

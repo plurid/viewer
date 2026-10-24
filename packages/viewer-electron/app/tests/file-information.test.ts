@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chmod, lstat, mkdir, readFile, rename, symlink, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { FileInformationService, informationPatchSchema } from '../src/desktop/file-information';
-import { informationChanges } from '../src/domain/file-information';
-import { macFiles } from '../src/desktop/macos-files';
+import {
+  FileInformationService,
+  informationPatchSchema,
+} from '../src/desktop/files/file-information';
+import { informationChanges } from '../src/domain/files/information';
+import { macFiles } from '../src/desktop/native/macos-files';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const roots: string[] = [];

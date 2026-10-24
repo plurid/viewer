@@ -1,7 +1,7 @@
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
-import type { TerminalStart } from '../../domain/automation';
+import type { TerminalStart } from '../../domain/automation/actions';
 import { report } from '../state/store';
 import { terminalTheme } from './theme';
 export interface TerminalSession {

@@ -1,18 +1,32 @@
-import { builtInProfiles, profilePaths, type SettingProfile } from '../../../domain/profiles';
-import type { JSONValue } from '../../../domain/project';
+import {
+  builtInProfiles,
+  profilePaths,
+  type SettingProfile,
+} from '../../../domain/preferences/profiles';
+import type { JSONValue } from '../../../domain/workspaces/project';
 import { getState, receiveSettings } from '../../state/store';
-import { savePatch } from '../../state/core';
+import { report, savePatch } from '../../state/core';
+import {
+  effectiveWindowLook,
+  effectiveWindowPreferences,
+  effectiveWindowSettings,
+} from '../../state/effective-ui';
+import { presentationProfiles } from '../../../domain/preferences/presentation/resolver';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 import { changeSetting, settingNow } from './settings';
-import { builtInTheme } from '../../../domain/themes';
+import { builtInTheme } from '../../../domain/preferences/themes';
 import { stopTour } from '../../workspace/tour';
 
-const profiles = () => [...builtInProfiles, ...getState().settings.settings.profiles];
-/** Applies a profile, keeping what it replaces, from before the first profile, to leave it again. */
+const profiles = () => presentationProfiles(getState().settings.settings.profiles);
+/** Selects a window-local overlay; canonical configuration remains untouched. */
 export async function applyProfile(profile: SettingProfile): Promise<void> {
+  if (!profiles().some((item) => item.id === profile.id))
+    throw new Error(`The profile “${profile.id}” is unavailable.`);
   stopTour();
   savePatch({ profile: { id: profile.id, previous: {} } });
+  const issues = effectiveWindowPreferences(getState()).diagnostics;
+  if (issues.length) report(new Error(issues.map((issue) => issue.message).join(' ')));
 }
 /** Back to what was there before the first profile. */
 export async function leaveProfile(): Promise<void> {
@@ -54,6 +68,8 @@ export function profileCommands({
   windowScope,
 }: WindowScopes): CommandDefinition[] {
   const active = state.saved.profile;
+  const look = effectiveWindowLook(state);
+  const settings = effectiveWindowSettings(state);
   const name = active && profiles().find((profile) => profile.id === active.id)?.name;
   const focus = builtInProfiles.find((profile) => profile.id === 'focus')!;
   return [
@@ -89,12 +105,10 @@ export function profileCommands({
       run: leaveProfile,
     },
     // a theme for the appearance in use (2026-10-23)
-    ...[builtInTheme(state.saved.look), ...state.settings.settings.themes]
-      .filter((theme) => theme.look === state.saved.look)
+    ...[builtInTheme(look), ...state.settings.settings.themes]
+      .filter((theme) => theme.look === look)
       .map((theme): CommandDefinition => {
-        const chosen =
-          (state.settings.settings.theme[state.saved.look] || builtInTheme(state.saved.look).id) ===
-          theme.id;
+        const chosen = (settings.theme[look] || builtInTheme(look).id) === theme.id;
         return {
           id: `theme.${theme.id}`,
           label: `Theme: ${theme.name}`,
@@ -104,8 +118,8 @@ export function profileCommands({
           when: windowScope,
           run: () =>
             changeSetting(
-              `settings.theme.${state.saved.look}`,
-              theme.id === builtInTheme(state.saved.look).id ? '' : theme.id,
+              `settings.theme.${look}`,
+              theme.id === builtInTheme(look).id ? '' : theme.id,
             ),
         };
       }),

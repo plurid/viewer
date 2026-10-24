@@ -8,7 +8,7 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
-import { cadFormats } from '../../../domain/model-formats';
+import { cadFormats } from '../../../domain/previews/models/formats';
 import { importCad } from '../model/cad';
 import { printingScale } from '../model/printing';
 import {

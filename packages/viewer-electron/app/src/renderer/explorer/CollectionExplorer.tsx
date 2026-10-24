@@ -20,7 +20,7 @@ import { FileTable } from './FileTable';
 import { ContextMenu } from '../ui/ContextMenu';
 import type { CommandRequest } from '../commands/registry';
 import { Loading, Empty } from '../ui/primitives';
-import { isPackage, sortEntries } from '../../domain/files';
+import { isPackage, sortEntries } from '../../domain/files/entries';
 import { nativeOpening } from './opening';
 import { useContextPublish } from './context-publish';
 export function CollectionExplorer({ id }: { id: string }) {

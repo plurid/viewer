@@ -2,23 +2,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, realpath, writeFile, readFile, readdir, rename, symlink } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
-import { Workflows } from '../src/desktop/workflows';
-import { WatchRules } from '../src/desktop/watch-rules';
-import { Operations } from '../src/desktop/operations';
-import { OperationPlans } from '../src/desktop/operation-plans';
-import { Checkpoints } from '../src/desktop/checkpoints';
-import { Comparisons } from '../src/desktop/comparison';
+import { Workflows } from '../src/desktop/automation/workflows';
+import { WatchRules } from '../src/desktop/automation/watch-rules';
+import { Operations } from '../src/desktop/operations/operations';
+import { OperationPlans } from '../src/desktop/operations/operation-plans';
+import { Checkpoints } from '../src/desktop/operations/checkpoints';
+import { Comparisons } from '../src/desktop/comparison/comparison';
 import { ActionPlanner } from '../src/desktop/actions/planner';
-import { inspectFile } from '../src/desktop/inspection';
+import { inspectFile } from '../src/desktop/files/inspection';
 import {
   workflowDefinitionSchema,
   type WorkflowRun,
   type WorkflowDocument,
-} from '../src/domain/workflows';
-import type { WatchRule, WatchRuleScope } from '../src/domain/watch-rules';
+} from '../src/domain/automation/workflows';
+import type { WatchRule, WatchRuleScope } from '../src/domain/automation/watch-rules';
 import type { ActionRecipe } from '../src/domain/services';
-import type { OperationPlan } from '../src/domain/operation-plan';
-import type { DirectoryWatch, watchDirectory } from '../src/desktop/directory-watch';
+import type { OperationPlan } from '../src/domain/operations/operation-plan';
+import type { DirectoryWatch, watchDirectory } from '../src/desktop/files/directory-watch';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 async function settle<T>(read: () => Promise<T>, accept: (value: T) => boolean): Promise<T> {

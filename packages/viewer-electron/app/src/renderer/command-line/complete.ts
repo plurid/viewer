@@ -2,8 +2,8 @@ import type { FileEntry } from '../../domain/contracts';
 import { expandPath } from '../../domain/command-line/lex';
 import { findVerb, verbName, verbs, type CompleteKind } from '../../domain/command-line/verbs';
 import { settingByName, settingNames, settingText } from '../../domain/command-line/set';
-import { overridable } from '../../domain/overrides';
-import { tileLayouts } from '../../domain/tiling';
+import { overridable } from '../../domain/preferences/overrides';
+import { tileLayouts } from '../../domain/workspaces/tiling';
 
 export interface Completion {
   label: string;
@@ -228,7 +228,7 @@ function complete(
           (name === 'query' ? 'The file query language' : 'Prefix keys'),
       );
     case 'query':
-      // the file query language's terms (domain/file-query.ts), with an example each
+      // the file query language's terms (domain/search/query.ts), with an example each
       return named(Object.keys(queryTerms), (term) => queryTerms[term]);
     case 'command':
       return named(

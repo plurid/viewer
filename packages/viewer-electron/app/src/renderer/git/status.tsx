@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { gitBadge, type GitResult, type GitStatus } from '../../domain/git';
+import { gitBadge, type GitResult, type GitStatus } from '../../domain/comparison/git';
 import { useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 

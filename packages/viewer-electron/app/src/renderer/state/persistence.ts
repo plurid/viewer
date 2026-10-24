@@ -2,24 +2,36 @@
 import { flushBuffers } from '../editing/buffers';
 import { flushChatDrafts } from '../chat/drafts';
 import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../domain/contracts';
-import { previewValuesSchema, type JSONValue } from '../../domain/project';
+import { previewValuesSchema, type JSONValue } from '../../domain/workspaces/project';
 import { activeWorkspace, getState, replaceState, report } from './core';
 import { flushPreferences } from './preferences';
+import { installPersistenceScheduler } from './persistence-request';
 
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingEngineFlush = false;
+let flushRequested = false;
+let flushing: Promise<void> | undefined;
+let nextArrangementRevision = 0;
 /** Saves after a quiet period; a later request replaces an earlier one. */
 export function schedulePersist(flushEngine: boolean): void {
+  pendingEngineFlush ||= flushEngine;
   clearTimeout(persistTimer);
+  if (flushing) {
+    flushRequested = true;
+    return;
+  }
   persistTimer = setTimeout(() => {
-    void flushState(flushEngine).catch(report);
+    void flushState(pendingEngineFlush).catch(report);
   }, 400);
 }
 export const adapters = new Map<string, Map<string, string>>();
-const dirtyArrangements = new Set<string>();
+const dirtyArrangements = new Map<string, number>();
 // Host records survive an arrangement undo in memory, never as unreferenced saved panes.
 export const closedPanes = new Map<string, Map<string, { pane: Pane; root: boolean }>>();
 export function resetPersistence(): void {
   clearTimeout(persistTimer);
+  pendingEngineFlush = false;
+  flushRequested = false;
   adapters.clear();
   dirtyArrangements.clear();
   closedPanes.clear();
@@ -32,11 +44,14 @@ export function storageAdapter(id: string) {
     setItem: (key: string, value: string) => {
       if (map.get(key) === value) return;
       map.set(key, value);
-      dirtyArrangements.add(id);
+      dirtyArrangements.set(id, ++nextArrangementRevision);
       schedulePersist(false);
     },
     removeItem: (key: string) => {
-      if (map.delete(key)) dirtyArrangements.add(id);
+      if (map.delete(key)) {
+        dirtyArrangements.set(id, ++nextArrangementRevision);
+        schedulePersist(false);
+      }
     },
   };
 }
@@ -57,7 +72,7 @@ function retainedPreviewStates(): SavedState['previewStates'] {
   const kept = entries.filter(([key]) => keep.has(key));
   return kept.length === entries.length ? states : Object.fromEntries(kept);
 }
-export async function flushState(flushEngine = true): Promise<void> {
+async function flushOnce(flushEngine: boolean): Promise<void> {
   if (flushEngine) window.dispatchEvent(new Event('pagehide'));
   // unsaved text first: a quit waits for this flush
   await flushBuffers();
@@ -65,6 +80,7 @@ export async function flushState(flushEngine = true): Promise<void> {
   // After the engine's synchronous flush: a save it scheduled is covered by this one.
   clearTimeout(persistTimer);
   await flushPreferences();
+  const arrangementRevisions = new Map(dirtyArrangements);
   const saved = {
     ...getState().saved,
     previewStates: retainedPreviewStates(),
@@ -75,9 +91,34 @@ export async function flushState(flushEngine = true): Promise<void> {
     ),
   };
   replaceState({ ...getState(), saved });
-  dirtyArrangements.clear();
   await window.viewer.save(saved);
+  for (const [id, revision] of arrangementRevisions)
+    if (dirtyArrangements.get(id) === revision) dirtyArrangements.delete(id);
 }
+
+/** All callers join the same durable barrier, including work arriving during a save. */
+export function flushState(flushEngine = true): Promise<void> {
+  clearTimeout(persistTimer);
+  pendingEngineFlush ||= flushEngine;
+  flushRequested = true;
+  if (flushing) return flushing;
+  const work = Promise.resolve()
+    .then(async () => {
+      while (flushRequested) {
+        flushRequested = false;
+        const engine = pendingEngineFlush;
+        pendingEngineFlush = false;
+        await flushOnce(engine);
+      }
+    })
+    .finally(() => {
+      if (flushing === work) flushing = undefined;
+    });
+  flushing = work;
+  return work;
+}
+
+installPersistenceScheduler(schedulePersist);
 
 export function previewValues(
   paneID: string,

@@ -12,6 +12,15 @@ export function arrangementCommands({
 }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [
     {
+      id: 'overview',
+      label: 'Overview',
+      group: 'Space',
+      icon: 'frame',
+      aliases: ['minimap', 'navigate space'],
+      when: (context) => windowScope(context) && !!actions.overviewAvailable,
+      run: () => actions.overview?.(),
+    },
+    {
       id: 'frame-all',
       label: 'Frame all planes',
       group: 'Space',

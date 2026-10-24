@@ -1,9 +1,9 @@
 import { useRef, type ReactNode } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { browserColumnWidth } from '../../domain/folder-presentation';
+import { browserColumnWidth } from '../../domain/preferences/folder-presentation';
 import { updateFolderPresentation, useFolderPresentation } from '../state/store';
 import { measureLocalX, type Point } from '../ui/projectedResize';
-import { baseName } from '../../domain/planes';
+import { baseName } from '../../domain/workspaces/planes';
 /** The geometry adapter is shared with list/sidebar resizing; movement never writes React state. */
 export function BrowserColumn({
   path,

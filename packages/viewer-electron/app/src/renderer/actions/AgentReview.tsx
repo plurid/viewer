@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AgentProposal } from '../../domain/agent-requests';
+import type { AgentProposal } from '../../domain/agents/requests';
 import { Dialog } from '../ui/primitives';
 import { report } from '../state/store';
 export function AgentReview() {

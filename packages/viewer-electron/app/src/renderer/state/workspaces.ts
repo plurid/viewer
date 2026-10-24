@@ -1,16 +1,24 @@
+import { presentationValue } from '../../domain/preferences/presentation/profile-fields';
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
-import { overridable, type WorkspaceOverrides } from '../../domain/overrides';
-import type { Tiling } from '../../domain/tiling';
+import { overridable, type WorkspaceOverrides } from '../../domain/preferences/overrides';
+import type { Tiling } from '../../domain/workspaces/tiling';
 import {
   CURRENT_STATE_VERSION,
   type Bootstrap,
   type SavedState,
   type Workspace,
 } from '../../domain/contracts';
-import { migratePlaneNavigation, normalizePreferences, spaceColor } from '../../domain/preferences';
+import {
+  migratePlaneNavigation,
+  normalizePreferences,
+  spaceColor,
+} from '../../domain/preferences/ui';
 import { clearSessions } from '../workspace/sessions';
 import { defaultSettings } from '../../domain/services';
-import { panePresentation, resolveFolderPresentation } from '../../domain/folder-presentation';
+import {
+  panePresentation,
+  resolveFolderPresentation,
+} from '../../domain/preferences/folder-presentation';
 import {
   type ViewerState,
   activeWorkspace,
@@ -25,7 +33,7 @@ import {
 import { folderPane } from './panes';
 import { adapters, closedPanes, flushState, resetPersistence } from './persistence';
 import { resetPreferences } from './preferences';
-import { scopedPresentation } from './presentation';
+import { scopedPresentation } from './folder-presentation';
 import { stopTour } from '../workspace/tour';
 
 export function initialize(bootstrap: Bootstrap): void {
@@ -181,12 +189,12 @@ export function renameWorkspace(name: string): void {
   changeWorkspace((space) => ({ ...space, name }));
 }
 /** A setting of the active workspace's own (2026-10-23); undefined goes back to the general one. */
-export function setWorkspaceOverride(path: string, value: boolean | number | undefined): void {
+export function setWorkspaceOverride(path: string, value: unknown): void {
   if (!overridable(path)) return;
   changeWorkspace((space) => {
     const overrides: WorkspaceOverrides = { ...space.overrides };
     if (value === undefined) delete overrides[path];
-    else overrides[path] = value;
+    else Object.assign(overrides, { [path]: presentationValue(path, value) });
     const { overrides: _previous, ...rest } = space;
     return Object.keys(overrides).length ? { ...rest, overrides } : rest;
   });

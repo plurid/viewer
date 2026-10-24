@@ -1,1 +1,1 @@
-export { parseDelimited } from '../../domain/delimited';
+export { parseDelimited } from '../../domain/previews/data/delimited';

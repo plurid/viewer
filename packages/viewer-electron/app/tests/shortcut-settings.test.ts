@@ -9,7 +9,7 @@ import { createElement } from 'react';
 import { ShortcutSettings } from '../src/renderer/ui/settings/ShortcutSettings';
 import type { SettingsEditor } from '../src/renderer/ui/settings/editor';
 import { defaultSettings, type SettingsSnapshot } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 
 afterEach(cleanup);
 const press = (key: string, init: KeyboardEventInit = {}) =>

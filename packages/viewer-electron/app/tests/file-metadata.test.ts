@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chmod, lstat, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { FolderSizes } from '../src/desktop/folder-sizes';
-import { Applications } from '../src/desktop/applications';
-import type { FolderSizeTask } from '../src/domain/metadata';
+import { FolderSizes } from '../src/desktop/files/folder-sizes';
+import { Applications } from '../src/desktop/native/applications';
+import type { FolderSizeTask } from '../src/domain/files/metadata';
 import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 const owned: string[] = [];
 async function temporary() {

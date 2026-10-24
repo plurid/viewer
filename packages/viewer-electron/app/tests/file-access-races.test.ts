@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, it, vi } from 'vitest';
-import { FileAccess } from '../src/desktop/file-access';
+import { FileAccess } from '../src/desktop/files/file-access';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const canonical = vi.hoisted(() => ({

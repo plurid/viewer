@@ -1,11 +1,15 @@
 /** Pure and mocked safety regressions. No filesystem removals or real native menus. */
 import { beforeEach, expect, it, vi } from 'vitest';
 import path from 'node:path';
-import { Trash } from '../src/desktop/trash';
-import { applicationsPath, linuxMounts, trashRoots } from '../src/desktop/trash-locations';
-import { trashName, forbiddenTrashCommands } from '../src/domain/trash';
-import { agentCommandID } from '../src/domain/agent-safety';
-import type { FileAccess } from '../src/desktop/file-access';
+import { Trash } from '../src/desktop/operations/trash';
+import {
+  applicationsPath,
+  linuxMounts,
+  trashRoots,
+} from '../src/desktop/operations/trash-locations';
+import { trashName, forbiddenTrashCommands } from '../src/domain/files/trash';
+import { agentCommandID } from '../src/domain/agents/safety';
+import type { FileAccess } from '../src/desktop/files/file-access';
 import type { BrowserWindow } from 'electron';
 
 const mock = vi.hoisted(() => ({
@@ -33,7 +37,7 @@ const mock = vi.hoisted(() => ({
   read: vi.fn(),
   settings: vi.fn(async () => {}),
 }));
-vi.mock('../src/desktop/macos-files', () => ({
+vi.mock('../src/desktop/native/macos-files', () => ({
   macFiles: () => ({
     volumes: async () => [
       { path: '/', name: 'Local' },

@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import type { OperationJob, OperationProgress } from '../src/domain/contracts';
-import { stateSchema } from '../src/desktop/storage';
-import { normalizePreferences, reorder } from '../src/domain/preferences';
+import { stateSchema } from '../src/desktop/persistence/storage';
+import { normalizePreferences, reorder } from '../src/domain/preferences/ui';
 import { CommandRegistry } from '../src/renderer/commands/registry';
 import { windowCommands, type WindowActions } from '../src/renderer/commands/window';
 import {
@@ -87,7 +87,8 @@ describe('layout-only changes', () => {
     const { folderCommands } = await import('../src/renderer/commands/folder');
     const { programCommands } = await import('../src/renderer/commands/programs');
     const { readFile } = await import('node:fs/promises');
-    const { defaultShortcuts, shortcutCommandID } = await import('../src/domain/shortcuts');
+    const { defaultShortcuts, shortcutCommandID } =
+      await import('../src/domain/preferences/shortcuts');
     const actions = {
       workspace: {
         newRootFolder: addRootFolder,
@@ -117,7 +118,7 @@ describe('layout-only changes', () => {
     expect(menu).toEqual([]);
   });
   it('rebuilds the native menu when a listed custom action changes, and only then', async () => {
-    const { nativeMenuBindings } = await import('../src/domain/shortcuts');
+    const { nativeMenuBindings } = await import('../src/domain/preferences/shortcuts');
     const { defaultSettings } = await import('../src/domain/services');
     const settings = defaultSettings('/fixtures');
     const action = {

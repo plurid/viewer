@@ -5,7 +5,7 @@ import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const native = vi.hoisted(() => ({ thumbnail: vi.fn() }));
 vi.mock('electron', () => ({ nativeImage: { createThumbnailFromPath: native.thumbnail } }));
-import { Thumbnails } from '../src/desktop/thumbnails';
+import { Thumbnails } from '../src/desktop/previews/thumbnails';
 
 let root: string, first: string, second: string, thumbnails: Thumbnails;
 beforeEach(async () => {

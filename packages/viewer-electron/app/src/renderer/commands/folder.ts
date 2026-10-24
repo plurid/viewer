@@ -3,9 +3,9 @@ import { columnCommands } from './columns';
 import { copyPathCommand } from './copy-path';
 import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
-import { parentPath, baseName } from '../../domain/planes';
-import { convertibleImage } from '../../domain/image-conversions';
-export { parentPath } from '../../domain/planes';
+import { parentPath, baseName } from '../../domain/workspaces/planes';
+import { convertibleImage } from '../../domain/operations/image-conversions';
+export { parentPath } from '../../domain/workspaces/planes';
 import {
   favorite,
   getState,

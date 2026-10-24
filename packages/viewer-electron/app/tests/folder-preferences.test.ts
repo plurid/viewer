@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { normalizePreferences } from '../src/domain/preferences';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 import { defaultSettings } from '../src/domain/services';
-import { resolveFolderPresentation, browserColumnWidth } from '../src/domain/folder-presentation';
+import {
+  resolveFolderPresentation,
+  browserColumnWidth,
+} from '../src/domain/preferences/folder-presentation';
 import { nativeOpening } from '../src/renderer/explorer/opening';
 import { keyCommand, routeExplorerInput } from '../src/renderer/explorer/input';
 import { browseSession, clearSessions, remapSessions } from '../src/renderer/workspace/sessions';
-import { settingsSchema } from '../src/desktop/settings';
+import { settingsSchema } from '../src/desktop/preferences/settings';
 import {
   activeWorkspace,
   addRootFolder,

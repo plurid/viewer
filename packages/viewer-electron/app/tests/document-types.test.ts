@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { documentTypes } from '../tools/document-types';
-import { modelFormats } from '../src/domain/model-formats';
+import { modelFormats } from '../src/domain/previews/models/formats';
 
 describe('Finder document types', () => {
   it('offers Viewer in Open With without claiming any type as its default', () => {

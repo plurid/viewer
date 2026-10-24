@@ -10,8 +10,8 @@ import {
   type DrawingCanvas,
   type DrawingView,
 } from '../dxf/canvas';
-import type { Drawing, DrawingEntity } from '../../../domain/dxf/math';
-import { DXF_MAX_BYTES } from '../../../domain/dxf/math';
+import type { Drawing, DrawingEntity } from '../../../domain/previews/drawings/dxf/math';
+import { DXF_MAX_BYTES } from '../../../domain/previews/drawings/dxf/math';
 import {
   convertUnits,
   formatMeasure,
@@ -20,8 +20,8 @@ import {
   units,
   type Measurement,
   type Tool,
-} from '../../../domain/dxf/units';
-import type { DrawingResult } from '../dxf/dxf.worker';
+} from '../../../domain/previews/drawings/dxf/units';
+import type { DrawingResult } from '../dxf/dxf.worker.ts';
 
 /** Extend the established preview header: the drawing leads, tools and evidence stay compact. */
 export default function DXFPreview(context: PreviewContext) {

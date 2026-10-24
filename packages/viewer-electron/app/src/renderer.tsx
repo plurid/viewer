@@ -1,6 +1,6 @@
 import './renderer/native-api';
 import { createRoot } from 'react-dom/client';
-import { SettingsWindow } from './renderer/ui/Settings';
+import { SettingsWindow } from './renderer/ui/settings/Settings';
 import { App } from './renderer/App';
 import { initialize } from './renderer/state/store';
 import { Empty } from './renderer/ui/primitives';

@@ -1,6 +1,10 @@
 import { useSyncExternalStore } from 'react';
-import { canonicalKeymap, upgradeKeymap, type Keymap } from '../../domain/keymap';
-import { emptySessionKeys, withSessionKeys, type SessionKeys } from '../../domain/session-keys';
+import { canonicalKeymap, upgradeKeymap, type Keymap } from '../../domain/preferences/keymap';
+import {
+  emptySessionKeys,
+  withSessionKeys,
+  type SessionKeys,
+} from '../../domain/preferences/session-keys';
 import { getState } from '../state/store';
 
 let session: SessionKeys = emptySessionKeys;

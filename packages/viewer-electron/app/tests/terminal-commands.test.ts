@@ -9,7 +9,7 @@ import { programCommands } from '../src/renderer/commands/programs';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { activeWorkspace, initialize } from '../src/renderer/state/store';
-import { agentCommandID } from '../src/domain/agent-safety';
+import { agentCommandID } from '../src/domain/agents/safety';
 
 const newTerminal = vi.fn();
 const workspace = { newTerminal, rootID: () => 'root' } as unknown as WorkspaceController;

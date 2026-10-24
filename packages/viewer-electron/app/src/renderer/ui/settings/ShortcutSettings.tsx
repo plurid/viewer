@@ -3,7 +3,7 @@ import {
   menuShortcuts,
   shortcutLabel,
   shortcutOwner,
-} from '../../../domain/shortcuts';
+} from '../../../domain/preferences/shortcuts';
 import type { SettingsEditor } from './editor';
 import { KeyCapture } from './KeyCapture';
 import { KeymapSettings } from './KeymapSettings';

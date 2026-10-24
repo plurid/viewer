@@ -21,7 +21,7 @@ import {
   setActivePane,
 } from '../src/renderer/state/store';
 import { registerEditingPlane } from '../src/renderer/editing/planes';
-import { agentCommandID } from '../src/domain/agent-safety';
+import { agentCommandID } from '../src/domain/agents/safety';
 
 const settingsPatch = vi.fn(async (patches: { path: string; value: unknown }[]) => {
   const snapshot = structuredClone(getState().settings);
@@ -178,7 +178,9 @@ describe('set', () => {
     expect(getState().saved.ui.space.minimap).toBe(true);
     await act(async () => void (await runLine('setl minimap&', live)));
     expect(activeWorkspace()).not.toHaveProperty('overrides');
-    expect((await runLine('setl backdrop=blur', live)).message).toMatch(/not a workspace’s own/);
+    await act(async () => void (await runLine('setl backdrop=blur', live)));
+    expect(activeWorkspace().overrides).toEqual({ 'ui.space.backdrop': 'blur' });
+    expect(getState().saved.ui.space.backdrop).toBe('opaque');
   });
   it('with nothing after it lists the settings', async () => {
     const live = host();

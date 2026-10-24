@@ -6,7 +6,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import type { Pane } from '../src/domain/contracts';
-import { captureTemplate, templatePath, type LayoutTemplate } from '../src/domain/layout-templates';
+import {
+  captureTemplate,
+  templatePath,
+  type LayoutTemplate,
+} from '../src/domain/workspaces/layout-templates';
 import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';
@@ -16,7 +20,7 @@ import {
   initialize,
   receiveSettings,
 } from '../src/renderer/state/store';
-import { layoutTemplateSchema } from '../src/desktop/settings';
+import { layoutTemplateSchema } from '../src/desktop/preferences/settings';
 
 describe('a template', () => {
   const panes = [

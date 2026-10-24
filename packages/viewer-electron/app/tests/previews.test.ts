@@ -5,7 +5,7 @@ import { choosePreview, registerPreview } from '../src/renderer/previews/registr
 import { previewState } from '../src/renderer/previews/state';
 import { parseDelimited } from '../src/renderer/previews/parse';
 import { lookup } from 'mime-types';
-import { fileFamily } from '../src/domain/files';
+import { fileFamily } from '../src/domain/files/entries';
 const file = (name: string): FileEntry => ({
   path: `/fixtures/${name}`,
   name,
@@ -21,6 +21,12 @@ const file = (name: string): FileEntry => ({
   hidden: false,
 });
 describe('preview extension contract', () => {
+  it.each(['html', 'htm', 'xhtml'])(
+    'renders .%s documents before the generic text preview',
+    (extension) => {
+      expect(choosePreview(file(`page.${extension}`)).id).toBe('html');
+    },
+  );
   it('offers Office previews for DOCX/XLSX while leaving old binary and presentation formats to the fallback', () => {
     for (const name of ['Report.docx', 'Budget.xlsx'])
       expect(choosePreview(file(name)).id).toBe('office');

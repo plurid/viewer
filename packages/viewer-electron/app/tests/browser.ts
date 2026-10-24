@@ -20,6 +20,21 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  htmlPreview: (resourceID) => invoke('htmlPreview', resourceID),
+  htmlPreviewClose: (id) => invoke('htmlPreviewClose', id),
+  localServerStart: (root, paneID, sourceIdentity) =>
+    invoke('localServerStart', root, paneID, sourceIdentity),
+  localServers: () => invoke('localServers'),
+  localServerInspect: (id) => invoke('localServerInspect', id),
+  localServerAction: async (id, action) => {
+    if (action === 'copy-url' || action === 'open-browser') {
+      const { server } = await api.localServerInspect(id);
+      if (server.state !== 'running') throw new Error('Start the local server first.');
+      if (action === 'copy-url') await navigator.clipboard.writeText(server.url);
+      else window.open(server.url, '_blank', 'noopener,noreferrer');
+    }
+    return invoke('localServerAction', id, action);
+  },
   chat: (request) => invoke('chat', request),
   shellCommand: (action) => invoke('shellCommand', action),
   hotkeyStatus: () => invoke('hotkeyStatus'),
@@ -146,7 +161,7 @@ const api: ViewerAPI = {
   imageRendition: (id) => invoke('imageRendition', id),
   printPDF: (id, password) => invoke('printPDF', id, password),
   save: (state) => invoke('save', state),
-  flushed: (token) => invoke('flushed', token),
+  flushed: (token, result) => invoke('flushed', token, result),
   clipboardWrite: (paths, cut) => invoke('clipboardWrite', paths, cut),
   copyPaths: (paths) =>
     copyBrowserPaths(paths, () => invoke('copyPaths', paths), navigator.clipboard),

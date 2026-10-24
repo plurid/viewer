@@ -1,10 +1,10 @@
 import { KeyCapture } from './KeyCapture';
-import { shortcutOwner } from '../../../domain/shortcuts';
+import { shortcutOwner } from '../../../domain/preferences/shortcuts';
 import type { ActionRecipe } from '../../../domain/services';
 import { builtInRecipes } from '../../../domain/services';
-import { Field } from '../SettingField';
-import { ReferencedRemove } from '../AutomationSettings';
-import { referencesTo } from '../../../domain/references';
+import { Field } from './SettingField';
+import { ReferencedRemove } from './AutomationSettings';
+import { referencesTo } from '../../../domain/automation/references';
 import { Icon } from '../Icon';
 import { ChoiceButton } from '../ChoiceMenu';
 import type { SettingsEditor } from './editor';

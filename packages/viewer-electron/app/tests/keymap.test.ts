@@ -14,8 +14,8 @@ import {
   keyName,
   validKeymapKey,
   type Keymap,
-} from '../src/domain/keymap';
-import { keymapSchema } from '../src/desktop/keymap-schema';
+} from '../src/domain/preferences/keymap';
+import { keymapSchema } from '../src/desktop/preferences/keymap-schema';
 
 const key = (key: string, extra: Partial<KeyboardEvent> = {}) =>
   ({

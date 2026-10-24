@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { terminateTerminalGroup } from '../src/desktop/terminal-groups';
+import { terminateTerminalGroup } from '../src/desktop/terminals/terminal-groups';
 afterEach(() => vi.restoreAllMocks());
 describe('owned PTY groups', () => {
   it('kills only the recorded process group and waits until it no longer exists', async () => {

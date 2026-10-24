@@ -1,15 +1,16 @@
 // Folder view presentation resolved from settings, interface preferences and projects.
 import { useMemo } from 'react';
-import type { UIPreferences, Workspace } from '../../domain/contracts';
 import type { ApplicationSettings } from '../../domain/services';
 import {
   panePresentation,
-  resolveFolderPresentation,
   type FolderOverride,
   type FolderPresentation,
-} from '../../domain/folder-presentation';
+} from '../../domain/preferences/folder-presentation';
 import { activeWorkspace, changeWorkspace, getState, report, update, useViewer } from './core';
-import { pendingPreferences, receiveSettings, schedulePreferences } from './preferences';
+import { queuePreference, receiveSettings, schedulePreferences } from './preferences';
+import { effectiveWindowSettings, effectiveWindowUI } from './effective-ui';
+import { scopedPresentation } from './folder-presentation';
+export { scopedPresentation } from './folder-presentation';
 
 export function folderPresentation(path: string): FolderPresentation {
   return scopedPresentation(
@@ -17,49 +18,16 @@ export function folderPresentation(path: string): FolderPresentation {
     getState().settings.settings,
     getState().saved.ui,
     activeWorkspace(),
-  );
-}
-export function scopedPresentation(
-  path: string,
-  settings: ApplicationSettings,
-  ui: UIPreferences,
-  space: Workspace,
-): FolderPresentation {
-  const override = space.project?.folders[path];
-  return resolveFolderPresentation(
-    path,
-    override
-      ? {
-          ...settings,
-          folders: {
-            ...settings.folders,
-            [path]: {
-              ...settings.folders[path],
-              ...override,
-              ...(override.list
-                ? {
-                    list: {
-                      ...settings.folders[path]?.list,
-                      ...override.list,
-                      visible: {
-                        ...settings.folders[path]?.list?.visible,
-                        ...override.list.visible,
-                      },
-                      widths: { ...settings.folders[path]?.list?.widths, ...override.list.widths },
-                    },
-                  }
-                : {}),
-            },
-          },
-        }
-      : settings,
-    ui,
+    {
+      profileID: getState().saved.profile?.id,
+      systemLook: getState().settings.systemLook ?? getState().settings.look,
+    },
   );
 }
 export function useFolderPresentation(path: string): FolderPresentation {
-  const browsing = useViewer((state) => state.settings.settings.browsing);
-  const override = useViewer((state) => state.settings.settings.folders[path]);
-  const list = useViewer((state) => state.saved.ui.list);
+  const browsing = useViewer((state) => effectiveWindowSettings(state).browsing);
+  const override = useViewer((state) => effectiveWindowSettings(state).folders[path]);
+  const list = useViewer((state) => effectiveWindowUI(state).list);
   const project = useViewer((state) => activeWorkspace(state).project?.folders[path]);
   // folderPresentation reads the store; the selections above are exactly its inputs.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,7 +53,13 @@ export function updateFolderPresentation(path: string, patch: FolderOverride | n
             ? {
                 ...pane,
                 ...panePresentation(
-                  scopedPresentation(path, getState().settings.settings, getState().saved.ui, next),
+                  scopedPresentation(
+                    path,
+                    getState().settings.settings,
+                    getState().saved.ui,
+                    next,
+                    { profileID: getState().saved.profile?.id },
+                  ),
                 ),
               }
             : pane,
@@ -111,18 +85,24 @@ export function updateFolderPresentation(path: string, patch: FolderOverride | n
         pane.type === 'folder' && pane.path === path
           ? {
               ...pane,
-              ...panePresentation(scopedPresentation(path, settings, getState().saved.ui, space)),
+              ...panePresentation(
+                scopedPresentation(path, settings, getState().saved.ui, space, {
+                  profileID:
+                    space.id === getState().saved.activeWorkspace
+                      ? getState().saved.profile?.id
+                      : undefined,
+                }),
+              ),
             }
           : pane,
       ),
     })),
   };
   update({ ...getState(), settings: { ...getState().settings, settings }, saved }, true);
-  if (patch === null)
-    pendingPreferences.set('@' + JSON.stringify(['settings', 'folders', path]), null);
+  if (patch === null) queuePreference('@' + JSON.stringify(['settings', 'folders', path]), null);
   else
     for (const [key, value] of Object.entries(patch))
-      pendingPreferences.set(
+      queuePreference(
         '@' + JSON.stringify(['settings', 'folders', path, key]),
         key === 'list' ? folders[path]?.list : value,
       );

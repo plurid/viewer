@@ -10,8 +10,8 @@ import {
   type LensDocument,
   type LensFolder,
   type LensOp,
-} from '../../domain/lenses';
-import type { FolderPresentation } from '../../domain/folder-presentation';
+} from '../../domain/files/lenses';
+import type { FolderPresentation } from '../../domain/preferences/folder-presentation';
 import { report } from './core';
 
 export interface LensView {

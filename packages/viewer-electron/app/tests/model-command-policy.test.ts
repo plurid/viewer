@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { promptLineProblem } from '../src/domain/command-line/prompt';
-import type { CustomAction } from '../src/domain/automation';
+import type { CustomAction } from '../src/domain/automation/actions';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
 import { agentCatalog } from '../src/renderer/commands/agent-catalog';
 

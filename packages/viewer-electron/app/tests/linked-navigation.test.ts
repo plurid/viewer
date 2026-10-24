@@ -2,8 +2,8 @@ import { expect, it } from 'vitest';
 import type { TreePlane } from '@plurid/plurid-data';
 import type { Workspace } from '../src/domain/contracts';
 import { linkedPaneID, parentPaneID } from '../src/renderer/workspace/tree';
-import { normalizePreferences } from '../src/domain/preferences';
-import { preferencesSchema } from '../src/desktop/preferences-schema';
+import { normalizePreferences } from '../src/domain/preferences/ui';
+import { preferencesSchema } from '../src/desktop/preferences/preferences-schema';
 const node = (id: string, children: TreePlane[] = []) =>
   ({
     routeDivisions: { plane: { parameters: { id } }, path: { parameters: {} } },

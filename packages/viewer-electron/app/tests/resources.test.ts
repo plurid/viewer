@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
-import { Resources } from '../src/desktop/resources';
+import { Resources } from '../src/desktop/previews/resources';
 import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 let root: string, resources: Resources;
 beforeEach(async () => {

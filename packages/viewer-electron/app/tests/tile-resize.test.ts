@@ -6,7 +6,7 @@ import {
   tileTree,
   tilingRects,
   type Tiling,
-} from '../src/domain/tiling';
+} from '../src/domain/workspaces/tiling';
 
 describe('individual tile resize', () => {
   it('grows a secondary tile toward either neighboring boundary without changing the outside edges', () => {

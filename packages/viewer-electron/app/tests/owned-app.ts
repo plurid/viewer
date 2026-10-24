@@ -1,10 +1,12 @@
 /** Native supplemental checks own their profile, loopback debugger and app. */
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import net from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { adoptGeneratedProfile, type NativeWindowMode } from './native/runtime/owned-application';
 
 interface DebugTarget {
+  id: string;
   url: string;
   webSocketDebuggerUrl: string;
 }
@@ -12,49 +14,39 @@ interface RuntimeResult<T> {
   result: { value: T };
   exceptionDetails?: { exception?: { description?: string }; text?: string };
 }
-export async function ownedApp(binary: string, profile: string) {
-  const listener = net.createServer();
-  await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
-  const port = (listener.address() as net.AddressInfo).port;
-  await new Promise<void>((resolve) => listener.close(() => resolve()));
-  const child = spawn(
+export async function ownedApp(
+  binary: string,
+  profile: string,
+  options: { mode?: NativeWindowMode } = {},
+) {
+  const owned = await adoptGeneratedProfile({
     binary,
-    [
-      `--remote-debugging-port=${port}`,
-      '--remote-debugging-address=127.0.0.1',
-      '--disable-features=MacWebContentsOcclusion',
-      '--disable-renderer-backgrounding',
-      '--disable-background-timer-throttling',
-    ],
-    {
-      env: {
-        ...process.env,
-        VIEWER_DATA_DIRECTORY: profile,
-        VIEWER_RENDER_TEST: '1',
-        VIEWER_BACKGROUND_TEST: '1',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  let output = '';
-  for (const stream of [child.stdout, child.stderr])
-    stream.on('data', (chunk) => {
-      output = (output + String(chunk)).slice(-6000);
-    });
+    profile,
+    mode: options.mode ?? 'hidden',
+    label: 'native-supplemental',
+    evidenceRoot: path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../out/native-evidence',
+    ),
+  });
+  const launched = await owned.launch();
+  const { child, port } = launched;
   const sockets: WebSocket[] = [];
-  async function connect(settings = false) {
+  async function connect(settings = false, targetID?: string) {
     let target: DebugTarget | undefined;
     for (let i = 0; i < 200 && !target; i++) {
       if (child.exitCode !== null || child.signalCode !== null)
         throw new Error(
-          `Owned app exited before connection (${child.exitCode ?? child.signalCode}): ${output}`,
+          `Owned app exited before connection (${child.exitCode ?? child.signalCode}): ${launched.output()}`,
         );
       const targets: DebugTarget[] = await fetch(`http://127.0.0.1:${port}/json/list`)
         .then((r) => r.json())
         .catch(() => []);
       target = targets.find(
         (t) =>
-          t.url.startsWith('viewer-app://app/') && t.url.includes('window=settings') === settings,
+          t.url.startsWith('viewer-app://app/') &&
+          t.url.includes('window=settings') === settings &&
+          (!targetID || t.id === targetID),
       );
       if (!target) await delay(100);
     }
@@ -90,7 +82,11 @@ export async function ownedApp(binary: string, profile: string) {
       for (const request of pending.values()) request.reject(new Error('Owned debugger closed'));
       pending.clear();
     });
-    const command = <T = unknown>(method: string, params: Record<string, unknown> = {}) =>
+    const command = <T = unknown>(
+      method: string,
+      params: Record<string, unknown> = {},
+      sessionId?: string,
+    ) =>
       new Promise<T>((resolve, reject) => {
         const current = ++id,
           timeout = setTimeout(() => {
@@ -107,15 +103,23 @@ export async function ownedApp(binary: string, profile: string) {
             reject(error);
           },
         });
-        socket.send(JSON.stringify({ id: current, method, params }));
+        socket.send(JSON.stringify({ id: current, method, params, sessionId }));
       });
-    const evaluate = async <T = unknown>(expression: string): Promise<T> => {
-      const reply = await command<RuntimeResult<T>>('Runtime.evaluate', {
-        expression,
-        awaitPromise: true,
-        returnByValue: true,
-        userGesture: true,
-      });
+    const evaluate = async <T = unknown>(
+      expression: string,
+      options: { contextId?: number; sessionId?: string; userGesture?: boolean } = {},
+    ): Promise<T> => {
+      const reply = await command<RuntimeResult<T>>(
+        'Runtime.evaluate',
+        {
+          expression,
+          contextId: options.contextId,
+          awaitPromise: true,
+          returnByValue: true,
+          userGesture: options.userGesture ?? true,
+        },
+        options.sessionId,
+      );
       if (reply.exceptionDetails)
         throw new Error(
           reply.exceptionDetails.exception?.description || reply.exceptionDetails.text,
@@ -131,7 +135,7 @@ export async function ownedApp(binary: string, profile: string) {
       'owned renderer finished loading',
     );
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>resolve(true)))');
-    return { command, evaluate };
+    return { command, evaluate, targetID: target.id };
   }
   async function close(connection?: Awaited<ReturnType<typeof connect>>) {
     try {
@@ -139,19 +143,19 @@ export async function ownedApp(binary: string, profile: string) {
       for (let i = 0; i < 300 && child.exitCode === null && child.signalCode === null; i++)
         await delay(50);
       if (child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGTERM');
-        for (let i = 0; i < 100 && child.exitCode === null && child.signalCode === null; i++)
-          await delay(50);
+        await launched.stop();
         throw new Error(
-          'Owned app needed termination instead of graceful Quit. Recent app output: ' + output,
+          'Owned app needed termination instead of graceful Quit. Recent app output: ' +
+            launched.output(),
         );
       }
       assert.equal(child.exitCode, 0, 'Owned app quit cleanly');
     } finally {
       for (const socket of sockets) socket.close();
+      await launched.stop();
     }
   }
-  return { child, port, connect, close };
+  return { child, port, connect, close, evidenceDirectory: owned.evidenceDirectory };
 }
 export async function until<T>(
   read: () => Promise<T>,

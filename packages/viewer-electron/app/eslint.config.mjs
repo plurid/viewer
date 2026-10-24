@@ -2,7 +2,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 // AGENTS.md: nothing is permanently deleted outside the reviewed removal module.
 const removalMessage =
-  'Permanent removal is limited to src/desktop/removal.ts. Use the native Trash, a named function there, or tools/temporary.ts in tests and tools.';
+  'Permanent removal is limited to src/desktop/operations/removal.ts. Use the native Trash, a named function there, or tools/temporary.ts in tests and tools.';
 const removalCalls = ['rm', 'rmSync', 'rmdir', 'rmdirSync', 'unlink', 'unlinkSync'].join('|');
 const removal = [
   { selector: `CallExpression[callee.name=/^(${removalCalls})$/]`, message: removalMessage },
@@ -32,7 +32,7 @@ export default tseslint.config(
     rules: { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'error' },
   },
   {
-    files: ['src/desktop/removal.ts'],
+    files: ['src/desktop/operations/removal.ts'],
     rules: { 'no-restricted-syntax': ['error', importType] },
   },
   {

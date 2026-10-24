@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FileEntry } from '../src/domain/contracts';
-import { emptyLens, resolveLens, type Lens } from '../src/domain/lenses';
+import { emptyLens, resolveLens, type Lens } from '../src/domain/files/lenses';
 import {
   dropRegion,
   layoutLens,
@@ -11,7 +11,7 @@ import {
   regionAt,
   withinGroup,
   type MapLayout,
-} from '../src/domain/lens-layout';
+} from '../src/domain/files/lens-layout';
 
 const entry = (name: string): FileEntry => ({
   path: `/Part/${name}`,

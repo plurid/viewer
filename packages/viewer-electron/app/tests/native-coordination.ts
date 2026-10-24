@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { writeFile, readFile, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { FileCoordination } from '../src/desktop/file-coordination';
-import { macFiles } from '../src/desktop/macos-files';
+import { FileCoordination } from '../src/desktop/files/file-coordination';
+import { macFiles } from '../src/desktop/native/macos-files';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 if (process.platform !== 'darwin') throw new Error('Native coordination requires macOS.');

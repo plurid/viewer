@@ -1,3 +1,4 @@
+import { effectiveWindowSettings } from '../../state/effective-ui';
 import { getState } from '../../state/store';
 import { startTour, stopTour, tourActive } from '../../workspace/tour';
 import type { CommandDefinition } from '../registry';
@@ -82,7 +83,7 @@ export function viewsCommands({ actions, windowScope }: WindowScopes): CommandDe
           icon: 'play',
           aliases: ['tour', 'present', 'presentation', 'slideshow'],
           when: (context) => windowScope(context) && views.length > 0,
-          run: () => startTour(workspace, getState().settings.settings.tour),
+          run: () => startTour(workspace, effectiveWindowSettings(getState()).tour),
         },
   ];
 }

@@ -1,4 +1,4 @@
-import { normalizePreferences } from '../../../domain/preferences';
+import { normalizePreferences } from '../../../domain/preferences/ui';
 import type { SettingsEditor } from './editor';
 import { useEffect, useState } from 'react';
 import type { ViewerAPI } from '../../../domain/contracts';
@@ -79,6 +79,9 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
           {command?.installed ? 'Uninstall shell command…' : 'Install shell command'}
         </button>
       </div>
+      {command?.installed && command.executable === false && (
+        <p className="settings-note">This Viewer script is present but is not executable.</p>
+      )}
       {(error || command?.problem) && (
         <p className="error" role="alert">
           {error || command?.problem}

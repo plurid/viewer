@@ -3,14 +3,14 @@ import { chmod, readFile, readdir, stat, symlink, writeFile } from 'node:fs/prom
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
-import { Projects, decodeProject } from '../src/desktop/projects';
+import { Projects, decodeProject } from '../src/desktop/workspaces/projects';
 import {
   projectDefinitionSchema,
   projectReference,
   resolveProjectPath,
   type ProjectDefinition,
-} from '../src/domain/project';
-import { Storage } from '../src/desktop/storage';
+} from '../src/domain/workspaces/project';
+import { Storage } from '../src/desktop/persistence/storage';
 import { CURRENT_STATE_VERSION, type SavedState } from '../src/domain/contracts';
 import {
   activeWorkspace,

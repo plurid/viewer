@@ -70,6 +70,7 @@ static bool sandboxedProcess() {
 }
 #include "trash-ui.h"
 #include "file-coordination.h"
+#include "file-review.h"
 
 static napi_value clipboardVersion(napi_env env, napi_callback_info info) {
   @autoreleasepool {
@@ -145,6 +146,7 @@ struct Work {
   NSArray<NSDictionary *> *volumes = nil;
   NSArray<NSString *> *files = nil;
   NSArray<NSDictionary *> *dates = nil;
+  std::optional<ReviewedFileVersion> reviewed;
 };
 static void execute(napi_env, void *data) {
   Work *task = static_cast<Work *>(data);
@@ -223,6 +225,13 @@ static void execute(napi_env, void *data) {
         entered = true;
         if (!sameCoordinatedItem(url, sourcePath)) {
           task->error = @"The item moved while waiting for its file provider. Refresh the folder and retry.";
+          return;
+        }
+        ReviewedFileHandle reviewed;
+        NSString *reviewError = nil;
+        if (task->reviewed && !reviewed.matches(url, *task->reviewed, &reviewError)) {
+          task->error = reviewError;
+          task->errorNumber = ESTALE;
           return;
         }
         NSURL *result = nil; NSError *trashError = nil;
@@ -322,10 +331,29 @@ static napi_value metadata(napi_env env, napi_callback_info info) {
   Work *task = new Work{}; task->kind = Kind::Metadata; task->source = source; task->target = target; return queue(env, task);
 }
 static napi_value fileWork(napi_env env, napi_callback_info info, Kind kind) {
-  size_t count = 2; napi_value args[2]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
+  size_t count = 3; napi_value args[3]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
   NSString *file = count >= 1 ? stringArg(env, args[0]) : nil;
   if (!file.isAbsolutePath) return invalid(env);
-  Work *task = new Work{}; task->kind = kind; task->file = file; task->purpose = count > 1 ? stringArg(env, args[1]) : nil; return queue(env, task);
+  Work *task = new Work{};
+  task->kind = kind;
+  task->file = file;
+  task->purpose = count > 1 ? stringArg(env, args[1]) : nil;
+  if (kind == Kind::Trash && count > 2) {
+    napi_valuetype type;
+    if (napi_typeof(env, args[2], &type) != napi_ok) {
+      delete task;
+      return invalid(env);
+    }
+    if (type != napi_undefined) {
+      ReviewedFileVersion expected;
+      if (!readReviewedFileVersion(env, args[2], expected)) {
+        delete task;
+        return invalid(env);
+      }
+      task->reviewed = expected;
+    }
+  }
+  return queue(env, task);
 }
 static napi_value trash(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::Trash); }
 static napi_value pairWork(napi_env env, napi_callback_info info, Kind kind) {

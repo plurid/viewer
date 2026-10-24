@@ -10,9 +10,9 @@ import {
   KeySequence,
   rootKey,
   type Keymap,
-} from '../src/domain/keymap';
-import { sessionAliases, withSessionKeys } from '../src/domain/session-keys';
-import { referenceIssues } from '../src/domain/references';
+} from '../src/domain/preferences/keymap';
+import { sessionAliases, withSessionKeys } from '../src/domain/preferences/session-keys';
+import { referenceIssues } from '../src/domain/automation/references';
 import { defaultSettings } from '../src/domain/services';
 
 describe('a key, written any familiar way', () => {

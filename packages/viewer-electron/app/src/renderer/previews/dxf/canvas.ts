@@ -1,12 +1,17 @@
 import { measureLocalPoint } from '../../ui/projectedResize';
-import { distance, type Drawing, type DrawingEntity, type Point } from '../../../domain/dxf/math';
+import {
+  distance,
+  type Drawing,
+  type DrawingEntity,
+  type Point,
+} from '../../../domain/previews/drawings/dxf/math';
 import {
   convertUnits,
   formatMeasure,
   measurementValue,
   type Measurement,
   type Tool,
-} from '../../../domain/dxf/units';
+} from '../../../domain/previews/drawings/dxf/units';
 
 export interface DrawingView {
   center: Point;

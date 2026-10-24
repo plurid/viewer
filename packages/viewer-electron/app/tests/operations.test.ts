@@ -58,8 +58,8 @@ vi.mock('node:fs/promises', async (original) => {
 });
 // Publication uses renameatx_np on macOS. Inject failures at that same boundary
 // so collision and cross-volume tests still exercise the native path.
-vi.mock('../src/desktop/macos-files', async (original) => {
-  const actual = await original<typeof import('../src/desktop/macos-files')>();
+vi.mock('../src/desktop/native/macos-files', async (original) => {
+  const actual = await original<typeof import('../src/desktop/native/macos-files')>();
   const spelling = (file: string) => file.replace(/^\/private\/var\//, '/var/').normalize('NFC');
   return {
     ...actual,
@@ -82,8 +82,8 @@ vi.mock('../src/desktop/macos-files', async (original) => {
   };
 });
 // A folder named "many items" is over the proof's 10,000-item limit, without writing them all.
-vi.mock('../src/desktop/operation-journal', async (original) => {
-  const actual = await original<typeof import('../src/desktop/operation-journal')>();
+vi.mock('../src/desktop/operations/operation-journal', async (original) => {
+  const actual = await original<typeof import('../src/desktop/operations/operation-journal')>();
   const paths = await import('node:path');
   return {
     ...actual,
@@ -91,11 +91,15 @@ vi.mock('../src/desktop/operation-journal', async (original) => {
       paths.basename(file) === 'many items' ? undefined : actual.outputProof(file),
   };
 });
-import { Operations } from '../src/desktop/operations';
-import { ProtectedPaths } from '../src/desktop/protected-paths';
-import { OperationLog, operationJournal, outputProof } from '../src/desktop/operation-journal';
-import { entry } from '../src/desktop/filesystem';
-import { sourceVersion } from '../src/domain/inspection';
+import { Operations } from '../src/desktop/operations/operations';
+import { ProtectedPaths } from '../src/desktop/files/protected-paths';
+import {
+  OperationLog,
+  operationJournal,
+  outputProof,
+} from '../src/desktop/operations/operation-journal';
+import { entry } from '../src/desktop/files/filesystem';
+import { sourceVersion } from '../src/domain/files/inspection';
 let root: string, destination: string, trash: string, operations: Operations;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-ops-');

@@ -5,20 +5,20 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import type { FileEntry, OperationJob } from '../src/domain/contracts';
-import type { CapturedTarget, CustomAction } from '../src/domain/automation';
-import type { AgentProposal, CommandDescriptor } from '../src/domain/agent-requests';
+import type { CapturedTarget, CustomAction } from '../src/domain/automation/actions';
+import type { AgentProposal, CommandDescriptor } from '../src/domain/agents/requests';
 import {
   agentCommandID,
   agentDispatchRefusal,
   agentRemovalPolicy,
-} from '../src/domain/agent-safety';
-import { SettingsService } from '../src/desktop/settings';
-import { AgentRequests } from '../src/desktop/agent-requests';
-import { AgentBroker, redactedSettings } from '../src/desktop/agent-broker';
-import type { FileServices } from '../src/desktop/file-services';
+} from '../src/domain/agents/safety';
+import { SettingsService } from '../src/desktop/preferences/settings';
+import { AgentRequests } from '../src/desktop/agents/agent-requests';
+import { AgentBroker, redactedSettings } from '../src/desktop/agents/agent-broker';
+import type { FileServices } from '../src/desktop/files/file-services';
 import type { ActionPlanner } from '../src/desktop/actions/planner';
-import type * as FileSystem from '../src/desktop/filesystem';
-import { Operations } from '../src/desktop/operations';
+import type * as FileSystem from '../src/desktop/files/filesystem';
+import { Operations } from '../src/desktop/operations/operations';
 
 const memory = vi.hoisted(() => ({
   stores: new Map<string, unknown>(),
@@ -41,7 +41,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   };
   return { ...original, ...safe, default: { ...original, ...safe } };
 });
-vi.mock('../src/desktop/document-store', () => ({
+vi.mock('../src/desktop/persistence/document-store', () => ({
   DocumentStore: class {
     constructor(
       public file: string,
@@ -57,7 +57,7 @@ vi.mock('../src/desktop/document-store', () => ({
     async flush() {}
   },
 }));
-vi.mock('../src/desktop/filesystem', async (importOriginal) => ({
+vi.mock('../src/desktop/files/filesystem', async (importOriginal) => ({
   ...(await importOriginal<typeof FileSystem>()),
   absolute: (file: string) => {
     if (!path.isAbsolute(file)) throw new Error('Absolute paths are required.');
@@ -69,7 +69,7 @@ vi.mock('../src/desktop/filesystem', async (importOriginal) => ({
     return structuredClone(value);
   },
 }));
-vi.mock('../src/desktop/file-coordination', () => ({
+vi.mock('../src/desktop/files/file-coordination', () => ({
   fileCoordination: {
     run: async (
       _intents: unknown,
@@ -176,6 +176,8 @@ async function fixture(roots = ['/Granted']) {
     { all: async () => [], cancel: () => {} } as unknown as ActionPlanner,
     { requests, config: settings, catalog: () => ({ target, commands }), access: async () => {} },
   );
+  const authority = { enabled: true, add: roots };
+  await broker.access.approve(authority, await broker.access.captureReview(authority));
   const created = (await broker.clientRequest({
     kind: 'create',
     client: {
@@ -389,6 +391,102 @@ describe('agent removal safety', () => {
       'approval each time',
     );
     expect(memory.remove).not.toHaveBeenCalled();
+  });
+  it.each(['direct', 'alias', 'nested'] as const)(
+    'rejects a %s Trash sequence through the broker and request service before any native prompt',
+    async (kind) => {
+      const f = await fixture();
+      const removal = { ...action({ kind: 'builtin', command: 'trash' }), id: 'remove' };
+      const nested = {
+        ...action({ kind: 'sequence', commands: ['custom.remove'] }),
+        id: 'inner',
+      };
+      f.config.customActions = [
+        action({
+          kind: 'sequence',
+          commands: [
+            'frame-all',
+            kind === 'direct' ? 'trash' : kind === 'alias' ? 'custom.remove' : 'custom.inner',
+          ],
+        }),
+        removal,
+        nested,
+      ];
+      const catalog = await f.call<{ commands: CommandDescriptor[] }>('list_commands');
+      expect(catalog.commands.some((command) => command.id === 'custom.cleanup')).toBe(false);
+      for (const tool of ['explain_command', 'propose_command'])
+        await expect(f.call(tool, { commandID: 'custom.cleanup' })).rejects.toThrow(
+          'separate exact-path Trash proposal',
+        );
+      await expect(
+        f.requests.command('custom.cleanup', f.target, 'Convenient action'),
+      ).rejects.toThrow('separate exact-path Trash proposal');
+      expect(f.requests.list()).toEqual([]);
+      expect(f.confirm).not.toHaveBeenCalled();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(memory.remove).not.toHaveBeenCalled();
+    },
+  );
+  it.each(['self', 'mutual', 'deep'] as const)(
+    'rejects %s sequence recursion before a proposal, native prompt or executor can be reached',
+    async (kind) => {
+      const f = await fixture();
+      if (kind === 'deep') {
+        f.config.customActions = Array.from({ length: 12 }, (_, index) => ({
+          ...action({
+            kind: 'sequence',
+            commands: [index === 11 ? 'frame-all' : `custom.step-${index + 1}`],
+          }),
+          id: index === 0 ? 'cleanup' : `step-${index}`,
+        }));
+      } else {
+        f.config.customActions = [
+          action({
+            kind: 'sequence',
+            commands: [kind === 'self' ? 'custom.cleanup' : 'custom.inner'],
+          }),
+          { ...action({ kind: 'sequence', commands: ['custom.cleanup'] }), id: 'inner' },
+        ];
+      }
+      await expect(f.call('propose_command', { commandID: 'custom.cleanup' })).rejects.toThrow(
+        /cycle|recursive|nested|deep/i,
+      );
+      await expect(
+        f.requests.command('custom.cleanup', f.target, 'Convenient action'),
+      ).rejects.toThrow(/cycle|recursive|nested|deep/i);
+      expect(f.requests.list()).toEqual([]);
+      expect(f.confirm).not.toHaveBeenCalled();
+      expect(f.execute).not.toHaveBeenCalled();
+    },
+  );
+  it('keeps nonremoving sequences under fresh review and direct aliases on the exact-path Trash route', async () => {
+    const f = await fixture();
+    f.config.customActions = [action({ kind: 'sequence', commands: ['frame-all', 'copy-path'] })];
+    const safe = await f.call<{ id: string; requiresUserReview: boolean }>('propose_command', {
+      commandID: 'custom.cleanup',
+    });
+    expect(safe.requiresUserReview).toBe(true);
+    expect(f.requests.get(safe.id).status).toBe('review');
+    expect(f.requests.get(safe.id).removal).toBeUndefined();
+    f.config.customActions = [action({ kind: 'builtin', command: 'trash' })];
+    const first = await f.call<{ id: string; requiresUserReview: boolean }>('propose_command', {
+      commandID: 'custom.cleanup',
+    });
+    const second = await f.call<{ id: string; requiresUserReview: boolean }>('propose_command', {
+      commandID: 'custom.cleanup',
+    });
+    expect(first.id).not.toBe(second.id);
+    for (const request of [first, second]) {
+      expect(request.requiresUserReview).toBe(true);
+      expect(f.requests.get(request.id)).toMatchObject({
+        status: 'review',
+        removal: 'trash',
+        target: { selection: f.target.selection },
+      });
+      expect(f.requests.get(request.id).detail).toContain('/Granted/Report.txt');
+    }
+    expect(f.confirm).not.toHaveBeenCalled();
+    expect(f.execute).not.toHaveBeenCalled();
   });
   it('rejects a replaced or edited source before executing the reviewed removal', async () => {
     for (const change of [{ identity: '1:99' }, { modified: 11 }, { size: 9 }]) {

@@ -1,4 +1,4 @@
-import { modelFormats } from '../src/domain/model-formats';
+import { modelFormats } from '../src/domain/previews/models/formats';
 
 interface DocumentType {
   CFBundleTypeName: string;

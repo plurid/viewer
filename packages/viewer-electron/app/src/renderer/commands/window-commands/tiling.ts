@@ -1,12 +1,13 @@
+import { effectiveWindowSettings } from '../../state/effective-ui';
 import type { Pane } from '../../../domain/contracts';
-import { parentPath } from '../../../domain/planes';
+import { parentPath } from '../../../domain/workspaces/planes';
 import {
   nextLayout,
   resizeTile,
   tileLayoutLabels,
   tileLayouts,
   type TileLayout,
-} from '../../../domain/tiling';
+} from '../../../domain/workspaces/tiling';
 import {
   activeWorkspace,
   addRootFolder,
@@ -26,7 +27,7 @@ function splitPane(
   kind: 'same' | 'folder' | 'terminal' | 'scratch',
 ): string | undefined {
   const folder =
-    pane.type === 'folder' || pane.type === 'terminal'
+    pane.type === 'folder' || pane.type === 'terminal' || pane.type === 'server'
       ? pane.path
       : pane.type === 'preview'
         ? parentPath(pane.path)
@@ -61,7 +62,7 @@ export function splitTile(
   const space = activeWorkspace();
   const active = getState().activePane;
   const tiling = space.tiling;
-  const settings = getState().settings.settings.tiling;
+  const settings = effectiveWindowSettings(getState()).tiling;
   const pane = space.panes.find((item) => item.id === active);
   if (!pane) return false;
   const added = add ? add(pane) : splitPane(pane, settings.splitWith);
@@ -92,7 +93,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
   const space = activeWorkspace();
   const tiling = space.tiling;
   const active = state.activePane;
-  const settings = state.settings.settings.tiling;
+  const settings = effectiveWindowSettings(state).tiling;
   const tiled = (context: Parameters<CommandDefinition['when']>[0]) =>
     windowScope(context) && actions.ready && !!tiling;
   const apply = (next: Parameters<typeof setTiling>[0]) => {

@@ -1,4 +1,4 @@
-import { categories } from '../../domain/setting-catalog';
+import { categories } from '../../domain/preferences/catalog';
 import { commandScore, normalize, rankCommands, type ResolvedCommand } from './registry';
 
 /**

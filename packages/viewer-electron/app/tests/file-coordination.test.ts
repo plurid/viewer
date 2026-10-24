@@ -3,8 +3,8 @@ import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { FileCoordination } from '../src/desktop/file-coordination';
-import type { FileAccessIntent } from '../src/desktop/macos-files';
+import { FileCoordination } from '../src/desktop/files/file-coordination';
+import type { FileAccessIntent } from '../src/desktop/native/macos-files';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 function deferred<T>() {

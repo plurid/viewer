@@ -9,8 +9,8 @@ import { createElement } from 'react';
 import { ThemeSettings } from '../src/renderer/ui/settings/ThemeSettings';
 import type { SettingsEditor } from '../src/renderer/ui/settings/editor';
 import { defaultSettings, type SettingsSnapshot } from '../src/domain/services';
-import { normalizePreferences } from '../src/domain/preferences';
-import { builtInThemes, type Theme } from '../src/domain/themes';
+import { normalizePreferences } from '../src/domain/preferences/ui';
+import { builtInThemes, type Theme } from '../src/domain/preferences/themes';
 
 afterEach(cleanup);
 const show = (themes: Theme[] = []) => {
@@ -26,7 +26,9 @@ const show = (themes: Theme[] = []) => {
     snapshot,
     patch,
     patches: vi.fn(),
-    save: vi.fn(),
+    save: (change) => {
+      for (const { path, value } of change(snapshot)) patch(path, value);
+    },
     error: vi.fn(),
   } as SettingsEditor;
   return { view: render(createElement(ThemeSettings, { editor })), patch, editor };

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SettingsService } from '../src/desktop/settings';
-import type { CustomAction } from '../src/domain/automation';
+import { SettingsService } from '../src/desktop/preferences/settings';
+import type { CustomAction } from '../src/domain/automation/actions';
 import type { SettingsPatch, SettingsSnapshot } from '../src/domain/services';
 import {
   customActionEdit,
@@ -8,7 +8,7 @@ import {
   terminalProfileEdit,
   terminalProfilesEdit,
   type SettingsChange,
-} from '../src/renderer/ui/settings-edits';
+} from '../src/renderer/ui/settings/settings-edits';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let directory: string;

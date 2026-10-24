@@ -8,7 +8,7 @@ import {
   type DragScrollTarget,
 } from '../src/renderer/explorer/drag-navigation';
 import { folderDragNavigation } from '../src/renderer/explorer/folder-drag';
-import { stateSchema } from '../src/desktop/storage';
+import { stateSchema } from '../src/desktop/persistence/storage';
 import {
   activeWorkspace,
   flushState,

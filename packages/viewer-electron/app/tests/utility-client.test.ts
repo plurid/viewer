@@ -4,7 +4,7 @@ import path from 'node:path';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 vi.mock('electron', () => ({ utilityProcess: {} }));
-const { UtilityClient } = await import('../src/desktop/utility-client');
+const { UtilityClient } = await import('../src/desktop/workers/utility-client');
 
 let root: string;
 beforeEach(async () => {

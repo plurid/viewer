@@ -20,8 +20,8 @@ import {
   verbs,
 } from '../src/domain/command-line/verbs';
 import { parseSet, settingByName, settingNames, settingText } from '../src/domain/command-line/set';
-import { defaultKeymap, bindingRows } from '../src/domain/keymap';
-import { settingCatalog } from '../src/domain/setting-catalog';
+import { defaultKeymap, bindingRows } from '../src/domain/preferences/keymap';
+import { settingCatalog } from '../src/domain/preferences/catalog';
 
 const failsAt = (run: () => unknown, at: number, message?: RegExp) => {
   try {

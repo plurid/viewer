@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmod, mkdir, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { OperationJob } from '../src/domain/contracts';
-import { Checkpoints } from '../src/desktop/checkpoints';
+import { Checkpoints } from '../src/desktop/operations/checkpoints';
 import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
 let root: string;
 const access = vi.fn(async (_paths: readonly string[]) => {});

@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { OperationJob, OperationRequest } from '../src/domain/contracts';
-import { Operations } from '../src/desktop/operations';
-import { ProtectedPaths } from '../src/desktop/protected-paths';
+import { Operations } from '../src/desktop/operations/operations';
+import { ProtectedPaths } from '../src/desktop/files/protected-paths';
 import {
   conversionOutput,
   imagesToPDF,
   rotateBitmap,
   type ImageConverter,
-} from '../src/desktop/image-convert';
+} from '../src/desktop/operations/image-convert';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string, trash: string, operations: Operations;

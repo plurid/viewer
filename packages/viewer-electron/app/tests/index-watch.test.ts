@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IndexWatcher } from '../src/desktop/index-watch';
+import { IndexWatcher } from '../src/desktop/search/index-watch';
 import { defaultSettings } from '../src/domain/services';
 
 const watch = vi.hoisted(() => vi.fn());
-vi.mock('../src/desktop/directory-watch', () => ({ watchDirectory: watch }));
+vi.mock('../src/desktop/files/directory-watch', () => ({ watchDirectory: watch }));
 beforeEach(() => {
   vi.useFakeTimers();
   watch.mockReset().mockImplementation(() => ({ close: vi.fn(async () => {}) }));

@@ -1,6 +1,9 @@
 // Project files installed as workspaces.
 import type { Pane, Workspace } from '../../domain/contracts';
-import { panePresentation, type FolderOverride } from '../../domain/folder-presentation';
+import {
+  panePresentation,
+  type FolderOverride,
+} from '../../domain/preferences/folder-presentation';
 import {
   projectReference,
   resolveProjectPath,
@@ -8,8 +11,8 @@ import {
   type ProjectAssociation,
   type ProjectLayout,
   type PortableDiffSource,
-} from '../../domain/project';
-import type { DiffSource } from '../../domain/diff';
+} from '../../domain/workspaces/project';
+import type { DiffSource } from '../../domain/comparison/diff';
 import { activeWorkspace, changeWorkspace, getState, savePatch, update, uuid } from './core';
 import { folderPane } from './panes';
 import { adapters, flushState } from './persistence';

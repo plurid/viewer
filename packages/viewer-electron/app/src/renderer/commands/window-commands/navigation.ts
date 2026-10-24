@@ -1,4 +1,6 @@
-import { activeWorkspace, changePreferences, updatePane } from '../../state/store';
+import { effectiveWindowUI } from '../../state/effective-ui';
+import { changeSetting } from './settings';
+import { activeWorkspace, getState, updatePane } from '../../state/store';
 import { copyPathCommand } from '../copy-path';
 import type { CommandDefinition } from '../registry';
 import { requestProject, type ProjectCommand } from '../../workspace/projects';
@@ -13,6 +15,7 @@ export function navigationCommands({
   paneScope,
   sidebar,
 }: WindowScopes): CommandDefinition[] {
+  const ui = effectiveWindowUI(state);
   const commands: CommandDefinition[] = [
     {
       id: 'new-native-window',
@@ -161,28 +164,25 @@ export function navigationCommands({
     },
     {
       id: 'toggle-sidebar',
-      label: state.saved.ui.sidebar.visible ? 'Hide window navigation' : 'Show window navigation',
+      label: ui.sidebar.visible ? 'Hide window navigation' : 'Show window navigation',
       group: 'View',
       icon: 'sidebar',
       aliases: ['sb', 'window sidebar'],
       shortcut: '⌥⌘S',
       when: (context) => windowScope(context) || (sidebar(context) && !context.paneID),
       run: () =>
-        changePreferences((ui) => ({
-          ...ui,
-          sidebar: { ...ui.sidebar, visible: !ui.sidebar.visible },
-        })),
+        changeSetting('ui.sidebar.visible', !effectiveWindowUI(getState()).sidebar.visible),
     },
     {
       id: 'toggle-titlebar',
-      label: state.saved.ui.titlebar.visible ? 'Hide title bar' : 'Show title bar',
+      label: ui.titlebar.visible ? 'Hide title bar' : 'Show title bar',
       group: 'View',
       icon: 'frame',
       aliases: ['title bar', 'titlebar', 'chrome', 'toolbar', 'tb'],
       shortcut: '⌥⌘T',
       when: windowScope,
       run: () =>
-        changePreferences((ui) => ({ ...ui, titlebar: { visible: !ui.titlebar.visible } })),
+        changeSetting('ui.titlebar.visible', !effectiveWindowUI(getState()).titlebar.visible),
     },
     {
       id: 'plane-sidebar',

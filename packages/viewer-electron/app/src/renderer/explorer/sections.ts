@@ -1,7 +1,7 @@
 import type { DragEvent, MouseEvent } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { fileGroup } from '../../domain/files';
-import { lensGroupTree, type Lens, type ResolvedLens } from '../../domain/lenses';
+import { fileGroup } from '../../domain/files/entries';
+import { lensGroupTree, type Lens, type ResolvedLens } from '../../domain/files/lenses';
 import { FILE_DRAG } from './file-drop';
 
 /** A heading in a grouped view: a kind or date group, or a lens group. */

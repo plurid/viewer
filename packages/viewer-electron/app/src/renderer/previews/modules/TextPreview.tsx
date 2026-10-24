@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { effectiveWindowSettings } from '../../state/effective-ui';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,7 +13,7 @@ import { FileEditor } from '../../editing/FileEditor';
 import { registerEditingPlane } from '../../editing/planes';
 import { continuesEditing } from '../../editing/sessions';
 import { editorFont } from '../../editing/font';
-import { relativeLinkTarget } from '../../../domain/planes';
+import { relativeLinkTarget } from '../../../domain/workspaces/planes';
 import { highlightedLines } from '../highlight';
 import { languageByID, languageFor, loadPrismGrammar } from '../languages';
 
@@ -120,7 +121,7 @@ function Code({
   const scroll = useRef<HTMLDivElement>(null);
   const lines = useMemo(() => text.split('\n'), [text]);
   // the editor's font settings: a file reads as it edits
-  const settings = useViewer((state) => state.settings.settings.editor);
+  const settings = useViewer((state) => effectiveWindowSettings(state).editor);
   const grammar = usePrismGrammar(language);
   // Whole-document tokens for ordinary files; very large ones fall back to single lines.
   const document = useMemo(
@@ -195,7 +196,12 @@ function Code({
     </div>
   );
 }
-export default function TextPreview(context: PreviewContext) {
+export interface TextPreviewProps extends PreviewContext {
+  /** A composed preview can reveal source editing without owning its buffers or editor session. */
+  onEditingChange?(editing: boolean): void;
+}
+
+export default function TextPreview(context: TextPreviewProps) {
   const { resource, signal, services } = context;
   const [data, setData] = useState<{ text: string; truncated: boolean; binary: boolean } | null>(
     null,
@@ -212,6 +218,12 @@ export default function TextPreview(context: PreviewContext) {
   const [editing, setEditing] = useState<'asked' | 'restored' | false>(() =>
     !paneID ? false : continuesEditing(paneID) ? 'asked' : bufferID ? 'restored' : false,
   );
+  const onEditingChange = context.onEditingChange;
+  useEffect(() => onEditingChange?.(!!editing), [editing, onEditingChange]);
+  const startEditing = useCallback(() => {
+    onEditingChange?.(true);
+    setEditing('asked');
+  }, [onEditingChange]);
   // read again after editing, which may have saved
   const [reading, setReading] = useState(0);
   const evidenceLine =
@@ -237,12 +249,12 @@ export default function TextPreview(context: PreviewContext) {
   useEffect(() => {
     if (!paneID || editing || !editable) return;
     return registerEditingPlane(paneID, {
-      edit: () => setEditing('asked'),
+      edit: startEditing,
       dirty: () => false,
       // saved in another app: read again in place, keeping the scroll position
       changedOnDisk: () => setReading((value) => value + 1),
     });
-  }, [paneID, editing, editable]);
+  }, [paneID, editing, editable, startEditing]);
   const json = useMemo(() => {
     if (!data || resource.entry.extension !== 'json' || data.truncated) return null;
     try {
@@ -278,6 +290,7 @@ export default function TextPreview(context: PreviewContext) {
         header={context.commands?.header}
         focus={editing === 'asked'}
         onClose={() => {
+          onEditingChange?.(false);
           setEditing(false);
           setReading((value) => value + 1);
         }}
@@ -324,7 +337,7 @@ export default function TextPreview(context: PreviewContext) {
             </>
           )}
           {editable && (
-            <button title="Edit Text (⌘E)" onClick={() => setEditing('asked')}>
+            <button title="Edit Text (⌘E)" onClick={startEditing}>
               Edit
             </button>
           )}

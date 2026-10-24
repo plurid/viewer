@@ -1,4 +1,4 @@
-import { providerKinds, providerPresets } from '../../../domain/model-providers';
+import { providerKinds, providerPresets } from '../../../domain/models/providers';
 import type { ApplicationSettings } from '../../../domain/services';
 
 /** Categories whose settings live in dedicated editors, offered when a search matches them. */
