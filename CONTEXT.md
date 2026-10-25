@@ -87,3 +87,8 @@ image/media/PDF export submitted to the existing operation executor; optimizatio
 records size results and publishes only a smaller candidate. None is an agent
 shell or deletion grant. See [resource lifetimes](docs/adr/0007-spatial-workbench-resources.md)
 and [media and optimization](docs/media-tools.md).
+
+Large XLSX worksheets use `desktop/previews/office-worksheet.ts` with the shared
+incremental XML scanner and bounded archive streams. Retained cell/evidence
+budgets do not stop full XML, CRC and source-version validation. Word and small
+package parts keep their separate tree limits; see [Office previews](docs/office-previews.md).

@@ -51,3 +51,12 @@ and [verification](verification.md) for final packaged evidence and limitations.
 Every output preserves its original. Agent file removals remain subject to the
 exact-path, explicit-approval and OS Trash requirements in AGENTS.md. Generated
 fixtures and build artifacts remain retained.
+
+The next completed step replaces eager XLSX worksheet trees with bounded ZIP and
+XML streams. The public 18 MB worksheet that previously failed the 4 MB tree-part
+limit now previews in the packaged app. Retained rows/cells remain bounded and
+source-addressed; parsing, CRC validation and source-version checks continue
+through the omitted suffix. Malformed tails, cancellation and changed sources
+are covered by regression tests. The full suite now passes **1,800 tests in 255
+files**. See [Office previews](office-previews.md) and the updated real-file record
+for precise limits and retained acceptance evidence.

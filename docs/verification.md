@@ -1,5 +1,57 @@
 # Verification
 
+## October 25 streamed worksheet follow-up
+
+The validated Apple Silicon direct package is retained at
+`/private/tmp/viewer-office-streaming-validated-20261025-orv743/Viewer.app`.
+Adjacent `candidate.json` records the source/lockfile fingerprints, package
+checksums, exact evidence and limitations; `reports/` preserves executed logs,
+the real-file result and a captured large-workbook preview. Binary SHA256:
+`a187dece84e24dcb87a58fc80e192a8f0b87be38d895ec70f19ea0c27408845d`;
+ASAR SHA256:
+`969714ce7620740a404e4643e74627822c193bf45cb4245c3ac6b81550278aca`.
+
+**All 1,800 tests in 255 files pass, with zero failures or skips.** The full
+`pnpm test` command uses `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1`,
+the previous retained candidate's macOS binding and the existing
+`app/out/viewer-reviewed-trash-1792824425210.node` recording binding. Targeted
+Office/XML/ZIP acceptance passes 24 tests. All TypeScript targets, full ESLint,
+full Prettier, `pnpm package` and `codesign --verify --deep --strict` pass.
+This is development direct-package evidence, without a notarization or Store claim.
+
+The regression fails before the change with the eager 4 MB Office part limit.
+The public workbook has an 18.2 MB worksheet and 1.33 million XML elements, so
+raising that byte limit alone would retain an oversized tree and hit the node
+limit. The new bounded ZIP/XML streams retain cell data separately from full
+input validation. Tests cover sparse original addresses, retained text/formulas,
+UTF-8 and UTF-16 byte boundaries, entities, declarations, malformed suffixes,
+CRC/size failures, cancellation and changed source files. No new agent command,
+filesystem mutation, dependency or permission bypass is introduced.
+
+The packaged `tests/native/real-file-previews.ts` check now requires the formerly
+rejected large workbook to render. Its actual cold read is about 609 ms, cached
+read 61 ms and the complete inspection/Quick Preview sequence 1.09 seconds on
+this Mac. The first sheet retains 50,000 cells across 402 source rows and 126
+columns, with a visible truncation warning. The second sheet has no retained
+cells because this workbook exhausts the shared cell budget. Further ranges and
+sheets need on-demand reading. All public reference hashes remain unchanged,
+no file-operation jobs appear, and the isolated app exits cleanly.
+Log: `/private/tmp/viewer-office-streaming-native.log`; fixture/captures:
+`viewer-native-real-files-dqiJG0` under the macOS temporary root.
+
+The complete `pnpm test:desktop` packaged smoke also passes. Log:
+`/private/tmp/viewer-office-streaming-smoke.log`; fixture:
+`viewer-verification-kCsJL3`; evidence:
+`app/out/native-evidence/electron-smoke-2026-10-25T16-24-48-505Z-9ed4db66-5fcd-4eae-93cb-cf4c475e00a0`.
+These tests preserve all fixtures. The normal Viewer session was not restarted.
+
+Limits remain 32 MB per worksheet and total expanded reads, with 4 MB limits for
+Word, shared-string and metadata XML. Retained workbook content remains capped;
+complete Excel formatting, graphics and formula evaluation are not implemented.
+The existing RAW and OGV codec limits are unchanged. See [Office previews](office-previews.md)
+and [real-file qualification](real-file-qualification.md). Other architectures and
+operating systems require separate qualification.
+
 ## October 25 daily workbench completion
 
 All four steps in [the ordered follow-up](daily-workbench-followup.md) are

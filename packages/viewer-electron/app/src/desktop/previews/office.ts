@@ -3,16 +3,15 @@ import { lstat } from 'node:fs/promises';
 import { Archives } from './archives';
 import { fileCoordination } from '../files/file-coordination';
 import { attribute, child, children, localName, officeXML, xmlText } from './office-xml';
+import { worksheetReader, type WorkbookBudget } from './office-worksheet';
 import type { XMLNode } from './office-xml';
 import type { DocumentData } from '../../domain/services';
 import type {
   OfficeContent,
-  WorkbookRow,
   WorkbookSheet,
   WordParagraph,
   WordTable,
 } from '../../domain/previews/documents/office';
-import { columnName } from '../../domain/previews/documents/office';
 
 const relationshipTypes = [
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/',
@@ -142,16 +141,6 @@ function wordContent(main: XMLNode): { content: OfficeContent; truncated: boolea
   for (const node of children(body)) visit(node);
   return { content: { kind: 'word', blocks }, truncated };
 }
-function cellAddress(reference: string): { row: number; column: number } {
-  const match = reference.match(/^([A-Z]{1,3})([1-9]\d{0,6})$/);
-  if (!match) throw new Error('Invalid worksheet cell address.');
-  const column = [...(match[1] ?? '')].reduce((n, letter) => n * 26 + letter.charCodeAt(0) - 64, 0),
-    row = Number(match[2]);
-  if (row > 1048576 || column > 16384)
-    throw new Error('Worksheet cell address exceeds Excel limits.');
-  return { row, column };
-}
-
 /** Caller holds native read coordination. No package part is written or executed. */
 export async function extractOffice(file: string, signal?: AbortSignal): Promise<DocumentData> {
   const before = await lstat(fileCoordination.path(file));
@@ -172,14 +161,17 @@ export async function extractOffice(file: string, signal?: AbortSignal): Promise
     if (entries.size !== listing.entries.length)
       throw new Error('Office package has duplicate part names.');
     let bytes = 0;
-    const read = async (name: string) => {
+    const reserve = (name: string, maximum: number) => {
       signal?.throwIfAborted();
       const item = entries.get(name);
       if (!item || item.directory || !item.previewable)
         throw new Error('Missing, encrypted, or unsupported Office part: ' + name);
       bytes += item.size;
-      if (item.size > 4000000 || bytes > 32000000)
+      if (item.size > maximum || bytes > 32000000)
         throw new Error('Office expanded content exceeds the reader limit.');
+    };
+    const read = async (name: string) => {
+      reserve(name, 4000000);
       const node = officeXML(await reader.read(file, name));
       signal?.throwIfAborted();
       return node;
@@ -256,10 +248,13 @@ export async function extractOffice(file: string, signal?: AbortSignal): Promise
       if (!definitions.length) throw new Error('This XLSX has no worksheets.');
       if (definitions.length > 32) result.truncated = true;
       const sheets: WorkbookSheet[] = [];
-      let formulas = 0,
-        missingCached = 0,
-        cells = 0,
-        characters = 0;
+      const budget: WorkbookBudget = {
+        formulas: 0,
+        missingCached: 0,
+        cells: 0,
+        characters: 0,
+        truncated: false,
+      };
       const names = new Set<string>();
       for (const definition of definitions.slice(0, 32)) {
         const name = attribute(definition, 'name') || '';
@@ -271,9 +266,6 @@ export async function extractOffice(file: string, signal?: AbortSignal): Promise
           result.truncated = true;
           continue;
         }
-        const worksheet = await read(partTarget(mainPath, relation.target));
-        if (localName(worksheet) !== 'worksheet') throw new Error('Invalid worksheet part.');
-        const data = child(worksheet, 'sheetData');
         const sheet: WorkbookSheet = {
           name,
           hidden: ['hidden', 'veryHidden'].includes(attribute(definition, 'state') || ''),
@@ -281,88 +273,22 @@ export async function extractOffice(file: string, signal?: AbortSignal): Promise
           columns: 1,
           truncated: false,
         };
-        let previousRow = 0;
-        for (const sourceRow of data ? children(data, 'row') : []) {
-          signal?.throwIfAborted();
-          const row = Number(attribute(sourceRow, 'r') || previousRow + 1);
-          if (!Number.isSafeInteger(row) || row <= previousRow || row > 1048576)
-            throw new Error('Invalid or unordered worksheet row.');
-          previousRow = row;
-          if (sheet.rows.length >= 2000 || cells >= 50000 || characters >= 500000) {
-            sheet.truncated = true;
-            break;
-          }
-          const output: WorkbookRow = { row, cells: [] };
-          let previousColumn = 0;
-          for (const node of children(sourceRow, 'c')) {
-            const reference = attribute(node, 'r');
-            const location = reference
-              ? cellAddress(reference)
-              : { row, column: previousColumn + 1 };
-            if (location.row !== row || location.column <= previousColumn)
-              throw new Error('Duplicate or unordered worksheet cell.');
-            previousColumn = location.column;
-            if (location.column > 256 || cells >= 50000 || characters >= 500000) {
-              sheet.truncated = true;
-              continue;
-            }
-            const raw = child(node, 'v'),
-              formula = child(node, 'f');
-            const type = attribute(node, 't') || 'n';
-            let value = raw ? xmlText(raw) : '';
-            if (type === 's') {
-              const index = Number(value);
-              if (
-                !/^\d+$/.test(value) ||
-                !Number.isSafeInteger(index) ||
-                strings[index] === undefined
-              )
-                throw new Error('Worksheet references a missing shared string.');
-              value = strings[index];
-            } else if (type === 'inlineStr') {
-              const inline = child(node, 'is');
-              value = inline ? richText(inline) : '';
-            } else if (type === 'b') {
-              if (value && value !== '0' && value !== '1')
-                throw new Error('Invalid worksheet boolean.');
-              value = value === '1' ? 'TRUE' : value === '0' ? 'FALSE' : '';
-            } else if (!['n', 'str', 'e', 'd'].includes(type)) {
-              sheet.truncated = true;
-              continue;
-            }
-            const bounded = value.slice(0, Math.min(10000, 500000 - characters));
-            if (bounded.length < value.length) sheet.truncated = true;
-            characters += bounded.length;
-            cells++;
-            if (formula) {
-              formulas++;
-              if (!raw) missingCached++;
-            }
-            const formulaText = formula ? xmlText(formula) : undefined;
-            const boundedFormula = formulaText?.slice(0, Math.min(10000, 500000 - characters));
-            if (formulaText !== boundedFormula) sheet.truncated = true;
-            characters += boundedFormula?.length || 0;
-            output.cells.push({
-              column: location.column,
-              value: bounded,
-              ...(formula ? { formula: boundedFormula, cached: Boolean(raw) } : {}),
-            });
-            sheet.columns = Math.max(sheet.columns, location.column);
-            if (bounded && result.evidence.length < 8000)
-              result.evidence.push({
-                source: name + '!' + columnName(location.column) + row,
-                text: bounded,
-                anchor: { kind: 'cells', sheet: name, row, column: location.column },
-              });
-            else if (bounded) result.truncated = true;
-          }
-          sheet.rows.push(output);
-        }
+        const part = partTarget(mainPath, relation.target);
+        reserve(part, 32000000);
+        const parser = worksheetReader(sheet, strings, budget, result.evidence);
+        await reader.readZIPChunks(file, part, (chunk) => parser.write(chunk), signal);
+        parser.end();
         if (sheet.truncated) result.truncated = true;
         sheets.push(sheet);
       }
       if (!sheets.length) throw new Error('This workbook has no supported local worksheets.');
-      result.office = { kind: 'workbook', sheets, formulas, missingCached };
+      result.truncated ||= budget.truncated;
+      result.office = {
+        kind: 'workbook',
+        sheets,
+        formulas: budget.formulas,
+        missingCached: budget.missingCached,
+      };
       result.coverageReason =
         'Saved cell values; formulas are not recalculated. Number/date formatting, merged cells, charts, drawings and external data are omitted.';
     }

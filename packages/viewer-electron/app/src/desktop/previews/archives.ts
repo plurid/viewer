@@ -1,6 +1,7 @@
 import { open, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { crc32, gunzip, inflateRaw } from 'node:zlib';
+import { crc32, createInflateRaw, gunzip, inflateRaw } from 'node:zlib';
+import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import type { ArchiveEntry, ArchiveListing } from '../../domain/contracts';
 import { fileCoordination } from '../files/file-coordination';
@@ -174,6 +175,78 @@ export class Archives {
     if ((await archiveFingerprint(file)) !== before)
       throw new Error('The archive changed while reading. Retry with the current file.');
     return data;
+  }
+  /** Internal bounded ZIP reader for streaming document parsers. Successful
+   * completion verifies every expanded byte and the CRC, including omitted data. */
+  async readZIPChunks(
+    file: string,
+    name: string,
+    consume: (chunk: Buffer) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return fileCoordination.run(
+      [{ path: file, mode: 'read' }],
+      async (active) => {
+        active?.throwIfAborted();
+        const before = await archiveFingerprint(file);
+        const index = await this.index(file);
+        const entry = index.entries.find((item) => item.name === name);
+        if (!entry?.previewable || index.data || ![0, 8].includes(entry.method))
+          throw new Error('This ZIP entry cannot be streamed.');
+        await this.background(async () => {
+          active?.throwIfAborted();
+          const handle = await openArchive(file);
+          try {
+            const header = Buffer.alloc(30);
+            const read = await handle.read(header, 0, 30, entry.offset);
+            if (
+              read.bytesRead !== 30 ||
+              header.readUInt32LE(0) !== 0x04034b50 ||
+              header.readUInt16LE(6) & 1 ||
+              header.readUInt16LE(8) !== entry.method
+            )
+              throw new Error('Malformed or encrypted ZIP local header.');
+            const offset = entry.offset + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
+            if (offset + entry.compressed > (await handle.stat()).size)
+              throw new Error('Truncated ZIP entry.');
+            let length = 0,
+              checksum = 0;
+            const collect = async (chunks: AsyncIterable<Buffer>) => {
+              for await (const chunk of chunks) {
+                active?.throwIfAborted();
+                length += chunk.length;
+                if (length > entry.size || length > ENTRY_LIMIT)
+                  throw new Error('Archive entry size exceeds its index or reader limit.');
+                checksum = crc32(chunk, checksum);
+                consume(chunk);
+              }
+            };
+            if (entry.compressed) {
+              const source = handle.createReadStream({
+                start: offset,
+                end: offset + entry.compressed - 1,
+                autoClose: false,
+                highWaterMark: 64 * 1024,
+              });
+              if (entry.method === 8)
+                await pipeline(source, createInflateRaw({ chunkSize: 64 * 1024 }), collect, {
+                  signal: active,
+                });
+              else await pipeline(source, collect, { signal: active });
+            } else if (entry.method !== 0) throw new Error('Truncated ZIP compressed entry.');
+            if (length !== entry.size)
+              throw new Error('Archive entry size does not match its index.');
+            if (checksum !== entry.checksum) throw new Error('ZIP entry checksum is invalid.');
+          } finally {
+            await handle.close();
+          }
+        });
+        if ((await archiveFingerprint(file)) !== before)
+          throw new Error('The archive changed while reading. Retry with the current file.');
+        active?.throwIfAborted();
+      },
+      signal,
+    );
   }
   async extractionEntries(file: string): Promise<ArchiveEntry[]> {
     return this.coordinated(file, () => this.extractionEntriesCoordinated(file));

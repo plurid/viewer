@@ -13,24 +13,36 @@ copies of the public references. It records cold/warm document inspection,
 actual Quick Preview outcomes, screenshots, source hashes, zero file-operation
 jobs and graceful shutdown. Sample presence is not universal decoder support.
 
-| Reference                                                          | Observed result on this Apple Silicon Mac                                                                                                                                                         |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| qpdf 12.4.2 manual, 178 pages, 759 KB                              | PDF renders; page-count inspection confirms 178 pages.                                                                                                                                            |
-| Apache POI `saut_page.docx`, 2.96 MB                               | Body text renders. Five content blocks; layout, embedded images and other Word features remain omitted, as disclosed by Preview details.                                                          |
-| Apache POI `ConditionalFormattingSamples.xlsx`, 655 KB             | All 18 worksheet structures and saved cell values load. Formatting, charts, drawings, external data and formula recalculation remain outside this semantic preview.                               |
-| LibreOffice `LIBRE_OFFICE-116306-0.xlsx`, 2.86 MB / 28 MB expanded | Explicit reader-limit refusal. Its largest XML part is 18 MB; the current Office reader allows 4 MB per part and 32 MB total. The package's compressed size does not establish its decoding cost. |
-| Apache POI `deep-data.xlsx`, 965 KB                                | Explicit corrupt-ZIP refusal: central directory missing. This is a negative reference, retained intact.                                                                                           |
-| Original Nikon Z6 NEF, 26 MB; Ricoh GR III DNG, 33 MB              | This Mac's system thumbnail API did not answer. Viewer now reports a 12-second timeout, exposes Retry and quits cleanly; these two samples are **not qualified as rendered RAW previews**.        |
-| Big Buck Bunny trailer, 33 seconds, Theora/Vorbis OGV              | Audio playback advances in the fallback audio player; the current Chromium build supplies no video picture. The UI labels this partial result. This is not qualified video playback.              |
+| Reference                                                          | Observed result on this Apple Silicon Mac                                                                                                                                                              |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| qpdf 12.4.2 manual, 178 pages, 759 KB                              | PDF renders; page-count inspection confirms 178 pages.                                                                                                                                                 |
+| Apache POI `saut_page.docx`, 2.96 MB                               | Body text renders. Five content blocks; layout, embedded images and other Word features remain omitted, as disclosed by Preview details.                                                               |
+| Apache POI `ConditionalFormattingSamples.xlsx`, 655 KB             | All 18 worksheet structures and saved cell values load. Formatting, charts, drawings, external data and formula recalculation remain outside this semantic preview.                                    |
+| LibreOffice `LIBRE_OFFICE-116306-0.xlsx`, 2.86 MB / 28 MB expanded | Streamed, bounded cell preview. Its 18 MB worksheet is fully scanned without a worksheet DOM; output retains 50,000 cells across 402 rows in the first sheet. Further content is explicitly truncated. |
+| Apache POI `deep-data.xlsx`, 965 KB                                | Explicit corrupt-ZIP refusal: central directory missing. This is a negative reference, retained intact.                                                                                                |
+| Original Nikon Z6 NEF, 26 MB; Ricoh GR III DNG, 33 MB              | This Mac's system thumbnail API did not answer. Viewer now reports a 12-second timeout, exposes Retry and quits cleanly; these two samples are **not qualified as rendered RAW previews**.             |
+| Big Buck Bunny trailer, 33 seconds, Theora/Vorbis OGV              | Audio playback advances in the fallback audio player; the current Chromium build supplies no video picture. The UI labels this partial result. This is not qualified video playback.                   |
 
 Initial measured cold/warm document reads were about 6/3 ms for Word and 24/14 ms
 for the 18-sheet workbook. Actual Quick Preview opening took roughly 0.1–0.5 s
 for the supported documents. These are local observations on these exact samples,
-not performance guarantees or compression benchmarks. The final packaged run is
+not performance guarantees or compression benchmarks. The earlier baseline packaged run is
 recorded in `/private/tmp/viewer-real-file-previews-done.log`, with captures and
 `result.json` in the retained temporary folder `viewer-native-real-files-mrGEh9`.
 It verifies unchanged source hashes, no file-operation jobs, advancing fallback
 audio playback and graceful app exit after both RAW timeouts.
+
+The worksheet streaming follow-up passes on the packaged app in
+`/private/tmp/viewer-office-streaming-native.log`, with captures and `result.json`
+in `viewer-native-real-files-dqiJG0`. The previously rejected large workbook
+loads in about 609 ms cold and 61 ms from the extraction cache; the measured
+Quick Preview sequence takes 1.09 seconds including both inspection reads. Its
+first sheet retains 50,000 cells across 402 source rows and 126 columns. The
+second sheet is present but has no retained cells because the shared cell budget
+is exhausted; both the data and UI report truncation. Further ranges/sheets need
+on-demand reading. This run also verifies the other references, unchanged source
+hashes, no file-operation jobs and graceful app exit. These timings qualify this
+exact sample and machine, not arbitrary workbooks.
 
 The RAW stall also reproduces outside Viewer's coordination layer in a fresh
 Electron process, at a 1024px thumbnail request: no result within 14 seconds.
@@ -40,8 +52,8 @@ system render requests pending, cancels its own wait on release/revocation and
 ignores late bytes. A stuck native service can still require reopening Viewer;
 Viewer does not promise to cancel macOS's internal decoder work.
 
-Remaining work follows evidence: stream or page large worksheet XML, improve
-Office layout/graphics coverage, add a RAW decoder independent of Quick Look,
+Remaining work follows evidence: load further worksheet ranges and sheets on
+demand, improve Office layout/graphics coverage, add a RAW decoder independent of Quick Look,
 and provide a supported local video rendition for codecs Chromium cannot show.
 Current source-preservation, bounded rejection and codec labels remain required
 while those adapters are developed.

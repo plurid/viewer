@@ -50,8 +50,16 @@ without following the leaf symlink or waiting on a pipe, and checked as regular
 files. Automatic content indexing retains its existing 16 MB input limit;
 explicit Office preview/inspection uses the larger bound below.
 
-Limits: 64 MB container, 4 MB per XML part, 32 MB total expanded reads, 200,000 XML
-nodes per part and nesting depth 64. Word retains at most 2,000 blocks and 10,000
+Worksheets stream through bounded ZIP chunks and an incremental XML scanner.
+The reader keeps cell values and original coordinates without building a complete
+worksheet tree. Scanning continues beyond the retained rows/cells, so malformed
+trailing XML, checksum failures and source changes still reject the preview.
+Cancellation closes the stream and releases the native read claim.
+
+Limits: 64 MB container, 4 MB for Word, shared-string and package metadata XML,
+32 MB per streamed worksheet and 32 MB total expanded reads. Small XML trees
+allow 200,000 nodes; streamed worksheets allow 4 million nodes with bounded
+nesting and 256 KiB markup tokens. Word retains at most 2,000 blocks and 10,000
 table cells. Workbooks retain up to 32 supported worksheets, 2,000 stored rows per
 sheet, 256 columns, 50,000 cells and 8,000 content evidence records. Retained text
 and formula text share a 500,000-character budget; individual cell/formula strings
@@ -59,7 +67,8 @@ are capped at 10,000 characters. Out-of-budget container/XML fails explicitly;
 bounded content output is marked truncated. All Office inspection/search results
 report partial coverage rather than claiming complete Word/Excel fidelity.
 
-Implementation: `desktop/previews/office.ts`, `desktop/previews/office-xml.ts`, `domain/previews/documents/office.ts`,
+Implementation: `desktop/previews/office.ts`, `desktop/previews/office-worksheet.ts`,
+`desktop/previews/office-xml.ts`, `domain/previews/documents/office.ts`,
 `previews/modules/OfficePreview.tsx` and the shared `previews/DataTable.tsx`.
 The package relationship/cell model follows Microsoft's
 [SpreadsheetML structure](https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/structure-of-a-spreadsheetml-document),
@@ -68,6 +77,10 @@ and [Word paragraphs](https://learn.microsoft.com/en-us/office/open-xml/word/wor
 
 `tests/office.test.ts` covers extraction, original index anchors/purge, incomplete
 format coverage, malicious/malformed packages, source limits and cancellation.
+`tests/office-streaming.test.ts`, `tests/office-xml-stream.test.ts` and
+`tests/archive-streaming.test.ts` cover large worksheets, bounded cell text,
+byte/UTF-16/entity boundaries, malformed suffixes, full CRC/size validation,
+cancellation and changed sources.
 Agent tests exercise worksheet selection/paging/content grants. The owned direct
 package check is `pnpm exec tsx tests/native-office.ts`; its generated fixtures,
 captures and result live under `out/office-acceptance`. It does not qualify native

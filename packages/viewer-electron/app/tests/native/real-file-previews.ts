@@ -107,9 +107,7 @@ try {
       started = Date.now();
     const expectedRejection = sample.path.endsWith('poi-deep-data.xlsx')
       ? 'ZIP directory was not found'
-      : sample.path.endsWith('poi-large-workbook.xlsx')
-        ? 'Office expanded content exceeds the reader limit'
-        : undefined;
+      : undefined;
     if (['docx', 'xlsx'].includes(extension)) {
       const read = () =>
         evaluate(
@@ -127,6 +125,18 @@ try {
           warm = await read();
         observations.push({ file: sample.path, cold, warm });
         assert.ok((cold as { characters: number }).characters > 0);
+        if (sample.path.endsWith('poi-large-workbook.xlsx')) {
+          const value = cold as {
+            truncated: boolean;
+            sheets: { name: string; rows: number; columns: number; truncated: boolean }[];
+          };
+          assert.equal(value.truncated, true);
+          assert.equal(value.sheets.length, 2);
+          assert.equal(value.sheets[0].name, 'Documents Per Project');
+          assert.ok(value.sheets[0].rows > 0 && value.sheets[0].rows <= 2000);
+          assert.ok(value.sheets[0].columns > 0 && value.sheets[0].columns <= 256);
+          assert.equal(value.sheets[0].truncated, true);
+        }
       }
     }
     await evaluate(
