@@ -12,6 +12,9 @@ The adjacent `candidate.json` binds source, lockfile and test hashes;
 `native-acceptance.json` binds each result's hash, conditions, operator responses
 and limitations. Production sources and packaged bytes were rechecked unchanged
 after the native runs. Native checks ran on macOS 15.1 / 24B2083, arm64.
+The candidate was then opened with the existing acceptance workspace. A native
+read-only window probe confirms its visible window; private agent authority stays
+disabled with no roots. Adjacent `user-window.json` records that handoff.
 
 ### Framing diagnosis and correction
 
