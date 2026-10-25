@@ -8,6 +8,7 @@ import type { DrawingGeometryOptions } from '../../domain/previews/drawings/geom
 import { DocumentCache } from '../previews/document-cache';
 import { workerPort } from './worker-port';
 import { errorMessage } from '../../domain/errors';
+import type { WorksheetWindow } from '../../domain/previews/documents/office';
 interface Request {
   id: string;
   method:
@@ -157,6 +158,7 @@ port.on('message', async (event) => {
           file,
           request.args[1] as number | undefined,
           abort.signal,
+          request.args[3] as WorksheetWindow | undefined,
         );
         value = request.args[2] ? document : { ...document, chapters: undefined };
       } finally {

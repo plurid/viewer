@@ -13,15 +13,15 @@ copies of the public references. It records cold/warm document inspection,
 actual Quick Preview outcomes, screenshots, source hashes, zero file-operation
 jobs and graceful shutdown. Sample presence is not universal decoder support.
 
-| Reference                                                          | Observed result on this Apple Silicon Mac                                                                                                                                                              |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| qpdf 12.4.2 manual, 178 pages, 759 KB                              | PDF renders; page-count inspection confirms 178 pages.                                                                                                                                                 |
-| Apache POI `saut_page.docx`, 2.96 MB                               | Body text renders. Five content blocks; layout, embedded images and other Word features remain omitted, as disclosed by Preview details.                                                               |
-| Apache POI `ConditionalFormattingSamples.xlsx`, 655 KB             | All 18 worksheet structures and saved cell values load. Formatting, charts, drawings, external data and formula recalculation remain outside this semantic preview.                                    |
-| LibreOffice `LIBRE_OFFICE-116306-0.xlsx`, 2.86 MB / 28 MB expanded | Streamed, bounded cell preview. Its 18 MB worksheet is fully scanned without a worksheet DOM; output retains 50,000 cells across 402 rows in the first sheet. Further content is explicitly truncated. |
-| Apache POI `deep-data.xlsx`, 965 KB                                | Explicit corrupt-ZIP refusal: central directory missing. This is a negative reference, retained intact.                                                                                                |
-| Original Nikon Z6 NEF, 26 MB; Ricoh GR III DNG, 33 MB              | This Mac's system thumbnail API did not answer. Viewer now reports a 12-second timeout, exposes Retry and quits cleanly; these two samples are **not qualified as rendered RAW previews**.             |
-| Big Buck Bunny trailer, 33 seconds, Theora/Vorbis OGV              | Audio playback advances in the fallback audio player; the current Chromium build supplies no video picture. The UI labels this partial result. This is not qualified video playback.                   |
+| Reference                                                          | Observed result on this Apple Silicon Mac                                                                                                                                                            |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| qpdf 12.4.2 manual, 178 pages, 759 KB                              | PDF renders; page-count inspection confirms 178 pages.                                                                                                                                               |
+| Apache POI `saut_page.docx`, 2.96 MB                               | Body text renders. Five content blocks; layout, embedded images and other Word features remain omitted, as disclosed by Preview details.                                                             |
+| Apache POI `ConditionalFormattingSamples.xlsx`, 655 KB             | All 18 worksheet structures and saved cell values load. Formatting, charts, drawings, external data and formula recalculation remain outside this semantic preview.                                  |
+| LibreOffice `LIBRE_OFFICE-116306-0.xlsx`, 2.86 MB / 28 MB expanded | On-demand pages render later source rows and independently load the second sheet. The 18 MB worksheet is fully scanned without a worksheet DOM; each interactive page retains up to 100 stored rows. |
+| Apache POI `deep-data.xlsx`, 965 KB                                | Explicit corrupt-ZIP refusal: central directory missing. This is a negative reference, retained intact.                                                                                              |
+| Original Nikon Z6 NEF, 26 MB; Ricoh GR III DNG, 33 MB              | This Mac's system thumbnail API did not answer. Viewer now reports a 12-second timeout, exposes Retry and quits cleanly; these two samples are **not qualified as rendered RAW previews**.           |
+| Big Buck Bunny trailer, 33 seconds, Theora/Vorbis OGV              | Audio playback advances in the fallback audio player; the current Chromium build supplies no video picture. The UI labels this partial result. This is not qualified video playback.                 |
 
 Initial measured cold/warm document reads were about 6/3 ms for Word and 24/14 ms
 for the 18-sheet workbook. Actual Quick Preview opening took roughly 0.1–0.5 s
@@ -32,7 +32,7 @@ recorded in `/private/tmp/viewer-real-file-previews-done.log`, with captures and
 It verifies unchanged source hashes, no file-operation jobs, advancing fallback
 audio playback and graceful app exit after both RAW timeouts.
 
-The worksheet streaming follow-up passes on the packaged app in
+The earlier unpaged worksheet streaming follow-up passes on the packaged app in
 `/private/tmp/viewer-office-streaming-native.log`, with captures and `result.json`
 in `viewer-native-real-files-dqiJG0`. The previously rejected large workbook
 loads in about 609 ms cold and 61 ms from the extraction cache; the measured
@@ -44,6 +44,20 @@ on-demand reading. This run also verifies the other references, unchanged source
 hashes, no file-operation jobs and graceful app exit. These timings qualify this
 exact sample and machine, not arbitrary workbooks.
 
+Interactive worksheet paging now removes that shared-preview starvation from the
+UI. The packaged `tests/native/worksheet-pages.ts` run loads rows 5000–5099 of
+the public worksheet and independently loads Documents Analysis. Its requested
+page contains 12,178 cells and reports the true last source row, 5392; the measured
+uncached read takes about 546 ms. The native check also verifies source-row 2500
+citations, final-page and Previous behavior, actual Return-key row submission,
+remembered sheet positions, malformed-page recovery and external-target refusal.
+Log: `/private/tmp/viewer-office-pagination-native-5.log`; source copies, five
+dark/light/760px captures and result data:
+`viewer-native-worksheet-pages-fYe32e` under the macOS temporary root. Original
+hashes are unchanged, no file-operation jobs occur, and both owned apps quit
+cleanly. The inherited 760px spatial framing does not establish native mobile
+or physical assistive-technology qualification.
+
 The RAW stall also reproduces outside Viewer's coordination layer in a fresh
 Electron process, at a 1024px thumbnail request: no result within 14 seconds.
 The retained direct probe is `/private/tmp/viewer-quicklook-probe-M4sPtx` and its
@@ -52,8 +66,8 @@ system render requests pending, cancels its own wait on release/revocation and
 ignores late bytes. A stuck native service can still require reopening Viewer;
 Viewer does not promise to cancel macOS's internal decoder work.
 
-Remaining work follows evidence: load further worksheet ranges and sheets on
-demand, improve Office layout/graphics coverage, add a RAW decoder independent of Quick Look,
+Remaining work follows evidence: index worksheet rows for faster uncached random
+access, improve Office layout/graphics coverage, add a RAW decoder independent of Quick Look,
 and provide a supported local video rendition for codecs Chromium cannot show.
 Current source-preservation, bounded rejection and codec labels remain required
 while those adapters are developed.

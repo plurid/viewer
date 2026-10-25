@@ -10,6 +10,12 @@ export interface WorkbookBudget {
   missingCached: number;
   truncated: boolean;
 }
+export interface WorksheetReadWindow {
+  fromRow: number;
+  limit: number;
+  lastRow?: number;
+  nextRow?: number;
+}
 interface Cell {
   column: number;
   type: string;
@@ -38,12 +44,16 @@ export function worksheetReader(
   strings: readonly string[],
   budget: WorkbookBudget,
   evidence: DocumentData['evidence'],
+  window?: WorksheetReadWindow,
 ): OfficeXMLStream {
   const trail: string[] = [];
   let previousRow = 0,
     previousColumn = 0,
     rowNumber = 0;
   let row: WorkbookRow | undefined, cell: Cell | undefined;
+  let incompleteRow = false;
+  let snapshot:
+    { budget: WorkbookBudget; evidence: number; columns: number; truncated: boolean } | undefined;
   const retain = () => budget.cells < 50000 && budget.characters < 500000;
   const finishCell = () => {
     if (!cell || !row) return;
@@ -104,11 +114,24 @@ export function worksheetReader(
           if (!Number.isSafeInteger(rowNumber) || rowNumber <= previousRow || rowNumber > 1048576)
             throw new Error('Invalid or unordered worksheet row.');
           previousRow = rowNumber;
+          if (window) window.lastRow = rowNumber;
           previousColumn = 0;
-          if (sheet.rows.length < 2000 && retain()) row = { row: rowNumber, cells: [] };
-          else {
+          incompleteRow = false;
+          snapshot = undefined;
+          if (window && (rowNumber < window.fromRow || window.nextRow !== undefined))
             row = undefined;
-            sheet.truncated = true;
+          else if (sheet.rows.length < (window?.limit ?? 2000) && retain()) {
+            snapshot = {
+              budget: { ...budget },
+              evidence: evidence.length,
+              columns: sheet.columns,
+              truncated: sheet.truncated,
+            };
+            row = { row: rowNumber, cells: [] };
+          } else {
+            row = undefined;
+            if (window) window.nextRow = rowNumber;
+            else sheet.truncated = true;
           }
         } else if (trail.length === 4 && trail[2] === 'row' && name === 'c') {
           const reference = attribute(node, 'r');
@@ -122,9 +145,11 @@ export function worksheetReader(
           )
             throw new Error('Duplicate or unordered worksheet cell.');
           previousColumn = location.column;
-          if (!row || location.column > 256 || !retain()) {
+          if (!row) cell = undefined;
+          else if (location.column > 256 || !retain()) {
             cell = undefined;
             sheet.truncated = true;
+            if (!retain()) incompleteRow = true;
           } else
             cell = {
               column: location.column,
@@ -181,7 +206,15 @@ export function worksheetReader(
           cell = undefined;
         }
         if (trail.length === 3 && trail[1] === 'sheetData' && name.split(':').at(-1) === 'row') {
-          if (row) sheet.rows.push(row);
+          if (row && window && incompleteRow && sheet.rows.length && snapshot) {
+            // An ordinary page boundary must not silently discard the rest of
+            // a row. Retry the complete source row with a fresh page budget.
+            Object.assign(budget, snapshot.budget);
+            evidence.length = snapshot.evidence;
+            sheet.columns = snapshot.columns;
+            sheet.truncated = snapshot.truncated;
+            window.nextRow = rowNumber;
+          } else if (row) sheet.rows.push(row);
           row = undefined;
         }
         trail.pop();

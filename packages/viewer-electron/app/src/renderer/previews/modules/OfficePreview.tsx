@@ -1,5 +1,4 @@
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
-import type { DocumentData } from '../../../domain/services';
 import { columnName } from '../../../domain/previews/documents/office';
 import type { PreviewContext } from '../contracts';
 import { usePreviewState } from '../state';
@@ -8,48 +7,55 @@ import { DataTable } from '../DataTable';
 import { Empty, Loading } from '../../ui/primitives';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { report } from '../../state/store';
+import { useOfficeDocument } from '../useOfficeDocument';
+import { WorksheetNavigation } from '../WorksheetNavigation';
 
 /* THESIS: Read Word text and inspect worksheet cells within the existing file plane.
    OWN-WORLD: Existing flat toolbar, theme surfaces, borders and type; no source fonts or HTML.
-   STORY: Choose a sheet, filter rows, inspect saved values, return to a source citation.
-   FIRST VIEWPORT: Sheet selector and coverage controls above the full-height table or readable body.
-   FORM: Ordinary extension of the incumbent preview system; office-preview-v1.
+   STORY: Choose a sheet, page or jump to source rows, inspect saved values and follow citations.
+   FIRST VIEWPORT: Existing sheet selector, a wrapping Previous/Next/Row strip and the full-height table.
+   FORM: Ordinary incumbent extension; office-preview-v1, worksheet-pages-v1; no new visual world.
    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance */
 export default function OfficePreview(context: PreviewContext) {
-  const [document, setDocument] = useState<DocumentData>();
-  const [error, setError] = useState('');
   const [details, setDetails] = useState(false);
   const [sheetName, setSheetName] = usePreviewState(context, 'office.sheet', '');
+  const [positions, setPositions] = usePreviewState<Record<string, number>>(
+    context,
+    'office.rows',
+    {},
+  );
+  const [history, setHistory] = useState<number[]>([]);
+  const [ignoredCitation, setIgnoredCitation] = useState('');
+  const suppliedAnchor = context.evidence?.anchor;
+  const citationKey =
+    suppliedAnchor?.kind === 'cells'
+      ? JSON.stringify([
+          context.resource.id,
+          suppliedAnchor.sheet,
+          suppliedAnchor.row,
+          suppliedAnchor.column,
+        ])
+      : '';
+  const anchor = citationKey && citationKey === ignoredCitation ? undefined : suppliedAnchor;
+  const requestedSheet = anchor?.kind === 'cells' && anchor.sheet ? anchor.sheet : sheetName;
+  const savedRow =
+    positions && typeof positions === 'object' ? positions[requestedSheet] : undefined;
+  const fromRow =
+    anchor?.kind === 'cells'
+      ? anchor.row
+      : typeof savedRow === 'number' &&
+          Number.isInteger(savedRow) &&
+          savedRow >= 1 &&
+          savedRow <= 1048576
+        ? savedRow
+        : 1;
+  const workbook = context.resource.entry.extension === 'xlsx';
+  const request = useMemo(
+    () => (workbook ? { sheet: requestedSheet || undefined, fromRow, limit: 100 } : undefined),
+    [workbook, requestedSheet, fromRow],
+  );
+  const { document, loading, error, retry } = useOfficeDocument(context, request);
   const wordRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    let alive = true;
-    setDocument(undefined);
-    setError('');
-    const timer = setTimeout(() => {
-      if (!alive) return;
-      alive = false;
-      setError('The document reader is taking longer than expected. Try again.');
-      void context.services.release(context.resource.id).catch(() => {});
-    }, 15000);
-    context.services
-      .document(context.resource.id)
-      .then((value) => {
-        clearTimeout(timer);
-        if (alive && !context.signal.aborted) setDocument(value);
-      })
-      .catch((error) => {
-        clearTimeout(timer);
-        if (alive && !context.signal.aborted) setError(String(error.message || error));
-      });
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [context.services, context.resource.id, context.signal]);
-  const anchor = context.evidence?.anchor;
-  useEffect(() => {
-    if (anchor?.kind === 'cells' && anchor.sheet) setSheetName(anchor.sheet);
-  }, [anchor, setSheetName]);
   useEffect(() => {
     if (anchor?.kind === 'document' && document)
       wordRef.current
@@ -59,10 +65,36 @@ export default function OfficePreview(context: PreviewContext) {
   const office = document?.office;
   const sheet =
     office?.kind === 'workbook'
-      ? office.sheets.find((sheet) => sheet.name === sheetName) ||
+      ? office.sheets.find((sheet) => sheet.name === (office.page?.sheet ?? sheetName)) ||
         office.sheets.find((sheet) => !sheet.hidden) ||
         office.sheets[0]
       : undefined;
+  const page = office?.kind === 'workbook' ? office.page : undefined;
+  const savePosition = (name: string, row: number) =>
+    setPositions((previous) => ({
+      ...Object.fromEntries(
+        Object.entries(previous && typeof previous === 'object' ? previous : {})
+          .filter(([key]) => key !== name)
+          .slice(-31),
+      ),
+      [name]: row,
+    }));
+  const navigate = (row: number, direction: 'previous' | 'next' | 'jump') => {
+    if (!sheet || !page) return;
+    setIgnoredCitation(citationKey);
+    setSheetName(sheet.name);
+    savePosition(sheet.name, row);
+    setHistory((previous) =>
+      direction === 'previous' ? previous.slice(0, -1) : [...previous, page.fromRow].slice(-128),
+    );
+  };
+  const firstWorksheet = () => {
+    setIgnoredCitation(citationKey);
+    setSheetName('');
+    savePosition('', 1);
+    setHistory([]);
+    retry();
+  };
   const headers = useMemo(
     () => Array.from({ length: sheet?.columns || 0 }, (_, index) => columnName(index + 1)),
     [sheet?.columns],
@@ -82,14 +114,15 @@ export default function OfficePreview(context: PreviewContext) {
       [details, office],
     ),
   );
-  if (error || (document && !office))
+  if ((!document && error) || (document && !office))
     return (
       <Empty
         icon="file"
         title="Office preview unavailable"
         detail={error || 'This document has no supported text or worksheets.'}
       >
-        {context.retry && <button onClick={context.retry}>Try again</button>}
+        <button onClick={workbook ? retry : (context.retry ?? retry)}>Try again</button>
+        {workbook && <button onClick={firstWorksheet}>First worksheet</button>}
         <button
           onClick={() => {
             void window.viewer.openExternal(context.resource.entry.path).catch(report);
@@ -99,21 +132,26 @@ export default function OfficePreview(context: PreviewContext) {
         </button>
       </Empty>
     );
-  if (!document || !office) return <Loading label="Reading Office document…" />;
+  if (!document || !office)
+    return <Loading label={workbook ? 'Reading worksheet rows…' : 'Reading Office document…'} />;
   return (
-    <div className="office-viewer">
+    <div className="office-viewer" data-office-preview="worksheet-pages-v1">
       <PreviewToolbar context={context}>
         {office.kind === 'workbook' && (
           <label className="workbook-sheet-picker">
             Worksheet{' '}
             <ChoiceButton
               label="Worksheet"
-              value={sheet?.name ?? ''}
+              value={requestedSheet || sheet?.name || ''}
               choices={office.sheets.map((sheet) => ({
                 value: sheet.name,
                 label: sheet.name + (sheet.hidden ? ' (hidden)' : ''),
               }))}
-              onChoose={setSheetName}
+              onChoose={(name) => {
+                setIgnoredCitation(citationKey);
+                setSheetName(name);
+                setHistory([]);
+              }}
             />
           </label>
         )}
@@ -136,15 +174,20 @@ export default function OfficePreview(context: PreviewContext) {
           aria-label="Preview details"
         >
           <p>{document.coverageReason}</p>
-          {office.kind === 'workbook' && (
+          {office.kind === 'workbook' && !loading && !error && (
             <p>
-              {office.formulas} formula cells · {office.missingCached} without a saved value
+              {office.formulas} formula cells{page ? ' on this page' : ''} · {office.missingCached}{' '}
+              without a saved value
             </p>
           )}
         </section>
       )}
-      {document.truncated && (
-        <p className="inline-warning">The reader limit was reached. Some content is not shown.</p>
+      {!loading && !error && (page ? page.limited : document.truncated) && (
+        <p className="inline-warning">
+          {page
+            ? 'Some cell values or columns exceed the preview limits.'
+            : 'The reader limit was reached. Some content is not shown.'}
+        </p>
       )}
       {anchor?.kind === 'cells' &&
         anchor.sheet &&
@@ -154,9 +197,29 @@ export default function OfficePreview(context: PreviewContext) {
             The referenced worksheet is outside the available preview.
           </p>
         )}
-      {sheet ? (
+      {sheet && page && !error && (
+        <WorksheetNavigation
+          page={page}
+          sheet={sheet}
+          loading={loading}
+          previous={history.at(-1) ?? Math.max(1, page.fromRow - 100)}
+          navigate={navigate}
+        />
+      )}
+      {loading ? (
+        <Loading label={workbook ? 'Reading worksheet rows…' : 'Reading Office document…'} />
+      ) : error ? (
+        <Empty
+          icon="file"
+          title={workbook ? 'Worksheet page unavailable' : 'Office preview unavailable'}
+          detail={error}
+        >
+          <button onClick={workbook ? retry : (context.retry ?? retry)}>Try again</button>
+          {workbook && <button onClick={firstWorksheet}>First worksheet</button>}
+        </Empty>
+      ) : sheet ? (
         <DataTable
-          key={sheet.name}
+          key={sheet.name + ':' + (page?.fromRow ?? '')}
           label={sheet.name}
           rows={sheet.rows}
           headers={headers}
@@ -166,6 +229,8 @@ export default function OfficePreview(context: PreviewContext) {
               : undefined
           }
           numbered
+          sourceLastRow={page?.lastRow}
+          paged={Boolean(page)}
         />
       ) : (
         office.kind === 'word' && (

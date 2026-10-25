@@ -92,3 +92,9 @@ Large XLSX worksheets use `desktop/previews/office-worksheet.ts` with the shared
 incremental XML scanner and bounded archive streams. Retained cell/evidence
 budgets do not stop full XML, CRC and source-version validation. Word and small
 package parts keep their separate tree limits; see [Office previews](docs/office-previews.md).
+
+A **worksheet page** is one selected sheet's bounded stored-row window, addressed
+by original Excel row numbers. It uses an existing preview resource, a cancellable
+request ID and a source-version/range cache key. Unloaded sheet metadata differs
+from empty sheet content. Index/agent extraction keeps its separate existing
+content bounds and authority.

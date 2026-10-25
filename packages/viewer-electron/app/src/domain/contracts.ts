@@ -7,6 +7,7 @@ import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
 import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
 import type { TransformPlan } from './operations/transforms';
+import type { WorksheetDocumentRequest } from './previews/documents/office';
 import type { MediaRequest, MediaReply } from './media/documents';
 import type { BrowserRequest, BrowserSnapshot } from './previews/browser';
 import type {
@@ -642,7 +643,8 @@ export interface ViewerAPI {
   appIcon(path: string, size: 'small' | 'large'): Promise<string>;
   /** Records a renderer failure in the local diagnostic log; nothing is sent anywhere. */
   diagnosticReport(detail: string): Promise<void>;
-  document(id: string): Promise<DocumentData>;
+  document(id: string, request?: WorksheetDocumentRequest): Promise<DocumentData>;
+  cancelDocument(id: string, requestID: string): Promise<void>;
   list(path: string): Promise<FolderListing>;
   stat(path: string): Promise<FileEntry>;
   fileInformation(path: string): Promise<FileInformation>;

@@ -39,3 +39,27 @@ it('invalidates changed sources and keeps different extraction limits separate',
   await cache.read('/file.pdf', 1);
   expect(decode).toHaveBeenCalledTimes(4);
 });
+it('keys worksheet pages by sheet and source row while sharing identical requests', async () => {
+  const decode = vi.fn(
+    async (
+      _file: string,
+      options: Parameters<typeof import('../src/desktop/previews/formats').extractDocument>[1],
+    ) => ({
+      ...value,
+      text: JSON.stringify(options?.worksheet),
+    }),
+  );
+  const cache = new DocumentCache(decode, inspect);
+  const one = { sheet: 'Data', fromRow: 1, limit: 100 };
+  const first = await cache.read('/file.xlsx', undefined, undefined, one);
+  expect(
+    await cache.read('/file.xlsx', undefined, undefined, { limit: 100, fromRow: 1, sheet: 'Data' }),
+  ).toBe(first);
+  expect(
+    (await cache.read('/file.xlsx', undefined, undefined, { ...one, fromRow: 101 })).text,
+  ).not.toBe(first.text);
+  expect(
+    (await cache.read('/file.xlsx', undefined, undefined, { ...one, sheet: 'Other' })).text,
+  ).not.toBe(first.text);
+  expect(decode).toHaveBeenCalledTimes(3);
+});

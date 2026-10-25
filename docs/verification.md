@@ -1,5 +1,72 @@
 # Verification
 
+## October 25 on-demand worksheet pages
+
+The validated Apple Silicon direct package is retained at
+`/private/tmp/viewer-worksheet-pages-validated-20261025-Zl8lVE/Viewer.app`.
+Adjacent `candidate.json` records source/lockfile fingerprints, package checksums,
+scope and limitations; `reports/` preserves the executed logs, native results and
+five reviewed captures. Binary SHA256:
+`939dcbf669056bc9153d02861e94e7ead911144fe9ad9bd1a4729801843249ae`;
+ASAR SHA256:
+`43e948bf489a6677c6fdde37ec6acf15ab873b2284ecf372a38bcd52aea18fbf`.
+
+**All 1,814 tests in 257 files pass, with zero failures or skips.** The complete
+`pnpm test` run uses `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1`, the
+previous retained candidate's macOS binding and the existing
+`app/out/viewer-reviewed-trash-1792824425210.node` recording binding. The affected
+reader/renderer/cache/resource/IPC/file-service set passes 51 tests. All TypeScript
+targets, full ESLint, full Prettier, packaging and `codesign --verify --deep --strict`
+pass. This is development direct-package evidence, without notarization or Store
+qualification.
+
+Workbook previews now request one selected sheet and up to 100 stored rows.
+Previous/Next and Row/Go preserve source addresses, each sheet remembers its row,
+and citations load rows outside the old retained preview. A page boundary moves
+an otherwise incomplete row into a fresh budget when possible. Filters explicitly
+apply to the current page. Stale results cannot replace a newer selection, and
+resource/request cancellation preserves independent consumers. Requests carry
+the existing resource capability and bounded sheet/row parameters, with no path,
+permission override, process invocation or file mutation. Cache keys include the
+source version and normalized range; access is rechecked before returning data.
+
+The packaged `tests/native/worksheet-pages.ts` acceptance passes actual Return
+submission, source citation A2500, final-page and Previous behavior, remembered
+sheet positions, malformed local-page recovery, external-target refusal and true
+empty sheets. On the pinned public LibreOffice workbook it displays rows
+5000–5099 and independently loads Documents Analysis. The requested page contains
+12,178 cells, reports source row 5392 as the last row and reads in about 546 ms
+uncached on this Mac. No file jobs occur; source SHA256 values remain unchanged
+and both owned apps exit cleanly. Native log:
+`/private/tmp/viewer-office-pagination-native-5.log`; fixture and captures:
+`viewer-native-worksheet-pages-fYe32e` under the macOS temporary root.
+
+The existing `tests/native-office.ts` acceptance also passes Word body/tables,
+themes, saved-formula detail, page-local filtering, hidden/empty sheets and a
+cold-restored original cell citation. Its output now uses a unique preserved
+folder rather than replacing prior evidence. Log:
+`/private/tmp/viewer-office-pagination-word-native-2.log`; fixture:
+`viewer-native-office-Io0BQ5/acceptance`. The complete `pnpm test:desktop` packaged
+smoke passes; log `/private/tmp/viewer-office-pagination-smoke.log`, fixture
+`viewer-verification-UEuMEb`, native evidence
+`app/out/native-evidence/electron-smoke-2026-10-25T17-24-24-188Z-f919409c-2e82-4246-9255-209af65c69a5`.
+
+Independent UI review returns **ship**, with no material fixes, for the local
+worksheet paging extension and its five supplied captures. They are retained in
+`.impeccable/review/worksheet-pages/`. The detector ran once and reported only the
+unchanged source-citation border advisory required by the existing design rule.
+The 760px capture demonstrates inherited desktop spatial framing, not native
+mobile or physical assistive-technology qualification. No new shipping raster
+assets or global visual identity are introduced.
+
+Uncached ranges still scan the full selected worksheet. Existing 32 MB expanded
+read, text/cell and 256-column bounds remain; complete Excel rendering and formula
+evaluation are outside this preview. Agent/index content keeps its own existing
+bounds and authority. RAW, OGV and other platform limitations remain documented
+in [real-file qualification](real-file-qualification.md). All generated fixtures,
+previous candidates and original source files remain preserved; the user's
+ordinary Viewer session was not restarted. See [Office previews](office-previews.md).
+
 ## October 25 streamed worksheet follow-up
 
 The validated Apple Silicon direct package is retained at

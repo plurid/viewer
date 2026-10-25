@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { DocumentData } from '../../domain/services';
 import { fileCoordination } from '../files/file-coordination';
+import type { WorksheetWindow } from '../../domain/previews/documents/office';
 const run = promisify(execFile);
 const decode = (value: string) =>
   value
@@ -51,7 +52,7 @@ export async function documentBytes(file: string, limit: number): Promise<Uint8A
 }
 export async function extractDocument(
   file: string,
-  options: { ocr?: string; pages?: number; signal?: AbortSignal } = {},
+  options: { ocr?: string; pages?: number; signal?: AbortSignal; worksheet?: WorksheetWindow } = {},
 ): Promise<DocumentData> {
   return fileCoordination.run(
     [{ path: file, mode: 'read' }],
@@ -66,9 +67,11 @@ export async function extractDocument(
 }
 async function extractCoordinated(
   file: string,
-  options: { ocr?: string; pages?: number; signal?: AbortSignal },
+  options: { ocr?: string; pages?: number; signal?: AbortSignal; worksheet?: WorksheetWindow },
 ): Promise<DocumentData> {
   const extension = path.extname(file).toLowerCase();
+  if (options.worksheet && extension !== '.xlsx')
+    throw new Error('Worksheet pages are available for XLSX files only.');
   const result: DocumentData = {
     path: file,
     metadata: {},
@@ -78,7 +81,7 @@ async function extractCoordinated(
   };
   if (extension === '.docx' || extension === '.xlsx') {
     const { extractOffice } = await import('./office');
-    return extractOffice(file, options.signal);
+    return extractOffice(file, options.signal, options.worksheet);
   } else if (extension === '.pdf') {
     const [pdf, worker] = await Promise.all([
       import('pdfjs-dist/legacy/build/pdf.mjs'),

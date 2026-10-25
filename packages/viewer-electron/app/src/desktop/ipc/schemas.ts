@@ -21,6 +21,7 @@ import { journalQuerySchema } from '../../domain/journal/events';
 import { browserRequestSchema } from '../../domain/previews/browser';
 import { transformPlanSchema } from '../../domain/operations/transforms';
 import { mediaRequestSchema } from '../../domain/media/documents';
+import { worksheetDocumentRequestSchema } from '../../domain/previews/documents/office';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
@@ -573,7 +574,8 @@ export const schemas = {
   thumbnail: z.tuple([localPath, z.number().int().min(128).max(512)]),
   appIcon: z.tuple([localPath, z.enum(['small', 'large'])]),
   diagnosticReport: z.tuple([z.string().max(8000)]),
-  document: z.tuple([id]),
+  document: z.tuple([id, worksheetDocumentRequestSchema.optional()]),
+  cancelDocument: z.tuple([id, id]),
   bootstrap: z.tuple([]),
   list: z.tuple([localPath]),
   stat: z.tuple([localPath]),
@@ -793,6 +795,7 @@ export const methodWindows = {
   appIcon: 'viewer',
   diagnosticReport: 'both',
   document: 'viewer',
+  cancelDocument: 'viewer',
   bootstrap: 'viewer',
   list: 'viewer',
   stat: 'viewer',

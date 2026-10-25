@@ -2,6 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { methodWindows, schemas, settingsEvents } from '../src/desktop/ipc/schemas';
 
 describe('IPC method table', () => {
+  it('bounds worksheet pages and cancellation to existing viewer resources', () => {
+    expect(schemas.document.safeParse(['resource']).success).toBe(true);
+    expect(
+      schemas.document.safeParse([
+        'resource',
+        { requestID: 'page', sheet: 'Data', fromRow: 2400, limit: 100 },
+      ]).success,
+    ).toBe(true);
+    for (const request of [
+      { requestID: 'page', fromRow: 0 },
+      { requestID: 'page', limit: 101 },
+      { requestID: 'page', path: '/other/file.xlsx' },
+      { sheet: 'Data' },
+    ])
+      expect(schemas.document.safeParse(['resource', request]).success).toBe(false);
+    expect(methodWindows.cancelDocument).toBe('viewer');
+    expect(schemas.cancelDocument.safeParse(['resource', 'page']).success).toBe(true);
+  });
   it('assigns every method a window', () => {
     expect(Object.keys(methodWindows).sort()).toEqual(Object.keys(schemas).sort());
   });

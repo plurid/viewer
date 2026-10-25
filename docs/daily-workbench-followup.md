@@ -60,3 +60,14 @@ through the omitted suffix. Malformed tails, cancellation and changed sources
 are covered by regression tests. The full suite now passes **1,800 tests in 255
 files**. See [Office previews](office-previews.md) and the updated real-file record
 for precise limits and retained acceptance evidence.
+
+The subsequent step adds **on-demand worksheet pages** to the existing preview.
+Previous/Next and Row/Go retain original Excel row numbers, each sheet gets its
+own bounded page budget and remembered position, and cell citations load their
+source row directly. Page filtering is explicitly local. Superseded/released
+requests cannot replace the active page, and cached pages remain tied to source
+versions and the existing preview grant. Native acceptance reaches source rows
+2500 and 5000, loads the formerly starved public second sheet, and verifies
+keyboard submission, recovery, unchanged source hashes and graceful exit. The
+complete suite passes **1,814 tests in 257 files**. See [Office previews](office-previews.md)
+and [verification](verification.md) for final candidate evidence and limits.

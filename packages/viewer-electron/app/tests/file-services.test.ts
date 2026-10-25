@@ -52,6 +52,33 @@ afterEach(() => {
 });
 const services = () => new FileServices('/isolated-profile', '/worker', '/ocr', () => {});
 describe('read-only file-services shutdown', () => {
+  it('passes a bounded worksheet window to the shared reader and rechecks access on return', async () => {
+    let denied = false;
+    const files = new FileServices(
+      '/private',
+      '/worker',
+      '/ocr',
+      () => {},
+      () => {},
+      {
+        access: async (paths) => {
+          if (denied) throw new FileAccessRequired(paths[0]);
+        },
+      },
+    );
+    const window = { sheet: 'Data', fromRow: 2500, limit: 100 };
+    const pending = files.extract('/Workbook.xlsx', undefined, true, window);
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    await vi.advanceTimersByTimeAsync(0);
+    const request = worker.postMessage.mock.calls.find(
+      ([request]) => request.method === 'extract',
+    )![0];
+    expect(request.args).toEqual(['/Workbook.xlsx', undefined, true, window]);
+    denied = true;
+    worker.emit('message', { id: request.id, value: { text: 'not returned' } });
+    await rejected;
+    await files.close();
+  });
   it('keeps an explicit inspection valid when only search indexing is reconfigured', async () => {
     const files = services();
     await files.configure(defaultSettings('/fixtures').search);

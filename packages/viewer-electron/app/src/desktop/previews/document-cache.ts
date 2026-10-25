@@ -3,6 +3,7 @@ import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection'
 import { extractDocument } from './formats';
 import { previewContains } from './preview-work';
 import type { DocumentData } from '../../domain/services';
+import { worksheetPageSchema, type WorksheetWindow } from '../../domain/previews/documents/office';
 
 interface Pending {
   file: string;
@@ -21,11 +22,17 @@ export class DocumentCache {
     private inspect = entry,
   ) {}
 
-  async read(file: string, pages?: number, signal?: AbortSignal): Promise<DocumentData> {
+  async read(
+    file: string,
+    pages?: number,
+    signal?: AbortSignal,
+    requested?: WorksheetWindow,
+  ): Promise<DocumentData> {
     signal?.throwIfAborted();
+    const worksheet = requested ? worksheetPageSchema.parse(requested) : undefined;
     const info = await this.inspect(file);
     signal?.throwIfAborted();
-    const key = JSON.stringify([file, sourceVersion(info), pages ?? null]);
+    const key = JSON.stringify([file, sourceVersion(info), pages ?? null, worksheet ?? null]);
     const cached = this.saved.get(key);
     if (cached) {
       this.saved.delete(key);
@@ -47,7 +54,7 @@ export class DocumentCache {
       item.work = Promise.resolve()
         .then(async () => {
           abort.signal.throwIfAborted();
-          const value = await this.decode(file, { pages, signal: abort.signal });
+          const value = await this.decode(file, { pages, worksheet, signal: abort.signal });
           if (!sameSourceVersion(sourceVersion(info), sourceVersion(await this.inspect(file))))
             throw new Error('The document changed while being read. Open it again.');
           abort.signal.throwIfAborted();

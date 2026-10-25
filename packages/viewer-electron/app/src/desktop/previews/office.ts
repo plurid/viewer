@@ -3,7 +3,7 @@ import { lstat } from 'node:fs/promises';
 import { Archives } from './archives';
 import { fileCoordination } from '../files/file-coordination';
 import { attribute, child, children, localName, officeXML, xmlText } from './office-xml';
-import { worksheetReader, type WorkbookBudget } from './office-worksheet';
+import { worksheetReader, type WorkbookBudget, type WorksheetReadWindow } from './office-worksheet';
 import type { XMLNode } from './office-xml';
 import type { DocumentData } from '../../domain/services';
 import type {
@@ -11,7 +11,10 @@ import type {
   WorkbookSheet,
   WordParagraph,
   WordTable,
+  WorksheetWindow,
+  WorksheetPage,
 } from '../../domain/previews/documents/office';
+import { worksheetPageSchema } from '../../domain/previews/documents/office';
 
 const relationshipTypes = [
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/',
@@ -142,7 +145,14 @@ function wordContent(main: XMLNode): { content: OfficeContent; truncated: boolea
   return { content: { kind: 'word', blocks }, truncated };
 }
 /** Caller holds native read coordination. No package part is written or executed. */
-export async function extractOffice(file: string, signal?: AbortSignal): Promise<DocumentData> {
+export async function extractOffice(
+  file: string,
+  signal?: AbortSignal,
+  requested?: WorksheetWindow,
+): Promise<DocumentData> {
+  const window = requested ? worksheetPageSchema.parse(requested) : undefined;
+  if (window && path.extname(file).toLowerCase() !== '.xlsx')
+    throw new Error('Worksheet pages are available for XLSX files only.');
   const before = await lstat(fileCoordination.path(file));
   if (!before.isFile() || before.isSymbolicLink() || before.size > 64000000)
     throw new Error('Office file must be a regular file within 64 MB.');
@@ -247,7 +257,28 @@ export async function extractOffice(file: string, signal?: AbortSignal): Promise
       const definitions = sheetContainer ? children(sheetContainer, 'sheet') : [];
       if (!definitions.length) throw new Error('This XLSX has no worksheets.');
       if (definitions.length > 32) result.truncated = true;
+      const supported = (node: XMLNode) => {
+        const relation = rels.find((item) => item.id === attribute(node, 'id'));
+        return relation && typeIs(relation.type, 'worksheet') && !relation.external;
+      };
+      const selected = window
+        ? window.sheet
+          ? definitions.find((node) => attribute(node, 'name') === window.sheet)
+          : definitions
+              .slice(0, 32)
+              .find(
+                (node) =>
+                  supported(node) &&
+                  !['hidden', 'veryHidden'].includes(attribute(node, 'state') || ''),
+              ) || definitions.slice(0, 32).find(supported)
+        : undefined;
+      if (
+        window &&
+        (!selected || !supported(selected) || !definitions.slice(0, 32).includes(selected))
+      )
+        throw new Error('The requested worksheet is unavailable in this workbook.');
       const sheets: WorkbookSheet[] = [];
+      let page: WorksheetPage | undefined;
       const budget: WorkbookBudget = {
         formulas: 0,
         missingCached: 0,
@@ -272,22 +303,41 @@ export async function extractOffice(file: string, signal?: AbortSignal): Promise
           rows: [],
           columns: 1,
           truncated: false,
+          ...(window ? { loaded: definition === selected } : {}),
         };
+        if (window && definition !== selected) {
+          sheets.push(sheet);
+          continue;
+        }
         const part = partTarget(mainPath, relation.target);
         reserve(part, 32000000);
-        const parser = worksheetReader(sheet, strings, budget, result.evidence);
+        const range: WorksheetReadWindow | undefined = window
+          ? { fromRow: window.fromRow, limit: window.limit }
+          : undefined;
+        const parser = worksheetReader(sheet, strings, budget, result.evidence, range);
         await reader.readZIPChunks(file, part, (chunk) => parser.write(chunk), signal);
         parser.end();
+        if (range)
+          page = {
+            sheet: name,
+            fromRow: range.fromRow,
+            lastRow: range.lastRow ?? 0,
+            nextRow: range.nextRow,
+            limited: sheet.truncated,
+          };
         if (sheet.truncated) result.truncated = true;
         sheets.push(sheet);
       }
-      if (!sheets.length) throw new Error('This workbook has no supported local worksheets.');
+      if (!sheets.length || (window && !page))
+        throw new Error('The requested worksheet has no supported local content.');
       result.truncated ||= budget.truncated;
+      if (page && (page.fromRow > 1 || page.nextRow || sheets.length > 1)) result.truncated = true;
       result.office = {
         kind: 'workbook',
         sheets,
         formulas: budget.formulas,
         missingCached: budget.missingCached,
+        ...(page ? { page } : {}),
       };
       result.coverageReason =
         'Saved cell values; formulas are not recalculated. Number/date formatting, merged cells, charts, drawings and external data are omitted.';

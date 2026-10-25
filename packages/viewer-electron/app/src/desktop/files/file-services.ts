@@ -1,4 +1,5 @@
 import type { QuerySnapshot } from '../../domain/workspaces/collections';
+import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import type {
   DrawingGeometryOptions,
   DrawingGeometryPage,
@@ -212,13 +213,21 @@ export class FileServices {
     await this.options.access?.([file]);
     return this.index.call<void>('update', [file, removed]);
   }
-  async extract(file: string, signal?: AbortSignal, chapters = false): Promise<DocumentData> {
+  async extract(
+    file: string,
+    signal?: AbortSignal,
+    chapters = false,
+    worksheet?: WorksheetWindow,
+  ): Promise<DocumentData> {
     await this.options.access?.([file]);
+    const revision = this.accessRevision;
     const result = await this.index.call<DocumentData>(
       'extract',
-      [file, undefined, chapters],
+      worksheet ? [file, undefined, chapters, worksheet] : [file, undefined, chapters],
       signal,
     );
+    if (revision !== this.accessRevision)
+      throw new Error('File access changed. Read the document again.');
     await this.options.access?.([file]);
     return result;
   }

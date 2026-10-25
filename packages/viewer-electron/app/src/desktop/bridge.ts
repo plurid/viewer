@@ -1828,11 +1828,19 @@ export class Desktop {
         return thumbnail;
       },
       document: async (args) => {
+        const request = args[1];
+        if (request) {
+          const { requestID, ...worksheet } = request;
+          return this.resources.documentRead(args[0], requestID, (file, signal) =>
+            this.files.extract(file, signal, true, worksheet),
+          );
+        }
         const file = this.resources.documentSource(args[0]);
         const document = await this.files.extract(file, this.resources.signal(args[0]), true);
         this.resources.documentSource(args[0]);
         return document;
       },
+      cancelDocument: async ([id, requestID]) => this.resources.cancelDocument(id, requestID),
       bootstrap: async (_args, sender) => {
         const home = this.home;
         await this.fileAccess.load();

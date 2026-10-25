@@ -20,6 +20,19 @@ explicitly labeled. Viewer never evaluates formulas, resolves external data or
 opens workbook hyperlinks. Numeric/date formatting, merged cells, charts and
 drawings are omitted; numeric dates remain stored serial values.
 
+Workbook previews load one sheet and up to 100 stored rows at a time. Previous,
+Next and Row/Go use original Excel row numbers; a sparse sheet may skip blank
+gaps. Sheet choices retain their own row position in private preview state.
+Opening a cell citation loads its source row directly, including rows beyond the
+old retained preview. Manual navigation stops following that citation. Filter
+this page searches the loaded rows. Page transitions hide stale cells while
+retaining sheet choices; errors expose Try again and First worksheet.
+
+Each requested sheet/page receives a fresh bounded content budget. A row that
+cannot fit the remaining character budget moves intact to the next page when
+possible. A single row or individual value that exceeds a hard limit remains
+partial and is labeled as such. Source ranges never imply full Excel fidelity.
+
 Inspection, opt-in content indexing, workflows and named agent content tools use
 the same worker reader. Word citations identify a document block; workbook
 citations identify a sheet, row and column. Opening a citation selects its sheet
@@ -36,6 +49,8 @@ addresses are returned alongside formula text and cached-value availability.
 The response lists available sheets, reports reader truncation separately from
 partial format coverage, and obeys the named client's returned-byte budget.
 No input file is modified. CSV/TSV keep their existing first-row header behavior.
+This agent/indexing interface remains separately bounded; the interactive
+preview's new row-window API does not widen agent content permissions.
 
 The reader follows local package relationships rather than assuming a particular
 main-part filename. It uses the existing bounded ZIP/CRC reader, rejects unsafe
@@ -61,7 +76,10 @@ Limits: 64 MB container, 4 MB for Word, shared-string and package metadata XML,
 allow 200,000 nodes; streamed worksheets allow 4 million nodes with bounded
 nesting and 256 KiB markup tokens. Word retains at most 2,000 blocks and 10,000
 table cells. Workbooks retain up to 32 supported worksheets, 2,000 stored rows per
-sheet, 256 columns, 50,000 cells and 8,000 content evidence records. Retained text
+sheet, 256 columns, 50,000 cells and 8,000 content evidence records. Interactive
+preview pages retain up to 100 stored rows of one selected sheet using a fresh
+cell/text budget; other sheets in that response carry unloaded metadata.
+Retained text
 and formula text share a 500,000-character budget; individual cell/formula strings
 are capped at 10,000 characters. Out-of-budget container/XML fails explicitly;
 bounded content output is marked truncated. All Office inspection/search results
@@ -70,6 +88,8 @@ report partial coverage rather than claiming complete Word/Excel fidelity.
 Implementation: `desktop/previews/office.ts`, `desktop/previews/office-worksheet.ts`,
 `desktop/previews/office-xml.ts`, `domain/previews/documents/office.ts`,
 `previews/modules/OfficePreview.tsx` and the shared `previews/DataTable.tsx`.
+`previews/useOfficeDocument.ts` owns current-request UI state and
+`previews/WorksheetNavigation.tsx` owns bounded row navigation.
 The package relationship/cell model follows Microsoft's
 [SpreadsheetML structure](https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/structure-of-a-spreadsheetml-document),
 [cell-value documentation](https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/how-to-retrieve-the-values-of-cells-in-a-spreadsheet)
@@ -81,9 +101,15 @@ format coverage, malicious/malformed packages, source limits and cancellation.
 `tests/archive-streaming.test.ts` cover large worksheets, bounded cell text,
 byte/UTF-16/entity boundaries, malformed suffixes, full CRC/size validation,
 cancellation and changed sources.
+`tests/office-pagination.test.ts`, `tests/office-pagination-preview.test.tsx`,
+resource/cache, IPC and file-service tests cover page continuations, independent
+sheet budgets, citation jumps, stale responses, cancellation and access rechecks.
 Agent tests exercise worksheet selection/paging/content grants. The owned direct
 package check is `pnpm exec tsx tests/native-office.ts`; its generated fixtures,
-captures and result live under `out/office-acceptance`. It does not qualify native
+captures and result now live in a unique retained `viewer-native-office-*` folder.
+`tests/native/worksheet-pages.ts` exercises actual paging, keyboard row submission,
+row-2500 citations, external-target refusal, empty recovery and the public large
+workbook in dark/light/narrow views. These do not qualify native
 folder pickers, physical assistive technologies or Mac App Store distribution.
 
 Preview resource acquisition and Office reads have recoverable deadlines and
@@ -92,3 +118,12 @@ version and reader options, deduplicates concurrent reads and cancels abandoned
 subscribers independently. Long media responses have a separate native queue,
 so they cannot occupy every foreground reader. Worksheets virtualize both rows
 and columns; selecting/filtering retains original cell addresses.
+
+Paged document requests contain only the existing preview resource ID, a request
+ID and validated sheet/row bounds. They cannot name another file. Cancellation
+matches both resource and request, and releasing the resource aborts dependent
+reads. The shared worker cache keys pages by source version and canonical range;
+source permissions are rechecked on return. New ranges still validate the full
+selected XML stream and CRC, so uncached reads scan the worksheet rather than
+using a random-access row index. Cached pages share the existing eight-entry,
+32 MB derived-data budget.

@@ -3,6 +3,7 @@ import type { DocumentData } from '../../domain/services';
 import type { ComponentType } from 'react';
 import type { ArchiveListing, FileEntry, Resource, ResourceRead } from '../../domain/contracts';
 import type { HtmlPreview } from '../../domain/previews/web';
+import type { WorksheetDocumentRequest } from '../../domain/previews/documents/office';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {
@@ -38,7 +39,8 @@ export interface PreviewContext {
     htmlPreview(resourceID: string): Promise<HtmlPreview>;
     htmlPreviewClose(id: string): Promise<void>;
     thumbnail(file: string, size: number): Promise<string>;
-    document(id: string): Promise<DocumentData>;
+    document(id: string, request?: WorksheetDocumentRequest): Promise<DocumentData>;
+    cancelDocument(id: string, requestID: string): Promise<void>;
     read(id: string, limit?: number): Promise<ResourceRead>;
     archive(id: string): Promise<ArchiveListing>;
     archiveEntry(id: string, name: string): Promise<Resource>;

@@ -14,6 +14,68 @@ afterEach(async () => {
   await trashTemporary(root);
 });
 describe('scoped preview resources', () => {
+  it('cancels only the matching preview page and keeps independent resources usable', async () => {
+    const file = path.join(root, 'Workbook.xlsx');
+    await writeFile(file, 'source');
+    const first = await resources.grant(file),
+      second = await resources.grant(file);
+    let active!: AbortSignal;
+    const pending = resources.documentRead(first.id, 'page', async (_file, signal) => {
+      active = signal;
+      return new Promise<void>((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+      );
+    });
+    const cancelled = expect(pending).rejects.toThrow();
+    resources.cancelDocument(second.id, 'page');
+    expect(active.aborted).toBe(false);
+    resources.cancelDocument(first.id, 'page');
+    await cancelled;
+    expect(await resources.documentRead(second.id, 'independent', async () => 'usable')).toBe(
+      'usable',
+    );
+    expect(resources.documentSource(first.id)).toBeTruthy();
+  });
+  it('rejects late document bytes after the source resource is released', async () => {
+    const file = path.join(root, 'Workbook.xlsx');
+    await writeFile(file, 'source');
+    const grant = await resources.grant(file);
+    let finish!: (value: string) => void;
+    const pending = resources.documentRead(
+      grant.id,
+      'late-page',
+      async () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const rejected = expect(pending).rejects.toThrow();
+    expect(() => resources.documentRead(grant.id, 'late-page', async () => 'duplicate')).toThrow(
+      'already running',
+    );
+    resources.release(grant.id);
+    finish('late source bytes');
+    await rejected;
+    expect(() => resources.documentRead(grant.id, 'new-page', async () => 'expired')).toThrow(
+      'expired',
+    );
+  });
+  it('aborts document pages during shutdown and drains their tracked work', async () => {
+    const file = path.join(root, 'Workbook.xlsx');
+    await writeFile(file, 'source');
+    const grant = await resources.grant(file);
+    const pending = resources.documentRead(
+      grant.id,
+      'closing-page',
+      async (_file, signal) =>
+        new Promise<void>((_resolve, reject) =>
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+        ),
+    );
+    const rejected = expect(pending).rejects.toThrow();
+    await resources.close();
+    await rejected;
+  });
   it('cancels an unfinished native acquisition without resurrecting a closed preview', async () => {
     const file = path.join(root, 'cancelled.txt');
     await writeFile(file, 'retained source');

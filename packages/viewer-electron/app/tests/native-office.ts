@@ -12,7 +12,7 @@ import { officeFixture, workbookSheet } from './office-fixtures';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const root = await temporaryRoot('viewer-native-office-');
-const output = path.resolve('out/office-acceptance');
+const output = path.join(root, 'acceptance');
 await mkdir(output, { recursive: true });
 await writeFile(
   path.join(output, 'result.json'),
@@ -234,7 +234,9 @@ async function checkBook() {
       /B61.*Saved value: 20.*SUM/,
     );
     await capture(connection, 'workbook-dark');
-    await evaluate(`document.querySelector('input[aria-label="Filter table rows"]').focus()`);
+    await evaluate(
+      `document.querySelector('input[aria-label="Filter current worksheet page"]').focus()`,
+    );
     await connection.command('Input.insertText', { text: 'Panel front' });
     await until(
       () => evaluate<number>(`document.querySelectorAll('.data-scroll [role="rowheader"]').length`),

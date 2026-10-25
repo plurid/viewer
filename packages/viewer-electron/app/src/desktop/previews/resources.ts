@@ -30,6 +30,7 @@ export class Resources {
   private aborts = new Map<string, AbortController>();
   private work = new PreviewWork();
   private pending = new Map<string, AbortController>();
+  private documentRequests = new Map<string, { resource: string; abort: AbortController }>();
   readonly archives = new Archives();
   constructor(
     private access: (files: readonly string[]) => Promise<void> = async () => {},
@@ -257,6 +258,44 @@ export class Resources {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Nested document extraction is unavailable.');
     return grant.file;
+  }
+  /** One cancellable read is bound to its existing preview capability. Cancelling
+   * a page never releases the source or another preview's shared-cache subscriber. */
+  documentRead<T>(
+    id: string,
+    requestID: string,
+    read: (file: string, signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const file = this.documentSource(id);
+    if (this.documentRequests.has(requestID))
+      throw new Error('This document request is already running.');
+    if (this.documentRequests.size >= 32)
+      throw new Error('Too many document pages are opening. Try again.');
+    const request = { resource: id, abort: new AbortController() };
+    this.documentRequests.set(requestID, request);
+    const sourceSignal = this.signal(id);
+    return this.work
+      .track(
+        this.paths(id),
+        async (scope) => {
+          const signal = AbortSignal.any([scope.signal, sourceSignal, request.abort.signal]);
+          signal.throwIfAborted();
+          const value = await read(file, signal);
+          signal.throwIfAborted();
+          this.documentSource(id);
+          scope.check();
+          return value;
+        },
+        request.abort.signal,
+      )
+      .finally(() => {
+        if (this.documentRequests.get(requestID) === request)
+          this.documentRequests.delete(requestID);
+      });
+  }
+  cancelDocument(id: string, requestID: string): void {
+    const request = this.documentRequests.get(requestID);
+    if (request?.resource === id) request.abort.abort(new Error('Document page cancelled.'));
   }
   read(id: string, requested = MAX_READ): Promise<ResourceRead> {
     return this.work.track(this.paths(id), () =>

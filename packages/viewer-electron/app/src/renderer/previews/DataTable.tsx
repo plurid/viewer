@@ -13,12 +13,16 @@ export function DataTable({
   label,
   anchor,
   numbered = false,
+  paged = false,
+  sourceLastRow,
 }: {
   rows: readonly WorkbookRow[];
   headers: readonly string[];
   label: string;
   anchor?: CellAnchor;
   numbered?: boolean;
+  paged?: boolean;
+  sourceLastRow?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -86,8 +90,8 @@ export function DataTable({
         </span>
         <span className="toolbar-spacer" />
         <input
-          aria-label="Filter table rows"
-          placeholder="Filter rows"
+          aria-label={paged ? 'Filter current worksheet page' : 'Filter table rows'}
+          placeholder={paged ? 'Filter this page' : 'Filter rows'}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -121,7 +125,7 @@ export function DataTable({
         ref={ref}
         role="table"
         aria-label={label}
-        aria-rowcount={numbered ? (rows.at(-1)?.row ?? 0) + 1 : rows.length + 1}
+        aria-rowcount={numbered ? (sourceLastRow ?? rows.at(-1)?.row ?? 0) + 1 : rows.length + 1}
         aria-colcount={columns + (numbered ? 1 : 0)}
       >
         <div
@@ -261,7 +265,11 @@ export function DataTable({
       </div>
       {!body.length && (
         <p className="inline-warning">
-          {query ? 'No rows match this filter.' : 'No stored rows in this sheet.'}
+          {query
+            ? 'No rows match this filter.'
+            : paged && sourceLastRow !== 0
+              ? 'No stored rows in this page.'
+              : 'No stored rows in this sheet.'}
         </p>
       )}
     </div>

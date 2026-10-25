@@ -462,7 +462,15 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'actionExportSummary':
       return actions.exportSummary(args[0] as string, scoped(args[1] as string));
     case 'document':
+      if (args[1]) {
+        const { requestID, ...worksheet } = schemas.document.parse(args)[1]!;
+        return resources.documentRead(args[0] as string, requestID, (file, signal) =>
+          extractDocument(file, { signal, worksheet }),
+        );
+      }
       return extractDocument(resources.documentSource(args[0] as string));
+    case 'cancelDocument':
+      return resources.cancelDocument(args[0] as string, args[1] as string);
     case 'thumbnail':
       return '';
     case 'contextPublish':
