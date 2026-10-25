@@ -6,6 +6,8 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { licenseInventory } from './licenses';
 import { ensureElectronHeaders } from './native-build/headers';
+import { prepareProcessors } from './processors';
+import { preparePDFProcessors } from './pdf-processors';
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inventory = await licenseInventory();
 if (process.platform === 'darwin') {
@@ -30,6 +32,8 @@ if (process.platform === 'darwin') {
   if (arch !== 'arm64' && arch !== 'x64')
     throw new Error('Native helpers support arm64 and x64 builds.');
   const target = `${arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${minimum}`;
+  await prepareProcessors(minimum, arch);
+  await preparePDFProcessors(minimum, arch);
   const headers = await ensureElectronHeaders({
     appRoot,
     electronVersion: inventory.electron,

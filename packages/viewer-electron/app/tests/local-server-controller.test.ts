@@ -134,14 +134,19 @@ describe('linked local server creation', () => {
       (pane): pane is ServerPane => pane.type === 'server',
     )!;
     expect(activeWorkspace().roots).toEqual([source.id]);
-    expect(Object.keys(pane).sort()).toEqual(['id', 'path', 'sourceIdentity', 'type']);
+    expect(Object.keys(pane).sort()).toEqual(['id', 'path', 'runtimeID', 'sourceIdentity', 'type']);
     expect(pane.sourceIdentity).toBe('1:2');
     expect(controller.rootID(pane.id)).toBe(source.id);
     expect(publish).toHaveBeenCalledWith({
       topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
-      data: { route: `/servers/${pane.id}`, parentPlaneID: `engine-${source.id}`, framing: 'none' },
+      data: {
+        route: `/servers/${pane.id}`,
+        parentPlaneID: `engine-${source.id}`,
+        framing: 'none',
+        link: '.plane-controls',
+      },
     });
-    expect(api.localServerStart).toHaveBeenCalledWith('/fixture', pane.id, '1:2');
+    expect(api.localServerStart).toHaveBeenCalledWith('/fixture', pane.runtimeID, '1:2');
     await flushState(false);
     expect(JSON.stringify(getState().saved)).not.toContain('43110');
     expect(JSON.stringify(getState().saved)).not.toContain(`native-${pane.id}`);
@@ -181,7 +186,7 @@ describe('linked local server creation', () => {
     expect(activeWorkspace().panes.some((pane) => pane.type === 'server')).toBe(false);
   });
 
-  it('disposes late native startup when its parent closes before engine hydration', async () => {
+  it('keeps late native startup discoverable when its parent view closes', async () => {
     const controller = mount();
     const captured = target();
     let finish!: (server: LocalServer) => void;
@@ -205,6 +210,6 @@ describe('linked local server creation', () => {
     });
     await starting;
     expect(activeWorkspace().panes).toEqual([]);
-    expect(api.localServerAction).toHaveBeenCalledWith('late-native', 'close');
+    expect(api.localServerAction).not.toHaveBeenCalledWith('late-native', 'close');
   });
 });

@@ -24,8 +24,9 @@ filters, refresh and auto-follow controls operate on the most recent 200 request
 Query strings, headers and bodies are not retained. **Clear request log** clears
 only this in-memory history.
 
-A running server belongs to its window and server plane. Spatial culling leaves
-it running; closing the plane or window stops it. Saved server planes reopen
+A running server belongs to its window. Spatial culling or closing its plane
+leaves it running. **Local servers…** reopens the same runtime and request log or
+stops it. Closing the owner window or quitting stops its listeners. Saved server planes reopen
 stopped and wait for Start. Restart may assign a different port, so copy the
 current URL afterward. Server controls and logs stay in the local workspace and
 are excluded from portable project exports. Agents cannot start these listeners.
@@ -34,3 +35,18 @@ The services only read project files. They use bounded reads, native access
 checks, captured folder identities and explicit lifecycle cleanup. The HTTP
 listener accepts only its own loopback Host and same-origin browser requests;
 it is not a LAN sharing server.
+
+## Interactive browser planes
+
+**Open web page…** opens an ordinary HTTP/HTTPS site in Viewer. **Open in Viewer**
+on a server plane links its page and follows a changed port after Restart.
+Back/Forward, address entry, Reload/Stop, zoom and Open in default browser are
+available. Pages remain interactive under perspective, with typing, selection,
+clipboard actions and IME composition. The isolated Viewer browser profile keeps
+site cookies across restarts and shares neither application privileges nor the
+system browser's profile. Web guests receive no Viewer preload, local resource
+protocol or agent DOM access. Downloads and site permission requests are denied.
+Culling pauses painting; it retains the page. Closing the plane/window destroys
+its guest. HTTP sites, authentication providers, DRM and device integrations have
+different requirements; ordinary Chromium support is not a guarantee that every
+website or login flow works inside an offscreen view.

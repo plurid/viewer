@@ -1,6 +1,24 @@
+import { z } from 'zod';
+import { transformPlanSchema } from '../../domain/operations/transforms';
 /** The MCP tools Viewer offers agents. Every call is still authorized per client,
  * capability and folder, and anything that changes files waits for review. */
 export const agentTools = [
+  {
+    name: 'propose_transform',
+    description:
+      'Propose a typed image or media export for user review. Sources and output folder must be granted; content permission is required. Creates new files and keeps existing ones. No executable, flags, filter graph, authenticated browser state or direct apply route is available.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sources: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 16 },
+        destination: { type: 'string' },
+        name: { type: 'string', maxLength: 255 },
+        plan: z.toJSONSchema(transformPlanSchema),
+      },
+      required: ['sources', 'destination', 'name', 'plan'],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'read_drawing_geometry',
     description:

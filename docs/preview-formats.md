@@ -51,7 +51,7 @@ records these distinctions, including file packages and directory-backed sources
 | Excel            | `.xlsx`                                                                    | Read-only worksheets, stored cell values and saved-formula inspection.                          |
 | Markdown         | `.md`, `.markdown`, `.mdx`                                                 | Rendered Markdown and source; MDX components do not execute.                                    |
 | Web documents    | `.html`, `.htm`, `.xhtml`                                                  | Sandboxed rendered preview and editable source.                                                 |
-| Structured JSON  | `.json`                                                                    | Expandable JSON tree and source.                                                                |
+| Structured data  | `.json`, `.jsonc`, `.json5`, `.yaml`, `.yml`                               | Searchable expandable tree and source, with bounded aliases and copy controls.                  |
 | Delimited data   | `.csv`, `.tsv`                                                             | Table preview with filtering.                                                                   |
 | Archives         | `.zip`, `.tar`, `.tar.gz`, `.tgz`                                          | Browse supported archive entries and open previewable contents.                                 |
 | 3D meshes/scenes | `.glb`, `.gltf`, `.obj`, `.stl`, `.fbx`, `.3mf`, `.ply`                    | Interactive 3D viewing, dimensions, appearance controls and surface-point distance measurement. |
@@ -109,9 +109,16 @@ Recognized conventional filenames include:
 - `.env` and `.env.*`, `.gitignore`, `.gitconfig` and `.editorconfig`.
 - `.bashrc`, `.bash_profile`, `.zshrc`, `.zprofile`, `.zshenv` and `.profile`.
 
-Vue/Svelte files are source previews, not running components. JSONC, JSON5 and
-JSONL currently show text; the structured tree is specific to `.json`. Other
+Vue/Svelte files are source previews, not running components. JSON, JSONC, JSON5,
+YAML and YML offer a shared searchable tree with Expand all, Collapse all, copy
+path/value and retained expansion state. Alias references remain explicit;
+bounded parsing prevents recursive expansion. Invalid or oversized structures
+retain Source with a visible explanation. JSONL remains source text. Other
 readable files may use the bounded generic text fallback.
+
+Reading text uses separate preview font/line-height/wrap preferences, initially
+13px/20px, with local zoom/reset controls. This does not change editor settings.
+CSS selectors and property names use theme syntax roles.
 
 ## Deeper support missing within current families
 
@@ -126,7 +133,7 @@ readable files may use the bounded generic text fallback.
 | 3MF                        | Slicer/project settings and toolpaths; current support displays model geometry.                                                               |
 | ZIP                        | ZIP64, multipart archives and encrypted entries; supported compression/entry limits also apply.                                               |
 | Audio/video                | Reliable broader container/codec coverage, track selection and subtitle inspection.                                                           |
-| JSON-family data           | Structured JSONC/JSON5 trees and JSONL record/table navigation.                                                                               |
+| JSON-family data           | JSONL record/table navigation; JSON/JSONC/JSON5 trees are implemented.                                                                        |
 
 Support for one variant does not establish support for encrypted Office files,
 macro-enabled Office packages, every camera RAW model or every codec in a listed

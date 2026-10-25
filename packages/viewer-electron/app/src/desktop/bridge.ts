@@ -2,6 +2,11 @@ import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
 import { createWebHandlers } from './ipc/web-handlers';
 import { WebPreviews } from './previews/web/service';
+import { BrowserPlanes } from './browser/browser-planes';
+import { Transforms } from './transforms/transforms';
+import { imageProcess, imageInspectionProcess } from './transforms/image-process';
+import { MediaDocuments } from './transforms/media-documents';
+import { imageTransformSchema } from '../domain/operations/transforms';
 import { answerPrompt } from './models/prompts';
 import { namedLines } from '../domain/command-line/prompt';
 import {
@@ -49,7 +54,7 @@ import { AgentBroker } from './agents/agent-broker';
 import { Comparisons } from './comparison/comparison';
 import { Duplicates } from './comparison/duplicates';
 import { OperationPlans } from './operations/operation-plans';
-import { sourceVersion } from '../domain/files/inspection';
+import { sameSourceVersion, sourceVersion } from '../domain/files/inspection';
 import {
   sharedClientID,
   type AgentAccessRequest,
@@ -135,6 +140,9 @@ export class Desktop {
   readonly executions: Executions;
   readonly resources: Resources;
   readonly webPreviews: WebPreviews;
+  readonly transforms: Transforms;
+  readonly mediaDocuments: MediaDocuments;
+  readonly browsers = new BrowserPlanes((owner) => this.windows.get(owner)?.window);
   readonly fileAccess: FileAccess;
   readonly information: FileInformationService;
   readonly projects: Projects;
@@ -490,6 +498,31 @@ export class Desktop {
       }
     };
     const fallbackTrash = guardTestTrash((file: string) => shell.trashItem(file));
+    const processorRoot = path.join(
+      app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'assets'),
+      `viewer-processors-${process.platform}-${process.arch}`,
+    );
+    this.transforms = new Transforms(
+      processorRoot,
+      access,
+      (bytes, plan, signal) =>
+        imageProcess(
+          path.join(path.dirname(options.worker), 'image-worker.cjs'),
+          processorRoot,
+          bytes,
+          plan,
+          signal,
+          options.fileBackend,
+        ),
+      (bytes, signal) =>
+        imageInspectionProcess(
+          path.join(path.dirname(options.worker), 'image-worker.cjs'),
+          processorRoot,
+          bytes,
+          signal,
+          options.fileBackend,
+        ),
+    );
     this.operations = new Operations(
       (file, expected) =>
         process.platform === 'darwin'
@@ -506,7 +539,51 @@ export class Desktop {
       (receipt, work) => this.fileAccess.withReceipt(receipt, work),
       (message) => emit({ type: 'service-error', service: 'operations', message }),
       new ProtectedPaths(this.home),
-      nativeImageConverter,
+      {
+        convert: (conversion, sources, output, signal) => {
+          if (
+            conversion === 'pdf' ||
+            sources.some((source) => /\.(?:bmp|heic|heif)$/i.test(source))
+          )
+            return nativeImageConverter.convert(conversion, sources, output, signal);
+          const rotate = conversion === 'rotate-left' || conversion === 'rotate-right';
+          const plan = imageTransformSchema.parse({
+            kind: 'image',
+            format: conversion === 'jpeg' || (rotate && /\.jpe?g$/i.test(output)) ? 'jpeg' : 'png',
+            rotate: conversion === 'rotate-left' ? 270 : conversion === 'rotate-right' ? 90 : 0,
+          });
+          return this.transforms.execute(plan, sources, output, signal, () => {}).then(() => {});
+        },
+      },
+      this.transforms,
+    );
+    this.mediaDocuments = new MediaDocuments(
+      dataPath,
+      this.transforms,
+      this.operations,
+      this.resources,
+      access,
+      async (owner, media) => {
+        const result = await dialog.showOpenDialog(this.windows.get(owner)!.window, {
+          title: media === 'audio' ? 'Choose audio' : 'Add media',
+          properties: ['openFile', 'multiSelections'],
+          securityScopedBookmarks: this.fileAccess.scoped,
+          filters: [
+            {
+              name: 'Media',
+              extensions:
+                media === 'audio'
+                  ? ['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aif', 'aiff', 'caf', 'mp4', 'mov']
+                  : ['mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'mp3', 'wav', 'm4a', 'flac'],
+            },
+          ],
+        });
+        if (result.canceled) return [];
+        if (result.filePaths.length > 16) throw new Error('Choose at most 16 media files.');
+        for (const [index, file] of result.filePaths.entries())
+          await this.fileAccess.remember(file, false, result.bookmarks?.[index]);
+        return result.filePaths;
+      },
     );
     this.texts = new TextFiles(this.operations, access);
     this.buffers = new TextBuffers(dataPath);
@@ -619,6 +696,19 @@ export class Desktop {
           proposal.target ? this.windowForWorkspace(proposal.target.workspaceID) : this.window,
           proposal,
         ),
+      async (proposal) => ({
+        operationID: this.operations.start({
+          kind: 'convert',
+          sources: proposal.target!.selection.map((file) => file.path),
+          destination: proposal.transform!.destination,
+          name: proposal.transform!.name,
+          transform: proposal.transform!.plan,
+          expectedSources: proposal.target!.selection.map((file) => ({
+            path: file.path,
+            version: sourceVersion(file),
+          })),
+        }),
+      }),
     );
     this.agents = new AgentBroker(
       dataPath,
@@ -887,6 +977,8 @@ export class Desktop {
       if (role === 'viewer') this.selectWindow(sender);
     });
     window.on('closed', () => {
+      this.browsers.stopOwner(sender);
+      this.mediaDocuments.stopOwner(sender);
       this.flushes.disconnected(sender);
       this.chats.retain(sender, new Set());
       this.gitActions.stopOwner(sender);
@@ -1047,6 +1139,8 @@ export class Desktop {
       this.executions.close(),
       this.resources.close(),
       this.webPreviews.close(),
+      Promise.resolve(this.browsers.closeAll()),
+      (this.mediaDocuments.invalidate(), this.transforms.quiesce()),
       this.thumbnails.close(),
       this.information.close(),
       this.projects.flush(),
@@ -1193,6 +1287,20 @@ export class Desktop {
         openURL: (url) => shell.openExternal(url),
         copyURL: (url) => this.pasteboard.copyText([url]),
       }),
+      browser: ([request], owner) => this.browsers.request(owner, request),
+      media: ([request], owner) => this.mediaDocuments.request(request, owner),
+      imageInspect: async ([file]) => {
+        const before = sourceVersion(await entry(file));
+        const value = await this.transforms.inspectImage(file);
+        if (!sameSourceVersion(before, sourceVersion(await entry(file))))
+          throw new Error('The image changed while being read. Try again.');
+        const preview = await this.resources.grantBytes(
+          file,
+          'image-preview.png',
+          Buffer.from(value.preview),
+        );
+        return { width: value.width, height: value.height, alpha: value.alpha, preview };
+      },
       chat: ([request], sender) => {
         const work = () => this.chats.request(request, sender, this.windows.get(sender)?.catalog);
         return request.kind === 'send' ? this.activity.send(request.id, work) : work();
@@ -1449,6 +1557,7 @@ export class Desktop {
             fileCoordination.quiesce(root),
             this.resources.quiesce(root),
             this.webPreviews.quiesce(root),
+            (this.mediaDocuments.invalidate(root), this.transforms.quiesce(root)),
             this.thumbnails.quiesce(root),
             this.watchers.revoke(root),
             this.watchRules.revoke(root),
@@ -1497,6 +1606,8 @@ export class Desktop {
             this.emit({ type: 'file-access', path: root, resources });
             const previews = this.resources.quiesce(root);
             const webPreviews = this.webPreviews.quiesce(root);
+            this.mediaDocuments.invalidate(root);
+            const transforms = this.transforms.quiesce(root);
             const thumbnails = this.thumbnails.quiesce(root);
             const coordinated = fileCoordination.quiesce(root);
             await this.actions.quiesce(root);
@@ -1508,7 +1619,7 @@ export class Desktop {
             await this.watchers.revoke(root);
             await this.search.quiesce();
             await this.files.reset();
-            await Promise.all([previews, webPreviews, thumbnails, coordinated]);
+            await Promise.all([previews, webPreviews, transforms, thumbnails, coordinated]);
             await macFiles().eject(root);
           });
         } finally {
@@ -1896,7 +2007,7 @@ export class Desktop {
       resolveCollision: (args) => this.operations.resolve(args[0], args[1], args[2]),
       undo: (args) => this.operations.undo(args[0]),
       redo: (args) => this.operations.redo(args[0]),
-      resource: (args) => this.resources.grant(args[0]),
+      resource: (args) => this.resources.grant(args[0], args[1]),
       read: (args) => this.resources.read(args[0], args[1]),
       release: async (args) => {
         this.gitResources.delete(args[0]);

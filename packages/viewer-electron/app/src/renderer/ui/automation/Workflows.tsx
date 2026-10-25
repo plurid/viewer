@@ -458,7 +458,7 @@ export function WorkflowControls() {
                       disabled={busy}
                       onClick={() =>
                         void perform(async () => {
-                          if (record.kind === 'copy') {
+                          if (record.kind === 'copy' || record.kind === 'convert') {
                             const plan = await window.viewer.operationPlan({
                               kind: 'get',
                               id: record.taskID!,
@@ -473,7 +473,13 @@ export function WorkflowControls() {
                         })
                       }
                     >
-                      Review {record.kind === 'copy' ? 'copy' : 'recipe'}…
+                      Review{' '}
+                      {record.kind === 'copy'
+                        ? 'copy'
+                        : record.kind === 'convert'
+                          ? 'export'
+                          : 'recipe'}
+                      …
                     </button>
                   )}
                   {record.artifact !== undefined && <WorkflowArtifact value={record.artifact} />}

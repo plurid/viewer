@@ -10,6 +10,10 @@ import { requestAction } from '../actions/commands';
 import type { IconName } from '../ui/Icon';
 import { captureTarget } from './target';
 import { localServerCommands } from '../local-servers/commands';
+import { mediaFormats } from '../../domain/operations/transforms';
+import { transformableImage } from '../../domain/operations/image-conversions';
+import { optimizable } from '../../domain/operations/optimization';
+import type { FileEntry } from '../../domain/contracts';
 export { captureTarget } from './target';
 export function programCommands(
   workspace: WorkspaceController,
@@ -20,6 +24,10 @@ export function programCommands(
   live?: () => CommandContext,
   /** A step with words (`vs ~/Documents`, 2026-10-23), run by the command line. */
   line?: (text: string) => Promise<{ ok: boolean; message?: string }>,
+  showServers?: () => void,
+  newBrowser?: (paneID?: string) => void,
+  imageTools?: (files: FileEntry[], paneID?: string) => void,
+  optimizeFiles?: (files: FileEntry[], paneID?: string) => void,
 ): CommandDefinition[] {
   const folder = (context: CommandContext) => !!context.directory || !!context.folder;
   const target = (context: CommandContext) => {
@@ -27,7 +35,70 @@ export function programCommands(
     return { ...captured, directory: terminalDirectory(captured.directory, captured.selection) };
   };
   return [
-    ...localServerCommands(workspace),
+    ...localServerCommands(workspace, showServers),
+    {
+      id: 'optimize-files',
+      label: 'Optimize…',
+      group: 'Files',
+      icon: 'archive',
+      primary: true,
+      aliases: [
+        'minify',
+        'reduce file size',
+        'compress pdf',
+        'optimize images',
+        'minimize',
+        'shrink',
+      ],
+      when: (context) =>
+        !!optimizeFiles &&
+        context.selection.length > 0 &&
+        context.selection.length <= 1000 &&
+        context.selection.every(optimizable),
+      run: (context) => optimizeFiles?.(structuredClone([...context.selection]), context.paneID),
+    },
+    {
+      id: 'edit-media',
+      label: 'Edit media…',
+      group: 'Files',
+      icon: 'video',
+      aliases: ['trim', 'join clips', 'extract audio', 'mute video', 'mix audio', 'media editor'],
+      when: (context) =>
+        context.selection.length > 0 &&
+        context.selection.length <= 16 &&
+        context.selection.every(
+          (file) =>
+            file.kind === 'file' &&
+            (mediaFormats as readonly string[]).includes(file.extension.toLowerCase()),
+        ),
+      run: (context) =>
+        workspace.openMedia(
+          context.selection.map((file) => file.path),
+          context.paneID,
+        ),
+    },
+    {
+      id: 'image-tools',
+      label: 'Convert images…',
+      group: 'Images',
+      icon: 'image',
+      aliases: ['webp', 'avif', 'resize', 'crop', 'image tools', 'quality'],
+      when: (context) =>
+        !!imageTools &&
+        context.selection.length > 0 &&
+        context.selection.length <= 1000 &&
+        context.selection.every((file) => file.kind === 'file' && transformableImage(file)),
+      run: (context) => imageTools?.(structuredClone([...context.selection]), context.paneID),
+    },
+    {
+      id: 'open-browser-plane',
+      label: 'Open web page…',
+      group: 'Workspace',
+      icon: 'external',
+      aliases: ['browser', 'website', 'url', 'web page'],
+      when: () => !!newBrowser,
+      run: (context) => newBrowser?.(context.paneID),
+    },
     {
       id: 'open-terminal',
       label: terminalName ? 'Open in ' + terminalName : 'Open Terminal',

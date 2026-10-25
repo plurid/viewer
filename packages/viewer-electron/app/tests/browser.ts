@@ -20,6 +20,15 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  imageInspect: async () => {
+    throw new Error('Image tools require the desktop app.');
+  },
+  media: async () => {
+    throw new Error('Media tools require the desktop app.');
+  },
+  browser: async () => {
+    throw new Error('Live browser planes require the desktop app.');
+  },
   journalQuery: (query) => invoke('journalQuery', query),
   journalExportPreview: (query) => invoke('journalExportPreview', query),
   journalExport: (id) => invoke('journalExport', id),

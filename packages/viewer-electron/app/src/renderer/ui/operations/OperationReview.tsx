@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { OperationIntent, OperationPlan } from '../../../domain/operations/operation-plan';
 import { Dialog, Loading } from '../primitives';
 import { setOperationsOpen, report } from '../../state/store';
+import { transformDescription } from '../../../domain/operations/transforms';
 export function reviewOperationPlan(plan: OperationPlan) {
   window.dispatchEvent(new CustomEvent('viewer:operation-plan', { detail: plan }));
 }
@@ -103,7 +104,13 @@ export function OperationReviewControls() {
                   {row.kind} {row.source?.split('/').pop() ?? row.name}
                 </strong>
                 <span className="muted">{row.source}</span>
-                {row.kind === 'rename' || row.kind === 'mkdir' ? (
+                {row.sources?.slice(1).map((source) => (
+                  <span className="muted" key={source}>
+                    {source}
+                  </span>
+                ))}
+                {row.transform && <p>{transformDescription(row.transform)}</p>}
+                {row.kind === 'rename' || row.kind === 'mkdir' || row.kind === 'convert' ? (
                   <label>
                     Name
                     <input

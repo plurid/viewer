@@ -2,12 +2,14 @@ import { z } from 'zod';
 import type { ChangePlan } from './change-plan';
 import { sourceVersionSchema } from '../files/inspection';
 import { portablePath as localPath } from '../schemas';
+import { transformPlanSchema } from './transforms';
 export const operationIntentSchema = z
   .object({
-    kind: z.enum(['copy', 'move', 'trash', 'rename', 'mkdir']),
+    kind: z.enum(['copy', 'move', 'trash', 'rename', 'mkdir', 'convert']),
     sources: z.array(localPath).max(10000),
     destination: localPath.optional(),
     name: z.string().min(1).max(255).optional(),
+    transform: transformPlanSchema.optional(),
     expectedSources: z
       .array(z.object({ path: localPath, version: sourceVersionSchema }).strict())
       .max(10000)
@@ -20,6 +22,8 @@ export const operationPlanRowSchema = z
     id: z.uuid(),
     kind: operationIntentSchema.shape.kind,
     source: localPath.optional(),
+    sources: z.array(localPath).min(1).max(16).optional(),
+    transform: transformPlanSchema.optional(),
     version: sourceVersionSchema.optional(),
     expectedSources: operationIntentSchema.shape.expectedSources,
     destination: localPath.optional(),

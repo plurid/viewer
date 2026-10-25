@@ -1,5 +1,82 @@
 # Verification
 
+## October 25 spatial workbench, media and Optimize
+
+The validated direct Apple Silicon candidate is retained at
+`/private/tmp/viewer-spatial-validated-20261025-etmsgsbs/Viewer.app`.
+Executable SHA-256:
+`e3cb87f4343bc84ec29319dfba89422ed374e45ef2f86441ecde18c3247e45ab`;
+ASAR SHA-256:
+`0403bdd8fe2cf51b2a8231081b205ac2e70de3917063779024002d42355e2ad7`.
+Adjacent `candidate.json` records source/lockfile checksums and report paths;
+`reports/` preserves the executed logs. The ordinary package remains in
+`packages/viewer-electron/app/out/Viewer-darwin-arm64/Viewer.app`.
+
+**All 1,765 tests in 246 files pass, with zero failures or skips.** The exact
+full command is `pnpm test`, with `VIEWER_TEST_PRESERVE=1`,
+`VIEWER_TEST_NO_REMOVAL=1`, `VIEWER_TEST_MAC_BINDING` set to this candidate's
+`Contents/Resources/viewer-macos-files.node`, and `VIEWER_TEST_REVIEW_BINDING`
+set to the retained `app/out/viewer-reviewed-trash-1792824425210.node` recording
+binding. Log: `/private/tmp/viewer-spatial-suite-4.log`.
+All TypeScript targets, full ESLint, full Prettier, ordinary `pnpm package` and
+`codesign --verify --deep --strict` pass. This verifies a development direct
+package, with no notarization or Store-distribution claim.
+
+The complete `pnpm test:desktop` packaged smoke passes, including preview
+rendering/recovery, file jobs and Undo, explorer modes and metadata alignment,
+source anchoring, model gesture isolation, IPC/resource boundaries and workspace
+restoration. Log: `/private/tmp/viewer-spatial-smoke-4.log`. Fixture:
+`/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-3Nmv7R`.
+Native evidence:
+`app/out/native-evidence/electron-smoke-2026-10-25T13-06-26-814Z-fc9c4de8-3405-4d56-af5a-afb7f8503c6f`.
+
+Retained supplemental native drivers qualify the affected behavior:
+
+- `tests/native/preview-lifecycle.ts`: reproduces starvation in the previous
+  candidate with sixteen held response streams; the new separate queue meets
+  the foreground deadline and completes thirty Quick Preview open/close cycles.
+- `tests/native/browser-planes.ts`: actual projected clicks, typing, proxy IME,
+  double-click selection, changed displayed pixels, culling, Back/zoom, cookies
+  across a graceful restart and bitmap fallback. Dark rotated, light and narrow
+  browser captures are retained.
+- `tests/native/web-previews.ts`: real server command/linked child, HTTP requests,
+  log controls, stop/restart, close-without-stop, reattachment and owner shutdown.
+- `tests/native/inspection-tools.ts`: active/ancestor columns stay separate from
+  file selection; YAML aliases/expand/collapse, CSS color and 13px/20px metrics,
+  and original-address IV2 selection in a virtualized 256-column workbook.
+- `tests/native/media-tools.ts`: actual advancing playback, edited exact clip
+  duration, four filmstrip frames, AVIF resize, unchanged input hashes, private
+  draft close/restart restoration and visible completed output. The correction
+  captures retain source pixels through light/dark and narrow image views.
+- `tests/native/optimization.ts`: a mixed PDF/PNG batch produces smaller outputs,
+  visible before/after sizes and searchable PDF text while preserving originals.
+  Synthetic fixture savings are not a representative compression benchmark.
+
+Real FFmpeg/Sharp/qpdf/jpegtran regressions also cover segment join/mix/frame,
+source orientation, JPEG coefficients/decoded pixels, PNG pixels, safe credit/ICC
+metadata, PDF text/vectors and signed-source refusal. Operation tests cover
+cancelled/larger candidates and durable size receipts. Renderer tests cover
+Cancel during asynchronous group admission and playback failure/Retry plus live
+running/completed/cancelled/failed export feedback. Agent tests enforce typed
+plans, source/output/content scopes, stale-source checks and fresh review.
+
+The independent interface review requested three material corrections: persistent
+image content, truthful playback/recovery and actual export completion feedback.
+The reviewer scored all three **resolved**, returning **ship** for that fix list.
+The initial matrix is in `.impeccable/review/spatial-workbench-20261025-review/`;
+corrected media/image captures are in
+`.impeccable/review/spatial-workbench-20261025-fix1/`. The detector ran once and
+reported only an unchanged citation accent-border advisory. Design documentation
+was refreshed after this correction batch.
+
+All generated fixtures/builds remain retained. Current evidence is macOS Apple
+Silicon direct-package evidence. Intel execution, other operating systems,
+physical picker/assistive technology, every website/login/DRM flow and Store
+distribution require their own qualification. New image tools do not decode
+HEIC/HEIF; PDF optimization does not resample existing JPEG scans. Supported
+formats and limits are in [media tools](media-tools.md), and the
+[implementation ledger](spatial-workbench-implementation.md) maps retained logs.
+
 ## October 25 stable playground
 
 `pnpm playground` populated the sibling directory

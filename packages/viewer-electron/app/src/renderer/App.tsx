@@ -278,6 +278,10 @@ function AppWindow() {
           terminalName,
           () => registry.context(getState().activePane) || windowContext(),
           (text) => lineRunRef.current(text),
+          () => setWindowDialog({ type: 'servers' }),
+          (paneID) => setWindowDialog({ type: 'browser', paneID }),
+          (files, paneID) => setWindowDialog({ type: 'image-tools', files, paneID }),
+          (files, paneID) => setWindowDialog({ type: 'optimize', files, paneID }),
         ),
         ...windowCommands({
           workspace: controller,

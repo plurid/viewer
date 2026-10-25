@@ -22,6 +22,7 @@ export function DataTable({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
+  const [viewportWidth, setViewportWidth] = useState(840);
   const [selection, setSelection] = useState<{ row: number; cell: WorkbookCell }>();
   const body = useMemo(() => {
     const term = query.toLocaleLowerCase();
@@ -30,16 +31,32 @@ export function DataTable({
     );
   }, [rows, query]);
   const columns = headers.length;
+  const columnWidth = Math.max(140, (viewportWidth - (numbered ? 48 : 0)) / Math.max(1, columns));
+  const horizontal = useVirtualizer({
+    horizontal: true,
+    count: columns,
+    getScrollElement: () => ref.current,
+    estimateSize: () => columnWidth,
+    paddingStart: numbered ? 48 : 0,
+    overscan: 2,
+    initialRect: { width: 840, height: 400 },
+  });
   const virtual = useVirtualizer({
     count: body.length,
     getScrollElement: () => ref.current,
     estimateSize: () => 32,
     overscan: 8,
   });
-  const template = {
-    gridTemplateColumns: `${numbered ? '48px ' : ''}repeat(${columns}, minmax(140px, 1fr))`,
-    minWidth: columns * 140 + (numbered ? 48 : 0),
-  };
+  const width = columns * columnWidth + (numbered ? 48 : 0);
+  const template = { display: 'block', position: 'relative', width, minWidth: width } as const;
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setViewportWidth(element.clientWidth || 840));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => horizontal.measure(), [horizontal, columnWidth]);
   useEffect(() => {
     if (anchor) setQuery('');
   }, [anchor]);
@@ -50,9 +67,9 @@ export function DataTable({
     if (ref.current)
       ref.current.scrollLeft = Math.max(
         0,
-        (anchor.column - 1) * 140 - ref.current.clientWidth / 2 + 70,
+        (anchor.column - 1) * columnWidth - ref.current.clientWidth / 2 + columnWidth / 2,
       );
-  }, [anchor, query, body, virtual]);
+  }, [anchor, query, body, virtual, columnWidth]);
   const current =
     selection ||
     (anchor && {
@@ -107,30 +124,58 @@ export function DataTable({
         aria-rowcount={numbered ? (rows.at(-1)?.row ?? 0) + 1 : rows.length + 1}
         aria-colcount={columns + (numbered ? 1 : 0)}
       >
-        <div className="data-row data-header" role="row" style={template}>
+        <div
+          className="data-row data-header"
+          role="row"
+          style={{ ...template, position: 'sticky', top: 0, height: 32 }}
+        >
           {numbered && (
-            <div role="columnheader" className="workbook-row-number" aria-label="Row number" />
-          )}
-          {headers.map((header, index) => (
             <div
               role="columnheader"
-              title={header}
-              className={
-                !numbered && anchor?.row === 1 && anchor.column === index + 1
-                  ? 'evidence-cell'
-                  : undefined
-              }
-              key={index}
-            >
-              {header || `Column ${index + 1}`}
-            </div>
-          ))}
+              className="workbook-row-number"
+              aria-label="Row number"
+              style={{
+                position: 'sticky',
+                left: 0,
+                width: 48,
+                height: 32,
+                zIndex: 1,
+                background: 'var(--surface)',
+              }}
+            />
+          )}
+          {horizontal.getVirtualItems().map((column) => {
+            const index = column.index,
+              header = headers[index]!;
+            return (
+              <div
+                role="columnheader"
+                aria-colindex={index + (numbered ? 2 : 1)}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: column.start,
+                  width: column.size,
+                  height: 32,
+                }}
+                title={header}
+                className={
+                  !numbered && anchor?.row === 1 && anchor.column === index + 1
+                    ? 'evidence-cell'
+                    : undefined
+                }
+                key={index}
+              >
+                {header || `Column ${index + 1}`}
+              </div>
+            );
+          })}
         </div>
         <div
           style={{
             height: virtual.getTotalSize(),
             position: 'relative',
-            minWidth: template.minWidth,
+            minWidth: width,
           }}
         >
           {virtual.getVirtualItems().map((item) => {
@@ -148,19 +193,39 @@ export function DataTable({
                   position: 'absolute',
                   top: item.start,
                   height: item.size,
-                  width: '100%',
+                  width,
                 }}
               >
                 {numbered && (
-                  <div role="rowheader" className="workbook-row-number">
+                  <div
+                    role="rowheader"
+                    className="workbook-row-number"
+                    style={{
+                      position: 'sticky',
+                      left: 0,
+                      width: 48,
+                      height: 32,
+                      zIndex: 1,
+                      background: 'var(--surface)',
+                    }}
+                  >
                     {row.row}
                   </div>
                 )}
-                {headers.map((_, index) => {
+                {horizontal.getVirtualItems().map((column) => {
+                  const index = column.index;
                   const cell = cells.get(index + 1) || { column: index + 1, value: '' };
                   return (
                     <div
                       role="cell"
+                      aria-colindex={index + (numbered ? 2 : 1)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: column.start,
+                        width: column.size,
+                        height: 32,
+                      }}
                       title={
                         cell.formula !== undefined
                           ? `${cell.cached ? cell.value : 'No saved value'} · =${cell.formula}`

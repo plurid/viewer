@@ -373,6 +373,27 @@
 .token.tag {
   color: var(--syntax-function, var(--accent));
 }
+.token.selector {
+  color: var(--syntax-selector, var(--syntax-string, var(--accent)));
+}
+.token.property {
+  color: var(--syntax-property, var(--syntax-function, var(--accent)));
+}
+.token.attr-name {
+  color: var(--syntax-attribute, var(--syntax-number, var(--accent)));
+}
+.token.operator,
+.token.atrule {
+  color: var(--syntax-operator, var(--syntax-keyword, var(--muted)));
+}
+.code-scroll.is-wrapped .code-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.code-scroll.is-wrapped .code-line code {
+  min-width: 0;
+  flex: 1;
+}
 .json-scroll {
   padding: 18px;
   font:
@@ -632,4 +653,48 @@ button.markdown-link {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+.structured-viewer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.structured-viewer > .preview-toolbar {
+  flex-wrap: wrap;
+}
+.structured-viewer > .preview-toolbar button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.structured-scroll {
+  padding: 10px 12px;
+}
+.structured-row {
+  display: flex;
+  align-items: center;
+  white-space: pre;
+  width: 100%;
+  padding-inline-end: 20px;
+}
+.structured-row > button {
+  width: 24px;
+  flex: 0 0 24px;
+  padding: 0;
+}
+.structured-row.is-selected {
+  background: var(--selection);
+}
+.structured-status {
+  border-top: 1px solid var(--line);
+  padding: 5px 12px;
+  font-size: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.structured-viewer input[type='search'] {
+  min-width: 100px;
+  flex: 1;
+  max-width: 300px;
 }

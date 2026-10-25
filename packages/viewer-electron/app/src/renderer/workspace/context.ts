@@ -30,6 +30,9 @@ export interface WorkspaceController {
   newGitAction(target: CapturedTarget, action: GitActionIntent): Promise<void>;
   /** Serve one captured folder in a linked, explicitly started plane. */
   newServer(target: CapturedTarget): Promise<void>;
+  openServer(runtimeID: string): void;
+  openBrowser(url: string, parentID?: string, serverRuntimeID?: string): void;
+  openMedia(paths: string[], parentID?: string, fresh?: boolean): Promise<void>;
   rootID(paneID: string): string | undefined;
   parentPaneID(paneID: string): string | undefined;
   linkedPaneID(paneID: string, entry: Pick<FileEntry, 'path' | 'directory'>): string | undefined;

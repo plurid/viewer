@@ -225,6 +225,9 @@ export const settingsSchema = z
         thumbnailSize: z.number().int().min(128).max(512),
         maxImagePixels: z.number().int().min(1000000).max(128000000),
         maxModelMB: z.number().int().min(16).max(512),
+        textFontSize: z.number().int().min(8).max(32).default(13),
+        textLineHeight: z.number().int().min(12).max(64).default(20),
+        textWordWrap: z.boolean().default(false),
       })
       .strict(),
     editor: editorSchema,

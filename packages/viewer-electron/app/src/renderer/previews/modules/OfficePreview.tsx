@@ -25,16 +25,25 @@ export default function OfficePreview(context: PreviewContext) {
     let alive = true;
     setDocument(undefined);
     setError('');
+    const timer = setTimeout(() => {
+      if (!alive) return;
+      alive = false;
+      setError('The document reader is taking longer than expected. Try again.');
+      void context.services.release(context.resource.id).catch(() => {});
+    }, 15000);
     context.services
       .document(context.resource.id)
       .then((value) => {
+        clearTimeout(timer);
         if (alive && !context.signal.aborted) setDocument(value);
       })
       .catch((error) => {
+        clearTimeout(timer);
         if (alive && !context.signal.aborted) setError(String(error.message || error));
       });
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
   }, [context.services, context.resource.id, context.signal]);
   const anchor = context.evidence?.anchor;
@@ -80,6 +89,7 @@ export default function OfficePreview(context: PreviewContext) {
         title="Office preview unavailable"
         detail={error || 'This document has no supported text or worksheets.'}
       >
+        {context.retry && <button onClick={context.retry}>Try again</button>}
         <button
           onClick={() => {
             void window.viewer.openExternal(context.resource.entry.path).catch(report);

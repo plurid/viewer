@@ -327,6 +327,7 @@ export default function PDFPreview(context: PreviewContext) {
   return (
     <div className="pdf-viewer">
       <PreviewToolbar context={context}>
+        {context.optimize && <button onClick={context.optimize}>Optimize…</button>}
         <IconButton
           icon="left"
           label="Previous page"

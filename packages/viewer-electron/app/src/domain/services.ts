@@ -76,7 +76,14 @@ export interface ApplicationSettings {
     scrollback: number;
     tmux: { executable: string; session: string; socket: string; windowName: string };
   };
-  previews: { thumbnailSize: number; maxImagePixels: number; maxModelMB: number };
+  previews: {
+    thumbnailSize: number;
+    maxImagePixels: number;
+    maxModelMB: number;
+    textFontSize: number;
+    textLineHeight: number;
+    textWordWrap: boolean;
+  };
   /** The text editor (2026-10-23); its defaults are its owner's VS Code. */
   editor: {
     fontSize: number;
@@ -373,7 +380,14 @@ export function defaultSettings(home: string): ApplicationSettings {
       scrollback: 10000,
       tmux: { executable: 'tmux', session: 'viewer', socket: '', windowName: '{folder}' },
     },
-    previews: { thumbnailSize: 256, maxImagePixels: 64000000, maxModelMB: 256 },
+    previews: {
+      thumbnailSize: 256,
+      maxImagePixels: 64000000,
+      maxModelMB: 256,
+      textFontSize: 13,
+      textLineHeight: 20,
+      textWordWrap: false,
+    },
     editor: {
       fontSize: 18,
       lineHeight: 40,

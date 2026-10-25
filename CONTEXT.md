@@ -64,7 +64,7 @@ comparison, previews, terminals, workers, native helpers and diagnostics.
 at its root. Existing explorer, workspace, editing, terminal, Chat and preview
 modules remain separate features.
 
-Saved workspace state is version **7** (`CURRENT_STATE_VERSION`). Versions 1–6
+Saved workspace state is version **8** (`CURRENT_STATE_VERSION`). Versions 1–7
 receive byte-preserving backups before migration; legacy globally applied profiles
 are restored only through compare-and-set checks. Shared-agent authority is private
 version **2** and requires native review; version-1 authority cannot grant access.
@@ -78,3 +78,12 @@ Keep file selection/input independent of camera input. Keep shared presentation 
 See [architecture](docs/architecture.md), [configuration](docs/configuration.md), [terminals](docs/terminals.md), [actions](docs/actions.md), [verification](docs/verification.md), [capability map](docs/capabilities.md) and [remaining product work](docs/roadmap.md). Routine app verification stays hidden and never activates Viewer.
 
 Release checks and mandatory native gates live in [qualification](docs/release-qualification.md). The owner separately authorized a coordinated visible native acceptance session using disposable profiles and generated data; routine checks remain hidden. A passing source/mock/browser check is not proof of genuine native picker, Finder, accessibility or distribution behavior.
+
+A **server runtime** is a window-owned listener, independent of its detachable
+server planes. A **browser guest** is an isolated persistent offscreen Chromium
+page rendered into a plane canvas. A **media draft** is a private revisioned
+segment/audio plan against source versions. A **transform** is a bounded typed
+image/media/PDF export submitted to the existing operation executor; optimization
+records size results and publishes only a smaller candidate. None is an agent
+shell or deletion grant. See [resource lifetimes](docs/adr/0007-spatial-workbench-resources.md)
+and [media and optimization](docs/media-tools.md).

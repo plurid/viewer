@@ -54,6 +54,7 @@ const pane = z.discriminatedUnion('type', [
     .object({
       id,
       type: z.literal('server'),
+      runtimeID: id.optional(),
       path: localPath,
       sourceIdentity: z
         .string()
@@ -63,6 +64,22 @@ const pane = z.discriminatedUnion('type', [
     })
     .strict(),
   z.object({ id, type: z.literal('git-changes'), path: localPath }).strict(),
+  z.object({ id, type: z.literal('media'), path: localPath, draftID: z.uuid() }).strict(),
+  z
+    .object({
+      id,
+      type: z.literal('browser'),
+      path: localPath,
+      url: z
+        .string()
+        .max(8192)
+        .url()
+        .refine((value) => ['http:', 'https:'].includes(new URL(value).protocol)),
+      title: z.string().max(1000).optional(),
+      serverRuntimeID: id.optional(),
+      serverPath: z.string().max(8192).optional(),
+    })
+    .strict(),
   z.object({ id, type: z.literal('chat'), path: localPath, conversationID: z.uuid() }).strict(),
   z
     .object({
@@ -138,6 +155,7 @@ const savedStateSchema = z
       z.literal(4),
       z.literal(5),
       z.literal(6),
+      z.literal(7),
       z.literal(CURRENT_STATE_VERSION),
     ]),
     previewStates: z.record(id, previewValuesSchema).optional(),
@@ -342,6 +360,7 @@ export class Storage {
     if (state.version < 4) await this.preserve(bytes, '.before-projects-v4');
     else if (state.version < 6) await this.preserve(bytes, '.before-planes-v6');
     if (state.version < 7) await this.preserve(bytes, '.before-profile-overlays-v7');
+    if (state.version < 8) await this.preserve(bytes, '.before-spatial-workbench-v8');
     if (state.version < CURRENT_STATE_VERSION) state = { ...state, version: CURRENT_STATE_VERSION };
     return { state };
   }

@@ -226,7 +226,7 @@ export class WatchRules {
           );
         recipes.push(recipe);
       }
-      if (step.kind === 'copy') {
+      if (step.kind === 'copy' || step.kind === 'convert') {
         if (step.destination.kind !== 'input')
           throw new Error('Use a fixed destination input for watched copies.');
         const folder = resolveProjectPath(

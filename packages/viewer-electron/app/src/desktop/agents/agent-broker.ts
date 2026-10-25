@@ -43,6 +43,7 @@ import { isEmptyAgentOrigin } from '../../domain/agents/origin';
 import { discardOwnTemporaryFile, removeEmptyDirectory } from '../operations/removal';
 import { nativeTestRemovalsBlocked } from '../native/test-removal-policy';
 import { agentTools } from './agent-tools';
+import { transformPlanSchema } from '../../domain/operations/transforms';
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 /** The person's Home folder; a Mac App Store build's os.homedir() is its container. */
@@ -273,6 +274,11 @@ export class AgentBroker {
       await this.clients.require(capability);
       if (!(await this.access.state()).enabled) throw new Error('Agent access is disabled.');
       if (proposal.target) await this.authorizeTarget(proposal.target);
+      if (proposal.kind === 'transform') {
+        await this.clients.require('content');
+        if (!proposal.transform) throw new Error('The transform plan is unavailable.');
+        await this.authorize(proposal.transform.destination);
+      }
       if (
         proposal.kind === 'command' &&
         agentCommandID(proposal.commandID!, this.settings().customActions) === 'trash'
@@ -642,6 +648,32 @@ export class AgentBroker {
         await extension.requests.review((value as { id: string }).id, true);
         value = { ...(value as object), requiresUserReview: false };
       }
+    } else if (call.name === 'propose_transform') {
+      const extension = this.extension,
+        catalog = extension?.catalog();
+      if (!extension || !catalog) throw new Error('Open a workspace in Viewer first.');
+      const input = z
+        .object({
+          sources: z.array(z.string().min(1).max(32768)).min(1).max(16),
+          destination: z.string().min(1).max(32768),
+          name: z.string().min(1).max(255),
+          plan: transformPlanSchema,
+        })
+        .strict()
+        .parse(args);
+      await this.clients.require('content');
+      await this.authorizeTarget(catalog.target);
+      await this.authorize(input.destination);
+      const selection = [];
+      for (const file of input.sources) {
+        await this.authorize(file);
+        selection.push(await entry(file));
+      }
+      value = extension.requests.transform(input.plan, input.destination, input.name, {
+        ...catalog.target,
+        selection,
+      });
+      this.own((value as { id: string }).id);
     } else if (['list_commands', 'explain_command', 'propose_command'].includes(call.name)) {
       const extension = this.extension;
       const catalog = extension?.catalog();

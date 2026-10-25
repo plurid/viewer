@@ -2,6 +2,10 @@ import { useState } from 'react';
 import type { CapturedTarget, CustomAction } from '../../domain/automation/actions';
 import { CommitDialog } from '../git/CommitDialog';
 import { WorktreesDialog } from '../git/worktrees/WorktreesDialog';
+import { ServersDialog } from '../local-servers/ServersDialog';
+import { ImageToolsDialog } from '../media/ImageToolsDialog';
+import { OptimizeDialog } from '../media/OptimizeDialog';
+import type { FileEntry } from '../../domain/contracts';
 import type { WorkspaceController } from '../workspace/context';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { WorkspaceBackgroundDialog } from '../ui/workspace/WorkspaceBackgroundDialog';
@@ -25,6 +29,10 @@ import {
 } from '../state/store';
 
 export type WindowDialog =
+  | { type: 'servers' }
+  | { type: 'browser'; paneID?: string }
+  | { type: 'image-tools'; files: FileEntry[]; paneID?: string }
+  | { type: 'optimize'; files: FileEntry[]; paneID?: string }
   | { type: 'workspace'; kind: 'new' | 'rename' | 'delete' | 'background'; id: string }
   | { type: 'view'; kind: 'save' | 'manage' }
   | { type: 'profile' | 'template' | 'go-to' | 'connect' | 'tag' }
@@ -61,6 +69,26 @@ export function WindowDialogs({
   const tagging = dialog?.type === 'tag';
   return (
     <>
+      {dialog?.type === 'servers' && <ServersDialog workspace={controller} onClose={onClose} />}
+      {dialog?.type === 'optimize' && (
+        <OptimizeDialog files={dialog.files} paneID={dialog.paneID} onClose={onClose} />
+      )}
+      {dialog?.type === 'image-tools' && (
+        <ImageToolsDialog files={dialog.files} paneID={dialog.paneID} onClose={onClose} />
+      )}
+      {dialog?.type === 'browser' && (
+        <NameDialog
+          title="Open web page"
+          label="Web address"
+          maxLength={8192}
+          action="Open"
+          onClose={onClose}
+          onSubmit={(address) => {
+            controller.openBrowser(address, dialog.paneID);
+            onClose();
+          }}
+        />
+      )}
       {dialog?.type === 'git-worktrees' && (
         <WorktreesDialog
           key={dialog.id}

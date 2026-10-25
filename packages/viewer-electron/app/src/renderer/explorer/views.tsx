@@ -61,6 +61,8 @@ export interface FileViewProps {
   entries: FileEntry[];
   selection: string[];
   cursor?: string;
+  /** Visual route through ancestor columns, independent of the operation selection. */
+  ancestorPath?: string;
   selectionSet: ReadonlySet<string>;
   select(entry: FileEntry, event: FileModifiers, scope?: FileEntry[]): void;
   showHidden: boolean;
@@ -91,12 +93,14 @@ export function FileIcon({ entry, size = 18 }: { entry: FileEntry; size?: number
 export const FileRow = memo(function FileRow({
   entry,
   selected,
+  ancestor = false,
   props,
   compact = false,
   columns = ['name', 'modified', 'kind', 'size'],
 }: {
   entry: FileEntry;
   selected: boolean;
+  ancestor?: boolean;
   props: Pick<
     FileViewProps,
     'select' | 'open' | 'context' | 'drag' | 'toggle' | 'expanded' | 'depths' | 'paneID'
@@ -106,7 +110,7 @@ export const FileRow = memo(function FileRow({
 }) {
   return (
     <div
-      className={`file-row ${selected ? 'is-selected' : ''} ${compact ? 'compact-row' : ''}`}
+      className={`file-row ${selected ? 'is-selected' : ''} ${ancestor ? 'is-path-ancestor' : ''} ${compact ? 'compact-row' : ''}`}
       role="option"
       aria-selected={selected}
       data-file-path={entry.path}
@@ -598,6 +602,7 @@ function Column({
   );
   const columnProps = {
     ...props,
+    ancestorPath: navigation.trail[navigation.trail.indexOf(path) + 1],
     entries: filtered,
     presentation,
     sections,
@@ -611,7 +616,12 @@ function Column({
     return () => unregister(path);
   }, [path, filtered, listing.loading, listing.unavailable, register, unregister]);
   return (
-    <BrowserColumn path={path} entries={filtered} onActivate={() => navigation.activate(path)}>
+    <BrowserColumn
+      path={path}
+      entries={filtered}
+      active={navigation.activeDirectory() === path}
+      onActivate={() => navigation.activate(path)}
+    >
       {listing.loading ? (
         <Loading />
       ) : listing.unavailable ? (
@@ -683,6 +693,7 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
                 compact
                 entry={entry}
                 selected={props.selectionSet.has(entry.path)}
+                ancestor={props.ancestorPath === entry.path}
                 props={rowProps}
               />
             </div>
@@ -716,9 +727,10 @@ export function ColumnsView({
       <BrowserColumn
         path={path}
         entries={props.entries}
+        active={navigation.activeDirectory() === path}
         onActivate={() => navigation.activate(path)}
       >
-        <ListViewCompact props={props} />
+        <ListViewCompact props={{ ...props, ancestorPath: navigation.trail[0] }} />
       </BrowserColumn>
       {navigation.trail.map((folder) => (
         <Column key={folder} path={folder} props={props} navigation={navigation} />

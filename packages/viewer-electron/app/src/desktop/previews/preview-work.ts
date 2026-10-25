@@ -16,6 +16,8 @@ export class PreviewScope {
   private invalidated = new Set<string>();
   private expired = false;
   private pending = new Set<Promise<void>>();
+  private abort = new AbortController();
+  readonly signal = this.abort.signal;
   constructor(files: readonly string[]) {
     for (const file of files) this.paths.add(path.resolve(file));
   }
@@ -30,44 +32,71 @@ export class PreviewScope {
       const pending = canonical
         .then((actual) => {
           if (actual) this.invalidated.add(path.resolve(actual));
+          this.cancelIfExpired();
         })
         .finally(() => this.pending.delete(pending));
       this.pending.add(pending);
     }
     // Fail closed rather than retaining an unbounded invalidation history.
     if (this.invalidated.size > 128) this.expired = true;
+    this.cancelIfExpired();
   }
-  async finish(): Promise<void> {
-    while (this.pending.size) await Promise.allSettled([...this.pending]);
-    this.check();
+  affects(roots: readonly string[]): boolean {
+    return roots.some((root) => [...this.paths].some((file) => previewContains(root, file)));
   }
-  check(): void {
+  private cancelIfExpired(): void {
     if (
       this.expired ||
       [...this.invalidated].some((root) =>
         [...this.paths].some((file) => previewContains(root, file)),
       )
     )
-      throw new Error('This preview request has expired.');
+      this.abort.abort(new Error('This preview request has expired.'));
+  }
+  async finish(): Promise<void> {
+    while (this.pending.size) await Promise.allSettled([...this.pending]);
+    this.check();
+  }
+  check(): void {
+    this.signal.throwIfAborted();
+    if (
+      this.expired ||
+      [...this.invalidated].some((root) =>
+        [...this.paths].some((file) => previewContains(root, file)),
+      )
+    ) {
+      this.abort.abort(new Error('This preview request has expired.'));
+      this.signal.throwIfAborted();
+    }
   }
 }
 
 export class PreviewWork {
   private tasks = new Map<Promise<unknown>, PreviewScope>();
   private closed = false;
-  track<T>(files: readonly string[], run: (scope: PreviewScope) => Promise<T>): Promise<T> {
+  track<T>(
+    files: readonly string[],
+    run: (scope: PreviewScope) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
     if (this.closed) return Promise.reject(new Error('Preview resources have closed.'));
     if (this.tasks.size >= 512)
       return Promise.reject(
         new Error('Too many preview requests. Close some previews and try again.'),
       );
     const scope = new PreviewScope(files);
+    const cancel = () => scope.invalidate();
+    if (signal?.aborted) cancel();
+    else signal?.addEventListener('abort', cancel, { once: true });
     const task = run(scope)
       .then(async (value) => {
         await scope.finish();
         return value;
       })
-      .finally(() => this.tasks.delete(task));
+      .finally(() => {
+        this.tasks.delete(task);
+        signal?.removeEventListener('abort', cancel);
+      });
     this.tasks.set(task, scope);
     return task;
   }
@@ -76,10 +105,12 @@ export class PreviewWork {
     for (const scope of this.tasks.values()) scope.invalidate(root, root ? canonical : undefined);
     return canonical;
   }
-  async drain(): Promise<void> {
+  async drain(roots?: readonly string[]): Promise<void> {
     // Canonical paths may still be resolving. Wait for the bounded requests,
     // preserving independent resources and streams throughout that wait.
-    await Promise.allSettled([...this.tasks.keys()]);
+    await Promise.allSettled(
+      [...this.tasks].filter(([, scope]) => !roots || scope.affects(roots)).map(([task]) => task),
+    );
   }
   stop(): void {
     this.closed = true;

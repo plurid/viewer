@@ -96,6 +96,10 @@ typings/
 # Electron-Forge
 out/
 assets/viewer-macos-files.node
+assets/viewer-processors/
+assets/viewer-processors-*/
+assets/viewer-pdf-processors-*/
+assets/viewer-optimizers-*/
 assets/licenses/dependencies.json
 assets/licenses/third-party-notices.txt
 assets/licenses/electron.txt

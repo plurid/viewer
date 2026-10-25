@@ -1,0 +1,87 @@
+.optimize-dialog {
+  width: min(980px, calc(100vw - 40px));
+}
+.optimize-options {
+  display: grid;
+  gap: 14px;
+}
+.optimize-options > label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+}
+.optimize-options p {
+  margin: 0;
+  line-height: 1.5;
+}
+.optimize-options .media-destination {
+  flex-wrap: nowrap;
+  width: 100%;
+}
+.optimize-options .media-destination input {
+  flex: 1;
+}
+.optimize-resize {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.optimize-resize label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.optimize-resize input[type='number'] {
+  width: 90px;
+}
+.optimize-results {
+  overflow: auto;
+  max-height: 36vh;
+  border-block: 1px solid var(--line);
+}
+.optimize-results table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+.optimize-results th {
+  text-align: start;
+  font-weight: 500;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  background: var(--raised);
+}
+.optimize-results th,
+.optimize-results td {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.optimize-results td:first-child {
+  overflow-wrap: anywhere;
+}
+.optimize-results td:nth-child(2),
+.optimize-results td:nth-child(3) {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.optimize-results td:last-child {
+  max-width: 300px;
+  overflow-wrap: anywhere;
+}
+.optimize-results td button {
+  margin-inline-start: 8px;
+}
+.optimize-savings {
+  color: var(--accent);
+}
+.optimize-limit {
+  margin: 10px 16px;
+  font-size: 12px;
+}
+.optimize-dialog > footer {
+  gap: 8px;
+  flex-wrap: wrap;
+}

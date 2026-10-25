@@ -44,9 +44,11 @@ const sameServer = (left: LocalServer | undefined, right: LocalServer) =>
   left.started === right.started &&
   left.state === right.state;
 
-/** Native sessions belong to saved panes, independently of React mounting or engine culling. */
+/** Native listeners belong to this window; saved planes are reattachable views. */
 export class LocalServerSessions {
   private readonly sessions = new Map<string, Session>();
+  private readonly bindings = new Map<string, string>();
+  private readonly observers = new Set<() => void>();
   private readonly listeners = new Map<string, Set<() => void>>();
   private readonly starting = new Map<string, { session: Session; work: Promise<unknown> }>();
   private readonly closing = new Map<string, Promise<void>>();
@@ -60,7 +62,7 @@ export class LocalServerSessions {
   ) {}
 
   snapshot(paneID: string): LocalServerSnapshot {
-    return this.sessions.get(paneID)?.snapshot ?? stopped;
+    return this.sessions.get(this.bindings.get(paneID) ?? paneID)?.snapshot ?? stopped;
   }
 
   subscribe(paneID: string, listener: () => void): () => void {
@@ -74,25 +76,59 @@ export class LocalServerSessions {
   }
 
   retain(panes: readonly ServerPane[]): void {
-    const wanted = new Map(panes.map((pane) => [pane.id, pane]));
-    for (const [id, session] of this.sessions) {
-      const pane = wanted.get(id);
+    this.bindings.clear();
+    for (const pane of panes) {
+      const key = pane.runtimeID ?? pane.id;
+      this.bindings.set(pane.id, key);
+      const existing = this.sessions.get(key);
       if (
-        pane &&
-        pane.path === session.pane.path &&
-        pane.sourceIdentity === session.pane.sourceIdentity
-      )
-        continue;
-      this.sessions.delete(id);
-      this.revision++;
-      if (session.snapshot.server) void this.close(session.snapshot.server.id).catch(this.report);
-      this.notify(id);
-    }
-    for (const pane of panes)
-      if (!this.sessions.has(pane.id)) {
-        this.sessions.set(pane.id, { pane, snapshot: stopped, revision: 0 });
-        this.notify(pane.id);
+        existing &&
+        existing.pane.path === pane.path &&
+        (!existing.pane.sourceIdentity || existing.pane.sourceIdentity === pane.sourceIdentity)
+      ) {
+        existing.pane = { ...pane, id: key, runtimeID: key };
+      } else {
+        if (existing?.snapshot.server)
+          void this.close(existing.snapshot.server.id).catch(this.report);
+        this.sessions.set(key, {
+          pane: { ...pane, id: key, runtimeID: key },
+          snapshot: stopped,
+          revision: 0,
+        });
       }
+      this.notify(key);
+    }
+    // Closing or undoing a view deliberately leaves its listener and log behind.
+    for (const [key, session] of this.sessions)
+      if (
+        this.sessions.size > 200 &&
+        !session.snapshot.server &&
+        !session.starting &&
+        ![...this.bindings.values()].includes(key)
+      )
+        this.sessions.delete(key);
+  }
+
+  generation = () => this.revision;
+  subscribeAll = (listener: () => void): (() => void) => {
+    this.observers.add(listener);
+    return () => this.observers.delete(listener);
+  };
+  all(): LocalServer[] {
+    return [...this.sessions.values()].flatMap((session) =>
+      session.snapshot.server ? [session.snapshot.server] : [],
+    );
+  }
+  runtimeFor(path: string, identity?: string): string | undefined {
+    return [...this.sessions.values()].find(
+      (session) =>
+        session.pane.path === path &&
+        (!identity || session.pane.sourceIdentity === identity) &&
+        session.snapshot.server,
+    )?.pane.id;
+  }
+  descriptor(runtimeID: string): ServerPane | undefined {
+    return this.sessions.get(runtimeID)?.pane;
   }
 
   /** Events are lifecycle metadata only; request logs are read separately and remain bounded. */
@@ -100,7 +136,15 @@ export class LocalServerSessions {
     this.revision++;
     const present = new Set<string>();
     for (const server of servers) {
-      const session = this.sessions.get(server.paneID);
+      let session = this.sessions.get(server.paneID);
+      if (!session && !this.closed.has(server.id)) {
+        session = {
+          pane: { id: server.paneID, runtimeID: server.paneID, type: 'server', path: server.root },
+          snapshot: stopped,
+          revision: 0,
+        };
+        this.sessions.set(server.paneID, session);
+      }
       const earlier = this.starting.get(server.paneID);
       if (!session || this.closed.has(server.id) || (earlier && earlier.session !== session)) {
         void this.close(server.id).catch(this.report);
@@ -143,9 +187,11 @@ export class LocalServerSessions {
 
   start(paneID: string): Promise<LocalServer | undefined> {
     const session = this.require(paneID);
+    paneID = session.pane.id;
     if (session.starting) return session.starting;
     if (session.snapshot.server?.state === 'running')
       return Promise.resolve(session.snapshot.server);
+
     const earlier = this.starting.get(paneID)?.work;
     const work: Promise<LocalServer | undefined> = this.run(session, 'start', async () => {
       // An arrangement Undo may restore the same pane while its old start is still
@@ -154,7 +200,7 @@ export class LocalServerSessions {
       if (!this.current(session)) return;
       this.starting.set(paneID, { session, work });
       const previous = session.snapshot.server;
-      if (previous) {
+      if (previous?.state === 'stopped') {
         await this.api.localServerAction(previous.id, 'restart');
         await this.inspect(session);
         return session.snapshot.server;
@@ -293,7 +339,7 @@ export class LocalServerSessions {
   }
 
   private require(paneID: string): Session {
-    const session = this.sessions.get(paneID);
+    const session = this.sessions.get(this.bindings.get(paneID) ?? paneID);
     if (!session) throw new Error('This server plane has closed.');
     return session;
   }
@@ -312,6 +358,12 @@ export class LocalServerSessions {
   }
 
   private notify(paneID: string): void {
-    for (const listener of this.listeners.get(paneID) ?? []) listener();
+    this.revision++;
+    const views = new Set([
+      paneID,
+      ...[...this.bindings].filter(([, key]) => key === paneID).map(([view]) => view),
+    ]);
+    for (const view of views) for (const listener of this.listeners.get(view) ?? []) listener();
+    for (const observer of this.observers) observer();
   }
 }

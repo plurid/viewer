@@ -12,6 +12,8 @@ import type {
   ChatPane,
   ServerPane,
   JournalPane,
+  BrowserPane,
+  MediaPane,
 } from '../../domain/contracts';
 import { normalizePreferences } from '../../domain/preferences/ui';
 import { trimSessions } from '../workspace/sessions';
@@ -196,7 +198,7 @@ export function addPane(
 
 /** Register a typed content plane before the spatial adapter mounts its route. */
 export function addContentPane(
-  pane: DiffPane | GitChangesPane | ChatPane | JournalPane,
+  pane: DiffPane | GitChangesPane | ChatPane | JournalPane | ServerPane | BrowserPane | MediaPane,
   root = true,
 ): void {
   if (activeWorkspace().panes.length >= 200)
@@ -211,10 +213,14 @@ export function addContentPane(
 }
 
 /** Server panes retain a folder identity only; their listening session is never saved. */
-export function addServerPane(path: string, sourceIdentity: string): ServerPane {
+export function addServerPane(
+  path: string,
+  sourceIdentity: string,
+  runtimeID: string = uuid(),
+): ServerPane {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('Close a plane before opening another.');
-  const pane: ServerPane = { id: uuid(), type: 'server', path, sourceIdentity };
+  const pane: ServerPane = { id: uuid(), type: 'server', path, sourceIdentity, runtimeID };
   changeWorkspace((space) => ({ ...space, panes: [...space.panes, pane] }));
   setActivePane(pane.id);
   return pane;

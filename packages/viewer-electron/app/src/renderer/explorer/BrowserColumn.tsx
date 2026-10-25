@@ -8,11 +8,13 @@ import { baseName } from '../../domain/workspaces/planes';
 export function BrowserColumn({
   path,
   entries,
+  active = false,
   onActivate,
   children,
 }: {
   path: string;
   entries: FileEntry[];
+  active?: boolean;
   onActivate(): void;
   children: ReactNode;
 }) {
@@ -33,14 +35,20 @@ export function BrowserColumn({
   return (
     <div
       ref={element}
-      className="file-column"
+      className={`file-column ${active ? 'is-active-column' : 'is-ancestor-column'}`}
+      aria-label={`${baseName(path)}${active ? ', current column' : ', ancestor column'}`}
       data-folder-path={path}
       style={{ width: preferences.columnWidth }}
       onPointerDown={onActivate}
     >
-      <div className="column-title" title={path}>
+      <button
+        className="column-title"
+        title={path}
+        onClick={onActivate}
+        aria-current={active ? 'location' : undefined}
+      >
         {baseName(path)}
-      </div>
+      </button>
       {children}
       <button
         className="browser-column-resizer"

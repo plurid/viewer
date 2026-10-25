@@ -30,6 +30,8 @@ struct FileCoordinationState {
   std::mutex mutex;
   std::unordered_map<std::string, std::shared_ptr<FileCoordinationLease>> leases;
   NSOperationQueue *readers;
+  NSOperationQueue *streams;
+  NSOperationQueue *transforms;
   NSOperationQueue *writers;
   NSOperationQueue *nested;
 };
@@ -119,10 +121,29 @@ static napi_value coordinateStart(napi_env env, napi_callback_info info) {
     }
     NSMutableArray<NSURL *> *urls = [NSMutableArray array];
     NSMutableArray<NSString *> *modes = [NSMutableArray array];
+    bool stream = false;
+    bool transform = false;
     for (uint32_t index = 0; index < length; ++index) {
       napi_value item, fileValue, modeValue; napi_get_element(env, args[1], index, &item);
       napi_get_named_property(env, item, "path", &fileValue); napi_get_named_property(env, item, "mode", &modeValue);
       NSString *file = coordinationString(env, fileValue), *mode = coordinationString(env, modeValue);
+      bool hasStream = false;
+      napi_has_named_property(env, item, "stream", &hasStream);
+      if (hasStream) {
+        napi_value flag; napi_get_named_property(env, item, "stream", &flag);
+        if (napi_get_value_bool(env, flag, &stream) != napi_ok ||
+            (stream && (length != 1 || ![mode isEqualToString:@"read"]))) {
+          napi_throw_type_error(env, nullptr, "Streaming coordination requires one reader."); return nullptr;
+        }
+      }
+      bool hasTransform = false; napi_has_named_property(env, item, "transform", &hasTransform);
+      if (hasTransform) {
+        napi_value flag; napi_get_named_property(env, item, "transform", &flag);
+        if (napi_get_value_bool(env, flag, &transform) != napi_ok ||
+            (transform && (stream || length != 1 || ![mode isEqualToString:@"read"]))) {
+          napi_throw_type_error(env, nullptr, "Transform coordination requires one reader."); return nullptr;
+        }
+      }
       if (!file.isAbsolutePath || !mode || ![@[@"read", @"metadata", @"write", @"move", @"delete"] containsObject:mode]) {
         napi_throw_type_error(env, nullptr, "Invalid file coordination intent."); return nullptr;
       }
@@ -149,7 +170,7 @@ static napi_value coordinateStart(napi_env env, napi_callback_info info) {
       std::lock_guard<std::mutex> lock(state->mutex); state->leases.erase(lease->id);
       napi_throw_error(env, nullptr, "Could not start coordinated file access."); return nullptr;
     }
-    NSOperationQueue *queue = nested ? state->nested : coordinationRead(modes[0]) && length == 1 ? state->readers : state->writers;
+    NSOperationQueue *queue = nested ? state->nested : transform ? state->transforms : stream ? state->streams : coordinationRead(modes[0]) && length == 1 ? state->readers : state->writers;
     [queue addOperationWithBlock:^{
       @autoreleasepool {
         __block bool entered = false;
@@ -251,6 +272,8 @@ static napi_value coordinateSameItem(napi_env env, napi_callback_info info) {
 static void registerFileCoordination(napi_env env, napi_value exports) {
   auto state = std::make_shared<FileCoordinationState>();
   state->readers = [[NSOperationQueue alloc] init]; state->readers.name = @"com.pluridviewer.app.file-readers"; state->readers.maxConcurrentOperationCount = 16;
+  state->streams = [[NSOperationQueue alloc] init]; state->streams.name = @"com.pluridviewer.app.file-streams"; state->streams.maxConcurrentOperationCount = 16;
+  state->transforms = [[NSOperationQueue alloc] init]; state->transforms.name = @"com.pluridviewer.app.file-transforms"; state->transforms.maxConcurrentOperationCount = 32;
   state->writers = [[NSOperationQueue alloc] init]; state->writers.name = @"com.pluridviewer.app.file-writers"; state->writers.maxConcurrentOperationCount = 4;
   // Parent claims can occupy every root writer thread. Their one bounded
   // intermediate claim must still be able to enter and release the parent.

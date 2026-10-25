@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, sharedTexture } from 'electron';
 import type { ApiMethod, ApiResult, DesktopEvent, ViewerAPI } from './domain/contracts';
 
 const eventListeners = new Set<(event: DesktopEvent) => void>();
@@ -19,6 +19,20 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  imageInspect: (file) => invoke('imageInspect', file),
+  media: (request) => invoke('media', request),
+  browser: (request) =>
+    invoke(
+      'browser',
+      request.kind === 'open'
+        ? {
+            ...request,
+            texture:
+              request.texture !== false &&
+              typeof sharedTexture?.setSharedTextureReceiver === 'function',
+          }
+        : request,
+    ),
   journalQuery: (query) => invoke('journalQuery', query),
   journalExportPreview: (query) => invoke('journalExportPreview', query),
   journalExport: (id) => invoke('journalExport', id),
@@ -142,7 +156,7 @@ const api: ViewerAPI = {
   resolveCollision: (id, decision, all) => invoke('resolveCollision', id, decision, all),
   undo: (id) => invoke('undo', id),
   redo: (id) => invoke('redo', id),
-  resource: (file) => invoke('resource', file),
+  resource: (file, requestID) => invoke('resource', file, requestID),
   read: (id, limit) => invoke('read', id, limit),
   release: (id) => invoke('release', id),
   archive: (id) => invoke('archive', id),
@@ -188,4 +202,32 @@ const api: ViewerAPI = {
     };
   },
 };
+// Frames never cross contextBridge proxies. Transfer VideoFrames into the app's
+// main world; its permanent receiver closes even frames for an unmounted plane.
+sharedTexture?.setSharedTextureReceiver(async ({ importedSharedTexture }, id: string) => {
+  const frame = importedSharedTexture.getVideoFrame();
+  importedSharedTexture.release();
+  try {
+    window.postMessage({ type: 'viewer-browser-frame', id, frame }, '*', [frame]);
+  } catch {
+    frame.close();
+  }
+});
+ipcRenderer.on(
+  'viewer:browser-bitmap',
+  (_event, value: { id: string; width: number; height: number; pixels: Uint8Array }) => {
+    const pixels = new Uint8Array(value.pixels);
+    window.postMessage(
+      {
+        type: 'viewer-browser-frame',
+        id: value.id,
+        width: value.width,
+        height: value.height,
+        pixels,
+      },
+      '*',
+      [pixels.buffer],
+    );
+  },
+);
 contextBridge.exposeInMainWorld('viewerNative', Object.freeze(api));

@@ -13,6 +13,10 @@ export interface NativeVolume {
   readOnly: boolean;
 }
 export interface FileAccessIntent {
+  /** Long-lived streaming access uses its own bounded native queue. */
+  stream?: boolean;
+  /** Long media transformations must not occupy foreground or playback slots. */
+  transform?: boolean;
   path: string;
   mode: 'read' | 'metadata' | 'write' | 'move' | 'delete';
 }

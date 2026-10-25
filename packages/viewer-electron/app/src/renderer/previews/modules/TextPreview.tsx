@@ -16,6 +16,10 @@ import { editorFont } from '../../editing/font';
 import { relativeLinkTarget } from '../../../domain/workspaces/planes';
 import { highlightedLines } from '../highlight';
 import { languageByID, languageFor, loadPrismGrammar } from '../languages';
+import { usePreviewState } from '../state';
+import { StructuredTree } from '../StructuredTree';
+import { isStructured, inspectStructured } from '../../../domain/previews/data/structured';
+import type { ApplicationSettings } from '../../../domain/services';
 
 /** A Prism grammar, loaded on first use: the component renders again once it is ready. */
 function usePrismGrammar(id: string | undefined): Prism.Grammar | undefined {
@@ -65,63 +69,22 @@ function FencedCode({ language, text }: { language: string; text: string }) {
   );
 }
 
-function JSONNode({ name, value, depth = 0 }: { name: string; value: unknown; depth?: number }) {
-  const [open, setOpen] = useState(depth < 1);
-  const [limit, setLimit] = useState(100);
-  if (depth > 40) return <span className="muted">Maximum tree depth reached</span>;
-  const expandable = value !== null && typeof value === 'object';
-  const pairs = expandable ? Object.entries(value as Record<string, unknown>) : [];
-  return (
-    <div className="json-node">
-      <div className="json-value">
-        {expandable && (
-          <button
-            aria-label={`${open ? 'Collapse' : 'Expand'} ${name}`}
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
-          >
-            {open ? '▾' : '▸'}
-          </button>
-        )}
-        <span className="json-key">{name}</span>
-        <span className="muted">: </span>
-        {expandable ? (
-          <span className="muted">
-            {Array.isArray(value) ? `[${pairs.length} items]` : `{${pairs.length} keys}`}
-          </span>
-        ) : (
-          <span className={`json-${typeof value}`}>{JSON.stringify(value)}</span>
-        )}
-      </div>
-      {open && expandable && (
-        <div className="json-children">
-          {pairs.slice(0, limit).map(([key, child]) => (
-            <JSONNode key={key} name={key} value={child} depth={depth + 1} />
-          ))}
-          {pairs.length > limit && (
-            <button onClick={() => setLimit(limit + 100)}>
-              Show next {Math.min(100, pairs.length - limit)} items
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 function Code({
   text,
   language,
   line: targetLine,
+  settings,
+  wordWrap,
 }: {
   text: string;
   /** Prism's grammar id, from the language table. */
   language?: string;
   line?: number;
+  settings: ApplicationSettings['editor'];
+  wordWrap: boolean;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const lines = useMemo(() => text.split('\n'), [text]);
-  // the editor's font settings: a file reads as it edits
-  const settings = useViewer((state) => effectiveWindowSettings(state).editor);
   const grammar = usePrismGrammar(language);
   // Whole-document tokens for ordinary files; very large ones fall back to single lines.
   const document = useMemo(
@@ -140,7 +103,7 @@ function Code({
   }, [targetLine, lines.length, virtual]);
   return (
     <div
-      className="code-scroll"
+      className={`code-scroll ${wordWrap ? 'is-wrapped' : ''}`}
       ref={scroll}
       tabIndex={0}
       aria-label="File text"
@@ -150,7 +113,7 @@ function Code({
         style={{
           height: virtual.getTotalSize(),
           minWidth: '100%',
-          width: 'max-content',
+          width: wordWrap ? '100%' : 'max-content',
           position: 'relative',
         }}
       >
@@ -167,7 +130,14 @@ function Code({
             <div
               className={'code-line' + (item.index + 1 === targetLine ? ' evidence-line' : '')}
               key={item.key}
-              style={{ position: 'absolute', top: item.start, height: item.size }}
+              data-index={item.index}
+              ref={virtual.measureElement}
+              style={{
+                position: 'absolute',
+                top: item.start,
+                minHeight: settings.lineHeight,
+                width: wordWrap ? '100%' : undefined,
+              }}
             >
               <span className="line-number" aria-hidden="true">
                 {item.index + 1}
@@ -207,7 +177,19 @@ export default function TextPreview(context: TextPreviewProps) {
     null,
   );
   const [error, setError] = useState('');
-  const [raw, setRaw] = useState(false);
+  const [raw, setRaw] = usePreviewState(context, 'text.source', false);
+  const preferences = useViewer((state) => effectiveWindowSettings(state));
+  const [scale, setScale] = usePreviewState(context, 'text.scale', 1);
+  const [wrap, setWrap] = usePreviewState(
+    context,
+    'text.wrap',
+    preferences.previews.textWordWrap ?? false,
+  );
+  const textSettings = {
+    ...preferences.editor,
+    fontSize: (preferences.previews.textFontSize ?? 13) * scale,
+    lineHeight: (preferences.previews.textLineHeight ?? 20) * scale,
+  };
   // a workspace plane's text may be edited where it is; one holding unsaved edits opens editing
   const paneID = context.editing?.paneID;
   const bufferID = useViewer((state) => {
@@ -230,7 +212,7 @@ export default function TextPreview(context: TextPreviewProps) {
     context.evidence?.anchor.kind === 'text' ? context.evidence.anchor.line : undefined;
   useEffect(() => {
     if (evidenceLine) setRaw(true);
-  }, [evidenceLine]);
+  }, [evidenceLine, setRaw]);
   useEffect(() => {
     // the file's grammar loads beside its text, so it shows highlighted from the first paint
     const grammar = languageFor(resource.entry)?.prism;
@@ -255,14 +237,13 @@ export default function TextPreview(context: TextPreviewProps) {
       changedOnDisk: () => setReading((value) => value + 1),
     });
   }, [paneID, editing, editable, startEditing]);
-  const json = useMemo(() => {
-    if (!data || resource.entry.extension !== 'json' || data.truncated) return null;
-    try {
-      return { value: JSON.parse(data.text) as unknown };
-    } catch (error) {
-      return { error: (error as Error).message };
-    }
-  }, [data, resource.entry.extension]);
+  const structured = useMemo(
+    () =>
+      data && !data.truncated && isStructured(resource.entry.extension)
+        ? inspectStructured(data.text, resource.entry.extension)
+        : null,
+    [data, resource.entry.extension],
+  );
   usePreviewCommands(
     context,
     useMemo(
@@ -274,11 +255,12 @@ export default function TextPreview(context: TextPreviewProps) {
           available:
             !!data &&
             !data.binary &&
-            ['md', 'markdown', 'mdx', 'json'].includes(resource.entry.extension),
+            (['md', 'markdown', 'mdx'].includes(resource.entry.extension) ||
+              isStructured(resource.entry.extension)),
           run: () => setRaw((value) => !value),
         },
       ],
-      [raw, data, resource.entry.extension],
+      [raw, data, resource.entry.extension, setRaw],
     ),
   );
   if (editing && paneID)
@@ -324,9 +306,9 @@ export default function TextPreview(context: TextPreviewProps) {
   const language = languageFor(resource.entry)?.prism;
   return (
     <div className="text-viewer">
-      {(markdown || ext === 'json' || editable) && (
+      {
         <PreviewToolbar context={context}>
-          {(markdown || ext === 'json') && (
+          {(markdown || isStructured(ext)) && (
             <>
               <button className={!raw ? 'selected' : ''} onClick={() => setRaw(false)}>
                 {markdown ? 'Document' : 'Tree'}
@@ -341,8 +323,29 @@ export default function TextPreview(context: TextPreviewProps) {
               Edit
             </button>
           )}
+          <span className="toolbar-spacer" />
+          <button
+            aria-label="Smaller preview text"
+            disabled={scale <= 0.6}
+            onClick={() => setScale((value) => Math.max(0.6, value - 0.1))}
+          >
+            −
+          </button>
+          <button title="Reset preview text size" onClick={() => setScale(1)}>
+            {Math.round(textSettings.fontSize)} px
+          </button>
+          <button
+            aria-label="Larger preview text"
+            disabled={scale >= 2.5}
+            onClick={() => setScale((value) => Math.min(2.5, value + 0.1))}
+          >
+            +
+          </button>
+          <button aria-pressed={wrap} onClick={() => setWrap((value) => !value)}>
+            Wrap
+          </button>
         </PreviewToolbar>
-      )}
+      }
       {data.truncated && (
         <p className="inline-warning">
           Showing the first 4 MB. Open in another app to read the entire file.
@@ -392,19 +395,26 @@ export default function TextPreview(context: TextPreviewProps) {
             {data.text}
           </ReactMarkdown>
         </article>
-      ) : json && !raw ? (
-        'error' in json ? (
-          <div className="json-scroll">
-            <p className="error">Invalid JSON: {json.error}</p>
-            <Code text={data.text} language={language} />
-          </div>
-        ) : (
-          <div className="json-scroll">
-            <JSONNode name="root" value={json.value} />
-          </div>
-        )
+      ) : structured && !raw && !structured.error ? (
+        <StructuredTree context={context} data={structured} />
       ) : (
-        <Code text={data.text} language={language} line={evidenceLine} />
+        <>
+          {structured?.error && !raw && (
+            <p className="inline-warning">
+              {structured.error.startsWith('Tree inspection is limited')
+                ? 'Tree unavailable'
+                : `Invalid ${ext.toUpperCase()}`}
+              : {structured.error}
+            </p>
+          )}
+          <Code
+            text={data.text}
+            language={language}
+            line={evidenceLine}
+            settings={textSettings}
+            wordWrap={wrap}
+          />
+        </>
       )}
     </div>
   );

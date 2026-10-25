@@ -1,0 +1,67 @@
+.browser-plane {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--surface);
+}
+.browser-navigation {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.browser-navigation input {
+  min-width: 100px;
+  flex: 1;
+}
+.browser-surface {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: white;
+  touch-action: none;
+}
+.browser-surface canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+.browser-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  resize: none;
+  pointer-events: none;
+}
+.browser-status {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 4px 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+}
+.browser-status > span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browser-status button {
+  font-size: inherit;
+  padding: 2px 6px;
+}
+.browser-error {
+  padding: 10px;
+  color: var(--danger);
+  border-bottom: 1px solid var(--line);
+}

@@ -7,6 +7,9 @@ import type { LocalServer, LocalServerLog } from '../src/domain/previews/web';
 import ServerPlane from '../src/renderer/local-servers/ServerPlane';
 import { addServerPane, removePanes } from '../src/renderer/state/panes';
 import { initialize, flushState } from '../src/renderer/state/store';
+vi.mock('../src/renderer/workspace/context', () => ({
+  useWorkspace: () => ({ openBrowser: vi.fn() }),
+}));
 
 let pane: Pane;
 let api: ReturnType<typeof nativeAPI>;
@@ -124,7 +127,7 @@ describe('local server plane', () => {
     expect(api.localServerStart).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps serving through component culling and closes only after its saved pane is removed', async () => {
+  it('keeps serving through component culling and saved-view closure', async () => {
     const mounted = render(createElement(ServerPlane, { pane, active: true }));
     await act(async () => {});
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start' })));
@@ -136,7 +139,7 @@ describe('local server plane', () => {
     expect(api.localServerStart).toHaveBeenCalledTimes(1);
     restored.unmount();
     act(() => removePanes([pane.id]));
-    expect(api.localServerAction).toHaveBeenCalledWith('native-server', 'close');
+    expect(api.localServerAction).not.toHaveBeenCalledWith('native-server', 'close');
   });
 
   it('polls visible following logs and suspends polling while its plane is culled', async () => {

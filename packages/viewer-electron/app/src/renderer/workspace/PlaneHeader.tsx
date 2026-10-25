@@ -24,6 +24,7 @@ import { baseName } from '../../domain/workspaces/planes';
 import { hostID } from './tree';
 import { buffersGeneration, heldBuffer, subscribeBuffers } from '../editing/buffers';
 import { GitBranch } from '../git/status';
+import { RelatedPlanes } from './RelatedPlanes';
 
 /** Chooses and edits a folder's lenses; shown once the folder has one, and on the Map. */
 function LensButton({
@@ -171,6 +172,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           onClick={() => run('parent-plane')}
         />
       )}
+      <RelatedPlanes id={id} />
       {pane?.type === 'folder' && (controls.sidebar || controls.back || controls.forward) && (
         <div className="plane-navigation">
           {controls.sidebar && (
@@ -231,29 +233,33 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           size={16}
         />
         <span className="plane-title">
-          {pane?.type === 'scratch'
-            ? (pane.title ?? 'Untitled')
-            : pane?.type === 'journal'
-              ? 'Journal'
-              : pane?.type === 'chat'
-                ? 'Chat'
-                : pane?.type === 'server'
-                  ? 'Server · ' + baseName(pane.path)
-                  : pane?.type === 'diff'
-                    ? 'Compare · ' + baseName(pane.path)
-                    : pane?.type === 'git-changes'
-                      ? 'Git changes · ' + baseName(pane.path)
-                      : pane?.type === 'collection'
-                        ? (collection?.name ?? 'Collection')
-                        : pane?.type === 'search'
-                          ? pane.name
-                          : pane?.type === 'terminal'
-                            ? (pane.gitAction
-                                ? 'Git ' + gitActionLabels[pane.gitAction]
-                                : 'Terminal') +
-                              ' · ' +
-                              baseName(pane.path)
-                            : (pane && baseName(pane.path)) || 'Plane'}
+          {pane?.type === 'media'
+            ? 'Edit media · ' + baseName(pane.path)
+            : pane?.type === 'browser'
+              ? pane.title || new URL(pane.url).hostname
+              : pane?.type === 'scratch'
+                ? (pane.title ?? 'Untitled')
+                : pane?.type === 'journal'
+                  ? 'Journal'
+                  : pane?.type === 'chat'
+                    ? 'Chat'
+                    : pane?.type === 'server'
+                      ? 'Server · ' + baseName(pane.path)
+                      : pane?.type === 'diff'
+                        ? 'Compare · ' + baseName(pane.path)
+                        : pane?.type === 'git-changes'
+                          ? 'Git changes · ' + baseName(pane.path)
+                          : pane?.type === 'collection'
+                            ? (collection?.name ?? 'Collection')
+                            : pane?.type === 'search'
+                              ? pane.name
+                              : pane?.type === 'terminal'
+                                ? (pane.gitAction
+                                    ? 'Git ' + gitActionLabels[pane.gitAction]
+                                    : 'Terminal') +
+                                  ' · ' +
+                                  baseName(pane.path)
+                                : (pane && baseName(pane.path)) || 'Plane'}
         </span>
         {unsaved && (
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />

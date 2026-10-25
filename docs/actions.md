@@ -64,6 +64,14 @@ Planning reads at most 2,000 selected/collected files, visits at most 100,000 di
 
 ## MCP
 
+`propose_transform` prepares a reviewed typed image/media/PDF export. It requires
+the client's proposal and content capabilities, source-folder and output-folder
+access, captured source versions and fresh in-app review. The processor receives
+only validated formats, numeric settings and source indices; agents cannot
+supply arguments, executables or filters, approve the proposal, overwrite an
+original or access authenticated browser guests. Workflows share the same
+reviewed file-operation path. See [media tools](media-tools.md).
+
 Settings → Agents requests the shared local connection, folder scopes and client
 configuration. Enabling access, adding a folder or expanding capabilities requires
 a native confirmation. Private `agent-access-v2.json` is the authority;

@@ -11,6 +11,7 @@ vi.mock('electron', () => ({
     },
   },
   ipcRenderer: ipc,
+  sharedTexture: undefined,
   webUtils: {},
 }));
 

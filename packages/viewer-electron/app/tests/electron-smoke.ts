@@ -6210,8 +6210,10 @@ async function verify(): Promise<void> {
   await closePreview();
   await appearance('light');
   await preview(path.join(fixture.files, 'Data', 'Materials.json'), 'materials');
-  await click('[aria-label="Expand materials"]');
-  await click('[aria-label="Expand 0"]');
+  assert.ok(
+    await evaluate<boolean>('!!document.querySelector(\'[aria-label="Collapse materials"]\')'),
+    'Data tree expansion is retained when Quick Preview reopens.',
+  );
   await until(text, (value) => value.includes('Brushed aluminum'), 'light JSON tree');
   await snapshot('json-light.png');
   await closePreview();

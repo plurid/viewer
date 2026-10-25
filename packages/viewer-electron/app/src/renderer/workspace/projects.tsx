@@ -10,7 +10,15 @@ import {
   type PortableDiffSource,
 } from '../../domain/workspaces/project';
 import { parentPath } from '../../domain/workspaces/planes';
-import type { Pane, ScratchPane, ChatPane, ServerPane, JournalPane } from '../../domain/contracts';
+import type {
+  Pane,
+  ScratchPane,
+  ChatPane,
+  ServerPane,
+  JournalPane,
+  BrowserPane,
+  MediaPane,
+} from '../../domain/contracts';
 import type { DiffSource } from '../../domain/comparison/diff';
 import {
   activeWorkspace,
@@ -154,6 +162,8 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
       pane.type === 'scratch' ||
       pane.type === 'chat' ||
       pane.type === 'server' ||
+      pane.type === 'browser' ||
+      pane.type === 'media' ||
       pane.type === 'journal'
     )
       continue;
@@ -176,10 +186,17 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
   const space = activeWorkspace();
   // Private documents and runtime server controls stay in this Mac's workspace.
   const shared = space.panes.filter(
-    (pane): pane is Exclude<Pane, ScratchPane | ChatPane | ServerPane | JournalPane> =>
+    (
+      pane,
+    ): pane is Exclude<
+      Pane,
+      ScratchPane | ChatPane | ServerPane | JournalPane | BrowserPane | MediaPane
+    > =>
       pane.type !== 'scratch' &&
       pane.type !== 'chat' &&
       pane.type !== 'server' &&
+      pane.type !== 'browser' &&
+      pane.type !== 'media' &&
       pane.type !== 'journal',
   );
   const source = (value: DiffSource): PortableDiffSource => {

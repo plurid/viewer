@@ -19,6 +19,8 @@ const textFormats = [
   'markdown',
   'mdx',
   'json',
+  'jsonc',
+  'json5',
   'jsonl',
   'csv',
   'tsv',

@@ -1,6 +1,6 @@
 # Viewer
 
-A macOS-first file manager in the Plurid family. Folders and read-only previews live in linked spatial planes; dock a plane for focused browsing. The active application is [`packages/viewer-electron/app`](packages/viewer-electron/app). The 2021 predecessor is summarized in [docs/old-app.md](docs/old-app.md).
+A macOS-first file manager in the Plurid family. Folders, previews, browser pages and media tools live in linked spatial planes; dock a plane for focused work. The active application is [`packages/viewer-electron/app`](packages/viewer-electron/app). The 2021 predecessor is summarized in [docs/old-app.md](docs/old-app.md).
 
 See [Git, comparisons, Chat and native windows](docs/spatial-tools.md) for the
 opt-in Git and shortcut controls, comparison planes, `viewer` shell command,
@@ -8,6 +8,11 @@ read-only conversations, workspace profiles and individual tile resizing.
 
 See [Preview formats](docs/preview-formats.md) for the current file-type inventory,
 partial support and proposed major/medium additions.
+
+[Media, images and Optimize](docs/media-tools.md) covers local trimming, segment
+exports, audio mixing, image conversion/cropping and PDF/image size reduction.
+[Browser planes and local servers](docs/web-previews.md) covers interactive web
+pages, persistent browser sessions and reopening a running server's controls.
 
 Run `pnpm playground` to populate the stable sibling `../viewer-playground` with
 preview samples, local Git worktrees and a small website for local-server testing.
@@ -138,7 +143,7 @@ Right-click or Command-K provides **Batch rename**, **Rename as book**, **Rename
 | EPUB        | Local publication metadata, chapter navigation, safe text reading and search                                                     |
 | DjVu        | Worker rendering through WebAssembly, pages and text-layer search                                                                |
 | Office      | DOCX text, headings and simple tables; XLSX worksheets with stored values and formulas, never evaluated                          |
-| Text/data   | Safe Markdown, code/text highlighted in 34 languages, expandable JSON and CSV/TSV tables; text edits where it is previewed       |
+| Text/data   | Safe Markdown, highlighted code/text, searchable JSON/JSONC/JSON5/YAML trees and virtual CSV/TSV tables; in-place text editing   |
 | Archives    | ZIP, TAR, TAR.GZ/TGZ indexing and entry previews without extraction                                                              |
 
 Formats outside this set receive file information and an external-app action. Presentations, other Office formats, additional ebooks, USD and other creative formats are proposed next in the [preview roadmap](docs/preview-roadmap.md); Office coverage is in [Office previews](docs/office-previews.md). DXF support and limits are documented in [drawing previews](docs/drawings.md); physical units, CAD conversion limits and surface measurements are documented in [model previews](docs/model-previews.md). A registered extension does not guarantee a file’s codec, compression or external asset requirements: failures stay visible and recoverable.

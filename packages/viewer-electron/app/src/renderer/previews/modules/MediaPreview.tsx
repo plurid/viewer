@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePreviewCommands } from '../controls';
+import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
@@ -128,6 +128,11 @@ export default function MediaPreview(context: PreviewContext) {
   );
   return (
     <div className="media-preview">
+      {context.editMedia && (
+        <PreviewToolbar context={context}>
+          <button onClick={context.editMedia}>Edit media…</button>
+        </PreviewToolbar>
+      )}
       {media}
       {!ready && (
         <div className="media-loading" role="status">

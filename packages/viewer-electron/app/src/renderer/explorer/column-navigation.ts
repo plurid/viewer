@@ -94,6 +94,7 @@ export function useColumnNavigation(
     reveal,
     choose,
     directory: () => session.columnDirectory,
+    activeDirectory: () => session.columnScope,
     scope,
     activate(directory: string) {
       session.columnScope = directory;

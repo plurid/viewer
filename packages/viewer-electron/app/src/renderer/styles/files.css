@@ -557,3 +557,25 @@
   color: var(--danger);
   font-size: 11.5px;
 }
+.file-column .column-title {
+  display: block;
+  width: 100%;
+  text-align: start;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-column.is-active-column > .column-title {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, var(--field));
+  box-shadow: inset 0 -2px var(--accent);
+}
+.file-column .file-row.is-path-ancestor:not(.is-selected),
+.file-column.is-ancestor-column .file-row.is-selected {
+  background: color-mix(in srgb, var(--selection) 42%, var(--surface));
+  color: var(--ink);
+  box-shadow: inset 3px 0 var(--muted);
+}

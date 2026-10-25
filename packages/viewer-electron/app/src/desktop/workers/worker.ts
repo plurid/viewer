@@ -1,4 +1,3 @@
-import { entry } from '../files/filesystem';
 import type { ApplicationSettings, IndexedQuery, IndexStatus } from '../../domain/services';
 import { FileIndex } from '../search/index-core';
 import { IndexWatcher } from '../search/index-watch';
@@ -6,7 +5,7 @@ import { extractDocument } from '../previews/formats';
 import { inspectFile } from '../files/inspection';
 import { readDrawingGeometry } from '../previews/drawing-geometry';
 import type { DrawingGeometryOptions } from '../../domain/previews/drawings/geometry';
-import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
+import { DocumentCache } from '../previews/document-cache';
 import { workerPort } from './worker-port';
 import { errorMessage } from '../../domain/errors';
 interface Request {
@@ -29,7 +28,7 @@ let index: FileIndex | undefined;
 let watcher: IndexWatcher | undefined;
 let ocr: string | undefined;
 const port = workerPort;
-const extracted = new Map<string, Awaited<ReturnType<typeof extractDocument>>>();
+const extracted = new DocumentCache();
 const controllers = new Map<string, AbortController>();
 let config: ApplicationSettings['search'];
 let configurationQueue: Promise<void> = Promise.resolve();
@@ -60,9 +59,7 @@ async function configureNow(value: ApplicationSettings['search'], rebuild = fals
   watcher = new IndexWatcher(
     value,
     async (file) => {
-      for (const key of extracted.keys())
-        if (key.startsWith(file + ':') || key.startsWith(file.replace(/\/$/, '') + '/'))
-          extracted.delete(key);
+      extracted.invalidate(file);
       await index?.update(file);
     },
     (root) => {
@@ -153,29 +150,14 @@ port.on('message', async (event) => {
       }
     } else if (request.method === 'extract') {
       const file = request.args[0] as string;
-      const info = await entry(file);
-      const key = file + ':' + info.identity + ':' + info.modified + ':' + info.size;
       const abort = new AbortController();
       controllers.set(request.id, abort);
       try {
-        const document =
-          extracted.get(key) ||
-          (await extractDocument(file, {
-            pages: request.args[1] as number | undefined,
-            signal: abort.signal,
-          }));
-        if (!sameSourceVersion(sourceVersion(info), sourceVersion(await entry(file))))
-          throw new Error('The document changed while being read. Open it again.');
-        extracted.set(key, document);
-        let size = [...extracted.values()].reduce(
-          (n, value) => n + JSON.stringify(value).length,
-          0,
+        const document = await extracted.read(
+          file,
+          request.args[1] as number | undefined,
+          abort.signal,
         );
-        for (const [key, value] of extracted) {
-          if (extracted.size <= 8 && size <= 32000000) break;
-          extracted.delete(key);
-          size -= JSON.stringify(value).length;
-        }
         value = request.args[2] ? document : { ...document, chapters: undefined };
       } finally {
         controllers.delete(request.id);
@@ -184,6 +166,7 @@ port.on('message', async (event) => {
       controllers.get(request.args[0] as string)?.abort();
       value = true;
     } else if (request.method === 'close') {
+      extracted.invalidate();
       for (const abort of controllers.values()) abort.abort();
       await configurationQueue;
       await watcher?.close();

@@ -15,6 +15,13 @@ import { formatBytes } from '../../domain/files/entries';
 import { outputProof } from '../operations/operation-journal';
 import { errorMessage } from '../../domain/errors';
 import { sharedClientID, storedClientID } from '../../domain/agents/clients';
+import {
+  validateTransform,
+  transformDescription,
+  transformExtension,
+} from '../../domain/operations/transforms';
+import type { TransformPlan } from '../../domain/operations/transforms';
+import { validName } from '../files/filesystem';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
@@ -76,6 +83,7 @@ export class AgentRequests {
     /** A confirmation the desktop process shows itself. A renderer approval alone
      * never runs a command or configuration change (AGENTS.md). */
     private confirm?: (proposal: AgentProposal) => Promise<boolean>,
+    private exportTransform?: (proposal: AgentProposal) => Promise<{ operationID: string }>,
   ) {
     this.store = new DocumentStore(path.join(directory, 'execution-approvals-v1.json'), (value) =>
       z
@@ -305,6 +313,37 @@ export class AgentRequests {
     });
     return { id: proposal.id, requiresUserReview: true };
   }
+  transform(
+    plan: TransformPlan,
+    destination: string,
+    name: string,
+    target: CapturedTarget,
+  ): { id: string; requiresUserReview: true } {
+    if (!this.exportTransform) throw new Error('Transform proposals are unavailable.');
+    plan = validateTransform(plan, target.selection.length);
+    absolute(destination);
+    validName(name);
+    if (!name.toLowerCase().endsWith('.' + transformExtension(plan.format)))
+      throw new Error('Choose an output filename matching the transform format.');
+    if (plan.kind !== 'media' && target.selection.length !== 1)
+      throw new Error('Propose one image export at a time, or use a reviewed conversion workflow.');
+    if (target.selection.some((file) => file.kind !== 'file'))
+      throw new Error('Choose regular source files.');
+    const proposal = this.add({
+      kind: 'transform',
+      title: 'Export ' + name,
+      target: structuredClone(target),
+      transform: { plan: structuredClone(plan), destination, name },
+      detail:
+        target.selection.map((file) => file.path).join('\n') +
+        '\n\n' +
+        transformDescription(plan) +
+        '\n\nSave in ' +
+        destination +
+        '\nCreates a new file. Existing files are kept.',
+    });
+    return { id: proposal.id, requiresUserReview: true };
+  }
   navigation(
     request: AgentNavigation,
     target: CapturedTarget,
@@ -421,6 +460,20 @@ export class AgentRequests {
         else if (proposal.kind === 'navigation') {
           if (!this.navigate) throw new Error('Workspace navigation is unavailable.');
           await this.navigate(proposal.navigation!, proposal.target!);
+        } else if (proposal.kind === 'transform') {
+          if (!this.exportTransform || !proposal.transform || !proposal.target)
+            throw new Error('This transformation is unavailable.');
+          validateTransform(proposal.transform.plan, proposal.target.selection.length);
+          for (const source of proposal.target.selection)
+            if (!sameSourceVersion(sourceVersion(source), sourceVersion(await entry(source.path))))
+              throw new Error('A source changed after this proposal. Request a new export.');
+          await this.authority?.check(proposal);
+          const result = await this.exportTransform(proposal);
+          proposal.operationID = result.operationID;
+          const current = this.authority?.operation?.(result.operationID);
+          if (current) this.operation(current);
+          if (this.proposals.get(id)?.status === 'cancelled')
+            this.authority?.cancelOperation?.(result.operationID);
         } else {
           const resolved = agentCommandID(
             proposal.commandID!,

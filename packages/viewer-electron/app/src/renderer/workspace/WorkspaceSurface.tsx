@@ -111,6 +111,8 @@ const LazyDiffPlane = lazy(() => import('../diff/DiffPlane'));
 const LazyGitChanges = lazy(() => import('../git/GitChanges'));
 const LazyChatPlane = lazy(() => import('../chat/ChatPlane'));
 const LazyServerPlane = lazy(() => import('../local-servers/ServerPlane'));
+const LazyBrowserPlane = lazy(() => import('../browser/BrowserPlane'));
+const LazyMediaPlane = lazy(() => import('../media/MediaPlane'));
 const LazyJournalPlane = lazy(() => import('../journal/JournalPlane'));
 
 function JournalContent() {
@@ -128,6 +130,34 @@ function JournalContent() {
   );
 }
 
+function BrowserContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'browser') return <Empty title="Browser unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening browser…" />}>
+        <LazyBrowserPlane pane={pane} active={plane.shown && plane.culled === 'visible'} />
+      </Suspense>
+    </PreviewFrame>
+  );
+}
+function MediaContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'media') return <Empty title="Media draft unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening media tools…" />}>
+        <LazyMediaPlane pane={pane} active={plane.shown && plane.culled === 'visible'} />
+      </Suspense>
+    </PreviewFrame>
+  );
+}
 function ServerContent() {
   const plane = usePluridPlane();
   const pane = useViewer((state) =>
@@ -237,6 +267,8 @@ const marked = (Content: React.ComponentType): React.ComponentType =>
   };
 const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/servers/:id', component: marked(ServerContent) },
+  { route: '/browsers/:id', component: marked(BrowserContent) },
+  { route: '/media/:id', component: marked(MediaContent) },
   { route: '/journals/:id', component: marked(JournalContent) },
   { route: '/chats/:id', component: marked(ChatContent) },
   { route: '/diffs/:id', component: marked(ComparisonContent) },

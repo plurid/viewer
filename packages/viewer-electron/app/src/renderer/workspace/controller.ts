@@ -45,6 +45,8 @@ import { openWorkspacePath } from './open-path';
 import { startTour } from './tour';
 import { announce } from '../state/core';
 import { addContentPane, addServerPane } from '../state/panes';
+import { fileSelector } from '../explorer/anchors';
+import { browserAddress } from '../../domain/previews/browser';
 import { connectLocalServers, localServerSessions } from '../local-servers/runtime';
 import { rememberTiling, restoreTiling } from './tiling-history';
 import { gitTerminalProfileID } from '../../domain/comparison/git-actions';
@@ -105,6 +107,7 @@ export function useWorkspaceController({
             data: {
               route: paneRoute(pane.type, pane.id),
               parentPlaneID: parent.planeID,
+              link: '.plane-controls',
               framing: 'none',
             },
           });
@@ -119,6 +122,80 @@ export function useWorkspaceController({
   );
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
+      async openMedia(paths, parentID, fresh = false) {
+        const space = activeWorkspace(),
+          existing =
+            !fresh &&
+            paths.length === 1 &&
+            space.panes.find(
+              (pane) =>
+                pane.type === 'media' &&
+                pane.path === paths[0] &&
+                (!parentID || controller.rootID(pane.id) === controller.rootID(parentID)),
+            );
+        if (existing) {
+          controller.focusPane(existing.id, { activate: true });
+          return;
+        }
+        const value = await window.viewer.media({ kind: 'create', paths });
+        if (!value || !('plan' in value)) throw new Error('The media draft could not be created.');
+        if (
+          activeWorkspace().id !== space.id ||
+          (parentID && !activeWorkspace().panes.some((pane) => pane.id === parentID))
+        )
+          throw new Error('The originating workspace changed. Open media tools again.');
+        const pane = {
+          id: crypto.randomUUID(),
+          type: 'media' as const,
+          path: value.sources[0]!.path,
+          draftID: value.id,
+        };
+        registerContent(pane, parentID);
+        controller.focusPane(pane.id, { activate: true });
+      },
+      openBrowser(address, parentID, serverRuntimeID) {
+        const url = browserAddress(address);
+        const space = activeWorkspace();
+        const existing = space.panes.find(
+          (pane) =>
+            pane.type === 'browser' &&
+            (serverRuntimeID ? pane.serverRuntimeID === serverRuntimeID : pane.url === url),
+        );
+        if (existing) {
+          controller.focusPane(existing.id, { activate: true });
+          return;
+        }
+        const parent = space.panes.find((pane) => pane.id === parentID);
+        const pane = {
+          id: crypto.randomUUID(),
+          type: 'browser' as const,
+          path: parent?.path ?? getState().bootstrap.home,
+          url,
+          ...(serverRuntimeID ? { serverRuntimeID, serverPath: '/' } : {}),
+        };
+        registerContent(pane, parentID);
+        controller.focusPane(pane.id, { activate: true });
+      },
+      openServer(runtimeID) {
+        const sessions = localServerSessions();
+        const descriptor = sessions.descriptor(runtimeID);
+        if (!descriptor) throw new Error('This server is no longer available.');
+        const existing = activeWorkspace().panes.find(
+          (pane) => pane.type === 'server' && (pane.runtimeID ?? pane.id) === runtimeID,
+        );
+        if (existing) {
+          controller.focusPane(existing.id, { activate: true });
+          return;
+        }
+        const pane = { ...descriptor, id: crypto.randomUUID(), runtimeID };
+        registerContent(pane, getState().activePane);
+        sessions.retain(
+          getState().saved.workspaces.flatMap((space) =>
+            space.panes.filter((pane) => pane.type === 'server'),
+          ),
+        );
+        controller.focusPane(pane.id, { activate: true });
+      },
       openJournal(filter) {
         const existing = activeWorkspace().panes.find(
           (pane) =>
@@ -555,7 +632,13 @@ export function useWorkspaceController({
               'This folder was replaced. Close its old server plane and start again.',
             );
           const pane =
-            existing?.type === 'server' ? existing : addServerPane(folder.path, folder.identity);
+            existing?.type === 'server'
+              ? existing
+              : addServerPane(
+                  folder.path,
+                  folder.identity,
+                  localServerSessions().runtimeFor(folder.path, folder.identity),
+                );
           connectLocalServers();
           if (!existing) {
             const owners = pendingOwners.current.get(space.id) ?? new Map<string, string>();
@@ -571,6 +654,7 @@ export function useWorkspaceController({
                 data: {
                   route: paneRoute('server', pane.id),
                   parentPlaneID: parent.planeID,
+                  link: captured.selection.length ? fileSelector(folder.path) : '.plane-controls',
                   framing: 'none',
                 },
               });

@@ -6,6 +6,7 @@ import { entry, absolute, validName } from '../files/filesystem';
 import type { Operations } from './operations';
 import type { Checkpoints } from './checkpoints';
 import { sourceVersion, sameSourceVersion } from '../../domain/files/inspection';
+import { validateTransform, transformExtension } from '../../domain/operations/transforms';
 import {
   operationPlanRowSchema,
   operationPlanRequestSchema,
@@ -69,6 +70,17 @@ export class OperationPlans {
         if (request.kind === 'prepare') {
           const rows: OperationPlan['rows'] = [];
           for (const intent of request.intents) {
+            if (intent.kind === 'convert') {
+              const transform = validateTransform(intent.transform, intent.sources.length);
+              if (!intent.destination || (transform.kind === 'media' && !intent.name))
+                throw new Error('Choose an export folder and filename.');
+              if (
+                intent.name &&
+                !intent.name.toLowerCase().endsWith('.' + transformExtension(transform.format))
+              )
+                throw new Error('The output filename must match its export format.');
+            } else if (intent.transform)
+              throw new Error('Transformation plans belong to convert operations.');
             if (intent.destination) {
               absolute(intent.destination);
               await this.access([intent.destination]);
@@ -84,16 +96,19 @@ export class OperationPlans {
               throw new Error('New-folder plans have no source file.');
             if (intent.kind !== 'mkdir' && !intent.sources.length)
               throw new Error('Select a source.');
+            const combined = intent.transform?.kind === 'media';
             for (const file of intent.kind === 'mkdir'
               ? [undefined]
-              : [...new Set(intent.sources)]) {
+              : combined
+                ? [intent.sources[0]]
+                : [...new Set(intent.sources)]) {
               if (rows.length >= 10000) throw new Error('A plan may contain at most 10,000 rows.');
               if (file) await this.access([file]);
               const item = file ? await entry(file) : undefined;
               const expected = intent.expectedSources?.find((value) => value.path === file);
               if (expected && item && !sameSourceVersion(expected.version, sourceVersion(item)))
                 throw new Error('Comparison source changed. Compare it again.');
-              const expectedSources = intent.expectedSources?.filter(
+              let expectedSources = intent.expectedSources?.filter(
                 (value) => value.path === file || value.path.startsWith(file! + path.sep),
               );
               for (const proof of expectedSources ?? []) {
@@ -101,10 +116,25 @@ export class OperationPlans {
                 if (!sameSourceVersion(proof.version, sourceVersion(await entry(proof.path))))
                   throw new Error('Comparison source changed. Compare it again.');
               }
+              if (combined) {
+                expectedSources = [];
+                for (const source of intent.sources) {
+                  await this.access([source]);
+                  const info = await entry(source);
+                  if (info.kind !== 'file') throw new Error('Choose regular media source files.');
+                  const version = sourceVersion(info),
+                    proof = intent.expectedSources?.find((value) => value.path === source);
+                  if (proof && !sameSourceVersion(proof.version, version))
+                    throw new Error('A source changed. Prepare a new transformation plan.');
+                  expectedSources.push({ path: source, version });
+                }
+              }
               rows.push({
                 id: randomUUID(),
                 kind: intent.kind,
                 source: file,
+                ...(combined ? { sources: intent.sources } : {}),
+                transform: intent.transform,
                 version: item ? sourceVersion(item) : undefined,
                 expectedSources,
                 destination: intent.destination,
@@ -246,7 +276,8 @@ export class OperationPlans {
             for (const row of selected) {
               row.jobID = this.operations.start({
                 kind: row.kind,
-                sources: row.source ? [row.source] : [],
+                sources: row.sources ?? (row.source ? [row.source] : []),
+                transform: row.transform,
                 destination: row.destination,
                 name: row.name,
                 expectedSources:

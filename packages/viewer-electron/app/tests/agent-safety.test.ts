@@ -113,7 +113,7 @@ function action(executor: CustomAction['executor']): CustomAction {
     executor,
   };
 }
-async function fixture(roots = ['/Granted']) {
+async function fixture(roots = ['/Granted'], content = false) {
   const settings = new SettingsService(
     '/Memory/Viewer',
     '/Home',
@@ -145,6 +145,9 @@ async function fixture(roots = ['/Granted']) {
     write = vi.fn();
   const cancelOperation = vi.fn();
   const confirm = vi.fn(async (_proposal: AgentProposal) => true);
+  const exportTransform = vi.fn(async (_proposal: AgentProposal) => ({
+    operationID: 'typed-export',
+  }));
   const requests: AgentRequests = new AgentRequests(
     '/Memory/Viewer',
     settings,
@@ -161,6 +164,7 @@ async function fixture(roots = ['/Granted']) {
       operation: (id) => memory.operations.get(id),
     },
     confirm,
+    exportTransform,
   );
   const broker: AgentBroker = new AgentBroker(
     '/Memory/Viewer',
@@ -183,7 +187,13 @@ async function fixture(roots = ['/Granted']) {
     client: {
       name: 'Safety fixture',
       roots,
-      capabilities: ['metadata', 'propose', 'execute', 'terminal-write'],
+      capabilities: [
+        'metadata',
+        'propose',
+        'execute',
+        'terminal-write',
+        ...(content ? ['content' as const] : []),
+      ],
       budgets: { maxReadBytes: 1024 * 1024, maxTasks: 4 },
     },
   })) as { client: { id: string; revision: number }; token: string };
@@ -202,6 +212,7 @@ async function fixture(roots = ['/Granted']) {
     write,
     cancelOperation,
     confirm,
+    exportTransform,
     requests,
     broker,
     created,
@@ -218,6 +229,47 @@ beforeEach(() => {
 });
 
 describe('agent removal safety', () => {
+  it('admits only granted typed exports with content permission, fresh review and unchanged sources', async () => {
+    const denied = await fixture();
+    const input = {
+      sources: [denied.target.selection[0].path],
+      destination: '/Granted',
+      name: 'preview.webp',
+      plan: { kind: 'image', format: 'webp' },
+    };
+    await expect(denied.call('propose_transform', input)).rejects.toThrow();
+    expect(denied.exportTransform).not.toHaveBeenCalled();
+    const allowed = await fixture(['/Granted'], true);
+    await expect(
+      allowed.call('propose_transform', { ...input, destination: '/Outside' }),
+    ).rejects.toThrow('outside');
+    await expect(
+      allowed.call('propose_transform', {
+        ...input,
+        plan: { ...input.plan, argv: ['-filter_complex', 'movie=https://outside'] },
+      }),
+    ).rejects.toThrow();
+    const proposal = await allowed.call<{ id: string }>('propose_transform', input);
+    expect(allowed.exportTransform).not.toHaveBeenCalled();
+    expect(allowed.requests.get(proposal.id)).toMatchObject({
+      kind: 'transform',
+      status: 'review',
+    });
+    await allowed.requests.review(proposal.id, true);
+    expect(allowed.exportTransform).toHaveBeenCalledOnce();
+    await expect(allowed.requests.review(proposal.id, true)).rejects.toThrow(
+      'no longer needs review',
+    );
+    const changed = await allowed.call<{ id: string }>('propose_transform', input);
+    const file = memory.files.get(input.sources[0])!;
+    memory.files.set(file.path, { ...file, modified: file.modified + 1 });
+    await expect(allowed.requests.review(changed.id, true)).rejects.toThrow('source changed');
+    expect(allowed.exportTransform).toHaveBeenCalledOnce();
+    await expect(
+      allowed.call('browser', { kind: 'state', id: 'private-browser' }),
+    ).rejects.toThrow();
+    expect(memory.remove).not.toHaveBeenCalled();
+  });
   it('runs nothing on a renderer approval until the desktop confirmation is accepted', async () => {
     const f = await fixture();
     f.confirm.mockResolvedValueOnce(false);

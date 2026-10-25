@@ -115,7 +115,7 @@ export class Workflows {
           for (const record of run.steps)
             if (record.status === 'running') {
               if (record.taskID) record.status = 'waiting-review';
-              else if (['copy', 'recipe'].includes(record.kind)) {
+              else if (['copy', 'convert', 'recipe'].includes(record.kind)) {
                 record.status = 'failed';
                 run.status = 'failed';
                 record.error =
@@ -249,7 +249,7 @@ export class Workflows {
       for (const record of run.steps) {
         if (record.taskID && ['running', 'waiting-review'].includes(record.status)) {
           if (record.kind === 'recipe') this.dependencies.actions.cancel(record.taskID);
-          else if (record.kind === 'copy')
+          else if (record.kind === 'copy' || record.kind === 'convert')
             await this.dependencies.plans.request({ kind: 'cancel', id: record.taskID });
         }
         if (['pending', 'running', 'waiting-review'].includes(record.status))
@@ -371,7 +371,9 @@ export class Workflows {
         // Use actual receipts, including keep-both names, rather than reconstructing destinations.
         return (
           receipt?.completed
-            .filter((item) => item.source === row.source && item.destination)
+            .filter(
+              (item) => (row.kind === 'convert' || item.source === row.source) && item.destination,
+            )
             .map((item) => item.destination!) ?? []
         );
       });
@@ -459,7 +461,7 @@ export class Workflows {
         await this.validate(record.sources);
         record.outputs = structuredClone(record.sources);
         record.status = 'completed';
-      } else if (step.kind === 'copy') {
+      } else if (step.kind === 'copy' || step.kind === 'convert') {
         const sources = await this.references(run, step.sources),
           destination = await this.references(run, [step.destination]);
         const [folder] = destination;
@@ -471,7 +473,8 @@ export class Workflows {
           title: run.definition.name + ' · ' + step.id,
           intents: [
             {
-              kind: 'copy',
+              kind: step.kind,
+              ...(step.kind === 'convert' ? { transform: step.transform, name: step.name } : {}),
               sources,
               destination: destination[0],
               expectedSources: record.sources.filter((source) => sources.includes(source.path)),
@@ -519,7 +522,7 @@ export class Workflows {
         for (const record of run.steps)
           if (record.status === 'running') {
             if (record.taskID) record.status = 'waiting-review';
-            else if (['copy', 'recipe'].includes(record.kind)) {
+            else if (['copy', 'convert', 'recipe'].includes(record.kind)) {
               record.status = 'failed';
               run.status = 'failed';
               record.error =

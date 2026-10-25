@@ -14,7 +14,7 @@ import { effectiveWindowLook } from '../state/effective-ui';
 import type { FileEntry, Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files/entries';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
-import { activeWorkspace, getState, report, useViewer } from '../state/store';
+import { activeWorkspace, getState, quickPreview, report, useViewer } from '../state/store';
 import { useCommands } from '../commands/context';
 import { usePreviewControlsSlot } from './controls';
 import type { PreviewContext, PreviewModule } from './contracts';
@@ -29,6 +29,7 @@ import {
 } from '../../domain/files/inspection';
 import { parentPath } from '../../domain/workspaces/planes';
 import { editingPlane } from '../editing/planes';
+import { useResource } from './useResource';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
 function componentFor(module: PreviewModule) {
@@ -70,11 +71,16 @@ export const PreviewHost = memo(function PreviewHost({
   editable?: boolean;
   renderFooter?(resource: Resource, module: PreviewModule): ReactNode;
 }) {
-  const [resource, setResource] = useState<Resource | null>(supplied ?? null);
-  const [error, setError] = useState('');
-  const [errorCode, setErrorCode] = useState('');
   const [retry, setRetry] = useState(0);
   const [activated, setActivated] = useState(active);
+  const {
+    resource,
+    signal,
+    error,
+    code: errorCode,
+    cancel,
+  } = useResource(path, supplied, activated, retry);
+  const [subscriber] = useState(() => `preview:${paneID || crypto.randomUUID()}`);
   const registry = useCommands();
   const header = usePreviewControlsSlot(paneID);
   const workspace = useContext(WorkspaceContext);
@@ -100,9 +106,8 @@ export const PreviewHost = memo(function PreviewHost({
     setCurrent(undefined);
   }, [entry]);
   useEffect(() => {
-    if (!paneID || !path || supplied) return;
+    if (!path || supplied || !activated) return;
     const folder = parentPath(path);
-    const subscriber = `preview:${paneID}`;
     void window.viewer.watch(folder, subscriber).catch(() => {});
     let checking = false,
       again = false;
@@ -114,7 +119,7 @@ export const PreviewHost = memo(function PreviewHost({
       // a link's own entry is not its file's
       if (latest.kind === 'file') setCurrent(latest);
       // a text plane reads it again in place, and an edited one asks before losing edits
-      const plane = editingPlane(paneID);
+      const plane = paneID ? editingPlane(paneID) : undefined;
       if (plane?.changedOnDisk) plane.changedOnDisk();
       else setRetry((value) => value + 1);
     };
@@ -143,7 +148,7 @@ export const PreviewHost = memo(function PreviewHost({
       off();
       void window.viewer.unwatch(subscriber).catch(() => {});
     };
-  }, [paneID, path, supplied]);
+  }, [paneID, path, supplied, activated, subscriber]);
   const viewState = useMemo(
     () => previewState(paneID || path || supplied?.id || 'temporary', entry),
     [paneID, path, supplied?.id, entry],
@@ -154,9 +159,6 @@ export const PreviewHost = memo(function PreviewHost({
     [editable, paneID, supplied],
   );
   const look = useViewer(effectiveWindowLook);
-  // One controller per resource effect run: a new `supplied` object re-runs that effect.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const abort = useMemo(() => new AbortController(), [path, supplied, retry]);
   useEffect(
     () =>
       window.viewer.onEvent((event) => {
@@ -169,14 +171,13 @@ export const PreviewHost = memo(function PreviewHost({
         if (!within && !event.resources?.includes(resource?.id || supplied?.id || '')) return;
         // Dispose decoded bytes, media and GPU state as soon as access stops. The
         // completion event can retry the owned path after an unsuccessful eject.
-        abort.abort();
-        setResource(null);
-        if (supplied) {
-          setError('This preview is no longer available.');
-          setErrorCode('');
-        } else setRetry((value) => value + 1);
+        if (supplied) cancel('This preview is no longer available.');
+        else {
+          cancel();
+          setRetry((value) => value + 1);
+        }
       }),
-    [path, supplied, resource?.id, abort],
+    [path, supplied, resource?.id, cancel],
   );
   const commands = useMemo<PreviewContext['commands']>(
     () =>
@@ -208,51 +209,24 @@ export const PreviewHost = memo(function PreviewHost({
                       active,
                   })),
                 valid: (invocation) =>
-                  !abort.signal.aborted &&
+                  !signal.aborted &&
                   invocation.resourceID === resource.id &&
                   activeWorkspace().panes.some(
                     (pane) => pane.id === paneID && pane.path === resource.entry.path,
                   ),
               }),
           },
-    [paneID, resource, header, registry, abort, active],
+    [paneID, resource, header, registry, signal, active],
   );
-  useEffect(() => {
-    let owned: Resource | undefined;
-    if (supplied) {
-      setResource(supplied);
-      return () => {
-        abort.abort();
-      };
-    }
-    setResource(null);
-    setError('');
-    setErrorCode('');
-    if (path)
-      void window.viewer
-        .resource(path)
-        .then((value) => {
-          if (abort.signal.aborted) {
-            void window.viewer.release(value.id);
-            return;
-          }
-          owned = value;
-          setResource(value);
-        })
-        .catch((error) => {
-          if (!abort.signal.aborted) {
-            setError(String(error.message || error));
-            setErrorCode(error.code || '');
-          }
-        });
-    return () => {
-      abort.abort();
-      if (owned) void window.viewer.release(owned.id);
-    };
-  }, [path, supplied, abort]);
   if (error)
     return (
       <Empty icon="warning" title="File unavailable" detail={error}>
+        {!supplied && <button onClick={() => setRetry((value) => value + 1)}>Try again</button>}
+        {path && (
+          <button onClick={() => void window.viewer.openExternal(path).catch(report)}>
+            Open in default app
+          </button>
+        )}
         {path && needsFolderAccess(errorCode) && (
           <FolderAccessButton
             folder={path.replace(/[/\\][^/\\]+$/, '') || '/'}
@@ -271,6 +245,23 @@ export const PreviewHost = memo(function PreviewHost({
       />
     );
   const module = choosePreview(resource.entry);
+  const invokeFile = (id: string) => () => {
+    const owner = paneID || getState().quickPreview?.paneID || getState().activePane;
+    const invocation = {
+      paneID: owner,
+      context: {
+        scope: 'preview' as const,
+        workspaceID: activeWorkspace().id,
+        paneID: owner,
+        path: resource.entry.path,
+        selection: [resource.entry],
+        jobs: getState().jobs,
+        clipboard: getState().clipboard,
+      },
+    };
+    quickPreview(null);
+    void registry.invoke(id, invocation).catch(report);
+  };
   const Viewer = componentFor(module);
   return (
     <div className="preview-host" data-preview-module={module.id}>
@@ -278,6 +269,7 @@ export const PreviewHost = memo(function PreviewHost({
         <ErrorBoundary key={resource.id}>
           <Suspense fallback={<Loading label={`Loading ${module.label.toLowerCase()}…`} />}>
             <Viewer
+              key={resource.id}
               resource={resource}
               evidence={
                 evidence && sameSourceVersion(sourceVersion(resource.entry), evidence.version)
@@ -286,7 +278,7 @@ export const PreviewHost = memo(function PreviewHost({
               }
               active={active}
               interactive={interactive}
-              signal={abort.signal}
+              signal={signal}
               services={services}
               look={look}
               commands={commands}
@@ -294,6 +286,21 @@ export const PreviewHost = memo(function PreviewHost({
               limits={limits}
               openRelated={openRelated}
               editing={editing}
+              optimize={!supplied ? invokeFile('optimize-files') : undefined}
+              editImage={!supplied ? invokeFile('image-tools') : undefined}
+              editMedia={
+                !supplied && workspace
+                  ? () =>
+                      void workspace
+                        .openMedia(
+                          [resource.entry.path],
+                          paneID || getState().quickPreview?.paneID || getState().activePane,
+                        )
+                        .then(() => quickPreview(null))
+                        .catch(report)
+                  : undefined
+              }
+              retry={!supplied ? () => setRetry((value) => value + 1) : undefined}
             />
           </Suspense>
         </ErrorBoundary>

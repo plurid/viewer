@@ -29,7 +29,17 @@ export const shellTokens = [
   'softShadowColor',
   'strongShadowColor',
 ] as const;
-export const syntaxTokens = ['comment', 'string', 'keyword', 'number', 'function'] as const;
+export const syntaxTokens = [
+  'comment',
+  'string',
+  'keyword',
+  'number',
+  'function',
+  'selector',
+  'property',
+  'attribute',
+  'operator',
+] as const;
 export const terminalTokens = [
   'background',
   'foreground',
@@ -111,6 +121,10 @@ export const builtInThemes: readonly [Theme, Theme] = [
       keyword: '#c9b4d6',
       number: '#dfb891',
       function: '#82b3cf',
+      selector: '#b7c79e',
+      property: '#82b3cf',
+      attribute: '#dfb891',
+      operator: '#c9b4d6',
     },
     terminal: {
       background: '#25282e',
@@ -163,6 +177,10 @@ export const builtInThemes: readonly [Theme, Theme] = [
       keyword: '#755183',
       number: '#805d32',
       function: '#337396',
+      selector: '#386731',
+      property: '#337396',
+      attribute: '#805d32',
+      operator: '#755183',
     },
     terminal: {
       background: '#f5f6f8',

@@ -72,3 +72,10 @@ Agent tests exercise worksheet selection/paging/content grants. The owned direct
 package check is `pnpm exec tsx tests/native-office.ts`; its generated fixtures,
 captures and result live under `out/office-acceptance`. It does not qualify native
 folder pickers, physical assistive technologies or Mac App Store distribution.
+
+Preview resource acquisition and Office reads have recoverable deadlines and
+retry controls. A bounded shared extraction cache keys by source identity,
+version and reader options, deduplicates concurrent reads and cancels abandoned
+subscribers independently. Long media responses have a separate native queue,
+so they cannot occupy every foreground reader. Worksheets virtualize both rows
+and columns; selecting/filtering retains original cell addresses.

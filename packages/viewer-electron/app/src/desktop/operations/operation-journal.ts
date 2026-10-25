@@ -4,6 +4,7 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, readlink, rename } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { transformPlanSchema } from '../../domain/operations/transforms';
 import { DocumentStore } from '../persistence/document-store';
 import { discardOwnTemporaryFile, removePrivateData } from './removal';
 import { sourceVersionSchema } from '../../domain/files/inspection';
@@ -54,11 +55,23 @@ const job = z
     destination: file.optional(),
     current: file.optional(),
     bytesDone: count,
+    progress: z.number().finite().min(0).max(1).optional(),
+    detail: z.string().max(500).optional(),
     bytesTotal: count,
     itemsDone: count,
     itemsTotal: count,
     completed: z
-      .array(z.object({ source: z.string().max(32768), destination: file.optional() }).strict())
+      .array(
+        z
+          .object({
+            source: z.string().max(32768),
+            destination: file.optional(),
+            inputBytes: count.optional(),
+            outputBytes: count.optional(),
+            optimized: z.boolean().optional(),
+          })
+          .strict(),
+      )
       .max(10000),
     errors: z
       .array(z.object({ path: z.string().max(32768), message: z.string().max(4000) }).strict())
@@ -98,6 +111,7 @@ const record = z
         destination: file.optional(),
         name: z.string().max(255).optional(),
         conversion: z.enum(['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf']).optional(),
+        transform: transformPlanSchema.optional(),
         expectedSources: z
           .array(z.object({ path: file, version: sourceVersionSchema }).strict())
           .max(10000)

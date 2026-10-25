@@ -1,6 +1,7 @@
 import type { CapturedTarget, ExecutionTask } from '../automation/actions';
 import type { SettingsPatch } from '../services';
 import type { Pane, ViewMode, FileEntry, OperationJob } from '../contracts';
+import type { TransformPlan } from '../operations/transforms';
 /** Live navigation discovery excludes history, camera/layout and unrelated preferences. */
 export interface AgentPlane {
   id: string;
@@ -34,7 +35,8 @@ export interface CommandDescriptor {
 export interface AgentProposal {
   id: string;
   clientID?: string;
-  kind: 'command' | 'configuration' | 'terminal-write' | 'navigation';
+  kind: 'command' | 'configuration' | 'terminal-write' | 'navigation' | 'transform';
+  transform?: { plan: TransformPlan; destination: string; name: string };
   title: string;
   target?: CapturedTarget;
   commandID?: string;

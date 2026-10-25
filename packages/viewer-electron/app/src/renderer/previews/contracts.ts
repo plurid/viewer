@@ -29,6 +29,10 @@ export interface PreviewContext {
   editing?: { paneID: string };
   /** Opens a local file the preview refers to (a relative link) beside its plane. */
   openRelated?(path: string): void;
+  retry?(): void;
+  editMedia?(): void;
+  editImage?(): void;
+  optimize?(): void;
   services: {
     htmlPreview(resourceID: string): Promise<HtmlPreview>;
     htmlPreviewClose(id: string): Promise<void>;

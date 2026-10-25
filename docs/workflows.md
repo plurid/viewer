@@ -6,8 +6,8 @@ does not execute it. Choose Run workflow to create a private run receipt.
 
 ## Definitions
 
-Version 1 supports metadata/content inspection, folder comparison, reviewed copy
-and existing recipes. Steps have unique IDs and explicit `needs` dependencies.
+Version 1 supports metadata/content inspection, folder comparison, reviewed copy,
+typed conversion/optimization and existing recipes. Steps have unique IDs and explicit `needs` dependencies.
 A dependency must finish before its outputs can be consumed. Cycles, missing
 references and unknown executors are rejected.
 
@@ -27,7 +27,7 @@ Select native folders to grant access separately. JSONC comments survive explici
 saves, and stale revisions cannot overwrite newer external edits. Selection
 workflows reject an empty selection before creating a receipt.
 
-Copy and recipe steps create the existing editable reviews. Review and Apply
+Copy, conversion and recipe steps create the existing editable reviews. Review and Apply
 there, then Resume the workflow. Resume uses actual operation receipts, including
 resolved keep-both names. Changed sources or definitions reject further work.
 Cancelled/failed runs are not replayed. Interrupted read steps pause; an ambiguous
@@ -36,6 +36,26 @@ mutation step requires examining task history before starting a new run.
 History retains at most 100 runs, with at most 20 pending. Artifacts are bounded
 to 4 MB each, a run to 8 MiB and the history to 64 MiB. Removing a completed run
 receipt does not remove its files or the ordinary operation/Undo receipts.
+
+A conversion step uses a bounded `transform` object, not a command line. For
+example, this step prepares WebP copies of the selected raster images in a
+declared `exports` folder binding:
+
+```jsonc
+{
+  "id": "webp",
+  "kind": "convert",
+  "sources": [{ "kind": "selection" }],
+  "destination": { "kind": "input", "name": "exports" },
+  "transform": { "kind": "image", "format": "webp", "quality": 85 },
+}
+```
+
+PDF optimization uses `{ "kind": "pdf", "format": "pdf", "preset": "lossless" }`.
+Media plans join their bounded source list into one named output; image/PDF plans
+produce one output per source. Conversion always waits for review and Apply,
+checks source versions, keeps originals and uses guarded Keep both publication.
+See [media tools](media-tools.md) for supported formats, metadata and processor limits.
 
 ## Watch rules
 
@@ -51,12 +71,12 @@ wait for review and Apply. Only one run can remain pending for each rule. Approv
 persist across app restart, so approved rules can watch while the app runs; opening
 a project or workflow never enables one.
 
-Current watched steps are inspection, reviewed copy and nonrecursive local
+Current watched steps are inspection, reviewed copy/conversion and nonrecursive local
 batch rename. Comparison and model recipes run manually. Reading content/OCR may
 download cloud files. Rename proposals use a frozen approved recipe at planner
 admission, so changing it to a provider recipe cannot cause an automatic request.
 
-Rules exclude Viewer’s private data, their definition and copy-output subtrees.
+Rules exclude Viewer’s private data, their definition and copy/conversion-output subtrees.
 They skip symlinks, reject changed canonical roots and scope changes, and pause on
 failed/cancelled runs, lost grants or unavailable sources. Completed rename output
 versions prevent self-triggering; later user edits remain eligible. An interrupted

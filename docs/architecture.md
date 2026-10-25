@@ -337,3 +337,17 @@ Terminal process IDs originate only from the owned worker. `terminal-groups.ts` 
 The same bounded catalog publication carries a compact live workspace/plane snapshot, without persisted arrangement or navigation history. `desktop/agents/agent-broker.ts` filters discovery through native access and canonical agent roots and constructs typed navigation proposals. `AgentRequests` requires review; the desktop rechecks authority before its sender-owned dispatch/acknowledgement. `workspace/agent-navigation.ts` checks origin/root/active-column ownership and destination snapshots before calling the ordinary store/controller/session transitions. Selecting files validates the whole set before changing selection. Empty-workspace targets have no parent and can create only independent roots; preview targets keep their actual root and parent directory. No second filesystem manager, permission picker or direct command execution is added to the MCP path.
 
 See [CONTEXT.md](../CONTEXT.md) for vocabulary and [configuration.md](configuration.md) / [terminals.md](terminals.md) for the public interfaces.
+
+## Spatial workbench resources and transforms
+
+[ADR 0007](adr/0007-spatial-workbench-resources.md) separates plane views from
+window-owned server/browser runtimes and private media drafts.
+`desktop/browser` owns isolated Chromium guests and texture/bitmap transport;
+`renderer/browser` owns projected input, IME and canvas lifetime. No authenticated
+page capability is published to agents. `domain/media` owns revisioned drafts;
+`desktop/transforms` owns bounded fixed processors and held source descriptors;
+`renderer/media` owns draft sessions and editor/optimization surfaces.
+`domain/operations/transforms.ts` is the common typed vocabulary. The existing
+`Operations` service remains the mutation boundary, including no-growth skips
+and size receipts. Packaged processor preparation is pinned and source-bearing;
+ordinary exports never install software or invoke a configurable command.

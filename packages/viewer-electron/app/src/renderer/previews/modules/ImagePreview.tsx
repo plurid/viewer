@@ -3,6 +3,8 @@ import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { transformableImage } from '../../../domain/operations/image-conversions';
+import { optimizable } from '../../../domain/operations/optimization';
 
 export default function ImagePreview(context: PreviewContext) {
   const { resource, active, interactive } = context;
@@ -127,6 +129,12 @@ export default function ImagePreview(context: PreviewContext) {
         </p>
       )}
       <PreviewToolbar context={context}>
+        {context.optimize && optimizable(resource.entry) && (
+          <button onClick={context.optimize}>Optimize…</button>
+        )}
+        {context.editImage && transformableImage(resource.entry) && (
+          <button onClick={context.editImage}>Image tools…</button>
+        )}
         <IconButton
           icon="frame"
           label="Fit image"

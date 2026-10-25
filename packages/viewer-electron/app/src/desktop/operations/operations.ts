@@ -37,6 +37,8 @@ import {
   type ImageConverter,
 } from './image-convert';
 import { holds, sameItem, unchanged, type Replaced } from '../files/item-identity';
+import { validateTransform, transformExtension } from '../../domain/operations/transforms';
+import type { TransformExecutor } from '../transforms/transforms';
 import {
   aliasName,
   copyTree,
@@ -134,6 +136,7 @@ export class Operations {
     private notice: (message: string) => void = () => {},
     private protection = new ProtectedPaths(),
     private images: ImageConverter = unavailableConverter,
+    private transforms?: TransformExecutor,
   ) {
     if (dataPath) this.journal = new OperationLog(dataPath);
   }
@@ -345,21 +348,33 @@ export class Operations {
     )
       throw new Error('Enter a ZIP archive name.');
     if (request.kind === 'convert') {
-      if (!request.conversion) throw new Error('Choose an image quick action.');
-      if (
-        roots.some((file) => !convertibleExtensions.has(path.extname(file).slice(1).toLowerCase()))
-      )
-        throw new Error('Quick actions work on JPEG, PNG, TIFF, HEIC, GIF, BMP and WebP images.');
-      if (
-        request.conversion === 'pdf' &&
-        (!request.destination || !request.name?.toLowerCase().endsWith('.pdf'))
-      )
-        throw new Error('Choose a folder and a PDF name.');
+      if (request.transform) {
+        if (!this.transforms)
+          throw new Error('Transform processors are unavailable in this build.');
+        if (request.conversion) throw new Error('Choose one conversion plan.');
+        request.transform = validateTransform(request.transform, roots.length);
+        if (request.transform.kind === 'media' && (!request.destination || !request.name))
+          throw new Error('Choose a destination folder and output name.');
+      } else {
+        if (!request.conversion) throw new Error('Choose an image quick action.');
+        if (
+          roots.some(
+            (file) => !convertibleExtensions.has(path.extname(file).slice(1).toLowerCase()),
+          )
+        )
+          throw new Error('Quick actions work on JPEG, PNG, TIFF, HEIC, GIF, BMP and WebP images.');
+        if (
+          request.conversion === 'pdf' &&
+          (!request.destination || !request.name?.toLowerCase().endsWith('.pdf'))
+        )
+          throw new Error('Choose a folder and a PDF name.');
+      }
     }
     // A PDF is one output from every source; other conversions create one file per image.
     const single =
       ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
-      (request.kind === 'convert' && request.conversion === 'pdf');
+      (request.kind === 'convert' &&
+        (request.conversion === 'pdf' || request.transform?.kind === 'media'));
     const task = this.add({ ...request, sources: roots }, single ? 1 : roots.length);
     task.reviewedFile = reviewedFile;
     this.queue.push(task);
@@ -890,6 +905,7 @@ export class Operations {
     guard?: () => Promise<void>,
   ): Promise<void> {
     // Without Replace, the exclusive publication below refuses an existing destination.
+    await guard?.();
     if (replaced) {
       await this.protection.check(destination, 'replaced');
       await this.trashItem(task, destination, replaced);
@@ -966,6 +982,8 @@ export class Operations {
     job.revision++;
     job.errorCount = job.errors.length;
     this.progressed({
+      progress: job.progress,
+      detail: job.detail,
       id: job.id,
       revision: job.revision,
       current: job.current,
@@ -1014,7 +1032,8 @@ export class Operations {
    * edited while its collision prompt was open was copied or moved (2026-10-20). */
   private async checkPins(task: Task, source: string): Promise<void> {
     for (const expected of task.request.expectedSources ?? []) {
-      if (expected.path !== source && !expected.path.startsWith(source + path.sep)) continue;
+      if (source && expected.path !== source && !expected.path.startsWith(source + path.sep))
+        continue;
       const current = fileCoordination.path(expected.path);
       await this.access([current]);
       if (!sameSourceVersion(expected.version, sourceVersion(await entry(current))))
@@ -1027,6 +1046,7 @@ export class Operations {
       throw error;
     });
     if (!existing) return { path: destination };
+    if (task.request.transform) return { path: await keepBothName(destination) };
     // Creating something new never replaces what is already there.
     let replaceable = !['mkdir', 'mkfile'].includes(task.request.kind);
     if (source) {
@@ -1192,7 +1212,8 @@ export class Operations {
         this.emit(task);
         const single =
           ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
-          (request.kind === 'convert' && request.conversion === 'pdf');
+          (request.kind === 'convert' &&
+            (request.conversion === 'pdf' || request.transform?.kind === 'media'));
         const items = single ? [''] : request.sources;
         for (const source of items) {
           const priorErrors = job.errors.length;
@@ -1209,6 +1230,8 @@ export class Operations {
             if (request.kind === 'trash') await this.checkpoint(task);
             this.progress(task);
             let destination: string | undefined;
+            let statistics:
+              { inputBytes: number; outputBytes: number; optimized: boolean } | undefined;
             // A transfer moves only within one volume. Its destination folder is resolved, as
             // the transfer itself resolves it, so a link to a folder on another volume copies.
             const move =
@@ -1225,7 +1248,19 @@ export class Operations {
               destination = single
                 ? path.join(request.destination!, validName(request.name!))
                 : request.kind === 'convert'
-                  ? conversionOutput(source, request.conversion!)
+                  ? request.transform
+                    ? path.join(
+                        request.destination || path.dirname(source),
+                        request.name && request.sources.length === 1
+                          ? validName(request.name)
+                          : path.basename(source, path.extname(source)) +
+                              (request.transform.kind === 'pdf' ||
+                              (request.transform.kind === 'image' && request.transform.optimize)
+                                ? ' optimized.'
+                                : ' converted.') +
+                              transformExtension(request.transform.format),
+                      )
+                    : conversionOutput(source, request.conversion!)
                   : request.kind === 'extract'
                     ? path.join(
                         request.destination!,
@@ -1241,7 +1276,8 @@ export class Operations {
                         : request.kind === 'alias'
                           ? await aliasName(source)
                           : path.join(request.destination!, request.name ?? path.basename(source));
-              if (source === destination) throw new Error('Source and destination are the same.');
+              if (source === destination && !request.transform)
+                throw new Error('Source and destination are the same.');
               await this.access([destination]);
               task.intent = { source, destination };
               if (source && destination.startsWith(source + path.sep))
@@ -1398,14 +1434,53 @@ export class Operations {
                     const inputs = source ? [source] : request.sources;
                     await this.access([...inputs, staging]);
                     job.current = source || destination;
-                    await this.images.convert(
-                      request.conversion!,
-                      inputs,
-                      staging,
-                      task.abort.signal,
-                    );
+                    if (request.transform) {
+                      const result = await this.transforms!.execute(
+                        request.transform,
+                        inputs,
+                        staging,
+                        task.abort.signal,
+                        (fraction, detail) => {
+                          job.progress = Math.max(
+                            job.progress || 0,
+                            (job.itemsDone + Math.max(0, Math.min(1, fraction))) /
+                              Math.max(1, job.itemsTotal),
+                          );
+                          job.detail = detail;
+                          this.progress(task);
+                        },
+                      );
+                      if (result) {
+                        await this.checkPins(task, source);
+                        statistics = {
+                          ...result,
+                          optimized: result.outputBytes < result.inputBytes,
+                        };
+                        if (!statistics.optimized) {
+                          job.completed.push({ source, ...statistics });
+                          job.itemsDone++;
+                          task.intent = undefined;
+                          job.detail = 'Already compact · original kept';
+                          await this.checkpoint(task);
+                          this.progress(task);
+                          continue;
+                        }
+                      }
+                    } else
+                      await this.images.convert(
+                        request.conversion!,
+                        inputs,
+                        staging,
+                        task.abort.signal,
+                      );
                     this.check(task);
-                    await this.publishReplacing(task, staging, destination, replaced);
+                    await this.publishReplacing(
+                      task,
+                      staging,
+                      destination,
+                      replaced,
+                      request.transform ? () => this.checkPins(task, source) : undefined,
+                    );
                   } finally {
                     await this.disposeStage(task, stage);
                   }
@@ -1452,7 +1527,7 @@ export class Operations {
                 }
               }
             }
-            job.completed.push({ source, destination });
+            job.completed.push({ source, destination, ...statistics });
             if (destination && move) this.filesChanged([{ source, destination }]);
             job.itemsDone++;
             task.intent = undefined;

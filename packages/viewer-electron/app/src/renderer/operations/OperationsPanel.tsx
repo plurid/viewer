@@ -109,9 +109,13 @@ export function OperationsPanel() {
             {job.current || job.destination || job.sources[0]}
           </p>
           {['queued', 'running'].includes(job.status) && (
-            <progress max={Math.max(job.itemsTotal, 1)} value={job.itemsDone} />
+            <progress
+              max={job.progress === undefined ? Math.max(job.itemsTotal, 1) : 1}
+              value={job.progress ?? job.itemsDone}
+            />
           )}
           <div className="operation-count muted">
+            {job.detail && <span>{job.detail} · </span>}
             {job.itemsDone} / {job.itemsTotal} items{' '}
             {job.bytesDone > 0 && `· ${formatBytes(job.bytesDone)} transferred`}
             {job.errorCount > 0 &&

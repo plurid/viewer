@@ -54,6 +54,12 @@ const config: ForgeConfig = {
     extraResource: [
       'assets/licenses',
       ...(process.platform === 'darwin'
+        ? [
+            `assets/viewer-processors-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,
+            `assets/viewer-optimizers-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,
+          ]
+        : []),
+      ...(process.platform === 'darwin'
         ? ['assets/viewer-ocr', 'assets/viewer-applications', 'assets/viewer-macos-files.node']
         : []),
     ],
@@ -144,6 +150,11 @@ const config: ForgeConfig = {
         },
         {
           entry: 'src/desktop/workers/worker.ts',
+          config: 'vite.services.config.ts',
+          target: 'main',
+        },
+        {
+          entry: 'src/desktop/transforms/image-worker.ts',
           config: 'vite.services.config.ts',
           target: 'main',
         },

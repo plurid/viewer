@@ -49,12 +49,12 @@
     "mas:package": "tsx tools/mas.ts distribution"
   },
   "devDependencies": {
-    "@electron-internal/extract-zip": "1.0.5",
     "@electron-forge/cli": "8.0.1",
     "@electron-forge/maker-zip": "8.0.1",
     "@electron-forge/plugin-fuses": "8.0.1",
     "@electron-forge/plugin-vite": "8.0.1",
     "@electron-forge/shared-types": "8.0.1",
+    "@electron-internal/extract-zip": "1.0.5",
     "@electron/fuses": "^2.0.0",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
@@ -109,6 +109,7 @@
     "djvu-rs": "0.40.0",
     "dxf-parser": "1.1.2",
     "fflate": "^0.8.2",
+    "json5": "2.2.3",
     "jsonc-parser": "^3.3.1",
     "mime-types": "^3.0.1",
     "node-pty": "^1.1.0",
@@ -121,6 +122,7 @@
     "remark-gfm": "^4.0.1",
     "styled-components": "^6.4.2",
     "three": "0.186.1",
+    "yaml": "2.8.1",
     "zod": "^4.0.0"
   },
   "type": "module"

@@ -44,8 +44,9 @@ describe('private bounded Journal store', () => {
           answer = resolve;
         }),
     );
-    while (store.status().state !== 'clearing')
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    // `clearing` precedes asynchronous handle closure. Join the actual review
+    // callback rather than racing it on a busy concurrent native/test run.
+    await vi.waitFor(() => expect(answer).toBeTypeOf('function'), { timeout: 5000 });
     record(store);
     await expect(store.clear(async () => false)).rejects.toThrow('busy');
     answer(false);

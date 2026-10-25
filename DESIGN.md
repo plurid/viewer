@@ -33,9 +33,21 @@ colors:
   syntax-string: '#b7c79e'
   syntax-keyword: '#c9b4d6'
   syntax-number: '#dfb891'
+  syntax-comment: '#9fabb9'
+  syntax-function: '#82b3cf'
+  syntax-selector: '#b7c79e'
+  syntax-property: '#82b3cf'
+  syntax-attribute: '#dfb891'
+  syntax-operator: '#c9b4d6'
   light-syntax-string: '#386731'
   light-syntax-keyword: '#755183'
   light-syntax-number: '#805d32'
+  light-syntax-comment: '#637084'
+  light-syntax-function: '#337396'
+  light-syntax-selector: '#386731'
+  light-syntax-property: '#337396'
+  light-syntax-attribute: '#805d32'
+  light-syntax-operator: '#755183'
   terminal-space: '#25282e'
   terminal-ink: '#eeeeef'
   terminal-cursor: '#9abfd1'
@@ -83,6 +95,11 @@ typography:
     fontSize: '12px'
     fontWeight: 400
     lineHeight: '22px'
+  reading-preview:
+    fontFamily: 'Menlo, ui-monospace, SFMono-Regular, monospace'
+    fontSize: '13px'
+    fontWeight: 400
+    lineHeight: '20px'
   terminal:
     fontFamily: 'Menlo, Monaco, monospace'
     fontSize: '13px'
@@ -267,6 +284,7 @@ The defining visual behavior is a titled file plane beside its folder, with a vi
 - Filename-first finding and proposal review with explicit scope, evidence, and Apply/Undo.
 - Declarative custom commands and real terminal planes within the same quiet desktop grammar.
 - File-content previews within the same visual system.
+- Column routes, structured inspection, interactive browser pages and local media tools keep file content dominant, with ordinary controls and explicit result states.
 - Project recovery, plane-note and file-inspection controls reuse compact buttons, neutral surfaces and explicit choices; recovery notices keep workspace chrome reachable.
 - Named client settings, checkpoints, comparison and collections extend the existing Settings, review and file-list patterns.
 - Workflow definitions, runs and receipts use native disclosures and the existing review, field and selected-metadata treatments.
@@ -289,6 +307,8 @@ The later additions follow [named agent clients](packages/viewer-electron/app/sr
 
 The model, linked-navigation and Trash extension is code-led within this existing world, without a replacement visual system. Sources are [Shading controls](packages/viewer-electron/app/src/renderer/previews/model/ShadingControls.tsx), [model appearance](packages/viewer-electron/app/src/renderer/previews/model/appearance.ts), [ModelPreview](packages/viewer-electron/app/src/renderer/previews/modules/ModelPreview.tsx), [linked markers](packages/viewer-electron/app/src/renderer/workspace/LinkedPlaneButton.tsx), [plane navigation](packages/viewer-electron/app/src/renderer/workspace/controller.ts), the [folder-style Trash browser](packages/viewer-electron/app/src/renderer/ui/trash/Trash.tsx), the [desktop Trash service](packages/viewer-electron/app/src/desktop/operations/trash.ts) and [native macOS confirmation](packages/viewer-electron/app/tools/trash-ui.h). Earlier evidence comprises 14 [model/navigation captures](.impeccable/review/models-links-trash-v3/model-navigation-acceptance-MigAQR), four [fixture-based populated Trash renders](.impeccable/review/models-links-trash-v3/trash-ui-acceptance) and three [native read-only captures](.impeccable/review/models-links-trash-v3/trash-readonly-acceptance-qEwPUo). All 21 supplied captures were validated; that finish review returned ship with no material fixes. Current folder-style Trash evidence is recorded under Applications and Trash below. The earlier `trash-readonly-acceptance-dWr3Hd` evidence is superseded and preserved.
 
+The spatial workbench extension follows [column state](packages/viewer-electron/app/src/renderer/explorer/BrowserColumn.tsx), [reading previews](packages/viewer-electron/app/src/renderer/previews/modules/TextPreview.tsx), [structured trees](packages/viewer-electron/app/src/renderer/previews/StructuredTree.tsx), [virtual tables](packages/viewer-electron/app/src/renderer/previews/DataTable.tsx), [browser planes](packages/viewer-electron/app/src/renderer/browser/BrowserPlane.tsx), [media drafts](packages/viewer-electron/app/src/renderer/media/MediaPlane.tsx), [image tools](packages/viewer-electron/app/src/renderer/media/ImageToolsDialog.tsx), [Optimize](packages/viewer-electron/app/src/renderer/media/OptimizeDialog.tsx), [Related planes](packages/viewer-electron/app/src/renderer/workspace/RelatedPlanes.tsx) and [Local servers](packages/viewer-electron/app/src/renderer/local-servers/ServersDialog.tsx). The [review captures](.impeccable/review/spatial-workbench-20261025-review) cover columns, wide tables, browser pages under perspective, Optimize and server logs. [Corrected media/image captures](.impeccable/review/spatial-workbench-20261025-fix1) cover dark, light and narrow desktop layouts with actual source pixels visible. The finish handoff reports the three media/image findings resolved and a ship disposition. These are extensions of the existing application, with no new visual world or shipping raster imagery. Phone layouts, physical assistive technology, Intel, other operating systems and Store distribution are not qualified by this evidence. [Media tool limits](docs/media-tools.md) remain the capability reference.
+
 ## Colors
 
 The palette uses graphite neutrals in dark mode and pale neutral space with white content surfaces in light mode. Frontmatter names without a `light-` prefix describe the default dark look; prefixed names are the corresponding light values. Switching the look replaces the source CSS variables and sends the same space, surface, ink, and accent values to the engine.
@@ -307,6 +327,8 @@ The palette uses graphite neutrals in dark mode and pale neutral space with whit
 - **Dividers:** `line` defines shell boundaries and controls. Dense file/archive rows mix this source color with transparency for a quieter divider.
 
 File-family colors distinguish image files and code/data files. Syntax colors distinguish strings, keywords, and numeric values inside code/JSON previews; light mode has its own darker syntax values. `danger` identifies errors and destructive actions. These are content and state colors, not additional identity accents.
+
+CSS source also uses the theme's comment, function/tag, selector, property, attribute and operator/at-rule roles. The built-in looks deliberately share some values across these semantic roles; keep the roles distinct so imported themes can change them independently. Syntax color belongs to the source content, including fenced Markdown code, and follows the current look.
 
 Terminal contents use the recorded `terminal-space`, `terminal-ink` and `terminal-cursor` roles, with their light counterparts. Their surrounding header and search controls retain the shell's existing surface, text and accent roles.
 
@@ -330,7 +352,7 @@ The interface has a compact functional hierarchy. Weight distinguishes plane tit
 - **Settings hierarchy:** The `settings-title` role names the selected category or Search results; `settings-section` separates groups and editors in that window. Both use the existing system family and semibold weight.
 - **Body:** The `body` role serves controls and application text; `body-compact` serves file names and supporting preview text.
 - **Label:** The `label` role serves file metadata, column headers, status bars, and preview metadata.
-- **Code:** The `code` role serves source listings. JSON retains its observed taller line spacing (24px); CSV uses its content-specific monospace row treatment (11px/32px).
+- **Reading previews:** The `reading-preview` role records the read-only source default, independently of the editing size and line-height preferences. It inherits the configured editor font family; local Smaller/Larger/Reset and Wrap controls affect the reading view. The `code` role retains the stylesheet fallback. Structured trees retain their content-specific monospace treatment (12px/24px) within virtual rows (26px); CSV and worksheets retain their table treatment (11px/32px).
 - **Terminal:** The `terminal` role serves shell output in the xterm screen; `command-output` serves process output and agent proposal details inside their bounded surfaces.
 
 Use tabular numerals for file sizes and operation counts. File and plane names truncate to one line; error text and document content can wrap. Markdown and EPUB headings belong to the displayed document and retain their content hierarchy. EPUB reading text starts at 17px with a user-adjustable size; it does not establish a new application display face.
@@ -350,6 +372,10 @@ Automatic planes follow the measured workspace: the width is the workspace's les
 File lists use virtualized rows (36px comfortable, 30px compact), with a flexible name column and configurable metadata columns. Folder and search headers share their grid, insets and horizontal viewport with the rows. Name aligns with filename text after its icon; dates and kind align left, size right. Browsing Settings and header actions show or hide Modified, Created, Kind, Extension and Size; Name stays visible. Narrow planes scroll horizontally instead of hiding configured fields. Column dividers resize through projected pointer coordinates or keyboard steps; double-click restores the default width. Pointer movement updates grid variables without publishing preferences until release. Filenames retain their full-name tooltip; optional wrapping measures natural row heights. Grid and gallery use contained thumbnails and truncated file names; columns retain separate scrollable folder lists. Small control gaps and the repeated frontmatter spacing steps keep chrome compact. Dialog content uses the larger panel/dialog steps.
 
 Folder view, sort, metadata layout and browsing-column width are shared by path across roots and workspaces. Selection, history, filters and scroll remain local to each explorer. Browsing-column edges resize in projected coordinates, adjusting the element directly during drag and saving on release. The separator supports Left/Right steps (10px, or 50px with Shift), Home/End limits (160–1600px), double-click fitting to filenames and Option to apply the width to the visible trail.
+
+The current browsing-column title uses primary text, a restrained accent/field mix and a bottom inset line; ancestor route rows use a quieter selection/surface mix and a muted left inset. The right inspector retains its own scroll boundary. Structured-tree actions wrap inside that narrow inspector rather than widening the folder trail. CSV and worksheets virtualize columns as well as rows, while horizontal scrolling keeps all source columns reachable.
+
+Media editing places the contained player, compact playback row, source filmstrip/waveform, In/Out controls and flat sequence list beside a fixed export-options column (256px). At a media-editor container width of 720px or less, options move below the main area, the dividing border moves to the top and the body scrolls vertically. Image tools use a bounded wide dialog, a contained source stage and an options column (300px); at a viewport width of 720px or less they become a vertical stage/options layout with a wrapping footer. Optimize uses a bounded wide dialog, a scrolling results table with sticky headings and a wrapping action footer. These are desktop window/plane adaptations, not a phone navigation system.
 
 Model Shading uses a stage-contained panel with a small inset (12px from the top/right), the recorded width and internal padding, and bounds of `calc(100% - 24px)` in both axes. Its own scroll area and stable scrollbar gutter keep controls reachable in compact Quick Preview and linked planes. Trash uses the recorded larger dialog bounds, the inherited viewport maximum width of `calc(100vw - 60px)`, a flexible scrolling body and a nonshrinking header, selection/search toolbar and footer. Back and breadcrumbs extend the toolbar only inside trashed folders. Its inventory keeps sortable headings separate from 40px virtual rows; columns scroll horizontally when their 520px minimum (650px with dates) exceeds the available space. A single selected item's origin detail remains above the footer, with wrapping, selectable path text and a separate Open original folder in plane action. The footer's three-column grid centers Empty Trash… between the count and the right-aligned Refresh/Done group.
 
@@ -637,6 +663,38 @@ Images, supported audio/video, PDF, text/code/Markdown/JSON/CSV, models and arch
 
 Model stages use neutral ambient fill and key/fill lights attached to the model camera, preserving readable reverse faces during orbiting. The hemisphere follows the stage's up axis, and CAD material colors enter the renderer as linear RGB. Dimensions and surface measurements retain the source geometry and units.
 
+### Column Routes and Structured Inspection
+
+Columns separate location from operation selection. The current title exposes `aria-current="location"`; current and ancestor columns have explicit accessible labels. Ancestor route rows keep their quieter inset treatment even when their earlier file selection remains present. The current column's selected file retains the ordinary selection fill. The trail must remain understandable without implying that every route ancestor is an operation target.
+
+**The Route State Rule.** Keep the current directory and ancestor route visually distinct from the files selected for an operation.
+
+JSON, JSONC, JSON5 and YAML offer Tree and Source within the existing preview controls. The tree uses bounded virtual rows, compact disclosure buttons, syntax roles and ordinary selection fill. Expand all, Collapse all, key/value search, Copy path and Copy value wrap within the inspector. Arrow, Home and End navigation retain a roving focus target; expansion, query and scroll persist with the preview. A parsing or tree-limit explanation stays plain and keeps readable Source available. Source addresses and copy actions refer to the underlying data rather than virtual row positions.
+
+CSV and worksheet tables share row/column virtualization, sticky headings, source-address semantics and horizontal scrolling. Numbered worksheets retain the sticky row-number strip and wrapping cell/formula detail. Do not infer full spreadsheet editing or formula recalculation from this preview treatment.
+
+### Interactive Browser Planes
+
+Browser pages use the existing plane header above a compact navigation row: Back, Forward, Reload/Stop, a flexible address field, Go and external-open control. A white page stage fills the remaining body; page content keeps its own colors. Pointer positions are projected into the live page under spatial scale and perspective, and page keyboard, selection, clipboard and wheel input remain page interactions. A quiet footer shows title/loading state and zoom reset. Errors use the danger role with an ordinary Retry action. This live canvas-backed page is not a screenshot preview; its accessible canvas label and keyboard-input bridge do not establish a native browser accessibility tree or screen-reader qualification.
+
+Related planes reuses the existing compact choice control in the contextual header. Its choices name Parent, Child or Server and focus an existing relative without rearranging authored planes. Local servers reuses the wide dialog and flat divided rows with a wrapping root path, running URL or Stopped text, Show plane and Stop. The dialog explains that closing a server plane leaves its listener running. Server logs keep compact filters, a scrolling table with sticky neutral headings and explicit textual state; no status-card dashboard is introduced.
+
+### Media, Image Tools and Optimize
+
+Media is a focused clip workbench within the incumbent plane. Source choice and Add media/Add audio share a compact row with Saving draft… or Draft saved. Video uses ordinary Play/Pause and seek controls beneath the contained source stage. Four source-frame buttons and the audio waveform inspect the original; In/Out fields use monospace tabular time, with Set in/Set out and range controls. The flat sequence list puts filename and time range beside explicit reorder/remove actions. Selection uses the shared selection fill, with no decorative cards or timeline chrome.
+
+Export options keep format, quality, cut accuracy, audio treatment, filename and destination explicit. Exact cuts are the default; Fast names its keyframe tradeoff when applicable. Additional audio exposes offset and gains. Sequence, separate segments, audio-only/muted-video choices and current-frame PNG remain bounded clip operations, without implying a multitrack editor. Source paths/versions, decisions and export options belong to the durable private draft; the preview and playback remain separate transient state.
+
+Loading playback, delayed playback, unavailable playback and inspection errors use truthful text and relevant Retry actions. Draft-save failure offers Retry save. Export feedback follows the real queued/running/collision/failed/cancelled job, shows progress and cancellation while active, retains reported errors and exposes actual completed output paths. A successful export names the output in the inline notice; a subsequent edit clears that acknowledgement so it cannot describe the changed draft as exported.
+
+Image tools keep the actual decoded source visible through rotation, resize and appearance changes. The stage contains the source bitmap and a thin accent crop region; Crop is explicit, Reset crop and Rotate are ordinary actions, and numeric crop bounds accompany pointer selection. Format, quality, dimensions, fit behavior, metadata policy, JPEG transparency background, filename and destination live in the adjacent field column. Reading, delayed/failed preview, Retry image preview, job status, cancellation and Open result reuse the existing task-feedback language. The stage demonstrates source and crop geometry rather than a promise to simulate every output encoding setting.
+
+Optimize uses Balanced, Smaller and Lossless choices above one flat mixed PDF/image results table. File identity, Original bytes, Optimized bytes and textual Result stay aligned; savings use the existing accent. Per-file failures and Already compact remain distinct from a smaller published result and its Open action. The footer retains processed count, total savings, cancellation and the ordinary Optimize action for another attempt. Originals remain intact and results are published only when smaller; these are file-operation outcomes rather than estimated savings.
+
+**The Source Work Rule.** Keep source inspection, private draft decisions and published output visibly distinct; task content supplies the imagery and every export creates a separately reported result.
+
+**The Honest Result Rule.** Drive saving, loading, progress, failure, cancellation and output feedback from the actual state; retain a useful recovery action and clear a success acknowledgement when its underlying draft changes.
+
 ### Model Shading
 
 Shading is an ordinary selected/expanded toolbar button in Quick Preview and the linked preview header. It opens the bounded stage panel with Surface and Lighting selects, a Brightness range and percentage output, Show edges and Shadows checkboxes, and Reset shading. The fields use existing system type, neutral surfaces, border/caret roles and compact gaps (12px between controls, 6px inside labels). Close shading controls and Escape close only this panel and return focus to Shading. Pointer and wheel events within the panel stay with its controls rather than the model camera.
@@ -711,6 +769,10 @@ Dialog Close icon focus (`.dialog .icon-button:focus-visible`) uses the selectio
 - Do extend reusable recipe, provider and agent editors with the existing system font and surface tokens.
 - Do state layout-only consequences for sidebar/workspace actions and the Trash consequence before replacing a file.
 - Do retain file-content conventions such as syntax coloring, contained imagery, Markdown quotation borders and EPUB chapter hierarchy.
+- Do distinguish column routes from operation selection, and keep structured-tree controls reachable within a narrow inspector.
+- Do retain independent compact reading metrics, semantic syntax roles and source addresses in virtual data previews.
+- Do keep browser and file-content input with their task under spatial perspective, with ordinary recovery controls for failures.
+- Do keep source imagery visible in media/image stages and tie export, Optimize savings and output links to real job results.
 - Do wrap project names, inspection paths and evidence within their available width while keeping row actions and dialog footers reachable.
 - Do keep project recovery in normal flow, offer Close project for missing definitions and retain open workspace content when detaching the association.
 - Do use the shared body font and field roles for plane notes, and keep the content-reading choice explicit in file inspection.
@@ -734,6 +796,8 @@ Dialog Close icon focus (`.dialog .icon-button:focus-visible`) uses the selectio
 - Don't make file content or model gestures drag the plane instead of performing their own task.
 - Don't reuse dark syntax colors unchanged in light previews or use ordinary muted text on dark selected files.
 - Don't turn synthetic verification fixtures into shipping product imagery.
+- Don't present a changed media draft as already exported, hide per-file Optimize failures behind a success total, or claim every PDF/image can shrink.
+- Don't infer phone, native browser accessibility, Intel, other operating-system or Store qualification from the reviewed desktop captures.
 - Don't let Shading reimport or alter source models, materials, textures, units or dimensions.
 - Don't expose Trash erasure or approval through renderer commands, shortcuts, MCP, scheduled routes or editable grants, or let a coding agent select or approve Empty Trash.
 - Don't replace or merge restored destinations, recreate missing parents, cross disks or infer unavailable macOS original locations.

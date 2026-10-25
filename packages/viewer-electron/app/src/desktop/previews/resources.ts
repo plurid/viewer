@@ -29,14 +29,42 @@ export class Resources {
   /** Background work for a preview stops when the preview releases its resource. */
   private aborts = new Map<string, AbortController>();
   private work = new PreviewWork();
+  private pending = new Map<string, AbortController>();
   readonly archives = new Archives();
   constructor(
     private access: (files: readonly string[]) => Promise<void> = async () => {},
     /** Renders formats the renderer cannot decode; see `quick-look-render.ts`. */
     private render?: (file: string) => Promise<{ data: Buffer; extension: string }>,
   ) {}
-  grant(file: string): Promise<Resource> {
-    return this.work.track([file], (scope) => this.grantFile(file, scope));
+  grant(file: string, requestID?: string): Promise<Resource> {
+    if (requestID && this.pending.has(requestID))
+      return Promise.reject(new Error('This preview request is already running.'));
+    const abort = new AbortController();
+    if (requestID) this.pending.set(requestID, abort);
+    let owned: Resource | undefined;
+    return this.work
+      .track(
+        [file],
+        async (scope) => {
+          owned = await this.grantFile(file, scope);
+          return owned;
+        },
+        abort.signal,
+      )
+      .then((resource) => {
+        if (abort.signal.aborted) {
+          this.release(resource.id);
+          abort.signal.throwIfAborted();
+        }
+        return resource;
+      })
+      .catch((error) => {
+        if (owned) this.release(owned.id);
+        throw error;
+      })
+      .finally(() => {
+        if (requestID) this.pending.delete(requestID);
+      });
   }
   /** Immutable repository bytes are readable resources, never editable filesystem files. */
   async grantBytes(authority: string, name: string, data: Buffer): Promise<Resource> {
@@ -74,18 +102,23 @@ export class Resources {
     return resource;
   }
   private async grantFile(file: string, scope: PreviewScope): Promise<Resource> {
+    scope.check();
     await this.access([file]);
     const actual = await realpath(file);
     scope.add(actual);
     await this.access([actual]);
     const info = await stat(actual);
     if (!info.isFile()) throw new Error('Choose a regular file to preview.');
-    return fileCoordination.run([{ path: actual, mode: 'read' }], async (signal) => {
-      signal?.throwIfAborted();
-      await this.access([fileCoordination.path(actual)]);
-      scope.check();
-      return this.grantCoordinated(file, scope);
-    });
+    return fileCoordination.run(
+      [{ path: actual, mode: 'read' }],
+      async (signal) => {
+        signal?.throwIfAborted();
+        await this.access([fileCoordination.path(actual)]);
+        scope.check();
+        return this.grantCoordinated(file, scope);
+      },
+      scope.signal,
+    );
   }
   private async grantCoordinated(file: string, scope: PreviewScope): Promise<Resource> {
     await this.access([file]);
@@ -136,6 +169,7 @@ export class Resources {
     return abort.signal;
   }
   release(id: string): void {
+    this.pending.get(id)?.abort(new Error('Preview closed.'));
     this.aborts.get(id)?.abort();
     this.aborts.delete(id);
     for (const stream of this.streams.get(id)?.keys() ?? []) stream.destroy();
@@ -379,7 +413,10 @@ export class Resources {
       }
       if (!grant.data) await this.access([file!]);
       if (file && !grant.data) {
-        claim = await fileCoordination.acquire([{ path: file, mode: 'read' }], request.signal);
+        claim = await fileCoordination.acquire(
+          [{ path: file, mode: 'read', stream: true }],
+          request.signal,
+        );
         claim.signal?.throwIfAborted();
         scope.check();
         file = claim.path(file);

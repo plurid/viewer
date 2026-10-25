@@ -144,3 +144,23 @@
   color: var(--muted);
   font-size: 11px;
 }
+.server-list {
+  padding: 0 20px 20px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.server-list-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding-block: 14px;
+}
+.server-list-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}

@@ -95,7 +95,7 @@ describe('local server pane runtime ownership', () => {
     expect(sessions.snapshot(pane.id).logs[0]?.sequence).toBe(51);
   });
 
-  it('disposes late native completion before an undone pane can explicitly start again', async () => {
+  it('shares late native completion across closing and restoring its view', async () => {
     const { api, sessions } = fixture();
     const first = deferred<LocalServer>();
     api.localServerStart.mockReturnValueOnce(first.promise).mockResolvedValueOnce(server('second'));
@@ -106,16 +106,13 @@ describe('local server pane runtime ownership', () => {
     sessions.retain([pane]);
     const nextStart = sessions.start(pane.id);
     sessions.receive([server('first')]);
-    expect(sessions.snapshot(pane.id).server).toBeUndefined();
+    expect(sessions.snapshot(pane.id).server?.id).toBe('first');
     expect(api.localServerStart).toHaveBeenCalledTimes(1);
     first.resolve(server('first'));
     await Promise.all([oldStart, nextStart]);
-    expect(api.localServerAction).toHaveBeenCalledWith('first', 'close');
-    expect(api.localServerStart).toHaveBeenCalledTimes(2);
-    expect(sessions.snapshot(pane.id).server?.id).toBe('second');
-    expect(api.localServerAction.mock.invocationCallOrder[0]).toBeLessThan(
-      api.localServerStart.mock.invocationCallOrder[1]!,
-    );
+    expect(api.localServerAction).not.toHaveBeenCalledWith('first', 'close');
+    expect(api.localServerStart).toHaveBeenCalledTimes(1);
+    expect(sessions.snapshot(pane.id).server?.id).toBe('first');
   });
 
   it('cannot replace a freshly started session with an older empty list response', async () => {
@@ -129,20 +126,24 @@ describe('local server pane runtime ownership', () => {
     expect(sessions.snapshot(pane.id).server?.id).toBe('native-server');
   });
 
-  it('ignores old inspect replies after a pane closes and is restored', async () => {
+  it('keeps detached inspection separate from a new runtime bound to another view', async () => {
     const { api, sessions } = fixture();
     await sessions.start(pane.id);
     const oldDetail = deferred<LocalServerDetail>();
     api.localServerInspect.mockReturnValueOnce(oldDetail.promise);
     const refreshing = sessions.refresh(pane.id);
     sessions.retain([]);
-    sessions.retain([pane]);
-    api.localServerStart.mockResolvedValueOnce(server('restored'));
-    await sessions.start(pane.id);
+    sessions.retain([{ ...pane, id: 'another-view', runtimeID: 'another-runtime' }]);
+    api.localServerStart.mockResolvedValueOnce({
+      ...server('restored'),
+      paneID: 'another-runtime',
+    });
+    await sessions.start('another-view');
     oldDetail.resolve({ server: server(), logs: [log(1)] });
     await refreshing;
-    expect(sessions.snapshot(pane.id).server?.id).toBe('restored');
-    expect(sessions.snapshot(pane.id).logs).toEqual([]);
+    expect(sessions.snapshot('another-view').server?.id).toBe('restored');
+    expect(sessions.snapshot('another-view').logs).toEqual([]);
+    expect(sessions.snapshot(pane.id).logs).toEqual([log(1)]);
   });
 
   it('waits out a stale inspect and refreshes the authoritative result after Stop', async () => {

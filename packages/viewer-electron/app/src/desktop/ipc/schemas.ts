@@ -18,6 +18,9 @@ import { chatRequestSchema } from '../../domain/models/chat';
 import { providerCheckKinds } from '../../domain/models/provider-checks';
 import { flushResultSchema } from '../../domain/persistence/flush';
 import { journalQuerySchema } from '../../domain/journal/events';
+import { browserRequestSchema } from '../../domain/previews/browser';
+import { transformPlanSchema } from '../../domain/operations/transforms';
+import { mediaRequestSchema } from '../../domain/media/documents';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
@@ -111,6 +114,8 @@ const workspaceSnapshotSchema = z.object({
                 'chat',
                 'git-changes',
                 'server',
+                'browser',
+                'media',
                 'journal',
               ]),
               path: localPath,
@@ -178,6 +183,9 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export const schemas = {
+  imageInspect: z.tuple([localPath]),
+  media: z.tuple([mediaRequestSchema]),
+  browser: z.tuple([browserRequestSchema]),
   journalQuery: z.tuple([journalQuerySchema]),
   journalExportPreview: z.tuple([journalQuerySchema]),
   journalExport: z.tuple([z.uuid()]),
@@ -609,6 +617,7 @@ export const schemas = {
       destination: localPath.optional(),
       name: z.string().max(255).optional(),
       conversion: z.enum(['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf']).optional(),
+      transform: transformPlanSchema.optional(),
       expectedSources: z
         .array(z.object({ path: localPath, version: sourceVersionSchema }).strict())
         .max(10000)
@@ -620,7 +629,7 @@ export const schemas = {
   resolveCollision: z.tuple([id, z.enum(['skip', 'keep-both', 'replace', 'cancel']), z.boolean()]),
   undo: z.tuple([id]),
   redo: z.tuple([id]),
-  resource: z.tuple([localPath]),
+  resource: z.tuple([localPath, id.optional()]),
   read: z.tuple([id, z.number().int().positive().optional()]),
   release: z.tuple([id]),
   archive: z.tuple([id]),
@@ -688,6 +697,9 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  browser: 'viewer',
+  media: 'viewer',
+  imageInspect: 'viewer',
   journalQuery: 'viewer',
   journalExportPreview: 'viewer',
   journalExport: 'viewer',

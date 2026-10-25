@@ -270,6 +270,28 @@ export const settingCatalog: SettingDefinition[] = [
     ],
   },
   {
+    path: 'settings.previews.textFontSize',
+    category: 'Previews',
+    label: 'Text size',
+    kind: 'number',
+    min: 8,
+    max: 32,
+  },
+  {
+    path: 'settings.previews.textLineHeight',
+    category: 'Previews',
+    label: 'Text line height',
+    kind: 'number',
+    min: 12,
+    max: 64,
+  },
+  {
+    path: 'settings.previews.textWordWrap',
+    category: 'Previews',
+    label: 'Wrap preview text',
+    kind: 'boolean',
+  },
+  {
     path: 'settings.previews.maxImagePixels',
     category: 'Previews',
     label: 'Image pixel limit',

@@ -496,6 +496,7 @@ async function isolation() {
 }
 
 async function server() {
+  let liveURL: string | undefined;
   const directory = await profile('Server profile', [
     {
       id: 'server-folder',
@@ -526,6 +527,14 @@ async function server() {
       'actual local server command',
     );
     const current = running.find((row) => row.state === 'running')!;
+    const viewID = await until(
+      () =>
+        main!.evaluate<string>(
+          'document.querySelector(".server-plane")?.closest("[data-viewer-pane]")?.dataset.viewerPane || ""',
+        ),
+      Boolean,
+      'server view ID',
+    );
     const response = await fetch(current.url);
     assert.equal(response.status, 200);
     assert.match(await response.text(), /Generated site/);
@@ -540,7 +549,7 @@ async function server() {
           const api = hook.memoizedState?.current;
           if (!api?.camera?.frame || !api?.tree?.get) continue;
           const host = node => node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
-          return api.tree.get().some(node => host(node) === 'server-folder' && node.children?.some(child => host(child) === ${JSON.stringify(current.paneID)}));
+          return api.tree.get().some(node => host(node) === 'server-folder' && node.children?.some(child => host(child) === ${JSON.stringify(viewID)}));
         }
       }
       return false;
@@ -555,11 +564,14 @@ async function server() {
         ) as SavedState,
       (state) =>
         state.workspaces.some((space) =>
-          space.panes.some((pane) => pane.id === current.paneID && pane.type === 'server'),
+          space.panes.some(
+            (pane) =>
+              pane.id === viewID && pane.type === 'server' && pane.runtimeID === current.paneID,
+          ),
         ),
       'server plane persisted',
     );
-    assert.ok(!saved.workspaces[0]!.roots.includes(current.paneID));
+    assert.ok(!saved.workspaces[0]!.roots.includes(viewID));
     checks.push({ id: 'actual-server-start', detail: { current, linked } });
     await save();
     console.log(
@@ -645,6 +657,7 @@ async function server() {
       'restart server',
     );
     const live = restarted.find((row) => row.state === 'running')!;
+    liveURL = live.url;
     assert.equal((await fetch(live.url)).status, 200);
     checks.push({
       id: 'server-log-and-controls',
@@ -657,14 +670,35 @@ async function server() {
     await save();
 
     await main.evaluate(
-      `document.querySelector('[data-viewer-plane="${live.paneID}"] [aria-label="Close plane"]').click()`,
+      `document.querySelector('[data-viewer-plane="${viewID}"] [aria-label="Close plane"]').click()`,
     );
     await until(
       () => main!.evaluate<LocalServer[]>('window.viewer.localServers()'),
-      (value) => !value.some((row) => row.id === live.id),
-      'closing server plane disposes listener',
+      (value) => value.some((row) => row.id === live.id && row.state === 'running'),
+      'closing server view keeps its listener',
     );
-    await stopped(live.url);
+    assert.equal((await fetch(live.url)).status, 200);
+    await command(main, 'Local servers');
+    await until(
+      () => main!.evaluate<boolean>('!!document.querySelector(".server-list-row")'),
+      Boolean,
+      'local server manager',
+    );
+    await main.evaluate(
+      'Array.from(document.querySelectorAll(".server-list-row button")).find(button=>button.textContent.trim()==="Show plane").click()',
+    );
+    await until(
+      () => main!.evaluate<boolean>('!!document.querySelector(".server-plane")'),
+      Boolean,
+      'reattached server view',
+    );
+    assert.equal(
+      (await main.evaluate<LocalServer[]>('window.viewer.localServers()')).find(
+        (server) => server.state === 'running',
+      )!.id,
+      live.id,
+    );
+    assert.equal((await fetch(live.url)).status, 200);
     checks.push({
       id: 'server-lifecycle',
       detail: {
@@ -672,15 +706,17 @@ async function server() {
         cleared: true,
         stopped: true,
         restarted: true,
-        planeCloseStopped: true,
+        planeCloseKeptRunning: true,
+        reopenedSameRuntime: true,
       },
     });
     await save();
     console.log(
-      'PASS server-lifecycle: log filters/clear, stop/restart and plane-close listener cleanup.',
+      'PASS server-lifecycle: log filters/clear, stop/restart, detached listener and reattached controls.',
     );
   } finally {
     await app.close(main);
+    if (liveURL) await stopped(liveURL);
   }
 }
 

@@ -6,6 +6,9 @@ import type { GitActionKind, GitActionRequest, GitActionReply } from './comparis
 import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
 import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
+import type { TransformPlan } from './operations/transforms';
+import type { MediaRequest, MediaReply } from './media/documents';
+import type { BrowserRequest, BrowserSnapshot } from './previews/browser';
 import type {
   JournalFilter,
   JournalQuery,
@@ -202,11 +205,27 @@ export interface ChatPane {
   conversationID: string;
 }
 /** A local server's folder reference; listening sockets and logs remain runtime state. */
+export interface BrowserPane {
+  id: string;
+  type: 'browser';
+  path: string;
+  url: string;
+  title?: string;
+  serverRuntimeID?: string;
+  serverPath?: string;
+}
+export interface MediaPane {
+  id: string;
+  type: 'media';
+  path: string;
+  draftID: string;
+}
 export interface ServerPane {
   id: string;
   type: 'server';
   path: string;
   sourceIdentity?: string;
+  runtimeID?: string;
 }
 export interface JournalPane {
   id: string;
@@ -226,6 +245,8 @@ export type Pane =
   | GitChangesPane
   | ChatPane
   | ServerPane
+  | BrowserPane
+  | MediaPane
   | JournalPane;
 export interface Workspace {
   id: string;
@@ -250,9 +271,9 @@ export interface Workspace {
   tiling?: Tiling;
 }
 /** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
-export const CURRENT_STATE_VERSION = 7 as const;
+export const CURRENT_STATE_VERSION = 8 as const;
 export interface SavedState {
-  version: 1 | 2 | 3 | 4 | 5 | 6 | typeof CURRENT_STATE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
   preferencesRevision?: number;
   workspaces: Workspace[];
@@ -364,6 +385,7 @@ export interface OperationRequest {
   name?: string;
   /** Required for `convert`. */
   conversion?: ImageConversion;
+  transform?: TransformPlan;
   /** Source versions captured in a reviewed plan; checked again when queued work starts. */
   expectedSources?: { path: string; version: SourceVersion }[];
   /** A reviewed folder's contents (`outputProof`), set by the desktop for an agent's approved Trash;
@@ -382,6 +404,8 @@ export interface Collision {
   replaceable?: boolean;
 }
 export interface OperationJob {
+  progress?: number;
+  detail?: string;
   id: string;
   revision: number;
   kind: OperationKind;
@@ -393,7 +417,13 @@ export interface OperationJob {
   bytesTotal: number;
   itemsDone: number;
   itemsTotal: number;
-  completed: { source: string; destination?: string }[];
+  completed: {
+    source: string;
+    destination?: string;
+    inputBytes?: number;
+    outputBytes?: number;
+    optimized?: boolean;
+  }[];
   errors: { path: string; message: string }[];
   errorCount: number;
   collision?: Collision;
@@ -403,6 +433,8 @@ export interface OperationJob {
   recovery?: { source: string; destination?: string; staging?: string };
 }
 export interface OperationProgress {
+  progress?: number;
+  detail?: string;
   id: string;
   revision: number;
   current?: string;
@@ -448,6 +480,7 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'browser'; browser: BrowserSnapshot }
   | { type: 'journal-changed' }
   | { type: 'local-servers'; servers: LocalServer[] }
   | { type: 'chat'; document: ChatDocument }
@@ -490,6 +523,11 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  imageInspect(
+    file: string,
+  ): Promise<{ width: number; height: number; alpha: boolean; preview: Resource }>;
+  media(request: MediaRequest): Promise<MediaReply>;
+  browser(request: BrowserRequest): Promise<BrowserSnapshot | void>;
   journalQuery(query: JournalQuery): Promise<JournalPage>;
   journalExportPreview(query: JournalQuery): Promise<JournalExportPreview>;
   journalExport(id: string): Promise<boolean>;
@@ -640,7 +678,7 @@ export interface ViewerAPI {
   undo(id: string): Promise<void>;
   /** Starts an undone operation again; resolves with the new job ID. */
   redo(id: string): Promise<string>;
-  resource(path: string): Promise<Resource>;
+  resource(path: string, requestID?: string): Promise<Resource>;
   read(id: string, limit?: number): Promise<ResourceRead>;
   release(id: string): Promise<void>;
   archive(id: string): Promise<ArchiveListing>;

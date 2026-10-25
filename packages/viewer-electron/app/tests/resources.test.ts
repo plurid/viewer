@@ -14,6 +14,22 @@ afterEach(async () => {
   await trashTemporary(root);
 });
 describe('scoped preview resources', () => {
+  it('cancels an unfinished native acquisition without resurrecting a closed preview', async () => {
+    const file = path.join(root, 'cancelled.txt');
+    await writeFile(file, 'retained source');
+    let resume!: () => void;
+    resources = new Resources(
+      async () =>
+        await new Promise<void>((resolve) => {
+          resume = resolve;
+        }),
+    );
+    const request = crypto.randomUUID();
+    const work = resources.grant(file, request);
+    resources.release(request);
+    resume();
+    await expect(work).rejects.toThrow('expired');
+  });
   it('revokes only the chosen root while independent text and media previews stay usable', async () => {
     const first = path.join(root, 'first'),
       second = path.join(root, 'second');

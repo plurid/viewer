@@ -3,6 +3,7 @@ import { projectPathSchema } from '../workspaces/project';
 import { sourceVersionSchema } from '../files/inspection';
 import type { DefinitionDocument } from '../definitions';
 import type { ActionContext } from '../services';
+import { transformPlanSchema } from '../operations/transforms';
 const id = z
   .string()
   .min(1)
@@ -51,12 +52,22 @@ export const workflowStepSchema = z.discriminatedUnion('kind', [
       destination: workflowReferenceSchema,
     })
     .strict(),
+  z
+    .object({
+      ...base,
+      kind: z.literal('convert'),
+      sources: z.array(workflowReferenceSchema).min(1).max(100),
+      destination: workflowReferenceSchema,
+      name: z.string().min(1).max(255).optional(),
+      transform: transformPlanSchema,
+    })
+    .strict(),
 ]);
 export type WorkflowStep = z.infer<typeof workflowStepSchema>;
 export function workflowReferences(step: WorkflowStep): WorkflowReference[] {
   return step.kind === 'compare'
     ? [step.left, step.right]
-    : step.kind === 'copy'
+    : step.kind === 'copy' || step.kind === 'convert'
       ? [...step.sources, step.destination]
       : step.sources;
 }
@@ -139,7 +150,7 @@ export function workflowArtifact(value: unknown): z.infer<typeof workflowArtifac
 export const workflowRecordSchema = z
   .object({
     id,
-    kind: z.enum(['inspect', 'compare', 'recipe', 'copy']),
+    kind: z.enum(['inspect', 'compare', 'recipe', 'copy', 'convert']),
     status: z.enum(['pending', 'running', 'waiting-review', 'completed', 'failed', 'cancelled']),
     sources: z.array(workflowSourceSchema).max(2000),
     outputs: z.array(workflowSourceSchema).max(2000),

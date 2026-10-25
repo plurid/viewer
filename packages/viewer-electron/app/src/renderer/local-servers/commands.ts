@@ -4,6 +4,7 @@ import { captureTarget } from '../commands/target';
 
 export function localServerCommands(
   workspace: Pick<WorkspaceController, 'newServer' | 'rootID'>,
+  showServers?: () => void,
 ): CommandDefinition[] {
   const available = (context: CommandContext) => {
     if (!context.paneID || !['window', 'folder', 'files'].includes(context.scope)) return false;
@@ -26,6 +27,15 @@ export function localServerCommands(
         if (selected) target.directory = selected.path;
         await workspace.newServer(target);
       },
+    },
+    {
+      id: 'local-servers',
+      label: 'Local servers…',
+      group: 'Workspace',
+      icon: 'code',
+      aliases: ['running servers', 'localhost', 'server controls'],
+      when: () => !!showServers,
+      run: () => showServers?.(),
     },
   ];
 }

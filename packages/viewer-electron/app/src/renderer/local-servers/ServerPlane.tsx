@@ -7,11 +7,13 @@ import { ChoiceButton } from '../ui/ChoiceMenu';
 import { connectLocalServers, localServerSessions } from './runtime';
 import { filterServerLogs, type LogStatus } from './logs';
 import './server-plane.css';
+import { useWorkspace } from '../workspace/context';
 
 const timestamp = (value: number) => new Date(value).toLocaleTimeString();
 
 /** The log view can unmount while its native server keeps running for the owning pane. */
 export default function ServerPlane({ pane, active }: { pane: Pane; active: boolean }) {
+  const workspace = useWorkspace();
   const sessions = localServerSessions();
   const subscribe = useCallback(
     (listener: () => void) => sessions.subscribe(pane.id, listener),
@@ -122,6 +124,14 @@ export default function ServerPlane({ pane, active }: { pane: Pane; active: bool
           disabled={!running || busy}
           onClick={() => run('open-browser')}
         />
+        <button
+          disabled={!running || busy}
+          onClick={() =>
+            server && workspace.openBrowser(server.url, pane.id, pane.runtimeID ?? pane.id)
+          }
+        >
+          Open in Viewer
+        </button>
       </div>
       {snapshot.error && (
         <p className="server-error" role="alert">
