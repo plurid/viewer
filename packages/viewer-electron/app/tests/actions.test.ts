@@ -20,6 +20,7 @@ import { epubFixture } from './fixtures';
 import { extractDocument } from '../src/desktop/previews/formats';
 import type { FileServices } from '../src/desktop/files/file-services';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { removalBlocked } from './support/preservation';
 let root: string,
   files: string,
   planner: ActionPlanner,
@@ -262,7 +263,9 @@ describe('reviewed file action transactions', () => {
     const plan = await batch();
     await planner.apply(approve(plan));
     expect((await planner.get(plan.id)).status).toBe('completed');
-    expect(await readdir(root)).not.toContain(`action-steps-${plan.id}.jsonl`);
+    const stepFile = `action-steps-${plan.id}.jsonl`;
+    const retained = removalBlocked('settled action step-log cleanup', [path.join(root, stepFile)]);
+    expect((await readdir(root)).includes(stepFile)).toBe(retained);
   });
   it('removes at load the step logs no interrupted plan needs (2026-10-20)', async () => {
     const orphan = `action-steps-${randomUUID()}.jsonl`;
@@ -276,7 +279,8 @@ describe('reviewed file action transactions', () => {
     planner = create();
     await planner.load();
     const names = await readdir(root);
-    expect(names).not.toContain(orphan);
+    const retained = removalBlocked('orphan action step-log cleanup', [path.join(root, orphan)]);
+    expect(names.includes(orphan)).toBe(retained);
     expect(names).toContain(needed);
   });
   it('recovers a crash between publishing a destination and its completion checkpoint', async () => {
@@ -384,6 +388,9 @@ describe('scoped proposal-only MCP broker', () => {
     settings.agents.enabled = false;
     await expect(broker.handle(token, { method: 'tools/list' })).rejects.toThrow('disabled');
     await broker.close();
-    await expect(stat(path.dirname(connection.socket))).rejects.toThrow();
+    await expect(stat(connection.socket)).rejects.toThrow();
+    if (process.env.VIEWER_TEST_PRESERVE === '1' || process.env.VIEWER_TEST_NO_REMOVAL === '1')
+      expect((await stat(path.dirname(connection.socket))).isDirectory()).toBe(true);
+    else await expect(stat(path.dirname(connection.socket))).rejects.toThrow();
   });
 });

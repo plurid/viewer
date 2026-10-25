@@ -66,8 +66,17 @@ describe('image quick actions', () => {
       sources: [photo],
     });
     expect(await readFile(photo, 'utf8')).toBe('original pixels');
-    // No staging folders are left behind.
-    expect((await readdir(root)).sort()).toEqual(['Photo rotated.jpg', 'Photo.jpg', 'trash']);
+    const entries = await readdir(root);
+    const stages = entries.filter((name) => name.startsWith('.viewer-convert-'));
+    if (process.env.VIEWER_TEST_NO_REMOVAL === '1') {
+      expect(stages).toHaveLength(1);
+      expect(await readdir(path.join(root, stages[0]))).toEqual([]);
+    } else expect(stages).toEqual([]);
+    expect(entries.filter((name) => !stages.includes(name)).sort()).toEqual([
+      'Photo rotated.jpg',
+      'Photo.jpg',
+      'trash',
+    ]);
     expect(job.undoable).toBe(true);
     await operations.undo(job.id);
     expect(await readdir(root)).not.toContain('Photo rotated.jpg');

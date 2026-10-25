@@ -14,7 +14,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import type { OperationJob, OperationProgress, OperationRequest } from '../src/domain/contracts';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { removalBlocked } from './support/preservation';
 const exdev = vi.hoisted(() => ({ source: '', race: '', noLinks: false, foreign: '' }));
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof import('node:fs/promises')>();
@@ -272,7 +273,7 @@ describe('file operation queue', () => {
     await writeFile(source, 'new work');
     await expect(operations.undo(job.id)).rejects.toThrow('already exists');
     expect(await readFile(source, 'utf8')).toBe('new work');
-    await trashFixtureEntry(source);
+    await rename(source, source + '.occupied');
     await operations.undo(job.id);
     expect(await readFile(source, 'utf8')).toBe('original');
   });
@@ -556,10 +557,16 @@ describe('file operation queue', () => {
     await writeFile(source, 'cross volume');
     exdev.source = source;
     const job = await run({ kind: 'move', sources: [source], destination });
-    expect(job.status).toBe('completed');
     expect(job.undoable).toBe(false);
-    await expect(lstat(source)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await readFile(path.join(destination, 'file'), 'utf8')).toBe('cross volume');
+    if (removalBlocked('cross-volume move source removal', [source])) {
+      expect(job.status).toBe('failed');
+      expect(job.errors[0].message).toContain('must preserve');
+      expect(await readFile(source, 'utf8')).toBe('cross volume');
+    } else {
+      expect(job.status).toBe('completed');
+      await expect(lstat(source)).rejects.toMatchObject({ code: 'ENOENT' });
+    }
   });
   it('copies when a transfer reaches a folder on another volume through a link', async () => {
     const volume = path.join(root, 'other-volume');
@@ -600,7 +607,6 @@ describe('file operation queue', () => {
       ]);
       exdev.source = source;
       const job = await run({ kind: 'move', sources: [source], destination });
-      expect(job.status).toBe('completed');
       const copied = path.join(destination, 'tagged.txt');
       expect(await readFile(copied, 'utf8')).toBe('important');
       expect(
@@ -608,9 +614,14 @@ describe('file operation queue', () => {
           await promisify(execFile)('/usr/bin/xattr', ['-p', 'com.plurid.viewer.fixture', copied])
         ).stdout.trim(),
       ).toBe('synthetic');
-      await expect(lstat(source)).rejects.toMatchObject({
-        code: 'ENOENT',
-      });
+      if (removalBlocked('metadata-preserving move source removal', [source])) {
+        expect(job.status).toBe('failed');
+        expect(job.errors[0].message).toContain('must preserve');
+        expect(await readFile(source, 'utf8')).toBe('important');
+      } else {
+        expect(job.status).toBe('completed');
+        await expect(lstat(source)).rejects.toMatchObject({ code: 'ENOENT' });
+      }
     },
   );
   it('keeps a concurrently created destination and leaves the source intact', async () => {
@@ -630,7 +641,7 @@ describe('file operation queue', () => {
     expect(job.undoable).toBe(true);
     await mkdir(source);
     await expect(operations.undo(job.id)).rejects.toThrow('already exists');
-    await trashFixtureEntry(source);
+    await rename(source, source + '.occupied');
     await operations.undo(job.id);
     expect(await readFile(path.join(source, 'child.txt'), 'utf8')).toBe('child');
   });
@@ -648,7 +659,19 @@ describe('file operation queue', () => {
     );
     const job = await run({ kind: 'copy', sources: [source], destination });
     expect(job.status).toBe('cancelled');
-    expect(await readdir(destination)).toEqual([]);
+    const leftovers = await readdir(destination);
+    if (
+      removalBlocked(
+        'cancelled transfer partial cleanup',
+        leftovers.map((name) => path.join(destination, name)),
+      )
+    ) {
+      expect(leftovers).toHaveLength(1);
+      expect(leftovers[0]).toMatch(/^\.viewer-transfer-/);
+      const partial = await lstat(path.join(destination, leftovers[0], 'item'));
+      expect(partial.isFile()).toBe(true);
+      expect(partial.size).toBeLessThanOrEqual(16 * 1024 * 1024);
+    } else expect(leftovers).toEqual([]);
     expect((await lstat(source)).size).toBe(16 * 1024 * 1024);
   });
   it('throttles small-file progress across the whole job and sends authoritative lifecycle snapshots', async () => {
@@ -959,7 +982,7 @@ describe('file operation redo', () => {
     expect(() => operations.redo(moved.id)).toThrow('cannot be redone');
     // A file replaced at the restored path after Undo is not acted on.
     await operations.undo(again.id);
-    await trashFixtureEntry(source);
+    await rename(source, source + '.original');
     await writeFile(source, 'a different file now');
     const refused = await waitFor(operations.redo(again.id));
     expect(refused.errors[0]?.message).toContain('changed after review');

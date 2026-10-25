@@ -8,7 +8,7 @@ import { DocumentStore } from '../persistence/document-store';
 import { fileCoordination } from '../files/file-coordination';
 import { operationRoots, type Operations } from './operations';
 import type { CheckpointEstimate, CheckpointRecord } from '../../domain/operations/change-plan';
-import { removePrivateData } from './removal';
+import { assertTestRemovalAllowed, removePrivateData } from './removal';
 const recordSchema = z
   .object({
     id: z.uuid(),
@@ -348,7 +348,16 @@ export class Checkpoints {
         }
         return structuredClone(record);
       } catch (error) {
-        await this.drop(folder);
+        try {
+          await this.drop(folder);
+        } catch (cleanupError) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new AggregateError(
+            [error, cleanupError],
+            message + ' Incomplete checkpoint kept at ' + folder + '.',
+            { cause: error },
+          );
+        }
         throw error;
       }
     });
@@ -369,6 +378,7 @@ export class Checkpoints {
       )
     )
       throw new Error('Wait for the checkpoint restore to finish before removing it.');
+    assertTestRemovalAllowed(path.join(this.directory, record.id));
     const prior = record.status;
     record.status = 'failed';
     try {
@@ -500,6 +510,7 @@ export class Checkpoints {
     return bytes;
   }
   private async drop(folder: string): Promise<void> {
+    assertTestRemovalAllowed(folder);
     const pending = [folder];
     while (pending.length) {
       const file = pending.pop()!,

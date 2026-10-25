@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chmod, lstat, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, rename, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FolderSizes } from '../src/desktop/files/folder-sizes';
 import { Applications } from '../src/desktop/native/applications';
 import type { FolderSizeTask } from '../src/domain/files/metadata';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const owned: string[] = [];
 async function temporary() {
   const root = await temporaryRoot('viewer-metadata-');
@@ -178,7 +178,7 @@ describe('native application adapter', () => {
       'Choose the application again',
     );
   });
-  it('rejects ordinary executables and applications removed after selection', async () => {
+  it('rejects ordinary executables and applications moved after selection', async () => {
     const root = await temporary();
     const file = path.join(root, 'plain');
     await writeFile(file, 'contents');
@@ -188,7 +188,7 @@ describe('native application adapter', () => {
     const app = path.join(root, 'Fixture.app');
     await mkdir(app);
     const choice = await applications.register(app);
-    await trashFixtureEntry(app);
+    await rename(app, app + '-moved');
     await expect(applications.open([file], choice.id)).rejects.toThrow();
     expect(open).not.toHaveBeenCalled();
   });

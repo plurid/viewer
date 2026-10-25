@@ -180,7 +180,7 @@ export default function ModelPreview(context: PreviewContext) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = playback.current.appearance.exposure;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     element.append(renderer.domElement);
     renderer.domElement.setAttribute(
       'aria-label',

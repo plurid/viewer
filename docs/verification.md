@@ -1,5 +1,107 @@
 # Verification
 
+## October 25 complete preserved validation
+
+The verified direct Apple Silicon bundle is retained at
+`/private/tmp/viewer-validated-20261025-3cs9y6xb/Viewer.app`.
+Executable SHA-256:
+`9e68468b5a28a1a685f819d02f12c7ad0ff2e0214ccec7417eb9663d0fa31455`;
+ASAR SHA-256:
+`694d5076b1e85dccdb6b983c017484f20190edd3d3f69cae948673c05255c7d8`.
+Adjacent `candidate.json` binds source, lockfile, native binding and test hashes.
+The final build uses normal `pnpm package` and passes
+`codesign --verify --deep --strict`. The package log is
+`/private/tmp/viewer-full-validation-verified-package-20261025.log`.
+
+### Complete suite and static checks
+
+**All 1,700 tests in 229 files pass, with zero failed or skipped tests.**
+The run uses `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1`, the final
+candidate's native binding and a separately compiled recording review binding.
+Its exact invocation is the normal `pnpm test` command with default/JSON
+reporters. Adjacent `unit.json` and `unit.log` retain the complete result.
+The four previously conditional native cases now exercise actual metadata,
+version/hash validation, refusal before the recording Trash selector, and
+exclusive rename inside a generated restore folder. They use no system Trash.
+The recording binding and source hashes remain at
+`/private/tmp/viewer-native-validation-bindings-20261025-4k9pp1bi/bindings.json`.
+
+All four TypeScript targets, full ESLint and full Prettier checks pass; adjacent
+`types.log`, `lint.log` and `format.log` retain their output. Whitespace checks
+also pass. The lockfile is unchanged.
+
+Preservation is part of the tested behavior. Fourteen deletion-dependent cases
+assert refusal or retained artifacts instead of performing positive removal;
+adjacent `removal-gates.jsonl` names each unexecuted branch and exact generated
+paths. These positive branches remain **unverified** even though the configured
+tests pass. The removal helpers block source/private-data deletion; temporary
+cleanup leaves artifacts alone. Completed transfers retain their empty staging
+directories without becoming failed jobs; partial data remains inspectable.
+
+### Failures resolved
+
+- `OperationLog.forget` now removes its in-memory receipt entry only after
+  filesystem removal succeeds. A regression reproduces the lost-retry failure
+  before the correction and verifies two failed attempts retain the receipt.
+- Checkpoint capture retains its original failure when cleanup also fails,
+  reporting the retained location and both causes. Removal is denied before a
+  ready checkpoint's status or retained tree changes.
+- An operation item's primary failure precedes its cleanup details without
+  reordering errors from earlier items. Existing protected-folder and changed
+  replacement cases reproduce the incorrect ordering before the correction.
+- The removed Three.js `PCFSoftShadowMap` setting is replaced with
+  `PCFShadowMap`, the same mode the installed renderer was already substituting.
+- Missing-path, moved-application and symlink-substitution tests preserve their
+  originals through reversible fixture moves. Explicit removal tests retain
+  their normal positive branch and verify denial in preservation mode.
+- The PDF packaging check creates one PDF rather than the entire preview corpus.
+  Its setup/copy budget is separate from the unchanged ten-second extraction
+  subprocess deadline. The operation-log stress test's outer timeout now matches
+  its existing bounded filesystem wait. Size/linearity assertions remain intact.
+- Copy Path verification restores the prior pasteboard through stdin and memory,
+  checking that its current text is still the test's last write. No private
+  clipboard snapshot is left in a fixture file or passed as a command argument.
+- The root-plane smoke uses the retained Overview command to open a collapsed
+  map. The old titlebar-button assumption failed after that button was removed.
+  Actual minimap pointer/keyboard navigation remains tested.
+- Refinement checks use the current eight-pixel logical button gap and inspect
+  requested agent folders without claiming a configuration edit authorized them.
+  The native diagnostic measured 8.372 painted pixels / 1.0465 projection,
+  approximately eight logical pixels. Pending roots remain unapproved.
+
+The red/initial runs remain preserved under
+`/private/tmp/viewer-full-validation-*.log`, including the blocked-removal run,
+the temporary-cleanup guard correction, receipt retry, primary error ordering,
+PDF timeout, stale Overview selector and stale Settings selector. An isolated
+replacement test also encountered command-sandbox coordination denial; its real
+native rerun passed. Those environmental errors are not product-fix claims.
+
+### Packaged desktop checks
+
+The exact final bundle passes the complete `pnpm test:desktop` scenario with
+preservation/removal protection enabled. It covers previews and malformed assets,
+PDF text/OCR, reviewed rename/Undo, indexed search, independent root/preview
+ownership, actual minimap hit testing, file jobs, all four explorer views, model
+gesture isolation, resource/IPC confinement, workspace restoration and clean
+Quit. Adjacent `smoke.log` records the result. Fixture:
+`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-kWRZQB`.
+Native captures and owned-process evidence:
+`packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T04-25-33-603Z-e16888a4-a179-48eb-954c-e22aab200f83`.
+
+The supplemental `refinements` scenario also passes on this bundle: STEP/3MF/PLY
+and other model previews, measurement, path clipboard restoration, additive
+recents and Settings in both appearances and normal/minimum sizes. Requested
+agent folders wrap within their row and remain pending. Adjacent
+`refinements.log` records the result. Fixture:
+`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-0ZAdIZ`.
+Native evidence:
+`packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T04-29-03-022Z-d1101237-aa3b-44eb-8fb4-31755ef6e41e`.
+
+All generated files, fixture directories, intermediary bundles, logs and captures
+remain available. This direct-build validation does not establish positive OS
+removal, new live-provider/physical consent, signed Store sandbox behavior,
+notarization or distribution. Earlier physical results retain their own hashes.
+
 ## October 25 framing ownership and native agent consent
 
 The verified direct Apple Silicon candidate is retained at

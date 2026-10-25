@@ -1195,6 +1195,7 @@ export class Operations {
           (request.kind === 'convert' && request.conversion === 'pdf');
         const items = single ? [''] : request.sources;
         for (const source of items) {
+          const priorErrors = job.errors.length;
           try {
             this.check(task);
             await this.access(
@@ -1458,7 +1459,9 @@ export class Operations {
           } catch (error) {
             if (error instanceof ReceiptFailure) throw error;
             if (task.abort.signal.aborted) break;
-            job.errors.push({
+            // Cleanup may already have reported retained partial content. Keep this item's
+            // original failure before those details, without reordering earlier items.
+            job.errors.splice(priorErrors, 0, {
               path: source || request.destination!,
               message: message(error).slice(0, 4000),
             });

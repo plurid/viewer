@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, rename, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { Resources } from '../src/desktop/previews/resources';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string, resources: Resources;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-resources-');
@@ -165,7 +165,7 @@ describe('scoped preview resources', () => {
     await writeFile(file, 'local');
     await writeFile(outside, 'private');
     const grant = await resources.grant(file);
-    await trashFixtureEntry(file);
+    await rename(file, path.join(folder, 'Retained original.txt'));
     await symlink(outside, file);
     await expect(resources.read(grant.id)).rejects.toThrow();
     expect((await resources.response(new Request(grant.url))).status).toBe(403);

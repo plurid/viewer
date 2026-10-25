@@ -6,7 +6,7 @@ import type { SavedState } from '../src/domain/contracts';
 import { audioFixture, imageFixture, videoFixture } from './media-fixtures';
 import { temporaryRoot } from '../tools/temporary';
 
-function pdf(): Buffer {
+export function pdfFixture(): Buffer {
   const bodies = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -172,7 +172,7 @@ export async function createFixtures(): Promise<{
     path.join(files, 'Documents', 'Project notes.md'),
     '# A wider view\n\nViewer keeps folders and previews together in one workspace.\n\n## This week\n\n- Compare the model variants\n- Organize the reference files\n- Share the final archive\n\n```typescript\nconst workspace = { name: "Studio", previews: true };\n```\n',
   );
-  await writeFile(path.join(files, 'Documents', 'Project brief.pdf'), pdf());
+  await writeFile(path.join(files, 'Documents', 'Project brief.pdf'), pdfFixture());
   await writeFile(path.join(files, 'Documents', 'Book.epub'), epubFixture());
   await writeFile(
     path.join(files, 'Data', 'Materials.json'),

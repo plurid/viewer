@@ -21,7 +21,8 @@ import {
   type CustomAction,
 } from '../src/domain/automation/actions';
 import { entry } from '../src/desktop/files/filesystem';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { removalBlocked } from './support/preservation';
 let root: string;
 let config: ReturnType<typeof defaultSettings>;
 const cleanup: (() => void)[] = [];
@@ -175,7 +176,7 @@ describe('literal command execution', () => {
     expect(actionAvailable(action, captured)).toBe(true);
     expect(actionAvailable(action, target())).toBe(false);
     config.customActions = [action];
-    await trashFixtureEntry(file);
+    await fs.rename(file, file + '.original');
     await fs.writeFile(file, 'replacement data');
     const executions = new Executions(
       () => config,
@@ -308,7 +309,12 @@ describe('terminal launchers left behind (2026-10-20)', () => {
     await fs.utimes(other, hourAgo, hourAgo);
     const terminals = new ExternalTerminals(directory, () => config, '/Applications');
     await terminals.sweep(path.join(root, 'profile'));
-    expect((await fs.readdir(directory)).sort()).toEqual(['current.command', 'notes.txt']);
+    const retained = removalBlocked('expired terminal launcher cleanup', [stale]);
+    expect((await fs.readdir(directory)).sort()).toEqual(
+      retained
+        ? [path.basename(stale), 'current.command', 'notes.txt'].sort()
+        : ['current.command', 'notes.txt'],
+    );
   });
 });
 describe('embedded terminal planes', () => {

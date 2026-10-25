@@ -15,7 +15,7 @@ import { Search } from '../src/desktop/search/search';
 import { Watchers } from '../src/desktop/files/watchers';
 import { Storage } from '../src/desktop/persistence/storage';
 import { folderPane } from '../src/renderer/state/store';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-services-');
@@ -132,7 +132,7 @@ describe('search, subscriptions and persistence', () => {
     expect(watchers.count).toBe(0);
     await watchers.close();
   });
-  it('refreshes shallow folders after file writes, atomic replacement, rename and deletion', async () => {
+  it('refreshes shallow folders after writes, atomic replacement, rename and moving a file out', async () => {
     const file = path.join(root, 'Watched.txt');
     await writeFile(file, 'Initial');
     const events: DesktopEvent[] = [];
@@ -152,7 +152,8 @@ describe('search, subscriptions and persistence', () => {
       await rename(file, renamed);
       await vi.waitFor(() => expect(changes()).toBeGreaterThan(previous), { timeout: 5000 });
       previous = changes();
-      await trashFixtureEntry(renamed);
+      const retained = await temporaryRoot('viewer-watch-retained-');
+      await rename(renamed, path.join(retained, 'Retained.txt'));
       await vi.waitFor(() => expect(changes()).toBeGreaterThan(previous), { timeout: 5000 });
       expect(events.filter((event) => event.type === 'watch-error')).toEqual([]);
     } finally {

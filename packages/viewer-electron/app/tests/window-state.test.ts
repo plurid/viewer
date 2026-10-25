@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -7,7 +7,7 @@ import {
   WindowState,
   type WindowFrame,
 } from '../src/desktop/windows/window-state';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const primary = { id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } };
 const ordinary: WindowFrame = {
@@ -101,7 +101,7 @@ describe('native window placement', () => {
     const store = new WindowState(path.join(parent, 'window-state-v1.json'));
     store.remember(ordinary);
     await expect(store.flush()).rejects.toThrow();
-    await trashFixtureEntry(parent);
+    await rename(parent, parent + '.original');
     await mkdir(parent);
     await store.flush();
     expect(JSON.parse(await readFile(store.file, 'utf8'))).toEqual(ordinary);

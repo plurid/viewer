@@ -1,9 +1,9 @@
-import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileAccess } from '../src/desktop/files/file-access';
 import { Operations } from '../src/desktop/operations/operations';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string;
 let data: string;
@@ -85,9 +85,9 @@ describe('native folder access', () => {
     expect(await access.list()).toEqual([]);
     await expect(access.require([file])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
   });
-  it('shows a removed saved location as unavailable and releases its diagnostic scope', async () => {
+  it('shows a moved saved location as unavailable and releases its diagnostic scope', async () => {
     await access.remember(folder, true, 'folder');
-    await trashFixtureEntry(folder);
+    await rename(folder, folder + '-moved');
     expect(await access.list()).toEqual([{ path: folder, directory: true, status: 'unavailable' }]);
     expect(stops[0]).toHaveBeenCalledExactlyOnceWith();
     await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });

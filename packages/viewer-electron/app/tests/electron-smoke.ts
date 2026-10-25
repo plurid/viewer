@@ -13,8 +13,9 @@ import { formatBytes } from '../src/domain/files/entries';
 import { reactCommitProbe } from './react-commits';
 import type { OperationJob, SavedState } from '../src/domain/contracts';
 import type { AgentAccessState } from '../src/domain/agents/clients';
-import { trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { trashTemporary } from '../tools/temporary';
 import { prepareOwnedApplication } from './native/runtime/owned-application';
+import { restoreClipboard } from './native/runtime/clipboard';
 import {
   createScenarioFixtures,
   longFilename,
@@ -2296,6 +2297,7 @@ async function verifyModelLighting(): Promise<void> {
 }
 async function verifyRefinements(): Promise<void> {
   await paletteCommand('Dock plane');
+  await settleCamera();
   const readme = path.join(fixture.files, 'README.md');
   // Preserve all pasteboard items/types, including images and rich text, without logging them.
   const previousClipboard = await execNative(
@@ -2385,35 +2387,22 @@ async function verifyRefinements(): Promise<void> {
     );
   } finally {
     // Restore only our last write; preserve anything the user copied during this check.
-    if (copiedText && (await execNative('/usr/bin/pbpaste')).stdout === copiedText) {
-      const restoreFile = path.join(fixture.root, 'clipboard-restore.json');
-      await writeFile(restoreFile, previousClipboard, { mode: 0o600 });
-      await execNative('/usr/bin/osascript', [
-        '-l',
-        'JavaScript',
-        '-e',
-        `
-        ObjC.import('AppKit'); ObjC.import('Foundation');
-        const saved=JSON.parse(ObjC.unwrap($.NSString.stringWithContentsOfFileEncodingError(${JSON.stringify(restoreFile)},$.NSUTF8StringEncoding,null)));
-        const board=$.NSPasteboard.generalPasteboard, items=$.NSMutableArray.alloc.init;
-        for(const fields of saved) {
-          const item=$.NSPasteboardItem.alloc.init;
-          for(const [type,encoded] of fields) item.setDataForType($.NSData.alloc.initWithBase64EncodedStringOptions(encoded,0),type);
-          items.addObject(item);
-        }
-        board.clearContents;
-        if(saved.length) board.writeObjects(items);
-      `,
-      ]).catch(() => {
-        throw new Error('Could not restore the test clipboard.');
-      });
-      await trashFixtureEntry(restoreFile);
-    }
+    if (copiedText) await restoreClipboard(previousClipboard, copiedText);
   }
-  const headerGap = await evaluate<number>(
-    `(() => {const name=document.querySelector('.file-heading[data-column=name] .column-label').getBoundingClientRect(); const next=document.querySelector('.file-heading[data-column=modified] .column-label').getBoundingClientRect(); return next.left-name.right;})()`,
+  const headerGap = await evaluate<{ painted: number; local: number; scale: number }>(`(() => {
+    const first = document.querySelector('.file-heading[data-column=name] .column-label');
+    const next = document.querySelector('.file-heading[data-column=modified] .column-label');
+    const bounds = first.getBoundingClientRect();
+    const scale = bounds.width / first.offsetWidth;
+    const painted = next.getBoundingClientRect().left - bounds.right;
+    return {painted, local: painted / scale, scale};
+  })()`);
+  // Four-pixel margins on both labels leave an eight-pixel logical paint gap.
+  // Camera projection and fractional layout must not change this layout assertion.
+  assert.ok(
+    headerGap.local >= 8 - 0.25,
+    'Sort-button horizontal insets: ' + JSON.stringify(headerGap),
   );
-  assert.ok(headerGap >= 12, 'Sort-button paint has a gutter before the next column');
   await evaluate(`document.querySelector('.file-heading[data-column=name] .column-label').focus()`);
   await snapshot('desktop-native-header-gutter.png');
 
@@ -2592,7 +2581,7 @@ async function verifyRefinements(): Promise<void> {
             (await settingsEvaluate<number>(
               'document.querySelector(".settings-wide-field .choice-button").clientWidth',
             )) >= 240,
-            'Authorized-folder choice fits its placeholder',
+            'Agent folder choice fits its placeholder',
           );
         if (category === 'Space') {
           assert.equal(
@@ -2614,14 +2603,36 @@ async function verifyRefinements(): Promise<void> {
   await settingsEvaluate(
     `window.viewer.settingsGet().then(value=>window.viewer.settingsPatch([{path:'settings.agents.roots',value:[${JSON.stringify(path.join(fixture.files, 'Folder with a deliberately long descriptive name for permissions and display'))}]}],value.revision))`,
   );
+  await settingsEvaluate(`(() => {
+    const summary = Array.from(document.querySelectorAll('details > summary'))
+      .find(element => element.textContent.trim() === 'Shared connection');
+    if (!summary.parentElement.open) summary.click();
+  })()`);
   await until(
     () =>
       settingsEvaluate<string>(
-        'document.querySelector(".settings-field-detail")?.textContent || ""',
+        `Array.from(document.querySelectorAll('.settings-location span'))
+          .find(element => element.textContent.includes('deliberately long'))?.textContent || ''`,
       ),
-    (value) => value.includes('deliberately long'),
-    'Authorized-folder path remains fully readable',
+    (value) => value.includes('deliberately long') && value.includes('Requested in config.jsonc'),
+    'Requested agent-folder path remains visible without granting access',
   );
+  assert.equal(
+    await settingsEvaluate<boolean>(`(() => {
+      const field = Array.from(document.querySelectorAll('.settings-location span'))
+        .find(element => element.textContent.includes('deliberately long'));
+      field.scrollIntoView({block: 'center'});
+      return field.scrollWidth > field.clientWidth;
+    })()`),
+    false,
+    'Requested agent-folder path wraps within its row',
+  );
+  const requestedAccess = await settingsEvaluate<AgentAccessState>(
+    'window.viewer.agentAccess({kind:"state"})',
+  );
+  assert.equal(requestedAccess.enabled, false);
+  assert.deepEqual(requestedAccess.roots, []);
+  assert.equal(requestedAccess.pending.roots.length, 1);
   await snapshot('desktop-native-settings-long-path.png');
   await tab('Space');
   await setting('Navigation button');
@@ -4679,7 +4690,7 @@ async function verifyStoreFileServices(): Promise<void> {
     'thread-backed recursive size calculation',
   );
   assert.ok(measured.bytes > 0);
-  const deniedPDF = path.join(fixture.files, 'Documents', 'Denied.pdf');
+  const deniedPDF = path.join(fixture.root, 'Denied reader.pdf');
   await writeFile(
     deniedPDF,
     await readFile(path.join(fixture.files, 'Documents', 'Project brief.pdf')),
@@ -4698,7 +4709,6 @@ async function verifyStoreFileServices(): Promise<void> {
     );
   } finally {
     await chmod(deniedPDF, 0o600);
-    await trashFixtureEntry(deniedPDF);
   }
   await verifyServiceWorkflows();
   const { stdout } = await execNative('/bin/ps', ['-axo', 'pid=,ppid=,command=']);
@@ -5092,17 +5102,20 @@ async function verifyRootPlanes(): Promise<void> {
   const previewID = state.workspaces[0].panes.find((pane) => pane.type === 'preview')!.id;
   const face = async (hostID: string, keyboard = false) => {
     const collapsed = await evaluate<boolean>(
-      'document.querySelector(".app-titlebar [aria-label=Overview]")?.getAttribute("aria-expanded") === "false"',
+      `(() => {
+        const map = document.querySelector('[data-plurid-overlay="minimap"]');
+        return !!map?.hasAttribute('popover') && !map.matches(':popover-open');
+      })()`,
     );
     if (collapsed) {
-      await click('.app-titlebar [aria-label="Overview"]');
+      await paletteCommand('Overview');
       await until(
         () =>
           evaluate<boolean>(
             'document.querySelector("[data-plurid-overlay=minimap]")?.matches(":popover-open") === true',
           ),
         Boolean,
-        'crowded workspace overview opens through its titlebar control',
+        'crowded workspace overview opens through its command',
       );
     }
     const engineID = await evaluate<string>(

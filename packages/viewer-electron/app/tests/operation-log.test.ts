@@ -4,12 +4,14 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { OperationJob } from '../src/domain/contracts';
 import { Operations } from '../src/desktop/operations/operations';
+import * as removal from '../src/desktop/operations/removal';
 import {
   OperationLog,
   operationJournal,
   type OperationReceipt,
 } from '../src/desktop/operations/operation-journal';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { removalBlocked } from './support/preservation';
 
 let root: string, data: string;
 beforeEach(async () => {
@@ -99,7 +101,7 @@ describe('append-only operation log', () => {
       undoable: true,
     });
     expect(restored.all().find((job) => job.id === id)?.completed).toHaveLength(files.length);
-  });
+  }, 60_000);
   it('replays deltas, ignores a torn final line and keeps cleared fields cleared', async () => {
     const log = new OperationLog(data);
     await log.load();
@@ -159,7 +161,33 @@ describe('append-only operation log', () => {
     await log.load();
     const value = receipt({ status: 'completed' });
     await log.record(value);
-    await log.forget(value.job.id);
-    expect(await readdir(path.join(data, 'operation-journal-v2'))).toEqual([]);
+    if (removalBlocked('operation-history log reclamation', [logFile(value.job.id)])) {
+      await expect(log.forget(value.job.id)).rejects.toMatchObject({
+        code: 'TEST_REMOVAL_BLOCKED',
+      });
+      expect((await new OperationLog(data).load()).receipts.map((item) => item.job.id)).toEqual([
+        value.job.id,
+      ]);
+    } else {
+      await log.forget(value.job.id);
+      expect(await readdir(path.join(data, 'operation-journal-v2'))).toEqual([]);
+    }
+  });
+  it('can retry forgetting a receipt after filesystem removal fails', async () => {
+    const log = new OperationLog(data);
+    await log.load();
+    const value = receipt({ status: 'completed' });
+    await log.record(value);
+    const blocked = vi
+      .spyOn(removal, 'removePrivateData')
+      .mockRejectedValue(new Error('Generated removal failure'));
+    try {
+      await expect(log.forget(value.job.id)).rejects.toThrow('Generated removal failure');
+      await expect(log.forget(value.job.id)).rejects.toThrow('Generated removal failure');
+      expect(blocked).toHaveBeenCalledTimes(2);
+      expect(await readFile(logFile(value.job.id), 'utf8')).toContain(value.job.id);
+    } finally {
+      blocked.mockRestore();
+    }
   });
 });

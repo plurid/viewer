@@ -3,6 +3,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { privateStage } from '../src/desktop/operations/staging';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { removalBlocked } from './support/preservation';
 let root: string;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-staging-');
@@ -16,7 +17,12 @@ it('removes an emptied private directory after publication', async () => {
   await writeFile(stage.file, 'published copy');
   await rename(stage.file, path.join(root, 'Published.txt'));
   expect(await stage.dispose()).toBeUndefined();
-  expect(await readdir(root)).toEqual(['Published.txt']);
+  if (removalBlocked('empty transfer staging cleanup', [path.dirname(stage.file)])) {
+    expect(await readdir(path.dirname(stage.file))).toEqual([]);
+    expect((await readdir(root)).sort()).toEqual(
+      [path.basename(path.dirname(stage.file)), 'Published.txt'].sort(),
+    );
+  } else expect(await readdir(root)).toEqual(['Published.txt']);
 });
 it('moves partial content to the Trash instead of deleting it', async () => {
   const bin = path.join(root, 'Trash');
@@ -27,6 +33,12 @@ it('moves partial content to the Trash instead of deleting it', async () => {
     await rename(file, path.join(bin, path.basename(file)));
   });
   await writeFile(stage.file, 'partial copy');
+  if (removalBlocked('partial transfer staging Trash', [path.dirname(stage.file)])) {
+    expect(await stage.dispose()).toBe(path.dirname(stage.file));
+    expect(trashed).toEqual([]);
+    expect(await readFile(stage.file, 'utf8')).toBe('partial copy');
+    return;
+  }
   expect(await stage.dispose()).toBeUndefined();
   expect(trashed).toHaveLength(1);
   expect(path.basename(trashed[0])).toMatch(/^Viewer incomplete transfer /);

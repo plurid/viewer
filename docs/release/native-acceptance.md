@@ -31,6 +31,41 @@ On October 13, all eight guided checks completed on signed `2026101318`, macOS 1
 | R01 | Repeat mandatory scenarios on macOS 13 and the current stable macOS version, using the same release candidate. The local machine runs macOS 15.1. As checked October 13, Apple's current-version table lists 27.0.1; verify again at execution time. [Apple version table](https://support.apple.com/en-us/109033). |
 | D01 | Signed Store distribution build/profile and installer pass local verification and App Store Connect validation; direct DMG passes notarization/stapling/Gatekeeper. Test clean installation, first launch, upgrade/relaunch and retained window placement on a disposable user/profile. |
 
+## Preserved automated validation
+
+Coding-agent runs keep both preservation flags enabled:
+
+```sh
+VIEWER_TEST_PRESERVE=1 \
+VIEWER_TEST_NO_REMOVAL=1 \
+VIEWER_TEST_REMOVAL_REPORT=/absolute/path/to/retained-removal-gates.jsonl \
+pnpm test
+```
+
+The complete suite tests the configured preservation behavior: no source/private
+data is deleted, failed cleanup retains inspection artifacts, and explicit
+removal requests fail before mutation. Each deletion-dependent case also records
+the positive removal branch it did not execute. Keep that manifest beside the
+test report; a green test result does not authorize or establish positive OS
+removal. Every real removal still follows the exact-path permission and Trash
+rules in [AGENTS.md](../../AGENTS.md).
+
+The four conditional native tests can run without system Trash operations.
+`VIEWER_TEST_MAC_BINDING` selects the candidate's native binding for read-only
+metadata and exclusive rename in a generated restore folder.
+`VIEWER_TEST_REVIEW_BINDING` selects a separate build of
+`tools/file-review-test.mm`, which retains the production review checks and
+replaces only the OS Trash selector with a recorder. The tests require its
+recording marker before every positive call. These checks establish native
+validation and generated restore behavior, rather than actual system Trash
+movement or erasure.
+
+For packaged smoke, also set `VIEWER_TEST_BINARY` to the exact immutable
+candidate's executable, then run `pnpm test:desktop`. Reports and all fixtures
+remain on disk. Routine windows stay hidden. Configured executable/terminal and
+agent approvals need a genuine operator session; JSONC and test automation must
+not manufacture them.
+
 ## Shared local agent consent
 
 From `packages/viewer-electron/app`, run the direct-build scenario against an

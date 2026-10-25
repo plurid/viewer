@@ -1,14 +1,16 @@
 import { execFile } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { expect, it } from 'vitest';
 import { copyPDFRuntime } from '../tools/pdf-runtime';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
-import { createFixtures } from './fixtures';
+import { pdfFixture } from './fixtures';
 
 it('extracts a PDF from the packaged ESM and native dependencies without the workspace', async () => {
   const root = await temporaryRoot('viewer-pdf-runtime-');
-  const fixture = await createFixtures();
+  const file = path.join(root, 'Generated.pdf');
+  await writeFile(file, pdfFixture());
   try {
     await copyPDFRuntime(root, process.platform, process.arch);
     const { stdout, stderr } = await promisify(execFile)(
@@ -32,7 +34,7 @@ it('extracts a PDF from the packaged ESM and native dependencies without the wor
           console.log((await page.getTextContent()).items.map(item => item.str || '').join(' '));
         } finally { await task.destroy(); }`,
         root,
-        path.join(fixture.files, 'Documents/Project brief.pdf'),
+        file,
       ],
       { cwd: root, timeout: 10000 },
     );
@@ -41,7 +43,8 @@ it('extracts a PDF from the packaged ESM and native dependencies without the wor
     expect(stderr).not.toContain('Cannot load');
     expect(stderr).not.toContain('Cannot polyfill');
   } finally {
-    await trashTemporary(fixture.root);
     await trashTemporary(root);
   }
-});
+  // Copying the packaged dependency tree competes with the suite's other filesystem work;
+  // the extraction subprocess retains its separate 10-second deadline.
+}, 60_000);

@@ -1,9 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chmod, mkdir, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import type { OperationJob } from '../src/domain/contracts';
 import { Checkpoints } from '../src/desktop/operations/checkpoints';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { removalBlocked } from './support/preservation';
 let root: string;
 const access = vi.fn(async (_paths: readonly string[]) => {});
 const coordination = { run: async <T>(_intents: unknown, work: () => Promise<T>) => work() };
@@ -48,8 +58,8 @@ describe('reviewed content checkpoints', () => {
     const start = vi.fn(() => 'job');
     await expect(service.restore(record.id, destination, { start })).rejects.toThrow('changed');
     expect(start).not.toHaveBeenCalled();
-    await trashFixtureEntry(path.join(snapshot, 'Unrecorded.txt'));
-    await trashFixtureEntry(path.join(snapshot, 'Empty'));
+    await rename(path.join(snapshot, 'Unrecorded.txt'), path.join(root, 'Retained unrecorded.txt'));
+    await rename(path.join(snapshot, 'Empty'), path.join(root, 'Retained empty folder'));
     await expect(service.restore(record.id, destination, { start })).rejects.toThrow('changed');
     expect(start).not.toHaveBeenCalled();
   });
@@ -123,8 +133,19 @@ describe('reviewed content checkpoints', () => {
       });
       expect((await service.list()).records).toHaveLength(1);
       jobs[0].status = 'completed';
-      await service.remove(record.id);
-      expect((await service.list()).records).toEqual([]);
+      if (
+        removalBlocked('checkpoint removal after restore', [path.join(root, 'Private', record.id)])
+      ) {
+        await expect(service.remove(record.id)).rejects.toMatchObject({
+          code: 'TEST_REMOVAL_BLOCKED',
+        });
+        expect((await service.list()).records).toEqual([
+          expect.objectContaining({ id: record.id, status: 'ready' }),
+        ]);
+      } else {
+        await service.remove(record.id);
+        expect((await service.list()).records).toEqual([]);
+      }
     } finally {
       release();
       await settledRestore;
@@ -172,11 +193,21 @@ describe('reviewed content checkpoints', () => {
     expect(await service.estimate([file])).toMatchObject({ supported: false, availableBytes: 1 });
     await expect(service.create('Second', [file])).rejects.toThrow('budget');
     expect((await service.list()).records).toHaveLength(1);
-    await service.remove(record.id);
-    expect(await service.estimate([file])).toMatchObject({
-      supported: true,
-      availableBytes: budget,
-    });
+    if (removalBlocked('checkpoint budget reclamation', [path.join(root, 'Private', record.id)])) {
+      await expect(service.remove(record.id)).rejects.toMatchObject({
+        code: 'TEST_REMOVAL_BLOCKED',
+      });
+      expect(await service.estimate([file])).toMatchObject({ supported: false, availableBytes: 1 });
+      expect((await service.list()).records).toEqual([
+        expect.objectContaining({ id: record.id, status: 'ready' }),
+      ]);
+    } else {
+      await service.remove(record.id);
+      expect(await service.estimate([file])).toMatchObject({
+        supported: true,
+        availableBytes: budget,
+      });
+    }
   });
   it('keeps unsupported/symlink coverage explicit and cancellation leaves no ready record', async () => {
     const file = root + '/Source.txt';
@@ -192,9 +223,15 @@ describe('reviewed content checkpoints', () => {
     await expect(service.create('Cancelled', [file], abort.signal)).rejects.toThrow();
     expect((await service.list()).records).toEqual([]);
     expect(await readFile(file, 'utf8')).toBe('Original.');
-    expect((await readdir(root + '/Private')).filter((name) => !name.endsWith('.json'))).toEqual(
-      [],
-    );
+    const retained = (await readdir(root + '/Private')).filter((name) => !name.endsWith('.json'));
+    if (
+      removalBlocked(
+        'cancelled checkpoint cleanup',
+        retained.map((name) => path.join(root, 'Private', name)),
+      )
+    )
+      expect(retained).toHaveLength(1);
+    else expect(retained).toEqual([]);
   });
   it('rechecks revocation and snapshot integrity before a restore can start', async () => {
     const file = root + '/Source.txt';

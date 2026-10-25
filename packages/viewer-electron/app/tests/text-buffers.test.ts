@@ -8,6 +8,7 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { TextBuffers, type TextBuffer } from '../src/desktop/editing/text-buffers';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { removalBlocked } from './support/preservation';
 
 let root: string, buffers: TextBuffers;
 beforeEach(async () => {
@@ -57,9 +58,21 @@ describe('text buffers', () => {
   });
   it('removes a buffer only when it is discarded', async () => {
     await buffers.write(scratch('draft'));
-    await buffers.discard(scratch('').id);
-    expect(await buffers.read(scratch('').id)).toBeNull();
-    expect(await buffers.list()).toEqual([]);
+    if (
+      removalBlocked('explicit text-buffer discard', [
+        path.join(root, 'text-buffers', scratch('').id + '.json'),
+      ])
+    ) {
+      await expect(buffers.discard(scratch('').id)).rejects.toMatchObject({
+        code: 'TEST_REMOVAL_BLOCKED',
+      });
+      expect((await buffers.read(scratch('').id))?.text).toBe('draft');
+      expect(await buffers.list()).toHaveLength(1);
+    } else {
+      await buffers.discard(scratch('').id);
+      expect(await buffers.read(scratch('').id)).toBeNull();
+      expect(await buffers.list()).toEqual([]);
+    }
   });
   it('keeps an unreadable buffer file, and reports it', async () => {
     const directory = path.join(root, 'text-buffers');

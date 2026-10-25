@@ -197,6 +197,17 @@ Native file-information editing is isolated in domain/files/information.ts, desk
 
 `tests/electron-smoke.ts` launches the actual locally signed app against synthetic files in a temporary profile. It verifies every initial preview family, malformed/missing assets, selectable PDF text/search, media cleanup, four explorer views, independent model orbiting, native IPC/resource restrictions, workspace switching/restoration and the close-flush handshake. The browser fixture server adds UI checks with an isolated file-operation clipboard and Trash adapter. Copy Path writes to the browser text clipboard, reports permission failures and clears the virtual file selection only after a successful write. Raster/video fixtures are authored color samples; all model, PDF and archive fixtures are generated locally. No user files are mutated by verification.
 
+Preserved validation sets `VIEWER_TEST_PRESERVE=1` and
+`VIEWER_TEST_NO_REMOVAL=1`. The removal boundary blocks source/private-data
+deletion, temporary cleanup leaves artifacts alone, and staging retains empty or
+partial directories without turning completed publication into a failure.
+Deletion-dependent tests assert denial or retention in that mode and record their
+unexecuted positive branches through `tests/support/preservation.ts`. A passing
+preserved suite does not establish those positive removal outcomes. Missing-path
+and substitution tests use reversible moves of generated files rather than
+deleting their fixtures. Native clipboard snapshots remain in memory and travel
+over stdin; restoration checks that the current text still belongs to the test.
+
 Packaged functional checks default to hidden offscreen Viewer and Settings windows with GPU rendering retained. Test mode requires explicit render/background flags and an isolated profile; normal window behavior is unaffected. The macOS QA instance uses accessory activation policy and never calls window show/focus or native activation. A read-only NSRunningApplication probe asserts that it remains inactive, including after closing Settings. Foreground activation and physical frame profiling require `VIEWER_TEST_FOREGROUND=1`; offscreen timings are excluded from those measurements.
 
 Run `pnpm check`, `pnpm lint`, `pnpm test`, and `pnpm package` from the root. `pnpm make` produces a macOS ZIP; `pnpm test:desktop` verifies the packaged app. Fuses disable RunAsNode, Node options and Node CLI inspection, require ASAR-only loading and validate ASAR integrity. Local ad-hoc signing makes the development bundle executable; certificate signing/notarization are release work.

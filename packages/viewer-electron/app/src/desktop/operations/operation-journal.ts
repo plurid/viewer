@@ -407,8 +407,8 @@ export class OperationLog {
     return this.serial(async () => {
       const written = this.written.get(id);
       if (!written) return;
-      this.written.delete(id);
       await removePrivateData(this.directory, written.file);
+      this.written.delete(id);
     });
   }
   /** The one place log bytes reach disk; tests replace it to simulate failures. */

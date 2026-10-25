@@ -10,6 +10,7 @@ import {
   trashFixtureEntry,
   trashTemporary,
 } from '../tools/temporary';
+import { removalBlocked } from './support/preservation';
 
 describe('owned test folders', () => {
   it('removes scenario entries inside an owned directory that temporaryRoot did not create', async () => {
@@ -20,14 +21,23 @@ describe('owned test folders', () => {
     const entry = path.join(directory, 'entry');
     await mkdir(entry);
     await writeFile(path.join(entry, 'generated.txt'), 'Generated fixture.');
-    await trashFixtureEntry(entry);
-    expect(existsSync(entry)).toBe(false);
+    if (removalBlocked('owned fixture-entry Trash', [entry])) {
+      await expect(trashFixtureEntry(entry)).rejects.toMatchObject({
+        code: 'TEST_REMOVAL_BLOCKED',
+      });
+      expect(readFileSync(path.join(entry, 'generated.txt'), 'utf8')).toBe('Generated fixture.');
+    } else {
+      await trashFixtureEntry(entry);
+      expect(existsSync(entry)).toBe(false);
+    }
     // Ownership is only ever taken by creating the folder.
     await expect(ownedDirectory(directory)).rejects.toMatchObject({ code: 'EEXIST' });
     await trashTemporary(directory);
   });
   it('refuses entries outside the folders this run owns', async () => {
-    await expect(trashFixtureEntry(os.tmpdir())).rejects.toThrow('Refusing to remove');
+    await expect(trashFixtureEntry(os.tmpdir())).rejects.toThrow(
+      process.env.VIEWER_TEST_NO_REMOVAL === '1' ? 'removal is blocked' : 'Refusing to remove',
+    );
     expect(existsSync(os.tmpdir())).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chmod, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, readFile, readdir, rename, stat, symlink, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -27,7 +27,7 @@ import {
   savePreviewValue,
   updateFolderPresentation,
 } from '../src/renderer/state/store';
-import { temporaryRoot, trashTemporary, trashFixtureEntry } from '../tools/temporary';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const project = (): ProjectDefinition => ({
   version: 1,
@@ -183,9 +183,7 @@ describe('portable project definitions', () => {
   });
 });
 async function renameToLink(file: string) {
-  const bytes = await readFile(file);
-  await trashFixtureEntry(file);
-  await writeFile(file + '.original', bytes);
+  await rename(file, file + '.original');
   await symlink(file + '.original', file);
 }
 describe('project sessions', () => {

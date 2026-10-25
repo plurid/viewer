@@ -1,4 +1,4 @@
-import { mkdtemp, lstat, rename } from 'node:fs/promises';
+import { mkdtemp, lstat, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { macFiles } from '../native/macos-files';
@@ -29,6 +29,11 @@ export async function privateStage(
     async dispose(): Promise<string | undefined> {
       if (!(await owned(root)))
         throw new Error('The temporary transfer location changed. It was kept for inspection.');
+      if (process.env.VIEWER_TEST_NO_REMOVAL === '1') {
+        // Successful publication leaves only an empty artifact. Partial content remains at
+        // its original generated path and is reported without invoking a removal adapter.
+        return (await readdir(root)).length ? root : undefined;
+      }
       try {
         await removeEmptyDirectory(root);
         return;

@@ -8,6 +8,29 @@ Each check records the artifact hash, runtime/channel, OS, fixtures, result and 
 
 ## Work and acceptance ledger
 
+### October 25 complete preserved validation
+
+The complete configured suite passes **1,700 tests in 229 files, with no skips**.
+All four TypeScript targets, full ESLint/Prettier checks, normal packaging and
+strict/deep signature verification pass. The final direct bundle passes the
+complete packaged desktop smoke and the supplemental CAD/Settings refinement
+scenario. Candidate hashes, exact commands, native evidence and remaining limits
+are recorded in [verification](verification.md).
+
+The run fixes receipt-removal retry bookkeeping, checkpoint error preservation,
+operation error ordering and use of a removed Three.js shadow mode. Validation
+now retains temporary/staging artifacts, restores clipboard contents through
+memory rather than a saved file, and uses the current Overview command and
+pending-agent-folder UI. The PDF test uses one PDF fixture; filesystem-heavy
+integration checks have explicit budgets while extraction retains its deadline.
+
+Preservation is an explicit test mode. Fourteen cases verify refusal or retention
+and record positive removal branches as **unverified**; they are not positive OS
+removal passes. All four native binding tests run through read-only metadata,
+generated exclusive-rename restoration and a recording Trash selector. No system
+Trash movement or erasure is established. Store, distribution and physical
+acceptance remain bound to their separately identified candidates.
+
 ### October 25 framing and native agent consent
 
 The direct candidate fixes scheduler-delayed framing and stale resize ownership.
