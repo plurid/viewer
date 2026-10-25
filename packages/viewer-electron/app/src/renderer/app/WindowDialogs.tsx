@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { CapturedTarget, CustomAction } from '../../domain/automation/actions';
 import { CommitDialog } from '../git/CommitDialog';
+import { WorktreesDialog } from '../git/worktrees/WorktreesDialog';
 import type { WorkspaceController } from '../workspace/context';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { WorkspaceBackgroundDialog } from '../ui/workspace/WorkspaceBackgroundDialog';
@@ -29,6 +30,7 @@ export type WindowDialog =
   | { type: 'profile' | 'template' | 'go-to' | 'connect' | 'tag' }
   | { type: 'macro'; commands: string[] }
   | { type: 'git-commit'; id: string; target: CapturedTarget }
+  | { type: 'git-worktrees'; id: string; target: CapturedTarget }
   | { type: 'shortcut'; path: string; name: string };
 
 /** Window-level dialogs have one owner; opening another replaces the previous request. */
@@ -59,6 +61,14 @@ export function WindowDialogs({
   const tagging = dialog?.type === 'tag';
   return (
     <>
+      {dialog?.type === 'git-worktrees' && (
+        <WorktreesDialog
+          key={dialog.id}
+          target={dialog.target}
+          workspace={controller}
+          onClose={onClose}
+        />
+      )}
       {dialog?.type === 'git-commit' && (
         <CommitDialog
           key={dialog.id}

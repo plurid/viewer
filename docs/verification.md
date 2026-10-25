@@ -1,5 +1,56 @@
 # Verification
 
+## October 25 existing-worktrees candidate
+
+The direct Apple Silicon candidate is retained at
+`/private/tmp/viewer-worktrees-validated-20261025-swm6x6j3/Viewer.app`.
+Executable SHA-256:
+`d9a18521e53c46a2859c7abebaf5bd67ac3e7669c6d3f2356c477fd1f00287ba`;
+ASAR SHA-256:
+`d3a450fbd15efc24f22188d0ee47549a3167f5f79e1c949255efc5666b03e82a`.
+Adjacent `candidate.json` and `verification.json` bind the unchanged production
+source, lockfile, bundle, test reports and native evidence.
+
+**All 1,734 tests in 236 files pass, with zero failures or skips.** The full run
+uses four workers, `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1`, this
+candidate's native binding and the retained recording review binding. `unit.json`
+and `unit.log` retain the result; `verification.json` records the exact command
+and environment. Fourteen added cases cover parsing/bounds, real main/feature
+checkouts, unchanged files/indices/refs, owner/expiry isolation, stale branch and
+folder identities, unavailable builds, picker behavior, independent navigation,
+stale opening context and linked comparisons.
+
+All TypeScript targets, full ESLint, full Prettier, ordinary `pnpm package` and
+`codesign --verify --deep --strict` pass. Build log:
+`/private/tmp/viewer-worktrees-package-20261025.log`. The dependency lockfile is
+unchanged. The fresh interface review returned **ship**, with no material fixes;
+the design detector returned `[]`. Dark, light and minimum-window picker captures
+were inspected, along with the two-branch arrangement.
+
+Packaged native acceptance passes four workflow checks: actual discovery and
+independent Clean/2 changes headers, a second view of the same checkout, an
+editable linked working-file comparison, and cold restoration of all three
+folder views and the comparison. Main-file contents, both index hashes and
+shared refs remain unchanged. Fixture and screenshots:
+`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-worktrees-C93gTj`.
+The driver and result are retained beside the candidate report.
+
+The full default packaged desktop smoke also passes and quits cleanly. It covers
+previews, jobs/Undo, all explorer views, model gestures, IPC/resource boundaries
+and workspace restoration. `smoke.log` retains the result. Fixture:
+`/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-P0Gb8n`.
+Native evidence is retained under
+`packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T08-16-08-540Z-b2d98dce-fb66-4b3e-8918-03caff634af9`.
+
+All generated fixtures are preserved. Positive removal branches and native
+Save-picker acceptance retain the operator gates recorded below; preservation
+checks do not qualify their positive paths. No new physical hotkey, live provider,
+affirmative agent consent, Store or distribution qualification is claimed. The
+packaged smoke verifies that pending agent consent stays disabled; authorized
+protocol behavior is covered by the service suite. Worktree creation, branch
+switching, removal and agent adapters remain outside
+[this implemented stage](git-worktrees.md).
+
 ## October 25 Journal candidate
 
 The direct Apple Silicon candidate is retained at

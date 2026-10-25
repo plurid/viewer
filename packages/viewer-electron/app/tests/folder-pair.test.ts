@@ -297,7 +297,10 @@ describe('saved arrangements', () => {
   });
 });
 
-const planes = [{ route: '/folders/:id', component: () => createElement('div', null, 'folder') }];
+const planes = ['folders', 'git-changes', 'diffs'].map((route) => ({
+  route: `/${route}/:id`,
+  component: () => createElement('div', null, route),
+}));
 const configuration = configurationWith({ elements: { plane: { width: 800, height: 480 } } });
 let rendered: RenderedPlurid | undefined;
 let clock: ReturnType<typeof installFrameClock> | undefined;
@@ -322,6 +325,120 @@ const target = () => {
   const folder = activeWorkspace().panes[0]!;
   return { workspaceID: activeWorkspace().id, paneID: folder.id, path: folder.path };
 };
+
+const worktreeTarget = () => ({
+  workspaceID: activeWorkspace().id,
+  rootID: activeWorkspace().panes[0]!.id,
+  paneID: activeWorkspace().panes[0]!.id,
+  panePath: activeWorkspace().panes[0]!.path,
+  directory: activeWorkspace().panes[0]!.path,
+  selection: [],
+});
+
+describe('existing worktree views', () => {
+  it('places distinct checkouts beside each other with independent navigation and persisted roots', async () => {
+    const { controller } = await workspace();
+    const read = vi.fn(async () => ({
+      kind: 'folder',
+      entry: { path: '/fixtures-feature', directory: true },
+    }));
+    Object.assign(window.viewer, { gitWorktrees: read });
+    const captured = worktreeTarget();
+    await act(async () =>
+      controller.openWorktree(captured, { catalogID: 'catalog', worktreeID: 'feature' }),
+    );
+    const space = activeWorkspace();
+    const [first, second] = space.panes as FolderPane[];
+    expect(space.roots).toEqual([first!.id, second!.id]);
+    expect(first!.path).toBe('/fixtures');
+    expect(second!.path).toBe('/fixtures-feature');
+    expect(first!.pair).toBeUndefined();
+    expect(second!.pair).toBeUndefined();
+    expect(rendered!.handle.tree.get().map((node) => node.width)).toEqual([486, 486]);
+    act(() => navigate(second!.id, '/fixtures-feature/src'));
+    expect(activeWorkspace().panes[0]?.path).toBe('/fixtures');
+    expect(stateSchema.parse(getState().saved).workspaces[0]?.panes[1]).toMatchObject({
+      path: '/fixtures-feature/src',
+      history: ['/fixtures-feature', '/fixtures-feature/src'],
+    });
+    await act(async () => controller.closePane(second!.id));
+    expect(activeWorkspace().panes.map((pane) => pane.path)).toEqual(['/fixtures']);
+    expect(read).toHaveBeenCalledExactlyOnceWith({
+      kind: 'open',
+      catalogID: 'catalog',
+      worktreeID: 'feature',
+    });
+  });
+
+  it('reuses an existing folder view and creates another only when requested', async () => {
+    const { controller } = await workspace();
+    Object.assign(window.viewer, {
+      gitWorktrees: vi.fn(async () => ({
+        kind: 'folder',
+        entry: { path: '/fixtures-feature', directory: true },
+      })),
+    });
+    const captured = worktreeTarget();
+    const selection = { catalogID: 'catalog', worktreeID: 'feature' };
+    await act(async () => controller.openWorktree(captured, selection));
+    const featureID = activeWorkspace().panes[1]!.id;
+    await act(async () => controller.openWorktree(captured, selection));
+    expect(activeWorkspace().panes).toHaveLength(2);
+    expect(getState().activePane).toBe(featureID);
+    await act(async () => controller.openWorktree(captured, selection, true));
+    const copies = activeWorkspace().panes.filter((pane) => pane.path === '/fixtures-feature');
+    expect(copies).toHaveLength(2);
+    expect(copies[0]?.id).not.toBe(copies[1]?.id);
+    act(() => navigate(copies[0]!.id, '/fixtures-feature/subfolder'));
+    expect(activeWorkspace().panes.find((pane) => pane.id === copies[1]!.id)?.path).toBe(
+      '/fixtures-feature',
+    );
+  });
+
+  it('rejects a stale opening context before adding a root', async () => {
+    const { controller } = await workspace();
+    let finish!: (reply: unknown) => void;
+    Object.assign(window.viewer, {
+      gitWorktrees: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    });
+    const captured = worktreeTarget();
+    const opening = controller.openWorktree(captured, {
+      catalogID: 'catalog',
+      worktreeID: 'feature',
+    });
+    const rejection = expect(opening).rejects.toThrow('originating folder changed');
+    act(() => navigate(captured.paneID, '/fixtures/elsewhere'));
+    finish({ kind: 'folder', entry: { path: '/fixtures-feature', directory: true } });
+    await rejection;
+    expect(activeWorkspace().roots).toHaveLength(1);
+  });
+
+  it('links Git changes and diffs under their source, returning there when the child closes', async () => {
+    const { controller } = await workspace();
+    const folder = activeWorkspace().panes[0]!;
+    await act(async () => controller.openGitChanges('/fixtures', folder.id));
+    const changes = activeWorkspace().panes.find((pane) => pane.type === 'git-changes')!;
+    expect(activeWorkspace().roots).toEqual([folder.id]);
+    expect(controller.parentPaneID(changes.id)).toBe(folder.id);
+    await act(async () =>
+      controller.openDiff(
+        { kind: 'empty', name: 'HEAD' },
+        { kind: 'file', path: '/fixtures/notes.txt' },
+        changes.id,
+      ),
+    );
+    const diff = activeWorkspace().panes.find((pane) => pane.type === 'diff')!;
+    expect(controller.parentPaneID(diff.id)).toBe(changes.id);
+    expect(activeWorkspace().roots).toEqual([folder.id]);
+    await act(async () => controller.closePane(diff.id));
+    expect(getState().activePane).toBe(changes.id);
+    await act(async () => controller.closePane(changes.id));
+    expect(getState().activePane).toBe(folder.id);
+  });
+});
 async function workspace(planeConfiguration = configuration) {
   rendered = await renderPlurid({
     id: 'folder-pair',

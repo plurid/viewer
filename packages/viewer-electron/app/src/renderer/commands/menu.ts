@@ -193,7 +193,13 @@ export function contextMenuSections(
       return branch(label, [
         section(
           rows.filter((item) =>
-            ['git-changes', 'git-diff', 'git-action.status', 'git-action.log'].includes(item.id),
+            [
+              'git-worktrees',
+              'git-changes',
+              'git-diff',
+              'git-action.status',
+              'git-action.log',
+            ].includes(item.id),
           ),
         ),
         section(

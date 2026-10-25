@@ -30,6 +30,7 @@ export interface WindowActions {
   /** Names the current chrome and look as a setting profile. */
   profileDialog(): void;
   gitCommit(target: CapturedTarget): void;
+  gitWorktrees(target: CapturedTarget): void;
 }
 /** The state snapshot and scope predicates shared by every window command group. */
 export function windowScopes(actions: WindowActions) {

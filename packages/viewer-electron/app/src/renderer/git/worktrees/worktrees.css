@@ -1,0 +1,112 @@
+.worktrees-dialog {
+  width: min(900px, 94vw);
+}
+.worktrees-controls {
+  display: flex;
+  gap: 8px;
+  padding: 16px 18px 8px;
+}
+.worktrees-controls input {
+  flex: 1;
+  min-width: 0;
+}
+.worktrees-repository {
+  margin: 0;
+  padding: 0 18px 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.worktrees-list {
+  max-height: min(36vh, 340px);
+  overflow: auto;
+  border-block: 1px solid var(--line);
+  overscroll-behavior: contain;
+}
+.worktree-option {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(180px, 2fr) minmax(110px, auto);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  background: var(--surface);
+}
+.worktree-option[aria-selected='true'] {
+  background: var(--selection);
+}
+.worktree-option:hover {
+  background: var(--raised);
+}
+.worktree-option[aria-selected='true']:hover {
+  background: var(--selection);
+}
+.worktree-branch {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.worktree-location {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.worktree-state {
+  color: var(--muted);
+  font-size: 11px;
+}
+.worktrees-empty {
+  padding: 20px 18px;
+  margin: 0;
+  color: var(--muted);
+  text-align: center;
+}
+.worktree-inspection {
+  padding: 14px 18px;
+  background: var(--field);
+  border-bottom: 1px solid var(--line);
+}
+.worktree-inspection strong {
+  overflow-wrap: anywhere;
+}
+.worktree-inspection p {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.worktree-inspection-path {
+  color: var(--muted);
+}
+.worktrees-error {
+  color: var(--danger);
+  margin: 0;
+  padding: 8px 18px;
+  overflow-wrap: anywhere;
+}
+.worktree-inspection .worktrees-error {
+  padding: 0;
+}
+.worktrees-preferences {
+  padding: 12px 18px;
+}
+.worktrees-preferences label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.worktrees-preferences p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+@media (max-width: 760px) {
+  .worktree-option {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+  }
+  .worktree-location {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

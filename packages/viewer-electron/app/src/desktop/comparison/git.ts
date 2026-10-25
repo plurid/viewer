@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { parseGitWorktrees } from '../../domain/comparison/worktrees';
 import {
   gitSourceSchema,
   parseGitStatus,
@@ -240,6 +241,30 @@ export class GitReader {
       kind: 'head',
       source: source && (await this.object(source)) ? source : null,
       root: snapshot.root,
+    };
+  }
+  /** Also used by explicit discovery under its own direct-build policy, independent of badges. */
+  async worktrees(file: string) {
+    this.check();
+    const directory = await this.directory(file);
+    await this.version(directory);
+    const common = (
+      await this.command(
+        directory,
+        ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+        32768,
+      )
+    )
+      .toString('utf8')
+      .replace(/\n$/, '');
+    if (!path.isAbsolute(common)) throw new Error('Git returned a relative repository directory.');
+    await this.access([common]);
+    const commonDirectory = await realpath(common);
+    const output = await this.command(directory, ['worktree', 'list', '--porcelain', '-z']);
+    return {
+      currentPath: directory,
+      commonDirectory,
+      worktrees: parseGitWorktrees(new TextDecoder('utf-8', { fatal: true }).decode(output)),
     };
   }
   private async object(source: GitSource): Promise<string | undefined> {

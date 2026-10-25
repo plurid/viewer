@@ -171,7 +171,7 @@ function ComparisonContent() {
         {record.type === 'diff' ? (
           <LazyDiffPlane pane={record} />
         ) : (
-          <LazyGitChanges path={record.path} />
+          <LazyGitChanges path={record.path} paneID={record.id} />
         )}
       </Suspense>
     </PreviewFrame>

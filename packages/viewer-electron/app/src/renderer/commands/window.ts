@@ -48,6 +48,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     ...gitCommands(scopes, {
       start: (kind, target) => actions.workspace.newGitAction(target, { kind }),
       commit: (target) => actions.gitCommit(target),
+      worktrees: (target) => actions.gitWorktrees(target),
     }),
     ...templateCommands(scopes),
     ...explodeCommands(scopes),

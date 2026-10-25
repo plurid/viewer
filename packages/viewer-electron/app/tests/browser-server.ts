@@ -1,6 +1,7 @@
 import type { ComparisonRequest } from '../src/domain/comparison/folders';
 import type { GitRequest } from '../src/domain/comparison/git';
 import { GitReader } from '../src/desktop/comparison/git';
+import { GitWorktrees } from '../src/desktop/comparison/worktrees';
 import { JournalStore } from '../src/desktop/journal/store';
 import { JournalActivity } from '../src/desktop/journal/activity';
 import { createJournalHandlers } from '../src/desktop/journal/handlers';
@@ -69,6 +70,13 @@ if (!Number.isInteger(fixturePort) || fixturePort < 1024 || fixturePort > 65535)
 const fixtureOrigin = 'http://127.0.0.1:' + fixturePort;
 const fixture = await createFixtures();
 const canonicalFixtureRoot = await realpath(fixture.root);
+const worktrees = new GitWorktrees({
+  available: () => true,
+  access: async (paths) => {
+    paths.forEach(scoped);
+  },
+  owner: () => 'browser-fixture',
+});
 const permissionScenario = process.env.VIEWER_TEST_SCENARIO === 'folder-access';
 const restrictedFolder = path.join(fixture.files, 'Models');
 let permissionGranted = false;
@@ -295,6 +303,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       const file = scoped(request.path);
       return request.kind === 'head' ? git.head(file) : git.status(file, request.refresh);
     }
+    case 'gitWorktrees':
+      return worktrees.request(schemas.gitWorktrees.parse(args)[0], 1);
     case 'hotkeyStatus':
       return {
         registered: false,
@@ -714,6 +724,7 @@ console.log(
 );
 async function close() {
   git.close();
+  worktrees.close();
   await webPreviews.close();
   sizes.close();
   resources.clear();

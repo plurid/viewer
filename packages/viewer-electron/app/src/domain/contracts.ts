@@ -5,6 +5,7 @@ import type { GitRequest, GitReply, GitSource } from './comparison/git';
 import type { GitActionKind, GitActionRequest, GitActionReply } from './comparison/git-actions';
 import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
+import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
 import type {
   JournalFilter,
   JournalQuery,
@@ -506,6 +507,7 @@ export interface ViewerAPI {
   workspaceClaim(id: string): Promise<boolean>;
   newWindow(): Promise<void>;
   git(request: GitRequest): Promise<GitReply>;
+  gitWorktrees(request: WorktreeRequest): Promise<WorktreeReply>;
   gitResource(source: GitSource): Promise<Resource>;
   gitAction(request: GitActionRequest): Promise<GitActionReply>;
   watchRules(request: WatchRuleRequest): Promise<WatchRuleReply>;

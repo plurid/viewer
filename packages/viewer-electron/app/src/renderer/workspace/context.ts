@@ -8,13 +8,19 @@ import type { DiffSource } from '../../domain/comparison/diff';
 import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 import type { Tiling } from '../../domain/workspaces/tiling';
 import type { JournalFilter } from '../../domain/journal/events';
+import type { WorktreeSelection } from '../../domain/comparison/worktrees';
 export interface WorkspaceController {
   openJournal(filter: JournalFilter): void;
   newChat(paths: string[], draft?: string): Promise<void>;
   openChat(id: string): Promise<void>;
-  openDiff(left: DiffSource, right: DiffSource): void;
-  openGitDiff(file: string): Promise<void>;
-  openGitChanges(path: string): void;
+  openDiff(left: DiffSource, right: DiffSource, parentPaneID?: string): void;
+  openGitDiff(file: string, parentPaneID?: string): Promise<void>;
+  openGitChanges(path: string, parentPaneID?: string): void;
+  openWorktree(
+    target: CapturedTarget,
+    selection: WorktreeSelection,
+    another?: boolean,
+  ): Promise<void>;
   present(): void;
   openCollection(id: string): void;
   openEvidence(evidence: EvidenceNavigation, parentPaneID?: string): Promise<void>;
@@ -39,7 +45,11 @@ export interface WorkspaceController {
   newRootFolder(target?: NewRootFolderTarget): void;
   /** A new scratch plane of unsaved text, framed and active. */
   newScratch(): void;
-  splitFolder(target: { workspaceID: string; paneID: string; path: string }, axis: 'x' | 'y'): void;
+  splitFolder(
+    target: { workspaceID: string; paneID: string; path: string },
+    axis: 'x' | 'y',
+    destination?: string,
+  ): void;
   layoutPlane(target: PlaneLayoutTarget, edit: PlaneLayoutEdit): void;
   editPlane(target: PlaneLayoutTarget, mode: 'move' | 'resize'): void;
   open(

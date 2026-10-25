@@ -7,6 +7,7 @@ import { captureTarget } from '../commands/target';
 export interface GitCommandActions {
   start(kind: Exclude<GitActionKind, 'commit'>, target: CapturedTarget): void | Promise<void>;
   commit(target: CapturedTarget): void | Promise<void>;
+  worktrees?(target: CapturedTarget): void;
 }
 
 /** Explicit human commands are independent of optional background Git status. */
@@ -110,6 +111,20 @@ export function gitCommands(
       detail: repository,
       when: folderScope,
       run: (context) => run('push', context),
+    },
+    {
+      id: 'git-worktrees',
+      label: 'Open worktree…',
+      group: 'Git',
+      icon: 'folder',
+      aliases: ['branches', 'git worktrees', 'checkouts', 'open branch'],
+      detail: repository,
+      when: (context) => folderScope(context) && !!commands.worktrees,
+      run: (context) => {
+        if (!folderScope(context) || !commands.worktrees)
+          throw new Error('Choose an open repository folder with worktree browsing available.');
+        commands.worktrees(captureTarget(context, actions.workspace));
+      },
     },
   ];
 }

@@ -4,7 +4,7 @@ import { useWorkspace } from '../workspace/context';
 import { useGitStatus } from './status';
 import { report, useViewer } from '../state/store';
 
-export default function GitChanges({ path }: { path: string }) {
+export default function GitChanges({ path, paneID }: { path: string; paneID?: string }) {
   const view = useGitStatus(path);
   const workspace = useWorkspace();
   const enabled = useViewer((state) => state.settings.settings.git.enabled);
@@ -46,7 +46,9 @@ export default function GitChanges({ path }: { path: string }) {
               </span>
               <button
                 onClick={() =>
-                  void workspace.openGitDiff(snapshot.root + '/' + change.path).catch(report)
+                  void workspace
+                    .openGitDiff(snapshot.root + '/' + change.path, paneID)
+                    .catch(report)
                 }
               >
                 Open diff

@@ -53,7 +53,7 @@ export function comparisonCommands({
         paneScope(context) &&
         context.selection.length === 1 &&
         context.selection[0]?.kind === 'file',
-      run: (context) => actions.workspace.openGitDiff(context.selection[0]!.path),
+      run: (context) => actions.workspace.openGitDiff(context.selection[0]!.path, context.paneID),
     },
     {
       id: 'git-changes',
@@ -63,7 +63,7 @@ export function comparisonCommands({
       aliases: ['git', 'repository', 'status'],
       when: (context) =>
         state.settings.settings.git.enabled && paneScope(context) && !!context.directory,
-      run: (context) => actions.workspace.openGitChanges(context.directory!),
+      run: (context) => actions.workspace.openGitChanges(context.directory!, context.paneID),
     },
   ];
 }

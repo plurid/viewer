@@ -131,7 +131,7 @@ export function GitColumn({ entry }: { entry: FileEntry }) {
   return <span className="file-git">{view?.statuses.get(entry.path) ?? ''}</span>;
 }
 
-export function GitBranch({ path }: { path: string }) {
+export function GitBranch({ path, paneID }: { path: string; paneID?: string }) {
   const view = useGitStatus(path);
   const workspace = useWorkspace();
   if (!view || view.result.kind === 'outside' || view.result.kind === 'disabled') return null;
@@ -149,13 +149,15 @@ export function GitBranch({ path }: { path: string }) {
   ]
     .filter(Boolean)
     .join(' ');
+  const count = snapshot.changes.length;
+  const changes = count ? `${count} ${count === 1 ? 'change' : 'changes'}` : 'Clean';
   return (
     <button
       className="git-branch"
-      title={`Git changes · ${label}`}
-      onClick={() => workspace.openGitChanges(snapshot.root)}
+      title={`Git changes · ${label} · ${changes}`}
+      onClick={() => workspace.openGitChanges(snapshot.root, paneID)}
     >
-      {label}
+      {label} · {changes}
     </button>
   );
 }

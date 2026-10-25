@@ -424,6 +424,11 @@ from measured baseline hardware and keep the result artifacts.
 
 ## Delivery sequence
 
+Stage 1 is implemented: [existing worktree discovery and views](git-worktrees.md).
+It includes explicit status inspection, reuse/another-view actions, branch/change
+headers, linked Git comparisons and restoration of ordinary folder views. New
+checkout creation and read-only revision folders remain stage 2.
+
 | Stage | Deliverable                                                               | Acceptance evidence                                                                                                 |
 | ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | 0     | Finish current Chat, fullscreen, sidebar/list fixes and Git quick actions | Regressions, package checks and honest native/live-provider results                                                 |

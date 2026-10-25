@@ -1,6 +1,6 @@
 import { effectiveWindowSettings } from '../state/effective-ui';
 import type { PlanePlacement } from '../../domain/workspaces/project';
-import { useMemo, useRef, type RefObject } from 'react';
+import { useCallback, useMemo, useRef, type RefObject } from 'react';
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC, type TreePlane, type TreePlaneLocation } from '@plurid/plurid-data';
 import type { FileEntry } from '../../domain/contracts';
@@ -80,6 +80,43 @@ export function useWorkspaceController({
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
   const serverStarts = useRef(new Map<string, Promise<void>>());
   const serverParents = useRef(new Map<string, { workspaceID: string; parentID: string }>());
+  const registerContent = useCallback(
+    (pane: Parameters<typeof addContentPane>[0], parentID?: string) => {
+      const api = engine.current;
+      const space = activeWorkspace();
+      const parent =
+        parentID && api
+          ? flattenTree(api.tree.get()).find((node) => hostID(node) === parentID)
+          : undefined;
+      if (parentID && !parent)
+        throw new Error('The source plane closed. Open the comparison again.');
+      const pending = pendingOwners.current.get(space.id) ?? new Map<string, string>();
+      const root =
+        parent && api
+          ? rootOwners(api.tree.get(), hostID, space.roots, pending).get(parentID!)
+          : undefined;
+      addContentPane(pane, !parent);
+      if (parent && api) {
+        pendingOwners.current.set(space.id, pending);
+        pending.set(pane.id, root ?? parentID!);
+        try {
+          api.pubsub.publish({
+            topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
+            data: {
+              route: paneRoute(pane.type, pane.id),
+              parentPlaneID: parent.planeID,
+              framing: 'none',
+            },
+          });
+        } catch (error) {
+          pending.delete(pane.id);
+          removePanes([pane.id]);
+          throw error;
+        }
+      }
+    },
+    [engine],
+  );
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
       openJournal(filter) {
@@ -119,7 +156,7 @@ export function useWorkspaceController({
         addContentPane({ id, type: 'chat', path: document.path, conversationID });
         controller.focusPane(id, { activate: true });
       },
-      openDiff(left, right) {
+      openDiff(left, right, parentPaneID) {
         const id = crypto.randomUUID();
         const sourcePath = (source: typeof left): string | undefined => {
           if (source.kind === 'file') return source.path;
@@ -128,10 +165,10 @@ export function useWorkspaceController({
           return undefined;
         };
         const path = sourcePath(right) ?? sourcePath(left) ?? getState().bootstrap.home;
-        addContentPane({ id, type: 'diff', path, left, right, mode: 'split' });
+        registerContent({ id, type: 'diff', path, left, right, mode: 'split' }, parentPaneID);
         controller.focusPane(id);
       },
-      async openGitDiff(file) {
+      async openGitDiff(file, parentPaneID) {
         const owner = activeWorkspace().id;
         const result = await window.viewer.git({ kind: 'head', path: file });
         if (owner !== activeWorkspace().id) return;
@@ -146,15 +183,56 @@ export function useWorkspaceController({
         controller.openDiff(
           result.source ?? { kind: 'empty', name: 'Absent at HEAD' },
           exists ? { kind: 'file', path: file } : { kind: 'empty', name: 'Deleted working file' },
+          parentPaneID,
         );
       },
-      openGitChanges(path) {
+      openGitChanges(path, parentPaneID) {
         const existing = activeWorkspace().panes.find(
           (pane) => pane.type === 'git-changes' && pane.path === path,
         );
         const id = existing?.id ?? crypto.randomUUID();
-        if (!existing) addContentPane({ id, type: 'git-changes', path });
+        if (!existing) registerContent({ id, type: 'git-changes', path }, parentPaneID);
         controller.focusPane(id);
+      },
+      async openWorktree(target, selection, another = false) {
+        const captured = structuredClone(target);
+        const origin = () => {
+          const space = activeWorkspace();
+          const pane = space.panes.find((pane) => pane.id === captured.paneID);
+          if (
+            !engine.current ||
+            !readyRef.current ||
+            space.id !== captured.workspaceID ||
+            pane?.type !== 'folder' ||
+            pane.path !== captured.panePath ||
+            controller.rootID(pane.id) !== captured.rootID
+          )
+            throw new Error('The originating folder changed or closed. Open worktrees again.');
+          return { space, pane };
+        };
+        origin();
+        const result = await window.viewer.gitWorktrees({ kind: 'open', ...selection });
+        const { space, pane } = origin();
+        if (result.kind !== 'folder') throw new Error('The worktree could not be opened.');
+        const existing = space.panes.find(
+          (item) =>
+            item.type === 'folder' &&
+            normalizedPanePath(item.path, getState().bootstrap.platform) ===
+              normalizedPanePath(result.entry.path, getState().bootstrap.platform),
+        );
+        if (existing && !another) {
+          controller.focusPane(existing.id, { activate: true });
+          return;
+        }
+        const before = new Set(space.panes.map((pane) => pane.id));
+        controller.splitFolder(
+          { workspaceID: space.id, paneID: pane.id, path: pane.path },
+          'x',
+          result.entry.path,
+        );
+        const opened = activeWorkspace().panes.find((pane) => !before.has(pane.id));
+        if (!opened) throw new Error('The new worktree view could not open. Try again.');
+        controller.focusPane(opened.id, { frame: false, activate: true });
       },
       present() {
         if (!controller.bookmarks().length) {
@@ -547,7 +625,7 @@ export function useWorkspaceController({
             dock: getState().saved.ui.space.opening === 'dock',
           });
       },
-      splitFolder(target, axis) {
+      splitFolder(target, axis, destination) {
         const api = engine.current;
         const element = surface.current;
         const space = activeWorkspace();
@@ -583,10 +661,10 @@ export function useWorkspaceController({
         let copyID: string | undefined;
         api.store.dispatch(pluridStateModules.space.actions.historyBegin());
         try {
-          const copy = addPane(folder.path, 'folder', true);
+          const copy = addPane(destination ?? folder.path, 'folder', true);
           copyID = copy.id;
           // the two as a commander's panels: ⌃⌘C copies to the other (2026-10-24)
-          pairPanes(folder.id, copy.id);
+          if (destination === undefined) pairPanes(folder.id, copy.id);
           updatePane(copy.id, {
             sidebar: folder.sidebar ? { ...folder.sidebar } : undefined,
           });
@@ -1106,7 +1184,7 @@ export function useWorkspaceController({
         }
       },
     }),
-    [engine, readyRef, surface],
+    [engine, readyRef, surface, registerContent],
   );
   return controller;
 }

@@ -195,13 +195,16 @@ export function addPane(
 }
 
 /** Register a typed content plane before the spatial adapter mounts its route. */
-export function addContentPane(pane: DiffPane | GitChangesPane | ChatPane | JournalPane): void {
+export function addContentPane(
+  pane: DiffPane | GitChangesPane | ChatPane | JournalPane,
+  root = true,
+): void {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('Close a plane before opening another.');
   changeWorkspace((space) => ({
     ...space,
     panes: [...space.panes, pane],
-    roots: [...space.roots, pane.id],
+    roots: root ? [...space.roots, pane.id] : space.roots,
     activePane: pane.id,
   }));
   setActivePane(pane.id);

@@ -274,7 +274,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       </span>
       {pane?.type === 'folder' ? (
         <>
-          <GitBranch path={pane.path} />
+          <GitBranch path={pane.path} paneID={pane.id} />
           {controls.view && (
             <button
               className="plane-view-button"

@@ -214,6 +214,14 @@ export const schemas = {
     ]),
   ]),
   gitResource: z.tuple([gitSourceSchema.extend({ repository: localPath })]),
+  gitWorktrees: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('list'), directory: localPath }).strict(),
+      z.object({ kind: z.literal('inspect'), catalogID: z.uuid(), worktreeID: z.uuid() }).strict(),
+      z.object({ kind: z.literal('open'), catalogID: z.uuid(), worktreeID: z.uuid() }).strict(),
+      z.object({ kind: z.literal('release'), catalogID: z.uuid() }).strict(),
+    ]),
+  ]),
   gitAction: z.tuple([gitActionRequestSchema]),
   watchRules: z.tuple([watchRuleRequestSchema]),
   relationships: z.tuple([
@@ -698,6 +706,7 @@ export const methodWindows = {
   newWindow: 'viewer',
   git: 'viewer',
   gitResource: 'viewer',
+  gitWorktrees: 'viewer',
   gitAction: 'viewer',
   watchRules: 'viewer',
   relationships: 'viewer',

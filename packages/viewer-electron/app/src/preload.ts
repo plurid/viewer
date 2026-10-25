@@ -37,6 +37,7 @@ const api: ViewerAPI = {
   workspaceClaim: (id) => invoke('workspaceClaim', id),
   newWindow: () => invoke('newWindow'),
   git: (request) => invoke('git', request),
+  gitWorktrees: (request) => invoke('gitWorktrees', request),
   gitResource: (source) => invoke('gitResource', source),
   gitAction: (request) => invoke('gitAction', request),
   watchRules: (request) => invoke('watchRules', request),

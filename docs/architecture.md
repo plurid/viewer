@@ -129,6 +129,21 @@ Preview modules receive an optional command capability with `register()` and a h
 
 ## Service boundaries
 
+`domain/comparison/worktrees.ts` owns strict NUL-delimited registry parsing and
+the closed discovery contract. `desktop/comparison/worktrees.ts` performs explicit
+reads through the hardened Git runner, independently of opt-in background status.
+Short-lived catalogs belong to one live window origin. Inspect/open revalidate
+registration, branch/revision, checkout and Git-administration identities before
+returning a folder; no creation, switching, pruning or removal API is exposed.
+
+`renderer/git/worktrees` owns the picker. The workspace controller checks its
+captured folder/workspace before and after native resolution, then reuses an
+existing view or splits an ordinary folder plane beside the source. Checkouts
+have real filesystem paths; several views share their files while retaining
+independent navigation and selection. Existing workspace storage owns placement,
+and linked changes/diff planes use the normal parent/close lifecycle. See
+[existing worktrees](git-worktrees.md).
+
 `desktop/previews/web` shares one bounded static-folder reader between offline
 HTML capabilities and explicitly started loopback HTTP servers. HTML documents
 use `viewer-html:` frames with an opaque sandbox origin; native navigation and

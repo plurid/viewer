@@ -93,6 +93,7 @@ import { methodWindows, schemas, settingsEvents, type ApiHandlers } from './ipc/
 import { serverAddress } from '../domain/files/volumes';
 import { errorMessage } from '../domain/errors';
 import { GitReader } from './comparison/git';
+import { GitWorktrees } from './comparison/worktrees';
 import { GitActions } from './comparison/git-actions';
 import { bindGitTarget, validateGitTarget, type GitTargetWindow } from './comparison/git-target';
 import { WorkspaceSessions } from './windows/workspace-sessions';
@@ -115,6 +116,7 @@ export class Desktop {
   private shellCommand: ShellCommand;
   readonly workspaceSessions = new WorkspaceSessions();
   readonly git: GitReader;
+  readonly worktrees: GitWorktrees;
   private readonly gitActions: GitActions;
   private gitResources = new Set<string>();
   private nativeSelections = new NativeSelections((source) =>
@@ -274,6 +276,16 @@ export class Desktop {
       this.emit({ type: 'journal-changed' }),
     );
     this.activity = new JournalActivity(this.journal);
+    this.worktrees = new GitWorktrees({
+      available: () => !process.mas,
+      access: (paths) => this.fileAccess.require(paths),
+      owner: (owner) => {
+        const record = this.windows.get(owner);
+        return record?.role === 'viewer' && !record.window.isDestroyed()
+          ? record.originID
+          : undefined;
+      },
+    });
     const emit = (event: DesktopEvent) => this.emit(event);
     this.fileAccess = new FileAccess(
       dataPath,
@@ -1009,6 +1021,7 @@ export class Desktop {
     await this.chats.close();
     await this.gitActions.close();
     this.git.close();
+    this.worktrees.close();
     this.ready = false;
     this.trash.close();
     if (process.platform === 'darwin') macFiles().dismissFilePanels();
@@ -1209,6 +1222,11 @@ export class Desktop {
         request.kind === 'status'
           ? this.git.status(request.path, request.refresh)
           : this.git.head(request.path),
+      gitWorktrees: ([request], owner) => {
+        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
+          throw new Error('Worktree browsing is available only to the person.');
+        return this.worktrees.request(request, owner);
+      },
       gitAction: async ([request], owner) => {
         if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
           throw new Error('Agents cannot run Git program actions.');

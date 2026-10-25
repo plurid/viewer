@@ -305,6 +305,8 @@ function AppWindow() {
           profileDialog: () => setWindowDialog({ type: 'profile' }),
           gitCommit: (target) =>
             setWindowDialog({ type: 'git-commit', id: crypto.randomUUID(), target }),
+          gitWorktrees: (target) =>
+            setWindowDialog({ type: 'git-worktrees', id: crypto.randomUUID(), target }),
         }),
       ],
       valid: (invocation) =>
