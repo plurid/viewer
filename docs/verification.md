@@ -1,5 +1,109 @@
 # Verification
 
+## October 25 framing ownership and native agent consent
+
+The verified direct Apple Silicon candidate is retained at
+`/private/tmp/viewer-framing-agent-candidate-20261025-vcwdf8l_/Viewer.app`.
+Executable SHA-256:
+`f80c02debfff2ea694cfce7c538a2efc736a8352a2ce34f19fd9cadc6c1b9afa`;
+ASAR SHA-256:
+`a5b8f3e6078ef592f6ed47a94d85d2dc1bd27c4063e59e90107242c7634fbd4d`.
+The adjacent `candidate.json` binds source, lockfile and test hashes;
+`native-acceptance.json` binds each result's hash, conditions, operator responses
+and limitations. Production sources and packaged bytes were rechecked unchanged
+after the native runs. Native checks ran on macOS 15.1 / 24B2083, arm64.
+
+### Framing diagnosis and correction
+
+The old candidate's 1.5-second wall-clock readiness deadline could expire during
+a scheduler pause before useful layout measurements arrived. A controlled
+1.7-second pause after the actual Frame plane command reproduced the reported
+offscreen Chat/Send failure. Five later snapshots retained the same idle camera,
+offscreen control and zero wrapper scroll offsets, ruling out an early snapshot
+or scrolled engine wrapper in that reproduction. The failed run remains at
+`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-ePFDwF/result.json`.
+
+Four regression cases failed before the source correction: delayed scheduling,
+resize replacing a pending destination, failed framing resurrecting the preceding
+resize owner, and unbounded hidden-node recovery. The new request immediately
+relinquishes the old resize owner and budgets 90 delivered measurement frames,
+including recovery. Stable viewport/node measurements, input cancellation,
+independent engines and deliberate-camera preservation remain enforced. The
+engine still performs projection and camera transitions. See
+[ADR 0005](adr/0005-framing-request-ownership.md).
+
+- The exact corrected candidate passes a **1.7-second pause with 6× CPU
+  throttling**, concurrently with the foreground spatial resize/drag scenario.
+  Chat is framed inside the viewport and Send is the actual hit target at
+  1280×900 and 780×560. Result:
+  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-ln2Tli/result.json`.
+- A separate **2.5-second pause** also passes at both sizes. Result:
+  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-ycjVsL/result.json`.
+- The concurrent spatial scenario passes native resize, plane drag, cube
+  conceal/hover and compact layout, with zero failures among 894 exposed-floor
+  samples. Result:
+  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-spatial-surface-5wVYDS/result.json`.
+
+These scenarios use generated profiles and files, make no model requests and
+retain their evidence. The concurrency baseline originally passed; the controlled
+pause made the intermittent symptom reproducible rather than establishing that
+every unscheduled concurrent run failed.
+
+### Genuine native agent acceptance
+
+The operator personally chose **Cancelled**, **Allowed**, and **Allowed that
+folder** in the three native dialogs. `tests/native/agent-consent.ts --interactive`
+records those production Settings-origin outcomes; stdin only starts a scenario.
+No native approval was simulated. The test profile and all generated files remain
+at
+`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-agent-consent-z6S1WH`.
+Its `result.json` records eight passing checks:
+
+1. Editable configuration requested access but could not authorize it; a
+   workspace-origin attempt to grant access was rejected.
+2. Native Cancel left access disabled and no connection file was created.
+3. Native Enable granted only metadata/navigation/proposals, with no folder
+   access. The separate packaged MCP client could initialize but could not read.
+4. Native Allow for the exact generated folder enabled authenticated Unicode-file
+   metadata reads. Sibling paths, a symlink escape, private Viewer data and an
+   invalid credential were denied.
+5. The live command catalog excluded executable/terminal actions; direct attempts
+   were denied. A refresh proposal required review, was rejected through the
+   rendered UI and never ran. Private approval configuration was not writable.
+6. Folder revocation immediately denied the same live client's next read.
+7. Full disable closed access; the generated socket directory was retained.
+8. A cold restart with configuration requesting access again stayed disabled and
+   rejected the old client. Final requested access is off with no roots.
+
+Generated file hashes and the symlink are unchanged. No credentials are included
+in the result. The broker now honors preservation/no-removal mode when disposing
+its owned socket directory; actual listener/stream shutdown still revokes access.
+Its lifecycle regression fails before that change and passes afterward. Normal
+transport cleanup remains scoped to its one owned directory.
+
+The old hidden smoke agent step assumed that JSONC could grant access. It now
+asserts pending consent and an absent broker; its authenticated command-policy
+and proposal-rejection checks moved to the genuine operator scenario above.
+The separate denial preflight also passed before the interactive run. The entire
+desktop smoke was not rerun or marked passing by this focused work.
+
+### Automated checks and limits
+
+**101 tests in 11 files pass**, covering framing, linked-plane closing, spatial
+overview, catalog readiness, broker disposal, access, grants, agent safety,
+command catalogs, sequences and MCP transport. All four TypeScript targets,
+scoped ESLint, formatting, whitespace checks, ordinary `pnpm package` and
+strict/deep signature verification pass. Logs use
+`/private/tmp/viewer-framing-agent-` with `focused`, `final-types`, `final-lint`,
+`format` and `package` suffixes; native reproduction logs use
+`/private/tmp/viewer-framing-fixed-`.
+
+This completes the reported framing failure and shared local agent-consent
+follow-up on this direct candidate. It does not qualify content/execution grants,
+third-party agent applications, another OS, the full desktop smoke, a new signed
+Store candidate or distribution. Earlier physical hotkey, Clear hide/show and
+live-provider results retain their separately identified candidate scope.
+
 ## October 24 clear-window shadow after application hide
 
 The accepted direct candidate is open and preserved at

@@ -8,6 +8,29 @@ Each check records the artifact hash, runtime/channel, OS, fixtures, result and 
 
 ## Work and acceptance ledger
 
+### October 25 framing and native agent consent
+
+The direct candidate fixes scheduler-delayed framing and stale resize ownership.
+The old candidate fails a controlled pause after the real Frame plane command;
+the corrected candidate passes that reproduction with CPU throttling while a
+second native window is resized and dragged, plus a longer pause in isolation.
+Both Chat sizes retain an actual unobstructed Send hit target. The spatial
+scenario also retains the engine's cube anchors, conceal and hover behavior.
+
+The operator completed genuine native Cancel, Enable and generated-folder Allow
+dialogs. A separately launched packaged MCP client passed authenticated scoped
+metadata reads, scope/token/private-data denials, proposal rejection, live folder
+revocation, full disable and cold restart without configuration regranting access.
+Agent access ends disabled; the regular workspace's grants were untouched. The
+unattended smoke step now verifies pending consent rather than assuming JSONC can
+authorize access. Positive protocol/review checks live in the operator scenario.
+
+All 101 focused regressions, four TypeScript targets, scoped lint/format checks,
+packaging and signature verification pass. [Verification](verification.md) binds
+the source, candidate hashes and retained evidence. This completes the reported
+framing and shared-agent consent follow-ups, without qualifying third-party agent
+clients, content/execution grants, the full desktop smoke or a new Store build.
+
 ### October 24 Clear backdrop after ⌘H
 
 The latest accepted candidate disables the native alpha-derived window shadow

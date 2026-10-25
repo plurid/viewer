@@ -31,6 +31,40 @@ On October 13, all eight guided checks completed on signed `2026101318`, macOS 1
 | R01 | Repeat mandatory scenarios on macOS 13 and the current stable macOS version, using the same release candidate. The local machine runs macOS 15.1. As checked October 13, Apple's current-version table lists 27.0.1; verify again at execution time. [Apple version table](https://support.apple.com/en-us/109033). |
 | D01 | Signed Store distribution build/profile and installer pass local verification and App Store Connect validation; direct DMG passes notarization/stapling/Gatekeeper. Test clean installation, first launch, upgrade/relaunch and retained window placement on a disposable user/profile. |
 
+## Shared local agent consent
+
+From `packages/viewer-electron/app`, run the direct-build scenario against an
+explicit immutable candidate:
+
+```sh
+VIEWER_TEST_PRESERVE=1 \
+VIEWER_TEST_NO_REMOVAL=1 \
+VIEWER_TEST_BINARY=/absolute/path/to/Viewer.app/Contents/MacOS/Viewer \
+pnpm exec tsx tests/native/agent-consent.ts --interactive
+```
+
+The supervised terminal starts each scenario only after the operator has read
+its instruction. The operator must personally Cancel the first native Enable
+dialog, Allow the second, then Allow only the named generated folder. The harness
+never chooses an affirmative native response. Without `--interactive`, it runs
+only the pending-consent denial preflight and marks the native steps unverified.
+
+The authenticated client is the candidate's actual `--mcp` process, separate from
+the GUI. Enable alone must authorize no folder. The folder grant permits metadata
+for the generated file; sibling paths, symlink escapes, private Viewer data and
+invalid tokens must fail. Executable and terminal commands remain unavailable,
+and a proposed refresh is rejected through the rendered review UI. Folder
+revocation affects the existing client; full disable closes access. After a cold
+restart, editable configuration cannot restore the revoked approval. Content,
+execution and terminal capabilities are never granted by this scenario.
+
+The scenario uses a new profile, leaves the regular profile unchanged, and ends
+with test access disabled. Every generated folder and socket directory is
+retained. Reports record paths, hashes and outcomes without tokens. The October
+25 direct candidate passed with the operator's real responses; exact hashes and
+scope are in [verification](../verification.md). This does not establish Store
+sandbox or third-party-client acceptance.
+
 Automated native metadata checks already exercise modes, xattrs, resource forks, ACLs and relative links. Actual Trash receipts, cold relaunch and owned terminal-child disposal have automated signed tests. Run the whole qualification command against the final candidate to bind that evidence to its source and hashes.
 
 No critical/major failure or unverified mandatory scenario can be marked ready. Attach explicit evidence to each ID rather than changing a general readiness flag by judgment alone.

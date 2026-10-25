@@ -6,6 +6,8 @@ import { flattenTree, hostID } from './tree';
 const pending = new WeakMap<PluridApplicationHandle, () => void>();
 const generations = new WeakMap<PluridApplicationHandle, number>();
 const framed = new WeakMap<PluridApplicationHandle, { targets?: string[]; viewpoint: string }>();
+const stableLayoutFrames = 3;
+const maximumLayoutFrames = 90;
 
 /** An authored camera placement takes ownership from an earlier fit or restore. */
 export function cancelWorkspaceFraming(api: PluridApplicationHandle): void {
@@ -25,12 +27,15 @@ export function frameWorkspace(
   const element = surface.current;
   if (!api || !element) return;
   pending.get(api)?.();
+  // A new request owns the destination immediately. A resize must not restore the preceding
+  // placement while this target is still waiting for its measured layout.
+  framed.delete(api);
   const generation = (generations.get(api) || 0) + 1;
   generations.set(api, generation);
   let cancelled = false;
   let previous = '';
   let stable = 0;
-  const deadline = performance.now() + 1500;
+  let remainingFrames = maximumLayoutFrames;
   const cancel = () => {
     cancelled = true;
     cleanup();
@@ -46,6 +51,12 @@ export function frameWorkspace(
   window.addEventListener('wheel', cancel, { capture: true, passive: true });
   const frame = () => {
     if (cancelled || engine.current !== api || !element.isConnected) {
+      cleanup();
+      return;
+    }
+    // Bound actual measurement work, rather than elapsed wall time. A busy or hidden renderer
+    // cannot consume its readiness budget while the browser is unable to deliver layout frames.
+    if (remainingFrames-- === 0) {
       cleanup();
       return;
     }
@@ -91,9 +102,8 @@ export function frameWorkspace(
     ]);
     stable = signature === previous ? stable + 1 : 0;
     previous = signature;
-    if (!(resolved && expected && measured && viewport && stable >= 3)) {
-      if (performance.now() < deadline) requestAnimationFrame(frame);
-      else cleanup();
+    if (!(resolved && expected && measured && viewport && stable >= stableLayoutFrames)) {
+      requestAnimationFrame(frame);
       return;
     }
     cleanup();

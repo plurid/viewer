@@ -41,6 +41,7 @@ import { drawingGeometryOptionsSchema } from '../../domain/previews/drawings/geo
 import { agentCommandID, agentRemovalPolicy } from '../../domain/agents/safety';
 import { isEmptyAgentOrigin } from '../../domain/agents/origin';
 import { discardOwnTemporaryFile, removeEmptyDirectory } from '../operations/removal';
+import { nativeTestRemovalsBlocked } from '../native/test-removal-policy';
 import { agentTools } from './agent-tools';
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
@@ -1037,6 +1038,9 @@ export class AgentBroker {
     const directory = this.socketDirectory;
     if (!directory) return;
     this.socketDirectory = undefined;
+    // Closing the listener still revokes access. Generated acceptance directories are retained
+    // until their exact paths have been reviewed for removal under the repository's policy.
+    if (process.env.VIEWER_TEST_PRESERVE === '1' || nativeTestRemovalsBlocked()) return;
     await discardOwnTemporaryFile(path.join(directory, 'v.sock'));
     await removeEmptyDirectory(directory).catch(() => {});
   }

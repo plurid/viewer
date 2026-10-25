@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmod, lstat, mkdir, readFile, readdir, readlink, writeFile } from 'node:fs/promises';
-import net from 'node:net';
 import path from 'node:path';
 import { parse } from 'jsonc-parser';
 import { fileURLToPath } from 'node:url';
@@ -1084,87 +1083,23 @@ async function verifyFoundations(): Promise<void> {
   await patchInSettings(
     `[{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(fixture.root)}]}]`,
   );
-  const agentCall = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
-    const connection = JSON.parse(
-      await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
-    );
-    const token = JSON.parse(await readFile(path.join(profile, 'agent-token-v1.json'), 'utf8'));
-    return new Promise<T>((resolve, reject) => {
-      const stream = net.createConnection(connection.socket);
-      const timer = setTimeout(() => {
-        stream.destroy();
-        reject(new Error('Fixture MCP request timed out.'));
-      }, 10000);
-      let data = '';
-      stream.on('error', (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-      stream.on('connect', () =>
-        stream.write(
-          JSON.stringify({
-            id: 1,
-            token,
-            request: { method: 'tools/call', params: { name, arguments: args } },
-          }) + '\n',
-        ),
-      );
-      stream.on('data', (chunk) => {
-        data += chunk.toString();
-        if (!data.includes('\n')) return;
-        clearTimeout(timer);
-        stream.end();
-        const reply = JSON.parse(data.slice(0, data.indexOf('\n')));
-        if (reply.error) reject(new Error(reply.error));
-        else resolve(JSON.parse(reply.value.content[0].text));
-      });
-    });
-  };
-  await click(`[data-file-owner=${JSON.stringify(folderID)}] .file-scroll`);
-  // Agents see only allow-listed commands; executables and terminals are never offered.
-  const catalog = await until(
-    () => agentCall<{ commands: { id: string }[] }>('list_commands'),
-    (value) => value.commands.some((command) => command.id === 'refresh'),
-    'agent command catalog uses the focused file context',
+  // Hidden smoke must exercise the pending-consent boundary. It cannot manufacture
+  // a native approval; authorized protocol/review checks run in native/agent-consent.ts.
+  const pendingAgentAccess = await settingsEvaluate<AgentAccessState>(
+    'window.viewer.agentAccess({kind:"state"})',
   );
-  for (const id of ['open-terminal-plane', 'custom.inspect-path'])
-    assert.ok(
-      !catalog.commands.some((command) => command.id === id),
-      `${id} is not offered to agents`,
-    );
-  await assert.rejects(
-    () => agentCall('propose_command', { commandID: 'custom.inspect-path' }),
-    /Agents cannot run shell scripts, executables or terminal profiles/,
-  );
-  await assert.rejects(
-    () => agentCall('propose_command', { commandID: 'open-terminal-plane' }),
-    /terminal execution is unavailable/,
-  );
-  const proposal = await agentCall<{ id: string; requiresUserReview: boolean }>('propose_command', {
-    commandID: 'refresh',
+  assert.equal(pendingAgentAccess.enabled, false);
+  assert.deepEqual(pendingAgentAccess.roots, []);
+  assert.equal(pendingAgentAccess.pending.enable, true);
+  assert.ok(pendingAgentAccess.pending.roots.includes(fixture.root));
+  await assert.rejects(readFile(path.join(profile, 'agent-connection-v1.json')), {
+    code: 'ENOENT',
   });
-  assert.equal(proposal.requiresUserReview, true);
-  await until(
-    () =>
-      evaluate<boolean>(
-        'Array.from(document.querySelectorAll("dialog[open] button")).some(button=>button.textContent==="Reject")',
-      ),
-    Boolean,
-    'agent action review appears before execution',
+  await patchInSettings(
+    `[{path:'settings.agents.enabled',value:false},{path:'settings.agents.roots',value:[]}]`,
   );
-  await snapshot('desktop-native-agent-review.png');
-  // Approving would open the desktop's own confirmation, which hidden checks cannot answer.
-  await evaluate(
-    'Array.from(document.querySelectorAll("dialog[open] button")).find(button=>button.textContent==="Reject").click()',
-  );
-  await until(
-    () => agentCall<{ status: string }>('get_proposal', { id: proposal.id }),
-    (result) => result.status === 'rejected',
-    'a rejected agent action never runs',
-  );
-  await assert.rejects(
-    () => agentCall('propose_config', { patches: [{ path: 'executionApprovals', value: [] }] }),
-    /Agents cannot change/,
+  console.log(
+    'Agent smoke: requested access stays unapproved; genuine consent has a separate operator scenario.',
   );
   await evaluate(
     'window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:"settings.folders",value:{}}],s.revision))',

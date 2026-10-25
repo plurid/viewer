@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   CURRENT_STATE_VERSION,
   type SavedState,
@@ -256,7 +257,28 @@ async function palette(main: Connection, label: string) {
     (text) => text.includes(label),
     'palette command ' + label,
   );
-  await main.evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
+  const framePause =
+    label === 'Frame plane' ? Number(process.env.VIEWER_TEST_FRAME_PAUSE_MS ?? 0) : 0;
+  assert.ok(Number.isInteger(framePause) && framePause >= 0 && framePause <= 3000);
+  await main.evaluate(`(async () => {
+    if (${framePause} > 0) {
+      const marker = document.querySelector('[data-viewer-plane]');
+      const key = Object.keys(marker).find(key => key.startsWith('__reactFiber'));
+      let api;
+      for (let fiber = marker[key]; fiber && !api; fiber = fiber.return) {
+        for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+          const current = hook.memoizedState?.current;
+          if (current?.camera?.frame && current?.tree?.get) { api = current; break; }
+        }
+      }
+      if (!api) throw new Error('The owned framing test needs the public engine ref.');
+      api.camera.moveBy({pan: {x: 600, y: 0}}, {animate: false});
+    }
+    document.querySelector('.command-result[aria-selected=true]').click();
+    if (${framePause} > 0) await new Promise(resolve => requestAnimationFrame(resolve));
+    const end = performance.now() + ${framePause};
+    while (performance.now() < end) { /* bounded scheduling stress in this owned renderer */ }
+  })()`);
   await until(
     () => main.evaluate<boolean>(`!!document.querySelector('[aria-label="Search commands"]')`),
     (open) => !open,
@@ -518,6 +540,7 @@ async function chatAppearance(main: Connection, app: Application) {
     actions: Bounds;
     layout: { textarea: Bounds; actions: Bounds };
     plane: Bounds;
+    viewport: Bounds;
     send: Bounds;
     sendHit: boolean;
     sendPointerEvents: string;
@@ -585,7 +608,8 @@ async function chatAppearance(main: Connection, app: Application) {
         motion: view.getAttribute('data-plurid-motion') ?? 'idle',
         transform: getComputedStyle(textarea.closest('[data-plurid-plane]')).transform,
         actions: rect(actions), layout: { textarea: layout(textarea), actions: layout(actions) },
-        plane: rect(textarea.closest('.chat-plane')), send: sendBounds,
+        plane: rect(textarea.closest('.chat-plane')),
+        viewport: rect(document.querySelector('.workspace-surface')), send: sendBounds,
         sendHit: hit === send || send.contains(hit),
         sendPointerEvents: getComputedStyle(send).pointerEvents,
         hitTarget: hit ? describe(hit) : null,
@@ -604,6 +628,7 @@ async function chatAppearance(main: Connection, app: Application) {
           current.actions,
           current.layout,
           current.plane,
+          current.viewport,
           current.send,
           current.transform,
         ]);
@@ -612,6 +637,10 @@ async function chatAppearance(main: Connection, app: Application) {
         return (
           current.send.right > current.send.left &&
           current.textarea.bottom > current.textarea.top &&
+          current.send.left >= current.viewport.left - 1 &&
+          current.send.right <= current.viewport.right + 1 &&
+          current.send.top >= current.viewport.top - 1 &&
+          current.send.bottom <= current.viewport.bottom + 1 &&
           stable >= 3
         );
       },
@@ -626,6 +655,42 @@ async function chatAppearance(main: Connection, app: Application) {
     );
     measurements.push({ width, height, ...value, screenshot });
     await save();
+    if (!value.sendHit) {
+      const samples: unknown[] = [];
+      checks.push({ id: 'offscreen-framing-diagnostics', detail: samples });
+      for (let sample = 0; sample < 5; sample++) {
+        if (sample) await delay(500);
+        const snapshot = await main.evaluate(`(() => {
+          const marker = document.querySelector('.chat-plane')?.closest('[data-viewer-plane]') ||
+            document.querySelector('[data-viewer-plane]');
+          const key = marker && Object.keys(marker).find(key => key.startsWith('__reactFiber'));
+          let api;
+          for (let fiber = key && marker[key]; fiber && !api; fiber = fiber.return) {
+            for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+              const current = hook.memoizedState?.current;
+              if (current?.camera?.frame && current?.tree?.get) { api = current; break; }
+            }
+          }
+          const box = element => {
+            const rect = element.getBoundingClientRect();
+            return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
+          };
+          const send = document.querySelector('.chat-composer button[type="submit"]');
+          const rect = send?.getBoundingClientRect();
+          const hit = rect && document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+          const ancestors = [];
+          for (let element = send; element; element = element.parentElement) {
+            ancestors.push({tag: element.tagName, className: element.className,
+              scrollLeft: element.scrollLeft, scrollTop: element.scrollTop, bounds: box(element)});
+          }
+          return {at: performance.now(), visibility: document.visibilityState,
+            camera: api?.camera.get(), motion: api?.camera.motion(), view: api?.inspect().view,
+            send: send && box(send), sendHit: !!hit && (hit === send || send.contains(hit)), ancestors};
+        })()`);
+        samples.push({ sample, activePane: workspace(await saved()).activePane, snapshot });
+      }
+      await save();
+    }
     assert.equal(value.fontFamily, value.bodyFontFamily, 'Chat uses the interface font.');
     assert.notEqual(value.background, 'rgba(0, 0, 0, 0)');
     assert.notEqual(value.border, 'none');
@@ -733,6 +798,9 @@ async function phase(work: (main: Connection, app: Application) => Promise<void>
   let main: Connection | undefined;
   try {
     main = await app.connect();
+    const cpuRate = Number(process.env.VIEWER_TEST_FRAME_CPU_RATE ?? 1);
+    assert.ok(Number.isFinite(cpuRate) && cpuRate >= 1 && cpuRate <= 20);
+    if (cpuRate !== 1) await main.command('Emulation.setCPUThrottlingRate', { rate: cpuRate });
     await main.command('Emulation.setDeviceMetricsOverride', {
       width: 1280,
       height: 900,
