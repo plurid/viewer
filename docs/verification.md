@@ -9,6 +9,10 @@ Executable SHA-256:
 ASAR SHA-256:
 `694d5076b1e85dccdb6b983c017484f20190edd3d3f69cae948673c05255c7d8`.
 Adjacent `candidate.json` binds source, lockfile, native binding and test hashes.
+`verification.json` records exact commands, checked outcomes, retained removal
+paths and the native driver revision used by each run. Production sources and
+bundle hashes match after the checks. The full-smoke driver and the later
+scrolled-capture revision are both retained beside the report.
 The final build uses normal `pnpm package` and passes
 `codesign --verify --deep --strict`. The package log is
 `/private/tmp/viewer-full-validation-verified-package-20261025.log`.
@@ -18,8 +22,10 @@ The final build uses normal `pnpm package` and passes
 **All 1,700 tests in 229 files pass, with zero failed or skipped tests.**
 The run uses `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1`, the final
 candidate's native binding and a separately compiled recording review binding.
-Its exact invocation is the normal `pnpm test` command with default/JSON
-reporters. Adjacent `unit.json` and `unit.log` retain the complete result.
+The executed command is
+`pnpm --filter viewer-electron exec vitest run --reporter=default --reporter=json --outputFile.json=/private/tmp/viewer-validated-20261025-3cs9y6xb/unit.json`.
+Its environment is recorded in `verification.json`; adjacent `unit.json` and
+`unit.log` retain the complete result.
 The four previously conditional native cases now exercise actual metadata,
 version/hash validation, refusal before the recording Trash selector, and
 exclusive rename inside a generated restore folder. They use no system Trash.
@@ -96,6 +102,23 @@ agent folders wrap within their row and remain pending. Adjacent
 `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-0ZAdIZ`.
 Native evidence:
 `packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T04-29-03-022Z-d1101237-aa3b-44eb-8fb4-31755ef6e41e`.
+
+A final capture rerun also passes after scrolling the requested-folder row into
+view. Its reviewed image shows the complete wrapping path and the pending label;
+no Allow action is taken. Adjacent `refinements-capture.log` and native evidence
+`packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T04-35-49-226Z-91b12751-5d36-413f-aef7-f5358ab91a4d`
+retain that exact check.
+
+The supplemental `store-file-services` scenario passes on the same bundle. Real
+thread-backed SQLite/indexing, recursive sizes, PDF/EPUB extraction, OCR, reviewed
+actions/Undo, independent preview revocation and permission recovery pass on the
+ordinary direct runtime. The unreadable PDF stays outside the browsed fixture
+tree and is retained after its mode is restored. Adjacent
+`store-file-services.log` records the result. Fixture:
+`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-uhT2Hd`.
+Native evidence:
+`packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T04-32-55-559Z-4d92fa5c-245d-4908-af35-34ab56d972a0`.
+This is reader-strategy evidence rather than a signed App Sandbox pass.
 
 All generated files, fixture directories, intermediary bundles, logs and captures
 remain available. This direct-build validation does not establish positive OS
