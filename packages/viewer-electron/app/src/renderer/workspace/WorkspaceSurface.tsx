@@ -111,6 +111,22 @@ const LazyDiffPlane = lazy(() => import('../diff/DiffPlane'));
 const LazyGitChanges = lazy(() => import('../git/GitChanges'));
 const LazyChatPlane = lazy(() => import('../chat/ChatPlane'));
 const LazyServerPlane = lazy(() => import('../local-servers/ServerPlane'));
+const LazyJournalPlane = lazy(() => import('../journal/JournalPlane'));
+
+function JournalContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'journal') return <Empty title="Journal unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening Journal…" />}>
+        <LazyJournalPlane pane={pane} active={plane.shown && plane.culled === 'visible'} />
+      </Suspense>
+    </PreviewFrame>
+  );
+}
 
 function ServerContent() {
   const plane = usePluridPlane();
@@ -221,6 +237,7 @@ const marked = (Content: React.ComponentType): React.ComponentType =>
   };
 const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/servers/:id', component: marked(ServerContent) },
+  { route: '/journals/:id', component: marked(JournalContent) },
   { route: '/chats/:id', component: marked(ChatContent) },
   { route: '/diffs/:id', component: marked(ComparisonContent) },
   { route: '/git-changes/:id', component: marked(ComparisonContent) },

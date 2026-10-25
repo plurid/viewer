@@ -20,6 +20,10 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  journalQuery: (query) => invoke('journalQuery', query),
+  journalExportPreview: (query) => invoke('journalExportPreview', query),
+  journalExport: (id) => invoke('journalExport', id),
+  journalClear: () => invoke('journalClear'),
   htmlPreview: (resourceID) => invoke('htmlPreview', resourceID),
   htmlPreviewClose: (id) => invoke('htmlPreviewClose', id),
   localServerStart: (root, paneID, sourceIdentity) =>

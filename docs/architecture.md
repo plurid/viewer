@@ -214,6 +214,29 @@ Run `pnpm check`, `pnpm lint`, `pnpm test`, and `pnpm package` from the root. `p
 
 Actual disconnected/reconnected external drives and network mounts, release distribution, Windows and Linux remain unverified. Mounted-path behavior uses ordinary local filesystem APIs, with platform-specific Trash, dialogs, clipboard and metadata kept in desktop adapters. Format and workload limits are listed in the project README. [verification.md](verification.md) records the checks and their scope; [performance.md](performance.md) records measured workloads and remaining performance risks.
 
+## Journal inspection
+
+`domain/journal/events.ts` defines the closed safe event vocabulary and typed
+filters. `desktop/journal/activity.ts` projects actual service lifecycle events,
+capturing context before awaits and keeping origins through late callbacks.
+Validated Git/server/save targets refine window context. File jobs arriving
+without a window still appear with no invented workspace attribution. Terminal
+bytes, provider responses, paths and Chat text are not event fields.
+
+`desktop/journal/store.ts` owns a private capped append file and immutable query
+pages. Full/invalid stores preserve existing bytes, stop ingestion and report
+gaps. `handlers.ts` owns human queries, expiring export previews and exact-file
+native review before identity-checked OS Trash. Workspace persistence stores a
+Journal plane's filters and named views, independently of the event file. Portable
+projects omit the private history view. No renderer append or agent reader exists.
+
+`renderer/journal/session.ts` handles one reader's live/paused cursor, pagination
+and stale IPC replies. The plane, virtual table, inspector and export dialog use
+existing shell components and theme tokens. Source links resolve only existing
+workspace/plane IDs; closing a source never authorizes recreating or replaying it.
+Operation recovery, native consent and detailed source logs keep their existing
+owners. See [Journal scope](journal-plane.md) and [the decision](adr/0006-bounded-human-journal.md).
+
 ## Window-local presentation
 
 `domain/preferences/presentation/profile-fields.ts` is the exact typed catalog of

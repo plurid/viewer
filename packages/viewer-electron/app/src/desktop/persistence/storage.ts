@@ -27,8 +27,29 @@ import {
 import { discardOwnTemporaryFile } from '../operations/removal';
 import { localPath, id } from '../schemas';
 import { diffModes, diffSourceSchema } from '../../domain/comparison/diff';
+import { journalFilterSchema } from '../../domain/journal/events';
 
 const pane = z.discriminatedUnion('type', [
+  z
+    .object({
+      id,
+      type: z.literal('journal'),
+      path: localPath,
+      filter: journalFilterSchema,
+      savedFilters: z
+        .array(
+          z
+            .object({
+              id: z.uuid(),
+              name: z.string().trim().min(1).max(80),
+              filter: journalFilterSchema,
+            })
+            .strict(),
+        )
+        .max(20)
+        .optional(),
+    })
+    .strict(),
   z
     .object({
       id,

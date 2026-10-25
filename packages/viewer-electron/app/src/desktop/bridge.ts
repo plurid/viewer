@@ -104,8 +104,13 @@ import { planLegacyProfileRestoration } from './preferences/profile-migration';
 import { resolveWindowPreferences } from '../domain/preferences/presentation/resolver';
 import { modelEndpoint } from '../domain/models/permissions';
 import { WindowFlushRequests } from './windows/flush-requests';
+import { JournalStore } from './journal/store';
+import { JournalActivity } from './journal/activity';
+import { createJournalHandlers } from './journal/handlers';
 
 export class Desktop {
+  readonly journal: JournalStore;
+  private readonly activity: JournalActivity;
   readonly chats: Chats;
   private shellCommand: ShellCommand;
   readonly workspaceSessions = new WorkspaceSessions();
@@ -265,6 +270,10 @@ export class Desktop {
       diagnose?(detail: string): void;
     },
   ) {
+    this.journal = new JournalStore(path.join(dataPath, 'journal'), () =>
+      this.emit({ type: 'journal-changed' }),
+    );
+    this.activity = new JournalActivity(this.journal);
     const emit = (event: DesktopEvent) => this.emit(event);
     this.fileAccess = new FileAccess(
       dataPath,
@@ -388,6 +397,7 @@ export class Desktop {
       options.terminalWorker,
       () => this.settings.snapshot().settings,
       (owner, event) => {
+        this.activity.terminal(event);
         const window = this.windows.get(owner)?.window;
         if (window && !window.isDestroyed())
           window.webContents.send('viewer:event', { type: 'terminal', event });
@@ -656,6 +666,7 @@ export class Desktop {
         );
       },
       changed: (owner, document) => {
+        this.activity.chat(document);
         this.windows
           .get(owner)
           ?.window.webContents.send('viewer:event', { type: 'chat', document });
@@ -935,6 +946,7 @@ export class Desktop {
     return owner === undefined ? undefined : this.windows.get(owner)?.window;
   }
   emit(event: DesktopEvent): void {
+    if (event.type === 'job') this.activity.job(event.job);
     for (const { window, role } of this.windows.values())
       if (!window.isDestroyed() && (role === 'viewer' || settingsEvents.includes(event.type)))
         window.webContents.send('viewer:event', event);
@@ -1032,6 +1044,7 @@ export class Desktop {
       fileCoordination.quiesce(),
     ]);
     await this.fileAccess.close();
+    await this.journal.close();
     for (const request of this.agentCommands.values())
       request.finish('The application closed before completing the action.');
     ipcMain.removeHandler('viewer:request');
@@ -1131,14 +1144,46 @@ export class Desktop {
   /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
   private createHandlers(): ApiHandlers {
     return {
+      ...createJournalHandlers({
+        store: this.journal,
+        allowHuman: (owner) => {
+          if ([...this.agentCommands.values()].some((item) => item.owner === owner))
+            throw new Error('Journal access is available only to the person.');
+        },
+        chooseExport: async (owner) => {
+          const window = this.windows.get(owner)?.window;
+          if (!window || window.isDestroyed()) throw new Error('The export window closed.');
+          const result = await dialog.showSaveDialog(window, {
+            title: 'Export Journal',
+            defaultPath: `viewer-journal-${new Date().toISOString().slice(0, 10)}.json`,
+            filters: [{ name: 'Journal JSON', extensions: ['json'] }],
+            securityScopedBookmarks: this.fileAccess.scoped,
+          });
+          if (result.canceled || !result.filePath) return;
+          await this.fileAccess.allowOnce(result.filePath, result.bookmark);
+          await this.fileAccess.require([result.filePath]);
+          return result.filePath;
+        },
+        confirmClear: (owner, file) =>
+          confirmNatively(
+            this.windows.get(owner)?.window,
+            'Move Journal history to the Trash?',
+            `Move this exact file, including all recorded events, to the OS Trash:\n${file}\n\nA new empty Journal will be created. Operation receipts, consent records and other logs are kept.`,
+            'Move to Trash',
+          ),
+        trash: (reviewed) => this.operations.trashReviewedFile(reviewed),
+      }),
       ...createWebHandlers({
+        activity: this.activity,
         previews: this.webPreviews,
         resources: this.resources,
         openURL: (url) => shell.openExternal(url),
         copyURL: (url) => this.pasteboard.copyText([url]),
       }),
-      chat: ([request], sender) =>
-        this.chats.request(request, sender, this.windows.get(sender)?.catalog),
+      chat: ([request], sender) => {
+        const work = () => this.chats.request(request, sender, this.windows.get(sender)?.catalog);
+        return request.kind === 'send' ? this.activity.send(request.id, work) : work();
+      },
       shellCommand: ([action]) => this.shellCommand[action](),
       hotkeyStatus: () => this.options.hotkeyStatus?.() ?? { registered: false, shortcut: '' },
       restoreWindow: () => this.options.restoreWindow?.(),
@@ -1168,7 +1213,11 @@ export class Desktop {
         if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
           throw new Error('Agents cannot run Git program actions.');
         const target = await bindGitTarget(request.target, this.gitWindow(owner));
-        return this.gitActions.start({ ...request, target }, owner);
+        return this.activity.at({ workspaceID: target.workspaceID, planeID: target.paneID }, () =>
+          this.activity.git(request.id, request.kind, () =>
+            this.gitActions.start({ ...request, target }, owner),
+          ),
+        );
       },
       gitResource: async ([source]) => {
         const bytes = await this.git.blob(source);
@@ -1351,6 +1400,7 @@ export class Desktop {
       terminalClose: (args, senderID) => {
         this.gitActions.stop(args[0], senderID);
         this.terminals.stop(args[0], senderID);
+        this.activity.cancelGit(args[0], this.windows.get(senderID)?.originID);
       },
       customExecute: (args) => {
         // never on an agent's request: its approval was for a recipe or a command, not a program
@@ -1853,13 +1903,20 @@ export class Desktop {
             ),
           ),
         );
-        const state = await this.workspaceSessions.persist(sender, args[0], (state) =>
-          this.storage.save({
-            ...state,
-            ui: this.settings.snapshot().ui,
-            look: this.settings.snapshot().look,
-            preferencesRevision: this.settings.snapshot().revision,
-          } as Parameters<Storage['save']>[0]),
+        const active = args[0].workspaces.find((space) => space.id === args[0].activeWorkspace);
+        const state = await this.activity.at(
+          { workspaceID: args[0].activeWorkspace, planeID: active?.activePane },
+          () =>
+            this.activity.run('workspace', 'save', () =>
+              this.workspaceSessions.persist(sender, args[0], (state) =>
+                this.storage.save({
+                  ...state,
+                  ui: this.settings.snapshot().ui,
+                  look: this.settings.snapshot().look,
+                  preferencesRevision: this.settings.snapshot().revision,
+                } as Parameters<Storage['save']>[0]),
+              ),
+            ),
         );
         this.emit({ type: 'workspaces', state });
         this.assignWorkspace(sender, args[0].activeWorkspace);
@@ -1899,6 +1956,16 @@ export class Desktop {
   /** Runs a method's handler with arguments its schema produced. */
   private call<K extends ApiMethod>(method: K, args: unknown, senderID: number): unknown {
     const handler: ApiHandlers[K] = (this.handlerTable ??= this.createHandlers())[method];
-    return handler(schemas[method].parse(args) as Parameters<ApiHandlers[K]>[0], senderID);
+    const parsed = schemas[method].parse(args) as Parameters<ApiHandlers[K]>[0];
+    const record = this.windows.get(senderID);
+    const target = record?.catalog?.target;
+    const workspaceID = record?.workspaceID;
+    const planeID =
+      target && target.workspaceID === workspaceID && target.paneID !== 'none'
+        ? target.paneID
+        : undefined;
+    return this.activity.within({ windowID: record?.originID, workspaceID, planeID }, () =>
+      handler(parsed, senderID),
+    );
   }
 }

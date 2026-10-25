@@ -5,6 +5,12 @@ import type { GitRequest, GitReply, GitSource } from './comparison/git';
 import type { GitActionKind, GitActionRequest, GitActionReply } from './comparison/git-actions';
 import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
+import type {
+  JournalFilter,
+  JournalQuery,
+  JournalPage,
+  JournalExportPreview,
+} from './journal/events';
 import type { ProviderCheckRequest, ProviderCheckResult } from './models/provider-checks';
 import type { SessionKeys } from './preferences/session-keys';
 import type { WorkspaceOverrides } from './preferences/overrides';
@@ -201,6 +207,13 @@ export interface ServerPane {
   path: string;
   sourceIdentity?: string;
 }
+export interface JournalPane {
+  id: string;
+  type: 'journal';
+  path: string;
+  filter: JournalFilter;
+  savedFilters?: { id: string; name: string; filter: JournalFilter }[];
+}
 export type Pane =
   | FolderPane
   | PreviewPane
@@ -211,7 +224,8 @@ export type Pane =
   | DiffPane
   | GitChangesPane
   | ChatPane
-  | ServerPane;
+  | ServerPane
+  | JournalPane;
 export interface Workspace {
   id: string;
   name: string;
@@ -433,6 +447,7 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'journal-changed' }
   | { type: 'local-servers'; servers: LocalServer[] }
   | { type: 'chat'; document: ChatDocument }
   | { type: 'launch'; request: LaunchRequest }
@@ -474,6 +489,10 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  journalQuery(query: JournalQuery): Promise<JournalPage>;
+  journalExportPreview(query: JournalQuery): Promise<JournalExportPreview>;
+  journalExport(id: string): Promise<boolean>;
+  journalClear(): Promise<boolean>;
   htmlPreview(resourceID: string): Promise<HtmlPreview>;
   htmlPreviewClose(id: string): Promise<void>;
   localServerStart(root: string, paneID: string, sourceIdentity?: string): Promise<LocalServer>;

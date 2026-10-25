@@ -1,7 +1,95 @@
 # Viewer Journal plane
 
-Product proposal, October 24, 2026. Requested during the
-[spatial development discussion](spatial-development.md). Not implemented yet.
+Initial implementation, October 25, 2026. Requested during the
+[spatial development discussion](spatial-development.md).
+
+## Implemented scope
+
+**Open Journal**, **Journal for workspace** and **Journal for plane** open a normal
+Plurid plane. The latter two prefill its context. Multiple Journal planes share
+the desktop store while keeping independent filters and reading cursors.
+Journal commands are human-only, including through command aliases; there is no
+agent Journal query or renderer append API.
+
+The plane provides source, severity, workspace, plane and absolute time filters,
+search by safe summary/IDs, presets, up to 20 named filters per plane, and trace
+filtering from an event inspector. Its virtualized table pages through stable
+snapshots, 200 events at a time. Selecting or scrolling older activity pauses
+following; new matches increment a visible count without replacing those rows.
+Resume explicitly returns to the latest results. Invalid ranges and failed or
+superseded queries retain useful earlier results. Keyboard arrows/Home/End select
+events. Details wrap IDs, expose a copy action and link to an existing source;
+another workspace opens or focuses its independent window. Closed sources remain
+honest placeholders. Restoration restores filters, never recorded operations.
+
+The first event producers are:
+
+| Source          | Recorded lifecycle                                                                                                                                   |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File operations | Queued jobs, collision decisions, completion, cancellation and failure; completed item count. Background jobs may have no workspace origin.          |
+| Git actions     | Start through terminal exit/error; process exit code, explicit plane-close cancellation. Commit messages, arguments and terminal bytes are excluded. |
+| Chat            | Model-request start and final outcome, including stop/failure. Request text, transcripts, tool excerpts and provider error bodies are excluded.      |
+| Workspace       | Save start and result, attributed to the workspace in that save request.                                                                             |
+| Local server    | Explicit start, stop, restart and close; per-request logs stay with the server plane.                                                                |
+
+Each event has a UUID, sequence, desktop producer, process-session UUID, timestamp,
+monotonic duration where applicable, safe source/action/phase and a correlation ID.
+Origins are copied when work starts; services with a validated target refine that
+origin. Completion callbacks do not consult the focused window. Expected explicit
+cancellation is informational. These are observations, not security attestations
+or a new source of mutation/consent authority.
+
+### Storage and privacy
+
+`domain/journal/events.ts` owns the closed event vocabulary and bounded query
+schema. `desktop/journal/store.ts` owns a private append-only
+`<application-data>/journal/events.jsonl`; `activity.ts` projects service events;
+`handlers.ts` owns human queries, export tickets and exact-file clear review.
+`renderer/journal/session.ts` owns one reader's stable cursor and stale-response
+protection. Presentation is split between the plane, virtual table, inspector and
+export dialog.
+
+The store is capped at **8 MiB or 10,000 events**, with a 256-event ingestion queue
+and query pages capped at 500. File identity, regular-file type, single-link count
+and private permissions are checked. A replaced/symlinked store or damaged tail
+stops appends while preserving the file and earlier valid rows. Full stores stop
+ingestion. A visible session counter reports rejected/dropped events. There is no
+automatic pruning, rotation, replacement or cleanup. The sink cannot fail the
+observed action. Mutation recovery and consent records retain their own stronger
+persistence requirements; Journal is a bounded support history, not a crash-proof
+transaction receipt or tamper-proof audit.
+
+Events have **no free-form message/detail field**. The schema has no place for
+paths, filenames, prompt text, credentials, argv, environment, transcripts or raw
+errors. Workspace/plane names are resolved for the human interface from currently
+known workspace state; they are not stored in event rows. Internal IDs are still
+private local data. No telemetry upload is introduced.
+
+**Export…** previews the exact JSON for up to the newest 2,000 matching events in
+the visible snapshot. An owner-bound, ten-minute ticket binds that preview to a
+native Save dialog. Saving creates a new private file exclusively; an existing
+file or link is preserved. The preview explains included IDs and any truncation.
+**Clear Journal filters** changes only the view. **Move history to Trash…** names
+the exact private event file in native review, reuses identity-checked OS Trash,
+and creates an empty store only after that succeeds. Cancellation preserves all
+history. No alias, saved grant or agent command can bypass that review. Positive
+native history removal remains an operator acceptance gate; automated checks
+exercise denial and preservation without removing any fixture.
+
+### Deliberate next slices
+
+The design below remains a broader target. Command dispatch/child spans, provider
+safe-error classifications, app build identities, window/watcher/agent audits,
+running-work aggregation and attention badges are not yet Journal producers.
+Storage is deliberately a capped append store rather than a second database;
+larger retention/indexing needs measured volume and a separately reviewed policy.
+Saved filters currently belong to their Journal plane; sharing/management can grow
+when those workflows are needed. Portable project exports omit this private
+history view. Browser fixtures can inspect events and preview exports; native
+saving and history removal belong to desktop acceptance.
+
+The original design follows as context for those extensions. Implemented behavior
+and limits above take precedence over proposed future capabilities below.
 
 ## Purpose
 

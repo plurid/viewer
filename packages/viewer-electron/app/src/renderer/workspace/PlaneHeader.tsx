@@ -233,25 +233,27 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
         <span className="plane-title">
           {pane?.type === 'scratch'
             ? (pane.title ?? 'Untitled')
-            : pane?.type === 'chat'
-              ? 'Chat'
-              : pane?.type === 'server'
-                ? 'Server · ' + baseName(pane.path)
-                : pane?.type === 'diff'
-                  ? 'Compare · ' + baseName(pane.path)
-                  : pane?.type === 'git-changes'
-                    ? 'Git changes · ' + baseName(pane.path)
-                    : pane?.type === 'collection'
-                      ? (collection?.name ?? 'Collection')
-                      : pane?.type === 'search'
-                        ? pane.name
-                        : pane?.type === 'terminal'
-                          ? (pane.gitAction
-                              ? 'Git ' + gitActionLabels[pane.gitAction]
-                              : 'Terminal') +
-                            ' · ' +
-                            baseName(pane.path)
-                          : (pane && baseName(pane.path)) || 'Plane'}
+            : pane?.type === 'journal'
+              ? 'Journal'
+              : pane?.type === 'chat'
+                ? 'Chat'
+                : pane?.type === 'server'
+                  ? 'Server · ' + baseName(pane.path)
+                  : pane?.type === 'diff'
+                    ? 'Compare · ' + baseName(pane.path)
+                    : pane?.type === 'git-changes'
+                      ? 'Git changes · ' + baseName(pane.path)
+                      : pane?.type === 'collection'
+                        ? (collection?.name ?? 'Collection')
+                        : pane?.type === 'search'
+                          ? pane.name
+                          : pane?.type === 'terminal'
+                            ? (pane.gitAction
+                                ? 'Git ' + gitActionLabels[pane.gitAction]
+                                : 'Terminal') +
+                              ' · ' +
+                              baseName(pane.path)
+                            : (pane && baseName(pane.path)) || 'Plane'}
         </span>
         {unsaved && (
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
@@ -347,9 +349,11 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
                 ? 'Search actions'
                 : pane?.type === 'terminal'
                   ? 'Terminal actions'
-                  : pane?.type === 'server'
-                    ? 'Server actions'
-                    : 'Preview actions'
+                  : pane?.type === 'journal'
+                    ? 'Journal actions'
+                    : pane?.type === 'server'
+                      ? 'Server actions'
+                      : 'Preview actions'
           }
           aria-haspopup="dialog"
           aria-expanded={menu?.kind === 'actions'}

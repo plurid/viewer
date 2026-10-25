@@ -82,6 +82,16 @@ export function useWorkspaceController({
   const serverParents = useRef(new Map<string, { workspaceID: string; parentID: string }>());
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
+      openJournal(filter) {
+        const existing = activeWorkspace().panes.find(
+          (pane) =>
+            pane.type === 'journal' && JSON.stringify(pane.filter) === JSON.stringify(filter),
+        );
+        const id = existing?.id ?? crypto.randomUUID();
+        if (!existing)
+          addContentPane({ id, type: 'journal', path: getState().bootstrap.home, filter });
+        controller.focusPane(id, { activate: true });
+      },
       async newChat(paths, draft) {
         const owner = activeWorkspace().id;
         const document = await window.viewer.chat({ kind: 'create', paths });

@@ -17,6 +17,7 @@ import { gitActionKinds, gitCommitMessageLimit } from '../../domain/comparison/g
 import { chatRequestSchema } from '../../domain/models/chat';
 import { providerCheckKinds } from '../../domain/models/provider-checks';
 import { flushResultSchema } from '../../domain/persistence/flush';
+import { journalQuerySchema } from '../../domain/journal/events';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
@@ -110,6 +111,7 @@ const workspaceSnapshotSchema = z.object({
                 'chat',
                 'git-changes',
                 'server',
+                'journal',
               ]),
               path: localPath,
               mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']).optional(),
@@ -176,6 +178,10 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export const schemas = {
+  journalQuery: z.tuple([journalQuerySchema]),
+  journalExportPreview: z.tuple([journalQuerySchema]),
+  journalExport: z.tuple([z.uuid()]),
+  journalClear: z.tuple([]),
   htmlPreview: z.tuple([id]),
   htmlPreviewClose: z.tuple([id]),
   localServerStart: z.tuple([
@@ -674,6 +680,10 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  journalQuery: 'viewer',
+  journalExportPreview: 'viewer',
+  journalExport: 'viewer',
+  journalClear: 'viewer',
   htmlPreview: 'viewer',
   htmlPreviewClose: 'viewer',
   localServerStart: 'viewer',

@@ -7,7 +7,9 @@ import { createContext, useContext } from 'react';
 import type { DiffSource } from '../../domain/comparison/diff';
 import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 import type { Tiling } from '../../domain/workspaces/tiling';
+import type { JournalFilter } from '../../domain/journal/events';
 export interface WorkspaceController {
+  openJournal(filter: JournalFilter): void;
   newChat(paths: string[], draft?: string): Promise<void>;
   openChat(id: string): Promise<void>;
   openDiff(left: DiffSource, right: DiffSource): void;

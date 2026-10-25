@@ -1,5 +1,57 @@
 # Verification
 
+## October 25 Journal candidate
+
+The direct Apple Silicon candidate is retained at
+`/private/tmp/viewer-journal-validated-20261025-jti9whh1/Viewer.app`.
+Executable SHA-256:
+`3674f786018eda19e04ebdf11469694928d0dca3ad3706486f30c368933e5836`;
+ASAR SHA-256:
+`e0edfb858aa36faf7d04ee8f42ded3b4b5ee822bc4b765becb16de3ca3543ac3`.
+Adjacent `candidate.json`, `source.json` and `verification.json` bind the retained
+bundle, source, unchanged lockfile, test reports and native evidence.
+
+**All 1,720 tests in 234 files pass, with zero failures or skips.** The complete
+run uses four workers, `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1`, this
+candidate's native binding and the retained recording review binding from the
+earlier complete validation. `unit-bounded.json` and `unit-bounded.log` retain the
+result. Earlier runs are kept: two bridge fixture tests initially lacked the new
+activity service; their fixture now uses the real observer and asserts captured
+origin. An unrestricted subsequent run hit worker-startup/resource timeouts;
+the four-worker run changes no assertion or removal protection.
+
+All TypeScript targets, full ESLint, full Prettier, ordinary `pnpm package` and
+`codesign --verify --deep --strict` pass. Build log:
+`/private/tmp/viewer-journal-package-20261025.log`. No dependency or lockfile
+change is introduced. The new Journal has 20 focused tests across five files,
+covering durable bounds, damage/substitution, immutable queries, privacy,
+concurrent origins, stale replies, paused reading, exports and denied removal.
+
+The packaged Journal scenario passes eight checks on actual generated-fixture
+services: file copy, hardened read-only Git status, local-server lifecycle,
+rejected model request without provider traffic, paused unread activity, private
+export preview, captured source/trace IDs and cold restoration. Reopening retains
+filters and history without replaying file jobs, Git or servers. Native fixture:
+`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-journal-ADWnyA`.
+Its `Screenshots` folder holds normal dark/light and narrow dark renders. The
+driver and result are also retained beside `verification.json`.
+
+The complete default packaged desktop smoke passes and quits cleanly, covering
+previews, file jobs/Undo, explorer views, model gestures, IPC/resource confinement
+and workspace restoration. `smoke.log` retains the outcome; fixture:
+`/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-cnNDOd`.
+The fresh interface review returned **ship**, with no material fixes; the design
+detector returned `[]`. The Journal section of `DESIGN.md` records the inherited
+surface and responsive inspector behavior.
+
+All fixtures and earlier evidence remain retained. The previous fourteen positive
+removal branches still need operator acceptance, as does positive Journal history
+removal. Native Save-picker export also remains an operator check; service tests
+verify exact preview bytes, owner binding, ticket validation, exclusive creation and
+existing-file preservation. No new live provider, physical hotkey, affirmative
+agent consent, signed Store or distribution qualification is claimed. See
+[implemented Journal scope](journal-plane.md) and [its storage decision](adr/0006-bounded-human-journal.md).
+
 ## October 25 complete preserved validation
 
 The verified direct Apple Silicon bundle is retained at

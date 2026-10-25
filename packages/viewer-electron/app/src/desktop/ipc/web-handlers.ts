@@ -1,6 +1,7 @@
 import type { ApiHandlers } from './schemas';
 import type { Resources } from '../previews/resources';
 import type { WebPreviews } from '../previews/web/service';
+import type { JournalActivity } from '../journal/activity';
 
 type WebHandlers = Pick<
   ApiHandlers,
@@ -13,6 +14,7 @@ type WebHandlers = Pick<
 >;
 
 interface WebPorts {
+  activity?: Pick<JournalActivity, 'run' | 'at'>;
   previews: Pick<
     WebPreviews,
     | 'openHtml'
@@ -33,6 +35,16 @@ interface WebPorts {
 
 /** Pages receive scoped content; external browser and clipboard actions accept only owned IDs. */
 export function createWebHandlers(ports: WebPorts): WebHandlers {
+  const observe = <T>(
+    action: 'start' | 'stop' | 'restart' | 'close',
+    work: () => Promise<T>,
+    paneID?: string,
+  ) =>
+    ports.activity
+      ? ports.activity.at(paneID ? { planeID: paneID } : {}, () =>
+          ports.activity!.run('server', action, work),
+        )
+      : work();
   return {
     htmlPreview: async ([resourceID], owner) => {
       const file = ports.resources.editableFile(resourceID);
@@ -48,22 +60,34 @@ export function createWebHandlers(ports: WebPorts): WebHandlers {
     },
     htmlPreviewClose: ([id], owner) => ports.previews.closeHtml(owner, id),
     localServerStart: ([root, paneID, identity], owner) =>
-      ports.previews.start(owner, root, paneID, identity),
+      observe('start', () => ports.previews.start(owner, root, paneID, identity), paneID),
     localServers: (_args, owner) => ports.previews.list(owner),
     localServerInspect: ([id], owner) => ports.previews.inspect(owner, id),
     localServerAction: async ([id, action], owner) => {
       switch (action) {
         case 'stop':
-          await ports.previews.stop(owner, id);
+          await observe(
+            'stop',
+            () => ports.previews.stop(owner, id),
+            ports.previews.get(owner, id).paneID,
+          );
           return;
         case 'restart':
-          await ports.previews.restart(owner, id);
+          await observe(
+            'restart',
+            () => ports.previews.restart(owner, id),
+            ports.previews.get(owner, id).paneID,
+          );
           return;
         case 'clear-log':
           ports.previews.clearLog(owner, id);
           return;
         case 'close':
-          await ports.previews.dispose(owner, id);
+          await observe(
+            'close',
+            () => ports.previews.dispose(owner, id),
+            ports.previews.get(owner, id).paneID,
+          );
           return;
         case 'open-browser':
         case 'copy-url': {

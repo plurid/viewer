@@ -4,6 +4,8 @@ import { realpath } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { Desktop } from '../src/desktop/bridge';
+import { JournalActivity } from '../src/desktop/journal/activity';
+import type { JournalStore } from '../src/desktop/journal/store';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import type { ApiMethod, ApiResult, ViewerAPI } from '../src/domain/contracts';
 import type { CapturedTarget } from '../src/domain/automation/actions';
@@ -51,6 +53,16 @@ async function fixture() {
   Reflect.set(desktop, 'windows', new Map([[owner, record]]));
   Reflect.set(desktop, 'workspaceSessions', sessions);
   Reflect.set(desktop, 'agentCommands', new Map());
+  const events: Parameters<JournalStore['record']>[0][] = [];
+  Reflect.set(
+    desktop,
+    'activity',
+    new JournalActivity({
+      record: (event) => {
+        events.push(event);
+      },
+    }),
+  );
   Reflect.set(desktop, 'gitActions', { start: git });
   Reflect.set(desktop, 'chats', { request: chat });
   const call = Reflect.get(desktop, 'call') as <K extends ApiMethod>(
@@ -101,6 +113,7 @@ async function fixture() {
     target,
     invokeGit,
     invokeChat,
+    events,
   };
 }
 
@@ -120,6 +133,11 @@ describe('cold human command origin publication', () => {
     await expect(f.invokeChat()).resolves.toMatchObject({ target: { panePath: f.root } });
     expect(f.publish).toHaveBeenCalledOnce();
     expect(f.git).toHaveBeenCalledOnce();
+    expect(f.events[0]?.origin).toEqual({
+      windowID: f.record.originID,
+      workspaceID: f.record.workspaceID,
+      planeID: f.target().paneID,
+    });
     await expect(f.invokeGit({ ...f.target(), rootID: 'another-root' })).rejects.toThrow(
       'originating folder',
     );

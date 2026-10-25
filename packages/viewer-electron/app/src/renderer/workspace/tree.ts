@@ -19,6 +19,7 @@ const routeKinds: Record<Pane['type'], string> = {
   'git-changes': 'git-changes',
   chat: 'chats',
   server: 'servers',
+  journal: 'journals',
 };
 /** The engine route that renders a host pane; `hostID` maps a plane back to its pane. */
 export function paneRoute(type: Pane['type'], id: string): string {

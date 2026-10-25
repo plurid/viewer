@@ -10,7 +10,7 @@ import {
   type PortableDiffSource,
 } from '../../domain/workspaces/project';
 import { parentPath } from '../../domain/workspaces/planes';
-import type { Pane, ScratchPane, ChatPane, ServerPane } from '../../domain/contracts';
+import type { Pane, ScratchPane, ChatPane, ServerPane, JournalPane } from '../../domain/contracts';
 import type { DiffSource } from '../../domain/comparison/diff';
 import {
   activeWorkspace,
@@ -150,7 +150,13 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
     }
   };
   for (const pane of panes) {
-    if (pane.type === 'scratch' || pane.type === 'chat' || pane.type === 'server') continue;
+    if (
+      pane.type === 'scratch' ||
+      pane.type === 'chat' ||
+      pane.type === 'server' ||
+      pane.type === 'journal'
+    )
+      continue;
     bind(pane.path, pane.type === 'folder' || pane.type === 'git-changes');
     if (pane.type === 'diff') {
       for (const source of [pane.left, pane.right]) {
@@ -170,8 +176,11 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
   const space = activeWorkspace();
   // Private documents and runtime server controls stay in this Mac's workspace.
   const shared = space.panes.filter(
-    (pane): pane is Exclude<Pane, ScratchPane | ChatPane | ServerPane> =>
-      pane.type !== 'scratch' && pane.type !== 'chat' && pane.type !== 'server',
+    (pane): pane is Exclude<Pane, ScratchPane | ChatPane | ServerPane | JournalPane> =>
+      pane.type !== 'scratch' &&
+      pane.type !== 'chat' &&
+      pane.type !== 'server' &&
+      pane.type !== 'journal',
   );
   const source = (value: DiffSource): PortableDiffSource => {
     if (value.kind === 'empty') return value;

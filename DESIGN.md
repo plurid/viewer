@@ -657,6 +657,18 @@ Preview details is an ordinary header button with expanded/control semantics and
 
 The supplied [Office acceptance evidence](packages/viewer-electron/app/out/office-acceptance/result.json) verifies four packaged checks and settled, fully opaque captures: Word in dark/light and compact light, workbook formulas/filtering in dark/light and compact light, hidden/empty sheets in compact light, and unavailable recovery in dark. The Office finish disposition is ship, with coverage clipping resolved and the compact Word capture supplied. Loading capture, physical assistive technology, genuine native pickers and Store acceptance gates remain unverified.
 
+### Journal
+
+[JournalPlane](packages/viewer-electron/app/src/renderer/journal/JournalPlane.tsx) extends the existing plane system with shared neutral surfaces, compact system text and ordinary fields, choice menus and icon buttons. Two wrapping control rows place search/source/level/time above workspace/plane/filter choices, live following and Export…. Optional time-range and trace controls enter normal flow. Active following uses accent text; error feedback uses danger and notices use muted text.
+
+The seven-column event grid keeps flat virtual rows (36px), sticky headings (34px), tabular numerals and a horizontally scrollable minimum width (880px). Time, Level, Source, Event, Duration, Workspace and Plane remain aligned. Hover uses raised fill and selection uses the existing selection role. Severity stays textual, with danger for Error and accent for Warning. Truncated summaries retain their full tooltip.
+
+Selection opens a plain field-surface inspector beside the table (320px, bounded to 40% of the plane). Muted definition labels face wrapping values; event, trace, task and session IDs use compact monospace. At a plane width of 900px or below, details stack beneath the table, with their own scroll area bounded to 45% of the content height. Control rows and the footer wrap while the table retains horizontal scrolling.
+
+**The Journal Inspection Rule.** Pause following when selecting an event or scrolling back, keep the selected lifecycle record readable, and expose Show trace plus Go to plane or Go to workspace beside it. An unavailable source keeps its event, disables return and explains why. New events use the existing follow control's count and Show latest action.
+
+Export Journal reuses the wide modal with count/size context, a bounded read-only monospace JSON preview and the existing Cancel/Save export… footer. Empty, loading and no-match states use the shared empty primitive. The plane footer keeps event counts, the local-history explanation and Move history to Trash… in normal flow. Reviewed native desktop dark/light and compact dark captures show generated-fixture service events; the finish disposition is ship with no material fixes, and the design detector returned `[]` once. These captures introduce no shipping imagery.
+
 ### Operations
 
 The operations control appears for pending work, conflicts, or unseen failures. Its anchored popover shows bounded progress, cancellation, paths, errors, and available undo; past jobs open through Commands or the native menu. Conflicts provide Skip, Keep both, and Replace, with an explicit remaining-conflicts checkbox. Replace explains that the existing item goes to Trash and requires its own confirmation. Idle browsing keeps the workspace open.

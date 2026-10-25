@@ -1,6 +1,10 @@
 import type { ComparisonRequest } from '../src/domain/comparison/folders';
 import type { GitRequest } from '../src/domain/comparison/git';
 import { GitReader } from '../src/desktop/comparison/git';
+import { JournalStore } from '../src/desktop/journal/store';
+import { JournalActivity } from '../src/desktop/journal/activity';
+import { createJournalHandlers } from '../src/desktop/journal/handlers';
+import { schemas } from '../src/desktop/ipc/schemas';
 import type { OperationPlanRequest } from '../src/domain/operations/operation-plan';
 import type { FileInformationPatch } from '../src/domain/files/information';
 import type { AgentClientRequest } from '../src/domain/agents/clients';
@@ -71,8 +75,26 @@ let permissionGranted = false;
 let pickerRequests = 0;
 const clients = new Set<ServerResponse>();
 const emit = (event: DesktopEvent) => {
+  if (event.type === 'job') activity.job(event.job);
   for (const client of clients) client.write(`data: ${JSON.stringify(event)}\n\n`);
 };
+const journal = new JournalStore(path.join(fixture.root, 'journal'), () =>
+  emit({ type: 'journal-changed' }),
+);
+const activity = new JournalActivity(journal);
+const journalHandlers = createJournalHandlers({
+  store: journal,
+  allowHuman: () => {},
+  chooseExport: async () => {
+    throw new Error('Save Journal exports in the desktop app.');
+  },
+  confirmClear: async () => {
+    throw new Error('Review Journal history removal in the desktop app.');
+  },
+  trash: async () => {
+    throw new Error('Browser fixtures cannot remove Journal history.');
+  },
+});
 const resources = new Resources();
 const webPreviews = new WebPreviews(
   async (files) => {
@@ -235,6 +257,14 @@ function scoped(file: string): string {
 }
 async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
   switch (method) {
+    case 'journalQuery':
+      return journalHandlers.journalQuery(schemas.journalQuery.parse(args), 1);
+    case 'journalExportPreview':
+      return journalHandlers.journalExportPreview(schemas.journalExportPreview.parse(args), 1);
+    case 'journalExport':
+      return journalHandlers.journalExport(schemas.journalExport.parse(args), 1);
+    case 'journalClear':
+      return journalHandlers.journalClear([], 1);
     case 'htmlPreview':
       throw new Error('Rendered HTML previews use the desktop’s isolated browser.');
     case 'htmlPreviewClose':
@@ -691,6 +721,7 @@ async function close() {
   await actions.close();
   await watchRules.close();
   await Promise.all([watchers.close(), operations.close(), index.close(), settings.flush()]);
+  await journal.close();
   for (const client of clients) client.end();
   await server.close();
   console.log('Fixtures preserved:', fixture.root);

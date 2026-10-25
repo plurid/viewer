@@ -30,6 +30,14 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | File relationship      | A versioned receipt link, declared/inferred local reference or separate reported note; `domain/files/relationships.ts`, `desktop/workspaces/relationships.ts`. It is evidence with a basis, not automatic authority.                     |
 | Office content         | Bounded DOCX body blocks or XLSX source-addressed stored cells, shared by previews, inspection, search and agent readers; `domain/previews/documents/office.ts`, `desktop/previews/office.ts`. Formulas and external data never execute. |
 
+A **Journal** is a human-readable projection of desktop activity, separate from
+the authoritative operation receipt log. `domain/journal` owns the closed event
+and query vocabulary; `desktop/journal` owns bounded private persistence, captured
+origins and reviewed exports/Trash; `renderer/journal` owns independent reader
+cursors and the plane. History cannot apply, undo, authorize or replay its event.
+There is no renderer append API or agent Journal reader. See
+[Journal scope](docs/journal-plane.md).
+
 A **setting profile** is a named presentation overlay, not an application data
 profile or an authorization document. The shared configuration remains canonical.
 Each workspace window resolves general preferences → workspace default profile →
