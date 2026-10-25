@@ -285,6 +285,7 @@ The defining visual behavior is a titled file plane beside its folder, with a vi
 - Declarative custom commands and real terminal planes within the same quiet desktop grammar.
 - File-content previews within the same visual system.
 - Column routes, structured inspection, interactive browser pages and local media tools keep file content dominant, with ordinary controls and explicit result states.
+- PDF page tools separate output inclusion from page inspection; export presets prefill the existing image, Optimize and media forms.
 - Project recovery, plane-note and file-inspection controls reuse compact buttons, neutral surfaces and explicit choices; recovery notices keep workspace chrome reachable.
 - Named client settings, checkpoints, comparison and collections extend the existing Settings, review and file-list patterns.
 - Workflow definitions, runs and receipts use native disclosures and the existing review, field and selected-metadata treatments.
@@ -376,6 +377,8 @@ Folder view, sort, metadata layout and browsing-column width are shared by path 
 The current browsing-column title uses primary text, a restrained accent/field mix and a bottom inset line; ancestor route rows use a quieter selection/surface mix and a muted left inset. The right inspector retains its own scroll boundary. Structured-tree actions wrap inside that narrow inspector rather than widening the folder trail. CSV and worksheets virtualize columns as well as rows, while horizontal scrolling keeps all source columns reachable.
 
 Media editing places the contained player, compact playback row, source filmstrip/waveform, In/Out controls and flat sequence list beside a fixed export-options column (256px). At a media-editor container width of 720px or less, options move below the main area, the dividing border moves to the top and the body scrolls vertically. Image tools use a bounded wide dialog, a contained source stage and an options column (300px); at a viewport width of 720px or less they become a vertical stage/options layout with a wrapping footer. Optimize uses a bounded wide dialog, a scrolling results table with sticky headings and a wrapping action footer. These are desktop window/plane adaptations, not a phone navigation system.
+
+PDF tools keep source and range controls above an ordered page list and contained page stage, with output fields below. At a viewport width of 720px or less, the list and preview remain side by side, output name and folder stack, and toolbar/footer actions wrap. The list scrolls independently so page order and export controls remain reachable.
 
 Model Shading uses a stage-contained panel with a small inset (12px from the top/right), the recorded width and internal padding, and bounds of `calc(100% - 24px)` in both axes. Its own scroll area and stable scrollbar gutter keep controls reachable in compact Quick Preview and linked planes. Trash uses the recorded larger dialog bounds, the inherited viewport maximum width of `calc(100vw - 60px)`, a flexible scrolling body and a nonshrinking header, selection/search toolbar and footer. Back and breadcrumbs extend the toolbar only inside trashed folders. Its inventory keeps sortable headings separate from 40px virtual rows; columns scroll horizontally when their 520px minimum (650px with dates) exceeds the available space. A single selected item's origin detail remains above the footer, with wrapping, selectable path text and a separate Open original folder in plane action. The footer's three-column grid centers Empty Trash… between the count and the right-aligned Refresh/Done group.
 
@@ -661,6 +664,8 @@ Custom-process output appears in a bounded lower-right panel (at most 560px wide
 
 Images, supported audio/video, PDF, text/code/Markdown/JSON/CSV, models and archives keep their established local-content stages and scoped controls. EPUB joins the same preview family with a toggleable contents column (200px), chapter navigation/count, and adjustable reading text. Chapter content scrolls in the existing document inset (24px 32px) and line spacing (1.7). Source headings remain document hierarchy; unsupported content and extraction limits receive plain feedback. These previews derive their visual substance from local files.
 
+[Rendered-image previews](packages/viewer-electron/app/src/renderer/previews/modules/RenderedImagePreview.tsx) reuse the ordinary unavailable state and Retry preview after a bounded native wait (12 seconds); [media previews](packages/viewer-electron/app/src/renderer/previews/modules/MediaPreview.tsx) retain the existing audio player with an explicit inline no-picture status when only audio decodes. The [RAW timeout capture](/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-real-files-mrGEh9/preview-Nikon-Z6.NEF.png) and [OGV audio-only capture](/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-real-files-mrGEh9/preview-Big-Buck-Bunny-trailer.ogv.png) received a scoped ship verdict with no material fixes; [real-file qualification](docs/real-file-qualification.md) records the observed playback and decoder limits without qualifying these samples as rendered RAW or video playback.
+
 Model stages use neutral ambient fill and key/fill lights attached to the model camera, preserving readable reverse faces during orbiting. The hemisphere follows the stage's up axis, and CAD material colors enter the renderer as linear RGB. Dimensions and surface measurements retain the source geometry and units.
 
 ### Column Routes and Structured Inspection
@@ -694,6 +699,16 @@ Optimize uses Balanced, Smaller and Lossless choices above one flat mixed PDF/im
 **The Source Work Rule.** Keep source inspection, private draft decisions and published output visibly distinct; task content supplies the imagery and every export creates a separately reported result.
 
 **The Honest Result Rule.** Drive saving, loading, progress, failure, cancellation and output feedback from the actual state; retain a useful recovery action and clear a success acknowledgement when its underlying draft changes.
+
+### PDF Tools and Export Presets
+
+[PDF tools](packages/viewer-electron/app/src/renderer/pdf-tools/PDFToolsDialog.tsx) extends the existing Image tools/Optimize dialog family. Inclusion checkboxes define the output; the blue active row identifies the page being inspected. The ordered flat list names source, page and rotation, mutes excluded pages and offers explicit move/rotate controls. Source choice and Apply range stay above it. The [page stage](packages/viewer-electron/app/src/renderer/pdf-tools/PDFPagePreview.tsx) retains a real rendered document bitmap through appearance and size changes, with bounded loading and Retry feedback.
+
+Output name, folder and the separate-page choice remain visible before Save PDF or Split pages. The dialog states that originals stay intact and that bookmarks, forms and accessibility tags are not retained. Progress, cancellation, errors and Open output follow actual jobs; changing pages, sources or output settings clears the saved acknowledgement. Optimize's explicit scanned-image option uses the existing labeled numeric field and inline error treatment: typed values remain editable, with validation on blur and before export.
+
+The [export catalog](packages/viewer-electron/app/src/domain/operations/export-presets.ts) and [commands](packages/viewer-electron/app/src/renderer/commands/programs.ts) supply scoped starting points: Images for web… and Batch convert images… open Image tools, PDF for email… opens Optimize with scan recompression selected, and Extract audio… opens an M4A media draft. Each preserves the receiving form's editable options, destination and explicit export action. These ordinary extensions introduce no new visual world, tokens or reusable component primitive. Runtime PDF bitmaps are document content; verification fixtures are not shipping imagery.
+
+PDF evidence covers [dark](.impeccable/review/pdf-workbench/pdf-tools-dark.png), [light](.impeccable/review/pdf-workbench/pdf-tools-light.png), [720px](.impeccable/review/pdf-workbench/pdf-tools-narrow.png) and [light scan controls](.impeccable/review/pdf-workbench/pdf-scan-light.png). The finish verdict is ship after both fixes were verified: draft changes invalidate the saved acknowledgement, and raw scan-edge entry validates on blur/export. The scoped preset review returned ship with no material fixes against [Images for web](/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-export-presets-XyILER/images-for-web-dark.png), [PDF for email](/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-export-presets-XyILER/pdf-for-email-dark.png) and [Extract audio](/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-export-presets-XyILER/extract-audio-dark.png) captures. Preset light/compact renders and physical assistive technology are not established by that scoped review.
 
 ### Model Shading
 
@@ -772,7 +787,7 @@ Dialog Close icon focus (`.dialog .icon-button:focus-visible`) uses the selectio
 - Do distinguish column routes from operation selection, and keep structured-tree controls reachable within a narrow inspector.
 - Do retain independent compact reading metrics, semantic syntax roles and source addresses in virtual data previews.
 - Do keep browser and file-content input with their task under spatial perspective, with ordinary recovery controls for failures.
-- Do keep source imagery visible in media/image stages and tie export, Optimize savings and output links to real job results.
+- Do keep source imagery visible in media, image and PDF stages and tie export, Optimize savings and output links to real job results.
 - Do wrap project names, inspection paths and evidence within their available width while keeping row actions and dialog footers reachable.
 - Do keep project recovery in normal flow, offer Close project for missing definitions and retain open workspace content when detaching the association.
 - Do use the shared body font and field roles for plane notes, and keep the content-reading choice explicit in file inspection.
@@ -796,7 +811,7 @@ Dialog Close icon focus (`.dialog .icon-button:focus-visible`) uses the selectio
 - Don't make file content or model gestures drag the plane instead of performing their own task.
 - Don't reuse dark syntax colors unchanged in light previews or use ordinary muted text on dark selected files.
 - Don't turn synthetic verification fixtures into shipping product imagery.
-- Don't present a changed media draft as already exported, hide per-file Optimize failures behind a success total, or claim every PDF/image can shrink.
+- Don't present a changed media or PDF draft as already exported, hide per-file Optimize failures behind a success total, or claim every PDF/image can shrink.
 - Don't infer phone, native browser accessibility, Intel, other operating-system or Store qualification from the reviewed desktop captures.
 - Don't let Shading reimport or alter source models, materials, textures, units or dimensions.
 - Don't expose Trash erasure or approval through renderer commands, shortcuts, MCP, scheduled routes or editable grants, or let a coding agent select or approve Empty Trash.

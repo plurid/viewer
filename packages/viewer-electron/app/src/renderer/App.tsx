@@ -278,10 +278,15 @@ function AppWindow() {
           terminalName,
           () => registry.context(getState().activePane) || windowContext(),
           (text) => lineRunRef.current(text),
-          () => setWindowDialog({ type: 'servers' }),
-          (paneID) => setWindowDialog({ type: 'browser', paneID }),
-          (files, paneID) => setWindowDialog({ type: 'image-tools', files, paneID }),
-          (files, paneID) => setWindowDialog({ type: 'optimize', files, paneID }),
+          {
+            showServers: () => setWindowDialog({ type: 'servers' }),
+            newBrowser: (paneID) => setWindowDialog({ type: 'browser', paneID }),
+            imageTools: (files, paneID, preset) =>
+              setWindowDialog({ type: 'image-tools', files, paneID, preset }),
+            optimizeFiles: (files, paneID, preset) =>
+              setWindowDialog({ type: 'optimize', files, paneID, preset }),
+            pdfTools: (files, paneID) => setWindowDialog({ type: 'pdf-tools', files, paneID }),
+          },
         ),
         ...windowCommands({
           workspace: controller,

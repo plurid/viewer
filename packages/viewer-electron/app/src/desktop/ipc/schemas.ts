@@ -184,6 +184,8 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
 ]);
 export const schemas = {
   imageInspect: z.tuple([localPath]),
+  pdfInspect: z.tuple([localPath]),
+  choosePDFs: z.tuple([]),
   media: z.tuple([mediaRequestSchema]),
   browser: z.tuple([browserRequestSchema]),
   journalQuery: z.tuple([journalQuerySchema]),
@@ -700,6 +702,8 @@ export const methodWindows = {
   browser: 'viewer',
   media: 'viewer',
   imageInspect: 'viewer',
+  pdfInspect: 'viewer',
+  choosePDFs: 'viewer',
   journalQuery: 'viewer',
   journalExportPreview: 'viewer',
   journalExport: 'viewer',

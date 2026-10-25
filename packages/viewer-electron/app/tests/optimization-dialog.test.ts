@@ -58,3 +58,36 @@ it('cancels an export admitted after Cancel and prevents the next format group f
   expect(operate).toHaveBeenCalledOnce();
   expect(screen.queryByRole('button', { name: 'Cancel optimization' })).toBeNull();
 });
+it('allows digit-by-digit scan size entry and validates it before export', async () => {
+  const operate = vi.fn<ViewerAPI['operate']>(async () => 'scan-job');
+  Object.assign(window, { viewer: { operate, save: vi.fn(async () => {}) } });
+  initialize({ home: '/fixture', platform: 'darwin', state: null, locations: [], openPaths: [] });
+  const file = {
+    name: 'scan.pdf',
+    path: '/fixture/scan.pdf',
+    parent: '/fixture',
+    extension: 'pdf',
+    kind: 'file',
+    size: 100,
+    identity: 'scan',
+    modified: 1,
+  } as FileEntry;
+  render(
+    createElement(OptimizeDialog, { files: [file], initial: 'pdf-for-email', onClose: vi.fn() }),
+  );
+  const input = screen.getByLabelText('PDF maximum image edge') as HTMLInputElement;
+  for (const value of ['', '1', '16', '160', '1600']) {
+    fireEvent.change(input, { target: { value } });
+    expect(input.value).toBe(value);
+  }
+  fireEvent.change(input, { target: { value: '9000' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Optimize file' }));
+  await screen.findByRole('alert');
+  expect(operate).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: '1600' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Optimize file' }));
+  await waitFor(() => expect(operate).toHaveBeenCalledOnce());
+  expect(operate.mock.calls[0]![0]).toMatchObject({
+    transform: { kind: 'pdf', recompressImages: true, maxImageEdge: 1600 },
+  });
+});

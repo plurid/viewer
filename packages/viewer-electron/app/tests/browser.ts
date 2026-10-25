@@ -20,6 +20,12 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  pdfInspect: async () => {
+    throw new Error('PDF tools require the desktop app.');
+  },
+  choosePDFs: async () => {
+    throw new Error('PDF tools require the desktop app.');
+  },
   imageInspect: async () => {
     throw new Error('Image tools require the desktop app.');
   },

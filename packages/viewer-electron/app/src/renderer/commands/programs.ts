@@ -14,7 +14,20 @@ import { mediaFormats } from '../../domain/operations/transforms';
 import { transformableImage } from '../../domain/operations/image-conversions';
 import { optimizable } from '../../domain/operations/optimization';
 import type { FileEntry } from '../../domain/contracts';
+import {
+  exportPresetCatalog,
+  exportPresetAvailable,
+  type ImageExportPreset,
+  type PDFExportPreset,
+} from '../../domain/operations/export-presets';
 export { captureTarget } from './target';
+export interface ProgramTools {
+  showServers?(): void;
+  newBrowser?(paneID?: string): void;
+  imageTools?(files: FileEntry[], paneID?: string, preset?: ImageExportPreset): void;
+  optimizeFiles?(files: FileEntry[], paneID?: string, preset?: PDFExportPreset): void;
+  pdfTools?(files: FileEntry[], paneID?: string): void;
+}
 export function programCommands(
   workspace: WorkspaceController,
   /** `false` when no command of that ID is available here. */
@@ -24,11 +37,9 @@ export function programCommands(
   live?: () => CommandContext,
   /** A step with words (`vs ~/Documents`, 2026-10-23), run by the command line. */
   line?: (text: string) => Promise<{ ok: boolean; message?: string }>,
-  showServers?: () => void,
-  newBrowser?: (paneID?: string) => void,
-  imageTools?: (files: FileEntry[], paneID?: string) => void,
-  optimizeFiles?: (files: FileEntry[], paneID?: string) => void,
+  tools: ProgramTools = {},
 ): CommandDefinition[] {
+  const { showServers, newBrowser, imageTools, optimizeFiles, pdfTools } = tools;
   const folder = (context: CommandContext) => !!context.directory || !!context.folder;
   const target = (context: CommandContext) => {
     const captured = captureTarget(context, workspace);
@@ -36,6 +47,42 @@ export function programCommands(
   };
   return [
     ...localServerCommands(workspace, showServers),
+    ...exportPresetCatalog.map((preset): CommandDefinition => ({
+      id: preset.id,
+      label: preset.name,
+      group: 'Export',
+      icon: preset.kind === 'image' ? 'image' : preset.kind === 'pdf' ? 'pdf' : 'audio',
+      aliases: [preset.description, 'export preset'],
+      when: (context) =>
+        exportPresetAvailable(preset, context.selection) &&
+        (preset.kind === 'image' ? !!imageTools : preset.kind === 'pdf' ? !!optimizeFiles : true),
+      run: (context) => {
+        const files = structuredClone([...context.selection]);
+        if (preset.kind === 'image') return imageTools?.(files, context.paneID, preset.preset);
+        if (preset.kind === 'pdf') return optimizeFiles?.(files, context.paneID, preset.preset);
+        return workspace.openMedia(
+          files.map((file) => file.path),
+          context.paneID,
+          true,
+          'extract-audio',
+        );
+      },
+    })),
+    {
+      id: 'pdf-tools',
+      label: 'PDF tools…',
+      group: 'Files',
+      icon: 'file',
+      aliases: ['merge pdf', 'split pdf', 'extract pages', 'rotate pages', 'reorder pages'],
+      when: (context) =>
+        !!pdfTools &&
+        context.selection.length > 0 &&
+        context.selection.length <= 16 &&
+        context.selection.every(
+          (file) => file.kind === 'file' && file.extension.toLowerCase() === 'pdf',
+        ),
+      run: (context) => pdfTools?.(structuredClone([...context.selection]), context.paneID),
+    },
     {
       id: 'optimize-files',
       label: 'Optimize…',

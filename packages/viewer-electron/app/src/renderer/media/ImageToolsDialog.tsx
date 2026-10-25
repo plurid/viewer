@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FileEntry, ViewerAPI } from '../../domain/contracts';
+import { imagePresetPlan, type ImageExportPreset } from '../../domain/operations/export-presets';
 import {
   imageTransformSchema,
   transformExtension,
@@ -18,15 +19,15 @@ export function ImageToolsDialog({
   files,
   paneID,
   onClose,
+  initial,
 }: {
   files: FileEntry[];
   paneID?: string;
   onClose(): void;
+  initial?: ImageExportPreset;
 }) {
   const workspace = useWorkspace();
-  const [plan, setPlan] = useState(() =>
-    imageTransformSchema.parse({ kind: 'image', format: 'webp' }),
-  );
+  const [plan, setPlan] = useState(() => imagePresetPlan(initial));
   const [inspection, setInspection] = useState<Awaited<ReturnType<ViewerAPI['imageInspect']>>>();
   const [decoded, setDecoded] = useState<HTMLImageElement>(),
     [previewError, setPreviewError] = useState(''),

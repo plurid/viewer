@@ -5,7 +5,9 @@ import { WorktreesDialog } from '../git/worktrees/WorktreesDialog';
 import { ServersDialog } from '../local-servers/ServersDialog';
 import { ImageToolsDialog } from '../media/ImageToolsDialog';
 import { OptimizeDialog } from '../media/OptimizeDialog';
+import { PDFToolsDialog } from '../pdf-tools/PDFToolsDialog';
 import type { FileEntry } from '../../domain/contracts';
+import type { ImageExportPreset, PDFExportPreset } from '../../domain/operations/export-presets';
 import type { WorkspaceController } from '../workspace/context';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { WorkspaceBackgroundDialog } from '../ui/workspace/WorkspaceBackgroundDialog';
@@ -31,8 +33,9 @@ import {
 export type WindowDialog =
   | { type: 'servers' }
   | { type: 'browser'; paneID?: string }
-  | { type: 'image-tools'; files: FileEntry[]; paneID?: string }
-  | { type: 'optimize'; files: FileEntry[]; paneID?: string }
+  | { type: 'image-tools'; files: FileEntry[]; paneID?: string; preset?: ImageExportPreset }
+  | { type: 'optimize'; files: FileEntry[]; paneID?: string; preset?: PDFExportPreset }
+  | { type: 'pdf-tools'; files: FileEntry[]; paneID?: string }
   | { type: 'workspace'; kind: 'new' | 'rename' | 'delete' | 'background'; id: string }
   | { type: 'view'; kind: 'save' | 'manage' }
   | { type: 'profile' | 'template' | 'go-to' | 'connect' | 'tag' }
@@ -71,10 +74,25 @@ export function WindowDialogs({
     <>
       {dialog?.type === 'servers' && <ServersDialog workspace={controller} onClose={onClose} />}
       {dialog?.type === 'optimize' && (
-        <OptimizeDialog files={dialog.files} paneID={dialog.paneID} onClose={onClose} />
+        <OptimizeDialog
+          key={JSON.stringify([dialog.files.map((file) => file.path), dialog.preset])}
+          initial={dialog.preset}
+          files={dialog.files}
+          paneID={dialog.paneID}
+          onClose={onClose}
+        />
+      )}
+      {dialog?.type === 'pdf-tools' && (
+        <PDFToolsDialog files={dialog.files} paneID={dialog.paneID} onClose={onClose} />
       )}
       {dialog?.type === 'image-tools' && (
-        <ImageToolsDialog files={dialog.files} paneID={dialog.paneID} onClose={onClose} />
+        <ImageToolsDialog
+          key={JSON.stringify([dialog.files.map((file) => file.path), dialog.preset])}
+          initial={dialog.preset}
+          files={dialog.files}
+          paneID={dialog.paneID}
+          onClose={onClose}
+        />
       )}
       {dialog?.type === 'browser' && (
         <NameDialog

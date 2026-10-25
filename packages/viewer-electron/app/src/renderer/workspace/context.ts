@@ -32,7 +32,12 @@ export interface WorkspaceController {
   newServer(target: CapturedTarget): Promise<void>;
   openServer(runtimeID: string): void;
   openBrowser(url: string, parentID?: string, serverRuntimeID?: string): void;
-  openMedia(paths: string[], parentID?: string, fresh?: boolean): Promise<void>;
+  openMedia(
+    paths: string[],
+    parentID?: string,
+    fresh?: boolean,
+    preset?: 'extract-audio',
+  ): Promise<void>;
   rootID(paneID: string): string | undefined;
   parentPaneID(paneID: string): string | undefined;
   linkedPaneID(paneID: string, entry: Pick<FileEntry, 'path' | 'directory'>): string | undefined;

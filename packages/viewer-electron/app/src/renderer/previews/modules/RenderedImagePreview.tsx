@@ -32,7 +32,12 @@ export default function RenderedImagePreview(context: PreviewContext) {
       if (owned) void services.release(owned.id);
     };
   }, [resource.id, services]);
-  if (error) return <Empty icon="warning" title="Preview unavailable" detail={error} />;
+  if (error)
+    return (
+      <Empty icon="warning" title="Preview unavailable" detail={error}>
+        {context.retry && <button onClick={context.retry}>Retry preview</button>}
+      </Empty>
+    );
   if (!rendered) return <Loading label="Rendering preview…" />;
   return (
     <ImagePreview

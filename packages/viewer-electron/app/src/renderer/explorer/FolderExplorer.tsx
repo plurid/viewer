@@ -32,13 +32,14 @@ import {
   useViewer,
   useFolderPresentation,
 } from '../state/store';
-import { browseSession, useBrowseField } from '../workspace/sessions';
+import { browseSession, updateBrowseSession, useBrowseField } from '../workspace/sessions';
 import { useWorkspace } from '../workspace/context';
 import { IconButton, Empty, Loading } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
 import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
-import { useFolder } from './useFolder';
+import { refreshFolder, useFolder } from './useFolder';
+import { folderCommandPath } from '../commands/folder-target';
 import { recordScroll, useScrollRestore } from './scroll-restore';
 import { mouseHistoryDirection, mouseHistoryTarget } from './mouse-navigation';
 import { useSearch } from './useSearch';
@@ -285,12 +286,26 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           },
           contents: (entry) => navigate(id, entry.path),
           ...fileDialogs.actions,
-          search: () => {
+          search: (context) => {
+            const target = folderCommandPath(context) || path;
+            if (target !== path) {
+              navigate(id, target);
+              browseSession(id, target);
+              updateBrowseSession(id, target, { searchOpen: true });
+              return;
+            }
             if (searchOpen) closeSearch();
             else setSearchOpen(true);
           },
-          path: () => setPathOpen((value) => !value),
-          refresh: listing.refresh,
+          path: (context) => {
+            const target = folderCommandPath(context) || path;
+            if (target !== path) {
+              navigate(id, target);
+              browseSession(id, target);
+              updateBrowseSession(id, target, { pathOpen: true });
+            } else setPathOpen((value) => !value);
+          },
+          refresh: (context) => refreshFolder(folderCommandPath(context) || path),
           selectAll: () => {
             const scope = pane?.mode === 'columns' ? columns.scope() : entries;
             selecting.all(scope);

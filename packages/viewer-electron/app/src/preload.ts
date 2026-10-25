@@ -19,6 +19,8 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  pdfInspect: (file) => invoke('pdfInspect', file),
+  choosePDFs: () => invoke('choosePDFs'),
   imageInspect: (file) => invoke('imageInspect', file),
   media: (request) => invoke('media', request),
   browser: (request) =>

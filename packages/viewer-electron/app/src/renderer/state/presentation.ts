@@ -108,10 +108,13 @@ export function updateFolderPresentation(path: string, patch: FolderOverride | n
       );
   schedulePreferences();
 }
-export function applyFolderAsDefaults(path: string): void {
+export function applyFolderAsDefaults(
+  path: string,
+  displayedMode?: FolderPresentation['mode'],
+): void {
   const value = folderPresentation(path);
-  const { list, mode, sort, descending, showHidden, density, foldersFirst, group, columnWidth } =
-    value;
+  const { list, sort, descending, showHidden, density, foldersFirst, group, columnWidth } = value;
+  const mode = displayedMode ?? value.mode;
   const browsing = getState().settings.settings.browsing;
   void window.viewer
     .settingsPatch(

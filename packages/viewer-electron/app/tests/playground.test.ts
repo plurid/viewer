@@ -110,6 +110,14 @@ describe('stable Viewer playground', () => {
       async () => new Response(bytes, { headers: { 'content-length': '100' } }),
     );
     await expect(downloadSample(sample, wrongLength)).rejects.toThrow('Unexpected');
+    const decodedTransfer = vi.fn<typeof fetch>(
+      async () =>
+        new Response(bytes, { headers: { 'content-length': '2', 'content-encoding': 'gzip' } }),
+    );
+    expect(await downloadSample(sample, decodedTransfer)).toEqual(bytes);
+    await expect(
+      downloadSample({ ...sample, sha256: '0'.repeat(64) }, decodedTransfer),
+    ).rejects.toThrow('checksum');
   });
 
   it('preserves an interrupted Git initialization instead of replaying mutations', async () => {

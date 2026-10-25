@@ -34,7 +34,11 @@ export class Resources {
   constructor(
     private access: (files: readonly string[]) => Promise<void> = async () => {},
     /** Renders formats the renderer cannot decode; see `quick-look-render.ts`. */
-    private render?: (file: string) => Promise<{ data: Buffer; extension: string }>,
+    private render?: (
+      file: string,
+      signal: AbortSignal,
+    ) => Promise<{ data: Buffer; extension: string }>,
+    private renditionTimeout = 12000,
   ) {}
   grant(file: string, requestID?: string): Promise<Resource> {
     if (requestID && this.pending.has(requestID))
@@ -330,14 +334,47 @@ export class Resources {
   }
   /** A preview of a file Chromium cannot decode, rendered by the system and held in memory. */
   rendition(id: string): Promise<Resource> {
-    return this.work.track(this.paths(id), () => this.coordinated(id, () => this.renderFile(id)));
+    return this.work.track(this.paths(id), (scope) =>
+      this.coordinated(id, () => this.renderFile(id, scope.signal)),
+    );
   }
-  private async renderFile(id: string): Promise<Resource> {
+  private async renderFile(id: string, scope: AbortSignal): Promise<Resource> {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Rendered previews need a file on disk.');
     if (!this.render) throw new Error('Rendered previews are unavailable here.');
     await this.access([grant.file]);
-    const { data, extension } = await this.render(fileCoordination.path(grant.file));
+    const deadline = new AbortController();
+    const signal = AbortSignal.any([scope, this.signal(id), deadline.signal]);
+    signal.throwIfAborted();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancel: () => void = () => {};
+    const { data, extension } = await new Promise<{ data: Buffer; extension: string }>(
+      (resolve, reject) => {
+        cancel = () => reject(signal.reason ?? new Error('Preview closed.'));
+        timer = setTimeout(
+          () =>
+            deadline.abort(
+              new Error(
+                'The macOS image preview timed out. Retry the preview or open the file in its original app.',
+              ),
+            ),
+          this.renditionTimeout,
+        );
+        signal.addEventListener('abort', cancel, { once: true });
+        void Promise.resolve()
+          .then(() => {
+            signal.throwIfAborted();
+            return this.render!(fileCoordination.path(grant.file!), signal);
+          })
+          .then(resolve, reject);
+        if (signal.aborted) cancel();
+      },
+    ).finally(() => {
+      // The native service may never answer. Cleanup follows our own completion
+      // so releasing a preview and application quiescence cannot wait on it.
+      clearTimeout(timer);
+      signal.removeEventListener('abort', cancel);
+    });
     // A preview closed while rendering cannot leave an orphan grant.
     this.get(id);
     const name = `${grant.resource.entry.name}.${extension}`;

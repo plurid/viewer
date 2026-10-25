@@ -255,6 +255,42 @@ describe('preview work cancellation', () => {
   });
 });
 describe('rendered image previews', () => {
+  it('bounds a system renderer that never answers and lets shutdown drain', async () => {
+    const file = path.join(root, 'Camera.nef');
+    await writeFile(file, 'generated RAW fixture');
+    resources = new Resources(
+      async () => {},
+      () => new Promise(() => {}),
+      25,
+    );
+    const resource = await resources.grant(file);
+    await expect(resources.rendition(resource.id)).rejects.toThrow('timed out');
+    await resources.quiesce();
+  });
+  it('cancels an unanswered rendition when its source preview closes and ignores late bytes', async () => {
+    const file = path.join(root, 'Camera.dng');
+    await writeFile(file, 'generated RAW fixture');
+    let resolve!: (value: { data: Buffer; extension: string }) => void, started!: () => void;
+    const begun = new Promise<void>((done) => {
+      started = done;
+    });
+    resources = new Resources(
+      async () => {},
+      () =>
+        new Promise((done) => {
+          resolve = done;
+          started();
+        }),
+    );
+    const resource = await resources.grant(file),
+      pending = resources.rendition(resource.id);
+    await begun;
+    resources.release(resource.id);
+    await expect(pending).rejects.toThrow();
+    await resources.quiesce();
+    resolve({ data: Buffer.from('late bytes'), extension: 'png' });
+    expect((await resources.response(new Request(resource.url))).status).toBe(404);
+  });
   it('serves a system rendering as a child resource released with its file', async () => {
     const file = path.join(root, 'Scan.tiff');
     await writeFile(file, 'tiff bytes the renderer cannot decode');
@@ -263,7 +299,7 @@ describe('rendered image previews', () => {
     resources = new Resources(async () => {}, render);
     const resource = await resources.grant(file);
     const rendition = await resources.rendition(resource.id);
-    expect(render).toHaveBeenCalledWith(await realpath(file));
+    expect(render).toHaveBeenCalledWith(await realpath(file), expect.any(AbortSignal));
     expect(rendition.entry.name).toBe('Scan.tiff.jpg');
     const response = await resources.response(new Request(rendition.url));
     expect(response.headers.get('Content-Type')).toBe('image/jpeg');

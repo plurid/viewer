@@ -37,7 +37,11 @@ import {
   type ImageConverter,
 } from './image-convert';
 import { holds, sameItem, unchanged, type Replaced } from '../files/item-identity';
-import { validateTransform, transformExtension } from '../../domain/operations/transforms';
+import {
+  validateTransform,
+  transformExtension,
+  combinedTransform,
+} from '../../domain/operations/transforms';
 import type { TransformExecutor } from '../transforms/transforms';
 import {
   aliasName,
@@ -353,7 +357,7 @@ export class Operations {
           throw new Error('Transform processors are unavailable in this build.');
         if (request.conversion) throw new Error('Choose one conversion plan.');
         request.transform = validateTransform(request.transform, roots.length);
-        if (request.transform.kind === 'media' && (!request.destination || !request.name))
+        if (combinedTransform(request.transform) && (!request.destination || !request.name))
           throw new Error('Choose a destination folder and output name.');
       } else {
         if (!request.conversion) throw new Error('Choose an image quick action.');
@@ -374,7 +378,7 @@ export class Operations {
     const single =
       ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
       (request.kind === 'convert' &&
-        (request.conversion === 'pdf' || request.transform?.kind === 'media'));
+        (request.conversion === 'pdf' || combinedTransform(request.transform)));
     const task = this.add({ ...request, sources: roots }, single ? 1 : roots.length);
     task.reviewedFile = reviewedFile;
     this.queue.push(task);
@@ -1213,7 +1217,7 @@ export class Operations {
         const single =
           ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
           (request.kind === 'convert' &&
-            (request.conversion === 'pdf' || request.transform?.kind === 'media'));
+            (request.conversion === 'pdf' || combinedTransform(request.transform)));
         const items = single ? [''] : request.sources;
         for (const source of items) {
           const priorErrors = job.errors.length;

@@ -1,5 +1,6 @@
 import { actionCommands } from '../actions/commands';
 import { columnCommands } from './columns';
+import { folderCommandPath } from './folder-target';
 import { copyPathCommand } from './copy-path';
 import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
@@ -13,6 +14,8 @@ import {
   navigate,
   quickPreview,
   refreshClipboard,
+  folderPresentation,
+  updateFolderPresentation,
   updatePane,
   writeFileClipboard,
 } from '../state/store';
@@ -27,9 +30,9 @@ export interface FolderActions {
   info(context: CommandContext): void;
   openWith(context: CommandContext): void;
   destination(kind: 'copy' | 'move', context: CommandContext): void;
-  search(): void;
-  path(): void;
-  refresh(): void;
+  search(context: CommandContext): void;
+  path(context: CommandContext): void;
+  refresh(context: CommandContext): void;
   selectAll(): void;
   invertSelection(): void;
 }
@@ -429,13 +432,19 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'hidden',
-      label: (context) => (context.folder?.showHidden ? 'Hide hidden files' : 'Show hidden files'),
+      label: (context) =>
+        context.folder && folderPresentation(folderCommandPath(context)!).showHidden
+          ? 'Hide hidden files'
+          : 'Show hidden files',
       group: 'Folder',
       icon: 'eye',
       aliases: ['hf'],
       shortcut: '⇧⌘.',
       when: folder,
-      run: (context) => updatePane(context.paneID!, { showHidden: !context.folder!.showHidden }),
+      run: (context) => {
+        const path = folderCommandPath(context)!;
+        updateFolderPresentation(path, { showHidden: !folderPresentation(path).showHidden });
+      },
     },
     {
       id: 'refresh',
@@ -521,8 +530,8 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       icon: 'up',
       shortcut: '⌘↑',
       when: (context) =>
-        folder(context) && context.folder!.path !== parentPath(context.folder!.path),
-      run: (context) => navigate(context.paneID!, parentPath(context.folder!.path)),
+        folder(context) && folderCommandPath(context)! !== parentPath(folderCommandPath(context)!),
+      run: (context) => navigate(context.paneID!, parentPath(folderCommandPath(context)!)),
     },
     {
       id: 'select-all',
@@ -541,7 +550,12 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       group: 'View',
       icon: mode,
       when: folder,
-      run: (context) => updatePane(context.paneID!, { mode }),
+      run: (context) => {
+        const path = folderCommandPath(context)!;
+        if (context.folder!.mode !== mode && path !== context.folder!.path)
+          navigate(context.paneID!, path);
+        updatePane(context.paneID!, { mode });
+      },
     });
   return [...commands, ...columnCommands(), ...actionCommands()];
 }

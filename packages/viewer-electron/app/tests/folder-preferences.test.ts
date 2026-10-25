@@ -28,6 +28,36 @@ import type { FileEntry } from '../src/domain/contracts';
 import type { SettingsPatch } from '../src/domain/services';
 import { columnCommands } from '../src/renderer/commands/columns';
 import type { CommandContext } from '../src/renderer/commands/registry';
+import { folderCommands, type FolderActions } from '../src/renderer/commands/folder';
+
+function columnContext(): CommandContext {
+  const root = activeWorkspace().panes[0]!;
+  updatePane(root.id, { mode: 'columns' });
+  return {
+    scope: 'folder',
+    workspaceID: activeWorkspace().id,
+    paneID: root.id,
+    folder: activeWorkspace().panes[0],
+    directory: '/fixtures/Invoices',
+    path: root.path,
+    selection: [],
+    clipboard: null,
+    jobs: [],
+  } as CommandContext;
+}
+const folderActions = {
+  open: vi.fn(),
+  dialog: vi.fn(),
+  trash: vi.fn(),
+  info: vi.fn(),
+  openWith: vi.fn(),
+  destination: vi.fn(),
+  search: vi.fn(),
+  path: vi.fn(),
+  refresh: vi.fn(),
+  selectAll: vi.fn(),
+  invertSelection: vi.fn(),
+} satisfies FolderActions;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -73,6 +103,79 @@ afterEach(async () => {
 });
 
 describe('folder appearance and independent explorer sessions', () => {
+  it('sorts and reverses the child column from its own live preferences', () => {
+    const context = columnContext();
+    updateFolderPresentation('/fixtures', { sort: 'size', descending: false });
+    updateFolderPresentation(context.directory!, { sort: 'modified', descending: false });
+    const sort = columnCommands().find((command) => command.id === 'sort.modified')!;
+    expect(typeof sort.label === 'function' && sort.label(context)).toBe(
+      'Sort by date modified, descending',
+    );
+    sort.run(context);
+    expect(folderPresentation(context.directory!)).toMatchObject({
+      sort: 'modified',
+      descending: true,
+    });
+    expect(folderPresentation('/fixtures')).toMatchObject({ sort: 'size', descending: false });
+    sort.run(context);
+    expect(folderPresentation(context.directory!).descending).toBe(false);
+  });
+  it('toggles hidden files in the child without changing its ancestor', () => {
+    const context = columnContext();
+    updateFolderPresentation('/fixtures', { showHidden: true });
+    const hidden = folderCommands(folderActions).find((command) => command.id === 'hidden')!;
+    expect(typeof hidden.label === 'function' && hidden.label(context)).toBe('Show hidden files');
+    hidden.run(context);
+    expect(folderPresentation(context.directory!).showHidden).toBe(true);
+    hidden.run(context);
+    expect(folderPresentation(context.directory!).showHidden).toBe(false);
+    expect(folderPresentation('/fixtures').showHidden).toBe(true);
+  });
+  it('resets only the child folder view and exports its displayed Columns settings as defaults', () => {
+    const context = columnContext();
+    updateFolderPresentation(context.directory!, {
+      mode: 'grid',
+      sort: 'modified',
+      descending: true,
+      group: 'kind',
+      columnWidth: 610,
+    });
+    columnCommands()
+      .find((command) => command.id === 'folder-view-defaults')!
+      .run(context);
+    const defaults = vi
+      .mocked(window.viewer.settingsPatch)
+      .mock.calls.flatMap(([patches]) => patches)
+      .findLast((patch) => patch.path === 'settings.browsing')?.value;
+    expect(defaults).toMatchObject({
+      mode: 'columns',
+      sort: 'modified',
+      descending: true,
+      group: 'kind',
+      columnWidth: 610,
+    });
+    columnCommands()
+      .find((command) => command.id === 'reset-folder-view')!
+      .run(context);
+    expect(getState().settings.settings.folders[context.directory!]).toBeUndefined();
+    expect(folderPresentation('/fixtures').mode).toBe('columns');
+  });
+  it('changes view and goes to the parent of the browsed column, preserving the ancestor session', () => {
+    const context = columnContext();
+    const before = browseSession(context.paneID!, '/fixtures');
+    folderCommands(folderActions)
+      .find((command) => command.id === 'view-grid')!
+      .run(context);
+    expect(activeWorkspace().panes[0]).toMatchObject({ path: context.directory, mode: 'grid' });
+    expect(folderPresentation('/fixtures').mode).toBe('columns');
+    expect(browseSession(context.paneID!, '/fixtures')).toBe(before);
+    navigate(context.paneID!, '/fixtures');
+    const nested = { ...context, directory: '/fixtures/Invoices/2026' };
+    folderCommands(folderActions)
+      .find((command) => command.id === 'parent')!
+      .run(nested);
+    expect(activeWorkspace().panes[0]?.path).toBe('/fixtures/Invoices');
+  });
   it('groups the browsed child column and shares its view without changing its ancestor', () => {
     const root = activeWorkspace().panes[0]!;
     updatePane(root.id, { mode: 'columns' });

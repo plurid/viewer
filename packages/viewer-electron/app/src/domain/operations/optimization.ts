@@ -11,11 +11,19 @@ export function optimizationPlan(
   file: Pick<FileEntry, 'kind' | 'extension'>,
   preset: OptimizationPreset,
   maximum?: number,
+  pdfImages?: { maximum: number },
 ): TransformPlan {
   if (!optimizable(file))
     throw new Error('Optimize supports PDFs, JPEGs, PNGs, WebP and AVIF images.');
   if (file.extension.toLowerCase() === 'pdf')
-    return transformPlanSchema.parse({ kind: 'pdf', format: 'pdf', preset });
+    return transformPlanSchema.parse({
+      kind: 'pdf',
+      format: 'pdf',
+      preset,
+      ...(pdfImages && preset !== 'lossless'
+        ? { recompressImages: true, maxImageEdge: pdfImages.maximum }
+        : {}),
+    });
   const format = ['jpg', 'jpeg'].includes(file.extension.toLowerCase())
     ? 'jpeg'
     : file.extension.toLowerCase();

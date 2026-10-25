@@ -6364,6 +6364,20 @@ async function verify(): Promise<void> {
   await preview(path.join(fixture.files, 'Documents', 'Project notes.md'), 'A wider view');
   await closePreview();
   await paletteCommand('Gallery view');
+  await until(
+    () =>
+      evaluate<boolean>(
+        `!!document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Documents', 'Project notes.md')))})`,
+      ),
+    Boolean,
+    'view switch retains the browsed column folder',
+  );
+  await paletteCommand('Parent folder');
+  await until(
+    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(source))})`),
+    Boolean,
+    'parent folder returns to Studio before gallery inspection',
+  );
   await click(fileSelector(source));
   await until(
     text,

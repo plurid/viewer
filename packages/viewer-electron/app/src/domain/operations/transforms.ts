@@ -56,7 +56,28 @@ export const mediaTransformSchema = z
       .default({ mode: 'keep', offset: 0, gain: 1, originalGain: 1 }),
   })
   .strict();
+export const pdfPagesSchema = z
+  .object({
+    kind: z.literal('pdf-pages'),
+    format: z.literal('pdf'),
+    pages: z
+      .array(
+        z
+          .object({
+            source,
+            page: z.number().int().min(1).max(10000),
+            rotate: z
+              .union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)])
+              .default(0),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(1000),
+  })
+  .strict();
 export const transformPlanSchema = z.discriminatedUnion('kind', [
+  pdfPagesSchema,
   imageTransformSchema,
   mediaTransformSchema,
   z
@@ -64,11 +85,14 @@ export const transformPlanSchema = z.discriminatedUnion('kind', [
       kind: z.literal('pdf'),
       format: z.literal('pdf'),
       preset: z.enum(['lossless', 'balanced', 'small']).default('balanced'),
+      recompressImages: z.boolean().default(false),
+      maxImageEdge: z.number().int().min(256).max(8192).default(2400),
     })
     .strict(),
 ]);
 export type ImageTransform = z.infer<typeof imageTransformSchema>;
 export type MediaTransform = z.infer<typeof mediaTransformSchema>;
+export type PDFPagesTransform = z.infer<typeof pdfPagesSchema>;
 export type TransformPlan = z.infer<typeof transformPlanSchema>;
 export const mediaFormats = [
   'mp4',
@@ -95,12 +119,20 @@ export const mediaFormats = [
 ] as const;
 export function validateTransform(value: unknown, sources: number): TransformPlan {
   const plan = transformPlanSchema.parse(value);
-  if (sources < 1 || (plan.kind === 'media' ? sources > 16 : sources > 1000))
+  if (sources < 1 || (combinedTransform(plan) ? sources > 16 : sources > 1000))
     throw new Error(
-      plan.kind === 'media'
-        ? 'Choose between 1 and 16 media source files.'
+      combinedTransform(plan)
+        ? 'Choose between 1 and 16 source files.'
         : 'Choose between 1 and 1000 files.',
     );
+  if (plan.kind === 'pdf-pages') {
+    if (plan.pages.some((page) => page.source >= sources))
+      throw new Error('A page refers to a PDF that is no longer in this draft.');
+    if (new Set(plan.pages.map((page) => `${page.source}:${page.page}`)).size !== plan.pages.length)
+      throw new Error('Include each source page at most once per PDF output.');
+  }
+  if (plan.kind === 'pdf' && plan.preset === 'lossless' && plan.recompressImages)
+    throw new Error('Choose Balanced or Smaller to recompress scanned images.');
   if (plan.kind === 'image' && plan.width && plan.height && plan.width * plan.height > 100_000_000)
     throw new Error('Choose output dimensions below 100 megapixels.');
   if (
@@ -137,14 +169,18 @@ export function validateTransform(value: unknown, sources: number): TransformPla
   return plan;
 }
 export function transformDescription(plan: TransformPlan): string {
+  if (plan.kind === 'pdf-pages')
+    return `PDF · ${plan.pages.length} pages in order: ${plan.pages.map((page) => `${page.source + 1}:${page.page}${page.rotate ? ` (+${page.rotate}°)` : ''}`).join(', ')} · creates a new document; bookmarks, forms and document tags are not retained`;
   if (plan.kind === 'pdf')
-    return `Optimize PDF · ${plan.preset === 'lossless' ? 'lossless structure compression' : plan.preset + ' image compression'} · preserve searchable text and vector pages · save only if smaller`;
+    return `Optimize PDF · ${plan.preset === 'lossless' ? 'lossless structure compression' : plan.preset + ' image compression'}${plan.recompressImages ? ` · recompress compatible JPEG scans, maximum edge ${plan.maxImageEdge}px` : ''} · preserve searchable text and vector pages · save only if smaller`;
   if (plan.kind === 'image')
     return `${plan.format.toUpperCase()} · ${[plan.width, plan.height].some(Boolean) ? `${plan.width || 'auto'} × ${plan.height || 'auto'}` : 'original size'}${plan.crop ? ` · crop ${plan.crop.width} × ${plan.crop.height} at ${plan.crop.x}, ${plan.crop.y}` : ''}${plan.rotate ? ` · rotate ${plan.rotate}°` : ''} · ${plan.metadata === 'safe' ? 'keep color and credit, remove GPS' : plan.metadata === 'strip' ? 'remove metadata' : 'keep all metadata including location'}`;
   return `${plan.format.toUpperCase()} · ${plan.segments.map((segment) => `source ${segment.source + 1}: ${mediaTime(segment.start)}–${mediaTime(segment.end)}`).join(', ')} · ${plan.cut === 'exact' ? 'exact cuts' : 'fast keyframe cuts'} · audio ${plan.audio.mode}${plan.audio.source === undefined ? '' : ` from source ${plan.audio.source + 1}, offset ${plan.audio.offset}s, gain ${plan.audio.gain}`}`;
 }
 export const transformExtension = (format: TransformPlan['format']) =>
   format === 'jpeg' ? 'jpg' : format;
+export const combinedTransform = (plan?: TransformPlan): boolean =>
+  plan?.kind === 'media' || plan?.kind === 'pdf-pages';
 export const mediaTime = (seconds: number) => {
   const total = Math.max(0, seconds);
   return `${Math.floor(total / 60)

@@ -8,6 +8,9 @@ candidate-specific results in [verification](verification.md).
 The [stable playground](playground.md) supplies manual examples for every current
 registered extension and conventional filename, with provenance, checksums and
 expected decoder limitations. Run `pnpm playground` from the repository.
+Actual larger-file outcomes, including Office reader refusals, system RAW
+timeouts and partial media decode, are recorded in
+[real-file qualification](real-file-qualification.md).
 
 The expanded [professional format ecosystems](preview-format-ecosystems.md)
 catalog covers BIM, scanning, medical/scientific data, vendor CAD, media,

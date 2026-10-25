@@ -1,5 +1,18 @@
 # Stable manual playground
 
+The additive qualification corpus is available with `pnpm playground:qualify`
+(`--offline` reuses existing files). It adds a 178-page upstream PDF manual,
+application-authored Apache POI Word/Excel references and the distribution
+license under `qualification/`, with a separate `manifest-v2.json`. The original
+playground manifest and all existing bytes remain untouched. Historical v1
+qualification metadata and every generation report are retained.
+
+The corpus deliberately includes a corrupt ZIP rejection reference and a valid
+workbook with an 18 MB expanded XML part, above the reader's current 4 MB
+per-part limit. Reference presence is distinct from successful decoding. See
+[real-file qualification](real-file-qualification.md) for actual outcomes and
+the original RAW/video decoder limits on this Mac.
+
 Run from the Viewer repository:
 
 ```sh

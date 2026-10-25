@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { optimizationPlan, type OptimizationPreset } from '../../domain/operations/optimization';
 import { sourceVersion } from '../../domain/files/inspection';
+import { pdfEmailPreset, type PDFExportPreset } from '../../domain/operations/export-presets';
 import { formatBytes } from '../../domain/files/entries';
 import { Dialog } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
@@ -12,16 +13,22 @@ export function OptimizeDialog({
   files,
   paneID,
   onClose,
+  initial,
 }: {
   files: FileEntry[];
   paneID?: string;
   onClose(): void;
+  initial?: PDFExportPreset;
 }) {
   const workspace = useWorkspace(),
     allJobs = useViewer((state) => state.jobs);
-  const [preset, setPreset] = useState<OptimizationPreset>('balanced'),
+  const [preset, setPreset] = useState<OptimizationPreset>(
+      initial ? pdfEmailPreset.preset : 'balanced',
+    ),
     [resize, setResize] = useState(false),
     [maximum, setMaximum] = useState(2048);
+  const [scans, setScans] = useState(!!initial),
+    [scanMaximum, setScanMaximum] = useState(String(initial ? pdfEmailPreset.maximum : 2400));
   const [folder, setFolder] = useState(files[0]!.parent),
     [ids, setIDs] = useState<string[]>([]),
     [error, setError] = useState(''),
@@ -48,9 +55,19 @@ export function OptimizeDialog({
     setError('');
     const queued: string[] = [];
     try {
+      const scanEdge = Number(scanMaximum);
+      if (scans && (!Number.isInteger(scanEdge) || scanEdge < 256 || scanEdge > 8192))
+        throw new Error('Choose a PDF image edge between 256 and 8192 pixels.');
       const groups = new Map<string, FileEntry[]>();
       for (const file of files) {
-        const key = JSON.stringify(optimizationPlan(file, preset, resize ? maximum : undefined));
+        const key = JSON.stringify(
+          optimizationPlan(
+            file,
+            preset,
+            resize ? maximum : undefined,
+            scans ? { maximum: scanEdge } : undefined,
+          ),
+        );
         const group = groups.get(key) || [];
         group.push(file);
         groups.set(key, group);
@@ -99,7 +116,10 @@ export function OptimizeDialog({
             ]}
             onChoose={(value) => {
               setPreset(value as OptimizationPreset);
-              if (value === 'lossless') setResize(false);
+              if (value === 'lossless') {
+                setResize(false);
+                setScans(false);
+              }
             }}
           />
         </label>
@@ -107,6 +127,48 @@ export function OptimizeDialog({
           PDFs keep searchable text, vectors and page sizes. Signed PDFs stay unchanged. Image
           metadata keeps color and credit and removes GPS.
         </p>
+        {files.some((file) => file.extension.toLowerCase() === 'pdf') && (
+          <div className="optimize-scan-options">
+            <label>
+              <input
+                type="checkbox"
+                checked={scans}
+                disabled={preset === 'lossless' || working}
+                onChange={(event) => setScans(event.target.checked)}
+              />
+              Recompress scanned images
+            </label>
+            {scans && (
+              <>
+                <label>
+                  Maximum image edge{' '}
+                  <input
+                    type="number"
+                    aria-label="PDF maximum image edge"
+                    min={256}
+                    max={8192}
+                    disabled={working}
+                    value={scanMaximum}
+                    onChange={(event) => {
+                      setScanMaximum(event.target.value);
+                      setError('');
+                    }}
+                    onBlur={() => {
+                      const edge = Number(scanMaximum);
+                      if (!Number.isInteger(edge) || edge < 256 || edge > 8192)
+                        setError('Choose a PDF image edge between 256 and 8192 pixels.');
+                    }}
+                  />{' '}
+                  px
+                </label>
+                <p className="muted">
+                  Re-encodes compatible RGB and grayscale JPEG scans. Text, vectors and page sizes
+                  stay intact. Masks, unusual color spaces and other image encodings are kept.
+                </p>
+              </>
+            )}
+          </div>
+        )}
         {files.some((file) => file.extension.toLowerCase() !== 'pdf') && (
           <div className="optimize-resize">
             <label>

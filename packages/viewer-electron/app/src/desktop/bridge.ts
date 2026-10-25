@@ -351,7 +351,9 @@ export class Desktop {
       emit({ type: 'folder-changed', path: path.dirname(file) });
       void this.files.update(file).catch(() => {});
     });
-    this.resources = new Resources(access, (file) => quickLookRender(file));
+    this.resources = new Resources(access, (file, signal) =>
+      quickLookRender(file, undefined, signal),
+    );
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
       if (target && !target.isDestroyed())
@@ -1300,6 +1302,29 @@ export class Desktop {
           Buffer.from(value.preview),
         );
         return { width: value.width, height: value.height, alpha: value.alpha, preview };
+      },
+      pdfInspect: async ([file]) => {
+        await this.fileAccess.require([file]);
+        const version = sourceVersion(await entry(file));
+        const value = await this.transforms.pdfInspect(file);
+        if (!sameSourceVersion(version, sourceVersion(await entry(file))))
+          throw new Error('The PDF changed while being read. Inspect it again.');
+        return { ...value, version };
+      },
+      choosePDFs: async (_args, owner) => {
+        const window = this.windows.get(owner)?.window;
+        if (!window || window.isDestroyed()) throw new Error('The PDF tools window closed.');
+        const result = await dialog.showOpenDialog(window, {
+          title: 'Add PDFs',
+          properties: ['openFile', 'multiSelections'],
+          filters: [{ name: 'PDF documents', extensions: ['pdf'] }],
+          securityScopedBookmarks: this.fileAccess.scoped,
+        });
+        if (result.canceled) return [];
+        if (result.filePaths.length > 16) throw new Error('Choose at most 16 PDFs.');
+        for (const [index, file] of result.filePaths.entries())
+          await this.fileAccess.remember(file, false, result.bookmarks?.[index]);
+        return result.filePaths;
       },
       chat: ([request], sender) => {
         const work = () => this.chats.request(request, sender, this.windows.get(sender)?.catalog);

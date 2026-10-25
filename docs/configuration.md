@@ -39,11 +39,14 @@ Defaults live in `settings.browsing` and `ui.list`. A folder's overrides live in
 
 Supported overrides include view (including `map`, which is per folder only), sort/direction, grouping, hidden files, folders-first ordering, density, list fields/order/widths/wrapping and browsing-column width. `"group": "lens"` with `"lens": "<lens id>"` groups a folder by one of its [lenses](lenses.md); the lens itself lives in the folder's `.viewer/lenses/`, not in this file. Overrides apply to the same path in every root and workspace. Selection, cursor, history, search/filter and scroll remain independent in each explorer. Known Viewer moves/renames remap overrides and inactive sessions; arbitrary external moves are not inferred from path alone.
 
-In Columns, **Group by kind**, **Group by date modified** and **Ungroup files**
-apply to the currently browsed folder, including a child column. Each column
-shows its own folder's group headings and keeps its independent view preference.
+In Columns, grouping, sorting, hidden files, Refresh and Reset view apply to the
+currently browsed folder, including a child column. Labels and sort reversal use
+that folder's live preferences. Each column keeps its independent view settings.
+Use as default folder view copies those settings with the displayed Columns mode.
+Switching to another view, Parent folder, Search this folder and Show folder path
+enter the browsed folder as needed; ancestor navigation sessions stay available.
 
-List headers and searchable column actions control fields, ordering and widths. Browser-column edges resize with drag or Left/Right when the separator is focused; Shift changes the keyboard step, double-click fits filenames, and Option applies a width to the visible trail. Names retain full-text tooltips. **Use as default folder view** updates defaults; **Reset this folder’s view** removes that folder's overrides. Grouping currently renders in List view.
+List headers and searchable column actions control fields, ordering and widths. Browser-column edges resize with drag or Left/Right when the separator is focused; Shift changes the keyboard step, double-click fits filenames, and Option applies a width to the visible trail. Names retain full-text tooltips. **Use as default folder view** updates defaults; **Reset this folder’s view** removes that folder's overrides. Grouping renders in List, Columns, Grid and Gallery using their section layouts.
 
 **Calculate Size** retains individual folder measurements for the Size column, Get Info and later selections. Selecting a measured folder with other files adds its known contents to the selection total; selected descendants are not counted twice. Missing, partial and stale measurements remain distinct from a measured empty folder. File changes invalidate affected measurements. Columns view previews a single selected file beside its browsing trail, using the same preview modules as planes and Quick Preview.
 

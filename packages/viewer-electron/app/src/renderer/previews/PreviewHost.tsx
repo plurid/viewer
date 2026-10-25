@@ -287,6 +287,7 @@ export const PreviewHost = memo(function PreviewHost({
               openRelated={openRelated}
               editing={editing}
               optimize={!supplied ? invokeFile('optimize-files') : undefined}
+              editPDF={!supplied ? invokeFile('pdf-tools') : undefined}
               editImage={!supplied ? invokeFile('image-tools') : undefined}
               editMedia={
                 !supplied && workspace

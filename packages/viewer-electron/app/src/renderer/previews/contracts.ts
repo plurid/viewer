@@ -33,6 +33,7 @@ export interface PreviewContext {
   editMedia?(): void;
   editImage?(): void;
   optimize?(): void;
+  editPDF?(): void;
   services: {
     htmlPreview(resourceID: string): Promise<HtmlPreview>;
     htmlPreviewClose(id: string): Promise<void>;

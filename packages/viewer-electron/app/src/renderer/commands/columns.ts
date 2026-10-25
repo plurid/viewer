@@ -6,8 +6,8 @@ import {
   updateFolderPresentation,
   applyFolderAsDefaults,
   getState,
-  updatePane,
 } from '../state/store';
+import { folderCommandPath } from './folder-target';
 import type { CommandContext, CommandDefinition } from './registry';
 import type { SortKey } from '../../domain/contracts';
 
@@ -33,10 +33,12 @@ export const columnCommandIDs = [
 ];
 export function columnCommands(): CommandDefinition[] {
   const list = (context: CommandContext) =>
-    context.folder ? folderPresentation(context.folder.path).list : getState().saved.ui.list;
+    context.folder
+      ? folderPresentation(folderCommandPath(context)!).list
+      : getState().saved.ui.list;
   const save = (context: CommandContext, value: ReturnType<typeof list>) =>
     context.folder
-      ? updateFolderPresentation(context.folder.path, { list: value })
+      ? updateFolderPresentation(folderCommandPath(context)!, { list: value })
       : changePreferences((ui) => ({ ...ui, list: value }));
   const available = (context: CommandContext) =>
     !!context.paneID &&
@@ -49,7 +51,7 @@ export function columnCommands(): CommandDefinition[] {
       group: 'View',
       icon: 'refresh',
       when: (context) => !!context.folder,
-      run: (context) => updateFolderPresentation(context.folder!.path, null),
+      run: (context) => updateFolderPresentation(folderCommandPath(context)!, null),
     },
     {
       id: 'folder-view-defaults',
@@ -58,7 +60,7 @@ export function columnCommands(): CommandDefinition[] {
       icon: 'settings',
       aliases: ['defaults', 'other folders'],
       when: (context) => !!context.folder,
-      run: (context) => applyFolderAsDefaults(context.folder!.path),
+      run: (context) => applyFolderAsDefaults(folderCommandPath(context)!, context.folder!.mode),
     },
     ...(['none', 'kind', 'modified'] as const).map((group): CommandDefinition => ({
       id: 'group.' + group,
@@ -69,35 +71,30 @@ export function columnCommands(): CommandDefinition[] {
       group: 'View',
       icon: group === 'modified' ? 'clock' : group === 'kind' ? 'data' : 'list',
       when: (context) => !!context.folder,
-      run: (context) =>
-        updateFolderPresentation(
-          context.folder!.mode === 'columns'
-            ? context.directory || context.folder!.path
-            : context.folder!.path,
-          { group },
-        ),
+      run: (context) => updateFolderPresentation(folderCommandPath(context)!, { group }),
     })),
     // sorting as the column headers sort (2026-10-24): again the same key reverses it
     ...sortKeys.map((key): CommandDefinition => ({
       id: 'sort.' + key,
-      label: (context) =>
-        context.folder?.sort === key
-          ? `Sort by ${sortLabels[key]}, ${context.folder.descending ? 'ascending' : 'descending'}`
-          : `Sort by ${sortLabels[key]}`,
+      label: (context) => {
+        const view = context.folder && folderPresentation(folderCommandPath(context)!);
+        return view?.sort === key
+          ? `Sort by ${sortLabels[key]}, ${view.descending ? 'ascending' : 'descending'}`
+          : `Sort by ${sortLabels[key]}`;
+      },
       group: 'View',
       icon: key === 'modified' || key === 'created' ? 'clock' : key === 'size' ? 'info' : 'list',
       // the key's name is in the label: a column's toggle keeps "date created" to itself
       aliases: ['sort', 'order'],
       when: (context) => !!context.folder,
       run: (context) => {
-        const folder = context.folder!;
-        updatePane(folder.id, {
+        const path = folderCommandPath(context)!;
+        const view = folderPresentation(path);
+        updateFolderPresentation(path, {
           sort: key,
           // the newest and the largest first, as Finder's date and size columns start
           descending:
-            folder.sort === key
-              ? !folder.descending
-              : ['modified', 'created', 'size'].includes(key),
+            view.sort === key ? !view.descending : ['modified', 'created', 'size'].includes(key),
         });
       },
     })),

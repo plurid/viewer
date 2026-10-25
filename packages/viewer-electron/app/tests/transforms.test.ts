@@ -257,67 +257,81 @@ it('publishes new output with keep-both collisions, retains its typed receipt an
   expect(restored.all().some((job) => job.status === 'completed')).toBe(true);
   await restored.close();
 });
-it('prepares a combined media row without writing outputs and pins every source again at review', async () => {
-  const root = await temporaryRoot('viewer-transform-plan-'),
-    destination = path.join(root, 'Output');
-  await mkdir(destination);
-  const files = [path.join(root, 'one.mp4'), path.join(root, 'two.mp4')];
-  for (const file of files) await writeFile(file, 'fixture', { flag: 'wx' });
-  const operations = new Operations(
-    async () => {
-      throw new Error('No removal');
-    },
-    () => {},
-  );
-  const checkpoints = new Checkpoints(
-    path.join(root, 'Checkpoints'),
-    async () => {},
-    () => 1048576,
-  );
-  const plans = new OperationPlans(
-    path.join(root, 'Plans'),
-    operations,
-    checkpoints,
-    async () => {},
-  );
-  try {
-    const plan = (await plans.request({
-      kind: 'prepare',
-      title: 'Join',
-      intents: [
-        {
-          kind: 'convert',
-          sources: files,
-          destination,
-          name: 'joined.mp4',
-          transform: media([
-            { source: 0, start: 0, end: 1 },
-            { source: 1, start: 0, end: 1 },
-          ]),
-        },
-      ],
-    })) as OperationPlan;
-    expect(plan.rows).toHaveLength(1);
-    expect(plan.rows[0].sources).toEqual(files);
-    expect(plan.rows[0].expectedSources).toHaveLength(2);
-    expect(operations.all()).toEqual([]);
-    await writeFile(files[1], 'new content');
-    await expect(
-      plans.request({
-        kind: 'apply',
-        id: plan.id,
-        revision: plan.revision,
-        checkpoint: false,
-        rows: [{ id: plan.rows[0].id, approved: true }],
-      }),
-    ).rejects.toThrow('source changed');
-    expect(operations.all()).toEqual([]);
-  } finally {
-    await plans.close();
-    await operations.close();
-    await checkpoints.close();
-  }
-});
+it.each(['media', 'pdf-pages'] as const)(
+  'prepares a combined %s row without writing outputs and pins every source again at review',
+  async (kind) => {
+    const root = await temporaryRoot('viewer-transform-plan-'),
+      destination = path.join(root, 'Output');
+    await mkdir(destination);
+    const extension = kind === 'media' ? 'mp4' : 'pdf';
+    const files = [path.join(root, 'one.' + extension), path.join(root, 'two.' + extension)];
+    for (const file of files) await writeFile(file, 'fixture', { flag: 'wx' });
+    const operations = new Operations(
+      async () => {
+        throw new Error('No removal');
+      },
+      () => {},
+    );
+    const checkpoints = new Checkpoints(
+      path.join(root, 'Checkpoints'),
+      async () => {},
+      () => 1048576,
+    );
+    const plans = new OperationPlans(
+      path.join(root, 'Plans'),
+      operations,
+      checkpoints,
+      async () => {},
+    );
+    try {
+      const plan = (await plans.request({
+        kind: 'prepare',
+        title: 'Join',
+        intents: [
+          {
+            kind: 'convert',
+            sources: files,
+            destination,
+            name: 'joined.' + extension,
+            transform:
+              kind === 'media'
+                ? media([
+                    { source: 0, start: 0, end: 1 },
+                    { source: 1, start: 0, end: 1 },
+                  ])
+                : {
+                    kind: 'pdf-pages',
+                    format: 'pdf',
+                    pages: [
+                      { source: 0, page: 1, rotate: 0 },
+                      { source: 1, page: 1, rotate: 0 },
+                    ],
+                  },
+          },
+        ],
+      })) as OperationPlan;
+      expect(plan.rows).toHaveLength(1);
+      expect(plan.rows[0].sources).toEqual(files);
+      expect(plan.rows[0].expectedSources).toHaveLength(2);
+      expect(operations.all()).toEqual([]);
+      await writeFile(files[1], 'new content');
+      await expect(
+        plans.request({
+          kind: 'apply',
+          id: plan.id,
+          revision: plan.revision,
+          checkpoint: false,
+          rows: [{ id: plan.rows[0].id, approved: true }],
+        }),
+      ).rejects.toThrow('source changed');
+      expect(operations.all()).toEqual([]);
+    } finally {
+      await plans.close();
+      await operations.close();
+      await checkpoints.close();
+    }
+  },
+);
 it('restores private media drafts, serializes revisions, remaps separate exports and reuses only version-current inspection data', async () => {
   const root = await temporaryRoot('viewer-media-documents-'),
     files = [path.join(root, 'one.mp4'), path.join(root, 'two.mp4')];
@@ -350,6 +364,15 @@ it('restores private media drafts, serializes revisions, remaps separate exports
     );
   const service = documents(),
     draft = (await service.request({ kind: 'create', paths: files }, 1)) as MediaDraft;
+  const audioDraft = (await service.request(
+    { kind: 'create', paths: files, preset: 'extract-audio' },
+    1,
+  )) as MediaDraft;
+  expect(audioDraft.plan.format).toBe('m4a');
+  expect(audioDraft.plan.segments).toEqual(
+    files.map((_file, source) => ({ source, start: 0, end: facts.duration })),
+  );
+  expect(draft.plan.format).toBe('mp4');
   const updated = (await service.request(
     {
       kind: 'update',

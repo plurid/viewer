@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { FileEntry } from '../src/domain/contracts';
-import { useFolder } from '../src/renderer/explorer/useFolder';
+import { refreshFolder, useFolder } from '../src/renderer/explorer/useFolder';
 
 const entry = (name: string): FileEntry => ({
   path: `/fixtures/folder/${name}`,
@@ -44,6 +44,20 @@ const settle = async () => {
 };
 
 describe('a folder listing', () => {
+  it('refreshes the requested child listing without refreshing its mounted ancestor', async () => {
+    const parent = `/fixtures/folder-${++folder}`,
+      child = parent + '/child';
+    viewer.list.mockResolvedValue({ entries: [entry('a')] });
+    const root = renderHook(() => useFolder(parent));
+    const nested = renderHook(() => useFolder(child));
+    await settle();
+    viewer.list.mockClear();
+    act(() => refreshFolder(child));
+    await settle();
+    expect(viewer.list.mock.calls.map(([path]) => path)).toEqual([child]);
+    root.unmount();
+    nested.unmount();
+  });
   it('keeps what it showed when a reload fails, and empties only when the folder is gone', async () => {
     // A reload that failed replaced the listing with nothing: a transient error (a network volume's
     // timeout) emptied the view until the next change in the folder.

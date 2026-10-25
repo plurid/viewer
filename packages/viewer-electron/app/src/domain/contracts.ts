@@ -523,6 +523,8 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  pdfInspect(file: string): Promise<{ pages: number; version: SourceVersion }>;
+  choosePDFs(): Promise<string[]>;
   imageInspect(
     file: string,
   ): Promise<{ width: number; height: number; alpha: boolean; preview: Resource }>;

@@ -17,6 +17,7 @@ import { errorMessage } from '../../domain/errors';
 import { sharedClientID, storedClientID } from '../../domain/agents/clients';
 import {
   validateTransform,
+  combinedTransform,
   transformDescription,
   transformExtension,
 } from '../../domain/operations/transforms';
@@ -325,7 +326,7 @@ export class AgentRequests {
     validName(name);
     if (!name.toLowerCase().endsWith('.' + transformExtension(plan.format)))
       throw new Error('Choose an output filename matching the transform format.');
-    if (plan.kind !== 'media' && target.selection.length !== 1)
+    if (!combinedTransform(plan) && target.selection.length !== 1)
       throw new Error('Propose one image export at a time, or use a reviewed conversion workflow.');
     if (target.selection.some((file) => file.kind !== 'file'))
       throw new Error('Choose regular source files.');

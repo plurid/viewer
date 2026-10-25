@@ -6,7 +6,11 @@ import { entry, absolute, validName } from '../files/filesystem';
 import type { Operations } from './operations';
 import type { Checkpoints } from './checkpoints';
 import { sourceVersion, sameSourceVersion } from '../../domain/files/inspection';
-import { validateTransform, transformExtension } from '../../domain/operations/transforms';
+import {
+  validateTransform,
+  transformExtension,
+  combinedTransform,
+} from '../../domain/operations/transforms';
 import {
   operationPlanRowSchema,
   operationPlanRequestSchema,
@@ -72,7 +76,7 @@ export class OperationPlans {
           for (const intent of request.intents) {
             if (intent.kind === 'convert') {
               const transform = validateTransform(intent.transform, intent.sources.length);
-              if (!intent.destination || (transform.kind === 'media' && !intent.name))
+              if (!intent.destination || (combinedTransform(transform) && !intent.name))
                 throw new Error('Choose an export folder and filename.');
               if (
                 intent.name &&
@@ -96,7 +100,7 @@ export class OperationPlans {
               throw new Error('New-folder plans have no source file.');
             if (intent.kind !== 'mkdir' && !intent.sources.length)
               throw new Error('Select a source.');
-            const combined = intent.transform?.kind === 'media';
+            const combined = combinedTransform(intent.transform);
             for (const file of intent.kind === 'mkdir'
               ? [undefined]
               : combined
@@ -121,7 +125,7 @@ export class OperationPlans {
                 for (const source of intent.sources) {
                   await this.access([source]);
                   const info = await entry(source);
-                  if (info.kind !== 'file') throw new Error('Choose regular media source files.');
+                  if (info.kind !== 'file') throw new Error('Choose regular source files.');
                   const version = sourceVersion(info),
                     proof = intent.expectedSources?.find((value) => value.path === source);
                   if (proof && !sameSourceVersion(proof.version, version))

@@ -122,7 +122,7 @@ export function useWorkspaceController({
   );
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
-      async openMedia(paths, parentID, fresh = false) {
+      async openMedia(paths, parentID, fresh = false, preset) {
         const space = activeWorkspace(),
           existing =
             !fresh &&
@@ -137,7 +137,11 @@ export function useWorkspaceController({
           controller.focusPane(existing.id, { activate: true });
           return;
         }
-        const value = await window.viewer.media({ kind: 'create', paths });
+        const value = await window.viewer.media({
+          kind: 'create',
+          paths,
+          ...(preset ? { preset } : {}),
+        });
         if (!value || !('plan' in value)) throw new Error('The media draft could not be created.');
         if (
           activeWorkspace().id !== space.id ||

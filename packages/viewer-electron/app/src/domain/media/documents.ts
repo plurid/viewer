@@ -35,7 +35,13 @@ export const mediaDraftSchema = z
 export type MediaDraft = z.infer<typeof mediaDraftSchema>;
 const id = z.uuid();
 export const mediaRequestSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('create'), paths: z.array(portablePath).min(1).max(16) }).strict(),
+  z
+    .object({
+      kind: z.literal('create'),
+      paths: z.array(portablePath).min(1).max(16),
+      preset: z.literal('extract-audio').optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('get'), id }).strict(),
   z
     .object({

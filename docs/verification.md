@@ -1,5 +1,67 @@
 # Verification
 
+## October 25 daily workbench completion
+
+All four steps in [the ordered follow-up](daily-workbench-followup.md) are
+complete. The validated Apple Silicon direct package is retained at
+`/private/tmp/viewer-daily-validated-20261025-9llNt9/Viewer.app`, with
+`candidate.json` and immutable copies of the executed logs in adjacent `reports/`.
+Executable SHA256:
+`308f0cafeb215a3da006726f2e1a43ef7f710e51c336c42b515ea57b8ba9eed0`;
+ASAR SHA256:
+`156e21a21d0192226328723c30f2879409ca01b1734cab16b59568e4ca462b80`.
+The source fingerprint, lockfile hash, native binding paths and retained fixture
+locations are recorded in the candidate manifest. The ordinary package is also
+at `packages/viewer-electron/app/out/Viewer-darwin-arm64/Viewer.app`.
+
+**All 1,788 tests in 252 files pass, with zero failures or skips.** The full
+`pnpm test` run uses `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1`,
+`VIEWER_TEST_MAC_BINDING` pointing to the candidate's macOS files binding, and
+`VIEWER_TEST_REVIEW_BINDING` pointing to the retained recording binding at
+`app/out/viewer-reviewed-trash-1792824425210.node`. All TypeScript targets, full
+ESLint, full Prettier, packaging and `codesign --verify --deep --strict` pass.
+This remains development-package evidence, with no notarization or Store claim.
+
+The complete `pnpm test:desktop` packaged smoke passes. Its Columns-to-Gallery
+check now verifies that switching views retains the browsed child, then uses
+Parent folder before inspecting the root README. This corrects the obsolete
+root-navigation assumption without dropping either assertion. Retained log:
+`/private/tmp/viewer-finish-smoke.log`; fixture `viewer-verification-Sw9mYD`;
+native evidence:
+`app/out/native-evidence/electron-smoke-2026-10-25T15-53-18-317Z-3482381e-17a9-4597-9384-56182eb3e8d7`.
+
+Supplemental native acceptance covers:
+
+- Current-folder commands, sorting, hidden files, reset/defaults, refresh,
+  view switching, parent navigation and search in nested Columns.
+- PDF merge, extraction, reorder, rotation, split and scanned-JPEG compression:
+  six outputs, retained page imagery through dark/light/narrow layouts, verified
+  text/order/rotation and unchanged original hashes. The scan fixture shrinks
+  from 5,609,204 to 953,676 bytes; this is fixture evidence, not a general benchmark.
+- All four contextual export commands: editable defaults, explicit export,
+  five completed outputs and unchanged sources.
+- Eight public real-file references, including actual 178-page PDF inspection,
+  18-sheet workbook loading, Word body text, explicit corrupt/over-limit Office
+  refusal, bounded RAW failure, advancing OGV audio and graceful shutdown.
+  The final run is `/private/tmp/viewer-real-file-previews-done.log`; captures and
+  result data are retained in `viewer-native-real-files-mrGEh9`.
+
+Independent UI review returns ship for the two named PDF interaction corrections,
+the contextual preset entry points and the two ordinary preview lifecycle states.
+Design documentation records these bounded reviews; no new visual identity or
+component primitive is introduced.
+
+Material limits remain explicit: the two camera RAW samples do not render through
+this Mac's system thumbnail API; OGV supplies audio but no video picture; Office
+shows bounded semantic content rather than complete page layout and rejects XML
+parts above 4 MB. PDF assembly omits document-level outlines/forms/tags, and scan
+compression handles compatible JPEG streams only. See [PDF workbench](pdf-workbench.md),
+[export presets](export-presets.md) and [real-file qualification](real-file-qualification.md).
+Other architectures, operating systems and codecs require separate qualification.
+
+All generated fixtures and build artifacts are retained. Original sample hashes
+remain unchanged. The user's ordinary Viewer session was not restarted.
+
 ## October 25 preview size and Columns grouping follow-up
 
 Read-only source previews now default to **16px**, with their independent 20px

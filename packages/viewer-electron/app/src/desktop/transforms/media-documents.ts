@@ -128,6 +128,8 @@ export class MediaDocuments {
           const sources: MediaDraft['sources'] = [];
           for (const file of [...new Set(request.paths)]) sources.push(await this.source(file));
           const video = sources.every((source) => source.info.video);
+          if (request.preset === 'extract-audio' && sources.some((source) => !source.info.audio))
+            throw new Error('A selected source has no audio track. Choose sources with audio.');
           const draft: MediaDraft = {
             version: 1,
             id: randomUUID(),
@@ -135,7 +137,7 @@ export class MediaDocuments {
             sources,
             plan: mediaTransformSchema.parse({
               kind: 'media',
-              format: video ? 'mp4' : 'm4a',
+              format: request.preset === 'extract-audio' ? 'm4a' : video ? 'mp4' : 'm4a',
               segments: sources.map((source, index) => ({
                 source: index,
                 start: 0,

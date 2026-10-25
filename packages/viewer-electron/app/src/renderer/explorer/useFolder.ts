@@ -79,6 +79,11 @@ function load(path: string): void {
       }
     });
 }
+export function refreshFolder(path: string): void {
+  const value = dataset(path);
+  if (value.refresh) value.refresh();
+  else load(path);
+}
 export function useFolder(path: string) {
   const subscribe = useCallback(
     (listener: () => void) => {
@@ -188,9 +193,7 @@ export function useFolder(path: string) {
   );
   const state = useSyncExternalStore(subscribe, () => dataset(path).state);
   const refresh = useCallback(() => {
-    const value = dataset(path);
-    if (value.refresh) value.refresh();
-    else load(path);
+    refreshFolder(path);
   }, [path]);
   return { ...state, refresh };
 }

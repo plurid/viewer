@@ -1,6 +1,7 @@
 import {
   chmod,
   copyFile,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -40,7 +41,14 @@ export async function preparePDFProcessors(minimum: string, arch = process.arch)
   const existing = (await readFile(descriptor, 'utf8')
     .then(JSON.parse)
     .catch(() => undefined)) as
-    { minimum: string; arch: string; sources: unknown; files: Record<string, string> } | undefined;
+    | {
+        buildRevision?: number;
+        minimum: string;
+        arch: string;
+        sources: unknown;
+        files: Record<string, string>;
+      }
+    | undefined;
   if (existing) {
     if (
       existing.minimum !== minimum ||
@@ -53,12 +61,29 @@ export async function preparePDFProcessors(minimum: string, arch = process.arch)
     for (const [file, expected] of Object.entries(existing.files))
       if (hash(await readFile(path.join(output, file)), 'sha256', 'hex') !== expected)
         throw new Error(`PDF processor resource changed: ${file}`);
-    return;
+    if (existing.buildRevision === 2) return;
+    if (existing.buildRevision !== undefined)
+      throw new Error('Unknown PDF processor build revision. Its resources were preserved.');
   }
   const cache = path.join(appRoot, 'out/processor-sources');
   await mkdir(cache, { recursive: true });
   const build = await mkdtemp(path.join(cache, 'pdf-build-')),
     log = path.join(build, 'build.log');
+  if (existing)
+    await cp(output, path.join(build, 'previous-resources'), {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+    });
+  // A user CPATH can outrank CMake's -isystem include and silently mix an
+  // installed JPEG 8 header with our pinned JPEG 6 ABI static library.
+  const environment = {
+    CPATH: '',
+    C_INCLUDE_PATH: '',
+    CPLUS_INCLUDE_PATH: '',
+    OBJC_INCLUDE_PATH: '',
+    LIBRARY_PATH: '',
+  };
   console.log('Preparing PDF/JPEG optimizers. Retained build:', build);
   for (const source of sources) {
     const archive = path.join(cache, source.directory + '.tar.gz'),
@@ -107,9 +132,10 @@ export async function preparePDFProcessors(minimum: string, arch = process.arch)
     ],
     build,
     log,
+    environment,
   );
-  await run('cmake', ['--build', jpegBuild, '--parallel', '8'], build, log);
-  await run('cmake', ['--install', jpegBuild], build, log);
+  await run('cmake', ['--build', jpegBuild, '--parallel', '8'], build, log, environment);
+  await run('cmake', ['--install', jpegBuild], build, log, environment);
   const qpdfSource = path.join(build, sources[0].directory),
     qpdfBuild = path.join(build, 'qpdf-build');
   const flags = [
@@ -132,10 +158,17 @@ export async function preparePDFProcessors(minimum: string, arch = process.arch)
     '-DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew;/usr/local',
   ];
   await run('cmake', flags, build, log, {
+    ...environment,
     PKG_CONFIG_LIBDIR: path.join(prefix, 'lib/pkgconfig'),
     PKG_CONFIG_PATH: '',
   });
-  await run('cmake', ['--build', qpdfBuild, '--target', 'qpdf', '--parallel', '8'], build, log);
+  await run(
+    'cmake',
+    ['--build', qpdfBuild, '--target', 'qpdf', '--parallel', '8'],
+    build,
+    log,
+    environment,
+  );
   await mkdir(path.join(output, 'sources'), { recursive: true });
   const executables = {
     qpdf: path.join(qpdfBuild, 'qpdf/qpdf'),
@@ -155,31 +188,34 @@ export async function preparePDFProcessors(minimum: string, arch = process.arch)
       throw new Error('Optimizer linked to a non-system dynamic library. Its build was preserved.');
   }
   for (const [name, file] of Object.entries(executables)) {
-    await copyFile(file, path.join(output, name), 1);
+    await copyFile(file, path.join(output, name), existing ? 0 : 1);
     await chmod(path.join(output, name), 0o755);
   }
   for (const source of sources) {
     await copyFile(
       path.join(cache, source.directory + '.tar.gz'),
       path.join(output, 'sources', source.directory + '.tar.gz'),
-      1,
+      existing ? 0 : 1,
     );
     const folder = path.join(build, source.directory);
     for (const file of await readdir(folder))
       if (/^(LICENSE|COPYING|NOTICE|README\.ijg)(\.|$)/i.test(file)) {
         const content = await readFile(path.join(folder, file)).catch(() => undefined);
         if (content)
-          await writeFile(path.join(output, `${source.name}-${file}`), content, { flag: 'wx' });
+          await writeFile(path.join(output, `${source.name}-${file}`), content, {
+            flag: existing ? 'w' : 'wx',
+          });
       }
   }
   await writeFile(
     path.join(output, 'build.txt'),
-    `cmake libjpeg-turbo: ${common.join(' ')} -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DWITH_TURBOJPEG=OFF -DWITH_SIMD=OFF\ncmake qpdf: ${flags.join(' ')}\nNative crypto only; JPEG linked statically; source archives and licenses supplied.\n`,
-    { flag: 'wx' },
+    `cmake libjpeg-turbo: ${common.join(' ')} -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DWITH_TURBOJPEG=OFF -DWITH_SIMD=OFF\ncmake qpdf: ${flags.join(' ')}\nBuild revision 2: clear CPATH, C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, OBJC_INCLUDE_PATH and LIBRARY_PATH.\nNative crypto only; JPEG linked statically; source archives and licenses supplied.\n`,
+    { flag: existing ? 'w' : 'wx' },
   );
   const files: Record<string, string> = {};
   const visit = async (directory: string) => {
     for (const item of await readdir(directory, { withFileTypes: true })) {
+      if (directory === output && item.name === 'manifest.json') continue;
       const file = path.join(directory, item.name);
       if (item.isSymbolicLink())
         throw new Error('PDF processor resources may not be symbolic links.');
@@ -190,7 +226,7 @@ export async function preparePDFProcessors(minimum: string, arch = process.arch)
   await visit(output);
   await writeFile(
     descriptor,
-    JSON.stringify({ version: 1, minimum, arch, sources, files }, null, 2),
-    { flag: 'wx' },
+    JSON.stringify({ version: 1, buildRevision: 2, minimum, arch, sources, files }, null, 2),
+    { flag: existing ? 'w' : 'wx' },
   );
 }

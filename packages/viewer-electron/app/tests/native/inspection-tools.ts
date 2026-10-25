@@ -22,6 +22,8 @@ await mkdir(profile);
 const yaml = path.join(notes, 'Config.yaml'),
   css = path.join(notes, 'Theme.css'),
   book = path.join(notes, 'Wide.xlsx');
+const hidden = path.join(notes, '.Hidden.css');
+await writeFile(hidden, '.hidden { display: none; }\n', { flag: 'wx' });
 await writeFile(
   yaml,
   'base: &base\n  color: red\ncopy: *base\nnested:\n  one: true\n  two: [1, 2, 3]\n',
@@ -113,6 +115,39 @@ try {
     await writeFile(path.join(root, name + '.png'), Buffer.from(value.data, 'base64'), {
       flag: 'wx',
     });
+  };
+  const runCommand = async (label: string) => {
+    await evaluate('document.querySelector(\'[aria-label="Commands (⌘K)"]\').click()');
+    await until(
+      () =>
+        evaluate<boolean>('document.activeElement?.getAttribute("aria-label")==="Search commands"'),
+      Boolean,
+      'command input',
+    );
+    await command('Input.insertText', { text: label });
+    await until(
+      () =>
+        evaluate<string>(
+          'document.querySelector(\'.command-result[aria-selected="true"]\')?.textContent || ""',
+        ),
+      (value) => value.includes(label),
+      label,
+    );
+    for (const type of ['keyDown', 'keyUp'])
+      await command('Input.dispatchKeyEvent', {
+        type,
+        key: 'Enter',
+        code: 'Enter',
+        windowsVirtualKeyCode: 13,
+      });
+    await until(
+      () => evaluate<boolean>('!document.querySelector(\'[aria-label="Search commands"]\')'),
+      Boolean,
+      'command closed',
+    );
+    await evaluate(
+      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
+    );
   };
   await clickFile(collection);
   await clickFile(notes);
@@ -278,6 +313,96 @@ try {
     'restored YAML',
   );
   await capture('columns-data-light');
+  const displayed = () =>
+    evaluate<string[]>(
+      'Array.from(document.querySelectorAll(' +
+        JSON.stringify('[data-folder-path=' + JSON.stringify(notes) + '] .file-row') +
+        '),row=>row.dataset.filePath)',
+    );
+  await runCommand('Ungroup files');
+  await runCommand('Sort by name');
+  await until(
+    displayed,
+    (value) => value.join('|') === [book, css, yaml].join('|'),
+    'child descending name order',
+  );
+  await runCommand('Sort by name');
+  await until(
+    displayed,
+    (value) => value.join('|') === [yaml, css, book].join('|'),
+    'child ascending name order',
+  );
+  await runCommand('Show hidden files');
+  await until(displayed, (value) => value.includes(hidden), 'child hidden files shown');
+  await capture('columns-hidden-light');
+  await runCommand('Hide hidden files');
+  await until(displayed, (value) => !value.includes(hidden), 'child hidden files hidden');
+  await runCommand('Reset this folder’s view');
+  await until(
+    () =>
+      evaluate<boolean>(
+        'window.viewer.settingsGet().then(s=>!s.settings.folders[' + JSON.stringify(notes) + '])',
+      ),
+    Boolean,
+    'child overrides reset',
+  );
+  assert.equal(
+    await evaluate<boolean>(
+      'window.viewer.settingsGet().then(s=>!s.settings.folders[' + JSON.stringify(files) + '])',
+    ),
+    true,
+    'Ancestor preferences stayed intact.',
+  );
+  await runCommand('Sort by size');
+  await runCommand('Use as default folder view');
+  await until(
+    () =>
+      evaluate<boolean>(
+        'window.viewer.settingsGet().then(s=>s.settings.browsing.mode==="columns"&&s.settings.browsing.sort==="size"&&s.settings.browsing.descending)',
+      ),
+    Boolean,
+    'current column exported as defaults',
+  );
+  await runCommand('Grid view');
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".folder-explorer")?.getAttribute("aria-label") || ""',
+      ),
+    (value) => value === 'Folder ' + notes,
+    'view change enters browsed child',
+  );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".grid-scroll")'),
+    Boolean,
+    'child grid view',
+  );
+  await runCommand('Columns view');
+  await runCommand('Parent folder');
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".folder-explorer")?.getAttribute("aria-label") || ""',
+      ),
+    (value) => value === 'Folder ' + collection,
+    'parent of browsed folder',
+  );
+  await clickFile(notes);
+  await runCommand('Search this folder…');
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(".folder-explorer")?.getAttribute("aria-label") || ""',
+      ),
+    (value) => value === 'Folder ' + notes,
+    'search enters browsed child',
+  );
+  await until(
+    () => evaluate<boolean>('document.activeElement?.getAttribute("aria-label")==="Find files"'),
+    Boolean,
+    'child search is focused',
+  );
+  observations.push({ columnCommands: 'sort/hidden/reset/defaults/view/parent/search verified' });
   observations.push({
     scope,
     text,

@@ -63,7 +63,10 @@ export async function downloadSample(
   if (!response.ok || !response.body)
     throw new Error(`Sample download failed (${response.status}): ${sample.path}`);
   const declared = response.headers.get('content-length');
-  if (declared && Number(declared) !== sample.size) {
+  const encoding = response.headers.get('content-encoding');
+  // Fetch delivers decoded bytes; a compressed transfer length describes a
+  // different representation. Actual byte count and SHA256 remain mandatory.
+  if (declared && (!encoding || encoding === 'identity') && Number(declared) !== sample.size) {
     await response.body.cancel();
     throw new Error(`Unexpected sample download size: ${sample.path}`);
   }

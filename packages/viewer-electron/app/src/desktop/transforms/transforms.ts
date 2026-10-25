@@ -8,6 +8,7 @@ import { PreviewWork, type PreviewScope } from '../previews/preview-work';
 import { runProcessor } from './process';
 import { compileMedia, mediaDemuxer, mediaInfo } from './media';
 import type { ImageInspection } from './image';
+import { inspectPDF, pdfProcessor, transformPDF } from './pdf';
 import { jpegMetadata } from './jpeg-metadata';
 
 interface Source {
@@ -178,6 +179,17 @@ export class Transforms implements TransformExecutor {
       }),
     );
   }
+  pdfInspect(file: string, signal = new AbortController().signal): Promise<{ pages: number }> {
+    return this.work.track(
+      [file],
+      (scope) =>
+        this.sources([file], scope, async ([source]) => {
+          const value = await inspectPDF(pdfProcessor(this.root), source!, scope.signal);
+          return { pages: value.pages.length };
+        }),
+      signal,
+    );
+  }
   execute(
     value: TransformPlan,
     files: readonly string[],
@@ -195,74 +207,16 @@ export class Transforms implements TransformExecutor {
           async (sources) => {
             await this.access([output]);
             scope.check();
-            if (plan.kind === 'pdf') {
-              if (sources.length !== 1 || path.extname(sources[0]!.file).toLowerCase() !== '.pdf')
-                throw new Error('Optimize one PDF per output.');
-              const source = sources[0]!;
-              if (source.size > 256 * 1024 * 1024)
-                throw new Error('PDF optimization is limited to 256 MB per source.');
-              const chunk = Buffer.alloc(65536);
-              let tail = '';
-              for (let position = 0; position < source.size; position += chunk.length) {
-                scope.check();
-                const { bytesRead } = await source.handle.read(chunk, 0, chunk.length, position);
-                const text = tail + chunk.toString('latin1', 0, bytesRead);
-                if (position === 0 && !text.slice(0, 1024).includes('%PDF-'))
-                  throw new Error('The source is not a PDF.');
-                if (
-                  text
-                    .replace(/#([\da-f]{2})/gi, (_all, hex: string) =>
-                      String.fromCharCode(parseInt(hex, 16)),
-                    )
-                    .includes('/ByteRange')
-                )
-                  throw new Error(
-                    'Signed PDFs are kept unchanged. Optimize an unsigned copy instead.',
-                  );
-                tail = text.slice(-64);
-              }
-              progress(0.1, 'Optimizing PDF');
-              const target = await open(output, 'wx+', 0o644);
-              try {
-                const optimizer = path.join(
-                  this.root.replace('viewer-processors-', 'viewer-optimizers-'),
-                  'qpdf',
-                );
-                await runProcessor(
-                  optimizer,
-                  [
-                    '--global',
-                    '--max-stream-filters=8',
-                    '--parser-max-nesting=128',
-                    '--',
-                    '--suppress-recovery',
-                    '--compress-streams=y',
-                    '--decode-level=generalized',
-                    '--recompress-flate',
-                    '--compression-level=9',
-                    '--object-streams=generate',
-                    '--remove-unreferenced-resources=yes',
-                    ...(plan.preset === 'lossless'
-                      ? []
-                      : [
-                          '--optimize-images',
-                          '--jpeg-quality=' + (plan.preset === 'small' ? 65 : 85),
-                        ]),
-                    '/dev/fd/3',
-                    '/dev/fd/4',
-                  ],
-                  [source.handle.fd, target.fd],
-                  scope.signal,
-                  { timeout: 120000 },
-                );
-                await target.sync();
-                const result = { inputBytes: source.size, outputBytes: (await target.stat()).size };
-                progress(1, 'PDF ready');
-                return result;
-              } finally {
-                await target.close();
-              }
-            }
+            if (plan.kind === 'pdf' || plan.kind === 'pdf-pages')
+              return transformPDF(
+                pdfProcessor(this.root),
+                sources,
+                plan,
+                output,
+                this.image,
+                scope.signal,
+                progress,
+              );
             if (plan.kind === 'image') {
               if (sources.length !== 1) throw new Error('Convert one raster image per output.');
               if (sources[0]!.size > 256 * 1024 * 1024)

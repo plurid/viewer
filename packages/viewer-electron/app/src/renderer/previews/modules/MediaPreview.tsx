@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty } from '../../ui/primitives';
@@ -12,6 +12,7 @@ export default function MediaPreview(context: PreviewContext) {
   const [error, setError] = useState('');
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
+  const [pictureUnavailable, setPictureUnavailable] = useState(false);
   const [slow, setSlow] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [position, setPosition] = usePreviewState(context, 'media.position', 0);
@@ -21,11 +22,37 @@ export default function MediaPreview(context: PreviewContext) {
       ref.current.currentTime = context.evidence.anchor.seconds;
   }, [ready, context.evidence]);
   const audio = resource.entry.mime.startsWith('audio/');
+  const markReady = useCallback(() => {
+    const media = ref.current;
+    if (!audio && media instanceof HTMLVideoElement && media.videoWidth === 0) {
+      restored.current = false;
+      setPictureUnavailable(true);
+      setReady(false);
+      return;
+    }
+    setReady(true);
+    setSlow(false);
+  }, [audio]);
   useEffect(() => {
     if (ready || error || !active) return;
-    const timer = setTimeout(() => setSlow(true), 8000);
-    return () => clearTimeout(timer);
-  }, [ready, error, active, attempt]);
+    // Some partial/cached decodes expose HAVE_CURRENT_DATA without emitting the
+    // expected video-ready events. Read native state until readiness or the
+    // existing slow-load boundary, then leave ordinary media events in charge.
+    const synchronize = () => {
+      if ((ref.current?.readyState ?? 0) >= 2) markReady();
+    };
+    synchronize();
+    const poll = setInterval(synchronize, 200);
+    const timer = setTimeout(() => {
+      synchronize();
+      clearInterval(poll);
+      setSlow(true);
+    }, 8000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(poll);
+    };
+  }, [ready, error, active, attempt, pictureUnavailable, resource.id, markReady]);
   useEffect(() => {
     if (!active) ref.current?.pause();
   }, [active]);
@@ -38,7 +65,7 @@ export default function MediaPreview(context: PreviewContext) {
         media.load();
       }
     };
-  }, [error, attempt, resource.id]);
+  }, [error, attempt, resource.id, pictureUnavailable]);
   usePreviewCommands(
     context,
     useMemo(
@@ -90,14 +117,8 @@ export default function MediaPreview(context: PreviewContext) {
     controls: true,
     onPlay: () => setPlaying(true),
     onPause: () => setPlaying(false),
-    onLoadedData: () => {
-      setReady(true);
-      setSlow(false);
-    },
-    onCanPlay: () => {
-      setReady(true);
-      setSlow(false);
-    },
+    onLoadedData: markReady,
+    onCanPlay: markReady,
     onLoadedMetadata: () => {
       const media = ref.current;
       if (media && !restored.current) {
@@ -115,17 +136,18 @@ export default function MediaPreview(context: PreviewContext) {
     preload: 'metadata' as const,
     onError: () => setError('Open this file in its default app or choose another player.'),
   };
-  const media = audio ? (
-    <div className="audio-viewer">
-      <Icon name="audio" size={64} />
-      <h2>{resource.entry.name}</h2>
-      <audio ref={ref as React.RefObject<HTMLAudioElement>} {...props} />
-    </div>
-  ) : (
-    <div className="video-viewer">
-      <video ref={ref as React.RefObject<HTMLVideoElement>} {...props} />
-    </div>
-  );
+  const media =
+    audio || pictureUnavailable ? (
+      <div className="audio-viewer">
+        <Icon name="audio" size={64} />
+        <h2>{resource.entry.name}</h2>
+        <audio ref={ref as React.RefObject<HTMLAudioElement>} {...props} />
+      </div>
+    ) : (
+      <div className="video-viewer">
+        <video ref={ref as React.RefObject<HTMLVideoElement>} {...props} />
+      </div>
+    );
   return (
     <div className="media-preview">
       {context.editMedia && (
@@ -134,6 +156,11 @@ export default function MediaPreview(context: PreviewContext) {
         </PreviewToolbar>
       )}
       {media}
+      {ready && pictureUnavailable && (
+        <p className="inline-warning" role="status">
+          No video picture is available. Audio can still play.
+        </p>
+      )}
       {!ready && (
         <div className="media-loading" role="status">
           <span>{slow ? 'Media is taking longer to load.' : 'Loading media…'}</span>
