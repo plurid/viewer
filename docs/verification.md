@@ -1,5 +1,22 @@
 # Verification
 
+## October 25 preview size and Columns grouping follow-up
+
+Read-only source previews now default to **16px**, with their independent 20px
+line height. The current Viewer profile also receives the requested text-size
+setting. Editor sizes remain separate. Group by kind, date modified and Ungroup
+now target the browsed child folder in Columns, rather than its ancestor root.
+The regression fails on the previous implementation and passes after the fix.
+
+**60 affected tests pass** across settings, folder commands, views and sections.
+TypeScript, targeted ESLint, formatting and packaging pass. The owned packaged
+inspection driver verifies CSS/XLSX/YAML headings in the child column, retained
+selection, arrow navigation across headings, 16px/20px highlighted text and the
+wide worksheet. Log: `/private/tmp/viewer-columns-group-native-3.log`; generated
+fixtures/captures: `viewer-native-inspection-DipEoJ` under the macOS temporary
+root. Fixtures are retained. The rebuilt app is at
+`packages/viewer-electron/app/out/Viewer-darwin-arm64/Viewer.app`.
+
 ## October 25 spatial workbench, media and Optimize
 
 The validated direct Apple Silicon candidate is retained at

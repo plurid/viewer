@@ -26,6 +26,8 @@ import {
 } from '../src/renderer/state/store';
 import type { FileEntry } from '../src/domain/contracts';
 import type { SettingsPatch } from '../src/domain/services';
+import { columnCommands } from '../src/renderer/commands/columns';
+import type { CommandContext } from '../src/renderer/commands/registry';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -71,6 +73,36 @@ afterEach(async () => {
 });
 
 describe('folder appearance and independent explorer sessions', () => {
+  it('groups the browsed child column and shares its view without changing its ancestor', () => {
+    const root = activeWorkspace().panes[0]!;
+    updatePane(root.id, { mode: 'columns' });
+    const folder = activeWorkspace().panes[0]!;
+    const child = '/fixtures/Invoices';
+    const context = {
+      scope: 'folder',
+      workspaceID: activeWorkspace().id,
+      paneID: root.id,
+      folder,
+      directory: child,
+      path: root.path,
+      selection: [],
+      clipboard: null,
+      jobs: [],
+    } as CommandContext;
+    const group = (id: string) =>
+      columnCommands()
+        .find((command) => command.id === id)!
+        .run(context);
+    group('group.kind');
+    expect(folderPresentation(child).group).toBe('kind');
+    expect(folderPresentation(root.path).group).toBe('none');
+    expect(addRootFolder({ path: child })).toMatchObject({ path: child });
+    expect(folderPresentation(child).group).toBe('kind');
+    group('group.modified');
+    expect(folderPresentation(child).group).toBe('modified');
+    group('group.none');
+    expect(folderPresentation(child).group).toBe('none');
+  });
   it('makes a Map or lens-grouped folder the default view without its per-folder choices', () => {
     const defaults = structuredClone(getState().settings.settings.browsing);
     updateFolderPresentation('/fixtures', {

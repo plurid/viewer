@@ -97,7 +97,7 @@ typography:
     lineHeight: '22px'
   reading-preview:
     fontFamily: 'Menlo, ui-monospace, SFMono-Regular, monospace'
-    fontSize: '13px'
+    fontSize: '16px'
     fontWeight: 400
     lineHeight: '20px'
   terminal:

@@ -187,7 +187,7 @@ export default function TextPreview(context: TextPreviewProps) {
   );
   const textSettings = {
     ...preferences.editor,
-    fontSize: (preferences.previews.textFontSize ?? 13) * scale,
+    fontSize: (preferences.previews.textFontSize ?? 16) * scale,
     lineHeight: (preferences.previews.textLineHeight ?? 20) * scale,
   };
   // a workspace plane's text may be edited where it is; one holding unsaved edits opens editing

@@ -69,7 +69,13 @@ export function columnCommands(): CommandDefinition[] {
       group: 'View',
       icon: group === 'modified' ? 'clock' : group === 'kind' ? 'data' : 'list',
       when: (context) => !!context.folder,
-      run: (context) => updateFolderPresentation(context.folder!.path, { group }),
+      run: (context) =>
+        updateFolderPresentation(
+          context.folder!.mode === 'columns'
+            ? context.directory || context.folder!.path
+            : context.folder!.path,
+          { group },
+        ),
     })),
     // sorting as the column headers sort (2026-10-24): again the same key reverses it
     ...sortKeys.map((key): CommandDefinition => ({

@@ -117,7 +117,7 @@ retain Source with a visible explanation. JSONL remains source text. Other
 readable files may use the bounded generic text fallback.
 
 Reading text uses separate preview font/line-height/wrap preferences, initially
-13px/20px, with local zoom/reset controls. This does not change editor settings.
+16px/20px, with local zoom/reset controls. This does not change editor settings.
 CSS selectors and property names use theme syntax roles.
 
 ## Deeper support missing within current families

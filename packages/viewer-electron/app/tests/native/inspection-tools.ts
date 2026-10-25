@@ -128,6 +128,85 @@ try {
   assert.deepEqual(scope.active, [notes]);
   assert.deepEqual(scope.selected, [yaml]);
   assert.ok(scope.ancestors.includes(collection) && scope.ancestors.includes(notes));
+  await evaluate('document.querySelector(\'[aria-label="Commands (⌘K)"]\').click()');
+  await until(
+    () =>
+      evaluate<boolean>('document.activeElement?.getAttribute("aria-label")==="Search commands"'),
+    Boolean,
+    'grouping command input',
+  );
+  await command('Input.insertText', { text: 'Group by kind' });
+  await until(
+    () =>
+      evaluate<string>(
+        'document.querySelector(\'.command-result[aria-selected="true"]\')?.textContent || ""',
+      ),
+    (value) => value.includes('Group by kind'),
+    'grouping command',
+  );
+  await command('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Enter',
+    code: 'Enter',
+    windowsVirtualKeyCode: 13,
+  });
+  await command('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key: 'Enter',
+    code: 'Enter',
+    windowsVirtualKeyCode: 13,
+  });
+  const headings = await until(
+    () =>
+      evaluate<string[]>(
+        'Array.from(document.querySelectorAll(' +
+          JSON.stringify(
+            '[data-folder-path=' + JSON.stringify(notes) + '] .file-group-label .section-label',
+          ) +
+          '),heading=>heading.textContent)',
+      ),
+    (value) => ['CSS files', 'XLSX files', 'YAML files'].every((label) => value.includes(label)),
+    'kind sections inside browsed child column',
+  );
+  observations.push({ groupedColumn: notes, headings });
+  assert.deepEqual(
+    await evaluate<string[]>(
+      'Array.from(document.querySelectorAll(".file-row[aria-selected=true]"),row=>row.dataset.filePath)',
+    ),
+    [yaml],
+    'Grouping keeps the selected source.',
+  );
+  await evaluate('document.querySelector(".folder-explorer").focus()');
+  for (const [key, expected] of [
+    ['ArrowUp', book],
+    ['ArrowDown', yaml],
+  ] as const) {
+    await command('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key,
+      code: key,
+      windowsVirtualKeyCode: key === 'ArrowUp' ? 38 : 40,
+    });
+    await command('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key,
+      code: key,
+      windowsVirtualKeyCode: key === 'ArrowUp' ? 38 : 40,
+    });
+    await until(
+      () =>
+        evaluate<string[]>(
+          'Array.from(document.querySelectorAll(".file-row[aria-selected=true]"),row=>row.dataset.filePath)',
+        ),
+      (value) => value.length === 1 && value[0] === expected,
+      'selection skips group headers',
+    );
+  }
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".structured-viewer")'),
+    Boolean,
+    'YAML inspector after grouped keyboard navigation',
+  );
   const treeButton = (text: string) =>
     evaluate(
       'Array.from(document.querySelectorAll(".structured-viewer button")).find(button=>button.textContent.trim()===' +
@@ -153,7 +232,7 @@ try {
   const text = await evaluate<{ font: string; line: string; property: string; plain: string }>(
     '({font:getComputedStyle(document.querySelector(".code-scroll")).fontSize,line:getComputedStyle(document.querySelector(".code-scroll")).lineHeight,property:getComputedStyle(document.querySelector(".code-scroll .token.property")).color,plain:getComputedStyle(document.querySelector(".code-scroll")).color})',
   );
-  assert.equal(text.font, '13px');
+  assert.equal(text.font, '16px');
   assert.equal(text.line, '20px');
   assert.notEqual(text.property, text.plain);
   await capture('columns-code-dark');

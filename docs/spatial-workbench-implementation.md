@@ -10,7 +10,7 @@ qualification; generated fixtures and build artifacts remain retained.
   recovery, source watching and a shared versioned document cache cover Quick
   Preview and embedded Office/document views.
 - Columns distinguish the active directory and ancestor route from file-operation
-  selection. Reading text has independent 13px/20px defaults and zoom/wrap controls.
+  selection. Reading text has independent 16px/20px defaults and zoom/wrap controls.
   CSS syntax has theme roles. JSON/JSONC/JSON5/YAML share bounded virtual trees with
   expand/collapse, search, path/value copy and retained state. Worksheets virtualize
   columns as well as rows while retaining original cell addresses.

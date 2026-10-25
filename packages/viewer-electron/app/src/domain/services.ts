@@ -384,7 +384,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       thumbnailSize: 256,
       maxImagePixels: 64000000,
       maxModelMB: 256,
-      textFontSize: 13,
+      textFontSize: 16,
       textLineHeight: 20,
       textWordWrap: false,
     },
