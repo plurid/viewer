@@ -1,5 +1,39 @@
 # Verification
 
+## October 25 stable playground
+
+`pnpm playground` populated the sibling directory
+`/Users/ly3xqhl8g9/Data/i/theings/sauft/plurid/technologies/tools/viewer-playground`.
+Its manifest contains **178 catalog samples covering all 141 currently registered
+extensions**, plus conventional filenames and companions. All eight CC0 camera
+RAW files and the attributed OGV trailer match the pinned byte sizes and SHA-256
+values. The static website, scratch area and main/feature/review/conflict Git work
+areas are present. Feature has the intended staged/working/untracked states and
+one commit ahead/behind its local upstream; main/review are clean.
+
+The ordinary command succeeds again with **180 unchanged generated files** and
+the existing Git scenario preserved. Independent before/after verification of
+298 sample/Git/metadata files confirms identical bytes and modification times.
+Every generated test folder and report is retained. The evidence root is
+`/private/tmp/viewer-playground-verified-h_msxm47`, including `before.json`,
+`preservation.json`, `tests.json`, `tests.log` and static-check logs.
+
+**29 tests across five files pass, with zero failures or skips.** The exact
+regression command is
+`pnpm --filter viewer-electron exec vitest run tests/playground.test.ts tests/playground-assets.test.ts tests/previews.test.ts tests/languages.test.ts tests/fixture-removal-policy.test.ts --maxWorkers=4`,
+with `VIEWER_TEST_PRESERVE=1` and `VIEWER_TEST_NO_REMOVAL=1`. Eleven new cases
+cover catalog completeness, CLI paths, bounded/pinned downloads, destination/link
+refusal, interrupted Git initialization, preservation of user edits/commits/staging,
+and actual document/archive/model/drawing decoding. The DjVu check renders a
+nonblank page; PDF extraction reads all three generated pages. Full `pnpm check`,
+`pnpm lint` and `pnpm format:check` pass.
+
+This is developer tooling and sample content: production Viewer sources, runtime
+dependencies and the lockfile are unchanged, so no new app package is required.
+No fresh packaged/native UI, system RAW rendering or Chromium media-playback
+qualification is claimed by these checks. Their OS/camera/codec conditions are
+recorded in each sample's manifest. See [the playground guide](playground.md).
+
 ## October 25 existing-worktrees candidate
 
 The direct Apple Silicon candidate is retained at

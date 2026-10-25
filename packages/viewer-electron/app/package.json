@@ -26,6 +26,7 @@
   },
   "main": ".vite/build/main.cjs",
   "scripts": {
+    "playground": "node --import tsx tools/playground/main.ts",
     "plurid:sync": "tsx tools/sync-plurid.ts",
     "plurid:update": "tsx tools/plurid-registry.ts --update",
     "plurid:check": "tsx tools/plurid-registry.ts --registry",

@@ -4,6 +4,7 @@
   "packageManager": "pnpm@11.3.0",
   "engines": { "node": ">=22.13.0", "pnpm": ">=11" },
   "scripts": {
+    "playground": "pnpm --filter viewer-electron playground",
     "plurid:sync": "pnpm --filter viewer-electron plurid:sync",
     "plurid:update": "pnpm --filter viewer-electron plurid:update",
     "plurid:check": "pnpm --filter viewer-electron plurid:check",

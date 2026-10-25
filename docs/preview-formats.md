@@ -5,6 +5,10 @@ current preview coverage, limitations within supported formats, and proposed
 major and medium additions. Implementation status is separate from the
 candidate-specific results in [verification](verification.md).
 
+The [stable playground](playground.md) supplies manual examples for every current
+registered extension and conventional filename, with provenance, checksums and
+expected decoder limitations. Run `pnpm playground` from the repository.
+
 The expanded [professional format ecosystems](preview-format-ecosystems.md)
 catalog covers BIM, scanning, medical/scientific data, vendor CAD, media,
 publishing, packages and inspectable binaries. It adds domain-specific proposals

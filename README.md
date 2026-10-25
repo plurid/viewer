@@ -9,6 +9,12 @@ read-only conversations, workspace profiles and individual tile resizing.
 See [Preview formats](docs/preview-formats.md) for the current file-type inventory,
 partial support and proposed major/medium additions.
 
+Run `pnpm playground` to populate the stable sibling `../viewer-playground` with
+preview samples, local Git worktrees and a small website for local-server testing.
+It preserves edits and existing Git scenarios. The first run downloads about
+215 MiB of pinned public samples; `--offline` skips missing downloads. See
+[the playground guide](docs/playground.md).
+
 ## Run and build
 
 Use Node ≥22.13 and pnpm 11. Verified with Node 26.8.2 and pnpm 11.3.0 on Apple Silicon macOS.
