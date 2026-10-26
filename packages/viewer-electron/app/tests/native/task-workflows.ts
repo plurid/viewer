@@ -13,6 +13,7 @@ import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { AgentSessions } from '../../src/desktop/agents/sessions';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { NativeInteractions } from './runtime/interactions';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -145,6 +146,92 @@ const app = await ownedApp(binary, profile, { environment: { SHELL: '/bin/sh' } 
 const captures: string[] = [];
 const checks: string[] = [];
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
+
+async function verifyRestoredTask(
+  binary: string,
+  taskID: string,
+  sessionID: string,
+  workingText: string,
+): Promise<void> {
+  const resumed = await ownedApp(binary, profile, { environment: { SHELL: '/bin/sh' } });
+  let connection: Awaited<ReturnType<typeof resumed.connect>> | undefined;
+  try {
+    connection = await resumed.connect();
+    const { evaluate, command } = connection;
+    const actions = new NativeInteractions({ evaluate, command, until });
+    await command('Emulation.setDeviceMetricsOverride', {
+      width: 1560,
+      height: 1000,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const state = JSON.parse(
+      await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8'),
+    ) as SavedState;
+    const task = state.workspaces[0]?.taskAreas?.find((task) => task.id === taskID);
+    assert.ok(task);
+    assert.equal(task.checkout.path, checkout);
+    assert.equal(task.members.length, 5);
+    assert.ok(
+      task.members.some(
+        (member) =>
+          member.reference.kind === 'chat' && member.reference.externalSessionID === sessionID,
+      ),
+    );
+    assert.equal(await readFile(path.join(checkout, 'source.txt'), 'utf8'), workingText);
+    assert.equal(await git(checkout, 'show', ':source.txt'), original);
+    assert.equal(await readFile(path.join(checkout, 'order.txt'), 'utf8'), 'test\nbuild\n');
+    assert.equal(
+      (await git(checkout, 'branch', '--show-current')).trim(),
+      'feature/generated-task',
+    );
+    await actions.palette('Generated branch task');
+    await until(
+      () => evaluate<boolean>('!!document.querySelector(".task-plane")'),
+      Boolean,
+      'Restored task',
+    );
+    await evaluate(`(() => {
+      const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.textContent.includes('Git changes'));
+      row.querySelector('button').click();
+    })()`);
+    await until(
+      () => evaluate<boolean>('!!document.querySelector(".git-review")'),
+      Boolean,
+      'Restored Git tool',
+    );
+    await actions.click('[aria-label="Review changes"]');
+    await actions.button('Unstaged', 'document.querySelector(".choice-menu")');
+    await until(
+      () => evaluate<number>('document.querySelectorAll(".git-review-hunk").length'),
+      (count) => count === 2,
+      'Restored working edits',
+    );
+    await actions.visible('.git-review');
+    await actions.capture(path.join(root, 'restored-git-review.png'));
+    await actions.palette('Generated branch task');
+    await evaluate(`(() => {
+      const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.textContent.includes('Generated review conversation'));
+      row.querySelector('button').click();
+    })()`);
+    await until(
+      () =>
+        evaluate<string>('document.querySelector(".session-reported-status")?.textContent || ""'),
+      (text) => text.includes('Reported waiting'),
+      'Restored reported session',
+    );
+    await actions.visible('.chat-plane[aria-label="Agent session"]');
+    await actions.capture(path.join(root, 'restored-agent-session.png'));
+    assert.equal(
+      await readFile(path.join(checkout, 'order.txt'), 'utf8'),
+      'test\nbuild\n',
+      'Reopening tools must not replay the workflow',
+    );
+  } finally {
+    await resumed.close(connection);
+  }
+}
+
 try {
   connection = await app.connect();
   const { evaluate, command } = connection;
@@ -154,57 +241,10 @@ try {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  const click = async (label: string, selector = 'document') => {
-    const expression = `[...((${selector})?.querySelectorAll('button') ?? [])].find(button => button.textContent.trim() === ${JSON.stringify(label)} && !button.disabled)`;
-    await until(() => evaluate<boolean>(`!!(${expression})`), Boolean, 'Button ' + label);
-    await evaluate(`(${expression}).click()`);
-  };
-  const field = async (label: string, text: string) => {
-    const selector = `[aria-label=${JSON.stringify(label)}]`;
-    await until(
-      () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
-      Boolean,
-      label,
-    );
-    await evaluate(`(() => {
-      const input = document.querySelector(${JSON.stringify(selector)});
-      input.focus(); input.select();
-    })()`);
-    await command('Input.insertText', { text });
-  };
-  const palette = async (label: string) => {
-    await evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
-    await until(
-      () => evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
-      (value) => value === 'Search commands',
-      'Palette',
-    );
-    await command('Input.insertText', { text: label });
-    await until(
-      () =>
-        evaluate<string>(
-          'document.querySelector(".command-result[aria-selected=true]")?.textContent',
-        ),
-      (text) => text?.includes(label),
-      label,
-    );
-    await evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
-    // Palette actions intentionally run after its modal unmounts. Wait for that
-    // dispatch before issuing the next UI action against another source plane.
-    await evaluate(`new Promise(resolve => {
-      requestAnimationFrame(() => requestAnimationFrame(resolve));
-    })`);
-  };
+  const actions = new NativeInteractions({ evaluate, command, until });
   const capture = async (name: string) => {
-    await evaluate('new Promise(resolve => setTimeout(resolve, 500))');
-    await until(
-      () => evaluate<boolean>('!document.querySelector("[data-plurid-motion]")'),
-      Boolean,
-      'Settled view',
-    );
-    const picture = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
     const file = path.join(root, name + '.png');
-    await writeFile(file, Buffer.from(picture.data, 'base64'), { flag: 'wx' });
+    await actions.capture(file);
     captures.push(file);
   };
   const saved = async () =>
@@ -214,12 +254,12 @@ try {
     Boolean,
     'Folder',
   );
-  await palette('New task from branch');
-  await field('Branch task name', 'Generated branch task');
-  await field('New branch name', 'feature/generated-task');
-  await field('Worktree destination', checkout);
+  await actions.palette('New task from branch');
+  await actions.field('Branch task name', 'Generated branch task');
+  await actions.field('New branch name', 'feature/generated-task');
+  await actions.field('Worktree destination', checkout);
   await capture('branch-task-form');
-  await click('Create task', 'document.querySelector("dialog")');
+  await actions.button('Create task', 'document.querySelector("dialog")');
   await until(
     async () => (await saved()).workspaces[0]?.taskAreas?.[0]?.members.length,
     (count) => count === 4,
@@ -242,14 +282,14 @@ try {
     const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.textContent.includes('Git changes'));
     row.querySelector('button').click();
   })()`);
-  await click('Refresh', 'document.querySelector(".git-review")');
+  await actions.button('Refresh', 'document.querySelector(".git-review")');
   await until(
     () => evaluate<number>('document.querySelectorAll(".git-review-hunk").length'),
     (count) => count === 2,
     'Two review hunks',
   );
   await capture('hunk-review');
-  await click('Stage hunk 1', 'document.querySelector(".git-review")');
+  await actions.button('Stage hunk 1', 'document.querySelector(".git-review")');
   await until(
     async () => git(checkout, 'show', ':source.txt'),
     (text) => text === original.replace('line 2\n', 'first edit\n'),
@@ -265,23 +305,23 @@ try {
     'Review ready after staging',
   );
   await evaluate(`document.querySelector('[aria-label="Review changes"]').click()`);
-  await click('Staged', 'document.querySelector(".choice-menu")');
-  await click('Unstage hunk 1', 'document.querySelector(".git-review")');
+  await actions.button('Staged', 'document.querySelector(".choice-menu")');
+  await actions.button('Unstage hunk 1', 'document.querySelector(".git-review")');
   await until(
     async () => git(checkout, 'show', ':source.txt'),
     (text) => text === original,
     'Hunk unstaged',
   );
   checks.push('Real Git stages and unstages one hunk without changing the working file');
-  await palette('Generated branch task');
+  await actions.palette('Generated branch task');
   await evaluate(`(() => {
     const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.querySelector('strong')?.textContent === 'Checkout');
     row.querySelector('button').click();
   })()`);
-  await palette('Generated workflow');
-  await field('Run label', 'literal $(touch marker) {directory}');
+  await actions.palette('Generated workflow');
+  await actions.field('Run label', 'literal $(touch marker) {directory}');
   await capture('workflow-parameters');
-  await click('Run', 'document.querySelector(".command-parameters")');
+  await actions.button('Run', 'document.querySelector(".command-parameters")');
   await until(
     async () => readFile(path.join(checkout, 'order.txt'), 'utf8').catch(() => ''),
     (text) => text === 'test\nbuild\n',
@@ -317,9 +357,9 @@ try {
     },
     realpath,
   );
-  await palette('Generated branch task');
-  await click('Attach conversation…', 'document.querySelector(".task-plane")');
-  await click('Attach', 'document.querySelector(".session-library")');
+  await actions.palette('Generated branch task');
+  await actions.button('Attach conversation…', 'document.querySelector(".task-plane")');
+  await actions.button('Attach', 'document.querySelector(".session-library")');
   await until(
     () => evaluate<string>('document.querySelector(".session-reported-status")?.textContent'),
     (text) => text?.includes('Reported waiting'),
@@ -367,7 +407,7 @@ try {
     flag: 'wx',
   });
   await capture('agent-session');
-  await click('Open current file: source.txt:2');
+  await actions.button('Open current file: source.txt:2');
   await until(
     async () =>
       (await saved()).workspaces[0]?.panes.find(
@@ -376,7 +416,7 @@ try {
     Boolean,
     'Linked source',
   );
-  await palette('Generated branch task');
+  await actions.palette('Generated branch task');
   await until(
     async () =>
       (await saved()).workspaces[0]?.taskAreas?.[0]?.members.some(
@@ -386,7 +426,7 @@ try {
     Boolean,
     'Durable session link',
   );
-  await palette('Notes…');
+  await actions.palette('Notes…');
   await until(
     () => evaluate<boolean>('!!document.querySelector(".notes-library-row")'),
     Boolean,
@@ -401,12 +441,17 @@ try {
     'Note Trash presenter',
   );
   await capture('note-trash-cancel');
-  await click('Cancel', `document.querySelector('dialog[aria-label="Move to Trash?"]')`);
+  await actions.button('Cancel', `document.querySelector('dialog[aria-label="Move to Trash?"]')`);
   checks.push(
     'Agent session attaches to task, shows reported status and opens linked source; note Trash presenter cancelled',
   );
+  const taskID = (await saved()).workspaces[0]!.taskAreas![0]!.id;
   await app.close(connection);
   connection = undefined;
+  await verifyRestoredTask(binary, taskID, reported.id, changed);
+  checks.push(
+    'Cold restart keeps task membership, worktree edits, Git staging, receipts and reported conversation without replaying commands',
+  );
   assert.equal(await readFile(path.join(repository, 'source.txt'), 'utf8'), original);
   assert.equal(await readFile(path.join(checkout, 'order.txt'), 'utf8'), 'test\nbuild\n');
   await writeFile(

@@ -1,9 +1,10 @@
+import type * as ReactModule from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { FileEntry } from '../src/domain/contracts';
 import type { FolderSizeTask } from '../src/domain/files/metadata';
 
 vi.mock('react', async (original) => ({
-  ...(await original<typeof import('react')>()),
+  ...(await original<typeof ReactModule>()),
   useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 vi.mock('../src/renderer/state/store', () => ({

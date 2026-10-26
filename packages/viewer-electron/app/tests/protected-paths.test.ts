@@ -1,3 +1,4 @@
+import type * as FileSystemModule from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
 
 const folder = (dev: number, ino: number) => ({
@@ -7,7 +8,7 @@ const folder = (dev: number, ino: number) => ({
   isSymbolicLink: () => false,
 });
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const actual = await importOriginal<typeof FileSystemModule>();
   const mounted: Record<string, ReturnType<typeof folder>> = {
     '/Volumes': folder(1, 5),
     '/Volumes/Backup': folder(2, 10),

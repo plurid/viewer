@@ -1,3 +1,4 @@
+import type * as FileSystemModule from 'node:fs/promises';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, it, vi } from 'vitest';
@@ -10,7 +11,7 @@ const canonical = vi.hoisted(() => ({
   release: undefined as (() => void) | undefined,
 }));
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const actual = await importOriginal<typeof FileSystemModule>();
   return {
     ...actual,
     realpath: async (...args: Parameters<typeof actual.realpath>) => {

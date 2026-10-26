@@ -1,3 +1,6 @@
+import type * as FileSystemModule from 'node:fs/promises';
+import type * as MacFilesModule from '../src/desktop/native/macos-files';
+import type * as OperationJournalModule from '../src/desktop/operations/operation-journal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   lstat,
@@ -18,7 +21,7 @@ import { temporaryRoot, trashTemporary } from '../tools/temporary';
 import { removalBlocked } from './support/preservation';
 const exdev = vi.hoisted(() => ({ source: '', race: '', noLinks: false, foreign: '' }));
 vi.mock('node:fs/promises', async (original) => {
-  const actual = await original<typeof import('node:fs/promises')>();
+  const actual = await original<typeof FileSystemModule>();
   const paths = await import('node:path');
   // Items whose real location is inside `exdev.foreign` report another device, as if
   // that folder were a second volume.
@@ -60,7 +63,7 @@ vi.mock('node:fs/promises', async (original) => {
 // Publication uses renameatx_np on macOS. Inject failures at that same boundary
 // so collision and cross-volume tests still exercise the native path.
 vi.mock('../src/desktop/native/macos-files', async (original) => {
-  const actual = await original<typeof import('../src/desktop/native/macos-files')>();
+  const actual = await original<typeof MacFilesModule>();
   const spelling = (file: string) => file.replace(/^\/private\/var\//, '/var/').normalize('NFC');
   return {
     ...actual,
@@ -84,7 +87,7 @@ vi.mock('../src/desktop/native/macos-files', async (original) => {
 });
 // A folder named "many items" is over the proof's 10,000-item limit, without writing them all.
 vi.mock('../src/desktop/operations/operation-journal', async (original) => {
-  const actual = await original<typeof import('../src/desktop/operations/operation-journal')>();
+  const actual = await original<typeof OperationJournalModule>();
   const paths = await import('node:path');
   return {
     ...actual,

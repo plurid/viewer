@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+import type * as FramingModule from '../src/renderer/workspace/framing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { PluridApplicationHandle } from '@plurid/plurid-react';
 import { pluridStateModules } from '@plurid/plurid-react';
 import type { TreePlane } from '@plurid/plurid-data';
 import type { Pane } from '../src/domain/contracts';
+import { evidenceNavigationSchema, type SearchEvidence } from '../src/domain/files/inspection';
 import {
   activeWorkspace,
   addPane,
@@ -19,7 +21,7 @@ import { frameWorkspace } from '../src/renderer/workspace/framing';
 import { flattenTree, hostID } from '../src/renderer/workspace/tree';
 
 vi.mock('../src/renderer/workspace/framing', async (original) => ({
-  ...(await original<typeof import('../src/renderer/workspace/framing')>()),
+  ...(await original<typeof FramingModule>()),
   frameWorkspace: vi.fn(),
 }));
 
@@ -158,6 +160,35 @@ async function expectActive(view: ReturnType<typeof mount>, pane: Pane) {
 }
 
 describe('closing a plane returns to its surviving context', () => {
+  it('opens a search hit using only durable navigation fields', async () => {
+    const view = mount();
+    const evidence: SearchEvidence = {
+      path: '/fixture/project/source/notes.txt',
+      version: { identity: '1:2', modified: 1, size: 20 },
+      anchor: { kind: 'text', line: 2, start: 0, end: 7 },
+      quote: 'Orchard',
+      coverage: 'complete',
+    };
+    Object.assign(window.viewer, {
+      stat: vi.fn(async () => ({
+        path: evidence.path,
+        identity: evidence.version.identity,
+        modified: evidence.version.modified,
+        size: evidence.version.size,
+      })),
+    });
+    const open = vi.spyOn(view.controller, 'open').mockImplementation(() => {});
+    await view.controller.openEvidence(evidence, view.parent.id);
+    const navigation = open.mock.calls[0]?.[2]?.evidence;
+    expect(evidenceNavigationSchema.parse(navigation)).toEqual({
+      path: evidence.path,
+      version: evidence.version,
+      anchor: evidence.anchor,
+      quote: evidence.quote,
+    });
+    expect(evidence.coverage).toBe('complete');
+  });
+
   it.each([false, true])(
     'returns an active linked plane to its immediate parent when Git=%s',
     async (git) => {

@@ -1,4 +1,6 @@
 /** Runs the actual packaged macOS application against disposable synthetic files. */
+import type { ApplicationChoices, FolderSizeTask } from '../src/domain/files/metadata';
+import type { ActionPlan, IndexedResult } from '../src/domain/services';
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -11,7 +13,7 @@ import { promisify } from 'node:util';
 import { repeatedPreviewFixture } from './workspace-fixtures';
 import { formatBytes } from '../src/domain/files/entries';
 import { reactCommitProbe } from './react-commits';
-import type { OperationJob, SavedState } from '../src/domain/contracts';
+import type { OperationJob, Resource, SavedState } from '../src/domain/contracts';
 import type { AgentAccessState } from '../src/domain/agents/clients';
 import { trashTemporary } from '../tools/temporary';
 import { prepareOwnedApplication } from './native/runtime/owned-application';
@@ -555,7 +557,7 @@ async function verifyDailyFileWork(): Promise<void> {
   );
   await paletteCommand('Calculate Size');
   const measured = await until(
-    () => evaluate<import('../src/domain/files/metadata').FolderSizeTask[]>('window.__qaSizes'),
+    () => evaluate<FolderSizeTask[]>('window.__qaSizes'),
     (tasks) => tasks.some((task) => task.status === 'completed'),
     'folder size',
   ).then((tasks) => tasks.find((task) => task.status === 'completed')!);
@@ -832,7 +834,7 @@ async function verifySelectionReliability(): Promise<void> {
   );
   await paletteCommand('Calculate Size');
   const measured = await until(
-    () => evaluate<import('../src/domain/files/metadata').FolderSizeTask[]>('window.__qaSizes'),
+    () => evaluate<FolderSizeTask[]>('window.__qaSizes'),
     (tasks) => tasks.some((task) => task.status === 'completed'),
     'background folder measurement',
   ).then((tasks) => tasks.find((task) => task.status === 'completed')!);
@@ -1354,7 +1356,7 @@ async function verifyConfiguredChrome(): Promise<void> {
   assert.equal(await evaluate('document.querySelectorAll("dialog[open]").length'), 1);
   await click('.action-config .primary');
   const plans = await until(
-    () => evaluate<import('../src/domain/services').ActionPlan[]>('window.viewer.actionList()'),
+    () => evaluate<ActionPlan[]>('window.viewer.actionList()'),
     (plans) => plans.some((plan) => plan.recipeID === 'book-name' && plan.status === 'review'),
     'rename action produces a review proposal',
   );
@@ -1579,7 +1581,7 @@ async function verifyListAlignment(): Promise<void> {
 
 async function verifyPreviewFooter(): Promise<void> {
   const file = path.join(fixture.files, 'README.md');
-  const choices = await evaluate<import('../src/domain/files/metadata').ApplicationChoices>(
+  const choices = await evaluate<ApplicationChoices>(
     `window.viewer.applications([${JSON.stringify(file)}])`,
   );
   await preview(file, 'Synthetic files for local Viewer verification.');
@@ -4397,7 +4399,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   );
   await click('.action-config .primary');
   const plan = await until(
-    () => evaluate<import('../src/domain/services').ActionPlan[]>('window.viewer.actionList()'),
+    () => evaluate<ActionPlan[]>('window.viewer.actionList()'),
     (plans) => plans.some((plan) => plan.recipeID === 'book-name' && plan.status === 'review'),
     'local book proposal',
   ).then((plans) =>
@@ -4447,20 +4449,14 @@ async function verifyServiceWorkflows(): Promise<void> {
   await snapshot('action-review-native.png');
   await click('.task-dialog footer .primary');
   await until(
-    () =>
-      evaluate<import('../src/domain/services').ActionPlan>(
-        `window.viewer.actionGet(${JSON.stringify(plan.id)})`,
-      ),
+    () => evaluate<ActionPlan>(`window.viewer.actionGet(${JSON.stringify(plan.id)})`),
     (plan) => plan.status === 'completed',
     'apply reviewed book rename',
   );
   assert.deepEqual(await readFile(plan.rows[0].destination), bookBytes);
   await click('.task-dialog footer button');
   await until(
-    () =>
-      evaluate<import('../src/domain/services').ActionPlan>(
-        `window.viewer.actionGet(${JSON.stringify(plan.id)})`,
-      ),
+    () => evaluate<ActionPlan>(`window.viewer.actionGet(${JSON.stringify(plan.id)})`),
     (plan) => !plan.undoable,
     'undo reviewed rename',
   );
@@ -4501,7 +4497,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   );
   await until(
     () =>
-      evaluate<import('../src/domain/services').IndexedResult>(
+      evaluate<IndexedResult>(
         `window.viewer.indexedQuery({query:'local chapter fixture',content:true,root:${JSON.stringify(documents)}})`,
       ),
     (result) => result.entries.some((file) => file.path === book),
@@ -4512,7 +4508,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   );
   await until(
     () =>
-      evaluate<import('../src/domain/services').IndexedResult>(
+      evaluate<IndexedResult>(
         `window.viewer.indexedQuery({query:'local chapter fixture',content:true,root:${JSON.stringify(documents)}})`,
       ),
     (result) => !result.entries.length,
@@ -4628,9 +4624,7 @@ async function verifyIndependentPreviewRevocation(): Promise<void> {
   const documents = path.join(fixture.files, 'Documents');
   const images = path.join(fixture.files, 'Images');
   const file = path.join(documents, 'Project notes.md');
-  const resource = await evaluate<import('../src/domain/contracts').Resource>(
-    `window.viewer.resource(${JSON.stringify(file)})`,
-  );
+  const resource = await evaluate<Resource>(`window.viewer.resource(${JSON.stringify(file)})`);
   const original = await evaluate(`window.viewer.read(${JSON.stringify(resource.id)})`);
   await click(fileSelector(documents), 2);
   await preview(file, 'A wider view');
@@ -4678,14 +4672,11 @@ async function verifyIndependentPreviewRevocation(): Promise<void> {
 
 async function verifyStoreFileServices(): Promise<void> {
   await verifyIndependentPreviewRevocation();
-  const task = await evaluate<import('../src/domain/files/metadata').FolderSizeTask>(
+  const task = await evaluate<FolderSizeTask>(
     `window.viewer.folderSizeStart([${JSON.stringify(path.join(fixture.files, 'Models'))}])`,
   );
   const measured = await until(
-    () =>
-      evaluate<import('../src/domain/files/metadata').FolderSizeTask>(
-        `window.viewer.folderSizeGet(${JSON.stringify(task.id)})`,
-      ),
+    () => evaluate<FolderSizeTask>(`window.viewer.folderSizeGet(${JSON.stringify(task.id)})`),
     (value) => value.status === 'completed',
     'thread-backed recursive size calculation',
   );

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type * as ThreeModule from 'three';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import ModelPreview from '../src/renderer/previews/modules/ModelPreview';
@@ -6,7 +7,7 @@ import type { PreviewContext } from '../src/renderer/previews/contracts';
 
 const disposedWhileConnected = vi.hoisted(() => [] as boolean[]);
 vi.mock('three', async (original) => ({
-  ...(await original<typeof import('three')>()),
+  ...(await original<typeof ThreeModule>()),
   // Keep real OrbitControls and React teardown; only WebGL is absent in jsdom.
   WebGLRenderer: class {
     domElement = document.createElement('canvas');

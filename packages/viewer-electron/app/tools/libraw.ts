@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { x as extract } from 'tar';
 import { download, hash, run } from './processors';
+import { compatibleMacOSMinimum } from './native-build/macos-target';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = {
@@ -21,11 +22,18 @@ export async function prepareRawProcessor(minimum: string, arch = process.arch) 
   const existing = (await readFile(descriptor, 'utf8')
     .then(JSON.parse)
     .catch(() => undefined)) as
-    | { source: typeof source; minimum: string; helperHash: string; files: Record<string, string> }
+    | {
+        source: typeof source;
+        minimum: string;
+        arch: string;
+        helperHash: string;
+        files: Record<string, string>;
+      }
     | undefined;
   if (existing) {
     if (
-      existing.minimum !== minimum ||
+      !compatibleMacOSMinimum(existing.minimum, minimum) ||
+      existing.arch !== arch ||
       existing.helperHash !== helperHash ||
       JSON.stringify(existing.source) !== JSON.stringify(source)
     )

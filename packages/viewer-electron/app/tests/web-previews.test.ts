@@ -1,3 +1,5 @@
+import type * as FileSystemModule from 'node:fs/promises';
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
 import { request as httpRequest } from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { mkdir, open, readFile, realpath, symlink, writeFile, lstat } from 'node:fs/promises';
@@ -9,7 +11,7 @@ import { webLimits } from '../src/desktop/previews/web/policy';
 
 const replaced = vi.hoisted(() => new Set<string>());
 vi.mock('node:fs/promises', async (original) => {
-  const actual = await original<typeof import('node:fs/promises')>();
+  const actual = await original<typeof FileSystemModule>();
   return {
     ...actual,
     lstat: async (...args: Parameters<typeof actual.lstat>) => {
@@ -59,7 +61,7 @@ function readHttp(
   return new Promise<{
     status: number;
     text: string;
-    headers: import('node:http').IncomingHttpHeaders;
+    headers: IncomingHttpHeaders;
   }>((resolve, reject) => {
     const request = httpRequest(
       {
@@ -435,7 +437,7 @@ describe('explicit folder loopback servers', () => {
     ).rejects.toThrow('access');
     allowed = true;
     const server = await f.service.start(1, f.root, 'active-stream');
-    const client = await new Promise<import('node:http').IncomingMessage>((resolve, reject) => {
+    const client = await new Promise<IncomingMessage>((resolve, reject) => {
       const request = httpRequest(
         { host: '127.0.0.1', port: server.port, path: '/stream.css', agent: false },
         (incoming) => {

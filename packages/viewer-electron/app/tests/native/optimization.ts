@@ -31,7 +31,8 @@ interface Pipeline {
   toBuffer(): Promise<Buffer>;
 }
 const processors = path.resolve(
-  'packages/viewer-electron/app/assets',
+  path.dirname(binary),
+  '../Resources',
   `viewer-processors-${process.platform}-${process.arch}`,
 );
 const sharp = createRequire(import.meta.url)(path.join(processors, 'node_modules/sharp')) as (

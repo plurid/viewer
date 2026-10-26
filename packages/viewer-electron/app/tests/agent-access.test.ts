@@ -1,3 +1,4 @@
+import type * as FileSystemModule from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -11,7 +12,7 @@ import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const canonicalOverrides = vi.hoisted(() => new Map<string, string>());
 vi.mock('node:fs/promises', async (original) => {
-  const actual = await original<typeof import('node:fs/promises')>();
+  const actual = await original<typeof FileSystemModule>();
   return {
     ...actual,
     realpath: async (file: string) => canonicalOverrides.get(file) ?? actual.realpath(file),

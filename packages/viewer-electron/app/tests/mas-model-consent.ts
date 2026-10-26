@@ -1,4 +1,5 @@
 // Signed sandbox model-consent regression with a generated loopback endpoint, never a paid provider.
+import type { Socket, AddressInfo } from 'node:net';
 import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
@@ -49,7 +50,7 @@ await writeFile(
 type ObservedPlan = { status: string; error?: string };
 const requests: { url: string; body: unknown; mode: string; aborted?: boolean }[] = [];
 let mode = 'success';
-const sockets = new Set<import('node:net').Socket>();
+const sockets = new Set<Socket>();
 const server = http.createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) {
@@ -100,8 +101,7 @@ server.on('connection', (socket) => {
   socket.once('close', () => sockets.delete(socket));
 });
 await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-const endpoint =
-  'http://127.0.0.1:' + (server.address() as import('node:net').AddressInfo).port + '/v1';
+const endpoint = 'http://127.0.0.1:' + (server.address() as AddressInfo).port + '/v1';
 const provider = {
   id: 'generated-native-model',
   name: 'Generated local endpoint',

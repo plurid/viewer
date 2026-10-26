@@ -118,6 +118,7 @@ it('clears the prior saved acknowledgement when the output draft changes', async
   await act(async () => {
     receiveJob({
       id: 'export-job',
+      revision: 1,
       kind: 'convert',
       status: 'completed',
       sources: files.map((file) => file.path),
@@ -125,7 +126,11 @@ it('clears the prior saved acknowledgement when the output draft changes', async
       errors: [],
       itemsTotal: 1,
       itemsDone: 1,
-    } as OperationJob);
+      bytesDone: 0,
+      bytesTotal: 0,
+      errorCount: 0,
+      undoable: false,
+    } satisfies OperationJob);
   });
   await screen.findByText('1 PDF saved');
   fireEvent.change(screen.getByLabelText('PDF output name'), { target: { value: 'Another.pdf' } });

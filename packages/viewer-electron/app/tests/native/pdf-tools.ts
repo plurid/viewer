@@ -25,7 +25,8 @@ await Promise.all([mkdir(files), mkdir(profile)]);
 const first = path.join(files, 'Materials.pdf'),
   second = path.join(files, 'Scanned notes.pdf');
 const processors = path.resolve(
-  'packages/viewer-electron/app/assets',
+  path.dirname(binary),
+  '../Resources',
   `viewer-processors-${process.platform}-${process.arch}`,
 );
 const sharp = createRequire(import.meta.url)(path.join(processors, 'node_modules/sharp'));

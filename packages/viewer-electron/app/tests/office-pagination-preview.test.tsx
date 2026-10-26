@@ -85,7 +85,7 @@ it('pages, jumps with original row numbers, remembers each sheet and rejects inv
   );
   render(<OfficePreview {...current} />);
   await screen.findByText('Data:1');
-  fireEvent.click(screen.getByRole('button', { name: 'Next', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   await screen.findByText('Data:101');
   fireEvent.change(screen.getByLabelText('Worksheet'), { target: { value: 'Other' } });
   await screen.findByText('Other:1');
@@ -113,7 +113,7 @@ it('cancels superseded pages and prevents an older completion from replacing the
   });
   render(<OfficePreview {...current} />);
   await screen.findByText('Data:1');
-  fireEvent.click(screen.getByRole('button', { name: 'Next', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   expect(screen.queryByTestId('page-cells')).toBeNull();
   fireEvent.change(screen.getByLabelText('Worksheet'), { target: { value: 'Other' } });
   await waitFor(() => expect(waiting).toHaveLength(2));

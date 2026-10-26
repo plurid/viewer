@@ -23,8 +23,8 @@ export default tseslint.config(
     rules: { 'no-restricted-syntax': ['error', importType, ...removal] },
   },
   {
-    files: ['tests/**/*.ts', 'tools/**/*.ts', '*.ts'],
-    rules: { 'no-restricted-syntax': ['error', ...removal] },
+    files: ['tests/**/*.ts', 'tests/**/*.tsx', 'tools/**/*.ts', '*.ts'],
+    rules: { 'no-restricted-syntax': ['error', importType, ...removal] },
   },
   {
     files: ['src/renderer/**/*.ts', 'src/renderer/**/*.tsx', 'src/renderer.tsx'],

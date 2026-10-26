@@ -9,6 +9,7 @@
   "include": [
     "*.ts",
     "tests/**/*.ts",
+    "tests/**/*.tsx",
     "tools/**/*.ts",
     "src/domain/**/*.ts",
     "src/desktop/**/*.ts",

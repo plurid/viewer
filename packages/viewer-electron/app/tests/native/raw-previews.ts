@@ -7,6 +7,7 @@ import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contrac
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
+import { remoteSamples } from '../../tools/playground/catalog';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { verifyRawOrientation } from './raw-orientation';
@@ -28,6 +29,9 @@ const hashes: Record<string, string> = {};
 for (const name of originals) {
   const file = path.join(defaultPlaygroundDirectory, 'previews/images/camera-raw', name);
   hashes[name] = await hash(file);
+  const reference = remoteSamples.find((sample) => path.basename(sample.path) === name);
+  assert.ok(reference, 'Pinned camera fixture: ' + name);
+  assert.equal(hashes[name], reference.sha256, 'Pinned original camera bytes: ' + name);
   await copyFile(file, path.join(files, name), 1);
 }
 await writeFile(path.join(files, 'Broken.nef'), 'generated invalid camera input', { flag: 'wx' });
@@ -87,7 +91,9 @@ const state: SavedState = {
   ],
 };
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
-await writeFile(path.join(profile, 'settings.json'), JSON.stringify(settings), { flag: 'wx' });
+await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1, settings, ui }), {
+  flag: 'wx',
+});
 const orientation = await verifyRawOrientation(
   path.resolve(path.dirname(binary), '../Resources'),
   root,

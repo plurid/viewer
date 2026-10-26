@@ -412,7 +412,16 @@ export function useWorkspaceController({
           throw new Error(
             'This search evidence is stale. Refresh the index before opening its location.',
           );
-        controller.open(entry, parentPaneID, { evidence });
+        // Search hits also carry transient coverage metadata. Persist only the
+        // navigation contract so one result cannot block all workspace saves.
+        controller.open(entry, parentPaneID, {
+          evidence: {
+            path: evidence.path,
+            version: evidence.version,
+            anchor: evidence.anchor,
+            quote: evidence.quote,
+          },
+        });
       },
       captureLayout() {
         const api = engine.current;

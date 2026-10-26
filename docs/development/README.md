@@ -14,6 +14,7 @@ feature owner before introducing another registry, cache, mutation path or persi
 
 - [Architecture and boundaries](architecture.md)
 - [Adding a preview](previews.md)
+- [Runtime dependencies](dependencies.md)
 - [Sample playground](playground.md)
 - [Performance and resource audits](performance.md)
 - [Native and distribution release gates](releases.md)

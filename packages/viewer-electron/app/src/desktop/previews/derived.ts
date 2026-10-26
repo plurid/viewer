@@ -4,7 +4,7 @@ import { fileCoordination } from '../files/file-coordination';
 import { previewContains } from './preview-work';
 import { runProcessor } from '../transforms/process';
 import { imageDimensions } from './image-dimensions';
-import type { PreviewDerivationKind } from '../../domain/previews/derivations';
+import { PreviewDerivation, type PreviewDerivationKind } from '../../domain/previews/derivations';
 import type { OfficeLayoutMetadata } from '../../domain/previews/documents/layout';
 
 export type DerivedMode = PreviewDerivationKind;
@@ -35,6 +35,7 @@ interface Cached {
   file: string;
   value: DerivedRendition;
   pins: number;
+  retired: boolean;
 }
 interface Pending {
   file: string;
@@ -57,6 +58,44 @@ export class DerivedPreviews {
     private decode: Decoder,
     private budget = 128 * 1024 * 1024,
   ) {}
+  private unpin(entry: Cached): void {
+    entry.pins--;
+    if (!entry.pins && entry.retired) this.bytes -= entry.value.data.length;
+  }
+  private retire(key: string, entry: Cached): void {
+    this.cached.delete(key);
+    entry.retired = true;
+    // Existing leases keep their allocation accounted until their final release.
+    if (!entry.pins) this.bytes -= entry.value.data.length;
+  }
+  private wait(item: Pending, signal: AbortSignal): Promise<Cached> {
+    item.users++;
+    return new Promise<Cached>((resolve, reject) => {
+      let done = false;
+      const finish = (settle: () => void) => {
+        if (done) return;
+        done = true;
+        signal.removeEventListener('abort', cancel);
+        item.users--;
+        if (!item.users) item.abort.abort();
+        settle();
+      };
+      const cancel = () => finish(() => reject(signal.reason ?? new Error('Preview cancelled.')));
+      signal.addEventListener('abort', cancel, { once: true });
+      if (signal.aborted) cancel();
+      item.work.then(
+        (value) =>
+          finish(() => {
+            if (value.retired) reject(new Error('Preview source invalidated.'));
+            else {
+              value.pins++;
+              resolve(value);
+            }
+          }),
+        (error: unknown) => finish(() => reject(error)),
+      );
+    });
+  }
   async read(
     file: string,
     mode: DerivedMode,
@@ -96,14 +135,8 @@ export class DerivedPreviews {
         if (this.pending.size >= 8)
           throw new Error('Too many local previews are opening. Close a preview and try again.');
         const abort = new AbortController();
-        const item: Pending = {
-          file: actual,
-          abort,
-          users: 0,
-          work: Promise.resolve(undefined as never),
-        };
         // One active expensive decoder. A cancelled queued job never starts.
-        item.work = this.tail
+        const work = this.tail
           .catch(() => {})
           .then(async () => {
             abort.signal.throwIfAborted();
@@ -147,14 +180,13 @@ export class DerivedPreviews {
             for (const [oldKey, old] of this.cached) {
               if (this.bytes + value.data.length <= this.budget) break;
               if (old.pins) continue;
-              this.cached.delete(oldKey);
-              this.bytes -= old.value.data.length;
+              this.retire(oldKey, old);
             }
             if (this.bytes + value.data.length > this.budget)
               throw new Error(
                 'The local preview cache is full. Close a rendered preview and try again.',
               );
-            const saved = { file: actual, value, pins: 0 };
+            const saved: Cached = { file: actual, value, pins: 0, retired: false };
             this.cached.set(key, saved);
             this.bytes += value.data.length;
             return saved;
@@ -162,31 +194,12 @@ export class DerivedPreviews {
           .finally(() => {
             if (this.pending.get(key) === item) this.pending.delete(key);
           });
+        const item: Pending = { file: actual, abort, users: 0, work };
         this.tail = item.work;
         this.pending.set(key, item);
         pending = item;
       }
-      const item = pending;
-      item.users++;
-      entry = await new Promise<Cached>((resolve, reject) => {
-        let done = false;
-        const finish = (error?: unknown, value?: Cached) => {
-          if (done) return;
-          done = true;
-          signal.removeEventListener('abort', cancel);
-          item.users--;
-          if (!item.users) item.abort.abort();
-          if (error) reject(error);
-          else {
-            value!.pins++;
-            resolve(value!);
-          }
-        };
-        const cancel = () => finish(signal.reason ?? new Error('Preview cancelled.'));
-        signal.addEventListener('abort', cancel, { once: true });
-        if (signal.aborted) cancel();
-        item.work.then((value) => finish(undefined, value), finish);
-      });
+      entry = await this.wait(pending, signal);
     }
     // Even cache hits recheck authority and exact source identity.
     try {
@@ -195,8 +208,9 @@ export class DerivedPreviews {
       if (!same(before, await lstat(actual)) || actual !== (await realpath(file)))
         throw new Error('This source changed. Reopen its preview.');
       signal.throwIfAborted();
+      if (entry.retired) throw new Error('Preview source invalidated.');
     } catch (error) {
-      entry.pins--;
+      this.unpin(entry);
       throw error;
     }
     this.cached.delete(key);
@@ -207,7 +221,7 @@ export class DerivedPreviews {
       release: () => {
         if (held) {
           held = false;
-          entry!.pins--;
+          this.unpin(entry!);
         }
       },
     };
@@ -215,12 +229,7 @@ export class DerivedPreviews {
   invalidate(root?: string) {
     for (const [key, item] of this.cached)
       if (!root || previewContains(root, item.file)) {
-        // Released resources normally unpin first. A still pinned lease retains its
-        // budget until its final release; it cannot become an uncounted allocation.
-        if (!item.pins) {
-          this.cached.delete(key);
-          this.bytes -= item.value.data.length;
-        }
+        this.retire(key, item);
       }
     for (const item of this.pending.values())
       if (!root || previewContains(root, item.file))
@@ -251,11 +260,13 @@ export function rawDecoder(helper: string): Decoder {
     });
     const line = bytes.indexOf(10);
     if (line < 0 || line > 100) throw new Error('The RAW helper returned an invalid preview.');
-    const metadata = JSON.parse(bytes.subarray(0, line).toString()) as { kind?: string };
+    const metadata: unknown = JSON.parse(bytes.subarray(0, line).toString());
+    const kind =
+      metadata && typeof metadata === 'object' && 'kind' in metadata ? metadata.kind : undefined;
     const data = bytes.subarray(line + 1),
       dimensions = imageDimensions(data);
     if (
-      !['camera', 'raw'].includes(metadata.kind ?? '') ||
+      (kind !== PreviewDerivation.Camera && kind !== PreviewDerivation.Raw) ||
       !dimensions ||
       data[0] !== 255 ||
       data[1] !== 216 ||
@@ -265,7 +276,7 @@ export function rawDecoder(helper: string): Decoder {
     return {
       data,
       extension: 'jpg',
-      kind: metadata.kind as 'camera' | 'raw',
+      kind,
       decoder: 'LibRaw 0.22.2',
     };
   };

@@ -134,7 +134,7 @@ it('gathers typed parameters once and passes them literally through successful s
   expect(listeners.size).toBe(0);
 });
 it('places commands inside nested palette folders while keeping search direct', () => {
-  const row = {
+  const row: ResolvedCommand = {
     id: 'custom.test',
     label: 'Test',
     group: 'Actions',
@@ -142,8 +142,14 @@ it('places commands inside nested palette folders while keeping search direct', 
     aliases: [],
     primary: false,
     source: 'window',
-    context: {},
-  } as ResolvedCommand;
+    context: {
+      scope: 'window',
+      workspaceID: activeWorkspace().id,
+      selection: [],
+      clipboard: null,
+      jobs: [],
+    },
+  };
   const root = commandFolders([row], [row], [], '');
   expect(root.rows.map((row) => row.label)).toEqual(['Development']);
   expect(commandFolders([row], [row], ['Development'], '').rows.map((row) => row.label)).toEqual([

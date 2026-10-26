@@ -1,6 +1,7 @@
 import { open, type FileHandle } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
+import { optimizerDirectory } from './processor-paths';
 import { z } from 'zod';
 import {
   imageTransformSchema,
@@ -54,8 +55,7 @@ const compression = [
   '--object-streams=generate',
   '--remove-unreferenced-resources=yes',
 ];
-export const pdfProcessor = (root: string) =>
-  path.join(root.replace('viewer-processors-', 'viewer-optimizers-'), 'qpdf');
+export const pdfProcessor = (root: string) => path.join(optimizerDirectory(root), 'qpdf');
 
 /** Inspect the held source, including compressed signature dictionaries. No passwords,
  * file paths from PDF objects, scripts or arbitrary processor arguments are followed. */

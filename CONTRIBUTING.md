@@ -14,6 +14,9 @@ Read [AGENTS.md](AGENTS.md), including the exact-scope removal policy. Inspect t
 implementation and tests. Preserve unrelated edits and generated fixtures. Prefer the existing
 feature owner to a parallel service or registry.
 
+Use top-level `import type` declarations. Inline type imports are rejected in source, tests and
+tools; React test fixtures are included in type checking.
+
 ## Keep documentation useful
 
 - Put user instructions in a guide and exact syntax/limits in one reference.

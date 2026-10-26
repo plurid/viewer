@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { writeFile } from 'node:fs/promises';
+import { realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DerivedPreviews } from '../src/desktop/previews/derived';
 import { Resources } from '../src/desktop/previews/resources';
@@ -8,7 +8,7 @@ import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 const caches: DerivedPreviews[] = [];
 beforeEach(async () => {
-  root = await temporaryRoot('viewer-derived-');
+  root = await realpath(await temporaryRoot('viewer-derived-'));
 });
 afterEach(async () => {
   await Promise.all(caches.map((cache) => cache.close()));
@@ -102,6 +102,81 @@ describe('bounded derived preview leases', () => {
     expect(b.value.data.length).toBe(8);
     b.release();
   });
+  it('retires invalidated pinned bytes until the final release and never serves them as a warm hit', async () => {
+    const file = path.join(root, 'camera.nef');
+    await writeFile(file, 'unchanged source');
+    const decode = vi.fn(async () => value());
+    const service = cache(async () => {}, decode, 8);
+    const first = await service.read(file, 'camera', signal());
+    const second = await service.read(file, 'camera', signal());
+
+    service.invalidate(file);
+    await expect(service.read(file, 'camera', signal())).rejects.toThrow('cache is full');
+    first.release();
+    first.release();
+    await expect(service.read(file, 'camera', signal())).rejects.toThrow('cache is full');
+
+    second.release();
+    const fresh = await service.read(file, 'camera', signal());
+    expect(fresh.value.data).not.toBe(first.value.data);
+    fresh.release();
+    const warm = await service.read(file, 'camera', signal());
+    expect(warm.value.data).toBe(fresh.value.data);
+    expect(decode).toHaveBeenCalledTimes(4);
+    warm.release();
+  });
+
+  it('keeps a replacement rendition cached when the retired lease for the same source closes', async () => {
+    const file = path.join(root, 'camera.nef');
+    await writeFile(file, 'unchanged source');
+    const decode = vi.fn(async () => value());
+    const service = cache(async () => {}, decode, 16);
+    const old = await service.read(file, 'camera', signal());
+    service.invalidate(root);
+    const fresh = await service.read(file, 'camera', signal());
+    expect(fresh.value.data).not.toBe(old.value.data);
+    old.release();
+    old.release();
+    fresh.release();
+    const warm = await service.read(file, 'camera', signal());
+    expect(warm.value.data).toBe(fresh.value.data);
+    expect(decode).toHaveBeenCalledTimes(2);
+    warm.release();
+  });
+
+  it('rejects a warm lease invalidated during its final asynchronous authority check', async () => {
+    const file = path.join(root, 'camera.nef');
+    await writeFile(file, 'unchanged source');
+    let paused = false;
+    let accesses = 0;
+    let resume!: () => void;
+    const access = async () => {
+      if (paused && ++accesses === 3) {
+        paused = false;
+        await new Promise<void>((resolve) => {
+          resume = resolve;
+        });
+      }
+    };
+    const decode = vi.fn(async () => value());
+    const service = cache(access, decode, 8);
+    const first = await service.read(file, 'camera', signal());
+    first.release();
+
+    paused = true;
+    const pending = service.read(file, 'camera', signal());
+    const rejected = expect(pending).rejects.toThrow('invalidated');
+    await vi.waitFor(() => expect(resume).toBeDefined());
+    service.invalidate(file);
+    resume();
+    await rejected;
+
+    const fresh = await service.read(file, 'camera', signal());
+    expect(fresh.value.data).not.toBe(first.value.data);
+    expect(decode).toHaveBeenCalledTimes(2);
+    fresh.release();
+  });
+
   it('rechecks permission on a warm hit and rejects source mutations during decoding', async () => {
     const file = path.join(root, 'camera.nef');
     await writeFile(file, 'source');

@@ -17,6 +17,10 @@ Types cover main, preload, renderer and tooling. Tests cover pure rules, compone
 desktop services. Passing these does not qualify native pickers, Finder, physical accessibility or a
 distribution package.
 
+Tooling types include both `.ts` and React `.tsx` test files. Lint requires top-level type imports
+throughout source, tests and tools. Source CI also checks production dependency advisories; see
+[runtime dependencies](dependencies.md).
+
 ## Browser and packaged checks
 
 `pnpm test:browser` serves the renderer with isolated filesystem fixtures. Its

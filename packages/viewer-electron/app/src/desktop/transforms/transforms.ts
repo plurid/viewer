@@ -10,6 +10,7 @@ import { compileMedia, mediaDemuxer, mediaInfo } from './media';
 import type { ImageInspection } from './image';
 import { inspectPDF, pdfProcessor, transformPDF } from './pdf';
 import { jpegMetadata } from './jpeg-metadata';
+import { optimizerDirectory } from './processor-paths';
 
 interface Source {
   file: string;
@@ -226,10 +227,7 @@ export class Transforms implements TransformExecutor {
               let data: Buffer;
               if (plan.lossless && plan.format === 'jpeg') {
                 jpegMetadata(input, plan.metadata);
-                const optimizer = path.join(
-                  this.root.replace('viewer-processors-', 'viewer-optimizers-'),
-                  'jpegtran',
-                );
+                const optimizer = path.join(optimizerDirectory(this.root), 'jpegtran');
                 const encoded = await runProcessor(
                   optimizer,
                   ['-copy', 'all', '-optimize', '-progressive', '-maxmemory', '256m'],
