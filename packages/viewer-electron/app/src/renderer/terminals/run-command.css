@@ -1,0 +1,48 @@
+.run-command-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 130px);
+  overflow: auto;
+}
+.run-command-folder {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.run-command-dialog textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--field);
+  color: var(--ink);
+  font:
+    13px/1.5 Menlo,
+    monospace;
+  caret-color: var(--accent);
+}
+.run-command-dialog textarea:focus-visible {
+  border-color: var(--accent);
+}
+.run-command-dialog footer {
+  flex-wrap: wrap;
+}
+.run-command-recent {
+  max-height: 180px;
+  overflow: auto;
+}
+.run-command-recent > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.run-command-recent > button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

@@ -3,6 +3,38 @@
 Accepted October 25, 2026. This ledger records implementation and actual
 qualification; generated fixtures and build artifacts remain retained.
 
+## Current ordered follow-up
+
+| Delivery | Status and evidence |
+| --- | --- |
+| 0 · Commands and documents | Complete: redundant menu tooltips removed, Layout naming, manual shell commands with progress/Stop/save-as-action, private Markdown notes/checklists kept after view closure. 1,837 tests and packaged smoke pass; isolated native acceptance `viewer-native-notes-commands-Acsrkw`. |
+| 1 · Independent RAW | Complete: pinned LibRaw helper, camera/RAW modes, bounded shared cache, all-eight-orientation pixel checks and camera recovery after failed RAW rendering. 1,842 tests pass; final native `viewer-native-raw-gYVvRk`, candidate `/private/tmp/viewer-raw-20261025-E/Viewer.app`. |
+| 2 · Video compatibility | Complete: bounded local H.264/AAC copy, actual picture/audio/seeking, cancellation, warm reuse and error recovery. 1,847 tests pass; native `viewer-native-video-copy-J9M9kk`, candidate `/private/tmp/viewer-video-20261025-C/Viewer.app`. |
+| 3 · Office fidelity | Complete: 1,855 tests pass; actual formatted/stored values, cross-page merges, embedded images, source-bound authority, dark/light/narrow views and public Office files pass. Native `viewer-native-office-fidelity-ydDDzz`; independent UI review ship. |
+| 4 · Worktree creation | Complete: typed new/existing branch creation, pinned revisions, editable sibling paths, occupied-branch recovery, linked folder/Git views and cold restore. 1,861-test stage suite passes; final review correction passes native/25 targeted tests and is scored resolved/ship. |
+| 5 · Task areas | Complete: named checkout contexts, durable tool references, private receipts/history, reopen/arrange and no automatic command replay. The combined 1,873-test suite, seven native lifecycle checks, packaged smoke and independent UI review pass. |
+
+These statuses describe delivered evidence, not feature promises for the running
+older app. Isolated candidates never replace the user's normal Viewer instance.
+
+The combined follow-up candidate is
+`/private/tmp/viewer-followup-validated-20261025-A/Viewer.app`.
+Its sibling `candidate.json` records the source/lockfile hashes and retained
+reports. `runtime-equivalence.json` proves its executable, frameworks, resources,
+ASAR and Info.plist are identical to the final native/smoke-tested task candidate.
+Only test assertions, capture settling and test-code formatting changed after
+that candidate; production code did not change.
+
+The final combined suite passes **1,873 tests in 266 files**, without failures
+or skips. The task native run retains 11 captures and seven checks in
+`viewer-native-task-areas-r6q4gh`, including cold restoration, durable documents
+and receipts, terminal no-replay, server reattachment and browser-port rebinding.
+The settled receipt-error supplement is in `viewer-task-recovery-capture-6nyRDv`.
+The complete packaged smoke passes with fixture `viewer-verification-vzqoN0`.
+All generated files and earlier attempts remain retained. See
+[verification](verification.md#october-25-ordered-follow-up-video-and-office-fidelity)
+for exact logs and scope.
+
 ## Delivered behavior
 
 - Foreground previews no longer share their bounded native read queue with
@@ -35,8 +67,8 @@ qualification; generated fixtures and build artifacts remain retained.
   Signed PDFs are refused. Existing JPEG scans may not shrink.
 - Workflows and MCP can prepare reviewed typed transformations. They gain no raw
   execution, removal-approval bypass or authenticated-browser access. Saved state
-  is v8, with pre-migration backups and private browser/draft references excluded
-  from portable projects.
+  is now v10 for private note/task/receipt views, with pre-migration backups and
+  private browser/draft references excluded from portable projects.
 
 ## Executed evidence
 

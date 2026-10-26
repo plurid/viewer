@@ -20,6 +20,14 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  notes: (request) => invoke('notes', request),
+  receipts: (request) => invoke('receipts', request),
+  runCommand: async () => {
+    throw new Error('Commands require the desktop app.');
+  },
+  commandDraft: async () => {
+    throw new Error('Command drafts require the desktop app.');
+  },
   pdfInspect: async () => {
     throw new Error('PDF tools require the desktop app.');
   },
@@ -181,7 +189,9 @@ const api: ViewerAPI = {
   release: (id) => invoke('release', id),
   archive: (id) => invoke('archive', id),
   archiveEntry: (id, name) => invoke('archiveEntry', id, name),
-  imageRendition: (id) => invoke('imageRendition', id),
+  imageRendition: (id, request) => invoke('imageRendition', id, request),
+  videoRendition: (id, requestID) => invoke('videoRendition', id, requestID),
+  officeImage: (id, part, requestID) => invoke('officeImage', id, part, requestID),
   printPDF: (id, password) => invoke('printPDF', id, password),
   save: (state) => invoke('save', state),
   flushed: (token, result) => invoke('flushed', token, result),

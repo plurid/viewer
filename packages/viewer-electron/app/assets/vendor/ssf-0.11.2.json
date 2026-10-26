@@ -1,0 +1,9 @@
+{
+  "version": "0.11.2",
+  "url": "https://registry.npmjs.org/ssf/-/ssf-0.11.2.tgz",
+  "integrity": "sha512-+idbmIXoYET47hH+d7dfm2epdOMUDjqcB4648sTZ+t2JwoyBFL/insLfB/racrDmsKB3diwsDA696pZMieAC5g==",
+  "sourceSHA256": "27b543bb7440feb42c821ab58fc401a60d4affbc611d96bcd6bad31b09e5cb87",
+  "license": "Apache-2.0",
+  "adapter": "Only the final CommonJS export is replaced with export default SSF. The standalone distribution includes its fraction formatter; no external runtime dependency.",
+  "moduleSHA256": "83c41dba091e61f17016645d3d9c82b0569ab327eafce86986a3cba182dc4d98"
+}

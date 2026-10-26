@@ -244,6 +244,30 @@ export class GitReader {
     };
   }
   /** Also used by explicit discovery under its own direct-build policy, independent of badges. */
+  async localBranches(directory: string): Promise<{ name: string; commit: string }[]> {
+    const output = (
+      await this.command(
+        directory,
+        ['for-each-ref', '--format=%(refname)%00%(objectname)', 'refs/heads/'],
+        1024 * 1024,
+      )
+    ).toString('utf8');
+    if (!output) return [];
+    const lines = output.replace(/\n$/, '').split('\n');
+    if (lines.length > 512) throw new Error('Worktree creation supports up to 512 local branches.');
+    return lines.map((line) => {
+      const [ref, commit, extra] = line.split('\0');
+      if (
+        !ref?.startsWith('refs/heads/') ||
+        !commit ||
+        extra !== undefined ||
+        !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)
+      )
+        throw new Error('Git returned an invalid local branch.');
+      return { name: ref.slice(11), commit };
+    });
+  }
+  /** Also used by explicit discovery under its own direct-build policy, independent of badges. */
   async worktrees(file: string) {
     this.check();
     const directory = await this.directory(file);

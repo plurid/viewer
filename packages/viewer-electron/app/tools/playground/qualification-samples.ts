@@ -7,7 +7,14 @@ const records = [
     'document/saut_page.docx',
     2959626,
     '748f34f3dc285f4d48474930758b2c37382d17965545a1729cb7400cada793da',
-    'Word document with page breaks and embedded media; semantic content preview, not Word layout',
+    'Word document with page breaks; semantic content preview, not Word layout',
+  ],
+  [
+    'poi-various-pictures.docx',
+    'document/VariousPictures.docx',
+    103677,
+    'c1eecbca7de9f99e21c677e1d5b045eaa1d5a442eff4c82f0cbe9af93726a070',
+    'Word body with embedded PNG/JPEG and unsupported WMF/EMF pictures; bounded images and explicit placeholders',
   ],
   [
     'poi-deep-data.xlsx',

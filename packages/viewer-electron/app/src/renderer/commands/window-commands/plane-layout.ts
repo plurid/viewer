@@ -12,7 +12,7 @@ export function planeLayoutCommands({ actions, paneScope }: WindowScopes): Comma
     ...(['move', 'resize'] as const).map((mode) => ({
       id: `plane-${mode}`,
       label: mode === 'move' ? 'Move plane' : 'Resize plane',
-      group: 'Size & position',
+      group: 'Layout',
       icon: mode === 'move' ? ('move' as const) : ('resize' as const),
       aliases:
         mode === 'move' ? ['drag plane', 'move manually'] : ['resize manually', 'size plane'],
@@ -23,7 +23,7 @@ export function planeLayoutCommands({ actions, paneScope }: WindowScopes): Comma
     {
       id: 'plane-fill',
       label: 'Fill workspace',
-      group: 'Size & position',
+      group: 'Layout',
       icon: 'frame',
       aliases: ['maximize plane', 'full size', 'full width and height'],
       when: paneScope,
@@ -36,7 +36,7 @@ export function planeLayoutCommands({ actions, paneScope }: WindowScopes): Comma
       commands.push({
         id: `plane-${axis}-${preset.id}`,
         label: `${preset.label} ${axis}`,
-        group: 'Size & position',
+        group: 'Layout',
         icon: axis === 'width' ? 'side-by-side' : 'stacked',
         aliases: [
           `${preset.fraction[0]}/${preset.fraction[1]} ${axis}`,
@@ -50,12 +50,15 @@ export function planeLayoutCommands({ actions, paneScope }: WindowScopes): Comma
     commands.push({
       id: `plane-align-${alignment.id}`,
       label: alignment.label,
-      group: 'Size & position',
+      group: 'Layout',
       icon: alignment.icon,
       aliases: [`position plane ${alignment.id}`, `tile ${alignment.id}`],
       when: paneScope,
       run: (context) =>
         actions.workspace.layoutPlane(target(context), { [alignment.axis]: alignment.position }),
     });
-  return commands;
+  return commands.map((command) => ({
+    ...command,
+    aliases: [...(command.aliases ?? []), 'size & position', 'layout'],
+  }));
 }

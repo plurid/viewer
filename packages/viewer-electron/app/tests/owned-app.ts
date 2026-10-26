@@ -17,12 +17,13 @@ interface RuntimeResult<T> {
 export async function ownedApp(
   binary: string,
   profile: string,
-  options: { mode?: NativeWindowMode } = {},
+  options: { mode?: NativeWindowMode; environment?: NodeJS.ProcessEnv } = {},
 ) {
   const owned = await adoptGeneratedProfile({
     binary,
     profile,
     mode: options.mode ?? 'hidden',
+    environment: options.environment,
     label: 'native-supplemental',
     evidenceRoot: path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),

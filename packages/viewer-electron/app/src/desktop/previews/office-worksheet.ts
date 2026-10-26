@@ -2,6 +2,7 @@ import type { DocumentData } from '../../domain/services';
 import type { WorkbookRow, WorkbookSheet } from '../../domain/previews/documents/office';
 import { columnName } from '../../domain/previews/documents/office';
 import { attribute, localName, OfficeXMLStream } from './office-xml';
+import type { CellFormatter } from './office-formatting';
 
 export interface WorkbookBudget {
   cells: number;
@@ -19,6 +20,7 @@ export interface WorksheetReadWindow {
 interface Cell {
   column: number;
   type: string;
+  style?: string;
   raw: string;
   inline: string;
   formula: string;
@@ -27,7 +29,7 @@ interface Cell {
   hasInline: boolean;
   rawOverflow: boolean;
 }
-function cellAddress(reference: string): { row: number; column: number } {
+export function cellAddress(reference: string): { row: number; column: number } {
   const match = reference.match(/^([A-Z]{1,3})([1-9]\d{0,6})$/);
   if (!match) throw new Error('Invalid worksheet cell address.');
   const column = [...match[1]!].reduce((n, letter) => n * 26 + letter.charCodeAt(0) - 64, 0),
@@ -45,7 +47,13 @@ export function worksheetReader(
   budget: WorkbookBudget,
   evidence: DocumentData['evidence'],
   window?: WorksheetReadWindow,
+  format?: CellFormatter,
+  anchors?: ReadonlySet<string>,
 ): OfficeXMLStream {
+  const anchorRows = anchors
+    ? new Set([...anchors].map((reference) => cellAddress(reference).row))
+    : undefined;
+  const merges: NonNullable<WorkbookSheet['merges']> = [];
   const trail: string[] = [];
   let previousRow = 0,
     previousColumn = 0,
@@ -91,6 +99,7 @@ export function worksheetReader(
     row.cells.push({
       column: cell.column,
       value: bounded,
+      ...format?.(bounded, cell.type, cell.style),
       ...(cell.hasFormula ? { formula, cached: cell.hasRaw } : {}),
     });
     sheet.columns = Math.max(sheet.columns, cell.column);
@@ -108,6 +117,37 @@ export function worksheetReader(
         const name = localName(node);
         trail.push(name);
         if (trail.length === 1 && name !== 'worksheet') throw new Error('Invalid worksheet part.');
+        if (trail.length === 3 && trail[1] === 'mergeCells' && name === 'mergeCell') {
+          const reference = attribute(node, 'ref') ?? '',
+            parts = reference.split(':');
+          if (parts.length !== 2) throw new Error('Invalid merged cell range.');
+          const first = cellAddress(parts[0]!),
+            last = cellAddress(parts[1]!);
+          if (last.row < first.row || last.column < first.column)
+            throw new Error('Invalid merged cell order.');
+          if (last.column > 256 || merges.length >= 1024) {
+            sheet.mergeLimited = true;
+            return;
+          }
+          if (
+            merges.some(
+              (merge) =>
+                first.row <= merge.toRow &&
+                last.row >= merge.fromRow &&
+                first.column <= merge.toColumn &&
+                last.column >= merge.fromColumn,
+            )
+          )
+            throw new Error('Overlapping merged cell ranges.');
+          merges.push({
+            fromRow: first.row,
+            toRow: last.row,
+            fromColumn: first.column,
+            toColumn: last.column,
+          });
+          sheet.merges = merges;
+          sheet.columns = Math.max(sheet.columns, last.column);
+        }
         if (trail[1] !== 'sheetData') return;
         if (trail.length === 3 && name === 'row') {
           rowNumber = Number(attribute(node, 'r') || previousRow + 1);
@@ -118,7 +158,8 @@ export function worksheetReader(
           previousColumn = 0;
           incompleteRow = false;
           snapshot = undefined;
-          if (window && (rowNumber < window.fromRow || window.nextRow !== undefined))
+          if (anchorRows && !anchorRows.has(rowNumber)) row = undefined;
+          else if (window && (rowNumber < window.fromRow || window.nextRow !== undefined))
             row = undefined;
           else if (sheet.rows.length < (window?.limit ?? 2000) && retain()) {
             snapshot = {
@@ -145,7 +186,8 @@ export function worksheetReader(
           )
             throw new Error('Duplicate or unordered worksheet cell.');
           previousColumn = location.column;
-          if (!row) cell = undefined;
+          if (!row || (anchors && !anchors.has(columnName(location.column) + rowNumber)))
+            cell = undefined;
           else if (location.column > 256 || !retain()) {
             cell = undefined;
             sheet.truncated = true;
@@ -154,6 +196,7 @@ export function worksheetReader(
             cell = {
               column: location.column,
               type: attribute(node, 't') || 'n',
+              style: attribute(node, 's'),
               raw: '',
               inline: '',
               formula: '',
@@ -214,7 +257,7 @@ export function worksheetReader(
             sheet.columns = snapshot.columns;
             sheet.truncated = snapshot.truncated;
             window.nextRow = rowNumber;
-          } else if (row) sheet.rows.push(row);
+          } else if (row && (!anchors || row.cells.length)) sheet.rows.push(row);
           row = undefined;
         }
         trail.pop();

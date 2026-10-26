@@ -19,6 +19,10 @@ async function fixture() {
     'assets/licenses/README.txt',
     'assets/licenses/opencascade.txt',
     'assets/licenses/occt-import-js.txt',
+    'assets/licenses/ssf-0.11.2.txt',
+    'assets/vendor/ssf-0.11.2.mjs',
+    'assets/vendor/ssf-0.11.2.d.mts',
+    'assets/vendor/ssf-0.11.2.json',
   ];
   for (const file of files) {
     const destination = path.join(appRoot, file);

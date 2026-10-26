@@ -16,6 +16,7 @@ const terminalCommands = new Set([
   'open-tmux',
   'open-terminal-plane',
   'new-terminal-plane',
+  'run-command',
 ]);
 /** Built-in commands an agent may propose. Each acts only on the captured folder and
  * selection, opens a dialog the person completes, or changes the view. Everything

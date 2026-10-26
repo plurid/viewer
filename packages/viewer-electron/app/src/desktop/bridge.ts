@@ -18,13 +18,14 @@ import {
 import type { FileChange } from '../domain/files/changes';
 import { AgentRequests } from './agents/agent-requests';
 import { agentCommandID } from '../domain/agents/safety';
-import type { CapturedTarget } from '../domain/automation/actions';
+import type { CapturedTarget, CustomAction } from '../domain/automation/actions';
 import type {
   AgentNavigation,
   AgentWorkspaceSnapshot,
   CommandDescriptor,
 } from '../domain/agents/requests';
 import { Executions } from './actions/executions';
+import { CommandReceipts } from './actions/receipts';
 import { ExecutionConfirmations } from './actions/execution-confirmations';
 import { ProtectedPaths } from './files/protected-paths';
 import { Terminals } from './terminals/terminals';
@@ -64,7 +65,7 @@ import { newPlaneFolder, type ActionContext, type ApplicationSettings } from '..
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import type { ApiMethod, ApiResult, DesktopEvent, FileEntry } from '../domain/contracts';
+import type { ApiMethod, ApiResult, DesktopEvent, FileEntry, Resource } from '../domain/contracts';
 import { absolute, entry, list } from './files/filesystem';
 import { isPackage } from '../domain/files/entries';
 import { spotlightTagged } from './search/spotlight';
@@ -73,7 +74,11 @@ import { quickLookRender } from './native/quick-look-render';
 import { Operations } from './operations/operations';
 import { TextFiles } from './editing/text-files';
 import { TextBuffers } from './editing/text-buffers';
+import { Notes } from './editing/notes';
 import { Resources } from './previews/resources';
+import { DerivedPreviews, rawDecoder } from './previews/derived';
+import { videoDecoder } from './previews/video-rendition';
+import { officeImageParts } from '../domain/previews/documents/office';
 import { Search } from './search/search';
 import { Storage } from './persistence/storage';
 import { Watchers } from './files/watchers';
@@ -138,6 +143,7 @@ export class Desktop {
   readonly terminals: Terminals;
   readonly externalTerminals: ExternalTerminals;
   readonly executions: Executions;
+  readonly receipts: CommandReceipts;
   readonly resources: Resources;
   readonly webPreviews: WebPreviews;
   readonly transforms: Transforms;
@@ -157,6 +163,7 @@ export class Desktop {
   readonly operations: Operations;
   readonly texts: TextFiles;
   readonly buffers: TextBuffers;
+  readonly notes: Notes;
   readonly watchers: Watchers;
   readonly search: Search;
   readonly storage: Storage;
@@ -202,6 +209,7 @@ export class Desktop {
     { finish(error?: string): void; owner: number; command: string }
   >();
   private agentsEnabled?: boolean;
+  private pendingCommandDraft?: CustomAction;
   private agentsConfiguration: Promise<void> = Promise.resolve();
   private readonly flushes = new WindowFlushRequests();
   private flushing?: Promise<void>;
@@ -287,6 +295,7 @@ export class Desktop {
     this.worktrees = new GitWorktrees({
       available: () => !process.mas,
       access: (paths) => this.fileAccess.require(paths),
+      validateTarget: (owner, target) => validateGitTarget(target, this.gitWindow(owner)),
       owner: (owner) => {
         const record = this.windows.get(owner);
         return record?.role === 'viewer' && !record.window.isDestroyed()
@@ -351,8 +360,22 @@ export class Desktop {
       emit({ type: 'folder-changed', path: path.dirname(file) });
       void this.files.update(file).catch(() => {});
     });
-    this.resources = new Resources(access, (file, signal) =>
-      quickLookRender(file, undefined, signal),
+    const previewAssets = app.isPackaged
+      ? process.resourcesPath
+      : path.join(app.getAppPath(), 'assets');
+    const raw = rawDecoder(
+      path.join(previewAssets, `viewer-raw-v3-darwin-${process.arch}`, 'viewer-raw'),
+    );
+    const video = videoDecoder(
+      path.join(previewAssets, `viewer-processors-${process.platform}-${process.arch}`),
+    );
+    this.resources = new Resources(
+      access,
+      (file, signal) => quickLookRender(file, undefined, signal),
+      12000,
+      new DerivedPreviews(access, (source, mode, signal) =>
+        mode === 'video' ? video(source, mode, signal) : raw(source, mode, signal),
+      ),
     );
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
@@ -447,14 +470,24 @@ export class Desktop {
     );
     // launchers an earlier session wrote that Terminal never ran
     void this.externalTerminals.sweep(dataPath).catch(() => {});
+    this.receipts = new CommandReceipts(dataPath, (id) => emit({ type: 'receipt-changed', id }));
     this.executions = new Executions(
       () => this.settings.snapshot().settings,
-      (task) => {
-        emit({ type: 'execution', task });
+      (task, owner) => {
+        if (task.command)
+          void this.receipts.record(task).catch((error) => this.options.diagnose?.(String(error)));
+        if (owner === undefined) emit({ type: 'execution', task });
+        else {
+          const window = this.windows.get(owner)?.window;
+          if (window && !window.isDestroyed())
+            window.webContents.send('viewer:event', { type: 'execution', task });
+        }
         this.agentRequests?.execution(task);
       },
       access,
       (action) => confirmations.require(action),
+      (profile) => confirmations.requireTerminal(profile),
+      (owner, target) => validateGitTarget(target, this.gitWindow(owner)),
     );
     this.credentials = new Credentials(
       dataPath,
@@ -589,6 +622,9 @@ export class Desktop {
     );
     this.texts = new TextFiles(this.operations, access);
     this.buffers = new TextBuffers(dataPath);
+    this.notes = new Notes(dataPath, (id, revision) =>
+      emit({ type: 'note-changed', id, revision }),
+    );
     this.lenses = new Lenses(dataPath, access, {
       home: this.home,
       trash: async (file) => this.operations.start({ kind: 'trash', sources: [file] }),
@@ -984,7 +1020,9 @@ export class Desktop {
       this.flushes.disconnected(sender);
       this.chats.retain(sender, new Set());
       this.gitActions.stopOwner(sender);
+      this.worktrees.stopOwner(sender);
       this.terminals.stopOwner(sender);
+      this.executions.stopOwner(sender);
       void this.webPreviews
         .stopOwner(sender)
         .catch((error) => this.options.diagnose?.(String(error)));
@@ -1085,6 +1123,7 @@ export class Desktop {
       this.storage.flush(),
       this.settings.flush(),
       this.buffers.flush(),
+      this.notes.flush(),
       this.chats.flush(),
     ]);
   }
@@ -1136,6 +1175,7 @@ export class Desktop {
       this.watchers.close(),
       this.operations.close(),
       this.buffers.close(),
+      this.notes.close(),
       this.modelPermissions.close(),
       this.search.close(),
       this.executions.close(),
@@ -1152,6 +1192,7 @@ export class Desktop {
       this.relationships.close(),
       fileCoordination.quiesce(),
     ]);
+    await this.receipts.flush();
     await this.fileAccess.close();
     await this.journal.close();
     for (const request of this.agentCommands.values())
@@ -1253,6 +1294,12 @@ export class Desktop {
   /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
   private createHandlers(): ApiHandlers {
     return {
+      receipts: ([request]) => this.receipts.request(request),
+      notes: ([request], owner) => {
+        if ([...this.agentCommands.values()].some((item) => item.owner === owner))
+          throw new Error('Notes are private to the person.');
+        return this.notes.request(request);
+      },
       ...createJournalHandlers({
         store: this.journal,
         allowHuman: (owner) => {
@@ -1355,10 +1402,14 @@ export class Desktop {
         request.kind === 'status'
           ? this.git.status(request.path, request.refresh)
           : this.git.head(request.path),
-      gitWorktrees: ([request], owner) => {
+      gitWorktrees: async ([request], owner) => {
         if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
           throw new Error('Worktree browsing is available only to the person.');
-        return this.worktrees.request(request, owner);
+        const bound =
+          request.kind === 'create'
+            ? { ...request, target: await bindGitTarget(request.target, this.gitWindow(owner)) }
+            : request;
+        return this.worktrees.request(bound, owner);
       },
       gitAction: async ([request], owner) => {
         if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
@@ -1559,8 +1610,46 @@ export class Desktop {
           throw new Error('Agents cannot run programs or shell scripts.');
         return this.executions.start(args[0], args[1]);
       },
-      executionList: () => this.executions.list(),
-      executionCancel: (args) => this.executions.cancel(args[0]),
+      runCommand: async ([script, input], owner) => {
+        if ([...this.agentCommands.values()].some((request) => request.owner === owner))
+          throw new Error('Agents cannot run shell commands.');
+        const target = await bindGitTarget(input, this.gitWindow(owner));
+        return this.executions.startManual(script, target, owner);
+      },
+      commandDraft: async ([request], owner) => {
+        const role = this.windows.get(owner)?.role;
+        if (request) {
+          if (role !== 'viewer') throw new Error('Create a command draft from a workspace window.');
+          const settings = this.settings.snapshot().settings;
+          const profile = settings.terminals.profiles.find(
+            (item) => item.id === settings.terminals.profileID,
+          );
+          this.pendingCommandDraft = {
+            id: randomUUID(),
+            name: request.name,
+            aliases: [],
+            icon: 'terminal',
+            shortcut: '',
+            order: settings.customActions.length,
+            pinned: false,
+            when: { target: 'any', extensions: [], min: 0, max: 2000 },
+            executor: {
+              kind: 'shell',
+              executable: profile?.executable || process.env.SHELL || '/bin/sh',
+              script: request.script,
+              perItem: false,
+            },
+          };
+          this.options.openSettings('settings.customActions');
+          return;
+        }
+        if (role !== 'settings') throw new Error('Review command drafts in Settings.');
+        const draft = this.pendingCommandDraft;
+        this.pendingCommandDraft = undefined;
+        return draft;
+      },
+      executionList: (_args, owner) => this.executions.list(owner),
+      executionCancel: (args, owner) => this.executions.cancel(args[0], owner),
       openSettings: ([focus]) => this.options.openSettings(focus),
       settingsCategory: ([category]) => this.options.settingsCategory?.(category),
       settingsGet: async () => {
@@ -1591,6 +1680,7 @@ export class Desktop {
             this.operations.quiesce(root),
             this.executions.quiesce(root),
             this.gitActions.quiesce(root),
+            this.worktrees.quiesce(root),
             this.terminals.quiesce(root),
             this.externalTerminals.quiesce(),
           ]);
@@ -1639,6 +1729,7 @@ export class Desktop {
             await this.operations.quiesce(root);
             await this.executions.quiesce(root);
             await this.gitActions.quiesce(root);
+            await this.worktrees.quiesce(root);
             await this.terminals.quiesce(root);
             await this.externalTerminals.quiesce();
             await this.watchers.revoke(root);
@@ -1841,6 +1932,32 @@ export class Desktop {
         return document;
       },
       cancelDocument: async ([id, requestID]) => this.resources.cancelDocument(id, requestID),
+      officeImage: async ([id, part, requestID]) => {
+        let child: Resource | undefined;
+        try {
+          return await this.resources.documentRead(id, requestID, async (file, signal) => {
+            if (path.extname(file).toLowerCase() !== '.docx')
+              throw new Error('Embedded document images require a DOCX file.');
+            const document = await this.files.extract(file, signal, true);
+            if (!officeImageParts(document.office).includes(part))
+              throw new Error('This image is not a supported embedded document relationship.');
+            const resource = await this.resources.archiveEntry(id, part);
+            child = resource;
+            signal.throwIfAborted();
+            if (
+              !['png', 'jpg', 'jpeg'].includes(resource.entry.extension) ||
+              !resource.dimensions ||
+              resource.entry.size > 8 * 1024 * 1024 ||
+              resource.dimensions.width * resource.dimensions.height > 64000000
+            )
+              throw new Error('The embedded image exceeds the supported PNG/JPEG preview bounds.');
+            return resource;
+          });
+        } catch (error) {
+          if (child) this.resources.release(child.id);
+          throw error;
+        }
+      },
       bootstrap: async (_args, sender) => {
         const home = this.home;
         await this.fileAccess.load();
@@ -2049,7 +2166,8 @@ export class Desktop {
       },
       archive: (args) => this.resources.archive(args[0]),
       archiveEntry: (args) => this.resources.archiveEntry(args[0], args[1]),
-      imageRendition: (args) => this.resources.rendition(args[0]),
+      imageRendition: (args) => this.resources.rendition(args[0], args[1]),
+      videoRendition: ([id, requestID]) => this.resources.videoRendition(id, requestID),
       printPDF: async (args) => {
         if (process.platform !== 'darwin') throw new Error('Printing PDFs requires macOS.');
         const file = await this.resources.printableFile(args[0]);

@@ -8,6 +8,7 @@ import { licenseInventory } from './licenses';
 import { ensureElectronHeaders } from './native-build/headers';
 import { prepareProcessors } from './processors';
 import { preparePDFProcessors } from './pdf-processors';
+import { prepareRawProcessor } from './libraw';
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inventory = await licenseInventory();
 if (process.platform === 'darwin') {
@@ -34,6 +35,7 @@ if (process.platform === 'darwin') {
   const target = `${arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${minimum}`;
   await prepareProcessors(minimum, arch);
   await preparePDFProcessors(minimum, arch);
+  await prepareRawProcessor(minimum, arch);
   const headers = await ensureElectronHeaders({
     appRoot,
     electronVersion: inventory.electron,

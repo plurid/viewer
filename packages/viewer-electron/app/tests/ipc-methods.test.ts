@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { methodWindows, schemas, settingsEvents } from '../src/desktop/ipc/schemas';
+import { paneTypes } from '../src/domain/contracts';
 
 describe('IPC method table', () => {
   it('bounds worksheet pages and cancellation to existing viewer resources', () => {
@@ -81,6 +82,41 @@ describe('IPC method table', () => {
   });
 });
 describe('the workspace snapshot agents read (2026-10-23)', () => {
+  it.each(Object.values(paneTypes))(
+    'publishes the %s plane kind without exposing private document fields',
+    (type) => {
+      const target = {
+        workspaceID: 'w',
+        rootID: 'p',
+        paneID: 'p',
+        directory: '/tmp',
+        selection: [],
+      };
+      const snapshot = {
+        activeWorkspace: 'w',
+        workspaces: [
+          {
+            id: 'w',
+            name: 'Work',
+            roots: ['p'],
+            panes: [
+              {
+                id: 'p',
+                type,
+                path: '/tmp',
+                documentID: 'private-document',
+                text: 'private note contents',
+              },
+            ],
+          },
+        ],
+      };
+      const result = schemas.commandsPublish.safeParse([target, [], snapshot]);
+      expect(result.success).toBe(true);
+      if (result.success)
+        expect(result.data[2]?.workspaces[0]?.panes[0]).toEqual({ id: 'p', type, path: '/tmp' });
+    },
+  );
   it('accepts a scratch plane, by its type and folder only', () => {
     const snapshot = {
       activeWorkspace: 'w',

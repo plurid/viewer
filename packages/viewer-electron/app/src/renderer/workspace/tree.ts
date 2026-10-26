@@ -8,6 +8,8 @@ export function hostID(node: TreePlane): string {
   return node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id || '';
 }
 const routeKinds: Record<Pane['type'], string> = {
+  task: 'tasks',
+  receipt: 'receipts',
   folder: 'folders',
   search: 'searches',
   terminal: 'terminals',
@@ -15,6 +17,7 @@ const routeKinds: Record<Pane['type'], string> = {
   preview: 'previews',
   // a scratch plane renders where a preview does, so Save As turns it into one in place
   scratch: 'previews',
+  note: 'previews',
   diff: 'diffs',
   'git-changes': 'git-changes',
   chat: 'chats',

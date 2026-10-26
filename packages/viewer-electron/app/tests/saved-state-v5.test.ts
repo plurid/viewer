@@ -34,7 +34,24 @@ const state = (version: number, panes: unknown[]) => ({
 });
 
 it('uses the current plane format', () => {
-  expect(CURRENT_STATE_VERSION).toBe(8);
+  expect(CURRENT_STATE_VERSION).toBe(10);
+});
+it('backs up version 8 before adding durable note views', async () => {
+  const storage = new Storage(path.join(root, 'state.json'));
+  const original = JSON.stringify(state(8, []), null, 2);
+  await writeFile(storage.file, original);
+  expect((await storage.load()).state?.version).toBe(CURRENT_STATE_VERSION);
+  const backup = (await readdir(root)).find((file) => file.includes('before-notes-v9'))!;
+  expect(await readFile(path.join(root, backup), 'utf8')).toBe(original);
+  const note = {
+    id: 'note',
+    type: 'note',
+    path: root,
+    documentID: '6f1c2c0a-6a43-4c51-9e3e-6f3f0d3b9a01',
+    title: 'Saved privately',
+  };
+  await storage.save(state(9, [note]) as SavedState);
+  expect((await storage.load()).state?.workspaces[0]?.panes).toEqual([note]);
 });
 it('backs up a version 4 file before migrating it, leaving the original as it was', async () => {
   const storage = new Storage(path.join(root, 'state.json'));

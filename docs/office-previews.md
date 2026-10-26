@@ -9,7 +9,7 @@ still require another app.
 DOCX shows document-body paragraphs, supported heading levels and simple tables.
 It preserves text, tabs and line breaks, excludes tracked deletions and field
 instructions, and renders source text through React without source HTML or fonts.
-Page layout, images, headers, footers, footnotes and merged table cells are omitted.
+Embedded body PNG/JPEG images appear in reading order, including simple table cells. Alternative text is retained; unsupported drawings, missing parts and external images have explicit placeholders. Floating placement, full page layout, headers, footers, footnotes and merged Word table cells are omitted.
 Preview details explains the coverage; a separate warning appears for reader limits.
 
 XLSX provides a named worksheet selector, visible labels for hidden sheets,
@@ -17,8 +17,22 @@ original row numbers and A/B/C column headings. Blank gaps remain sparse and the
 first row is data. Filtering preserves the original addresses. Selecting a cell
 shows its stored value and optional saved formula. Missing cached values are
 explicitly labeled. Viewer never evaluates formulas, resolves external data or
-opens workbook hyperlinks. Numeric/date formatting, merged cells, charts and
-drawings are omitted; numeric dates remain stored serial values.
+opens workbook hyperlinks. **Formatted** presents supported number, currency, percentage,
+date/time and duration formats; **Stored** exposes the source value. The inspector
+always retains the raw value, saved formula and format code. The pinned local SSF
+0.11.2 formatter runs inside the document worker. It respects the workbook's
+1900/1904 date system, including Excel's serial-60 convention. Unsupported locale/
+numeral directives and malformed styles fall back visibly to stored values.
+No formula is recalculated and source evidence continues to contain stored values.
+Charts, conditional formatting, source fonts and drawings are omitted.
+
+Bounded merged worksheet ranges span the loaded stored rows and columns. A merge
+that starts before the current page fetches only its anchor value in a second
+bounded, CRC-validated stream pass and displays **Continued from A3** (for example).
+Selecting that continuation identifies the original A3 source coordinate. Row gaps
+remain sparse; the preview does not invent millions of blank rows. Filtering can
+compress the displayed span and searches the loaded cell values. Overlapping or
+malformed ranges are refused; ranges beyond supported bounds are labeled.
 
 Workbook previews load one sheet and up to 100 stored rows at a time. Previous,
 Next and Row/Go use original Excel row numbers; a sparse sheet may skip blank
@@ -127,3 +141,25 @@ source permissions are rechecked on return. New ranges still validate the full
 selected XML stream and CRC, so uncached reads scan the worksheet rather than
 using a random-access row index. Cached pages share the existing eight-entry,
 32 MB derived-data budget.
+
+
+## Embedded image authority
+
+Word images use a typed `officeImage(resourceID, part, requestID)` request. The
+part must be a supported image relationship in the extracted DOCX. The desktop
+service rechecks source access and image dimensions before issuing a child
+resource. Only PNG/JPEG up to 8 MiB and 64 million pixels can appear. Images load
+near the viewport, cancel when hidden or closed, and release late completions.
+External image URLs, source HTML, SVG and embedded objects never execute. Parent
+release/revocation expires dependent images. Child resources share a 128 MiB
+unique-buffer ceiling with a 64 MiB per-resource ceiling; the existing 256-grant
+limit still applies. The parser retains at most 256 images, 1,024 nonoverlapping
+worksheet merges and 256 columns. Custom format codes are limited to 256 characters;
+style and format records are bounded independently of cell text.
+
+`tests/office-fidelity.test.ts`, `tests/office-fidelity-preview.test.tsx` and
+`tests/native/office-fidelity.ts` cover stored/formatted values, both date systems,
+merged anchors beyond the current page, inline and table image order, cancellation,
+late-resource release, arbitrary-part refusal and source preservation. The public
+Apache POI `VariousPictures.docx` fixture contains PNG/JPEG and unsupported WMF/EMF;
+its provenance and hash are pinned in the playground qualification catalog.

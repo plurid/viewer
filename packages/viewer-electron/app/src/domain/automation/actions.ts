@@ -68,6 +68,15 @@ export interface ExecutionTask {
   output: string;
   exitCode?: number;
   error?: string;
+  directory?: string;
+  started?: number;
+  ended?: number;
+  truncated?: boolean;
+  workspaceID?: string;
+  paneID?: string;
+  /** Private human command metadata, never included in portable workspace projects. */
+  command?: string;
+  folderIdentity?: string;
 }
 export type TerminalEvent =
   | { type: 'data'; id: string; data: string }

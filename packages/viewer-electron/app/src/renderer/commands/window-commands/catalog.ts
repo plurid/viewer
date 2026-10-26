@@ -27,18 +27,35 @@ export function catalogCommands({
     commands.push({
       id: `plane:${pane.id}`,
       label:
-        pane.type === 'journal'
-          ? 'Journal'
-          : pane.type === 'scratch'
-            ? (pane.title ?? 'Untitled')
-            : baseName(pane.path),
+        pane.type === 'task'
+          ? pane.title
+          : pane.type === 'receipt'
+            ? 'Command receipt'
+            : pane.type === 'journal'
+              ? 'Journal'
+              : pane.type === 'scratch' || pane.type === 'note'
+                ? (pane.title ?? 'Untitled')
+                : baseName(pane.path),
       group: 'Open planes',
-      detail: pane.type === 'scratch' ? 'Unsaved text' : pane.path,
+      detail:
+        pane.type === 'note' ? 'Saved note' : pane.type === 'scratch' ? 'Unsaved text' : pane.path,
       aliases: ['plane', 'switch'],
       icon: pane.type === 'folder' ? 'folder' : 'file',
       remember: false,
       when: (context) => windowScope(context) && actions.ready,
       run: () => actions.workspace.focusPane(pane.id),
+    });
+  for (const area of space.taskAreas ?? [])
+    commands.push({
+      id: 'task:' + area.id,
+      label: area.name,
+      group: 'Tasks',
+      detail: area.checkout.path,
+      aliases: ['task', 'task area', area.checkout.branch ?? ''],
+      icon: 'dock',
+      remember: false,
+      when: (context) => windowScope(context) && actions.ready,
+      run: () => actions.workspace.openTaskArea(area.id),
     });
   const destinations = [
     ...state.saved.favorites,

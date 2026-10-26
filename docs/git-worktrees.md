@@ -1,4 +1,4 @@
-# Existing Git worktrees
+# Git worktrees
 
 Implemented October 25, 2026. This is the first worktree stage from
 [spatial development](spatial-development.md#delivery-sequence).
@@ -63,9 +63,10 @@ A registration lock preserves ordinary browsing/editing. Unexpected folder or
 Git-pointer links/replacements are refused. There is no raw Git-argument route,
 MCP worktree reader or agent-proposable worktree command.
 
-The API exposes only **list**, **inspect**, **open** and **release**. Creation,
-branch switching, pruning and removal are separate future work. Closing a plane
-changes its view state; the checkout and Git registration stay on disk.
+The API exposes **list**, **inspect**, **open**, **create** and **release**.
+Creation is a separate human-only typed operation; no caller supplies Git arguments.
+There is no force, switch, stash, reset, prune or removal operation. Closing a
+plane changes its view state; its checkout and Git registration stay on disk.
 
 ## Verification
 
@@ -81,3 +82,37 @@ Clean/2 changes headers, opens them beside each other, opens a second view of
 the views after a cold restart. Main-file contents, both index hashes and shared
 refs remain unchanged. Fixture files and every generated checkout are retained.
 See [verification](verification.md) for the exact candidate, commands and reports.
+
+
+## Create another checkout
+
+Choose **Create worktree…** inside the existing picker. **New branch** names a
+branch and selects a local base pinned to the displayed commit. **Existing branch**
+chooses an unused local branch. A checked-out branch offers **Show worktree**
+instead of forcing a duplicate. The suggested destination is a sibling of the
+main repository, with the branch name as a suffix; edit it or choose another
+parent folder. The destination must not exist, including as a symlink.
+
+**Create and open** invokes a fixed `git worktree add` and verifies the resulting
+branch, revision and shared repository. It opens a folder beside the source and
+links a Git changes plane beneath it. A terminal remains a separate explicit
+action. Worktree listing remains independent of automatic Git badge preferences;
+the existing changes plane uses the configured Git preference.
+
+Creation rechecks the captured folder/window/workspace, catalog ownership,
+source/admin identities, pinned refs, canonical parent identity and file access.
+Local branch discovery is bounded to 512 branches. Writes serialize by repository,
+allow up to 256 KiB diagnostics and stop after 120 seconds, on owner closure or
+access revocation. The process uses ordinary repository hooks and filters; its
+fixed argv has no shell or force option. No network operation is requested, though
+configured Git programs keep ordinary human-invoked Git behavior. Errors identify
+the destination and preserve any files/branch created by Git for inspection.
+Viewer never runs worktree cleanup. Catalogs and references must be refreshed when
+a branch, registration or checkout changes.
+
+`tests/worktree-creation.test.ts` covers real new/existing branches, normal hooks,
+source preservation, occupied/stale/foreign selections, parent links, cancellation,
+concurrency and retained partial outputs. `tests/native/worktree-creation.ts`
+creates both branches through the packaged UI, verifies linked folder/Git views,
+source/index hashes and cold restoration. See the implementation ledger and
+verification record for the exact candidate and captures.

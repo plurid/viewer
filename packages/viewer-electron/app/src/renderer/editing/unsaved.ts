@@ -14,6 +14,7 @@ import {
 } from '../state/store';
 import { discardBuffer, readBuffer } from './buffers';
 import { editingPlane } from './planes';
+import { flushNote, flushNotes } from '../notes/sessions';
 
 /** The name a plane's unsaved text is asked about under. */
 export const unsavedName = (pane: Pane) =>
@@ -106,6 +107,10 @@ async function discard(pane: Pane): Promise<void> {
  */
 export async function confirmClose(ids: readonly string[]): Promise<boolean> {
   for (const pane of activeWorkspace().panes.filter((item) => ids.includes(item.id))) {
+    if (pane.type === 'note') {
+      await flushNote(pane.id);
+      continue;
+    }
     if (!(await unsaved(pane))) continue;
     const answer = await window.viewer.textPrompt('close', unsavedName(pane));
     if (answer === 'cancel') return false;
@@ -119,12 +124,21 @@ export async function confirmClose(ids: readonly string[]): Promise<boolean> {
 /** Planes' unsaved text dropped without asking, as vim's `:q!` (2026-10-23). Files are not touched:
  * only text typed and never saved is lost. */
 export async function discardUnsaved(ids: readonly string[]): Promise<void> {
-  for (const pane of activeWorkspace().panes.filter((item) => ids.includes(item.id)))
+  for (const pane of activeWorkspace().panes.filter((item) => ids.includes(item.id))) {
+    if (pane.type === 'note') {
+      await flushNote(pane.id);
+      continue;
+    }
     if (await unsaved(pane)) await discard(pane);
+  }
 }
 /** A plane's unsaved text saved, when it holds any (`:x`); true when nothing is left unsaved. */
 export async function saveUnsaved(id: string): Promise<boolean> {
   const pane = activeWorkspace().panes.find((item) => item.id === id);
+  if (pane?.type === 'note') {
+    await flushNote(pane.id);
+    return true;
+  }
   if (!pane || !(await unsaved(pane))) return true;
   return save(pane);
 }
@@ -133,6 +147,7 @@ export async function saveUnsaved(id: string): Promise<boolean> {
  * file yet: it is counted, not asked about, as vim leaves a buffer without a name.
  */
 export async function saveAll(): Promise<{ saved: number; failed: number; unnamed: number }> {
+  await flushNotes();
   const result = { saved: 0, failed: 0, unnamed: 0 };
   for (const pane of activeWorkspace().panes) {
     if (!(await unsaved(pane))) continue;

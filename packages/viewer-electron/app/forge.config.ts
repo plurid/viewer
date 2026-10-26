@@ -57,6 +57,7 @@ const config: ForgeConfig = {
         ? [
             `assets/viewer-processors-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,
             `assets/viewer-optimizers-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,
+            `assets/viewer-raw-v3-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,
           ]
         : []),
       ...(process.platform === 'darwin'

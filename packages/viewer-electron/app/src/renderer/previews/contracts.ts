@@ -4,6 +4,7 @@ import type { ComponentType } from 'react';
 import type { ArchiveListing, FileEntry, Resource, ResourceRead } from '../../domain/contracts';
 import type { HtmlPreview } from '../../domain/previews/web';
 import type { WorksheetDocumentRequest } from '../../domain/previews/documents/office';
+import type { ImageRenditionRequest } from '../../domain/previews/images/rendered';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {
@@ -20,6 +21,7 @@ export interface PreviewContext {
   resource: Resource;
   state?: { get(key: string): unknown; set(key: string, value: unknown): void };
   limits?: { maxImagePixels: number; maxModelMB: number };
+  reading?: { fontSize: number };
   active: boolean;
   interactive: boolean;
   signal: AbortSignal;
@@ -44,7 +46,9 @@ export interface PreviewContext {
     read(id: string, limit?: number): Promise<ResourceRead>;
     archive(id: string): Promise<ArchiveListing>;
     archiveEntry(id: string, name: string): Promise<Resource>;
-    rendition(id: string): Promise<Resource>;
+    rendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
+    videoRendition(id: string, requestID: string): Promise<Resource>;
+    officeImage(id: string, part: string, requestID: string): Promise<Resource>;
     release(id: string): Promise<void>;
   };
 }

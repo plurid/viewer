@@ -614,6 +614,27 @@ button.markdown-link {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.office-inline-image {
+  display: block;
+  margin-block: 12px;
+}
+.office-inline-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.office-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  min-height: 100px;
+  color: var(--muted);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: normal;
+}
 .office-document h1,
 .office-document h2,
 .office-document h3 {
@@ -676,6 +697,20 @@ button.markdown-link {
   flex-direction: column;
   min-height: 0;
   flex: 1;
+}
+.workbook-merged-cell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  white-space: normal;
+  line-height: 16px;
+}
+.workbook-merged-cell small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 14px;
 }
 .structured-viewer > .preview-toolbar {
   flex-wrap: wrap;

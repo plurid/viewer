@@ -8,10 +8,15 @@ import type {
   WorktreeCatalog,
   WorktreeReply,
   WorktreeRequest,
+  WorktreeBranch,
+  WorktreeCreation,
 } from '../../domain/comparison/worktrees';
+import { validBranchName } from '../../domain/comparison/worktrees';
+import type { CapturedTarget } from '../../domain/automation/actions';
 import { inspectReviewedFile } from '../native/reviewed-file';
 import { entry } from '../files/filesystem';
 import { GitReader, type GitRunner } from './git';
+import { addWorktree } from './worktree-process';
 
 interface CheckoutIdentity {
   path: string;
@@ -31,6 +36,9 @@ interface CatalogLease {
   repository: string;
   issued: number;
   entries: Map<string, RegisteredWorktree>;
+  branches: Map<string, WorktreeBranch>;
+  sourceID?: string;
+  common: string;
 }
 
 interface WorktreePorts {
@@ -38,6 +46,8 @@ interface WorktreePorts {
   access(paths: readonly string[]): Promise<void>;
   owner(owner: number): string | undefined;
   run?: GitRunner;
+  validateTarget?(owner: number, target: CapturedTarget): Promise<void>;
+  create?: typeof addWorktree;
 }
 
 const leaseLifetime = 5 * 60_000;
@@ -50,11 +60,15 @@ const inside = (root: string, file: string) => {
   );
 };
 
-/** Existing checkouts only. No method can switch branches, create, prune or remove a worktree. */
+/** Owner-bound discovery and explicit human creation. Never switches, prunes or removes. */
 export class GitWorktrees {
   private readonly reader: GitReader;
   private readonly catalogs = new Map<string, CatalogLease>();
   private pending = 0;
+  private readonly writes = new Map<
+    AbortController,
+    { owner: number; paths: string[]; repository: string; done?: Promise<unknown> }
+  >();
 
   constructor(private readonly ports: WorktreePorts) {
     this.reader = new GitReader(ports.available, ports.access, ports.run);
@@ -123,6 +137,7 @@ export class GitWorktrees {
         }
         return { kind: 'catalog', catalog };
       }
+      if (request.kind === 'create') return await this.create(request, owner, ownerID);
       const { lease, registered, current } = await this.resolve(
         request.catalogID,
         request.worktreeID,
@@ -200,22 +215,202 @@ export class GitWorktrees {
     for (const [key, lease] of this.catalogs)
       if (Date.now() - lease.issued > leaseLifetime) this.catalogs.delete(key);
     if (this.catalogs.size >= 16) this.catalogs.delete(this.catalogs.keys().next().value!);
+    const current = worktrees
+      .filter((tree) => inside(tree.path, registry.currentPath))
+      .sort((left, right) => right.path.length - left.path.length)[0];
+    let branches: WorktreeBranch[] = [],
+      creationProblem: string | undefined;
+    try {
+      branches = (await this.reader.localBranches(directory)).map((branch) => ({
+        id: randomUUID(),
+        name: branch.name,
+        branch: branch.name,
+        commit: branch.commit,
+        worktreeID: worktrees.find((tree) => tree.branch === branch.name)?.id,
+      }));
+      if (!current?.available || !current.commit)
+        throw new Error('Create an initial commit before adding a worktree.');
+      if (
+        !branches.some(
+          (branch) => branch.branch === current.branch && branch.commit === current.commit,
+        )
+      )
+        branches.push({
+          id: randomUUID(),
+          name: 'Current checkout · ' + current.commit.slice(0, 8),
+          commit: current.commit,
+        });
+    } catch (error) {
+      creationProblem = (error as Error).message;
+    }
     this.catalogs.set(id, {
       owner,
       source: directory,
       issued: Date.now(),
       repository: identityOf(common),
       entries,
+      branches: new Map(branches.map((branch) => [branch.id, branch])),
+      sourceID: current?.id,
+      common: registry.commonDirectory,
     });
-    const current = worktrees
-      .filter((tree) => inside(tree.path, registry.currentPath))
-      .sort((left, right) => right.path.length - left.path.length)[0];
     return {
       id,
       repository: registry.worktrees[0]?.path ?? registry.commonDirectory,
       currentPath: current?.path ?? registry.currentPath,
       worktrees,
+      branches,
+      defaultBaseID:
+        branches.find(
+          (branch) => branch.commit === current?.commit && branch.branch === current?.branch,
+        )?.id ?? branches.at(-1)?.id,
+      creationProblem,
     };
+  }
+
+  private async create(
+    request: WorktreeCreation,
+    owner: number,
+    ownerID: string,
+  ): Promise<WorktreeReply> {
+    const lease = this.catalogs.get(request.catalogID);
+    if (
+      !lease ||
+      lease.owner !== ownerID ||
+      Date.now() - lease.issued > leaseLifetime ||
+      !lease.sourceID
+    )
+      throw new Error('The worktree list expired or belongs to another window. Refresh it.');
+    if (!this.ports.validateTarget) throw new Error('Worktree creation is unavailable.');
+    await this.ports.validateTarget(owner, request.target);
+    if ((await realpath(request.target.directory)) !== (await realpath(lease.source)))
+      throw new Error('The originating folder differs from this worktree list. Refresh it.');
+    await this.resolve(request.catalogID, lease.sourceID, ownerID);
+    if ([...this.writes.values()].some((write) => write.repository === lease.repository))
+      throw new Error('A worktree is already being created for this repository.');
+    const selected = lease.branches.get(
+      request.checkout.kind === 'new' ? request.checkout.baseID : request.checkout.branchID,
+    );
+    if (!selected) throw new Error('This branch selection expired. Refresh the worktree list.');
+    const fresh = request.checkout.kind === 'new';
+    const name = request.checkout.kind === 'new' ? request.checkout.name : selected.branch;
+    if (!name || !validBranchName(name)) throw new Error('Enter a valid local branch name.');
+    const refs = await this.reader.localBranches(lease.source);
+    if (
+      selected.branch &&
+      !refs.some((branch) => branch.name === selected.branch && branch.commit === selected.commit)
+    )
+      throw new Error('The selected branch changed. Refresh before creating a worktree.');
+    if (fresh && refs.some((branch) => branch.name === name))
+      throw new Error('That branch already exists. Choose Existing branch or another name.');
+    const registry = await this.reader.worktrees(lease.source);
+    const occupied = !fresh && registry.worktrees.find((tree) => tree.branch === name);
+    if (occupied)
+      throw new Error(
+        'That branch is already checked out at ' + occupied.path + '. Open its existing worktree.',
+      );
+    if (!path.isAbsolute(request.destination) || request.destination.includes('\0'))
+      throw new Error('Use an absolute local destination.');
+    const parent = path.dirname(path.normalize(request.destination));
+    await this.ports.access([lease.source, lease.common, parent, request.destination]);
+    const parentInfo = await lstat(parent),
+      canonicalParent = await realpath(parent);
+    if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink())
+      throw new Error('Choose an ordinary existing parent folder.');
+    const destination = path.join(canonicalParent, path.basename(request.destination));
+    if (inside(lease.common, destination))
+      throw new Error('A worktree cannot be created inside Git administration.');
+    const absent = async () => {
+      try {
+        await lstat(destination);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+        throw error;
+      }
+      throw new Error('The destination already exists. Choose a new folder name.');
+    };
+    await absent();
+    const abort = new AbortController();
+    if ([...this.writes.values()].some((write) => write.repository === lease.repository))
+      throw new Error('A worktree is already being created for this repository.');
+    const write = {
+      owner,
+      paths: [lease.source, lease.common, destination, canonicalParent],
+      repository: lease.repository,
+      done: undefined as Promise<unknown> | undefined,
+    };
+    this.writes.set(abort, write);
+    const work = (async () => {
+      let started = false;
+      try {
+        await this.ports.validateTarget!(owner, request.target);
+        await this.resolve(request.catalogID, lease.sourceID!, ownerID);
+        if (this.owner(owner) !== ownerID) throw new Error('The worktree window changed.');
+        await this.ports.access(write.paths);
+        if (
+          identityOf(await lstat(parent)) !== identityOf(parentInfo) ||
+          (await realpath(parent)) !== canonicalParent
+        )
+          throw new Error('The destination parent changed. Choose it again.');
+        await absent();
+        abort.signal.throwIfAborted();
+        started = true;
+        await (this.ports.create ?? addWorktree)(
+          lease.source,
+          destination,
+          { name, commit: selected.commit, fresh },
+          AbortSignal.any([abort.signal, AbortSignal.timeout(120000)]),
+        );
+        abort.signal.throwIfAborted();
+        await this.ports.validateTarget!(owner, request.target);
+        const created = await this.checkout(destination),
+          after = await this.reader.worktrees(created.path);
+        if (
+          identityOf(await lstat(after.commonDirectory)) !== lease.repository ||
+          !after.worktrees.some(
+            (tree) =>
+              tree.path === created.path && tree.branch === name && tree.commit === selected.commit,
+          )
+        )
+          throw new Error('The created checkout does not match the selected branch and revision.');
+        const catalog = await this.list(lease.source, ownerID),
+          tree = catalog.worktrees.find((tree) => tree.path === created.path);
+        if (!tree?.available) throw new Error('The created checkout could not be verified.');
+        if (this.owner(owner) !== ownerID) throw new Error('The worktree window changed.');
+        return {
+          kind: 'created' as const,
+          catalog,
+          worktreeID: tree.id,
+          entry: await entry(created.path),
+        };
+      } catch (error) {
+        const message = (error as Error).message;
+        throw new Error(
+          started
+            ? `${message}\nInspect ${destination} and Refresh worktrees. Viewer kept any files or branch created by Git.`
+            : message,
+        );
+      }
+    })();
+    write.done = work;
+    try {
+      return await work;
+    } finally {
+      this.writes.delete(abort);
+    }
+  }
+
+  stopOwner(owner: number): void {
+    for (const [abort, write] of this.writes)
+      if (write.owner === owner) abort.abort(new Error('The worktree window closed.'));
+  }
+  async quiesce(root?: string): Promise<void> {
+    const done: Promise<unknown>[] = [];
+    for (const [abort, write] of this.writes)
+      if (!root || write.paths.some((file) => inside(root, file) || inside(file, root))) {
+        abort.abort(new Error('Worktree creation stopped because folder access changed.'));
+        if (write.done) done.push(write.done);
+      }
+    await Promise.allSettled(done);
   }
 
   private async resolve(id: string, worktreeID: string, owner: string) {
@@ -256,6 +451,7 @@ export class GitWorktrees {
   }
 
   close(): void {
+    for (const abort of this.writes.keys()) abort.abort(new Error('Viewer is closing.'));
     this.catalogs.clear();
     this.reader.close();
   }

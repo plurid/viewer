@@ -51,6 +51,7 @@ import { connectLocalServers, localServerSessions } from '../local-servers/runti
 import { rememberTiling, restoreTiling } from './tiling-history';
 import { gitTerminalProfileID } from '../../domain/comparison/git-actions';
 import { runGitAction } from '../git/runtime';
+import { taskController } from '../tasks/controller';
 /** Owns host-plane identity and creation. Engine routes/IDs stay inside the adapter. */
 /**
  * Makes a plane the active one, as following a link does: it takes the wheel (plurid's
@@ -122,6 +123,12 @@ export function useWorkspaceController({
   );
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
+      ...taskController({
+        controller: () => controller,
+        register: registerContent,
+        engine,
+        surface,
+      }),
       async openMedia(paths, parentID, fresh = false, preset) {
         const space = activeWorkspace(),
           existing =
@@ -303,7 +310,7 @@ export function useWorkspaceController({
         );
         if (existing && !another) {
           controller.focusPane(existing.id, { activate: true });
-          return;
+          return existing.id;
         }
         const before = new Set(space.panes.map((pane) => pane.id));
         controller.splitFolder(
@@ -314,6 +321,7 @@ export function useWorkspaceController({
         const opened = activeWorkspace().panes.find((pane) => !before.has(pane.id));
         if (!opened) throw new Error('The new worktree view could not open. Try again.');
         controller.focusPane(opened.id, { frame: false, activate: true });
+        return opened.id;
       },
       present() {
         if (!controller.bookmarks().length) {
@@ -701,6 +709,54 @@ export function useWorkspaceController({
         if (!engine.current || !readyRef.current) return;
         const pane = addScratchPane();
         setActivePane(pane.id);
+        frameWorkspace(engine, surface, [pane.id], {
+          dock: getState().saved.ui.space.opening === 'dock',
+        });
+      },
+      async newNote(kind, directory, parentID) {
+        if (!engine.current || !readyRef.current) return;
+        const workspaceID = activeWorkspace().id;
+        const result = await window.viewer.notes({
+          kind: 'create',
+          format: kind,
+          directory: directory || getState().bootstrap.home,
+        });
+        if (result.kind !== 'document') throw new Error('The note could not be created.');
+        if (activeWorkspace().id !== workspaceID)
+          throw new Error('The workspace changed. Your note was saved; reopen it through Notes.');
+        const pane = {
+          id: crypto.randomUUID(),
+          type: 'note' as const,
+          path: result.document.directory,
+          documentID: result.document.id,
+          title: result.document.title,
+        };
+        registerContent(pane, parentID);
+        frameWorkspace(engine, surface, [pane.id], {
+          dock: getState().saved.ui.space.opening === 'dock',
+        });
+      },
+      async openNote(id) {
+        if (!engine.current || !readyRef.current) return;
+        const space = activeWorkspace();
+        const existing = space.panes.find((pane) => pane.type === 'note' && pane.documentID === id);
+        if (existing) {
+          setActivePane(existing.id);
+          frameWorkspace(engine, surface, [existing.id]);
+          return;
+        }
+        const result = await window.viewer.notes({ kind: 'read', id });
+        if (result.kind !== 'document') throw new Error('The note could not be opened.');
+        if (activeWorkspace().id !== space.id)
+          throw new Error('The workspace changed. Open the note again.');
+        const pane = {
+          id: crypto.randomUUID(),
+          type: 'note' as const,
+          path: result.document.directory,
+          documentID: id,
+          title: result.document.title,
+        };
+        registerContent(pane);
         frameWorkspace(engine, surface, [pane.id], {
           dock: getState().saved.ui.space.opening === 'dock',
         });

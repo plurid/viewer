@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { CapturedTarget, CustomAction } from '../../domain/automation/actions';
 import { CommitDialog } from '../git/CommitDialog';
 import { WorktreesDialog } from '../git/worktrees/WorktreesDialog';
 import { ServersDialog } from '../local-servers/ServersDialog';
+import { RunCommandDialog } from '../terminals/RunCommandDialog';
+import { NotesDialog } from '../notes/NotesDialog';
 import { ImageToolsDialog } from '../media/ImageToolsDialog';
 import { OptimizeDialog } from '../media/OptimizeDialog';
 import { PDFToolsDialog } from '../pdf-tools/PDFToolsDialog';
@@ -30,7 +32,13 @@ import {
   useViewer,
 } from '../state/store';
 
+const LazyTasksDialog = lazy(() =>
+  import('../tasks/TasksDialog').then((module) => ({ default: module.TasksDialog })),
+);
 export type WindowDialog =
+  | { type: 'tasks'; target?: CapturedTarget }
+  | { type: 'notes' }
+  | { type: 'run-command'; target: CapturedTarget }
   | { type: 'servers' }
   | { type: 'browser'; paneID?: string }
   | { type: 'image-tools'; files: FileEntry[]; paneID?: string; preset?: ImageExportPreset }
@@ -72,6 +80,15 @@ export function WindowDialogs({
   const tagging = dialog?.type === 'tag';
   return (
     <>
+      {dialog?.type === 'notes' && <NotesDialog workspace={controller} onClose={onClose} />}
+      {dialog?.type === 'tasks' && (
+        <Suspense fallback={null}>
+          <LazyTasksDialog workspace={controller} target={dialog.target} onClose={onClose} />
+        </Suspense>
+      )}
+      {dialog?.type === 'run-command' && (
+        <RunCommandDialog target={dialog.target} onClose={onClose} />
+      )}
       {dialog?.type === 'servers' && <ServersDialog workspace={controller} onClose={onClose} />}
       {dialog?.type === 'optimize' && (
         <OptimizeDialog

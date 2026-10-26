@@ -84,6 +84,14 @@ function PreviewContent() {
   );
   const interactive = useInteractive();
   if (!record) return <Empty title="Preview is unavailable" />;
+  if (record.type === 'note')
+    return (
+      <PreviewFrame activate={() => setActivePane(record.id)}>
+        <Suspense fallback={<Empty title="Opening note…" />}>
+          <LazyNotePlane pane={record} visible={plane.shown && plane.culled === 'visible'} />
+        </Suspense>
+      </PreviewFrame>
+    );
   // a scratch plane renders where a preview does, so Save As makes it the file's in place
   if (record.type === 'scratch')
     return (
@@ -107,6 +115,7 @@ function PreviewContent() {
   );
 }
 const LazyScratchPlane = lazy(() => import('../editing/ScratchPlane'));
+const LazyNotePlane = lazy(() => import('../notes/NotePlane'));
 const LazyDiffPlane = lazy(() => import('../diff/DiffPlane'));
 const LazyGitChanges = lazy(() => import('../git/GitChanges'));
 const LazyChatPlane = lazy(() => import('../chat/ChatPlane'));
@@ -114,6 +123,29 @@ const LazyServerPlane = lazy(() => import('../local-servers/ServerPlane'));
 const LazyBrowserPlane = lazy(() => import('../browser/BrowserPlane'));
 const LazyMediaPlane = lazy(() => import('../media/MediaPlane'));
 const LazyJournalPlane = lazy(() => import('../journal/JournalPlane'));
+const LazyTaskPlane = lazy(() => import('../tasks/TaskPlane'));
+const LazyReceiptPlane = lazy(() => import('../tasks/ReceiptPlane'));
+
+function TaskContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'task' && pane?.type !== 'receipt')
+    return <Empty title="Task view unavailable" />;
+  const active = plane.shown && plane.culled === 'visible';
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening task context…" />}>
+        {pane.type === 'task' ? (
+          <LazyTaskPlane pane={pane} active={active} />
+        ) : (
+          <LazyReceiptPlane pane={pane} active={active} />
+        )}
+      </Suspense>
+    </PreviewFrame>
+  );
+}
 
 function JournalContent() {
   const plane = usePluridPlane();
@@ -266,6 +298,8 @@ const marked = (Content: React.ComponentType): React.ComponentType =>
     );
   };
 const planes: PluridPlane<React.ComponentType>[] = [
+  { route: '/tasks/:id', component: marked(TaskContent) },
+  { route: '/receipts/:id', component: marked(TaskContent) },
   { route: '/servers/:id', component: marked(ServerContent) },
   { route: '/browsers/:id', component: marked(BrowserContent) },
   { route: '/media/:id', component: marked(MediaContent) },

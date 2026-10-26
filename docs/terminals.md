@@ -1,5 +1,28 @@
 # Terminals
 
+## Run a command without a terminal
+
+**Run command…** in the folder's Terminal menu or Commands accepts ordinary shell
+syntax in the captured folder, including pipes, redirects and `&&`. The current
+shell profile supplies the program, arguments and environment; a changed custom
+profile retains its existing first-use confirmation. The explicit Run button
+submits the entered line without an additional action confirmation. Interactive
+programs still use a terminal.
+
+**Command progress** reopens running/completed output. It shows the folder,
+elapsed time, exit status, Copy output and Stop, with an explicit last-256-KiB
+indicator when output is truncated. Hiding this view leaves the process running;
+quitting Viewer stops it. Recent lines are held only in the workspace window's
+memory, with Clear. **Save as action…** sends a draft to Settings → Actions, where
+Add command creates a reusable shell action under the existing execution rules.
+Saved shell actions use their configured shell executor; they do not implicitly
+inherit a terminal profile's argument/environment overrides.
+
+Manual runs are window-owned and folder identity/access are checked before
+launch. Changing the selected folder does not retarget an existing run. Neither
+the new command nor its process route is available to agents, model-generated
+lines or automatic command compositions through agent aliases.
+
 The searchable file/background menu and Commands provide **Open in Terminal**, **Open in tmux** and **Open terminal plane**. A selected folder becomes the working directory; a selected file uses its parent; otherwise the action uses the active browsing column or folder. Targets capture the originating workspace, root, plane and directory before asynchronous work. Opening a terminal in another root creates an independent terminal.
 
 ## External terminal
@@ -42,3 +65,11 @@ The PTY and terminal screen remain alive when camera culling detaches the React 
 The native package includes and unpacks node-pty and its spawn helper. A successful renderer build alone does not verify terminal availability; the hidden desktop foundations test starts a real shell and checks output, interruption, geometry and independent root ownership.
 
 Agents can be granted terminal read access only. Read access exposes bounded terminal output, which can contain secrets printed by commands; folder scope identifies the session's launch directory and is not process containment. Terminal input is unavailable to agents, because shell input cannot enforce Trash-only removal. Manage read grants in Settings → Agents, outside editable JSONC. A grant covers the folder its path resolves to; a folder chosen through a link or alias shows, and revokes, the grant made through it. Generating a new token for the shared connection revokes its grants, since the old token may have leaked; revoking a named client removes its grants too. See [actions.md](actions.md).
+
+
+Manual Run command results now retain private bounded receipts. Open receipt in
+Command progress or Tasks → Command history shows the script, working folder,
+start/end times, recorded exit outcome and output. An explicit task-source view
+also links the receipt into that area. This is process evidence, not automatic
+test-success attribution. Closing a result view keeps its receipt; restart never
+replays it. [Task areas](task-areas.md) describe limits and restoration.

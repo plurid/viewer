@@ -20,6 +20,22 @@ For example, complete publication metadata can produce `2000, J. E. Rehder, The 
 
 Select files or a folder, run the recipe, choose whether to include subfolders, and create the proposal. Review shows the editable filename first and the destination folder underneath. Edit path exposes the full destination when a folder change is needed. Expand Evidence to inspect the source text, edit names and select rows before Apply. Extensions stay intact; duplicate destinations, existing files, changed sources and paths escaping through symbolic links block application. Review is mandatory for both user- and agent-created proposals.
 
+## Notes and checklists
+
+The Text menu offers **New note plane**, **New checklist plane** and **Notes…**.
+These are private Markdown documents, separate from unsaved Scratch buffers and
+from files on disk. Document/Source modes share the existing Markdown reader and
+editor. Checklists add, edit, check and reorder source items. The reading view
+uses the preview font preference, 16px by default.
+
+Closing a note plane preserves its document; Notes… finds and reopens it. Exports
+write a new Markdown file using the normal native destination picker. Notes are
+limited to 4 MiB each and use atomic revisioned writes. A stale concurrent edit
+creates a recovered note rather than replacing the newer original. Failed
+writes remain visible and join the existing window-close flush barrier. Private
+note records and durable command receipts are excluded from portable project
+definitions and confer no agent or process permission.
+
 ## Other recipes
 
 - **Batch rename** needs no model. Prefix, suffix, literal replacement and `{name}`, `{extension}`, `{number}` templates are supported.
@@ -167,3 +183,9 @@ review UI. Coding agents also follow the repository's [removal policy](../AGENTS
 See [configuration.md](configuration.md) for declarative actions, placeholders and validation, and [terminals.md](terminals.md) for shell profiles and session behavior.
 
 Provider protocol tests use synthetic responses; no live paid model or real user credential is used by verification. The native integration test exercises the packaged MCP client with an isolated profile and disposable book files.
+
+
+[Task areas](task-areas.md) keep named checkout/document/tool associations. Manual
+commands retain private bounded receipts independently of the progress panel;
+Tasks → Command history reopens them. The manual form discloses this storage.
+Task membership and receipts grant no agent process, content or removal access.

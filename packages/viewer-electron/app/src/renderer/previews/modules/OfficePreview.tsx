@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { columnName } from '../../../domain/previews/documents/office';
 import type { PreviewContext } from '../contracts';
 import { usePreviewState } from '../state';
@@ -9,6 +9,7 @@ import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { report } from '../../state/store';
 import { useOfficeDocument } from '../useOfficeDocument';
 import { WorksheetNavigation } from '../WorksheetNavigation';
+import { WordBlock } from '../WordBlock';
 
 /* THESIS: Read Word text and inspect worksheet cells within the existing file plane.
    OWN-WORLD: Existing flat toolbar, theme surfaces, borders and type; no source fonts or HTML.
@@ -17,7 +18,9 @@ import { WorksheetNavigation } from '../WorksheetNavigation';
    FORM: Ordinary incumbent extension; office-preview-v1, worksheet-pages-v1; no new visual world.
    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance */
 export default function OfficePreview(context: PreviewContext) {
+  const fontSize = context.reading?.fontSize ?? 16;
   const [details, setDetails] = useState(false);
+  const [formatted, setFormatted] = usePreviewState(context, 'office.formatted', true);
   const [sheetName, setSheetName] = usePreviewState(context, 'office.sheet', '');
   const [positions, setPositions] = usePreviewState<Record<string, number>>(
     context,
@@ -156,8 +159,18 @@ export default function OfficePreview(context: PreviewContext) {
           </label>
         )}
         <span className="muted">
-          {office.kind === 'workbook' ? 'Saved values' : 'Text and tables'}
+          {office.kind === 'workbook' ? 'Saved values' : 'Text, tables and images'}
         </span>
+        {office.kind === 'workbook' && (
+          <>
+            <button aria-pressed={formatted} onClick={() => setFormatted(true)}>
+              Formatted
+            </button>
+            <button aria-pressed={!formatted} onClick={() => setFormatted(false)}>
+              Stored
+            </button>
+          </>
+        )}
         <span className="toolbar-spacer" />
         <button
           aria-expanded={details}
@@ -187,6 +200,19 @@ export default function OfficePreview(context: PreviewContext) {
           {page
             ? 'Some cell values or columns exceed the preview limits.'
             : 'The reader limit was reached. Some content is not shown.'}
+        </p>
+      )}
+      {!loading &&
+        !error &&
+        sheet?.rows.some((row) => row.cells.some((cell) => cell.formatWarning)) && (
+          <p className="inline-warning">
+            Some number formats are unavailable; stored values are shown for those cells. Select a
+            cell for details.
+          </p>
+        )}
+      {!loading && !error && sheet?.mergeLimited && (
+        <p className="inline-warning">
+          Some merged ranges or their anchor values exceed the preview limits.
         </p>
       )}
       {anchor?.kind === 'cells' &&
@@ -231,6 +257,8 @@ export default function OfficePreview(context: PreviewContext) {
           numbered
           sourceLastRow={page?.lastRow}
           paged={Boolean(page)}
+          formatted={formatted}
+          merges={sheet.merges}
         />
       ) : (
         office.kind === 'word' && (
@@ -240,7 +268,7 @@ export default function OfficePreview(context: PreviewContext) {
                 The referenced passage is outside the available preview.
               </p>
             )}
-            <article className="office-document" aria-label="Document body">
+            <article className="office-document" aria-label="Document body" style={{ fontSize }}>
               {office.blocks.map((block, index) => (
                 <div
                   className={
@@ -251,27 +279,7 @@ export default function OfficePreview(context: PreviewContext) {
                   data-document-block={index}
                   key={index}
                 >
-                  {block.kind === 'paragraph' ? (
-                    createElement(
-                      block.heading ? 'h' + block.heading : 'p',
-                      {},
-                      block.text || '\u00a0',
-                    )
-                  ) : (
-                    <div className="office-table-scroll">
-                      <table>
-                        <tbody>
-                          {block.rows.map((row, r) => (
-                            <tr key={r}>
-                              {row.map((cell, c) => (
-                                <td key={c}>{cell}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  <WordBlock block={block} context={context} />
                 </div>
               ))}
               {!office.blocks.length && <p className="muted">No document body text.</p>}

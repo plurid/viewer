@@ -291,6 +291,22 @@
   color: var(--muted);
   border-top: 1px solid var(--line);
 }
+.media-converting {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+.media-converting .loading {
+  height: auto;
+}
+.media-converting p {
+  margin: 0;
+}
 
 .file-column {
   position: relative;

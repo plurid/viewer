@@ -1,5 +1,54 @@
 # Verification
 
+## October 25 independent RAW decoder
+
+`/private/tmp/viewer-raw-20261025-E/Viewer.app` contains the pinned independent
+LibRaw 0.22.2 helper and separate replaceable library, corresponding source,
+licenses, hashes and direct build instructions. Its build retains intermediate
+objects. Camera images and explicit half-size RAW renditions stay within 4096px;
+source-version/mode cache keys, permission rechecks, cancellation and a 30-second
+helper deadline avoid dependence on the stalled system thumbnail service.
+
+The complete suite passes 1,842 tests in 260 files; TypeScript targets, full lint,
+preserving packaging and strict signature checks pass. Native acceptance verifies
+original Nikon NEF and Ricoh DNG camera/RAW pixels, warm reuse, all eight TIFF
+orientations against independent pixel references, corrupt-file recovery, unchanged
+source hashes and zero file jobs. A generated unsupported raw encoding verifies
+returning from a failed RAW render to the still-valid camera image. The independent
+reviewer scores that recovery fix resolved, disposition **ship** for its fix list.
+Five captures and results remain in `viewer-native-raw-gYVvRk`; log
+`/private/tmp/viewer-raw-native-5-20261025.log`. The detector ran once, with no findings.
+These are local Apple Silicon desktop checks; optional decoder integrations,
+other camera variants and Intel/Store runtimes remain unqualified.
+
+## October 25 commands and private notes
+
+Delivery 0 is retained at `/private/tmp/viewer-delivery-zero-20261025-E/Viewer.app`.
+Its adjacent `candidate.json` binds source/lock/package fingerprints and copied
+reports. All 1,837 tests in 259 files pass without failures or skips; four
+TypeScript targets, affected lint, preserving production build and strict deep
+signature verification pass. Complete packaged smoke passes after replacing its
+obsolete menu-tooltip selector with the visible Downloads label. The old failure
+log and fixture are retained.
+
+The isolated `tests/native/notes-and-commands.ts` acceptance verifies shell syntax,
+literal captured working directory, `git init`, output without xterm, action draft
+handoff to Settings without execution, rendered Markdown, note close/library/
+reopen, checklist edit/check/reorder and cold restart without process replay.
+Original file hashes stay unchanged and no file-operation jobs occur. The final
+run waits for asynchronous note saving/closure before opening the library.
+Log: `/private/tmp/viewer-delivery-zero-native-E2-20261025.log`; generated profile,
+files, result and seven captures: `viewer-native-notes-commands-Acsrkw` under the
+macOS temporary root. All fixtures and previous candidates remain preserved.
+
+The independent interface review requested the Notes picker body inset. That one
+fix was scored **resolved**, disposition **ship** for its fix list. The detector
+ran once with no findings. Dark/light and 760px desktop captures do not establish
+mobile or physical assistive-technology qualification. Native dependencies are
+inherited from the worksheet candidate; this is local Apple Silicon direct-build
+evidence, not notarization or Store qualification. RAW/video improvements are
+separate deliveries and are absent from this candidate.
+
 ## October 25 on-demand worksheet pages
 
 The validated Apple Silicon direct package is retained at
@@ -1894,3 +1943,93 @@ request. A bounded 1280×820 comparison checks active/inactive headers in
 appearance, including switching the active plane and clearing/reselecting it.
 Both selected headers have no inset shadow; the normal separator remains. The
 desktop app was reopened with this treatment.
+
+
+## October 25 ordered follow-up: video and Office fidelity
+
+The video candidate `/private/tmp/viewer-video-20261025-C/Viewer.app` passes
+1,847 tests in 261 files, all four TypeScript targets, full lint and signing.
+`/private/tmp/viewer-video-suite-20261025.log` and
+`/private/tmp/viewer-video-native-4-20261025.log` retain the results. Native root
+`viewer-native-video-copy-J9M9kk` contains five captures: actual Theora/Vorbis
+picture/audio through a complete local H.264/AAC copy, 33.018-second duration,
+seeking, warm 206 range reads, cancellation and malformed-source recovery. Original
+hashes and zero file jobs are verified. Fresh independent UI review returned ship
+with no material corrections; DESIGN.md and its ignored sidecar are updated.
+
+The Office candidate `/private/tmp/viewer-office-20261025-A/Viewer.app` passes
+1,855 tests in 263 files without failures or skips after adding the formatter
+assets to the qualification fixtures. Report:
+`/private/tmp/viewer-office-suite-2-20261025.log`. The preserved native check
+`/private/tmp/viewer-office-native-4-20261025.log`, root
+`viewer-native-office-fidelity-ydDDzz`, verifies all four files, ten captures,
+formatted/stored values, saved formulas, cross-page merge anchors, Word PNG/JPEG,
+table images/placeholders, non-DOCX/arbitrary-part refusal and parent-release 404.
+All originals remain unchanged, no file job runs and all apps quit cleanly.
+The public Apache POI VariousPictures fixture is pinned at commit
+`5c44755a2a7569a5884dc8f1f680ca3a86fa245f`; its SHA-256 is
+`c1eecbca7de9f99e21c677e1d5b045eaa1d5a442eff4c82f0cbe9af93726a070`.
+The existing page-break sample has no body images; its description was corrected.
+Office UI review returned ship without material fixes; the detector's only
+finding is an unchanged citation-border advisory outside the new UI. See
+`.impeccable/review/office-fidelity-20261025-review/finish-review.md`.
+
+These are direct Apple Silicon macOS checks, not Intel/Store/other-platform or
+physical assistive-technology qualification. Historical RAW/OGV limits above
+refer to their old candidates; current behavior is in preview-formats.md and
+real-file-qualification.md. Isolated candidates do not replace the running app.
+
+The worktree creation delivery passes its 1,861-test stage suite and actual Git
+creation/reopening checks. The final native run is
+`/private/tmp/viewer-worktree-native-3-20261025.log`, with six captures in
+`viewer-native-worktree-create-lBsvv8`. It verifies new and existing local
+branches, an editable sibling destination, unchanged source files/index/HEAD,
+linked folder/Git views and cold restoration. The reviewer identified silent
+invalid-branch validation; its associated inline error is now scored resolved
+with disposition ship. Scope and limits: [Git worktrees](git-worktrees.md).
+
+Task areas and private command receipts pass the final combined **1,873 tests in
+266 files**, with no failures or skips. Full report:
+`/private/tmp/viewer-tasks-suite-final-20261025.log`. Main, preload, renderer and
+tooling TypeScript checks, full ESLint and full app Prettier checks pass. The last
+test-only assertion/formatting edits also pass the tooling check and focused lint.
+Production code has not changed since this suite.
+
+`/private/tmp/viewer-tasks-native-5-20261025.log` and native root
+`viewer-native-task-areas-r6q4gh` retain seven checks and eleven dark/light/narrow
+captures. They establish durable task membership and note identity after view
+closure, actual manual command output/exit receipts, cold restoration without
+command or terminal-input replay, stopped-on-restore servers, single-listener
+reattachment and browser-port rebinding after an explicit restart. Reference
+file, Git index and HEAD remain unchanged; apps quit cleanly. The first
+receipt-error screenshot was captured during startup animation. Its retained
+settled replacement is
+`viewer-task-recovery-capture-6nyRDv/receipt-unavailable-dark-settled.png`, with
+measured opacity 1 and no camera motion, recorded in
+`/private/tmp/viewer-task-error-settled-3-20261025.log`. No product CSS override
+was used. Independent task UI review returned ship with no material fixes.
+
+The complete packaged smoke passes:
+`/private/tmp/viewer-final-smoke-3-20261025.log`, fixture
+`viewer-verification-vzqoN0`, and app evidence
+`out/native-evidence/electron-smoke-2026-10-25T21-23-02-402Z-e3c808b3-1c75-47ea-a0fe-ef38102183e2`.
+Two earlier smoke attempts had obsolete malformed-video title/retry assertions;
+their fixtures are preserved. The corrected assertions exercise the current
+compatibility-error and Retry conversion flow. No product fix was required.
+
+The combined local candidate is
+`/private/tmp/viewer-followup-validated-20261025-A/Viewer.app`, with copied reports
+and hashes in the sibling `candidate.json`. The preserving build report is
+`out/preserved-package-Sv8yX1/result.json`; its source hash before and after is
+`d65c37c8373404132df77c2a8d1e1e41f3f60fa1007000477d77a8ca9ea0d68c`.
+The lockfile hash is
+`bf1703c1f919ddaefa0e82f08386939e31145b07333bf3f46f107e1b18daee38`.
+`runtime-equivalence.json` records byte-identical executable, frameworks,
+resources, ASAR and Info.plist versus the final native/smoke-tested task candidate
+`/private/tmp/viewer-tasks-20261025-D/Viewer.app`. Its ASAR SHA-256 is
+`13991f9ba9e48724aeae5184a11a84bff3e546ff41fde806ae7f03c0a60dc3ca`.
+Deep strict local signature verification passes. The test-code readability edit
+and settled-capture guard change source fingerprints without changing runtime
+bytes. Every generated fixture, seed, intermediate and failed attempt remains
+preserved. This is a local Apple Silicon development package; no distribution,
+notarization or additional platform qualification is claimed.

@@ -10,6 +10,7 @@ import {
 } from './state/effective-ui';
 import type { SpatialOverviewHandle } from './workspace/overlays/useSpatialOverview';
 import { failedFlush } from '../domain/persistence/flush';
+import type { CapturedTarget } from '../domain/automation/actions';
 import { receiveWorkspaces } from './state/workspaces';
 import type { LaunchRequest } from '../domain/workspaces/launch';
 import { parentPath } from '../domain/workspaces/planes';
@@ -140,6 +141,14 @@ function AppWindow() {
     void recoverBuffers().catch(report);
   }, [ready]);
   const [windowDialog, setWindowDialog] = useState<WindowDialog>();
+  useEffect(() => {
+    const run = (event: Event) => {
+      const target = (event as CustomEvent<CapturedTarget>).detail;
+      if (target?.paneID) setWindowDialog({ type: 'run-command', target });
+    };
+    window.addEventListener('viewer:run-command', run);
+    return () => window.removeEventListener('viewer:run-command', run);
+  }, []);
   const recordingMacro = useMacroRecording();
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -280,6 +289,9 @@ function AppWindow() {
           (text) => lineRunRef.current(text),
           {
             showServers: () => setWindowDialog({ type: 'servers' }),
+            showNotes: () => setWindowDialog({ type: 'notes' }),
+            showTasks: (target) => setWindowDialog({ type: 'tasks', target }),
+            runCommand: (target) => setWindowDialog({ type: 'run-command', target }),
             newBrowser: (paneID) => setWindowDialog({ type: 'browser', paneID }),
             imageTools: (files, paneID, preset) =>
               setWindowDialog({ type: 'image-tools', files, paneID, preset }),

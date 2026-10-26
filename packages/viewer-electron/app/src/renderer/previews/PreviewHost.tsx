@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { WorkspaceContext } from '../workspace/context';
-import { effectiveWindowLook } from '../state/effective-ui';
+import { effectiveWindowLook, effectiveWindowSettings } from '../state/effective-ui';
 import type { FileEntry, Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files/entries';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
@@ -49,7 +49,9 @@ const services: PreviewContext['services'] = {
   read: (id, limit) => window.viewer.read(id, limit),
   archive: (id) => window.viewer.archive(id),
   archiveEntry: (id, name) => window.viewer.archiveEntry(id, name),
-  rendition: (id) => window.viewer.imageRendition(id),
+  rendition: (id, request) => window.viewer.imageRendition(id, request),
+  videoRendition: (id, requestID) => window.viewer.videoRendition(id, requestID),
+  officeImage: (id, part, requestID) => window.viewer.officeImage(id, part, requestID),
   release: (id) => window.viewer.release(id),
 };
 export const PreviewHost = memo(function PreviewHost({
@@ -155,6 +157,7 @@ export const PreviewHost = memo(function PreviewHost({
     [paneID, path, supplied?.id, entry],
   );
   const limits = useViewer((state) => state.settings.settings.previews);
+  const fontSize = useViewer((state) => effectiveWindowSettings(state).previews.textFontSize);
   const editing = useMemo(
     () => (editable && paneID && !supplied ? { paneID } : undefined),
     [editable, paneID, supplied],
@@ -285,6 +288,7 @@ export const PreviewHost = memo(function PreviewHost({
               commands={commands}
               state={viewState}
               limits={limits}
+              reading={{ fontSize }}
               openRelated={openRelated}
               editing={editing}
               optimize={!supplied ? invokeFile('optimize-files') : undefined}

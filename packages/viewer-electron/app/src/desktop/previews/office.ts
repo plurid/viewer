@@ -4,81 +4,19 @@ import { Archives } from './archives';
 import { fileCoordination } from '../files/file-coordination';
 import { attribute, child, children, localName, officeXML, xmlText } from './office-xml';
 import { worksheetReader, type WorkbookBudget, type WorksheetReadWindow } from './office-worksheet';
+import { workbookFormatter } from './office-formatting';
 import type { XMLNode } from './office-xml';
 import type { DocumentData } from '../../domain/services';
 import type {
-  OfficeContent,
   WorkbookSheet,
-  WordParagraph,
-  WordTable,
   WorksheetWindow,
   WorksheetPage,
 } from '../../domain/previews/documents/office';
-import { worksheetPageSchema } from '../../domain/previews/documents/office';
+import { worksheetPageSchema, columnName } from '../../domain/previews/documents/office';
 
-const relationshipTypes = [
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/',
-  'http://purl.oclc.org/ooxml/officeDocument/relationships/',
-];
-const typeIs = (type: string, name: string) =>
-  relationshipTypes.some((prefix) => type === prefix + name);
-interface Relationship {
-  id: string;
-  type: string;
-  target: string;
-  external: boolean;
-}
-/** OPC targets are package paths, never filesystem paths or fetchable URLs. */
-function partTarget(source: string, target: string): string {
-  const decoded = decodeURIComponent(target);
-  if (
-    !decoded ||
-    decoded.length > 1000 ||
-    /[\\\u0000-\u001f?#]/.test(decoded) ||
-    /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(decoded)
-  )
-    throw new Error('Invalid Office package relationship target.');
-  const stack = decoded.startsWith('/')
-    ? []
-    : path.posix
-        .dirname(source)
-        .split('/')
-        .filter((part) => part !== '.');
-  for (const part of decoded.split('/')) {
-    if (!part || part === '.') continue;
-    if (part === '..') {
-      if (!stack.length) throw new Error('Office relationship escapes its package.');
-      stack.pop();
-    } else stack.push(part);
-  }
-  return stack.join('/');
-}
-function relationships(root: XMLNode): Relationship[] {
-  if (localName(root) !== 'Relationships') throw new Error('Malformed Office relationships.');
-  const ids = new Set<string>();
-  return children(root, 'Relationship').map((node) => {
-    const id = attribute(node, 'Id') || '',
-      type = attribute(node, 'Type') || '',
-      target = attribute(node, 'Target') || '';
-    if (!id || ids.has(id) || !type || !target)
-      throw new Error('Malformed or duplicate Office relationship.');
-    ids.add(id);
-    return { id, type, target, external: attribute(node, 'TargetMode') === 'External' };
-  });
-}
-function wordText(node: XMLNode): string {
-  const name = localName(node);
-  if (['del', 'moveFrom', 'instrText', 'drawing', 'pict', 'object'].includes(name)) return '';
-  if (name === 't') return xmlText(node);
-  if (name === 'tab') return '\t';
-  if (name === 'br' || name === 'cr') return '\n';
-  return children(node).map(wordText).join('');
-}
-function wordParagraphs(node: XMLNode): XMLNode[] {
-  if (['del', 'moveFrom'].includes(localName(node))) return [];
-  if (localName(node) === 'p') return [node];
-  return children(node).flatMap(wordParagraphs);
-}
+import { typeIs, partTarget, relationships } from './office-package';
+import { wordContent } from './office-word';
+
 function richText(node: XMLNode): string {
   return children(node)
     .map((part) =>
@@ -89,60 +27,6 @@ function richText(node: XMLNode): string {
           : '',
     )
     .join('');
-}
-function wordContent(main: XMLNode): { content: OfficeContent; truncated: boolean } {
-  const body = child(main, 'body');
-  if (localName(main) !== 'document' || !body)
-    throw new Error('This DOCX has no readable document body.');
-  const blocks: (WordParagraph | WordTable)[] = [];
-  let characters = 0,
-    tableCells = 0,
-    truncated = false;
-  const text = (node: XMLNode) => {
-    const value = wordText(node);
-    const bounded = value.slice(0, Math.max(0, 500000 - characters));
-    characters += bounded.length;
-    if (bounded.length < value.length) truncated = true;
-    return bounded;
-  };
-  const visit = (node: XMLNode) => {
-    if (blocks.length >= 2000 || characters >= 500000) {
-      truncated = true;
-      return;
-    }
-    const name = localName(node);
-    if (name === 'del' || name === 'moveFrom') return;
-    if (name === 'p') {
-      const value = text(node);
-      const properties = child(node, 'pPr');
-      const outline = properties && child(properties, 'outlineLvl');
-      const style = properties && child(properties, 'pStyle');
-      const level = outline
-        ? Number(attribute(outline, 'val')) + 1
-        : Number(style && attribute(style, 'val')?.match(/^Heading([1-6])$/i)?.[1]);
-      blocks.push({
-        kind: 'paragraph',
-        text: value,
-        ...(level >= 1 && level <= 6 ? { heading: level } : {}),
-      });
-    } else if (name === 'tbl') {
-      const rows = children(node, 'tr');
-      if (rows.length > 500) truncated = true;
-      blocks.push({
-        kind: 'table',
-        rows: rows.slice(0, 500).map((row) => {
-          const cells = children(row, 'tc');
-          if (cells.length > 100) truncated = true;
-          if (tableCells + cells.length > 10000) truncated = true;
-          const retained = cells.slice(0, Math.min(100, Math.max(0, 10000 - tableCells)));
-          tableCells += retained.length;
-          return retained.map((cell) => wordParagraphs(cell).map(text).join('\n'));
-        }),
-      });
-    } else for (const nested of children(node)) visit(nested);
-  };
-  for (const node of children(body)) visit(node);
-  return { content: { kind: 'word', blocks }, truncated };
 }
 /** Caller holds native read coordination. No package part is written or executed. */
 export async function extractOffice(
@@ -224,11 +108,17 @@ export async function extractOffice(
     }
     const main = await read(mainPath);
     if (path.extname(file).toLowerCase() === '.docx') {
-      const parsed = wordContent(main);
+      const relPath = path.posix.join(
+        path.posix.dirname(mainPath),
+        '_rels',
+        path.posix.basename(mainPath) + '.rels',
+      );
+      const rels = entries.has(relPath) ? relationships(await read(relPath)) : [];
+      const parsed = wordContent(main, mainPath, rels, entries, types);
       result.office = parsed.content;
       result.truncated = parsed.truncated;
       result.coverageReason =
-        'Document body text and tables. Page layout, images, merged table cells, headers, footers, footnotes and tracked deletions are omitted.';
+        'Document body text, tables and embedded PNG/JPEG images in source order. Page layout, floating-image positioning, unsupported drawings, merged table cells, headers, footers, footnotes and tracked deletions are omitted. External images are not loaded.';
       if (parsed.content.kind === 'word')
         for (const [block, item] of parsed.content.blocks.entries()) {
           const text =
@@ -249,6 +139,15 @@ export async function extractOffice(
         path.posix.basename(mainPath) + '.rels',
       );
       const rels = relationships(await read(relPath));
+      const styleRelation = rels.find((item) => typeIs(item.type, 'styles') && !item.external);
+      const stylePart = styleRelation
+        ? await read(partTarget(mainPath, styleRelation.target))
+        : undefined;
+      const workbookProperties = child(main, 'workbookPr');
+      const date1904 = ['1', 'true'].includes(
+        workbookProperties ? (attribute(workbookProperties, 'date1904') ?? '') : '',
+      );
+      const format = workbookFormatter(stylePart, date1904);
       const shared = rels.find((item) => typeIs(item.type, 'sharedStrings') && !item.external);
       const strings = shared
         ? children(await read(partTarget(mainPath, shared.target)), 'si').map(richText)
@@ -314,9 +213,57 @@ export async function extractOffice(
         const range: WorksheetReadWindow | undefined = window
           ? { fromRow: window.fromRow, limit: window.limit }
           : undefined;
-        const parser = worksheetReader(sheet, strings, budget, result.evidence, range);
+        const parser = worksheetReader(sheet, strings, budget, result.evidence, range, format);
         await reader.readZIPChunks(file, part, (chunk) => parser.write(chunk), signal);
         parser.end();
+        const anchors = new Set<string>();
+        for (const merge of sheet.merges ?? []) {
+          const value = sheet.rows
+            .find((row) => row.row === merge.fromRow)
+            ?.cells.find((cell) => cell.column === merge.fromColumn);
+          if (value) merge.anchor = value;
+          else if (sheet.rows.some((row) => row.row >= merge.fromRow && row.row <= merge.toRow))
+            anchors.add(columnName(merge.fromColumn) + merge.fromRow);
+        }
+        if (anchors.size) {
+          const anchorSheet: WorkbookSheet = {
+            name,
+            hidden: sheet.hidden,
+            rows: [],
+            columns: 1,
+            truncated: false,
+          };
+          const anchorBudget: WorkbookBudget = {
+            cells: 0,
+            characters: 0,
+            formulas: 0,
+            missingCached: 0,
+            truncated: false,
+          };
+          const anchorParser = worksheetReader(
+            anchorSheet,
+            strings,
+            anchorBudget,
+            [],
+            undefined,
+            format,
+            anchors,
+          );
+          await reader.readZIPChunks(file, part, (chunk) => anchorParser.write(chunk), signal);
+          anchorParser.end();
+          sheet.mergeLimited ||= anchorSheet.truncated || anchorBudget.truncated;
+          for (const merge of sheet.merges ?? [])
+            if (!merge.anchor)
+              merge.anchor = anchorSheet.rows
+                .find((row) => row.row === merge.fromRow)
+                ?.cells.find((cell) => cell.column === merge.fromColumn) ?? {
+                column: merge.fromColumn,
+                value: '',
+                ...(sheet.mergeLimited
+                  ? { formatWarning: 'The merged anchor exceeds the preview read limit.' }
+                  : {}),
+              };
+        }
         if (range)
           page = {
             sheet: name,
@@ -340,7 +287,7 @@ export async function extractOffice(
         ...(page ? { page } : {}),
       };
       result.coverageReason =
-        'Saved cell values; formulas are not recalculated. Number/date formatting, merged cells, charts, drawings and external data are omitted.';
+        'Saved cell values with bounded number/date formats and merged ranges. Stored values and formulas remain inspectable; formulas are not recalculated. Conditional formatting, source fonts/colors, charts, drawings and external data are omitted.';
     }
     const after = await lstat(fileCoordination.path(file));
     if (

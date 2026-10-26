@@ -346,7 +346,6 @@ function MenuList({
                 aria-haspopup={entry.kind === 'submenu' ? 'menu' : undefined}
                 aria-expanded={entry.kind === 'submenu' ? openedID === entry.id : undefined}
                 data-active={activeID === entry.id}
-                title={name}
                 className="command-result"
                 onPointerEnter={() => onHover(entry, depth)}
                 onMouseDown={(event) => event.preventDefault()}

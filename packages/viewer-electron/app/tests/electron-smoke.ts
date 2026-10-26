@@ -5335,11 +5335,15 @@ async function verifyEntryAndPalette(): Promise<void> {
   );
   await until(
     () =>
-      settingsEvaluate<boolean>(`!!document.querySelector('.command-result[title="Downloads"]')`),
+      settingsEvaluate<boolean>(
+        `Array.from(document.querySelectorAll('.command-result')).some(row => row.querySelector('.command-result-text > span')?.textContent === 'Downloads')`,
+      ),
     Boolean,
     'new-plane folder choices',
   );
-  await settingsEvaluate(`document.querySelector('.command-result[title="Downloads"]').click()`);
+  await settingsEvaluate(
+    `Array.from(document.querySelectorAll('.command-result')).find(row => row.querySelector('.command-result-text > span')?.textContent === 'Downloads').click()`,
+  );
   await until(
     () =>
       evaluate<{ settings: { browsing: { newPlaneLocation: string } } }>(
@@ -6286,16 +6290,23 @@ async function verify(): Promise<void> {
     );
     await evaluate('window.__qaMedia=null');
   }
-  await preview(path.join(fixture.files, 'Media', 'Malformed.mkv'), 'Media could not be played');
+  await preview(
+    path.join(fixture.files, 'Media', 'Malformed.mkv'),
+    'Compatibility preview unavailable',
+  );
   assert.equal(
     await evaluate('!!document.querySelector(".quick-preview .native-open-actions")'),
     true,
   );
   await snapshot('desktop-native-media-error.png');
   await evaluate(
-    `Array.from(document.querySelectorAll('.quick-preview button')).find(button=>button.textContent.trim()==='Retry').click()`,
+    `Array.from(document.querySelectorAll('.quick-preview button')).find(button=>button.textContent.trim()==='Retry conversion').click()`,
   );
-  await until(text, (value) => value.includes('Media could not be played'), 'media retry recovery');
+  await until(
+    text,
+    (value) => value.includes('Compatibility preview unavailable'),
+    'media retry recovery',
+  );
   await closePreview();
   await paletteCommand('Parent folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'return after media');

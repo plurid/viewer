@@ -12,8 +12,14 @@ import { Archives } from './archives';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
 import { fileCoordination } from '../files/file-coordination';
 import { modelFormats } from '../../domain/previews/models/formats';
+import {
+  cameraRawFormats,
+  type ImageRenditionRequest,
+} from '../../domain/previews/images/rendered';
+import type { DerivedPreviews, DerivedMode } from './derived';
 
 interface Grant {
+  dispose?(): void;
   resource: Resource;
   authority?: string;
   root?: string;
@@ -40,6 +46,7 @@ export class Resources {
       signal: AbortSignal,
     ) => Promise<{ data: Buffer; extension: string }>,
     private renditionTimeout = 12000,
+    private derived?: DerivedPreviews,
   ) {}
   grant(file: string, requestID?: string): Promise<Resource> {
     if (requestID && this.pending.has(requestID))
@@ -179,6 +186,7 @@ export class Resources {
     this.aborts.delete(id);
     for (const stream of this.streams.get(id)?.keys() ?? []) stream.destroy();
     const grant = this.grants.get(id);
+    grant?.dispose?.();
     if (grant?.file) this.archives.release(grant.file);
     for (const child of grant?.archiveChildren ?? []) this.release(child);
     this.grants.delete(id);
@@ -209,8 +217,10 @@ export class Resources {
   clear(root?: string): Promise<string | undefined> {
     const canonical = this.work.invalidate(root);
     this.clearKnown(root);
+    this.derived?.invalidate(root);
     return canonical.then((actual) => {
       if (actual && actual !== root) this.clearKnown(actual);
+      if (actual && actual !== root) this.derived?.invalidate(actual);
       return actual;
     });
   }
@@ -236,6 +246,7 @@ export class Resources {
   async close(): Promise<void> {
     this.work.stop();
     await this.quiesce();
+    await this.derived?.close();
   }
   /** The file behind a previewed PDF; entries inside archives are not files to print. */
   async printableFile(id: string): Promise<string> {
@@ -372,10 +383,56 @@ export class Resources {
     return this.dataChild(id, path.basename(name), `${grant.file} → ${name}`, data);
   }
   /** A preview of a file Chromium cannot decode, rendered by the system and held in memory. */
-  rendition(id: string): Promise<Resource> {
+  rendition(id: string, request?: ImageRenditionRequest): Promise<Resource> {
+    const grant = this.get(id);
+    if (cameraRawFormats.includes(grant.resource.entry.extension))
+      return this.derivedRendition(
+        id,
+        request?.mode ?? 'camera',
+        request?.requestID ?? randomUUID(),
+      );
+    if (request?.mode === 'raw')
+      return Promise.reject(new Error('RAW rendering requires a camera RAW file.'));
     return this.work.track(this.paths(id), (scope) =>
       this.coordinated(id, () => this.renderFile(id, scope.signal)),
     );
+  }
+  videoRendition(id: string, requestID: string): Promise<Resource> {
+    const grant = this.get(id);
+    if (
+      !grant.resource.entry.mime.startsWith('video/') &&
+      !['mp4', 'm4v', 'mov', 'avi', 'mkv', 'webm', 'ogv', 'mpg', 'mpeg', 'ts', 'm2ts'].includes(
+        grant.resource.entry.extension,
+      )
+    )
+      return Promise.reject(
+        new Error('Choose a supported video file for a compatibility preview.'),
+      );
+    return this.derivedRendition(id, 'video', requestID);
+  }
+  private derivedRendition(id: string, mode: DerivedMode, requestID: string): Promise<Resource> {
+    const grant = this.get(id);
+    if (!this.derived)
+      return Promise.reject(new Error('The local preview decoder is unavailable.'));
+    return this.documentRead(id, requestID, async (file, signal) => {
+      const lease = await this.derived!.read(file, mode, signal);
+      try {
+        signal.throwIfAborted();
+        this.get(id);
+        const child = this.dataChild(
+          id,
+          grant.resource.entry.name + '.' + lease.value.extension,
+          grant.resource.entry.path,
+          lease.value.data,
+        );
+        child.derivation = { kind: lease.value.kind, decoder: lease.value.decoder };
+        this.get(child.id).dispose = lease.release;
+        return child;
+      } catch (error) {
+        lease.release();
+        throw error;
+      }
+    });
   }
   private async renderFile(id: string, scope: AbortSignal): Promise<Resource> {
     const grant = this.get(id);
@@ -423,6 +480,16 @@ export class Resources {
   private dataChild(id: string, basename: string, label: string, data: Buffer): Resource {
     const grant = this.get(id);
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
+    const held = new Set(
+      [...this.grants.values()].flatMap((item) => (item.data ? [item.data] : [])),
+    );
+    if (
+      data.length > 64 * 1024 * 1024 ||
+      (!held.has(data) &&
+        [...held].reduce((total, bytes) => total + bytes.length, 0) + data.length >
+          128 * 1024 * 1024)
+    )
+      throw new Error('The preview resource budget is full. Close a preview and try again.');
     const childID = randomUUID();
     const resource: Resource = {
       dimensions: imageDimensions(data),

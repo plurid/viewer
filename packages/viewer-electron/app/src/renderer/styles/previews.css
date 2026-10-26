@@ -75,6 +75,7 @@
   height: var(--preview-control-height);
 }
 .image-viewer,
+.rendered-image-viewer,
 .model-viewer,
 .pdf-viewer,
 .text-viewer,
@@ -86,6 +87,10 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+}
+.rendered-image-viewer > .image-viewer {
+  flex: 1;
+  height: auto;
 }
 .image-stage {
   position: relative;

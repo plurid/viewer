@@ -13,6 +13,10 @@ const sourceAssets = [
   'assets/licenses/README.txt',
   'assets/licenses/opencascade.txt',
   'assets/licenses/occt-import-js.txt',
+  'assets/licenses/ssf-0.11.2.txt',
+  'assets/vendor/ssf-0.11.2.mjs',
+  'assets/vendor/ssf-0.11.2.d.mts',
+  'assets/vendor/ssf-0.11.2.json',
 ] as const;
 
 async function optionalFileHash(hash: ReturnType<typeof createHash>, file: string, name: string) {

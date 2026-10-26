@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import type { CapturedTarget } from '../src/domain/automation/actions';
-import type { ViewerAPI } from '../src/domain/contracts';
+import type { ViewerAPI, FileEntry } from '../src/domain/contracts';
 import type { WorktreeCatalog } from '../src/domain/comparison/worktrees';
 import { WorktreesDialog } from '../src/renderer/git/worktrees/WorktreesDialog';
 import { activeWorkspace, flushState, getState, initialize } from '../src/renderer/state/store';
@@ -21,11 +21,14 @@ HTMLDialogElement.prototype.close ??= function () {
 let catalog: WorktreeCatalog;
 let target: CapturedTarget;
 const api = vi.fn<ViewerAPI['gitWorktrees']>();
-const open = vi.fn(async () => {});
+const open = vi.fn(async () => 'opened-folder');
+const changes = vi.fn();
 const close = vi.fn();
 beforeEach(() => {
   api.mockReset();
   open.mockReset();
+  open.mockResolvedValue('opened-folder');
+  changes.mockReset();
   close.mockReset();
   Object.assign(window, { viewer: { save: vi.fn(async () => {}), gitWorktrees: api } });
   initialize({
@@ -100,12 +103,70 @@ const mount = () =>
   render(
     createElement(WorktreesDialog, {
       target,
-      workspace: { openWorktree: open } as unknown as WorkspaceController,
+      workspace: { openWorktree: open, openGitChanges: changes } as unknown as WorkspaceController,
       onClose: close,
     }),
   );
 
 describe('existing worktree picker', () => {
+  it('captures a pinned new branch and editable sibling destination, then links its Git view', async () => {
+    const baseID = crypto.randomUUID();
+    catalog.branches = [
+      {
+        id: baseID,
+        name: 'main',
+        branch: 'main',
+        commit: 'a'.repeat(40),
+        worktreeID: catalog.worktrees[0]!.id,
+      },
+    ];
+    catalog.defaultBaseID = baseID;
+    const next = { ...catalog, id: crypto.randomUUID() },
+      treeID = crypto.randomUUID();
+    const previous = api.getMockImplementation()!;
+    api.mockImplementation(async (request) =>
+      request.kind === 'create'
+        ? {
+            kind: 'created',
+            catalog: next,
+            worktreeID: treeID,
+            entry: { path: '/fixture/main-feature-fast' } as FileEntry,
+          }
+        : previous(request),
+    );
+    mount();
+    await screen.findByRole('button', { name: 'Create worktree…' });
+    fireEvent.click(screen.getByRole('button', { name: 'Create worktree…' }));
+    fireEvent.change(screen.getByLabelText('New branch name'), {
+      target: { value: 'invalid branch' },
+    });
+    expect(
+      screen.getByText('Remove spaces or unsupported symbols; for example, feature/my-task.'),
+    ).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: 'Create and open' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText('New branch name'), {
+      target: { value: 'feature/fast' },
+    });
+    expect((screen.getByLabelText('Worktree destination') as HTMLInputElement).value).toBe(
+      '/fixture/main-feature-fast',
+    );
+    fireEvent.change(screen.getByLabelText('Worktree destination'), {
+      target: { value: '/fixture/custom-destination' },
+    });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create and open' })));
+    expect(api).toHaveBeenCalledWith({
+      kind: 'create',
+      catalogID: catalog.id,
+      target,
+      destination: '/fixture/custom-destination',
+      checkout: { kind: 'new', name: 'feature/fast', baseID },
+    });
+    expect(open).toHaveBeenCalledWith(target, { catalogID: next.id, worktreeID: treeID });
+    expect(changes).toHaveBeenCalledWith('/fixture/main-feature-fast', 'opened-folder');
+    expect(close).toHaveBeenCalledOnce();
+  });
   it('shows current/shared views, searches branches and dispatches an exact captured selection', async () => {
     mount();
     await act(async () => {});

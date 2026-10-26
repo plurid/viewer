@@ -1,6 +1,6 @@
 # Preview format inventory
 
-Last checked against the source on **October 24, 2026**. This is the reference for
+Last checked against the source on **October 25, 2026**. This is the reference for
 current preview coverage, limitations within supported formats, and proposed
 major and medium additions. Implementation status is separate from the
 candidate-specific results in [verification](verification.md).
@@ -8,8 +8,8 @@ candidate-specific results in [verification](verification.md).
 The [stable playground](playground.md) supplies manual examples for every current
 registered extension and conventional filename, with provenance, checksums and
 expected decoder limitations. Run `pnpm playground` from the repository.
-Actual larger-file outcomes, including Office reader refusals, system RAW
-timeouts and partial media decode, are recorded in
+Actual larger-file outcomes, including Office reader refusals, independent RAW
+decoding and remaining partial media decode, are recorded in
 [real-file qualification](real-file-qualification.md).
 
 The expanded [professional format ecosystems](preview-format-ecosystems.md)
@@ -46,7 +46,7 @@ records these distinctions, including file packages and directory-backed sources
 | ---------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Images           | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, `.bmp`, `.ico`, `.svg`  | Image preview with zoom and image controls.                                                     |
 | Extended images  | `.tif`, `.tiff`, `.heic`, `.heif`, `.psd`, `.jp2`, `.exr`, `.tga`, `.icns` | System-rendered bitmap; PSD coverage is its rendered composite.                                 |
-| Camera RAW       | `.dng`, `.cr2`, `.cr3`, `.nef`, `.arw`, `.raf`, `.orf`, `.rw2`             | System-rendered bitmap, dependent on camera/OS decoding support.                                |
+| Camera RAW       | `.dng`, `.cr2`, `.cr3`, `.nef`, `.arw`, `.raf`, `.orf`, `.rw2`             | Independent LibRaw camera image or half-size RAW rendition, up to 4096px. Exact camera/encoding coverage still requires qualification. |
 | PDF              | `.pdf`                                                                     | Pages, text-layer search/selection, thumbnails and outline navigation.                          |
 | Books            | `.epub`                                                                    | Chapter navigation and rendered book content.                                                   |
 | DjVu             | `.djvu`, `.djv`                                                            | Page rendering and text-layer search.                                                           |
@@ -60,7 +60,7 @@ records these distinctions, including file packages and directory-backed sources
 | 3D meshes/scenes | `.glb`, `.gltf`, `.obj`, `.stl`, `.fbx`, `.3mf`, `.ply`                    | Interactive 3D viewing, dimensions, appearance controls and surface-point distance measurement. |
 | CAD exchange     | `.step`, `.stp`, `.iges`, `.igs`                                           | Locally converted geometry in the 3D viewer; dimensions normalized to millimeters.              |
 | 2D drawings      | ASCII `.dxf`                                                               | Supported model-space entities, layers, inspection, snapping and measurements.                  |
-| Video            | `.mp4`, `.webm`, `.mov`, `.m4v`, `.ogv`                                    | Playback through Chromium's media decoder, subject to container/codec compatibility.            |
+| Video            | `.mp4`, `.webm`, `.mov`, `.m4v`, `.ogv`                                    | Original Chromium playback, with an automatic bounded local compatibility copy for unsupported video; see media tools.            |
 | Audio            | `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.opus`                   | Playback through Chromium's media decoder, subject to codec compatibility.                      |
 
 Media detection also accepts other audio/video MIME types. These may reach the
@@ -127,8 +127,8 @@ CSS selectors and property names use theme syntax roles.
 
 | Current family             | Missing capability                                                                                                                            |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| DOCX                       | Full page layout, images, headers/footers, footnotes and merged-table fidelity.                                                               |
-| XLSX                       | Number/date formatting, merged cells, charts and drawings. Formula inspection uses stored formulas/cached values; formulas are not evaluated. |
+| DOCX                       | Full page layout, unsupported image/drawing types, headers/footers, footnotes and merged Word-table fidelity.                                                               |
+| XLSX                       | Source typography, conditional formatting, charts and drawings. Bounded number/date formats and worksheet merges are supported; formulas use saved values and never recalculate. |
 | TIFF/HEIC/RAW/EXR          | Multi-page TIFF navigation, richer metadata, histogram, exposure/tone mapping and color-managed inspection beyond the system bitmap.          |
 | PSD                        | Layer/group inspection, artboards and asset extraction beyond its composite.                                                                  |
 | DXF                        | Binary DXF, paper-space layouts, spline/hatch/image coverage, fuller CAD text/dimension fidelity and 3D solids.                               |

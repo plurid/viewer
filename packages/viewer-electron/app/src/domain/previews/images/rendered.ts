@@ -1,5 +1,19 @@
-/** Formats Chromium cannot decode that macOS Quick Look renders: previews show its
- * rendering, decoded in the system's sandboxed service rather than in Viewer. */
+/** Camera formats use a bounded independent helper, not the system thumbnail service. */
+export const cameraRawFormats: readonly string[] = [
+  'dng',
+  'cr2',
+  'cr3',
+  'nef',
+  'arw',
+  'raf',
+  'orf',
+  'rw2',
+];
+export interface ImageRenditionRequest {
+  requestID: string;
+  mode: 'camera' | 'raw';
+}
+/** Formats Chromium cannot decode, rendered outside the renderer. */
 export const renderedImageFormats = [
   'tif',
   'tiff',

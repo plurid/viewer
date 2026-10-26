@@ -318,7 +318,7 @@ describe('preview work cancellation', () => {
 });
 describe('rendered image previews', () => {
   it('bounds a system renderer that never answers and lets shutdown drain', async () => {
-    const file = path.join(root, 'Camera.nef');
+    const file = path.join(root, 'Scan.tiff');
     await writeFile(file, 'generated RAW fixture');
     resources = new Resources(
       async () => {},
@@ -330,7 +330,7 @@ describe('rendered image previews', () => {
     await resources.quiesce();
   });
   it('cancels an unanswered rendition when its source preview closes and ignores late bytes', async () => {
-    const file = path.join(root, 'Camera.dng');
+    const file = path.join(root, 'Scan.tiff');
     await writeFile(file, 'generated RAW fixture');
     let resolve!: (value: { data: Buffer; extension: string }) => void, started!: () => void;
     const begun = new Promise<void>((done) => {

@@ -22,6 +22,9 @@ import {
 } from '../../domain/operations/export-presets';
 export { captureTarget } from './target';
 export interface ProgramTools {
+  showTasks?(target?: ReturnType<typeof captureTarget>): void;
+  showNotes?(): void;
+  runCommand?(target: ReturnType<typeof captureTarget>): void;
   showServers?(): void;
   newBrowser?(paneID?: string): void;
   imageTools?(files: FileEntry[], paneID?: string, preset?: ImageExportPreset): void;
@@ -46,6 +49,42 @@ export function programCommands(
     return { ...captured, directory: terminalDirectory(captured.directory, captured.selection) };
   };
   return [
+    {
+      id: 'open-tasks',
+      label: 'Tasks…',
+      group: 'Workspace',
+      icon: 'dock',
+      aliases: ['task areas', 'task context', 'command history'],
+      when: () => !!tools.showTasks,
+      run: () => tools.showTasks?.(),
+    },
+    {
+      id: 'new-task-area',
+      label: 'New task area…',
+      group: 'Workspace',
+      icon: 'dock',
+      aliases: ['task', 'branch workspace', 'task context'],
+      when: (context) => !!tools.showTasks && !!context.folder && folder(context),
+      run: (context) => tools.showTasks?.(target(context)),
+    },
+    ...(['note', 'checklist'] as const).map((kind): CommandDefinition => ({
+      id: 'new-' + kind + '-plane',
+      label: kind === 'note' ? 'New note plane' : 'New checklist plane',
+      group: 'Text',
+      icon: kind === 'note' ? 'text' : 'check',
+      aliases: [kind, 'markdown'],
+      when: () => activeWorkspace().panes.length < 200,
+      run: (context) => workspace.newNote(kind, context.directory, context.paneID),
+    })),
+    {
+      id: 'open-notes',
+      label: 'Notes…',
+      group: 'Text',
+      icon: 'text',
+      aliases: ['saved notes', 'checklists', 'reopen note'],
+      when: () => !!tools.showNotes,
+      run: () => tools.showNotes?.(),
+    },
     ...localServerCommands(workspace, showServers),
     ...exportPresetCatalog.map((preset): CommandDefinition => ({
       id: preset.id,
@@ -145,6 +184,26 @@ export function programCommands(
       aliases: ['browser', 'website', 'url', 'web page'],
       when: () => !!newBrowser,
       run: (context) => newBrowser?.(context.paneID),
+    },
+    {
+      id: 'command-progress',
+      label: 'Command progress',
+      group: 'Terminal',
+      icon: 'list',
+      aliases: ['running commands', 'command output', 'background commands'],
+      when: () => true,
+      run: () => {
+        window.dispatchEvent(new Event('viewer:command-progress'));
+      },
+    },
+    {
+      id: 'run-command',
+      label: 'Run command…',
+      group: 'Terminal',
+      icon: 'command',
+      aliases: ['shell command', 'run in folder', 'execute', 'git init'],
+      when: (context) => folder(context) && !!context.folder && !!tools.runCommand,
+      run: (context) => tools.runCommand?.({ ...target(context), selection: [] }),
     },
     {
       id: 'open-terminal',

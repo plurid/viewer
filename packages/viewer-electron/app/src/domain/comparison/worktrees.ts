@@ -1,5 +1,6 @@
 import type { FileEntry } from '../contracts';
 import type { GitSnapshot } from './git';
+import type { CapturedTarget } from '../automation/actions';
 
 export const maximumWorktrees = 256;
 
@@ -25,7 +26,27 @@ export interface WorktreeCatalog {
   repository: string;
   currentPath: string;
   worktrees: GitWorktree[];
+  branches?: WorktreeBranch[];
+  defaultBaseID?: string;
+  creationProblem?: string;
 }
+
+export interface WorktreeBranch {
+  id: string;
+  name: string;
+  commit: string;
+  /** Undefined for the synthetic detached HEAD base, which is not an existing branch. */
+  branch?: string;
+  worktreeID?: string;
+}
+
+export type WorktreeCreation = {
+  kind: 'create';
+  catalogID: string;
+  target: CapturedTarget;
+  destination: string;
+  checkout: { kind: 'new'; name: string; baseID: string } | { kind: 'existing'; branchID: string };
+};
 
 export interface WorktreeSelection {
   catalogID: string;
@@ -35,13 +56,45 @@ export interface WorktreeSelection {
 export type WorktreeRequest =
   | { kind: 'list'; directory: string }
   | ({ kind: 'inspect' | 'open' } & WorktreeSelection)
+  | WorktreeCreation
   | { kind: 'release'; catalogID: string };
 
 export type WorktreeReply =
   | { kind: 'catalog'; catalog: WorktreeCatalog }
   | { kind: 'status'; snapshot: GitSnapshot }
   | { kind: 'folder'; entry: FileEntry }
+  | { kind: 'created'; catalog: WorktreeCatalog; worktreeID: string; entry: FileEntry }
   | { kind: 'released' };
+
+export function validBranchName(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= 200 &&
+    value !== '@' &&
+    !value.startsWith('-') &&
+    !value.startsWith('/') &&
+    !value.endsWith('/') &&
+    !value.endsWith('.') &&
+    !/[\x00-\x20\x7f~^:?*\\[\\]/.test(value) &&
+    !value.includes('..') &&
+    !value.includes('@{') &&
+    !value.includes('//') &&
+    value.split('/').every((part) => !part.startsWith('.') && !part.endsWith('.lock'))
+  );
+}
+
+/** A sibling suggestion only; the desktop independently validates the selected destination. */
+export function worktreeDestination(repository: string, branch: string): string {
+  const separator = repository.includes('\\') ? '\\' : '/';
+  const parts = repository.replace(/[\\/]+$/, '').split(/[\\/]/);
+  const name = parts.pop() || 'repository';
+  const suffix =
+    branch
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'task';
+  return parts.join(separator) + separator + name + '-' + suffix;
+}
 
 export function worktreeLabel(worktree: GitWorktreeRecord): string {
   if (worktree.bare) return 'Bare repository';

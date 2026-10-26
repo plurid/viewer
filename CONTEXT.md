@@ -11,6 +11,7 @@ Viewer is a macOS-first file manager with familiar file navigation, spatial prev
 | Plane                  | A host record for a folder, search, collection, preview, terminal, scratch, comparison, Git changes or Chat; its engine route and geometry belong to the workspace adapter.                                                              |
 | Scratch plane          | Text that is not a file yet, kept in private app data until Save As writes it (the plane then shows that file, in place) or it is discarded; `editing/ScratchPlane.tsx`.                                                                 |
 | Text buffer            | Unsaved text kept in private app data: a scratch plane's, or a file's unsaved edits with the version they were made over; `desktop/editing/text-buffers.ts`, `renderer/editing/buffers.ts`. Removed only when saved or discarded.        |
+| Note / checklist       | A private Markdown document independent of its views. `domain/editing/notes.ts` owns its shape; `desktop/editing/notes.ts` owns revisioned persistence and conflict copies; `renderer/notes` owns editing sessions, library and views.   |
 | Root                   | An independent spatial branch. Reuse of a preview stays within that root; explicit new planes remain independent.                                                                                                                        |
 | Captured target        | Workspace/root/plane/directory plus selected entries and origin path, frozen before an asynchronous action; `domain/automation/actions.ts`.                                                                                              |
 | Command                | A contextual action with ID, availability, aliases and shortcut; `renderer/commands/registry.ts`. UI menus, keys and agent proposals invoke it.                                                                                          |
@@ -64,7 +65,7 @@ comparison, previews, terminals, workers, native helpers and diagnostics.
 at its root. Existing explorer, workspace, editing, terminal, Chat and preview
 modules remain separate features.
 
-Saved workspace state is version **8** (`CURRENT_STATE_VERSION`). Versions 1–7
+Saved workspace state is version **10** (`CURRENT_STATE_VERSION`). Versions 1–9
 receive byte-preserving backups before migration; legacy globally applied profiles
 are restored only through compare-and-set checks. Shared-agent authority is private
 version **2** and requires native review; version-1 authority cannot grant access.
@@ -98,3 +99,20 @@ by original Excel row numbers. It uses an existing preview resource, a cancellab
 request ID and a source-version/range cache key. Unloaded sheet metadata differs
 from empty sheet content. Index/agent extraction keeps its separate existing
 content bounds and authority.
+
+A **manual command run** is an explicit shell submission from a workspace window,
+captured against its folder and owned by that window. It reuses `Executions`,
+keeps bounded output and cancellation, and never becomes agent authority. Closing
+the output view leaves the run alive; application shutdown stops it. A saved
+command draft is transferred to Settings for explicit addition, not saved or
+executed by its workspace form.
+
+
+Task areas are private named checkout contexts inside a workspace, not new
+workspaces or harnesses. `domain/workspaces/tasks.ts` owns bounded durable tool
+references; `renderer/tasks/controller.ts` composes existing resource services
+through the spatial adapter. Plane IDs are view hints. Manual command receipts
+are app-owned evidence in `desktop/actions/receipts.ts`, independent of execution
+and view lifetimes. Neither task/receipt state nor private document views enter
+portable project exports. Cold restoration does not replay commands, agents or
+servers. See [task areas](docs/task-areas.md).

@@ -89,3 +89,26 @@ warm cache. Output formats and playback codecs differ: a source Chromium cannot
 play can still be inspectable/exportable by FFmpeg. Apple Silicon direct-package
 checks qualify this candidate; Intel, other operating systems and Store
 distribution remain separate release qualification.
+
+
+## Automatic compatibility playback
+
+When an original video errors, opens without a picture or stalls before decoding,
+Viewer prepares a complete local compatibility copy. Fixed bundled FFmpeg commands
+read only the validated source descriptor and produce H.264/AAC in memory, without
+network access or writing a temporary movie. The player labels the copy and keeps
+all editing/export operations bound to the original file.
+
+The copy preserves aspect/orientation, limits picture size to 1280×720 at 30 fps
+and uses stereo AAC. Metadata, chapters, subtitles and extra streams are omitted.
+A 4 GiB input ceiling, 64 MiB output ceiling and 120-second deadline bound the
+operation. A source too long for the complete-copy budget is refused before
+encoding; output is decoded through EOF to verify duration and codecs. This is
+playback compatibility, not a promise to convert every video variant. Cancel and
+Retry remain explicit; audio-only playback is offered only when audio was observed.
+
+Copies use the same source-versioned 128 MiB cache and single expensive-decoder
+lane as RAW previews. Closing the last consumer cancels work. Permission changes
+invalidate access even on a cache hit; released resources cannot serve ranges.
+`tests/native/video-compatibility.ts` qualifies the pinned Theora/Vorbis trailer's
+picture, audio, seeking, cancellation, warm reuse and unchanged source bytes.

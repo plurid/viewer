@@ -13,11 +13,14 @@ import { parentPath } from '../../domain/workspaces/planes';
 import type {
   Pane,
   ScratchPane,
+  NotePane,
   ChatPane,
   ServerPane,
   JournalPane,
   BrowserPane,
   MediaPane,
+  TaskPane,
+  ReceiptPane,
 } from '../../domain/contracts';
 import type { DiffSource } from '../../domain/comparison/diff';
 import {
@@ -160,10 +163,13 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
   for (const pane of panes) {
     if (
       pane.type === 'scratch' ||
+      pane.type === 'note' ||
       pane.type === 'chat' ||
       pane.type === 'server' ||
       pane.type === 'browser' ||
       pane.type === 'media' ||
+      pane.type === 'task' ||
+      pane.type === 'receipt' ||
       pane.type === 'journal'
     )
       continue;
@@ -190,13 +196,24 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       pane,
     ): pane is Exclude<
       Pane,
-      ScratchPane | ChatPane | ServerPane | JournalPane | BrowserPane | MediaPane
+      | ScratchPane
+      | NotePane
+      | ChatPane
+      | ServerPane
+      | JournalPane
+      | BrowserPane
+      | MediaPane
+      | TaskPane
+      | ReceiptPane
     > =>
       pane.type !== 'scratch' &&
+      pane.type !== 'note' &&
       pane.type !== 'chat' &&
       pane.type !== 'server' &&
       pane.type !== 'browser' &&
       pane.type !== 'media' &&
+      pane.type !== 'task' &&
+      pane.type !== 'receipt' &&
       pane.type !== 'journal',
   );
   const source = (value: DiffSource): PortableDiffSource => {

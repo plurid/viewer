@@ -25,14 +25,29 @@ export interface WordParagraph {
   kind: 'paragraph';
   text: string;
   heading?: number;
+  inlines?: WordInline[];
 }
+export type WordInline =
+  | { kind: 'text'; text: string }
+  | {
+      kind: 'image';
+      part?: string;
+      alt: string;
+      width?: number;
+      height?: number;
+      warning?: string;
+    };
 export interface WordTable {
   kind: 'table';
   rows: string[][];
+  media?: { row: number; column: number; inlines: WordInline[] }[];
 }
 export interface WorkbookCell {
   column: number;
   value: string;
+  formatted?: string;
+  numberFormat?: string;
+  formatWarning?: string;
   /** Saved formula text, never evaluated by Viewer. Shared formulas may have no text. */
   formula?: string;
   cached?: boolean;
@@ -49,6 +64,16 @@ export interface WorkbookSheet {
   truncated: boolean;
   /** False only for metadata entries outside an explicitly requested worksheet page. */
   loaded?: boolean;
+  merges?: WorkbookMerge[];
+  mergeLimited?: boolean;
+}
+export interface WorkbookMerge {
+  fromRow: number;
+  toRow: number;
+  fromColumn: number;
+  toColumn: number;
+  /** Original upper-left cell, including when outside the requested page. */
+  anchor?: WorkbookCell;
 }
 export type OfficeContent =
   | { kind: 'word'; blocks: (WordParagraph | WordTable)[] }
@@ -68,4 +93,14 @@ export function columnName(column: number): string {
     column = Math.floor(column / 26);
   }
   return name;
+}
+export function officeImageParts(office: OfficeContent | undefined): string[] {
+  if (office?.kind !== 'word') return [];
+  return office.blocks
+    .flatMap((block) =>
+      block.kind === 'paragraph'
+        ? (block.inlines ?? [])
+        : (block.media?.flatMap((cell) => cell.inlines) ?? []),
+    )
+    .flatMap((item) => (item.kind === 'image' && item.part ? [item.part] : []));
 }

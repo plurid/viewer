@@ -2,6 +2,8 @@
 
 Viewer is a macOS-first local file manager in the Plurid application family. It turns folders, search results, file previews, terminals, browser pages and media drafts into spatial planes, while letting routine work stay focused in a docked plane. The architecture must remain portable to Windows and Linux.
 
+The Text menu includes durable Markdown notes and editable checklists alongside Scratch. Notes autosave privately, survive closing their plane, reopen through Notes, and export Markdown through the existing native destination picker. Conflicting views preserve both versions as separate notes. Run command accepts a shell line in the captured folder without opening a terminal, with background output, status, elapsed time, Copy and Stop. Recent shell lines stay in window memory and can be cleared; Save as action transfers a draft to Settings for review. The shared menu omits redundant text hover labels and calls the plane sizing/position group Layout.
+
 Local quick tools trim and join media segments, extract frames/audio, remove or mix an additional audio track, convert/crop/resize raster images and optimize PDF/image sizes. Processing uses bundled fixed processors and the existing file-operation queue. New outputs preserve originals; Optimize publishes only smaller candidates and reports individual savings or failures. Media decisions are private revisioned drafts, independently restored from their views. Typed workflows and external agents may prepare reviewed exports, with captured source versions and explicit source/destination permissions; they receive no raw process or browser-session capability.
 
 Interactive browser planes use an isolated persistent Chromium profile and remain usable under real perspective. Closing a local server's view leaves its window-owned listener running; Local servers reopens its controls. A compact Related planes control exposes parent and direct children, and closing a child returns to its parent. Columns distinguish the active directory and ancestor route from operation selection. Read-only text has independent compact metrics and CSS highlighting; bounded JSON/JSONC/JSON5/YAML trees offer expand/collapse, search and copy. Shared document extraction and separate foreground/stream queues prevent abandoned media streams from starving Office previews.
@@ -59,3 +61,20 @@ Settings and external editors share a versioned `config.jsonc`, with comments, t
 Local persistence is versioned and atomic, with backups before settings migrations. UI version 3 enables navigation in existing folder planes and hides window navigation once, after backing up the original layout metadata. Later visibility choices persist. Legacy code and ~/.viewer data stay untouched. Remote/cloud accounts, third-party plugin installation, release certificate signing, notarization, and publishing are outside this first implementation. macOS development bundles use local ad-hoc signatures so they can run on Apple Silicon.
 
 Confirmed by the user during the planning interview and subsequent interface review; implementation authorized with “Implement the plan.” Existing files and folders must not be deleted during this work.
+
+
+Task areas are named checkout contexts inside a workspace. The overview keeps
+links to notes/checklists, conversations, independent terminals, Git changes and
+diffs, file previews, browsers and stopped server views. Closing a plane keeps
+its task reference; Tasks and palette entries reopen it. Manual commands keep
+private bounded receipts with the script, folder, times, output and recorded exit
+outcome, available in Tasks → Command history or the progress panel. Restoration
+never replays commands, agent input or server starts. Browser/server bindings
+follow an explicitly restarted local listener. Codex/Claude use ordinary terminal
+planes in this stage. See [task areas](docs/task-areas.md).
+
+The worktree picker also creates new or existing local branches at a pinned
+revision, suggests an editable sibling folder and opens linked checkout/Git
+views. Occupied branches offer their existing checkout. Creation preserves source
+files/index, obeys ordinary repository hooks/filters, and never forces, switches,
+stashes, resets, prunes or removes a checkout. See [Git worktrees](docs/git-worktrees.md).

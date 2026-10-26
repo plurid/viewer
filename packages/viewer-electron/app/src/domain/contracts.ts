@@ -8,6 +8,7 @@ import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
 import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
 import type { TransformPlan } from './operations/transforms';
 import type { WorksheetDocumentRequest } from './previews/documents/office';
+import type { ImageRenditionRequest } from './previews/images/rendered';
 import type { MediaRequest, MediaReply } from './media/documents';
 import type { BrowserRequest, BrowserSnapshot } from './previews/browser';
 import type {
@@ -21,6 +22,9 @@ import type { SessionKeys } from './preferences/session-keys';
 import type { WorkspaceOverrides } from './preferences/overrides';
 import type { Tiling } from './workspaces/tiling';
 import type { TextBuffer, TextBufferSummary, TextOpening, TextVersion } from './editing/documents';
+import type { NoteRequest, NoteReply } from './editing/notes';
+import type { ReceiptRequest, ReceiptReply } from './automation/receipts';
+import type { TaskArea } from './workspaces/tasks';
 import type { EvidenceNavigation, SourceVersion, InspectionResult } from './files/inspection';
 import type { WorkflowRequest, WorkflowReply } from './automation/workflows';
 import type { WatchRule, WatchRuleRequest, WatchRuleReply } from './automation/watch-rules';
@@ -160,6 +164,13 @@ export interface ScratchPane {
   language?: string;
   title?: string;
 }
+export interface NotePane {
+  id: string;
+  type: 'note';
+  path: string;
+  documentID: string;
+  title: string;
+}
 export interface SearchPane {
   id: string;
   type: 'search';
@@ -175,6 +186,8 @@ export interface TerminalPane {
   type: 'terminal';
   path: string;
   profileID: string;
+  /** Stable logical task terminal; opening another view does not replay its prior input. */
+  taskSessionID?: string;
   startOnOpen?: boolean;
   /** Display metadata only. Git jobs are never replayed from saved state. */
   gitAction?: GitActionKind;
@@ -235,13 +248,29 @@ export interface JournalPane {
   filter: JournalFilter;
   savedFilters?: { id: string; name: string; filter: JournalFilter }[];
 }
+export interface TaskPane {
+  id: string;
+  type: 'task';
+  path: string;
+  areaID: string;
+  title: string;
+}
+export interface ReceiptPane {
+  id: string;
+  type: 'receipt';
+  path: string;
+  receiptID: string;
+}
 export type Pane =
+  | TaskPane
+  | ReceiptPane
   | FolderPane
   | PreviewPane
   | SearchPane
   | TerminalPane
   | CollectionPane
   | ScratchPane
+  | NotePane
   | DiffPane
   | GitChangesPane
   | ChatPane
@@ -249,11 +278,32 @@ export type Pane =
   | BrowserPane
   | MediaPane
   | JournalPane;
+/** Runtime kind catalog stays exhaustive as new plane records are added. */
+export const paneTypes = {
+  task: 'task',
+  receipt: 'receipt',
+  folder: 'folder',
+  preview: 'preview',
+  search: 'search',
+  terminal: 'terminal',
+  collection: 'collection',
+  scratch: 'scratch',
+  note: 'note',
+  diff: 'diff',
+  'git-changes': 'git-changes',
+  chat: 'chat',
+  server: 'server',
+  browser: 'browser',
+  media: 'media',
+  journal: 'journal',
+} as const satisfies { [Kind in Pane['type']]: Kind };
 export interface Workspace {
   id: string;
   name: string;
   panes: Pane[];
   roots: string[];
+  /** Private task context persists independently of open views. Never exported in a project. */
+  taskAreas?: TaskArea[];
   activePane?: string;
   arrangement: Record<string, string>;
   project?: ProjectAssociation;
@@ -272,9 +322,9 @@ export interface Workspace {
   tiling?: Tiling;
 }
 /** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
-export const CURRENT_STATE_VERSION = 8 as const;
+export const CURRENT_STATE_VERSION = 10 as const;
 export interface SavedState {
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | typeof CURRENT_STATE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
   preferencesRevision?: number;
   workspaces: Workspace[];
@@ -460,6 +510,7 @@ export interface SearchBatch {
   truncated: boolean;
 }
 export interface Resource {
+  derivation?: { kind: 'camera' | 'raw' | 'video'; decoder: string };
   dimensions?: { width: number; height: number };
   id: string;
   url: string;
@@ -481,6 +532,8 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'note-changed'; id: string; revision: number }
+  | { type: 'receipt-changed'; id: string }
   | { type: 'browser'; browser: BrowserSnapshot }
   | { type: 'journal-changed' }
   | { type: 'local-servers'; servers: LocalServer[] }
@@ -524,6 +577,8 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  notes(request: NoteRequest): Promise<NoteReply>;
+  receipts(request: ReceiptRequest): Promise<ReceiptReply>;
   pdfInspect(file: string): Promise<{ pages: number; version: SourceVersion }>;
   choosePDFs(): Promise<string[]>;
   imageInspect(
@@ -604,6 +659,8 @@ export interface ViewerAPI {
   terminalAck(id: string, bytes: number): Promise<void>;
   terminalClose(id: string): Promise<void>;
   customExecute(actionID: string, target: CapturedTarget): Promise<string>;
+  runCommand(script: string, target: CapturedTarget): Promise<string>;
+  commandDraft(request?: { script: string; name: string }): Promise<CustomAction | undefined>;
   executionList(): Promise<ExecutionTask[]>;
   executionCancel(id: string): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
@@ -688,7 +745,9 @@ export interface ViewerAPI {
   archive(id: string): Promise<ArchiveListing>;
   archiveEntry(id: string, name: string): Promise<Resource>;
   /** A system-rendered image of a granted file Chromium cannot decode. */
-  imageRendition(id: string): Promise<Resource>;
+  imageRendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
+  videoRendition(id: string, requestID: string): Promise<Resource>;
+  officeImage(id: string, part: string, requestID: string): Promise<Resource>;
   /** Opens the system print sheet for a previewed PDF stored as a file. */
   printPDF(id: string, password?: string): Promise<void>;
   save(state: SavedState): Promise<void>;

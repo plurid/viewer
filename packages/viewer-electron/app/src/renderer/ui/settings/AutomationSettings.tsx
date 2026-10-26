@@ -203,7 +203,12 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
     </>
   );
 }
-export function CustomActionSettings({ snapshot, save }: EditingProps) {
+export function CustomActionSettings({
+  snapshot,
+  save,
+  draft,
+  onDraftDone,
+}: EditingProps & { draft?: CustomAction; onDraftDone?(): void }) {
   const actions = snapshot.settings.customActions;
   const set = (update: (actions: CustomAction[]) => CustomAction[]) =>
     save((current) => [
@@ -224,6 +229,27 @@ export function CustomActionSettings({ snapshot, save }: EditingProps) {
   return (
     <>
       <h2>Custom commands</h2>
+      {draft && (
+        <section className="settings-recipe" aria-label="Command draft">
+          <h3>{draft.name}</h3>
+          {draft.executor.kind === 'shell' && <pre>{draft.executor.script}</pre>}
+          <p className="settings-note">
+            Add this reusable shell action, then edit its name, shortcut and availability below. Its
+            first execution uses the normal action confirmation.
+          </p>
+          <button
+            onClick={() => {
+              set((actions) =>
+                actions.some((item) => item.id === draft.id) ? actions : [...actions, draft],
+              );
+              onDraftDone?.();
+            }}
+          >
+            Add command
+          </button>
+          <button onClick={onDraftDone}>Dismiss</button>
+        </section>
+      )}
       <p className="settings-note">
         Add commands to file actions and Commands. Executable arguments are literal: {'{directory}'}
         , {'{path}'}, {'{name}'}, {'{extension}'}, and a standalone {'{paths}'} are supported. Shell

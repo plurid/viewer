@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { build, type UserConfig } from 'vite';
 import { VitePlugin, type VitePluginConfig } from '@electron-forge/plugin-vite';
 import forge from '../forge.config';
+import { sourceHash, hashFile } from './qualification/source';
 
 if (process.platform !== 'darwin') throw new Error('This local rebuild requires macOS.');
 const source = path.resolve(process.argv[2] || '');
@@ -62,6 +63,8 @@ const generatorModule = (await import(
 };
 await mkdir(path.resolve('out'), { recursive: true });
 const work = await mkdtemp(path.resolve('out/preserved-package-'));
+const sourceBefore = await sourceHash(process.cwd());
+const lockHash = await hashFile(path.resolve('../../../pnpm-lock.yaml'));
 const generator = new generatorModule.default(config, process.cwd(), true);
 for (const target of [
   ...(await generator.getBuildConfigs()),
@@ -81,6 +84,11 @@ await cp(source, output, {
   errorOnExist: true,
   verbatimSymlinks: true,
 });
+// Current committed notices supplement inherited runtime notices in this new
+// output only. Neither the seed nor source license files are modified.
+await cp(path.resolve('assets/licenses'), path.join(output, 'Contents/Resources/licenses'), {
+  recursive: true,
+});
 // Optional freshly compiled N-API binding. Only the new output is changed;
 // the seed and its native binary remain intact for rollback and comparison.
 const nativeBinding = process.argv[4] ? path.resolve(process.argv[4]) : undefined;
@@ -94,6 +102,36 @@ if (nativeBinding) {
     '-',
     path.join(output, 'Contents/Resources/viewer-macos-files.node'),
   ]);
+}
+// An explicitly supplied freshly built RAW decoder is copied only into this new
+// candidate. Preserve all seeds and validate every resource against its manifest.
+const rawResources = process.argv[5] ? path.resolve(process.argv[5]) : undefined;
+if (rawResources) {
+  const name = path.basename(rawResources);
+  if (
+    name !== `viewer-raw-v3-darwin-${process.arch}` ||
+    !(await lstat(rawResources)).isDirectory() ||
+    (await lstat(rawResources)).isSymbolicLink()
+  )
+    throw new Error('Provide the matching reviewed RAW resource directory.');
+  const manifest = JSON.parse(await readFile(path.join(rawResources, 'manifest.json'), 'utf8')) as {
+    files: Record<string, string>;
+  };
+  for (const [file, digest] of Object.entries(manifest.files)) {
+    if (path.basename(file) !== file || !(await lstat(path.join(rawResources, file))).isFile())
+      throw new Error('Invalid RAW resource manifest.');
+    if (
+      createHash('sha256')
+        .update(await readFile(path.join(rawResources, file)))
+        .digest('hex') !== digest
+    )
+      throw new Error('RAW resource checksum mismatch.');
+  }
+  await cp(rawResources, path.join(output, 'Contents/Resources', name), {
+    recursive: true,
+    force: false,
+    errorOnExist: true,
+  });
 }
 const archive = path.join(output, 'Contents/Resources/app.asar');
 await asar.createPackageWithOptions(unpacked, archive, { unpack: '**/node-pty/**' });
@@ -158,11 +196,15 @@ await writeFile(
   JSON.stringify(
     {
       output,
+      sourceBefore,
+      sourceAfter: await sourceHash(process.cwd()),
+      lockHash,
       seed: source,
       scope: nativeBinding
         ? 'Local direct rebuild with the specified fresh N-API binding. Seed and intermediates preserved. Not a Store/distribution build.'
         : 'Local JS-only direct rebuild. Source seed and intermediates preserved. Not a Store/distribution build.',
       ...(nativeBinding ? { nativeBinding } : {}),
+      ...(rawResources ? { rawResources } : {}),
       inheritedVersion: JSON.parse(await readFile(path.join(unpacked, 'package.json'), 'utf8'))
         .version,
     },

@@ -1,6 +1,64 @@
 .worktrees-dialog {
   width: min(900px, 94vw);
 }
+.worktree-create {
+  padding: 6px 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.worktree-create-mode,
+.worktree-create-destination {
+  display: flex;
+  gap: 8px;
+}
+.worktree-create label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.worktree-create input,
+.worktree-create-destination input {
+  width: 100%;
+  min-width: 0;
+}
+.worktree-create p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.worktree-create-hint,
+.worktree-create-revision,
+.worktrees-creation-problem {
+  color: var(--muted);
+  font-size: 12px;
+}
+.worktrees-creation-problem {
+  margin: 0;
+  padding: 4px 18px 12px;
+}
+.worktree-create-warning {
+  color: var(--danger);
+}
+.worktree-create-occupied {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.worktree-create footer {
+  margin: 0;
+}
+.worktree-create-destination button {
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .worktree-create-destination {
+    flex-direction: column;
+  }
+  .worktrees-controls {
+    flex-wrap: wrap;
+  }
+}
 .worktrees-controls {
   display: flex;
   gap: 8px;

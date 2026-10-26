@@ -2,6 +2,7 @@
 import { flushBuffers } from '../editing/buffers';
 import { flushMediaDrafts } from '../media/drafts';
 import { flushChatDrafts } from '../chat/drafts';
+import { flushNotes } from '../notes/sessions';
 import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../domain/contracts';
 import { previewValuesSchema, type JSONValue } from '../../domain/workspaces/project';
 import { activeWorkspace, getState, replaceState, report } from './core';
@@ -77,6 +78,7 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   if (flushEngine) window.dispatchEvent(new Event('pagehide'));
   // unsaved text first: a quit waits for this flush
   await flushBuffers();
+  await flushNotes();
   await flushMediaDrafts();
   await flushChatDrafts();
   // After the engine's synchronous flush: a save it scheduled is covered by this one.

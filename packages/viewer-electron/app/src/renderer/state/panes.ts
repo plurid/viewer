@@ -14,6 +14,10 @@ import type {
   JournalPane,
   BrowserPane,
   MediaPane,
+  NotePane,
+  TaskPane,
+  ReceiptPane,
+  PreviewPane,
 } from '../../domain/contracts';
 import { normalizePreferences } from '../../domain/preferences/ui';
 import { trimSessions } from '../workspace/sessions';
@@ -82,6 +86,25 @@ export function updatePane(id: string, patch: Partial<Pane>): void {
   changeWorkspace((space) => ({
     ...space,
     panes: space.panes.map((pane) => (pane.id === id ? ({ ...pane, ...patch } as Pane) : pane)),
+    ...(pane?.type === 'note'
+      ? {
+          taskAreas: space.taskAreas?.map((area) => ({
+            ...area,
+            members: area.members.map((member) =>
+              member.views.includes(id) && member.reference.kind === 'note'
+                ? {
+                    ...member,
+                    title: ('title' in patch && patch.title) || pane.title,
+                    reference: {
+                      ...member.reference,
+                      documentID: ('documentID' in patch && patch.documentID) || pane.documentID,
+                    },
+                  }
+                : member,
+            ),
+          })),
+        }
+      : {}),
   }));
 }
 export function navigate(id: string, path: string, fromPair = false): void {
@@ -198,7 +221,20 @@ export function addPane(
 
 /** Register a typed content plane before the spatial adapter mounts its route. */
 export function addContentPane(
-  pane: DiffPane | GitChangesPane | ChatPane | JournalPane | ServerPane | BrowserPane | MediaPane,
+  pane:
+    | TaskPane
+    | ReceiptPane
+    | FolderPane
+    | PreviewPane
+    | TerminalPane
+    | DiffPane
+    | GitChangesPane
+    | ChatPane
+    | JournalPane
+    | ServerPane
+    | BrowserPane
+    | MediaPane
+    | NotePane,
   root = true,
 ): void {
   if (activeWorkspace().panes.length >= 200)

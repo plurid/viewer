@@ -9,7 +9,7 @@ export const workbookSheet = `<worksheet xmlns="${sheetNS}"><sheetData>
 </sheetData></worksheet>`;
 export function officeFixture(
   kind: 'word' | 'workbook',
-  overrides: Record<string, string> = {},
+  overrides: Record<string, string | Uint8Array> = {},
 ): Uint8Array {
   const main = kind === 'word' ? 'word/custom/document.xml' : 'xl/workbook.xml';
   const parts: Record<string, string> = {
@@ -35,7 +35,10 @@ export function officeFixture(
     });
   return zipSync(
     Object.fromEntries(
-      Object.entries({ ...parts, ...overrides }).map(([name, xml]) => [name, strToU8(xml)]),
+      Object.entries({ ...parts, ...overrides }).map(([name, xml]) => [
+        name,
+        typeof xml === 'string' ? strToU8(xml) : xml,
+      ]),
     ),
   );
 }

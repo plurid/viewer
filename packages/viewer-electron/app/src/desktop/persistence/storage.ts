@@ -28,8 +28,28 @@ import { discardOwnTemporaryFile } from '../operations/removal';
 import { localPath, id } from '../schemas';
 import { diffModes, diffSourceSchema } from '../../domain/comparison/diff';
 import { journalFilterSchema } from '../../domain/journal/events';
+import { taskAreaSchema } from '../../domain/workspaces/tasks';
 
 const pane = z.discriminatedUnion('type', [
+  z
+    .object({
+      id,
+      type: z.literal('task'),
+      path: localPath,
+      areaID: z.uuid(),
+      title: z.string().max(100),
+    })
+    .strict(),
+  z.object({ id, type: z.literal('receipt'), path: localPath, receiptID: z.uuid() }).strict(),
+  z
+    .object({
+      id,
+      type: z.literal('note'),
+      path: localPath,
+      documentID: z.uuid(),
+      title: z.string().max(255),
+    })
+    .strict(),
   z
     .object({
       id,
@@ -106,6 +126,7 @@ const pane = z.discriminatedUnion('type', [
     type: z.literal('terminal'),
     path: localPath,
     profileID: id,
+    taskSessionID: id.optional(),
     startOnOpen: z.boolean().optional(),
     gitAction: z.enum(gitActionKinds).optional(),
   }),
@@ -156,6 +177,8 @@ const savedStateSchema = z
       z.literal(5),
       z.literal(6),
       z.literal(7),
+      z.literal(8),
+      z.literal(9),
       z.literal(CURRENT_STATE_VERSION),
     ]),
     previewStates: z.record(id, previewValuesSchema).optional(),
@@ -168,6 +191,7 @@ const savedStateSchema = z
           name: z.string().min(1).max(100),
           panes: z.array(pane).max(200),
           roots: z.array(id).max(200),
+          taskAreas: z.array(taskAreaSchema).max(50).optional(),
           activePane: id.optional(),
           arrangement: z.record(z.string().max(300), z.string().max(4 * 1024 * 1024)),
           collections: z.array(collectionSchema).max(200).optional(),
@@ -361,6 +385,8 @@ export class Storage {
     else if (state.version < 6) await this.preserve(bytes, '.before-planes-v6');
     if (state.version < 7) await this.preserve(bytes, '.before-profile-overlays-v7');
     if (state.version < 8) await this.preserve(bytes, '.before-spatial-workbench-v8');
+    if (state.version < 9) await this.preserve(bytes, '.before-notes-v9');
+    if (state.version < 10) await this.preserve(bytes, '.before-task-areas-v10');
     if (state.version < CURRENT_STATE_VERSION) state = { ...state, version: CURRENT_STATE_VERSION };
     return { state };
   }

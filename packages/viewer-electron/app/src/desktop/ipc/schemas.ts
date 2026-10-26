@@ -2,6 +2,7 @@
  * before it reaches a handler, and `ApiCall` carries the inferred argument types. */
 import { z } from 'zod';
 import type { ApiMethod, DesktopEvent, ViewerAPI } from '../../domain/contracts';
+import { paneTypes } from '../../domain/contracts';
 import { modelDataLevels } from '../../domain/models/permissions';
 import { operationPlanRequestSchema } from '../../domain/operations/operation-plan';
 import { sourceVersionSchema } from '../../domain/files/inspection';
@@ -14,6 +15,7 @@ import { rootKey, validKeymapKey } from '../../domain/preferences/keymap';
 import { lineSchema } from '../preferences/keymap-schema';
 import { gitSourceSchema } from '../../domain/comparison/git';
 import { gitActionKinds, gitCommitMessageLimit } from '../../domain/comparison/git-actions';
+import { receiptRequestSchema } from '../../domain/automation/receipts';
 import { chatRequestSchema } from '../../domain/models/chat';
 import { providerCheckKinds } from '../../domain/models/provider-checks';
 import { flushResultSchema } from '../../domain/persistence/flush';
@@ -22,6 +24,7 @@ import { browserRequestSchema } from '../../domain/previews/browser';
 import { transformPlanSchema } from '../../domain/operations/transforms';
 import { mediaRequestSchema } from '../../domain/media/documents';
 import { worksheetDocumentRequestSchema } from '../../domain/previews/documents/office';
+import { noteRequestSchema } from '../../domain/editing/notes';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
@@ -104,21 +107,7 @@ const workspaceSnapshotSchema = z.object({
           .array(
             z.object({
               id,
-              type: z.enum([
-                'folder',
-                'preview',
-                'search',
-                'terminal',
-                'collection',
-                'scratch',
-                'diff',
-                'chat',
-                'git-changes',
-                'server',
-                'browser',
-                'media',
-                'journal',
-              ]),
+              type: z.enum(paneTypes),
               path: localPath,
               mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']).optional(),
               allLocations: z.boolean().optional(),
@@ -184,6 +173,8 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export const schemas = {
+  receipts: z.tuple([receiptRequestSchema]),
+  notes: z.tuple([noteRequestSchema]),
   imageInspect: z.tuple([localPath]),
   pdfInspect: z.tuple([localPath]),
   choosePDFs: z.tuple([]),
@@ -230,6 +221,24 @@ export const schemas = {
       z.object({ kind: z.literal('list'), directory: localPath }).strict(),
       z.object({ kind: z.literal('inspect'), catalogID: z.uuid(), worktreeID: z.uuid() }).strict(),
       z.object({ kind: z.literal('open'), catalogID: z.uuid(), worktreeID: z.uuid() }).strict(),
+      z
+        .object({
+          kind: z.literal('create'),
+          catalogID: z.uuid(),
+          target: targetSchema.strict(),
+          destination: localPath,
+          checkout: z.discriminatedUnion('kind', [
+            z
+              .object({
+                kind: z.literal('new'),
+                name: z.string().min(1).max(200),
+                baseID: z.uuid(),
+              })
+              .strict(),
+            z.object({ kind: z.literal('existing'), branchID: z.uuid() }).strict(),
+          ]),
+        })
+        .strict(),
       z.object({ kind: z.literal('release'), catalogID: z.uuid() }).strict(),
     ]),
   ]),
@@ -495,6 +504,30 @@ export const schemas = {
     }),
   ]),
   executionList: z.tuple([]),
+  runCommand: z.tuple([
+    z
+      .string()
+      .trim()
+      .min(1)
+      .max(16000)
+      .refine((value) => !value.includes('\0')),
+    targetSchema.strict(),
+  ]),
+  commandDraft: z.union([
+    z.tuple([]),
+    z.tuple([
+      z
+        .object({
+          script: z
+            .string()
+            .min(1)
+            .max(16000)
+            .refine((value) => !value.includes('\0')),
+          name: z.string().trim().min(1).max(100),
+        })
+        .strict(),
+    ]),
+  ]),
   executionCancel: z.tuple([id]),
   openSettings: z.union([
     z.tuple([]),
@@ -638,7 +671,23 @@ export const schemas = {
   release: z.tuple([id]),
   archive: z.tuple([id]),
   archiveEntry: z.tuple([id, z.string().max(65536)]),
-  imageRendition: z.tuple([id]),
+  imageRendition: z.tuple([
+    id,
+    z
+      .object({ requestID: id, mode: z.enum(['camera', 'raw']) })
+      .strict()
+      .optional(),
+  ]),
+  videoRendition: z.tuple([id, id]),
+  officeImage: z.tuple([
+    id,
+    z
+      .string()
+      .min(1)
+      .max(1000)
+      .refine((value) => !value.includes('\0')),
+    id,
+  ]),
   printPDF: z.tuple([id, z.string().min(1).max(1024).optional()]),
   save: z.tuple([stateSchema]),
   flushed: z.tuple([id, flushResultSchema.optional()]),
@@ -701,6 +750,8 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  receipts: 'viewer',
+  notes: 'viewer',
   browser: 'viewer',
   media: 'viewer',
   imageInspect: 'viewer',
@@ -761,6 +812,8 @@ export const methodWindows = {
   terminalClose: 'viewer',
   customExecute: 'viewer',
   executionList: 'viewer',
+  runCommand: 'viewer',
+  commandDraft: 'both',
   executionCancel: 'viewer',
   openSettings: 'viewer',
   settingsGet: 'both',
@@ -831,6 +884,8 @@ export const methodWindows = {
   archive: 'viewer',
   archiveEntry: 'viewer',
   imageRendition: 'viewer',
+  videoRendition: 'viewer',
+  officeImage: 'viewer',
   printPDF: 'viewer',
   save: 'viewer',
   flushed: 'both',

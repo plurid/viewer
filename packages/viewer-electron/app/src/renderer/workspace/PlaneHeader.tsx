@@ -233,33 +233,37 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           size={16}
         />
         <span className="plane-title">
-          {pane?.type === 'media'
-            ? 'Edit media · ' + baseName(pane.path)
-            : pane?.type === 'browser'
-              ? pane.title || new URL(pane.url).hostname
-              : pane?.type === 'scratch'
-                ? (pane.title ?? 'Untitled')
-                : pane?.type === 'journal'
-                  ? 'Journal'
-                  : pane?.type === 'chat'
-                    ? 'Chat'
-                    : pane?.type === 'server'
-                      ? 'Server · ' + baseName(pane.path)
-                      : pane?.type === 'diff'
-                        ? 'Compare · ' + baseName(pane.path)
-                        : pane?.type === 'git-changes'
-                          ? 'Git changes · ' + baseName(pane.path)
-                          : pane?.type === 'collection'
-                            ? (collection?.name ?? 'Collection')
-                            : pane?.type === 'search'
-                              ? pane.name
-                              : pane?.type === 'terminal'
-                                ? (pane.gitAction
-                                    ? 'Git ' + gitActionLabels[pane.gitAction]
-                                    : 'Terminal') +
-                                  ' · ' +
-                                  baseName(pane.path)
-                                : (pane && baseName(pane.path)) || 'Plane'}
+          {pane?.type === 'task'
+            ? pane.title
+            : pane?.type === 'receipt'
+              ? 'Command receipt'
+              : pane?.type === 'media'
+                ? 'Edit media · ' + baseName(pane.path)
+                : pane?.type === 'browser'
+                  ? pane.title || new URL(pane.url).hostname
+                  : pane?.type === 'scratch' || pane?.type === 'note'
+                    ? (pane.title ?? 'Untitled')
+                    : pane?.type === 'journal'
+                      ? 'Journal'
+                      : pane?.type === 'chat'
+                        ? 'Chat'
+                        : pane?.type === 'server'
+                          ? 'Server · ' + baseName(pane.path)
+                          : pane?.type === 'diff'
+                            ? 'Compare · ' + baseName(pane.path)
+                            : pane?.type === 'git-changes'
+                              ? 'Git changes · ' + baseName(pane.path)
+                              : pane?.type === 'collection'
+                                ? (collection?.name ?? 'Collection')
+                                : pane?.type === 'search'
+                                  ? pane.name
+                                  : pane?.type === 'terminal'
+                                    ? (pane.gitAction
+                                        ? 'Git ' + gitActionLabels[pane.gitAction]
+                                        : 'Terminal') +
+                                      ' · ' +
+                                      baseName(pane.path)
+                                    : (pane && baseName(pane.path)) || 'Plane'}
         </span>
         {unsaved && (
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
@@ -327,7 +331,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           {controls.actions && (
             <IconButton
               icon="resize"
-              label="Size & position"
+              label="Layout"
               aria-haspopup="dialog"
               aria-expanded={menu?.kind === 'layout'}
               onClick={(event) => openMenu(event, planeLayoutCommandIDs, 'layout')}
@@ -376,7 +380,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           request={menu.request}
           anchor={menu.anchor}
           onClose={() => setMenu(null)}
-          label={menu.kind === 'layout' ? 'Size & position' : 'Plane actions'}
+          label={menu.kind === 'layout' ? 'Layout' : 'Plane actions'}
         />
       )}
     </div>

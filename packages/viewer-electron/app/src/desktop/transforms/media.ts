@@ -11,6 +11,7 @@ export const mediaDemuxer = (extension: string): string => {
     wav: 'wav',
     flac: 'flac',
     ogg: 'ogg',
+    ogv: 'ogg',
     oga: 'ogg',
     opus: 'ogg',
     aif: 'aiff',

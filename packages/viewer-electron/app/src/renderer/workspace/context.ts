@@ -9,7 +9,22 @@ import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 import type { Tiling } from '../../domain/workspaces/tiling';
 import type { JournalFilter } from '../../domain/journal/events';
 import type { WorktreeSelection } from '../../domain/comparison/worktrees';
+import type { NoteKind } from '../../domain/editing/notes';
 export interface WorkspaceController {
+  newTaskArea(target: CapturedTarget, name: string): Promise<string>;
+  openTaskArea(id: string): void;
+  refreshTaskArea(id: string): Promise<void>;
+  openTaskMember(areaID: string, memberID: string): Promise<string>;
+  addTaskTool(
+    areaID: string,
+    kind:
+      'folder' | 'note' | 'checklist' | 'terminal' | 'chat' | 'git-changes' | 'browser' | 'server',
+    url?: string,
+  ): Promise<string>;
+  attachTaskPlane(areaID: string, paneID: string): void;
+  arrangeTaskArea(areaID: string): void;
+  runTaskCommand(areaID: string): Promise<void>;
+  openReceipt(id: string, directory?: string): void;
   openJournal(filter: JournalFilter): void;
   newChat(paths: string[], draft?: string): Promise<void>;
   openChat(id: string): Promise<void>;
@@ -20,7 +35,7 @@ export interface WorkspaceController {
     target: CapturedTarget,
     selection: WorktreeSelection,
     another?: boolean,
-  ): Promise<void>;
+  ): Promise<string>;
   present(): void;
   openCollection(id: string): void;
   openEvidence(evidence: EvidenceNavigation, parentPaneID?: string): Promise<void>;
@@ -53,6 +68,8 @@ export interface WorkspaceController {
   newRootFolder(target?: NewRootFolderTarget): void;
   /** A new scratch plane of unsaved text, framed and active. */
   newScratch(): void;
+  newNote(kind: NoteKind, directory?: string, parentID?: string): Promise<void>;
+  openNote(id: string): Promise<void>;
   splitFolder(
     target: { workspaceID: string; paneID: string; path: string },
     axis: 'x' | 'y',

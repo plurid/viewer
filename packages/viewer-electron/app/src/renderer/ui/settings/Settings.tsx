@@ -26,17 +26,25 @@ import { RecipeSettings } from './RecipeSettings';
 import { AgentSettings } from './AgentSettings';
 import { ShortcutSettings } from './ShortcutSettings';
 import { ThemeSettings } from './ThemeSettings';
+import type { CustomAction } from '../../../domain/automation/actions';
 import { useTheme, useThemeVariables } from '../theme';
 import { settingsDiscovery } from './discovery';
 
 const noThemes = { themes: [], theme: { dark: '', light: '' } };
 export function SettingsWindow() {
+  const [commandDraft, setCommandDraft] = useState<CustomAction>();
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [category, setCategory] = useState('Browsing');
   const [query, setQuery] = useState('');
   // a setting's command opened Settings at it (2026-10-23): its category, the row shown and marked
   const [focused, setFocused] = useState<{ path: string; at: number } | null>(null);
   const show = (path: string) => {
+    if (path === 'settings.customActions') {
+      setQuery('');
+      setCategory('Actions');
+      setFocused(null);
+      return;
+    }
     const definition = settingCatalog.find((item) => item.path === path);
     if (!definition) return;
     setQuery('');
@@ -60,6 +68,15 @@ export function SettingsWindow() {
       error: setError,
     });
   useEffect(() => {
+    const readDraft = () => {
+      void window.viewer
+        .commandDraft?.()
+        .then((draft) => {
+          if (draft) setCommandDraft(draft);
+        })
+        .catch((error) => setError(error.message));
+    };
+    readDraft();
     void window.viewer
       .settingsGet()
       .then((value) => {
@@ -82,7 +99,10 @@ export function SettingsWindow() {
       if (event.type === 'service-error') setError(event.message);
       if (event.type === 'settings') accept(event.snapshot);
       else if (event.type === 'session-keys') receiveSessionKeys(event.session);
-      if (event.type === 'settings-focus') show(event.path);
+      if (event.type === 'settings-focus') {
+        show(event.path);
+        if (event.path === 'settings.customActions') readDraft();
+      }
       if (event.type === 'flush-settings') {
         (document.activeElement as HTMLElement | null)?.blur();
         void writes
@@ -211,7 +231,12 @@ export function SettingsWindow() {
           <ConfigurationSettings snapshot={snapshot} save={patches} />
         )}
         {!query && category === 'Actions' && (
-          <CustomActionSettings snapshot={snapshot} save={enqueue} />
+          <CustomActionSettings
+            snapshot={snapshot}
+            save={enqueue}
+            draft={commandDraft}
+            onDraftDone={() => setCommandDraft(undefined)}
+          />
         )}
         {page === 'Actions' && <RecipeSettings editor={editor} />}
         {page === 'Agents' && <AgentSettings editor={editor} />}

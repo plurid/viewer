@@ -19,7 +19,7 @@ const groups = [
   'Actions',
   'Quick actions',
   'Plane',
-  'Size & position',
+  'Layout',
   'Space',
   'Sidebar',
   'App',

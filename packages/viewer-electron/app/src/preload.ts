@@ -19,6 +19,8 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  notes: (request) => invoke('notes', request),
+  receipts: (request) => invoke('receipts', request),
   pdfInspect: (file) => invoke('pdfInspect', file),
   choosePDFs: () => invoke('choosePDFs'),
   imageInspect: (file) => invoke('imageInspect', file),
@@ -94,6 +96,8 @@ const api: ViewerAPI = {
   terminalAck: (id, bytes) => invoke('terminalAck', id, bytes),
   terminalClose: (id) => invoke('terminalClose', id),
   customExecute: (actionID, target) => invoke('customExecute', actionID, target),
+  runCommand: (script, target) => invoke('runCommand', script, target),
+  commandDraft: (request) => (request ? invoke('commandDraft', request) : invoke('commandDraft')),
   executionList: () => invoke('executionList'),
   executionCancel: (id) => invoke('executionCancel', id),
   openSettings: (focus) => (focus ? invoke('openSettings', focus) : invoke('openSettings')),
@@ -164,7 +168,9 @@ const api: ViewerAPI = {
   release: (id) => invoke('release', id),
   archive: (id) => invoke('archive', id),
   archiveEntry: (id, name) => invoke('archiveEntry', id, name),
-  imageRendition: (id) => invoke('imageRendition', id),
+  imageRendition: (id, request) => invoke('imageRendition', id, request),
+  videoRendition: (id, requestID) => invoke('videoRendition', id, requestID),
+  officeImage: (id, part, requestID) => invoke('officeImage', id, part, requestID),
   printPDF: (id, password) => invoke('printPDF', id, password),
   save: (state) => invoke('save', state),
   flushed: (token) => invoke('flushed', token),

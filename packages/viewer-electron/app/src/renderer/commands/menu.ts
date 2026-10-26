@@ -27,7 +27,7 @@ const icons: Record<string, IconName> = {
   Git: 'side-by-side',
   Actions: 'command',
   Plane: 'link',
-  'Size & position': 'resize',
+  Layout: 'resize',
   Width: 'side-by-side',
   Height: 'stacked',
   Position: 'move',
@@ -56,7 +56,7 @@ const order = [
   'Preview',
   'Lens',
   'Plane',
-  'Size & position',
+  'Layout',
   'Project',
   'App',
   'Settings',
@@ -169,7 +169,7 @@ export function contextMenuSections(
       items.some((item) => item.id.startsWith('view-'))
     )
       sections.push(...viewSections(items));
-    else if (items.length && items.every((item) => item.group === 'Size & position'))
+    else if (items.length && items.every((item) => item.group === 'Layout'))
       sections.push(...layoutSections(items));
     else {
       const groups = groupCommands(items);
@@ -188,7 +188,7 @@ export function contextMenuSections(
   const entries = names.map((label) => {
     const rows = grouped.get(label)!;
     if (label === 'View') return branch(label, viewSections(rows));
-    if (label === 'Size & position') return branch(label, layoutSections(rows));
+    if (label === 'Layout') return branch(label, layoutSections(rows));
     if (label === 'Git')
       return branch(label, [
         section(

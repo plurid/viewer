@@ -1,0 +1,211 @@
+.task-plane,
+.receipt-plane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.task-area-summary {
+  flex: 0 0 auto;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--raised);
+}
+.task-area-summary > input {
+  width: 100%;
+  font-size: 18px;
+  font-weight: 600;
+}
+.task-area-summary p {
+  margin: 10px 0 0;
+}
+.task-checkout-path {
+  overflow-wrap: anywhere;
+}
+.task-area-summary .muted {
+  font-size: 12px;
+}
+.task-actions,
+.task-add-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.task-actions {
+  margin-top: 14px;
+}
+.task-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 24px 24px;
+}
+.task-tool-list {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.task-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.task-tool-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.task-tool-row strong,
+.task-tool-row small,
+.task-tool-kind {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.task-tool-row small {
+  margin-top: 5px;
+  color: var(--muted);
+}
+.task-tool-kind {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.task-retention-note {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 20px 0 0;
+  font-size: 12px;
+  max-width: 80ch;
+}
+.task-attach-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.task-attach-form label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+.task-attach-form input {
+  min-width: 0;
+  width: 100%;
+}
+.receipt-plane > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.receipt-scroll {
+  overflow: auto;
+  min-height: 0;
+  padding: 20px 24px 32px;
+}
+.receipt-scroll dl {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0 0 16px;
+}
+.receipt-scroll dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.receipt-scroll dt,
+.receipt-scroll .muted {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.receipt-scroll h2 {
+  margin: 24px 0 10px;
+  font-size: 14px;
+}
+.receipt-scroll pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+  font-family: var(--editor-font, ui-monospace), ui-monospace, SFMono-Regular, Menlo, monospace;
+  user-select: text;
+}
+.tasks-dialog {
+  width: min(760px, 94vw);
+}
+.tasks-dialog-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 65vh;
+  overflow: auto;
+}
+.tasks-dialog-tabs {
+  display: flex;
+  gap: 8px;
+}
+.tasks-search {
+  width: 100%;
+}
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--line);
+}
+.tasks-list > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 12px 8px;
+  background: transparent;
+}
+.tasks-list small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.task-create-form {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.task-create-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.task-create-form .task-create-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+@media (max-width: 600px) {
+  .task-area-summary {
+    padding: 16px;
+  }
+  .task-body,
+  .receipt-scroll {
+    padding: 16px;
+  }
+  .receipt-scroll dl {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .receipt-scroll dd {
+    margin-bottom: 10px;
+  }
+}
