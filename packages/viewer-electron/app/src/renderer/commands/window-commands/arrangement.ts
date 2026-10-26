@@ -102,13 +102,13 @@ export function arrangementCommands({
       aliases: ['cl'],
       shortcut: '⌥⌘W',
       when: paneScope,
-      // planes holding unsaved text ask Save, Don't Save or Cancel first (2026-10-23)
+      // planes holding unsaved text ask Save, Don't Save or Cancel first
       run: async (context) => {
         if (await confirmClose(actions.workspace.subtree(context.paneID!)))
           actions.workspace.closePane(context.paneID!);
       },
     },
-    // vim's :qa and :only (2026-10-23), unsaved text asked about first
+    // vim's :qa and :only, unsaved text asked about first
     {
       id: 'close-all-planes',
       label: 'Close all planes',

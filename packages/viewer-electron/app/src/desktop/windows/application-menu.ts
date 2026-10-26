@@ -233,7 +233,7 @@ export function installApplicationMenu(
             accelerator: accelerator(settings?.shortcuts['toggle-titlebar'] ?? 'Cmd+Alt+T'),
             click: command('toggle-titlebar'),
           },
-          // every setting is a command (2026-10-23): the space's own chrome, here too
+          // every setting is a command: the space's own chrome, here too
           {
             label: 'Show / Hide Space Toolbar',
             accelerator: accelerator(settings?.shortcuts['setting.ui.space.toolbar'] ?? ''),

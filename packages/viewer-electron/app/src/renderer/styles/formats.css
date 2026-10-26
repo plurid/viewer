@@ -329,7 +329,7 @@
   overflow: auto;
 }
 .code-scroll {
-  /* Settings → Editor, as the editor (2026-10-23) */
+  /* Settings → Editor, as the editor */
   font-family: var(--editor-font, ui-monospace), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--editor-font-size, 12px);
   line-height: var(--editor-line-height, 22px);
@@ -356,7 +356,7 @@
 .token.prolog {
   color: var(--syntax-comment, var(--subtle));
 }
-/* the code colours are the theme's (2026-10-23): domain/themes.ts */
+/* the code colours are the theme's: domain/themes.ts */
 .token.string,
 .token.attr-value {
   color: var(--syntax-string);

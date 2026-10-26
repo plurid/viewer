@@ -1,105 +1,55 @@
 # Viewer
 
-Viewer is a macOS-first local file manager in the Plurid application family. It turns folders, search results, file previews, terminals, browser pages and media drafts into spatial planes, while letting routine work stay focused in a docked plane. The architecture must remain portable to Windows and Linux.
+Viewer helps people work with files without constantly losing their place between applications. It
+starts with familiar folder browsing and grows into a workspace for previews, creative tools,
+development and automation.
 
-The Text menu includes durable Markdown notes and editable checklists alongside Scratch. Notes autosave privately, survive closing their plane, reopen through Notes, and export Markdown through the existing native destination picker. Conflicting views preserve both versions as separate notes. Run command accepts a shell line in the captured folder without opening a terminal, with background output, status, elapsed time, Copy and Stop. Recent shell lines stay in window memory and can be cleared; Save as action transfers a draft to Settings for review. The shared menu omits redundant text hover labels and calls the plane sizing/position group Layout.
+## Who it serves
 
-Local quick tools trim and join media segments, extract frames/audio, remove or mix an additional audio track, convert/crop/resize raster images and optimize PDF/image sizes. Processing uses bundled fixed processors and the existing file-operation queue. New outputs preserve originals; Optimize publishes only smaller candidates and reports individual savings or failures. Media decisions are private revisioned drafts, independently restored from their views. Typed workflows and external agents may prepare reviewed exports, with captured source versions and explicit source/destination permissions; they receive no raw process or browser-session capability.
+Someone organizing photographs should be able to open a folder, preview and convert an image without
+learning a command language. Someone developing software should be able to put source, Git review, a
+terminal and a browser together. Neither workflow requires adopting the other.
 
-Interactive browser planes use an isolated persistent Chromium profile and remain usable under real perspective. Closing a local server's view leaves its window-owned listener running; Local servers reopens its controls. A compact Related planes control exposes parent and direct children, and closing a child returns to its parent. Columns distinguish the active directory and ancestor route from operation selection. Read-only text has independent compact metrics and CSS highlighting; bounded JSON/JSONC/JSON5/YAML trees offer expand/collapse, search and copy. Shared document extraction and separate foreground/stream queues prevent abandoned media streams from starving Office previews.
+The documentation follows the same progression: everyday files, creating and editing, workspaces,
+development, then automation. Advanced features remain discoverable through contextual commands and
+deeper guides.
 
-The first release serves frequent everyday file work: browse large folders, find files, compare previews, and organize local files, external disks, and mounted network folders. Double-clicking a folder navigates inside its plane; an explicit action opens a linked child. List, grid, columns, and gallery are functional views. File operations include create, rename, copy, move, duplicate, native Trash, collision decisions, cancellation, progress, and safe undo of rename/move.
+## Product principles
 
-Applications and Trash are available in the sidebar. Trash opens a dedicated folder-style browser inside Viewer; Windows calls it Recycle Bin. Its root shows the title once; Back and breadcrumbs appear only inside a trashed folder. A name filter, virtualized selectable rows, range/multiple selection and keyboard navigation support browsing. Accessible header buttons sort Name, original containing folder, available date and Size in either direction, keeping unknown metadata last. Scoped context actions offer Quick Look through the existing large preview host, Restore, Restore to…, Copy Path, Open original folder in plane and read-only Get Info. These menus stay inside the dialog and are not published into the agent command catalog. The footer keeps the count left, Empty Trash… centered and Refresh/Done right; there is no actions dropdown or per-item permanent erase action.
+- **Start with the file.** Keep ordinary folders and file identities useful. A workspace references
+  files rather than importing them into a closed library.
+- **Make the next action clear.** Show relevant commands for the active folder, selection or
+  preview. Put quick inspection and common actions within reach.
+- **Give each format useful controls.** A worksheet needs sheet navigation; a model needs a camera;
+  a PDF needs pages. Explain partial coverage honestly.
+- **Use space for context.** Linked views express relationships. Docking and tiling support focused
+  work. Spatial navigation is optional for basic use.
+- **Keep views separate from work.** Closing a note view keeps its document; closing a server view
+  can keep its listener. Restoration never replays commands.
+- **Show real outcomes.** Report saved files, measured optimization savings, process exits and
+  explicitly reported agent status. Missing signals stay unknown.
+- **Keep consequential changes reviewable.** Exports preserve originals; file proposals expose their
+  scope and conflicts. Eligible Undo checks identities.
+- **Make automation optional.** Built-in tools work without a model. Provider data permission,
+  native file access and agent authority are separate decisions.
 
-The Original location column shows the containing folder or Unavailable. Selecting one item reveals its full original item path as wrapping, selectable text and offers Open original folder in plane; the same action appears in its context menu and Get Info. A known existing parent opens a new root folder plane and closes Trash. A missing parent produces an explicit error and keeps Trash open. On macOS, original locations come only from identity-matched Viewer Trash receipts; items deleted by Finder may need Restore to…. Linux Trash metadata and Windows origin inventory provide other known locations.
+## Current shape
 
-macOS can report Date added from its public directory-added metadata, read without changing the file and checked against stable identity/version information. This is distinct from a recorded deletion time; Viewer never substitutes modification/change times. The date column is omitted when no valid dates are available, and Get Info explains unavailable timestamps. macOS added-to-Trash dates are not inherited by nested entries; recorded deletion metadata may still be inherited across platforms.
+The maintained application is the Electron desktop app. Current local native qualification is on
+Apple Silicon macOS; portability and platform-specific qualification are tracked in the
+[platform reference](docs/reference/platforms.md).
 
-Restore uses a known original location or asks for a destination. It checks item and destination identity, stays on the same disk and never replaces or merges an existing destination, recreates missing parents or falls back to copy-and-delete. Stale items, symbolic-link ancestors, collisions and cross-disk destinations are refused. Linux orphan `.trashinfo` metadata is retained.
+Core capabilities include folder views and search; document, media and model previews; text editing;
+PDF/image/media transforms; notes and checklists; browser and terminal planes; Git/worktree tasks;
+custom commands; reviewed workflows; optional model recipes and scoped agent integration.
 
-Native permissions still apply. Unreadable or incomplete locations disable emptying. Empty Trash… ignores synthetic button clicks and requests native confirmation using only the inventory revision, with no approval/erase flag. An affirmative native choice is required, Cancel is the default, and inventory/confinement are rechecked. There is no erasure/approval API, command, shortcut, MCP tool or scheduled route. Coding agents must never select or approve it. macOS uses a private, reviewed, handle-relative removal confined to system Trash; Windows and Linux use their platform adapters. Owned native renderer captures use stub Trash mutations and confirmation; separate native metadata and generated private-root exclusive-rename tests pass. Actual system Trash erasure/restore, affirmative confirmation, physical assistive technology, Windows/Linux execution and Store qualification remain unverified.
+The [capability reference](docs/reference/capabilities.md) describes current behavior.
+[Research](docs/research/README.md) holds proposed capabilities and the hackathon direction. A
+proposal is not an implemented feature.
 
-macOS system Trash enumeration requires user-granted Full Disk Access. Privacy denial offers Open Privacy Settings… and explains enabling Viewer and restarting it; a folder picker does not grant that privacy permission. App Sandbox file authorization remains independent. Viewer never grants OS permission or widens agent scopes itself.
+## Writing about Viewer
 
-Projects explicitly save a portable workspace in `viewer.project.jsonc`: relative file references, open planes, folder views and named arrangements. Files remain at their original locations. Private session changes do not rewrite the project definition. Close project detaches the definition and stops its watcher while keeping the workspace's open planes, layout and preview notes; ordinary shared folder preferences resume. Missing definitions offer Close project directly, and Dismiss suppresses the same unchanged problem for the current association. Restoring a valid file or encountering a new problem can show a fresh notice. Closing never writes, recreates or removes a project file.
-
-Linked children have a configurable Back to parent header button and Option-Command-Up. A marker beside the originating file or folder returns to its existing child in list, grid, columns and gallery. View open plane focuses an existing matching plane rather than creating another. Both retain the current docked or spatial presentation. Agents use the reviewed, destination-scoped focus proposal instead of these generic navigation commands.
-
-3D previews expose Shading controls for original materials, clay and normals, three lighting presets, brightness, feature edges and self-shadows. Contrast lighting starts with lower exposure and ambient fill so recesses remain readable. Appearance is remembered per preview and changes without reimporting the model or resetting its camera, dimensions or source materials. These controls do not modify a file.
-
-Preview modules are typed, lazy-loaded, and independent of the explorer and spatial engine. The first set covers images, audio/video supported by Chromium, PDF, EPUB, Markdown, code/text, JSON, CSV, ZIP/TAR/TAR.GZ, ASCII DXF with 2D inspection/measurement, and GLB/glTF, OBJ, STL, and FBX. Office documents, other ebooks, STEP/IGES/USD, and creative formats belong on the same extensible path; future modules must report support honestly rather than relabeling incompatible files as images. Automatic opening uses an available preview and otherwise the OS association; Settings can choose plane or native opening globally or by extension.
-
-Visual decisions inherit current Plurid applications: one look for the shell and engine, restrained surfaces, readable dense file rows, familiar macOS commands, clear selection and feedback. Focus rings and halos are suppressed at the user's request; keyboard navigation, the input caret and the active command remain functional. The defining interaction is opening a file beside its folder in space, then docking the relevant plane for focused work.
-
-The window has no wordmark, tagline, plane-tab row or global shortcut footer. One contextual plane header exposes navigation, frame/dock and primary controls; path, search and secondary actions appear when needed. Its search icon toggles the search row, clearing and cancelling the query on close. Appearance belongs in a separate modeless Settings window whose dimensions stay stable across categories. Plurid's native bottom toolbar, minimap and viewcube are on by default with independent Settings toggles. Plane headers, title dragging and resize handles default on; plane backs are always visible and transform origin defaults off. Minimap activation faces the selected plane and selects its command context. Each linked child is placed at 90.1° from its parent and faces the camera when opened; linked-pair framing and docking are configurable. Opening an existing path/type reuses a plane within the originating root. The same file opened in another root has its own preview; an explicit Open another plane action creates a copy. Existing parentage and placement remain intact. Framing uses the live viewport and measured planes while preserving deliberate camera movements. Reopening preserves a usable saved view and recovers an active plane left clipped or offscreen. Explicit Consolidate repeated previews closes redundant automatic leaf previews from the same parent, preserves intentional copies and manually placed views, and supports one-step arrangement undo.
-
-A shared command registry serves Command-K, autofocus searchable context menus, header actions, native commands, shortcuts and agent proposals. Commands bind the clicked target or current selection, filter by availability, and rank aliases and the last two applicable actions. Context menus keep common file actions direct and organize other commands in named submenus; typing searches the entire applicable catalog. Command-K searches workspace names directly and offers Change workspace for a workspace-only picker. Preview modules may contribute scoped commands without depending on the explorer or engine. Command-F finds files in the active folder or subtree; Copy/Move to opens a destination step. Explorer keys take precedence over camera input: Command-Down opens, Command-Up goes to the parent, Command-1–5 changes view (list, grid, columns, gallery, Map), and Left/Right controls list disclosure or column traversal. Text editing, dialogs, previews and terminals retain their own input.
-
-Folder presentation is shared by path across planes, roots and workspaces: view, sorting, grouping, hidden files, density, metadata columns, filename wrapping and browsing-column width. Selection, cursor, history, filter and scroll stay local to each explorer. List and browsing-column edges resize in projected coordinates without saving on every pointer movement. Browsing-column separators also support keyboard adjustment, double-click fitting and Option to resize the visible trail together. Known Viewer moves remap folder overrides and inactive navigation sessions.
-
-Filename and metadata search uses a background local index, with explicit indexed locations, exclusions, pause/rebuild, filters and saved queries. Saved searches open as independent virtual root planes with the same file commands and Quick Preview. Document text indexing requires a separate folder grant, and revoking it removes stored body text. Browsing selection, filters and scroll positions survive spatial culling rather than depending on a mounted component.
-
-Reusable actions cover batch rename, publication naming, model-assisted rename/organization and summaries. The publication template is `{year}, {authors}, {title}, {publisher}{extension}`; local EPUB/PDF metadata and bounded extraction supply evidence, with macOS OCR for scanned PDFs. Missing fields stay unresolved. Users review editable recipe proposals and choose rows before file changes, with guarded Undo and interrupted-task recovery. Recipes are available through contextual commands, native menus and configurable shortcuts. Models can be OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter or a compatible local endpoint. Provider presets choose their documented transport and output mode; responses are validated before review. Keys stay in protected desktop storage, and sending document text requires an explicit provider permission. No cloud model is enabled automatically.
-
-Declarative custom actions appear in the same context menus, Commands, native Actions menu and configurable shortcuts. Their executors invoke a built-in command, a recipe, a terminal profile, an executable with literal arguments, or an explicitly chosen shell script. Availability, aliases, pinning and order are editable in Settings → Actions and JSONC. Every asynchronous invocation captures its originating workspace, root, plane, folder and selection. Custom processes retain bounded output and support cancellation; arbitrary process mutations do not receive file-operation Undo.
-
-Open in Terminal, Open in tmux and Open terminal plane use a selected folder, a file's parent or the active browsing column. External terminal discovery prefers a running supported app, then iTerm, then Terminal, with configurable shell profiles and a shared tmux-session adapter. Each embedded plane owns a real xterm/node-pty session bound to its originating root. Shell and screen state survive spatial culling and workspace changes during the running app; closing a plane ends its shell, and restarting restores terminal planes with fresh shells without replaying commands. The plane's local dimensions control terminal rows and columns; camera zoom and rotation do not.
-
-Opt-in MCP uses the shared command/configuration catalog alongside recipe, metadata and search tools. Every agent command requires fresh in-app approval; configuration changes require review, and recipe file changes retain row review and Apply. File and folder removal proposals name the exact paths and use system Trash only. Hidden manual confirmation preferences and old execution grants cannot bypass approval. Agent shell, executable, external-app, terminal-profile and terminal-input routes are unavailable because they can permanently delete files. Agent file Undo is unavailable because it can remove outputs outside the captured selection; users can review it in Recent file operations. Terminal output reading remains separately granted. Existing Trash contents, root, Home, system and private recovery folders are protected from agent Trash requests. Source identities and versions are rechecked at approval and before coordinated Trash. Proposals track actual job results; stopping an agent cancels queued removals. No direct Apply, Trash, Delete or Empty Trash MCP tool is exposed; imported configuration cannot authorize itself.
-
-Sidebar sections fold and reorder; Locations and Favorites support shortcut arrangement, alias names and hiding. Recent remains chronological and can supply Favorites. Folder planes show the shared navigation component by default, with a direct header toggle, independent visibility/width and actions scoped to their owner. Shortcut order, aliases, Favorites and folding stay shared. Sidebar resizing works under spatial zoom and perspective and leaves file content visible in narrow planes. Window navigation starts hidden and remains independently available. Settings can change navigation defaults for later new planes. These changes alter navigation preferences only. Workspace deletion removes layout only, confirms the name and plane count, offers session recovery, and preserves files and running jobs. An operations control appears only for pending work, conflicts or unseen failures; past jobs are available through Commands and the native menu.
-
-The workspace plus button, Command-N, Commands, the native File menu and folder actions create a fresh independent root folder plane. It starts at the active folder, a terminal's working folder, the active preview’s parent or Home, with its own history and selection. Sidebar shortcuts also offer Open in new root plane. Existing roots and linked children remain intact.
-
-Text files are edited where they are previewed (2026-10-23). Edit (⌘E) in a workspace preview plane opens UTF-8 text of up to 4 MiB in an editor that keeps the reading view's highlighting; ⌘S saves and Save As (⇧⌘S) starts on the Desktop. The first save of an editing session moves the version it replaces to the Trash, with file Undo; later saves in that session overwrite their own. A file changed on disk since it was read is never overwritten without asking. Other encodings, binary files, files with another hard link, archive entries and read-only files or folders stay read-only. A preview plane follows its file: saved in another app, it shows the new version, and an editor with unsaved edits asks first. Scratch planes (⌘T) hold text that is not a file yet, in Markdown by default (Settings → Browsing names the extension of new text files). Unsaved edits and scratch text are kept in the profile as they are typed, survive restarts, and are removed only when saved or explicitly discarded; closing a plane that holds unsaved text asks Save, Don't Save or Cancel. Agents cannot edit or save text. Quick Preview offers Edit (⌘E) for a text file, opening it as its plane, active and editing.
-
-Following a link (a row's link marker, Go to linked plane, a Markdown link) makes the plane it shows the active one. Applications and other bundles show their own icons and act as one item, as in Finder: double-click or Open starts an application (or opens a bundle in its app), Show Package Contents goes inside, and files dropped on one are not moved into it. The space between planes can show what is behind Viewer's window, blurred or clear, at a chosen opacity, has a colour of its own (general, or per workspace) and an optional grid (Settings → Space). The title bar can be hidden (⌥⌘T); it comes back at the window's top edge. Every setting is also a command (palette, menus, shortcuts, agents' reviewed proposals), kept apart in the palette: a few in their own section, all after `,`, each with its switch or value; Trash confirmation changes only in Settings. Key sequences work as tmux's: Ctrl+B, then a key (configurable, with chords, a leader key and which-key showing the next keys; keys without the prefix, repeat keys and modes such as resize, with counts); a command line (`:`) speaks vim's ex names and tmux's commands over every command: `:q!`, `:vs ~/Docs`, `:set grid!`, `:tabn Studio`, `:bind -n M-h select-pane -L`, `|` chaining, completion, history and `:help`, and named lines (`:command Dev …`) taking words; bindings, macros and sequences are lines too; `>` asks a model, in words, for a line to review and run (the model is told the commands, the folder's path and the selected names; its lines may not trash, rename, type into terminals or drop unsaved text); one file query language (words, `ext:`, `kind:`, `size>10mb`, `modified<7d`, `tag:red`, `OR`, `-`, parentheses, `~patterns`) reads the folder filter, the search through subfolders, Find file, the index and saved searches, with `:filter` and `:find` on the command line; two folder planes pair as a commander's panels (View side by side pairs them): ⌃⌘C and ⌃⌘X copy and move the selection to the other, they swap folders and may follow each other into subfolders, and ⌃⌘= / ⌃⌘- select and deselect by a glob or a query; plane hints label each plane in view to jump to it; macros record commands as reusable sequences; and the palette opens typed paths, calculates, jumps to frecent folders and takes a command's argument. The space keeps numbered and named views to fly back to and tour; planes tile as tmux's panes (split, layouts, swap, resize) and keep their layout as the window resizes; layout templates reopen a set of planes anywhere; and Explode folder spreads a folder's subfolders around it as planes. Setting profiles change many settings at once and back (Focus mode, ⇧⌘F, hides the chrome); a workspace can have its own chrome and grid over the general settings; and colour themes, per appearance, set the interface, code and terminal colours, made in Settings → Themes or imported from iTerm and VS Code. **Open terminal plane** links a terminal to the folder it was opened from; **New terminal plane** (File menu, palette) is a root plane of its own, starting where new planes start. Terminal planes take their font from Settings → Terminals (by default the owner's iTerm profile: Hack Nerd Font Mono, bold, 17), keep Find in the plane's header (⌘F) with every match highlighted and counted, and fill the plane with the terminal's own background.
-
-Settings and external editors share a versioned `config.jsonc`, with comments, trailing commas, a generated schema and live reload. Settings → Configuration exposes the path, validation, recent changes, import/export and section reset. Invalid external edits stay available for correction while the last valid configuration remains active; independent stale edits merge and overlapping edits report conflicts. Queued Settings edits preserve successive changes to custom actions, shell profiles and tmux fields. Credentials, effective grants, layouts and navigation sessions stay in separate metadata.
-
-Local persistence is versioned and atomic, with backups before settings migrations. UI version 3 enables navigation in existing folder planes and hides window navigation once, after backing up the original layout metadata. Later visibility choices persist. Legacy code and ~/.viewer data stay untouched. Remote/cloud accounts, third-party plugin installation, release certificate signing, notarization, and publishing are outside this first implementation. macOS development bundles use local ad-hoc signatures so they can run on Apple Silicon.
-
-Crowded tiled workspaces keep each plane at least 420 × 260 logical pixels and
-fit the group through camera scale. Frame and Dock remain accessible in compact
-headers; a searchable Related planes menu names parents and children by their
-actual content. Spatial connection lines hide while tiled and return in free
-space. Closing a tile and arranging its survivors takes one Undo action.
-
-Closing a file preview retains recent page, scroll, playback and camera state
-for a fresh view of the unchanged file, including after restarting Viewer.
-Simultaneous copies keep independent positions. This private session cache is
-bounded to 50 files per workspace and 200 overall; it carries view metadata,
-while notes and editing buffers remain with their existing owners. Changed
-sources reset recalled positions. See [mixed workspaces and preview recall](docs/mixed-workspace-followup.md).
-
-Confirmed by the user during the planning interview and subsequent interface review; implementation authorized with “Implement the plan.” Existing files and folders must not be deleted during this work.
-
-
-Task areas are named checkout contexts inside a workspace. The overview keeps
-links to notes/checklists, conversations, independent terminals, Git changes and
-diffs, file previews, browsers and stopped server views. Closing a plane keeps
-its task reference; Tasks and palette entries reopen it. Manual commands keep
-private bounded receipts with the script, folder, times, output and recorded exit
-outcome, available in Tasks → Command history or the progress panel. Restoration
-never replays commands, agent input or server starts. Browser/server bindings
-follow an explicitly restarted local listener. Codex/Claude use ordinary terminal
-planes in this stage. See [task areas](docs/task-areas.md).
-
-The worktree picker also creates new or existing local branches at a pinned
-revision, suggests an editable sibling folder and opens linked checkout/Git
-views. Occupied branches offer their existing checkout. Creation preserves source
-files/index, obeys ordinary repository hooks/filters, and never forces, switches,
-stashes, resets, prunes or removes a checkout. See [Git worktrees](docs/git-worktrees.md).
-
-Office layout previews use a bundled local engine for DOC/DOCX, XLS/XLSX and
-PPT/PPTX. They preserve supported pagination, typography, pictures and charts;
-missing fonts use substitutes. Excel has keyboard worksheet tabs and a searchable
-sheet menu. DOCX Reading and the XLSX stored-value grid remain available alongside
-layout. Source files stay unchanged. See [Office previews](docs/office-previews.md).
-
-Folder search links directly to scoped content results. Search queries can be
-edited in their plane, while content-index grants remain explicit. File and
-command discovery tolerate bounded spelling errors without changing or executing
-the input. A missing preview source identifies the last loaded view, offers
-retry/locate actions, and keeps unsaved drafts when a relocated file opens.
+Demonstrate useful work in the real application. Use ordinary language, readable screenshots and
+short recordings. Teach a small action before introducing its larger system. Link to the canonical
+reference instead of duplicating its limits or appending implementation history. See
+[contributing](CONTRIBUTING.md).

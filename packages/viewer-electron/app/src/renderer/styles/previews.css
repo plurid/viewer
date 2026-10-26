@@ -232,7 +232,7 @@
   font-size: 11px;
   line-height: 1.5;
 }
-/* Editing text (2026-10-23): CodeMirror in Viewer's own colours; tokens use Prism's classes. */
+/* Editing text: CodeMirror in Viewer's own colours; tokens use Prism's classes. */
 .text-editing-toolbar .muted {
   margin-right: auto;
   font-size: 12px;
@@ -261,7 +261,7 @@
   height: 100%;
   color: var(--ink);
   background: transparent;
-  /* Settings → Editor (2026-10-23) */
+  /* Settings → Editor */
   font-family: var(--editor-font, ui-monospace), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--editor-font-size, 12px);
   line-height: var(--editor-line-height, 22px);
@@ -315,7 +315,7 @@
   background: transparent;
   outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
 }
-/* Find in text (2026-10-23): Viewer's find over the editor's top right (EditorFind), covering the
+/* Find in text: Viewer's find over the editor's top right (EditorFind), covering the
    text rather than pushing it down. CodeMirror's own panel, with its native-looking buttons, is never
    opened; should anything open it, it stays out of sight. */
 .text-editor-frame {

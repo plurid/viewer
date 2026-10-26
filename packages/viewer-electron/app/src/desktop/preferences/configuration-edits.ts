@@ -10,7 +10,7 @@ import {
 } from 'jsonc-parser';
 
 /**
- * TEXT EDITS ELEMENT BY ELEMENT (2026-10-20). A changed list was one edit, the whole value written
+ * Text edits element by element. A changed list was one edit, the whole value written
  * again, so every comment inside it went, those of unchanged items too; jsonc-parser's own removal
  * took the comments above the next item and broke a list written on one line. A list's items are
  * matched — by `id` when every item has a unique one, by value when all are plain values — and only

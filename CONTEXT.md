@@ -1,118 +1,85 @@
 # Viewer domain map
 
-Viewer is a macOS-first file manager with familiar file navigation, spatial previews and user/agent commands. The active application is `packages/viewer-electron/app`; the 2021 predecessor is recorded in `docs/old-app.md`.
+The maintained app is `packages/viewer-electron/app`. Paths below are relative to that directory.
+For product intent, read [PRODUCT.md](PRODUCT.md); for UI rules, read [DESIGN.md](DESIGN.md). Start
+development with [CONTRIBUTING.md](CONTRIBUTING.md).
 
-| Term                   | Meaning and owner                                                                                                                                                                                                                        |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File entry             | A filesystem path plus metadata and identity; `src/domain/contracts.ts`, `desktop/files/filesystem.ts`.                                                                                                                                  |
-| Explorer session       | One plane's selection, cursor, range anchor, column trail and scroll; `renderer/workspace/sessions.ts`. Navigation history belongs to the saved folder pane.                                                                             |
-| Folder presentation    | Shared path-keyed view, sort, metadata columns and browser width; `domain/preferences/folder-presentation.ts`, `renderer/state/presentation.ts`.                                                                                         |
-| Lens                   | A folder-local grouping of its direct children, with remembered Map places, stored in the folder's `.viewer/lenses/`; it never moves files. `domain/files/lenses.ts`, `desktop/workspaces/lenses.ts`, [lenses](docs/lenses.md).          |
-| Plane                  | A host record for a folder, search, collection, preview, terminal, scratch, comparison, Git changes or Chat; its engine route and geometry belong to the workspace adapter.                                                              |
-| Scratch plane          | Text that is not a file yet, kept in private app data until Save As writes it (the plane then shows that file, in place) or it is discarded; `editing/ScratchPlane.tsx`.                                                                 |
-| Text buffer            | Unsaved text kept in private app data: a scratch plane's, or a file's unsaved edits with the version they were made over; `desktop/editing/text-buffers.ts`, `renderer/editing/buffers.ts`. Removed only when saved or discarded.        |
-| Note / checklist       | A private Markdown document independent of its views. `domain/editing/notes.ts` owns its shape; `desktop/editing/notes.ts` owns revisioned persistence and conflict copies; `renderer/notes` owns editing sessions, library and views.   |
-| Root                   | An independent spatial branch. Reuse of a preview stays within that root; explicit new planes remain independent.                                                                                                                        |
-| Captured target        | Workspace/root/plane/directory plus selected entries and origin path, frozen before an asynchronous action; `domain/automation/actions.ts`.                                                                                              |
-| Command                | A contextual action with ID, availability, aliases and shortcut; `renderer/commands/registry.ts`. UI menus, keys and agent proposals invoke it.                                                                                          |
-| Recipe                 | A reusable extraction/rename/organization/summarization definition that produces a reviewed file-change proposal.                                                                                                                        |
-| Custom action          | Declarative built-in, recipe, terminal, executable or explicit shell invocation; `desktop/actions/executions.ts`, `renderer/commands/programs.ts`.                                                                                       |
-| Operation              | A journaled filesystem mutation with progress, conflicts and eligible Undo; existing desktop operation services remain authoritative.                                                                                                    |
-| Protected folder       | Disk root, Home, its standard folders and system locations that no request may trash, move, rename or replace, matched by identity; `desktop/files/protected-paths.ts`.                                                                  |
-| Permanent removal      | Limited to named cases in `desktop/operations/removal.ts` (own temporary files, empty folders, verified move sources, private app data); ESLint rejects other `rm`/`rmdir`/`unlink` calls. Tests use `tools/temporary.ts`.               |
-| Configuration          | Versioned JSONC preferences with validation, comments, recovery and conflict handling; `desktop/preferences/configuration.ts`, `desktop/preferences/settings.ts`.                                                                        |
-| Execution grant        | A separately stored user approval for an agent to read terminal output under a canonical folder; `desktop/agents/agent-requests.ts`. Agent commands always need fresh approval.                                                          |
-| Terminal session       | A main-process-owned PTY plus a renderer-owned xterm screen, retained through culling; `desktop/terminals/terminals.ts`, `renderer/terminals/sessions.ts`.                                                                               |
-| Native file permission | A private picker bookmark or native clipboard/drag session capability, canonicalized and released after dependent work drains; `desktop/files/file-access.ts`.                                                                           |
-| Model data permission  | Private user consent for an exact provider endpoint and data level, independently revocable; `desktop/models/model-permissions.ts`, `domain/models/permissions.ts`.                                                                      |
-| Operation receipt      | A validated durable record of mutation intent, output identity and eligible guarded Undo; `desktop/operations/operation-journal.ts`. It never authorizes blindly replaying interrupted mutations.                                        |
-| Workflow               | A portable JSONC DAG that explicitly composes inspection, comparison and reviewed changes; `domain/automation/workflows.ts`, `desktop/automation/workflows.ts`. Run receipts and resolved bindings stay private.                         |
-| Watch rule             | A private approval for an incoming-file selection workflow, content scope and exact definition/recipe revision; `domain/automation/watch-rules.ts`, `desktop/automation/watch-rules.ts`. It creates reviews and cannot apply them.       |
-| File relationship      | A versioned receipt link, declared/inferred local reference or separate reported note; `domain/files/relationships.ts`, `desktop/workspaces/relationships.ts`. It is evidence with a basis, not automatic authority.                     |
-| Office content         | Bounded DOCX body blocks or XLSX source-addressed stored cells, shared by previews, inspection, search and agent readers; `domain/previews/documents/office.ts`, `desktop/previews/office.ts`. Formulas and external data never execute. |
+## Layer ownership
 
-A **worktree view** is an ordinary folder plane opened on an existing checkout.
-`domain/comparison/worktrees.ts` defines registry metadata; the desktop worktree
-service owns bounded discovery and owner-bound identity leases. View IDs are
-independent of checkout identity, while views of one checkout share real files
-and staging. Git changes and diffs link under their source planes. See
-[existing worktrees](docs/git-worktrees.md).
+| Layer           | Owns                                                                 | Entry points                                                                          |
+| --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Domain          | Serializable types, validation and pure decisions                    | `src/domain/contracts.ts`, feature directories under `src/domain/`                    |
+| Desktop         | Filesystem and process authority, native access, persistence and IPC | `src/desktop/bridge.ts`, `src/desktop/ipc/`, desktop feature services                 |
+| Preload         | The narrow renderer-to-desktop API                                   | `src/preload.ts`                                                                      |
+| Renderer        | User commands, sessions and presentation                             | `src/renderer/commands/`, `src/renderer/workspace/`, feature views                    |
+| Native helpers  | Platform-specific file, preview and process integration              | Native helper sources under `tools/`, `src/desktop/native/`, `tools/build-helpers.ts` |
+| Tests and tools | Reproducible fixtures, qualification and packaging                   | `tests/`, `tools/`                                                                    |
 
-A **Journal** is a human-readable projection of desktop activity, separate from
-the authoritative operation receipt log. `domain/journal` owns the closed event
-and query vocabulary; `desktop/journal` owns bounded private persistence, captured
-origins and reviewed exports/Trash; `renderer/journal` owns independent reader
-cursors and the plane. History cannot apply, undo, authorize or replay its event.
-There is no renderer append API or agent Journal reader. See
-[Journal scope](docs/journal-plane.md).
+## Files and views
 
-A **setting profile** is a named presentation overlay, not an application data
-profile or an authorization document. The shared configuration remains canonical.
-Each workspace window resolves general preferences → workspace default profile →
-explicit profile → local overrides. Shared folder choices and project folder views
-then refine folder defaults. Settings edits the shared values; activation and Leave
-profile do not. Missing definitions retain their references and report diagnostics.
+A **file entry** combines a path, metadata and stable identity. File operations check identity and
+source version rather than trusting a previously displayed path. Native file permission belongs to
+desktop services and can be revoked.
 
-The feature groups have matching ownership across layers. Domain code supplies
-serializable types, schemas and pure rules; desktop adapters own native authority,
-I/O and persistence; renderer features own commands, sessions and presentation.
-`domain/preferences/presentation` owns the exact profile field catalog and common
-resolver. `desktop/{preferences,persistence,agents,files,operations,windows,ipc}`
-separates shared configuration, durable documents, consent and window ownership.
-Other desktop groups cover models, chat, automation, workspaces, search,
-comparison, previews, terminals, workers, native helpers and diagnostics.
-`renderer/ui` groups business controls by feature and keeps only shared primitives
-at its root. Existing explorer, workspace, editing, terminal, Chat and preview
-modules remain separate features.
+A **plane** is a view record. Its engine route, framing and geometry belong to
+`src/renderer/workspace/controller.ts`. A **root** is an independent spatial branch: preview reuse
+is scoped to that root. Keep engine IDs inside the adapter.
 
-Saved workspace state is version **10** (`CURRENT_STATE_VERSION`). Versions 1–9
-receive byte-preserving backups before migration; legacy globally applied profiles
-are restored only through compare-and-set checks. Shared-agent authority is private
-version **2** and requires native review; version-1 authority cannot grant access.
-See [decisions](docs/adr/0001-window-local-profiles.md),
-[consent](docs/adr/0002-private-agent-authority-v2.md),
-[durability](docs/adr/0003-durable-save-barriers.md) and
-[spatial overlays](docs/adr/0004-collision-aware-spatial-overview.md).
+An **explorer session** owns selection, cursor, range anchor, scroll and column trail. **Folder
+presentation** is shared by path and owns view/sort/column choices. Navigation and operation
+selection remain independent of camera input.
 
-Keep file selection/input independent of camera input. Keep shared presentation independent of local navigation. Keep engine IDs inside `renderer/workspace/controller.ts`. Keep credentials and effective grants out of editable configuration. A working directory is not a sandbox.
+A **preview resource** is an authorized lease on a source or derived rendition. The desktop resource
+owner checks versions, bounds work and releases dependent resources on cancellation or revocation.
+Office layout uses a bundled sandboxed engine; Office content inspection is a separate bounded
+saved-value reader.
 
-See [architecture](docs/architecture.md), [configuration](docs/configuration.md), [terminals](docs/terminals.md), [actions](docs/actions.md), [verification](docs/verification.md), [capability map](docs/capabilities.md) and [remaining product work](docs/roadmap.md). Routine app verification stays hidden and never activates Viewer.
+## Documents and runtimes
 
-Release checks and mandatory native gates live in [qualification](docs/release-qualification.md). The owner separately authorized a coordinated visible native acceptance session using disposable profiles and generated data; routine checks remain hidden. A passing source/mock/browser check is not proof of genuine native picker, Finder, accessibility or distribution behavior.
+| Concept               | Lifetime and owner                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Scratch / text buffer | Private unsaved text, managed by `desktop/editing` and renderer editing sessions                                   |
+| Note / checklist      | A revisioned private document independent of its open views; `domain/editing/notes.ts`, `desktop/editing/notes.ts` |
+| Task area             | A checkout context with durable tool references; `domain/workspaces/tasks.ts`, `renderer/tasks/controller.ts`      |
+| Terminal              | A desktop-owned PTY plus a renderer xterm session; survives culling, ends when its view closes                     |
+| Server                | A window-owned listener independent of its controls plane; restored stopped                                        |
+| Browser               | An isolated Chromium guest rendered into a plane; `desktop` browser services and `renderer/browser`                |
+| Media draft           | Private versioned editing decisions; a transform publishes new output through operations                           |
+| Command receipt       | Private process evidence independent of the output view; `desktop/actions/receipts.ts`                             |
 
-A **server runtime** is a window-owned listener, independent of its detachable
-server planes. A **browser guest** is an isolated persistent offscreen Chromium
-page rendered into a plane canvas. A **media draft** is a private revisioned
-segment/audio plan against source versions. A **transform** is a bounded typed
-image/media/PDF export submitted to the existing operation executor; optimization
-records size results and publishes only a smaller candidate. None is an agent
-shell or deletion grant. See [resource lifetimes](docs/adr/0007-spatial-workbench-resources.md)
-and [media and optimization](docs/media-tools.md).
+Different worktrees have different working files and indices. Two views of one checkout share those
+files and staging. A view ID is never checkout identity. Cold restoration does not replay terminal
+input, commands, agents or server starts.
 
-Large XLSX worksheets use `desktop/previews/office-worksheet.ts` with the shared
-incremental XML scanner and bounded archive streams. Retained cell/evidence
-budgets do not stop full XML, CRC and source-version validation. Word and small
-package parts keep their separate tree limits; see [Office previews](docs/office-previews.md).
+## Commands and authority
 
-A **worksheet page** is one selected sheet's bounded stored-row window, addressed
-by original Excel row numbers. It uses an existing preview resource, a cancellable
-request ID and a source-version/range cache key. Unloaded sheet metadata differs
-from empty sheet content. Index/agent extraction keeps its separate existing
-content bounds and authority.
+A **captured target** freezes workspace, root, plane, directory and selection before asynchronous
+work. Contextual commands, recipes and custom actions use it instead of reading a later selection.
 
-A **manual command run** is an explicit shell submission from a workspace window,
-captured against its folder and owned by that window. It reuses `Executions`,
-keeps bounded output and cancellation, and never becomes agent authority. Closing
-the output view leaves the run alive; application shutdown stops it. A saved
-command draft is transferred to Settings for explicit addition, not saved or
-executed by its workspace form.
+A **command** is a contextual registry action. A **custom action** is a declarative executor. A
+**recipe** prepares a reviewed file proposal. A **workflow** composes typed inspection and
+proposals; a **watch rule** can prepare a review, not apply it.
 
+Native file permission, provider data permission and local agent authority have separate owners.
+Effective grants and credentials stay outside editable JSONC. Agent terminal read permission does
+not grant input or process containment. Every agent removal requires fresh exact-scope approval and
+operating-system Trash; see the authoritative [removal policy](AGENTS.md).
 
-Task areas are private named checkout contexts inside a workspace, not new
-workspaces or harnesses. `domain/workspaces/tasks.ts` owns bounded durable tool
-references; `renderer/tasks/controller.ts` composes existing resource services
-through the spatial adapter. Plane IDs are view hints. Manual command receipts
-are app-owned evidence in `desktop/actions/receipts.ts`, independent of execution
-and view lifetimes. Neither task/receipt state nor private document views enter
-portable project exports. Cold restoration does not replay commands, agents or
-servers. See [task areas](docs/task-areas.md).
+An **operation receipt** records mutation intent and guarded Undo. **Journal** is a bounded
+human-readable projection; it cannot authorize or replay an event. An external session's
+**Reported** state comes from its authenticated adapter, not terminal output or elapsed time.
+
+## Persistence and decisions
+
+Shared configuration is validated JSONC. A **setting profile** is a presentation overlay, distinct
+from an application data profile and from authorization. Window-local resolution and shared folder
+presentation have separate precedence.
+
+`CURRENT_STATE_VERSION` and migration functions in domain/persistence code are authoritative for
+saved-state versions. Durable save barriers coordinate document and window shutdown; invalid files
+and migration inputs are preserved for recovery.
+
+Read the [architecture](docs/development/architecture.md),
+[configuration](docs/reference/configuration.md) and [ADRs](docs/adr/README.md) before changing
+ownership. Run [affected checks](docs/development/testing.md). Routine native verification uses
+isolated hidden windows and generated files.

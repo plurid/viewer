@@ -174,7 +174,7 @@ export class AgentRequests {
     await task;
   }
   /** Every grant one client holds. A regenerated token starts its connection afresh: the grants
-   * were the connection's, so the token given after the old one leaked kept them (2026-10-21). */
+   * were the connection's, so the token given after the old one leaked kept them. */
   async revokeGrants(clientID: string): Promise<void> {
     const task = this.grantQueue
       .catch(() => {})
@@ -257,7 +257,7 @@ export class AgentRequests {
     const lines: string[] = [];
     for (const file of trash ? target.selection : []) {
       // what the item is, read from the disk: the selection's `directory` came from the window,
-      // so a folder sent as a file was listed, and approved, as one path (2026-10-20)
+      // so a folder sent as a file was listed, and approved, as one path
       const actual = await entry(file.path);
       if (actual.identity !== file.identity)
         throw new Error('Selection changed. Ask the agent for a new proposal.');

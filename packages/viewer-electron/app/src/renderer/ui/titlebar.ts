@@ -3,7 +3,7 @@ import { overlayOpen } from './modal';
 
 export type TitlebarState = 'shown' | 'hidden' | 'revealed';
 /**
- * A HIDDEN TITLE BAR (2026-10-23): Viewer's title bar can be hidden (⌥⌘T), and the window's buttons
+ * A hidden title bar: Viewer's title bar can be hidden (⌥⌘T), and the window's buttons
  * go with it. With the pointer at the window's top edge it comes back over the space, so the window
  * can still be moved and its menus reached; it hides again a moment after the pointer leaves, unless
  * one of its menus or dialogs is open.

@@ -83,7 +83,7 @@ export class JsoncConfiguration<T> {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         // Removed after it was read, the file is missing, not broken: the settings in effect stay,
         // and the next write puts it back from its last text, comments and all. As an error, it
-        // refused every save, and the next launch started from the defaults (2026-10-20).
+        // refused every save, and the next launch started from the defaults.
         if (this.text) {
           this.missing = true;
           this.diagnostics = [];

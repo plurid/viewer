@@ -54,7 +54,7 @@ function JsonField({
     </div>
   );
 }
-/** A Remove button for an item others use: kept, naming them, until they change (2026-10-20). */
+/** A Remove button for an item others use: kept, naming them, until they change. */
 export function ReferencedRemove({
   users,
   onRemove,

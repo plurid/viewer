@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * AN APPLICATION IS ONE ITEM (2026-10-23): as in Finder, opening an app or another bundle starts it
+ * An application is one item: as in Finder, opening an app or another bundle starts it
  * (or opens it in its app) rather than browsing into it; Show Package Contents goes inside. It is
  * no folder to expand, drop into or sort among folders, and its kind says what it is.
  */

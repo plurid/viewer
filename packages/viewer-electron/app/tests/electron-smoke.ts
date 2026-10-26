@@ -2738,11 +2738,11 @@ async function paletteCommand(label: string): Promise<void> {
   );
 }
 /**
- * EDITING TEXT (2026-10-23): a file edited where it is previewed and saved with ⌘S, the version it
+ * Editing text: a file edited where it is previewed and saved with ⌘S, the version it
  * replaced in the Trash and back with Undo, and a scratch plane's text kept in the profile as it is
  * typed. Save As uses the native save panel, which this harness does not drive.
  */
-/** The file query language (2026-10-24): the folder filter reads terms, OR and -, keeps the
+/** The file query language: the folder filter reads terms, OR and -, keeps the
  * last query that read while one is half typed; :filter and :find take a query. */
 async function verifyFileQueries(): Promise<void> {
   const shown = () =>
@@ -2854,7 +2854,7 @@ async function verifyFileQueries(): Promise<void> {
     'File queries: ext:, kind:, OR, a half-typed term, :filter, a pair copying and swapping, :find.',
   );
 }
-/** The command line (2026-10-23): prefix : opens it; lines split, set, repeat, report errors and
+/** The command line: prefix : opens it; lines split, set, repeat, report errors and
  * close every plane, unsaved text and all, with :qa!. */
 async function verifyCommandLine(): Promise<void> {
   const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
@@ -3074,7 +3074,7 @@ async function verifyCommandLine(): Promise<void> {
     'Command line: help, completion, errors, :vs, counts, :set, :bind -n, a mode, :command, Keep and :qa!.',
   );
 }
-/** Configuration and look (2026-10-23): Focus mode, a workspace's own setting and a theme, in the
+/** Configuration and look: Focus mode, a workspace's own setting and a theme, in the
  * packaged app. */
 async function verifyLook(): Promise<void> {
   const blur = () =>
@@ -3188,7 +3188,7 @@ async function verifyLook(): Promise<void> {
   );
   console.log("Look: Focus mode and back, a workspace's own minimap, and a theme's colours.");
 }
-/** The space (2026-10-23): views flown back to, tmux-style tiling, Explode folder and layout
+/** The space: views flown back to, tmux-style tiling, Explode folder and layout
  * templates, in the packaged app. */
 async function verifySpace(): Promise<void> {
   const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
@@ -3293,7 +3293,7 @@ async function verifySpace(): Promise<void> {
     'Space: a view flown back to, tiling split and relaid, Explode and Collapse, and a layout template.',
   );
 }
-/** The key layer (2026-10-23): tmux's prefix and which-key, plane hints, the palette's calculator
+/** The key layer: tmux's prefix and which-key, plane hints, the palette's calculator
  * and Record macro, in the packaged app. */
 async function verifyKeys(): Promise<void> {
   const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
@@ -3489,7 +3489,7 @@ async function verifyTextEditing(): Promise<void> {
     (list) => list.buffers.some((buffer) => buffer.kind === 'scratch' && buffer.bytes === 12),
     'scratch text kept in the profile',
   );
-  // Find in text (2026-10-23): Viewer's own find over the text, never CodeMirror's panel
+  // Find in text: Viewer's own find over the text, never CodeMirror's panel
   await key('f', 'KeyF', 4);
   await until(
     () =>
@@ -3531,7 +3531,7 @@ async function verifyTextEditing(): Promise<void> {
   assert.deepEqual(header.order, ['Save…', 'Language']);
   assert.equal(new Set(header.heights).size, 1, JSON.stringify(header.heights));
   assert.equal(header.edge, 'rgba(0, 0, 0, 0)');
-  // plurid's controls solid, and a see-through space only between planes (2026-10-23)
+  // plurid's controls solid, and a see-through space only between planes
   const application = `getComputedStyle(document.querySelector('.workspace-surface [data-plurid-application]'))`;
   assert.equal(
     await evaluate<string>(`${application}.getPropertyValue('--plurid-opacity-persistent').trim()`),
@@ -3550,7 +3550,7 @@ async function verifyTextEditing(): Promise<void> {
   assert.match(backdrop.space, /\/ 0\.6\)|, 0\.6\)/, backdrop.space);
   assert.match(backdrop.titlebar, /^rgb\(/, backdrop.titlebar);
   await patchInSettings(`[{path:'ui.space.backdrop',value:'opaque'}]`);
-  // ⌥⌘T hides the title bar and shows it again; the grid; a workspace's own colour (2026-10-23)
+  // ⌥⌘T hides the title bar and shows it again; the grid; a workspace's own colour
   const titlebarState = () =>
     evaluate<string>('document.querySelector(".app-shell")?.dataset.titlebar ?? ""');
   // the native menu takes ⌥⌘T anywhere; these keys reach the page itself, which leaves an
@@ -5329,7 +5329,7 @@ async function verifyEntryAndPalette(): Promise<void> {
     Boolean,
     'new-plane folder preference',
   );
-  // a choice is a searchable menu (2026-10-23): open it, then choose the row
+  // a choice is a searchable menu: open it, then choose the row
   await settingsEvaluate(
     `document.querySelector('[aria-label="New folder planes start in"]').click()`,
   );

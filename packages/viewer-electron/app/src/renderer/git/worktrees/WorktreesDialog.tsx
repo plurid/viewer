@@ -2,7 +2,7 @@
  * THESIS: Choose a real checkout and place its folder beside the current one.
  * OWN-WORLD: Existing Viewer dialog, flat branch/location rows, shared theme tokens.
  * STORY: Find a branch, inspect its state, open a view or return to an existing one.
- * FIRST VIEWPORT: Search and repository, checkout list, selected status, explicit open actions.
+ * First viewport: Search and repository, checkout list, selected status, explicit open actions.
  * FORM: Operate-mode extension; inherited interface, no new visual identity.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';

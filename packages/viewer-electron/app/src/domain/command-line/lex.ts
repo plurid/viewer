@@ -1,5 +1,5 @@
 /**
- * THE COMMAND LINE (2026-10-23): one small language for `:` lines, key bindings and sequences, as
+ * The command line: one small language for `:` lines, key bindings and sequences, as
  * vim's ex lines and tmux's commands are. A line is steps separated by `|` (tmux's `;` too); a step
  * is `[count]name[!] words…`. Words are bare, 'literal' or "escaped" (`\"`, `\\`); outside quotes a
  * backslash keeps the next character (`\|`, `\ `). A command id is a step on its own, so every
@@ -140,7 +140,7 @@ export function parseLine(
 }
 
 /**
- * A named line's words put in it (2026-10-23): `$1` to `$9` each word, `$*` all of them, escaped so
+ * A named line's words put in it: `$1` to `$9` each word, `$*` all of them, escaped so
  * each stays one word; `$$` is a dollar. Words given to a line that takes none are an error.
  */
 export function withArguments(line: string, words: readonly string[], name: string): string {

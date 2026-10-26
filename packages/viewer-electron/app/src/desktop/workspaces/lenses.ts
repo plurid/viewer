@@ -494,7 +494,7 @@ export class Lenses {
       return {};
     }
     // The last lens takes Viewer's now-empty folder along, as one undoable Trash item, rather than
-    // leaving a README and an empty lenses/ behind (2026-10-23).
+    // leaving a README and an empty lenses/ behind.
     const viewer = path.join(folder, lensFolder);
     if (await this.onlyLens(viewer, file)) return { job: await this.options.trash(viewer) };
     return { job: await this.options.trash(file) };

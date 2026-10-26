@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A ROOT TERMINAL PLANE (2026-10-23): Open terminal plane links a terminal to the folder it was
+ * A root terminal plane: Open terminal plane links a terminal to the folder it was
  * opened from; New terminal plane is a plane of its own, a root, from anywhere, starting where new
  * planes start (Settings → Browsing).
  */

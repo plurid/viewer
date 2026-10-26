@@ -21,7 +21,7 @@ export function chordFrom(event: KeyboardEvent): string | undefined {
 }
 const sequenceText = (keys: readonly string[]) => keys.map(keyGlyphs).join(' ');
 /**
- * PRESS TO SET A KEY (2026-10-23). A shortcut or prefix is a chord with ⌃ or ⌘; a leader is any key;
+ * Press to set a key. A shortcut or prefix is a chord with ⌃ or ⌘; a leader is any key;
  * a binding's keys are pressed in turn and end with Enter or a pause. Escape keeps the key as it
  * was; Backspace clears it. A chord another command has is refused and named.
  */

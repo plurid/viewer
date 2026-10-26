@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** A NOTICE SAYS WHAT KIND IT IS (2026-10-23): information is not shown as a warning. */
+/** A notice says what kind it is: information is not shown as a warning. */
 import { beforeEach, expect, it, vi } from 'vitest';
 import { announce, getState, initialize, report } from '../src/renderer/state/store';
 

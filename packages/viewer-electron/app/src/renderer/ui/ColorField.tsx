@@ -24,7 +24,7 @@ export const spaceSwatches = {
   ],
 } as const;
 /**
- * A SPACE COLOUR (2026-10-23): the automatic colour (the appearance's, or a workspace's general one),
+ * A space colour: the automatic colour (the appearance's, or a workspace's general one),
  * swatches for the appearance, and a colour of one's own from the system picker.
  */
 export function ColorField({

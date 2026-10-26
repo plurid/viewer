@@ -7,7 +7,7 @@ import { settingByName, settingNames } from './set';
 import { bindStep, parseCommandLine, resolveName, verbName, verbs } from './verbs';
 
 /**
- * PROMPTS (2026-10-24): `>` in the palette asks a model to turn a request ("sort by year", "the
+ * PROMPTS: `>` in the palette asks a model to turn a request ("sort by year", "the
  * PDFs from last week side by side") into one line of the command language. The person reads
  * the line and its one-sentence explanation; Enter runs it, Tab opens it to edit. The model is
  * told the language, the commands available here, the folder's path and the selected names.

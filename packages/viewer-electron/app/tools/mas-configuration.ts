@@ -35,7 +35,7 @@ export function macChannel(value?: string): 'direct' | StoreChannel {
   throw new Error('VIEWER_MAC_CHANNEL must be direct, mas-dev, or mas.');
 }
 /**
- * The channel a Store command builds (2026-10-20). `dev` builds the development channel and
+ * The channel a Store command builds. `dev` builds the development channel and
  * `distribution` the Store's, whatever the environment says: a `VIEWER_MAC_CHANNEL=mas` left exported
  * made `mas:dev` a distribution build. A conflicting value is refused rather than followed.
  * `preflight` checks the channel `VIEWER_MAC_CHANNEL` names, the development one by default.

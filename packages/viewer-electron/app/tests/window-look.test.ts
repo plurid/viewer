@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * MORE CONTROL OVER THE WINDOW'S LOOK (2026-10-23): the title bar can be hidden (⌥⌘T) and comes
+ * MORE CONTROL OVER THE WINDOW'S LOOK: the title bar can be hidden (⌥⌘T) and comes
  * back at the window's top edge; the space's grid can be turned off; the space has a general colour,
  * following the appearance unless chosen, and each workspace may have its own.
  */

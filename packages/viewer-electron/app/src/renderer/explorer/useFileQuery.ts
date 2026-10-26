@@ -8,7 +8,7 @@ import {
 
 const everything: FileQuery = { root: null, words: [], tags: [], needsStat: false };
 /**
- * A filter's query, read (domain/search/query.ts, 2026-10-24): while one being typed does not read,
+ * A filter's query, read (domain/search/query.ts): while one being typed does not read,
  * the last that did keeps the list, and the problem is said. Finder tags it names are looked up in
  * `folder`, through Spotlight.
  */

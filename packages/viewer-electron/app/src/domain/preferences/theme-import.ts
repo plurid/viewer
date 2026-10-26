@@ -39,7 +39,7 @@ const ansi: readonly TerminalToken[] = [
   'brightWhite',
 ];
 /**
- * AN ITERM COLOUR PRESET (2026-10-23): an `.itermcolors` property list. Its sixteen ANSI colours,
+ * An iterm colour preset: an `.itermcolors` property list. Its sixteen ANSI colours,
  * background, foreground, cursor and selection become the terminal's palette, and the shell takes
  * its space, text and accent from them.
  */
@@ -130,7 +130,7 @@ const syntaxScopes: [SyntaxToken, string[]][] = [
   ['function', ['entity.name.function', 'support.function']],
 ];
 /**
- * A VS CODE THEME (2026-10-23): its workbench colours become the shell's, its token colours the
+ * A vs code theme: its workbench colours become the shell's, its token colours the
  * code colours, and its terminal colours the terminal's palette.
  */
 export function importVSCodeTheme(text: string, fallbackName = 'Imported theme'): Theme {

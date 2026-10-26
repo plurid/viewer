@@ -1,6 +1,6 @@
 import type { FileEntry } from '../../domain/contracts';
 
-/** What a folder plane lets a line do with its items (2026-10-24): `:select` and `:deselect`. */
+/** What a folder plane lets a line do with its items: `:select` and `:deselect`. */
 export interface FolderHandle {
   path(): string;
   /** The items it shows, in their order. */

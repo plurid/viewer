@@ -79,7 +79,7 @@ const agentCommandPrefixes = ['view-', 'column.', 'group.', 'sort.', 'recipe.'];
 const externalCommands = new Set(['open-default', 'open-with', 'open-selection']);
 
 /**
- * What a model may not put in a line it proposes for a person to run (2026-10-24): what agents may
+ * What a model may not put in a line it proposes for a person to run: what agents may
  * never do (terminals, external apps, emptying Trash, file Undo, paste from outside the view, a
  * custom action that runs programs), and the Trash itself, which agents reach only with each path
  * reviewed. The person reads the line before Enter runs it; the rest is theirs to accept.
@@ -291,7 +291,7 @@ const agentConfigurable: readonly (readonly string[])[] = [
   ['ui'],
 ];
 /**
- * Why the workspace must not run an agent's command as it arrives, if it must not (2026-10-20).
+ * Why the workspace must not run an agent's command as it arrives, if it must not.
  * Main stops waiting after 25 seconds, and a window that ran it later (a hidden window draws no
  * frames) did so after the agent was told it failed. A custom action runs as it was reviewed: the
  * workspace ran its current definition, so a recipe action changed into a shell script since ran.
@@ -316,7 +316,7 @@ export function agentDispatchRefusal(
   return undefined;
 }
 /**
- * A setting's command an agent may propose (2026-10-23): an on/off setting or a choice the agent
+ * A setting's command an agent may propose: an on/off setting or a choice the agent
  * could also propose as configuration, and that the workspace changes itself. A number or colour
  * opens Settings, for the person; anything else is the person's, as configuration is.
  */

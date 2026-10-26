@@ -140,7 +140,7 @@ export class FileServices {
       : value;
   }
   /** The paths of each Finder tag a query names, from Spotlight, under its root or the indexed
-   * roots (2026-10-24); a query that does not read is left to the index to explain. */
+   * roots; a query that does not read is left to the index to explain. */
   private async tagged(value: IndexedQuery): Promise<IndexedQuery> {
     let tags: string[];
     try {

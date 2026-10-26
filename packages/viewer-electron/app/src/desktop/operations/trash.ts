@@ -155,7 +155,7 @@ export class Trash {
     clipboard.writeText(items.map((item) => item.file).join('\n'));
   }
   /** "Restore to…": the folder, chosen before the move takes the file operations lock. Chosen inside
-   * it, the picker held every queued file operation while it was open (2026-10-20). */
+   * it, the picker held every queued file operation while it was open. */
   async chooseRestoreFolder(window: BrowserWindow): Promise<string | undefined> {
     if (this.#closed || this.#busy || window.isDestroyed())
       throw new Error('Trash is busy. Try again.');

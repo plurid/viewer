@@ -18,7 +18,7 @@ const subscribe = (listener: () => void) => {
   };
 };
 /**
- * RECORD MACRO (2026-10-23): the commands run while recording, by keys, menus or the palette, become
+ * Record macro: the commands run while recording, by keys, menus or the palette, become
  * a command sequence saved as a custom action. Agents' commands are not recorded: they are not
  * remembered as the person's.
  */
@@ -35,7 +35,7 @@ export function stopMacro(): string[] {
 export function recordCommand(id: string): void {
   if (!recording || unrecorded.has(id) || id.startsWith('custom.') || recording.length >= 50)
     return;
-  // a workspace by its name, which a later session still has: its id is this one's (2026-10-23)
+  // a workspace by its name, which a later session still has: its id is this one's
   if (id.startsWith('workspace:')) {
     const name = getState().saved.workspaces.find((space) => `workspace:${space.id}` === id)?.name;
     if (name) publish([...recording, `tabn ${quoteWord(name)}`]);

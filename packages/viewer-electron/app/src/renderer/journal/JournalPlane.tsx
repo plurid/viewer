@@ -2,7 +2,7 @@
  * THESIS: Inspect an action's lifecycle and return directly to its source plane.
  * OWN-WORLD: Viewer's shared theme, compact controls, tabular rows and plain detail inspector.
  * STORY: Filter activity, pause to inspect, follow one trace, then return to work.
- * FIRST VIEWPORT: Two compact filter rows above events; selection opens adjacent details.
+ * First viewport: Two compact filter rows above events; selection opens adjacent details.
  * FORM: Operate-mode extension of existing file/server planes; no new visual identity.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review,
  * the verdict, DESIGN.md, and every shipping raster carrying its provenance.

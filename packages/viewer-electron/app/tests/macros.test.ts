@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * COMMAND SEQUENCES AND MACROS (2026-10-23): a custom action may run built-in commands in order, the
+ * Command sequences and macros: a custom action may run built-in commands in order, the
  * later ones where the earlier left things; Record macro collects what the person runs; an agent
  * may propose a sequence only if it could propose each step.
  */

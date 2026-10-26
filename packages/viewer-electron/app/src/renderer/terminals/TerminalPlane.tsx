@@ -30,7 +30,7 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
     useViewer((state) => state.settings.settings),
     look,
   ).terminal;
-  // Find lives in the plane's header (2026-10-23): a row of its own wasted the plane's top, and
+  // Find lives in the plane's header: a row of its own wasted the plane's top, and
   // opening it grew that row and shifted the terminal. With headers off it floats over the top.
   const header = usePreviewControlsSlot(pane.id);
   useEffect(() => {

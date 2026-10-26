@@ -3,7 +3,7 @@ import type { UIPreferences } from '../../domain/contracts';
 type Backdrop = UIPreferences['space']['backdrop'];
 
 /**
- * A SEE-THROUGH SPACE (2026-10-23). The window options for the space's backdrop: macOS vibrancy blurs
+ * A SEE-THROUGH SPACE. The window options for the space's backdrop: macOS vibrancy blurs
  * what is behind the window; a clear backdrop needs a window created transparent. The renderer then
  * draws the space at the chosen opacity, the planes opaque over it.
  */

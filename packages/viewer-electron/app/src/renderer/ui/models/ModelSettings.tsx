@@ -50,7 +50,7 @@ export function ModelSettings({
         Choose a provider and model for each recipe. Requests run only when you invoke an action.
       </p>
       {snapshot.settings.providers.length > 0 && (
-        // `>` in the palette (2026-10-24): which model turns words into a command line
+        // `>` in the palette: which model turns words into a command line
         <label className="settings-row">
           <span>Ask in words (&gt;) with</span>
           <ChoiceButton

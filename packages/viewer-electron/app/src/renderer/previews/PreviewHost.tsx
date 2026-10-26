@@ -108,7 +108,7 @@ export const PreviewHost = memo(function PreviewHost({
     if (active) setActivated(true);
   }, [active]);
   const entry = resource?.entry;
-  // A PREVIEW PLANE FOLLOWS ITS FILE (2026-10-23): saved in another app, it shows the new version.
+  // A PREVIEW PLANE FOLLOWS ITS FILE: saved in another app, it shows the new version.
   // Its folder is watched; a change there is the file's only when the file's version changed.
   const seen = useRef<SourceVersion | undefined>(undefined);
   // the file as it is now, for the footer: a save changes its size after the preview opened

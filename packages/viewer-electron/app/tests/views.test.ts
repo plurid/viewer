@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE SPACE'S VIEWS AND TOUR (2026-10-23): ⌃⌥⌘1–9 saves the camera as view 1–9 and ⌥⌘1–9 flies back;
+ * THE SPACE'S VIEWS AND TOUR: ⌃⌥⌘1–9 saves the camera as view 1–9 and ⌥⌘1–9 flies back;
  * views can be named; Tour flies through them in turn and any key stops it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

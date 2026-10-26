@@ -130,7 +130,7 @@ export class FileAccess {
     return work;
   }
   /** A file chosen in a panel for one use, an export or an import: for this session only. Each was
-   * saved as a folder permission, and at 128 of them new folders were refused (2026-10-20). */
+   * saved as a folder permission, and at 128 of them new folders were refused. */
   allowOnce(file: string, bookmark: string | undefined): Promise<void> {
     if (!this.scoped || !bookmark) return Promise.resolve();
     return this.receiveNative([{ path: file, directory: false, bookmark }]);

@@ -85,7 +85,7 @@ export function splitTile(
   return true;
 }
 /**
- * TILING AS TMUX'S PANES (2026-10-23): split the active plane right (prefix %) or down (prefix "),
+ * TILING AS TMUX'S PANES: split the active plane right (prefix %) or down (prefix "),
  * tile the planes in view, step through the layouts (prefix Space), swap, promote to main, grow or
  * shrink the main plane, and untile. The layout follows the window's size.
  */

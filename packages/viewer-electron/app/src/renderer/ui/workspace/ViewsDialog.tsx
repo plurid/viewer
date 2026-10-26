@@ -3,7 +3,7 @@ import type { WorkspaceController } from '../../workspace/context';
 import { Dialog } from '../primitives';
 
 /**
- * VIEWS (2026-10-23): the space's saved camera positions, to fly to, rename or remove. Views 1–9
+ * VIEWS: the space's saved camera positions, to fly to, rename or remove. Views 1–9
  * are the numbered ones (⌥⌘1–9); others carry the names they were saved under.
  */
 export function ViewsDialog({

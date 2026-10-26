@@ -13,7 +13,7 @@ export interface TextLanguage {
 }
 
 /**
- * COMMON LANGUAGES (2026-10-23). Seven grammars were loaded and every other extension fell through
+ * Common languages. Seven grammars were loaded and every other extension fell through
  * to a grammar name nothing defined, so Rust, Go, YAML and the rest showed plain. The table is the
  * one place a language is named: highlighting, the text preview's detection and the editor read it.
  */

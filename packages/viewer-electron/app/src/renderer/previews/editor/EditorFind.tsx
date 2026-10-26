@@ -20,7 +20,7 @@ export interface FindRequest {
   initial?: string;
 }
 /**
- * FIND IN TEXT (2026-10-23): Viewer's find over the editor's top right, as an editor's find widget:
+ * Find in text: Viewer's find over the editor's top right, as an editor's find widget:
  * it covers the text rather than pushing it down. Finds as it is typed from where it opened, counts,
  * steps with Enter and Shift+Enter, matches case (⌥C), whole words (⌥W) or patterns (⌥R), and
  * replaces one match or all.

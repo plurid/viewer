@@ -14,7 +14,7 @@ export interface Choice {
 }
 
 /**
- * CHOICES USE THE SEARCHABLE MENU (2026-10-23): the context menu's keyboard-first search over a
+ * Choices use the searchable menu: the context menu's keyboard-first search over a
  * list of values, the current one checked, in place of a native dropdown. Its end lines up with
  * the button's, it shows about five rows and scrolls the rest, and inside a modal dialog it opens
  * in that dialog's top layer. Not a command: nothing here reaches the command catalog or agents.

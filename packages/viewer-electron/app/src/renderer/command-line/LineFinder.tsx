@@ -134,7 +134,7 @@ function helpRows(topic: string): Row[] {
     });
 }
 /**
- * THE COMMAND LINE IN THE PALETTE (2026-10-23): a line typed after `:`, completed by Tab, its past
+ * The command line in the palette: a line typed after `:`, completed by Tab, its past
  * lines a ⌃P and ⌃N away, `help` listing what it can say. Enter runs it once it parses; an error
  * points at its column.
  */

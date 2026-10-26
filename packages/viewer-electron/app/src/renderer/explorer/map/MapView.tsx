@@ -56,7 +56,7 @@ const cameras = new Map<string, { zoom: number; left: number; top: number }>();
 const margin = 480;
 const draft = emptyLens('00000000-0000-4000-8000-000000000000', 'Map');
 /** A lens being created for a folder that has none. Edits made before the Map receives it edit it:
- * each created another (“Map 2”, “Map 3”), auto-repeated nudges included (2026-10-20). */
+ * each created another (“Map 2”, “Map 3”), auto-repeated nudges included. */
 const creating = new Map<string, Promise<LensDocument>>();
 const directions: Record<string, MapDirection> = {
   ArrowLeft: 'left',
@@ -105,7 +105,7 @@ export const MapView = memo(function MapView({
   const layout = useMemo(() => layoutLens(lens, resolved), [lens, resolved]);
   const index = useMemo(() => new MapIndex(layout), [layout]);
   // Reading order, top to bottom and left to right: a Shift range follows it, as the eye does;
-  // it followed the list's order, which the Map does not show (2026-10-20).
+  // it followed the list's order, which the Map does not show.
   const ordered = useMemo(() => layout.tiles.toSorted((a, b) => a.y - b.y || a.x - b.x), [layout]);
   const scope = useMemo(() => ordered.map((tile) => tile.entry), [ordered]);
   const key = `${props.paneID}:${path}`;
@@ -280,7 +280,7 @@ export const MapView = memo(function MapView({
         setGesture(null);
         if (!moved) return;
         // Outside every region on a map with groups, a drop has no group to join: said, rather
-        // than ignored (2026-10-20).
+        // than ignored.
         const target = dropRegion(layout, point.x, point.y);
         if (!target) {
           announce('Drop items onto a group, or onto Unsorted, to place them.');
@@ -439,7 +439,7 @@ export const MapView = memo(function MapView({
     reveal(layout.byPath.get(props.entries[position]?.path ?? '')),
   );
   // The cursor is followed wherever it moves from, as the list and grid follow it: type-to-select
-  // left the Map where it was (2026-10-20).
+  // left the Map where it was.
   useEffect(() => reveal(layout.byPath.get(props.cursor ?? '')), [props.cursor]); // eslint-disable-line react-hooks/exhaustive-deps
   controls.current = {
     move: (key, range) => {

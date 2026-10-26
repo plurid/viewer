@@ -2,7 +2,7 @@ import type { Keymap, KeymapBinding } from './keymap';
 import type { CustomAction } from '../automation/actions';
 
 /**
- * SESSION KEYS (2026-10-23): what `:bind`, `:unbind` and `:alias` change, kept until Viewer quits,
+ * Session keys: what `:bind`, `:unbind` and `:alias` change, kept until Viewer quits,
  * as tmux's prompt changes the running server and not .tmux.conf. Settings → Shortcuts keeps them
  * in config.jsonc, or discards them. `table` is `prefix`, `root` (no prefix) or a mode's name;
  * `line: null` unbinds.
@@ -76,7 +76,7 @@ export function sessionAliases(session: SessionKeys): Map<string, string> {
   return aliases;
 }
 /**
- * The session's named lines kept as sequences (2026-10-23): a name already a sequence's gets its
+ * The session's named lines kept as sequences: a name already a sequence's gets its
  * line; a new one is a new sequence; one forgotten (`:unalias`) removes the sequence of that name.
  */
 export function keepAliases(

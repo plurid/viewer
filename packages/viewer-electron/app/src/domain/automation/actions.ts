@@ -101,7 +101,7 @@ export function actionValues(inputs: readonly ActionInput[], supplied: ActionVal
 }
 /**
  * Whether a workspace's change to custom actions only adds, edits or removes command sequences
- * (2026-10-23): Record macro saves from the workspace, which can run any built-in command anyway;
+ *: Record macro saves from the workspace, which can run any built-in command anyway;
  * programs, scripts and terminals still change only in Settings.
  */
 export function sequencesOnly(

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * LAYOUT TEMPLATES (2026-10-23): a workspace's planes saved by kind and folder, with their tiling, in
+ * Layout templates: a workspace's planes saved by kind and folder, with their tiling, in
  * config.jsonc; opening one adds those planes, tiled, to the workspace in view, anywhere.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';

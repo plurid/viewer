@@ -1,5 +1,5 @@
 /**
- * A REBUILD TRASHES THE PREVIOUS BUILD (2026-10-23): Forge deletes `.vite` and its output folder before
+ * A rebuild trashes the previous build: Forge deletes `.vite` and its output folder before
  * writing new ones, which AGENTS.md forbids. Packaging first moves exactly those two to the Trash, and
  * stops rather than delete anything when the Trash fails.
  */

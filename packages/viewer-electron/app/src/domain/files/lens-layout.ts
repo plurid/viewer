@@ -292,7 +292,7 @@ export function regionAt(layout: MapLayout, x: number, y: number): MapRegion | u
 }
 /** Where dropped tiles go: the region under the point, or, on a map without groups, the map
  * itself (Unsorted, which grows to hold them) for a drop beyond the tiles. A map with groups has
- * no region in its gaps and margin, where a drop was silently ignored (2026-10-20). */
+ * no region in its gaps and margin, where a drop was silently ignored. */
 export function dropRegion(layout: MapLayout, x: number, y: number): MapRegion | undefined {
   return (
     regionAt(layout, x, y) ?? layout.regions.find((region) => region.bare && region.id === null)

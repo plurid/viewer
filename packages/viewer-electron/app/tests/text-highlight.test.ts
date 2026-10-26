@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * COMMON LANGUAGES ARE HIGHLIGHTED (2026-10-23): a grammar beyond the first seven loads on first use,
+ * Common languages are highlighted: a grammar beyond the first seven loads on first use,
  * and a Markdown document's fenced code is highlighted in its language.
  */
 import { afterEach, beforeAll, expect, it } from 'vitest';

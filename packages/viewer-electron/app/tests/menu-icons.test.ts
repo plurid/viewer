@@ -1,5 +1,5 @@
 /**
- * EACH MENU GROUP HAS ITS OWN ICON (2026-10-23): Lens, Text, Workspace and Preview fell back to the
+ * Each menu group has its own icon: Lens, Text, Workspace and Preview fell back to the
  * command icon, and Folder, Navigation and Project all showed a folder.
  */
 import { expect, it } from 'vitest';

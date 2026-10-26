@@ -11,7 +11,7 @@ import { frontPlaneDepth } from './plane-layout';
 import { rememberTiling } from './tiling-history';
 
 /**
- * TILING IN THE SPACE (2026-10-23): the active workspace's tiled planes placed face-on in the space's
+ * Tiling in the space: the active workspace's tiled planes placed face-on in the space's
  * area, as one arrangement step, and the camera at natural scale so their text reads at its size.
  * New planes are waited for: a split adds one that mounts a moment later. A plane closed meanwhile
  * leaves the tiling.

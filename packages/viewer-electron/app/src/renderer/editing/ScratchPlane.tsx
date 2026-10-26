@@ -15,7 +15,7 @@ import { scratchFileName } from './unsaved';
 const TextEditor = lazy(() => import('../previews/editor/TextEditor'));
 
 /**
- * A SCRATCH PLANE (2026-10-23): text that is not a file yet, kept in the profile as it is typed, so a
+ * A scratch plane: text that is not a file yet, kept in the profile as it is typed, so a
  * quit or a crash keeps it. Save As writes it as a file (on the Desktop, or anywhere) and the plane
  * becomes that file's, in place, still editing it.
  */

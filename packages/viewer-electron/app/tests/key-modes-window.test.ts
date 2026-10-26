@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * KEYS THAT SPEAK LINES, IN THE WINDOW (2026-10-23): a root key needs no prefix and leaves text
+ * KEYS THAT SPEAK LINES, IN THE WINDOW: a root key needs no prefix and leaves text
  * fields alone; a mode keeps its keys until Escape, counting digits; a repeat key comes again
  * without the prefix; `:bind`, `:unbind` and `:mode`; a macro records lines.
  */

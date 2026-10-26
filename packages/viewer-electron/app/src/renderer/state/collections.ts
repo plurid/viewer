@@ -52,7 +52,7 @@ export function addCollectionPane(collectionID: string): string {
   if (!source) throw new Error('This collection has no locations.');
   const id = uuid(),
     file = collection.kind === 'explicit' ? parentPath(source) : source;
-  // The opened collection is the active plane, as a new search is (2026-10-20).
+  // The opened collection is the active plane, as a new search is.
   changeWorkspace((space) => ({
     ...space,
     panes: [...space.panes, { id, type: 'collection', path: file, collectionID }],

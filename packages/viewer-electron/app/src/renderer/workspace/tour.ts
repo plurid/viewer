@@ -21,7 +21,7 @@ export function stopTour(): void {
   touring?.stop();
 }
 /**
- * TOUR (2026-10-23): the space's saved views in turn, each flown to and shown for a while, as a
+ * TOUR: the space's saved views in turn, each flown to and shown for a while, as a
  * presentation. Any key, click or scroll stops it; so does the last view, unless it loops.
  */
 export function startTour(

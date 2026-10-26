@@ -88,7 +88,7 @@ export interface WorkspaceController {
       evidence?: EvidenceNavigation;
       /** A link followed: the plane also becomes the active one, taking the wheel and the keys. */
       activate?: boolean;
-      /** A text file opens editing (Quick Preview's Edit, 2026-10-23). */
+      /** A text file opens editing (Quick Preview's Edit). */
       edit?: boolean;
     },
   ): void;
@@ -109,10 +109,10 @@ export interface WorkspaceController {
     },
   ): Promise<void>;
   /** Shows a plane and makes it Viewer's active pane; `activate` also gives it the wheel and the
-   * keys, as following a link does (2026-10-23). Plurid's selection is not changed. */
+   * keys, as following a link does. Plurid's selection is not changed. */
   focusPane(hostID: string, options?: { activate?: boolean; frame?: boolean }): void;
   frameAll(): void;
-  /** The space's named views (2026-10-23): plurid's bookmarks, saved with the arrangement. */
+  /** The space's named views: plurid's bookmarks, saved with the arrangement. */
   bookmarks(): { name: string; label: string }[];
   /** Saves the camera as a view; a name in use is replaced. */
   saveBookmark(name: string): void;

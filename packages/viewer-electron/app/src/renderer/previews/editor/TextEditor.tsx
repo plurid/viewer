@@ -76,7 +76,7 @@ export const editorPresentation = (settings: ApplicationSettings['editor']) => [
   ...(settings.wordWrap ? [EditorView.lineWrapping] : []),
 ];
 /**
- * EDITING TEXT (2026-10-23). A CodeMirror editor, loaded only when a plane edits text. It keeps the
+ * Editing text. A CodeMirror editor, loaded only when a plane edits text. It keeps the
  * file's line breaks (`\r\n` stays `\r\n`) and tells its owner when the text changes; the owner reads
  * it through the handle, so a large file is not copied on every keystroke.
  */

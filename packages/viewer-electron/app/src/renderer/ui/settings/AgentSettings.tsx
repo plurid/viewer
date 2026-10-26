@@ -24,7 +24,7 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
   const settings = snapshot.settings;
   const [agentConfig, setAgentConfig] = useState('');
   // The switch and folders are the person's approval, kept by the desktop: config.jsonc only
-  // narrows them, so what it asks for beyond them waits here (2026-10-20).
+  // narrows them, so what it asks for beyond them waits here.
   const [access, setAccess] = useState<AgentAccessState>();
   const change = (request: AgentAccessRequest) => {
     void window.viewer

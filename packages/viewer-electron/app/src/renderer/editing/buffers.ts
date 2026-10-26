@@ -3,7 +3,7 @@ import { report } from '../state/core';
 import { RevisionedWriteQueue } from '../persistence/revisioned-write-queue';
 
 /**
- * UNSAVED TEXT (2026-10-23). The renderer's copy of each buffer it holds: written to the profile half
+ * Unsaved text. The renderer's copy of each buffer it holds: written to the profile half
  * a second after the last change and at every flush, so a quit or a crash keeps what was typed. A
  * buffer is removed only by `discardBuffer`, which a person's Save or Don't Save asks for.
  */

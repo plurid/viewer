@@ -64,7 +64,7 @@ export class Workflows {
       access(files: readonly string[]): Promise<void>;
       files: Pick<FileServices, 'inspect'>;
       comparisons: Pick<Comparisons, 'run' | 'cancel'>;
-      /** Everything but apply: a workflow prepares a plan, and the person applies it (2026-10-20). */
+      /** Everything but apply: a workflow prepares a plan, and the person applies it. */
       plans: {
         request(
           request: Exclude<Parameters<OperationPlans['request']>[0], { kind: 'apply' }>,

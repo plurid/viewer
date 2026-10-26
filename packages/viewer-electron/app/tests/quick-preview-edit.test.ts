@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * EDIT FROM QUICK PREVIEW (2026-10-23): a text file previewed in Quick Preview opens as its plane,
+ * Edit from quick preview: a text file previewed in Quick Preview opens as its plane,
  * active and editing, from an Edit button or ⌘E.
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';

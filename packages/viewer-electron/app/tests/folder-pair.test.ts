@@ -564,7 +564,7 @@ describe('folder pair workspace integration', () => {
       await act(async () => controller.splitFolder(target(), axis));
       const copy = activeWorkspace().panes[1] as FolderPane;
       expect(activeWorkspace().roots).toEqual([folder.id, copy.id]);
-      // the two are a commander's pair (2026-10-24); the source is otherwise as it was
+      // the two are a commander's pair; the source is otherwise as it was
       expect(activeWorkspace().panes[0]).toEqual({ ...before, pair: copy.id });
       expect(copy.pair).toBe(folder.id);
       expect(getState().activePane).toBe(folder.id);
@@ -775,7 +775,7 @@ describe('folder pair commands', () => {
   });
 });
 /**
- * FOLLOWING A LINK ACTIVATES ITS PLANE (2026-10-23): the row's link marker, Go to linked plane and a
+ * Following a link activates its plane: the row's link marker, Go to linked plane and a
  * Markdown link moved the camera to the plane, but the plane clicked from stayed the active one, the
  * one taking the wheel. Plurid's selection, for moving planes, is a different thing and stays.
  */

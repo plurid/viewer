@@ -1,5 +1,5 @@
 /**
- * THE SMART PALETTE (2026-10-23): typing a path offers its folder's contents; `=` calculates; `z`
+ * The smart palette: typing a path offers its folder's contents; `=` calculates; `z`
  * and a name jumps to a folder by frecency, as zoxide does; and a command can take its argument
  * typed after its name: `new folder Drafts`, `rename notes.md`, `go ~/Downloads`.
  */

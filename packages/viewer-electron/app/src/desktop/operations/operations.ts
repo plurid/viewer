@@ -438,7 +438,7 @@ export class Operations {
     return task;
   }
   /**
-   * SAVING TEXT (2026-10-23). Writes `text` to `file` as a job of its own: over the version that was
+   * Saving text. Writes `text` to `file` as a job of its own: over the version that was
    * read (`expected`), which goes to the Trash with an Undo step, as Replace does; or, with none, to a
    * new file, created exclusively. It runs as exclusive work, beside a job waiting at its prompt when
    * that job leaves the file alone. The text is never journaled, only its hash and length, so a save
@@ -591,7 +591,7 @@ export class Operations {
     // Cancelled work that has not started touches nothing (each item checks its abort first), and
     // an unrelated job keeps to its own paths, even while its collision prompt is open: only a
     // related job in progress, and exclusive work, are waited for. Waiting for the whole queue
-    // held an Eject or a revoke behind any unanswered prompt (2026-10-20).
+    // held an Eject or a revoke behind any unanswered prompt.
     while (this.exclusiveActive || (this.active && involves(this.active)))
       await new Promise<void>((resolve) => this.settled.push(resolve));
   }
@@ -829,7 +829,7 @@ export class Operations {
         }
         // A folder's version misses nested edits; the contents a person reviewed are compared here,
         // where nothing else can change them before the move. Compared only at approval, a Trash
-        // queued behind other work ran on whatever the folder held by then (2026-10-20).
+        // queued behind other work ran on whatever the folder held by then.
         for (const expected of task.request.expectedContents ?? []) {
           if (expected.path !== file && !expected.path.startsWith(file + path.sep)) continue;
           const current = fileCoordination.path(expected.path);
@@ -935,7 +935,7 @@ export class Operations {
     ) => Promise<T>,
     /** The paths the work changes. With them it may also run while the current job waits at its
      * prompt, when neither that job nor a queued one involves them; the job goes on once it ends.
-     * An Undo waited for the whole queue, so behind any unanswered prompt (2026-10-21). */
+     * An Undo waited for the whole queue, so behind any unanswered prompt. */
     footprint?: () => string[],
   ): Promise<T> {
     this.exclusivePending++;
@@ -1033,7 +1033,7 @@ export class Operations {
   }
   /** The reviewed versions of `source` and what it holds: checked as its item starts, again once a
    * collision is decided and inside the claim that publishes it. Checked only at the start, a source
-   * edited while its collision prompt was open was copied or moved (2026-10-20). */
+   * edited while its collision prompt was open was copied or moved. */
   private async checkPins(task: Task, source: string): Promise<void> {
     for (const expected of task.request.expectedSources ?? []) {
       if (source && expected.path !== source && !expected.path.startsWith(source + path.sep))
@@ -1335,7 +1335,7 @@ export class Operations {
                 destination = resolved.path;
                 const replaced = resolved.replaces;
                 this.check(task);
-                // A collision prompt can stay open indefinitely (2026-10-20).
+                // A collision prompt can stay open indefinitely.
                 await this.checkPins(task, source);
                 await this.access([destination]);
                 task.intent = { source, destination };

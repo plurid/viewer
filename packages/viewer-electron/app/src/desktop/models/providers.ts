@@ -113,7 +113,7 @@ export class Credentials {
   /**
    * A key is sent only to the provider type and endpoint it was entered for. A key saved before keys
    * were tied to an endpoint is tied once the person allows it, naming the endpoint: it was tied,
-   * silently, to whatever endpoint config.jsonc named at its first use (2026-10-21).
+   * silently, to whatever endpoint config.jsonc named at its first use.
    */
   async forProvider(provider: ModelProvider): Promise<string> {
     await this.load();

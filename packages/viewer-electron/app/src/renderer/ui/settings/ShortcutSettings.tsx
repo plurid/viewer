@@ -8,7 +8,7 @@ import type { SettingsEditor } from './editor';
 import { KeyCapture } from './KeyCapture';
 import { KeymapSettings } from './KeymapSettings';
 
-/** Keyboard shortcuts for commands and menu items, each set by pressing it (2026-10-23). */
+/** Keyboard shortcuts for commands and menu items, each set by pressing it. */
 export function ShortcutSettings({ editor }: { editor: SettingsEditor }) {
   const { snapshot, patch } = editor;
   const settings = snapshot.settings;

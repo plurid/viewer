@@ -9,7 +9,7 @@ import { getState } from '../state/store';
 
 let session: SessionKeys = emptySessionKeys;
 const listeners = new Set<() => void>();
-/** The session's `:bind` and `:alias`, as the main process holds them (2026-10-23). */
+/** The session's `:bind` and `:alias`, as the main process holds them. */
 export function receiveSessionKeys(next: SessionKeys): void {
   session = next;
   for (const listener of listeners) listener();

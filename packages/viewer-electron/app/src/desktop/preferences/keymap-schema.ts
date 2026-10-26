@@ -11,7 +11,7 @@ import { errorMessage } from '../../domain/errors';
 import { validShortcut } from '../../domain/preferences/shortcuts';
 
 /**
- * A line, as the command line runs it (2026-10-23): a command id (`palette`,
+ * A line, as the command line runs it: a command id (`palette`,
  * `setting.ui.space.grid=false`, `custom.zip`), or steps with words (`vs ~/Documents | set grid!`).
  * Its syntax is checked here; its names when it runs, where the commands are.
  */
@@ -41,11 +41,11 @@ const binding = (depth: number): z.ZodType<KeymapBinding> =>
       ]);
 const table = (keys: z.ZodType<string> = key) =>
   z.record(keys, binding(1)).refine((map) => Object.keys(map).length <= 200);
-/** `settings.keymap` (2026-10-23): the prefix, the leader and their bindings. */
+/** `settings.keymap`: the prefix, the leader and their bindings. */
 export const keymapSchema = z
   .object({
     // each field defaults: `"keymap": { "prefix": "Ctrl+A" }` alone is a whole keymap, as one line
-    // of .tmux.conf is (2026-10-23)
+    // of .tmux.conf is
     prefix: z
       .string()
       .max(80)

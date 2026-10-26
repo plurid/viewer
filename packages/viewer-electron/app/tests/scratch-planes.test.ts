@@ -1,5 +1,5 @@
 /**
- * SCRATCH PLANES AND UNSAVED TEXT (2026-10-23): planes of text kept in the profile until saved or
+ * Scratch planes and unsaved text: planes of text kept in the profile until saved or
  * discarded, the close prompt that asks first, and the recovery of text no plane holds.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

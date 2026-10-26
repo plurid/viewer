@@ -26,7 +26,7 @@ const file = (name: string): FileEntry => ({
 });
 
 /**
- * COMMON LANGUAGES ARE HIGHLIGHTED (2026-10-23). Seven grammars were loaded, and every other
+ * Common languages are highlighted. Seven grammars were loaded, and every other
  * extension fell through to a grammar name nothing defined, so Rust, Go, YAML and the rest showed plain.
  */
 describe('the language table', () => {
@@ -68,7 +68,7 @@ describe('the language table', () => {
 
   it('loads grammars only through the loader, after the core', async () => {
     // A grammar file sets `Prism.languages` on the global the core defines. Imported statically, the
-    // bundle split some into chunks that ran before the core: "Prism is not defined" (2026-10-23).
+    // bundle split some into chunks that ran before the core: "Prism is not defined".
     const { readFile, readdir } = await import('node:fs/promises');
     const sources = (await readdir('src', { recursive: true })).filter(
       (file) => /\.tsx?$/.test(file) && !file.endsWith('previews/languages.ts'),

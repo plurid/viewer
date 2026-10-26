@@ -143,7 +143,7 @@ export class Desktop {
     macFiles().clipboardVersion(source === 'drag'),
   );
   private pasteboard: Pasteboard;
-  /** `:bind` and `:alias` of this session: in memory only, until quit (2026-10-23). */
+  /** `:bind` and `:alias` of this session: in memory only, until quit. */
   private sessionKeys: SessionKeys = emptySessionKeys;
   /** Prompts being answered, to cancel. */
   private prompts = new Map<string, AbortController>();
@@ -436,7 +436,7 @@ export class Desktop {
         this.options.settingsChanged?.();
         // On the defaults, which stand in for an unreadable config.jsonc and its last valid copy,
         // the providers are not the person's: reconciling deleted every model-data approval
-        // (2026-10-20). Approvals wait for a readable file.
+        //. Approvals wait for a readable file.
         if (snapshot.config?.fallback !== 'defaults')
           void this.modelPermissions.reconcile().catch(() =>
             emit({
@@ -565,7 +565,7 @@ export class Desktop {
         void this.files.update(change.source, true).catch(() => {});
         void this.files.update(change.destination).catch(() => {});
         // only what changed: every batch cleared every thumbnail, and stopped those being made
-        // elsewhere (2026-10-20); the cache keys already carry each file's identity and date
+        // elsewhere; the cache keys already carry each file's identity and date
         void this.thumbnails.clear(change.source);
         void this.thumbnails.clear(change.destination);
         this.appIcons.forget(change.source);
@@ -745,7 +745,7 @@ export class Desktop {
                 version: sourceVersion(file),
               })),
               // a folder's contents are checked again as the move runs, not only at approval:
-              // a nested edit while it waited in the queue moved the changed folder (2026-10-20)
+              // a nested edit while it waited in the queue moved the changed folder
               expectedContents: [...(contents ?? [])].map(([path, proof]) => ({ path, proof })),
             }),
           };
@@ -1019,7 +1019,7 @@ export class Desktop {
     await this.configureAgents();
   }
   /** Starts or stops the agent server for the access in effect when its turn comes: computed by
-   * each caller, a settings change and an approval could land in either order (2026-10-20). */
+   * each caller, a settings change and an approval could land in either order. */
   private configureAgents(): Promise<void> {
     const task = this.agentsConfiguration
       .catch(() => {})
@@ -1838,7 +1838,7 @@ export class Desktop {
         }
         return;
       },
-      // `>` in the palette (2026-10-24): a request in words answered with a line to review
+      // `>` in the palette: a request in words answered with a line to review
       promptLine: async (args) => {
         const request = args[0];
         const controller = new AbortController();

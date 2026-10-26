@@ -3,7 +3,7 @@ import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
 /**
- * EXPLODE FOLDER (2026-10-23): the active folder plane's subfolders, and theirs to the depth asked,
+ * Explode folder: the active folder plane's subfolders, and theirs to the depth asked,
  * as linked planes around it, in one undo step; Collapse closes them again.
  */
 export function explodeCommands({

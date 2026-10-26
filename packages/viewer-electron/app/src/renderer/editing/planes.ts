@@ -18,7 +18,7 @@ export interface EditingPlane {
   edit?(): void;
   /** Saves, while editing; false when the person cancelled or the save was refused. */
   save?(): Promise<boolean>;
-  /** Save As; `suggested` (`:w path`, 2026-10-23) is where the dialog opens, still asked. */
+  /** Save As; `suggested` (`:w path`) is where the dialog opens, still asked. */
   saveAs?(suggested?: string): Promise<boolean>;
   /** Back to the saved text, after asking; absent while nothing is unsaved. */
   revert?(): Promise<void>;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * SHORTCUTS IN SETTINGS (2026-10-23): each is recorded by pressing it; a chord another command has
+ * Shortcuts in settings: each is recorded by pressing it; a chord another command has
  * is refused and named; a changed one can go back to its default.
  */
 import { afterEach, expect, it, vi } from 'vitest';

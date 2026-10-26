@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 /**
- * A PACKAGED VIEWER TAKES NO DEVTOOLS-PROTOCOL SWITCH ON THE PERSON'S OWN PROFILE (2026-10-20). With
+ * A PACKAGED VIEWER TAKES NO DEVTOOLS-PROTOCOL SWITCH ON THE PERSON'S OWN PROFILE. With
  * `--remote-debugging-port` or `--remote-debugging-pipe`, whatever launched Viewer had its renderer,
  * and with it every Viewer API on that profile: folder bookmarks, agent tokens, credentials and
  * approvals. The packaged test runs pass them with a profile of their own (`VIEWER_DATA_DIRECTORY`),

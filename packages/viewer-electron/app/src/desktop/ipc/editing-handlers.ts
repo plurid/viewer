@@ -55,7 +55,7 @@ export function createEditingHandlers(ports: EditingPorts): EditingHandlers {
       const window = ports.window(senderID);
       const options = {
         title: 'Save As',
-        // `:w path` opens the dialog there (2026-10-23); a name alone starts on the Desktop
+        // `:w path` opens the dialog there; a name alone starts on the Desktop
         defaultPath: path.isAbsolute(name)
           ? path.normalize(name)
           : path.join(ports.home, 'Desktop', path.basename(name)),

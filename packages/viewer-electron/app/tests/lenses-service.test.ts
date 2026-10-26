@@ -140,7 +140,7 @@ describe('lens storage', () => {
     const other = await lenses.create(folder, 'By client');
     expect(await lenses.trash(folder, created.file)).toEqual({ job: 'job-1' });
     expect(trashed).toEqual([created.file]);
-    // the operation moved it; the last lens then takes Viewer's now-empty folder along (2026-10-23)
+    // the operation moved it; the last lens then takes Viewer's now-empty folder along
     await rename(created.file, path.join(root, 'moved.lens.jsonc'));
     await lenses.trash(folder, other.file);
     expect(trashed).toEqual([created.file, path.join(folder, '.viewer')]);

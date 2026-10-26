@@ -28,6 +28,8 @@
     "make": "pnpm --filter viewer-electron make",
     "mas:preflight": "pnpm --filter viewer-electron mas:preflight",
     "mas:dev": "pnpm --filter viewer-electron mas:dev",
-    "mas:package": "pnpm --filter viewer-electron mas:package"
+    "mas:package": "pnpm --filter viewer-electron mas:package",
+    "docs:check": "pnpm --filter viewer-electron docs:check",
+    "docs:media": "pnpm --filter viewer-electron docs:media"
   }
 }

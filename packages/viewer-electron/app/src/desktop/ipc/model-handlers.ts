@@ -68,7 +68,7 @@ export function createModelHandlers(ports: ModelPorts): ModelHandlers {
           'The provider endpoint changed. Review its new address before allowing data access.',
         );
       // A renderer could store this approval by itself, and with it send document text to any
-      // https host it had configured (2026-10-20): the person grants it here, natively.
+      // https host it had configured: the person grants it here, natively.
       if (
         level &&
         !(await confirmNatively(

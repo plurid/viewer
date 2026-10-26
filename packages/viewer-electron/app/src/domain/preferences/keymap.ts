@@ -1,5 +1,5 @@
 /**
- * THE KEY LAYER (2026-10-23): a tmux-style prefix and an optional leader key start a sequence through
+ * The key layer: a tmux-style prefix and an optional leader key start a sequence through
  * `settings.keymap.bindings`. A key names a line (`vs`, `set grid!`, a command id), a list of lines
  * (run in order) or a nested map: a chord. `root` keys need no prefix; `repeat` keys may be pressed
  * again without it for a moment; `modes` are tables that stay until Escape, where digits count. This
@@ -54,7 +54,7 @@ export const defaultKeymap: Keymap = {
     p: 'previous-workspace',
     w: 'change-workspace',
     ',': 'rename-workspace',
-    // tmux's command prompt: the command line (2026-10-23)
+    // tmux's command prompt: the command line
     ':': 'command-line',
     '?': 'keymap-help',
     q: 'record-macro',
@@ -134,7 +134,7 @@ const namedKeys = new Set([
 const codeKey = (code = '') =>
   /^Key([A-Z])$/.exec(code)?.[1]?.toLowerCase() ?? /^Digit(\d)$/.exec(code)?.[1];
 /**
- * A keymap with the defaults that moved since it was saved (2026-10-23): prefix `:` opened the
+ * A keymap with the defaults that moved since it was saved: prefix `:` opened the
  * palette, and opens the command line now, as tmux's prefix `:` opens its command prompt.
  */
 export function upgradeKeymap(keymap: Keymap): Keymap {
@@ -218,7 +218,7 @@ const modifierNames: Readonly<Record<string, 'Ctrl' | 'Alt' | 'Cmd' | 'Shift'>> 
   s: 'Shift',
 };
 /**
- * A key written any familiar way, as the key layer names it (2026-10-23): Viewer's `Ctrl+b`, tmux's
+ * A key written any familiar way, as the key layer names it: Viewer's `Ctrl+b`, tmux's
  * `C-b` and `M-h`, vim's `<C-b>`, `<M-h>`, `<D-k>`, `<Space>`, `<CR>`. A letter with ⌃ or ⌘ is
  * the letter whatever its case, unless Shift is written; with ⌥ it is the letter (⌥ changes the
  * character, so the key is read). Undefined when it is no key.

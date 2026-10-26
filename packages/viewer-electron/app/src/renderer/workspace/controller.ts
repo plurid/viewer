@@ -56,7 +56,7 @@ import { taskController } from '../tasks/controller';
 /**
  * Makes a plane the active one, as following a link does: it takes the wheel (plurid's
  * click-to-scroll owner, whose header is tinted) and the keys. The camera alone moved there, and the
- * plane clicked from stayed active (2026-10-23). Plurid's selection, for moving planes, is left as
+ * plane clicked from stayed active. Plurid's selection, for moving planes, is left as
  * it is. A plane just spawned is activated once it is in the tree.
  */
 function activatePlane(engine: RefObject<PluridApplicationHandle | null>, id: string): void {
@@ -830,7 +830,7 @@ export function useWorkspaceController({
         try {
           const copy = addPane(destination ?? folder.path, 'folder', true);
           copyID = copy.id;
-          // the two as a commander's panels: ⌃⌘C copies to the other (2026-10-24)
+          // the two as a commander's panels: ⌃⌘C copies to the other
           if (destination === undefined) pairPanes(folder.id, copy.id);
           updatePane(copy.id, {
             sidebar: folder.sidebar ? { ...folder.sidebar } : undefined,

@@ -4,7 +4,7 @@ import { looks, spaceLook, type LookPalette } from './look';
 
 /** plurid's toolbar drawers Viewer offers: all but Global. Viewer sets the look from its Appearance
  * setting, so the Global drawer's look, theme and language picks changed only plurid's chrome, until
- * Viewer's next configuration put its look back, and were never saved (2026-10-21). */
+ * Viewer's next configuration put its look back, and were never saved. */
 const drawers = (Object.keys(TOOLBAR_DRAWERS) as (keyof typeof TOOLBAR_DRAWERS)[]).filter(
   (drawer) => drawer !== 'ALL' && drawer !== 'GLOBAL',
 );

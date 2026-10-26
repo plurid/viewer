@@ -1,7 +1,7 @@
 import type { JSONValue } from '../workspaces/project';
 
 /**
- * SETTING PROFILES (2026-10-23): named sets of settings applied at once, as presentation modes: Focus
+ * Setting profiles: named sets of settings applied at once, as presentation modes: Focus
  * hides the chrome, Present hides headers too, Full shows everything. Only settings the workspace
  * window may change itself belong in one (setting-catalog.ts `workspaceMayChange`).
  */

@@ -113,7 +113,7 @@ export function CatalogSettings({
                   onChange={(event) => patch(definition.path, event.target.checked)}
                 />
               ) : definition.kind === 'choice' ? (
-                // the searchable choice menu, not a native dropdown (2026-10-23)
+                // the searchable choice menu, not a native dropdown
                 <ChoiceButton
                   label={definition.label}
                   value={String(settingValue(snapshot, definition.path))}

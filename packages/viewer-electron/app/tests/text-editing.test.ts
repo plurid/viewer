@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * EDITING TEXT IN PLANES (2026-10-23): a previewed file edited where it is, its unsaved edits kept
+ * Editing text in planes: a previewed file edited where it is, its unsaved edits kept
  * and restored, saves checked against the version read, Edit menu commands routed to the editor,
  * and a scratch plane saved as a file in place.
  */

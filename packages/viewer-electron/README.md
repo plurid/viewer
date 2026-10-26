@@ -1,5 +1,7 @@
 # Viewer desktop
 
-The active Electron application is [`app`](app). Run commands from the repository root; see the [project README](../../README.md) for setup, packaging, previews and keyboard commands.
+The maintained Electron app is in `app/`. Run commands from the repository root.
 
-The 2021 predecessor is documented in [docs/old-app.md](../../docs/old-app.md).
+[Build and run](../../docs/development/builds.md) ·
+[Architecture](../../docs/development/architecture.md) ·
+[Testing](../../docs/development/testing.md) · [User guides](../../docs/README.md)

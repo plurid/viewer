@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * RUNNING A LINE (2026-10-23): checked whole before anything runs, each step against the live plane,
+ * Running a line: checked whole before anything runs, each step against the live plane,
  * stopping at the first that cannot run; vim's verbs over Viewer's commands.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';

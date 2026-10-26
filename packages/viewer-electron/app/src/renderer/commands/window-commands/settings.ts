@@ -70,7 +70,7 @@ export async function changeSettings(values: Readonly<Record<string, unknown>>):
 /** A setting's value as it is now, from the settings or the window's preferences. */
 export const settingNow = (path: string) => current(path);
 /**
- * A COMMAND FOR EVERY SETTING (2026-10-23): in the palette, the Settings menu, a shortcut's reach and
+ * A command for every setting: in the palette, the Settings menu, a shortcut's reach and
  * an agent's proposals. An on/off setting toggles; a choice offers each value, the current one
  * checked; a number or colour opens Settings at it. ids are `setting.<path>` and
  * `setting.<path>=<value>`, so a shortcut or an agent names one exactly.
@@ -127,7 +127,7 @@ export function settingsCommands({ windowScope }: WindowScopes): CommandDefiniti
             run: () => changeSetting(path, !on),
           },
         ];
-        // this workspace's own, over the general setting (2026-10-23)
+        // this workspace's own, over the general setting
         if (overridable(path)) {
           const here = current(path) === true;
           const inherited = settingValue(inheritedWindowPreferences(getState()), path) === true;

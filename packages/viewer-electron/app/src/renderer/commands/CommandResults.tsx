@@ -37,7 +37,7 @@ export function CommandResults({
   onEmptyBackspace?(): void;
   /** A key the field handles itself first (the command line's Tab and history); true when it did. */
   onKey?(event: React.KeyboardEvent): boolean;
-  /** The line a row is, shown beside it (2026-10-23): `:q`, `:set grid!`. */
+  /** The line a row is, shown beside it: `:q`, `:set grid!`. */
   hint?(row: ResolvedCommand): string | undefined;
   /** Clear the mode's existing history without changing its query or selected scope. */
   onClearRecent?(): void;

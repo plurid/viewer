@@ -10,7 +10,7 @@ import { ColorField } from '../ColorField';
 import { Dialog } from '../primitives';
 
 /**
- * A WORKSPACE'S LOOK (2026-10-23): its space colour and its own chrome over the general settings:
+ * A WORKSPACE'S LOOK: its space colour and its own chrome over the general settings:
  * each toggle General, On or Off. Changes show at once.
  */
 export function WorkspaceBackgroundDialog({ onClose }: { onClose(): void }) {

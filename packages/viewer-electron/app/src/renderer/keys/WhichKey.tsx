@@ -7,7 +7,7 @@ import { useSequenceView } from './sequences';
 const words = (id: string) => id.replace(/^setting\./, '').replace(/[-.]/g, ' ');
 const commandID = plainCommandID;
 /**
- * WHICH-KEY (2026-10-23): while a sequence waits, the keys it can take next and what each does: a
+ * WHICH-KEY: while a sequence waits, the keys it can take next and what each does: a
  * command's label, a list's commands in order, or a chord's count of keys. Not a dialog, so the
  * commands it shows still run.
  */
@@ -21,7 +21,7 @@ export function WhichKey({
   const describe = (binding: KeymapBinding): { text: string; available: boolean } => {
     if (typeof binding === 'string' || Array.isArray(binding)) {
       const lines: readonly string[] = typeof binding === 'string' ? [binding] : binding;
-      // a command's label; a line with words (2026-10-23) as it is written
+      // a command's label; a line with words as it is written
       const steps = lines.map((line) => (commandID(line) ? label(line) : undefined));
       return {
         text: lines

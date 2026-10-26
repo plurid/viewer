@@ -59,7 +59,7 @@ export async function saveProfile(profile: SettingProfile): Promise<void> {
   );
 }
 /**
- * SETTING PROFILES (2026-10-23): Profile: Focus, Present, Full or one's own; Leave profile; Focus mode
+ * Setting profiles: Profile: Focus, Present, Full or one's own; Leave profile; Focus mode
  * (⇧⌘F) toggles Focus; Save profile as… keeps the current chrome and look.
  */
 export function profileCommands({
@@ -104,7 +104,7 @@ export function profileCommands({
       when: (context) => windowScope(context) && !!active,
       run: leaveProfile,
     },
-    // a theme for the appearance in use (2026-10-23)
+    // a theme for the appearance in use
     ...[builtInTheme(look), ...state.settings.settings.themes]
       .filter((theme) => theme.look === look)
       .map((theme): CommandDefinition => {

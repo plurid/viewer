@@ -24,7 +24,7 @@ const verbLines: Readonly<Record<string, string>> = {
 /** The name after a family's label (“Theme: Night Owl”, “Open layout “Pair””). */
 const labelName = (label: string) => /[“:]\s*(.+?)”?$/.exec(label)?.[1] ?? label;
 /**
- * THE LINE A ROW IS (2026-10-23), shown beside it in the palette, to learn the command line by:
+ * THE LINE A ROW IS, shown beside it in the palette, to learn the command line by:
  * Close plane is `:q`, Hide background grid `:set grid!`, Theme: Night Owl `:colo 'Night Owl'`.
  */
 export function lineHint(command: ResolvedCommand): string | undefined {

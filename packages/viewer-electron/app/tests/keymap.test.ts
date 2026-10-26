@@ -1,5 +1,5 @@
 /**
- * THE KEY LAYER (2026-10-23): a tmux-style prefix (⌃B by default) and an optional leader key start a
+ * The key layer: a tmux-style prefix (⌃B by default) and an optional leader key start a
  * sequence through `settings.keymap.bindings`: a key names a command, a list of commands, or a
  * nested map for a chord. The sequence ends on a command, Escape, an unbound key or the timeout.
  */
@@ -101,7 +101,7 @@ describe('the keymap in config.jsonc', () => {
       keymapSchema.safeParse({ ...defaultKeymap, bindings }).success;
     expect(parse({ a: 'palette' })).toBe(true);
     expect(parse({ ab: 'palette' })).toBe(false);
-    // a binding is a line (2026-10-23): words are fine, a broken line is not
+    // a binding is a line: words are fine, a broken line is not
     expect(parse({ a: 'vs ~/Documents | set grid!' })).toBe(true);
     expect(parse({ a: "e 'open" })).toBe(false);
     expect(parse({ a: Array(21).fill('palette') })).toBe(false);

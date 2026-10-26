@@ -1,5 +1,5 @@
 /**
- * THE FILE QUERY LANGUAGE IN THE INDEX AND THE WALK (2026-10-24): the index narrows in SQL and the
+ * The file query language in the index and the walk: the index narrows in SQL and the
  * query decides each row, paging the matches; the search through subfolders reads only what it
  * must; both look up Finder tags before.
  */

@@ -73,7 +73,7 @@ export function columnCommands(): CommandDefinition[] {
       when: (context) => !!context.folder,
       run: (context) => updateFolderPresentation(folderCommandPath(context)!, { group }),
     })),
-    // sorting as the column headers sort (2026-10-24): again the same key reverses it
+    // sorting as the column headers sort: again the same key reverses it
     ...sortKeys.map((key): CommandDefinition => ({
       id: 'sort.' + key,
       label: (context) => {

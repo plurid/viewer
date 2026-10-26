@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE KEY LAYER IN THE WINDOW (2026-10-23): ⌃B then a key runs its command; a terminal and a text
+ * The key layer in the window: ⌃B then a key runs its command; a terminal and a text
  * field keep ⌃B unless the keymap says otherwise; which-key shows the next keys after a moment;
  * plane hints label the planes in view and typing one chooses it.
  */
@@ -49,7 +49,7 @@ describe('a sequence in the window', () => {
     expect(press(document.body, 'b', { ctrlKey: true }).defaultPrevented).toBe(true);
     press(document.body, 'c');
     await act(async () => {});
-    // a binding is a line, run once (2026-10-23)
+    // a binding is a line, run once
     expect(invoke).toHaveBeenCalledWith(['new-terminal-plane'], 1);
   });
   it('leaves ⌃B to a terminal and a text field, unless told otherwise', async () => {

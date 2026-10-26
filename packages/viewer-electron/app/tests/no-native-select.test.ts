@@ -1,5 +1,5 @@
 /**
- * NO NATIVE DROPDOWNS (2026-10-23): every choice in the renderer uses the searchable choice menu
+ * No native dropdowns: every choice in the renderer uses the searchable choice menu
  * (ui/ChoiceMenu.tsx), the context menu's keyboard-first search, in place of a native `<select>`.
  */
 import { readFile, readdir } from 'node:fs/promises';

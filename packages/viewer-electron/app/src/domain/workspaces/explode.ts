@@ -2,7 +2,7 @@ import type { FileEntry } from '../contracts';
 import { isPackage } from '../files/entries';
 
 /**
- * EXPLODE FOLDER (2026-10-23): which subfolders open as linked planes, each under its parent's plane:
+ * Explode folder: which subfolders open as linked planes, each under its parent's plane:
  * breadth first to `depth` levels, at most `limit`, by name. Hidden folders only if the plane shows
  * them; bundles (an app is one item) and links (which may loop) never.
  */

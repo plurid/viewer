@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A PREVIEW PLANE FOLLOWS ITS FILE (2026-10-23): saved in another app (VS Code), the plane shows the
+ * A preview plane follows its file: saved in another app (VS Code), the plane shows the
  * new version; an unrelated change in its folder, or Viewer's own save, changes nothing.
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';

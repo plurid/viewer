@@ -1,5 +1,5 @@
 /**
- * SCRATCH PLANES (2026-10-23): saved state version 5 adds the scratch plane and a preview's unsaved
+ * Scratch planes: saved state version 5 adds the scratch plane and a preview's unsaved
  * edits. A version 4 file is backed up before its first version 5 save, as each format change was.
  */
 import { afterEach, beforeEach, expect, it } from 'vitest';

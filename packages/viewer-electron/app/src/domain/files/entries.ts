@@ -92,7 +92,7 @@ export const packageExtensions: ReadonlySet<string> = new Set([
 export const isPackage = (entry: Pick<FileEntry, 'directory' | 'extension'>) =>
   entry.directory && packageExtensions.has(entry.extension.toLowerCase());
 /** A folder Viewer browses into. An application or other bundle is one item, as in Finder
- * (2026-10-23): it opens in its app, and Show Package Contents goes inside. */
+ *: it opens in its app, and Show Package Contents goes inside. */
 export const browsable = (entry: Pick<FileEntry, 'directory' | 'extension'>) =>
   entry.directory && !isPackage(entry);
 /** The Kind column: Folder, Application, Alias, or a file's or bundle's extension. */

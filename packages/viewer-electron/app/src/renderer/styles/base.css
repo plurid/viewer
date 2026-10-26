@@ -279,7 +279,7 @@ select {
 .app-titlebar select {
   -webkit-app-region: no-drag;
 }
-/* A hidden title bar (2026-10-23): out of the layout, it comes back over the space while the
+/* A hidden title bar: out of the layout, it comes back over the space while the
    pointer is at the window's top edge (ui/titlebar.ts), above plurid's layers and under menus. */
 .app-shell:not([data-titlebar='shown']) {
   position: relative;
@@ -451,7 +451,7 @@ select {
 .workspace-surface > div {
   height: 100%;
 }
-/* A see-through space (2026-10-23): with a blurred or clear backdrop, only the space's grid floor
+/* A see-through space: with a blurred or clear backdrop, only the space's grid floor
    between planes shows what is behind the window, under its colour at the chosen opacity, its grid
    lines kept, as iTerm's window does. Viewer's title bar and sidebar, the planes and plurid's
    controls stay solid. */
@@ -469,14 +469,14 @@ select {
 :root[data-backdrop='clear'] .workspace-surface [data-plurid-entity='PluridSpace'] {
   background-color: color-mix(in srgb, var(--plurid-space) var(--space-opacity, 60%), transparent);
 }
-/* plurid's controls solid (2026-10-23): its toolbar drew at 85% over translucent glass, so a plane
+/* plurid's controls solid: its toolbar drew at 85% over translucent glass, so a plane
    behind it showed through. Its tokens, set more specifically than its own look stylesheet. */
 .workspace-surface [data-plurid-application] {
   --plurid-opacity-persistent: 1;
   --plurid-surface: var(--plurid-surface-solid);
   --plurid-surface-strong: var(--plurid-surface-solid);
 }
-/* Record macro (2026-10-23): what is being recorded, in the title bar; a click stops it */
+/* Record macro: what is being recorded, in the title bar; a click stops it */
 .macro-recording {
   -webkit-app-region: no-drag;
   display: inline-flex;

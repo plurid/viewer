@@ -20,7 +20,7 @@ export interface ViewerState {
   activePane: string;
   quickPreview: { paths: string[]; index: number; paneID?: string; workspaceID: string } | null;
   notice: string | null;
-  /** Whether the notice is information or a problem (2026-10-23): it shows and stays as such. */
+  /** Whether the notice is information or a problem: it shows and stays as such. */
   noticeKind?: 'info' | 'error';
   operationsOpen: boolean;
   operationsHistory: boolean;

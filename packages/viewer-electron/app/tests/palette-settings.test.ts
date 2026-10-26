@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * SETTINGS APART IN THE PALETTE (2026-10-23): a setting's command is listed in a Settings section
+ * Settings apart in the palette: a setting's command is listed in a Settings section
  * after the commands, found only by its name's words and a few at a time; `,` searches the settings
  * alone; and a setting's row shows its value.
  */

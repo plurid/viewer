@@ -1,5 +1,5 @@
 /**
- * A SEE-THROUGH SPACE (2026-10-23): the space between planes may show what is behind Viewer's window,
+ * A SEE-THROUGH SPACE: the space between planes may show what is behind Viewer's window,
  * blurred or clear, at a chosen opacity; the planes stay opaque.
  */
 import { readFileSync } from 'node:fs';

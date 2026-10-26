@@ -44,7 +44,7 @@ function promptContext(host: LineHost): PromptContext {
   };
 }
 /**
- * A REQUEST IN WORDS (2026-10-24): `>` in the palette asks a model, which answers with one line of
+ * A request in words: `>` in the palette asks a model, which answers with one line of
  * the command language and a sentence. The line is the person's to read: Enter runs it, Tab opens
  * it in the command line to change. The model is told the commands here, the folder's path and
  * the selected names, as its provider's "names" permission allows.

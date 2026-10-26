@@ -116,7 +116,7 @@ export const customActionSchema = z
           kind: z.literal('sequence'),
           commands: z
             .array(
-              // a line (2026-10-23): a command id as before, or `vs ~/Documents | set grid!`
+              // a line: a command id as before, or `vs ~/Documents | set grid!`
               lineSchema.refine(
                 // a sequence runs built-in commands and verbs, not another custom action or
                 // a person's named command, so none runs itself

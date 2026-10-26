@@ -1,5 +1,5 @@
 /**
- * THEMES (2026-10-23): the shell's colours, the code colours and the terminal's palette as one
+ * THEMES: the shell's colours, the code colours and the terminal's palette as one
  * theme per appearance, editable and importable from an iTerm colour preset or a VS Code theme.
  */
 import { describe, expect, it } from 'vitest';

@@ -169,7 +169,7 @@
   text-overflow: ellipsis;
   overflow: hidden;
 }
-/* the settings search's key, beside the folder (2026-10-23) */
+/* the settings search's key, beside the folder */
 .palette-context > .palette-hint {
   flex: 0 0 auto;
   margin-left: auto;
@@ -222,7 +222,7 @@
 .choice-placeholder {
   color: var(--muted);
 }
-/* Key sequences (2026-10-23): which-key above the space's toolbar, and plane hints on each plane.
+/* Key sequences: which-key above the space's toolbar, and plane hints on each plane.
    Neither is a dialog: the commands they show still run. */
 .which-key {
   position: fixed;
@@ -316,7 +316,7 @@
 .plane-hint b {
   opacity: 0.5;
 }
-/* A setting's row (2026-10-23): a switch for on and off, its value for a number or a colour. */
+/* A setting's row: a switch for on and off, its value for a number or a colour. */
 .command-switch {
   position: relative;
   flex-shrink: 0;
@@ -361,7 +361,7 @@
 .command-result .command-value + kbd {
   margin-left: 0;
 }
-/* The command line (2026-10-23): a monospace field after a colon, completions in the same face. */
+/* The command line: a monospace field after a colon, completions in the same face. */
 .line-finder {
   display: flex;
   flex-direction: column;
@@ -414,7 +414,7 @@
     Menlo,
     monospace;
 }
-/* the line a palette row is, to learn by (2026-10-23) */
+/* the line a palette row is, to learn by */
 .command-line-hint {
   flex-shrink: 0;
   margin-left: auto;
@@ -431,7 +431,7 @@
 .command-value + .command-line-hint {
   margin-left: 0;
 }
-/* a request in words (2026-10-24): words in the text face; the line it gives in the code face */
+/* a request in words: words in the text face; the line it gives in the code face */
 .prompt-finder .command-search-field input,
 .prompt-finder .command-result-text > span {
   font-family: inherit;

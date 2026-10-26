@@ -100,7 +100,7 @@ export class ExternalTerminals {
   ) {}
   /**
    * A launcher removes itself when Terminal runs it (its `/bin/rm`, the one removal outside
-   * `removal.ts`); one Terminal never ran kept the profile's environment there (2026-10-20). Those an
+   * `removal.ts`); one Terminal never ran kept the profile's environment there. Those an
    * earlier session wrote go at startup; this session's are left to run.
    */
   async sweep(privateRoot: string): Promise<void> {

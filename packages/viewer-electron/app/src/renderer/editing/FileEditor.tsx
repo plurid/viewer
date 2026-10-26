@@ -30,7 +30,7 @@ const TextEditor = lazy(() => import('../previews/editor/TextEditor'));
 import type { TextEditorProps } from '../previews/editor/TextEditor';
 
 /**
- * EDITING A PREVIEWED FILE (2026-10-23). The file opens for editing where it is, when the desktop
+ * Editing a previewed file. The file opens for editing where it is, when the desktop
  * says it can be. Unsaved edits are kept in the profile as they are typed and come back with the
  * plane. Each save is checked against the version that was read, and a file changed on disk since
  * is never overwritten without asking.
@@ -303,7 +303,7 @@ export function FileEditor({
   if (!loaded) return <Loading label="Opening for editing…" />;
   const toolbar = (
     // Save only while something is unsaved; Save As and Revert are in the plane's ⋯ menu, and
-    // ⇧⌘S and ⌘Z, rather than buttons (2026-10-23)
+    // ⇧⌘S and ⌘Z, rather than buttons
     <div className="preview-toolbar text-editing-toolbar">
       {dirty && (
         <button className="primary" disabled={saving} title="Save (⌘S)" onClick={() => void save()}>

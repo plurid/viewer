@@ -264,7 +264,7 @@ export const verbRuns: Record<string, VerbRun> = {
     readQuery(text);
     host.workspace.newSearch(text, text, places(host).folder, true, false);
   },
-  // a commander's select by pattern (2026-10-24): globs or a query, added or taken out
+  // a commander's select by pattern: globs or a query, added or taken out
   select: async ({ step }, host) => choose(host, step.rest?.text ?? '', true),
   deselect: async ({ step }, host) => choose(host, step.rest?.text ?? '', false),
   // the Trash command itself: its confirmation, as Settings has it; `!` is not taken

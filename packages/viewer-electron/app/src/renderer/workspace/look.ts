@@ -20,7 +20,7 @@ const chosenLooks = new Map<string, (typeof looks)[keyof typeof looks] & { grid:
 export type LookPalette = Partial<Record<'space' | 'surface' | 'ink' | 'accent', string>>;
 /**
  * plurid's look with the space's grid and colour from Settings → Space, or the workspace's own
- * colour, over the theme's colours (2026-10-23). plurid derives the rest from it, so the grid lines,
+ * colour, over the theme's colours. plurid derives the rest from it, so the grid lines,
  * minimap and palette backdrop follow too. One object per choice: plurid resolves a look once per
  * object.
  */

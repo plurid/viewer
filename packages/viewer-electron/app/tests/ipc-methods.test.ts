@@ -30,7 +30,7 @@ describe('IPC method table', () => {
       'agentToken',
       'agentClients',
       'fileAccessRevoke',
-      // imports replace the whole configuration, agents and providers included (2026-10-20)
+      // imports replace the whole configuration, agents and providers included
       'configTransfer',
       'configRestore',
     ])
@@ -41,7 +41,7 @@ describe('IPC method table', () => {
       'trashConfirmation',
       'printPDF',
       'clipboardWrite',
-      // text a person edits or keeps unsaved, and the saves that write it (2026-10-23)
+      // text a person edits or keeps unsaved, and the saves that write it
       'textOpen',
       'textSave',
       'textSaveAs',

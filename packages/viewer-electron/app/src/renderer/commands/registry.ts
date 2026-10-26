@@ -31,7 +31,7 @@ export interface CommandDefinition {
   detail?: string | ((context: CommandContext) => string);
   primary?: boolean | ((context: CommandContext) => boolean);
   remember?: boolean;
-  /** A setting's command (2026-10-23): the palette lists it apart, by the setting's name, with its
+  /** A setting's command: the palette lists it apart, by the setting's name, with its
    * value (on or off, or the current value) and whether it is a workspace's own. */
   setting?: CommandSetting;
   when(context: CommandContext): boolean;
@@ -58,7 +58,7 @@ export interface CommandRequest {
   global?: boolean;
   ids?: readonly string[];
   /** False for a command the person did not choose, such as an agent's: it stays out of Recent
-   * commands, where it ranked first in the palette (2026-10-20). */
+   * commands, where it ranked first in the palette. */
   remember?: boolean;
 }
 export interface ResolvedCommand {
@@ -143,7 +143,7 @@ export class CommandRegistry {
             : definition.label(context);
     return undefined;
   }
-  /** Every command id the sources define, available or not: a line may name any (2026-10-23). */
+  /** Every command id the sources define, available or not: a line may name any. */
   ids(): string[] {
     const ids = new Set<string>();
     for (const [id, source] of this.sources)

@@ -249,7 +249,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.keymap.bindings': [
     'Key -> a line: a command ID ("new-terminal-plane") or a command line ("vs ~/Documents | set grid!"),',
-    'a list run in order (["select-all","copy"]) or a map (a chord, nested four keys deep). docs/command-line.md.',
+    'a list run in order (["select-all","copy"]) or a map (a chord, nested four keys deep). docs/reference/command-line.md.',
     'Keys: a character ("%", "C"), Space, Enter, Tab, Left/Right/Up/Down, F1-F24, with Ctrl+/Alt+/Cmd+/Shift+,',
     'or as tmux ("C-b", "M-h") and vim ("<C-b>", "<Space>") write them.',
   ],
@@ -357,7 +357,7 @@ const revisedGuidance: [RegExp, string][] = [
 /**
  * Add guidance without reserializing values, user comments, formatting or trailing commas. In a
  * documented file, `added` limits it to the properties a write added: every save put back every
- * guide line a person had deleted (2026-10-20). Without `added`, every missing line is added.
+ * guide line a person had deleted. Without `added`, every missing line is added.
  */
 export function documentConfiguration(text: string, added?: ReadonlySet<string>): string {
   const documented = text.split(/\r?\n/).includes(guide);

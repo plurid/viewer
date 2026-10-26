@@ -32,7 +32,7 @@ export class FileIndex {
   /**
    * Each stamp is later than the last, even within one millisecond: a crawl compares its stamp
    * with the rows', and one in the same millisecond as the crawl before could not tell that crawl's
-   * rows from its own, so a file that had gone stayed (2026-10-20). Still the clock's, so the stamps
+   * rows from its own, so a file that had gone stayed. Still the clock's, so the stamps
    * kept on disk order with a new session's.
    */
   private stamped = 0;
@@ -247,7 +247,7 @@ export class FileIndex {
     const indexed =
       !root ||
       !!this.config?.roots.some((indexedRoot) => inside(root, indexedRoot) && !this.excluded(root));
-    // THE FILE QUERY LANGUAGE (2026-10-24): domain/search/query.ts, as the folder filter reads it
+    // THE FILE QUERY LANGUAGE: domain/search/query.ts, as the folder filter reads it
     let parsed: FileQuery;
     try {
       parsed = parseFileQuery(request.query.trim());
@@ -602,7 +602,7 @@ export class FileIndex {
         .prepare('DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)')
         .run(file.path);
       this.db.prepare('DELETE FROM files WHERE path=?').run(file.path);
-      // its extracted text too, as `remove` does: it stayed until the next configuration (2026-10-20)
+      // its extracted text too, as `remove` does: it stayed until the next configuration
       this.db.prepare('DELETE FROM source_documents WHERE path=?').run(file.path);
     }
     this.count = undefined;

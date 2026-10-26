@@ -14,7 +14,7 @@ const scrollable = '.file-scroll, .file-table, .columns-view, .gallery-strip';
 /**
  * A drag Viewer started itself, which reaches its own planes as a native drag with no Viewer data:
  * the devices of its items, so a drop's cursor shows the move a same-device transfer performs, and
- * the copy another device gets. Every such drag showed the copy cursor (2026-10-20). It ends with
+ * the copy another device gets. Every such drag showed the copy cursor. It ends with
  * the drag, or once no plane has seen it for a moment.
  */
 let started: { devices: ReadonlySet<string>; seen: number } | undefined;

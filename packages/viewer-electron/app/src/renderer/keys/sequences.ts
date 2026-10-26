@@ -17,7 +17,7 @@ export interface SequenceView {
   help?: boolean;
   /** A key that is not bound, said briefly. */
   message?: string;
-  /** A mode on (2026-10-23), and the count typed in it. */
+  /** A mode on, and the count typed in it. */
   mode?: string;
   count?: number;
 }
@@ -44,7 +44,7 @@ let modes: { enter(name: string): boolean; leave(): void } | undefined;
 /** Into a key mode until Escape; false when the keymap has none of that name. */
 export const enterKeyMode = (name: string) => modes?.enter(name) ?? false;
 export const leaveKeyMode = () => modes?.leave();
-/** ⌃B pressed twice reaches the terminal as ⌃B, as tmux sends its prefix on (2026-10-23). */
+/** ⌃B pressed twice reaches the terminal as ⌃B, as tmux sends its prefix on. */
 function sendPrefix(target: Element, prefix: string): void {
   const terminal = target.closest<HTMLElement>('.terminal-plane[data-terminal-id]');
   const letter = /(?:^|\+)([a-z])$/i.exec(prefix)?.[1];
@@ -63,7 +63,7 @@ const consume = (event: KeyboardEvent) => {
 const leaf = (binding: KeymapBinding | undefined) =>
   typeof binding === 'string' ? [binding] : Array.isArray(binding) ? binding : undefined;
 /**
- * THE KEY LAYER (2026-10-23): the prefix (or the leader) starts a sequence through the keymap's
+ * The key layer: the prefix (or the leader) starts a sequence through the keymap's
  * bindings; `root` keys need none; a repeat key may come again without it; a mode keeps its table
  * until Escape. Each binding is a line, run through `run` (App's line runner) after the sequence
  * has ended, `count` times. Installed before App's own key handler, it takes the keys of a sequence

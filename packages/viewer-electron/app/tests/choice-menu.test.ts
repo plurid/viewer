@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * CHOICES USE THE SEARCHABLE MENU (2026-10-23): a long native dropdown (the languages, 30 and more)
+ * Choices use the searchable menu: a long native dropdown (the languages, 30 and more)
  * gave way to the context menu's keyboard-first search, the current choice checked.
  */
 import { afterEach, expect, it, vi } from 'vitest';

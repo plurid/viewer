@@ -42,7 +42,7 @@ export function programCommands(
   terminalName?: string,
   /** The context as it is now: a sequence's later steps act where the earlier ones left it. */
   live?: () => CommandContext,
-  /** A step with words (`vs ~/Documents`, 2026-10-23), run by the command line. */
+  /** A step with words (`vs ~/Documents`), run by the command line. */
   line?: (text: string) => Promise<{ ok: boolean; message?: string }>,
   tools: ProgramTools = {},
 ): CommandDefinition[] {
@@ -261,7 +261,7 @@ export function programCommands(
       group: 'Terminal',
       icon: 'terminal',
       aliases: ['nt', 'root terminal', 'new terminal', 'terminal', 'shell'],
-      // a root plane of its own, from anywhere (2026-10-23): Open terminal plane links one to a folder
+      // a root plane of its own, from anywhere: Open terminal plane links one to a folder
       when: () => true,
       run: (context) => {
         const space = activeWorkspace();
@@ -383,13 +383,13 @@ export function programCommands(
           if (executor.kind === 'builtin') {
             if (executor.command.startsWith('custom.'))
               throw new Error('Custom actions cannot call another custom action.');
-            // an unknown or unavailable command did nothing, silently (2026-10-20)
+            // an unknown or unavailable command did nothing, silently
             if ((await invoke(executor.command, context)) === false)
               throw new Error(
                 `“${action.name}” runs “${executor.command}”, which is not a command available here.`,
               );
           } else if (executor.kind === 'recipe') {
-            // it opened Run action with no recipe, whose Create did nothing (2026-10-20)
+            // it opened Run action with no recipe, whose Create did nothing
             if (!getState().settings.settings.recipes.some(({ id }) => id === executor.recipeID))
               throw new Error(
                 `The recipe of “${action.name}” no longer exists. Choose another in Settings → Actions.`,

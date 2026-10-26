@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A REQUEST IN WORDS (2026-10-24): `>` in the palette asks a model for one line of the command
+ * A request in words: `>` in the palette asks a model for one line of the command
  * language, which the person reads and runs; the line may not do what a model may not ask for;
  * the model is told the commands, the folder's path and the selected names, nothing more.
  */

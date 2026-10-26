@@ -508,7 +508,7 @@ describe('settings the workspace window may change (2026-10-20)', () => {
       ['settings.agents', { ...service.snapshot().settings.agents, enabled: true }],
       ['settings.providers', []],
       ['settings.recipes', []],
-      // a program, unlike a macro, is the person's to add (2026-10-23)
+      // a program, unlike a macro, is the person's to add
       [
         'settings.customActions',
         [

@@ -2,7 +2,7 @@ import type { CommandContext, CommandRegistry } from '../commands/registry';
 import type { WorkspaceController } from '../workspace/context';
 import type { PaletteMode } from '../commands/palette-modes';
 
-/** What a line runs against: the window's commands and workspace, given by App (2026-10-23). */
+/** What a line runs against: the window's commands and workspace, given by App. */
 export interface LineHost {
   /** App's invoke: a command where it belongs (an editor, a terminal, the registry); false when
    * nothing ran. */

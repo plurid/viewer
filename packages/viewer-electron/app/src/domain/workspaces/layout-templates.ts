@@ -16,7 +16,7 @@ export type TemplatePlane =
       content?: boolean;
     };
 /**
- * LAYOUT TEMPLATES (2026-10-23): a set of planes and their tiling, saved by name in config.jsonc
+ * Layout templates: a set of planes and their tiling, saved by name in config.jsonc
  * (`settings.layouts`): "Triage" is Downloads, Desktop and a scratch plane side by side, "Dev" a
  * project folder beside two terminals. Opening one adds its planes to the workspace in view.
  */

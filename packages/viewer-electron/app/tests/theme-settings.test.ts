@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE THEMES PAGE AND COMMANDS (2026-10-23): a theme for each appearance; a new theme, an imported
+ * The themes page and commands: a theme for each appearance; a new theme, an imported
  * one, a colour changed; and Theme: … in the palette.
  */
 import { afterEach, expect, it, vi } from 'vitest';

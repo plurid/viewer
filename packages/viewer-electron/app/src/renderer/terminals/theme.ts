@@ -2,7 +2,7 @@ import { builtInTheme, type Theme } from '../../domain/preferences/themes';
 import type { ApplicationSettings } from '../../domain/services';
 
 /**
- * xterm colours for each Viewer look, from the theme (2026-10-23): its terminal palette over the
+ * xterm colours for each Viewer look, from the theme: its terminal palette over the
  * built-in one, and scrollbars in the theme's text colour.
  */
 export function terminalTheme(look: 'dark' | 'light', palette?: Theme['terminal']) {

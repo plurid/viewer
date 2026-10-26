@@ -29,7 +29,7 @@ export const textBufferSchema = z
   .strict();
 
 /**
- * UNSAVED TEXT IS KEPT (2026-10-23). Scratch planes and unsaved edits to files, one private document
+ * Unsaved text is kept. Scratch planes and unsaved edits to files, one private document
  * per buffer in the profile's `text-buffers/`, so one buffer's write never rewrites another's. A
  * buffer is removed only when it is explicitly discarded, never because no plane refers to it: at
  * launch, a buffer no plane holds comes back as a recovered plane. An unreadable buffer file is kept

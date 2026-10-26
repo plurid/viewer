@@ -174,7 +174,7 @@ export class ActionPlanner {
   }
   async load(): Promise<void> {
     // A failed read is tried again by the next call; kept, it disabled Actions until a restart,
-    // and every Actions call awaits it (2026-10-20).
+    // and every Actions call awaits it.
     this.loaded ??= this.restore().catch((error) => {
       this.loaded = undefined;
       throw error;
@@ -189,7 +189,7 @@ export class ActionPlanner {
         if (plan.status === 'applying') {
           applying.add(plan.id);
           // One unreadable log is set aside for inspection, as the operation log does; it
-          // rejected the whole load, and with it every plan (2026-10-20).
+          // rejected the whole load, and with it every plan.
           await this.recoverSteps(plan).catch(async (error: Error) => {
             const kept = `${this.stepFile(plan.id)}.unreadable-${Date.now()}`;
             const moved = await rename(this.stepFile(plan.id), kept).then(
@@ -231,7 +231,7 @@ export class ActionPlanner {
     }
   }
   /** Only a plan recorded as applying reads its step log, on recovery; any other log is spent
-   * private data, which was never removed (2026-10-20). A set-aside log is kept. */
+   * private data, which was never removed. A set-aside log is kept. */
   private async sweepSteps(applying: ReadonlySet<string>): Promise<void> {
     const directory = await opendir(this.dataPath).catch(() => undefined);
     if (!directory) return;

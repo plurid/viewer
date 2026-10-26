@@ -343,7 +343,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       commandResolved,
     ],
   );
-  // what :select and :deselect reach (2026-10-24): the items shown and the selection
+  // what :select and :deselect reach: the items shown and the selection
   const handleState = useRef({ entries, selected, selecting, path });
   handleState.current = { entries, selected, selecting, path };
   useEffect(

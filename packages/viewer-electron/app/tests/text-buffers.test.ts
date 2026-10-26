@@ -1,5 +1,5 @@
 /**
- * UNSAVED TEXT IS KEPT (2026-10-23). Scratch planes and unsaved edits live in Viewer's profile, one
+ * Unsaved text is kept. Scratch planes and unsaved edits live in Viewer's profile, one
  * document per buffer, until they are saved or explicitly discarded: never because nothing refers to
  * them any more.
  */

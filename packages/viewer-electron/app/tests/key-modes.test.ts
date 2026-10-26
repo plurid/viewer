@@ -1,5 +1,5 @@
 /**
- * KEYS THAT SPEAK LINES (2026-10-23): keys written as Viewer, tmux or vim write them; keys without
+ * Keys that speak lines: keys written as Viewer, tmux or vim write them; keys without
  * the prefix; repeat keys; modes that stay until Escape, with counts; and session bindings.
  */
 import { describe, expect, it, vi } from 'vitest';

@@ -6,7 +6,7 @@ import type { WindowScopes } from './scope';
 
 const slots = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 /**
- * THE SPACE'S VIEWS (2026-10-23): camera positions saved by number (⌃⌥⌘1–9, flown back to with ⌥⌘1–9
+ * THE SPACE'S VIEWS: camera positions saved by number (⌃⌥⌘1–9, flown back to with ⌥⌘1–9
  * or prefix 1–9) or by name, kept with the workspace, and Tour through them in turn.
  */
 export function viewsCommands({ actions, windowScope }: WindowScopes): CommandDefinition[] {

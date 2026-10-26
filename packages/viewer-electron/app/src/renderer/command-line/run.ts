@@ -30,7 +30,7 @@ export interface LineResult {
   at?: number;
 }
 /**
- * The person's commands (2026-10-23): sequences named in Settings (`command`), and this session's
+ * The person's commands: sequences named in Settings (`command`), and this session's
  * `:alias`es over them. Each name runs its lines.
  */
 export function userCommands(): Map<string, string[]> {
@@ -113,7 +113,7 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
   });
 }
 /**
- * RUNS A LINE (2026-10-23): checked whole first, then step by step, each against the live plane
+ * Runs a line: checked whole first, then step by step, each against the live plane
  * (so `cd ~/x | e %` opens what `cd` arrived at), a count running its step again. It stops at the
  * first step that cannot run, saying which.
  */

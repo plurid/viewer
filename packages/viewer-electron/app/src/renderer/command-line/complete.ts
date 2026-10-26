@@ -73,7 +73,7 @@ function stepStart(text: string): number | undefined {
 }
 const limit = 60;
 /**
- * COMPLETION (2026-10-23): the name being typed (verbs with their usage, then commands), or the word
+ * Completion: the name being typed (verbs with their usage, then commands), or the word
  * being typed by what the verb takes: paths, settings, workspaces, themes, profiles, layouts.
  */
 export function lineCompletions(text: string, sources: CompletionSources): LineCompletions {

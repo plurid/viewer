@@ -1,5 +1,5 @@
 /* Terminals, executions, agents, projects, inspection, checkpoints, comparison, collections, duplicates, workflows and relationships. */
-/* The terminal plane is all terminal (2026-10-23): its own background edge to edge, Find in the
+/* The terminal plane is all terminal: its own background edge to edge, Find in the
    plane's header rather than a row, and xterm's black viewport hidden under the last full row. */
 .terminal-plane {
   position: relative;

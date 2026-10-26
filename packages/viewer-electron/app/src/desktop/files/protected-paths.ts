@@ -68,7 +68,7 @@ export class ProtectedPaths {
     if (protectedPath)
       throw new Error(`${protectedPath} is a protected folder, so it cannot be ${action}.`);
     // A mounted volume's root: its device is not its parent's. Only /Volumes itself was protected,
-    // so a disk or a network share could be moved whole (2026-10-20).
+    // so a disk or a network share could be moved whole.
     const parent = path.dirname(file);
     if (info.isDirectory() && parent !== file) {
       const outer = await lstat(parent).catch(() => null);

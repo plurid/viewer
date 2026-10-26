@@ -1267,7 +1267,7 @@ describe('reviewed work that waits (2026-10-20)', () => {
   });
 });
 /**
- * SAVING TEXT (2026-10-23). An edited preview saves through the queue's own guarantees: the version a
+ * Saving text. An edited preview saves through the queue's own guarantees: the version a
  * save replaces goes to the Trash with an Undo step, and nothing is overwritten that was not checked.
  */
 describe('saving text', () => {

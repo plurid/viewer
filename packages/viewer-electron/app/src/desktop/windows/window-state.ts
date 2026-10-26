@@ -17,7 +17,7 @@ const schema = z.object({
   maximized: z.boolean(),
   fullscreen: z.boolean(),
   display: z.object({ id: z.number().int(), workArea: rectangle }),
-  /** The Settings window's last category: kept with its frame, not in config.jsonc (2026-10-20). */
+  /** The Settings window's last category: kept with its frame, not in config.jsonc. */
   category: z.string().max(40).optional(),
 });
 export type WindowFrame = z.infer<typeof schema>;

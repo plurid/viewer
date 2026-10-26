@@ -74,8 +74,8 @@ export async function temporaryRoot(prefix: string, parent = os.tmpdir()): Promi
   const root = mkdtempSync(path.join(parent, prefix));
   const info = lstatSync(root);
   owned.set(canonical(root), { dev: info.dev, ino: info.ino });
-  // Listed as it is made: a folder a test never handed to `trashTemporary` (an extra root) was
-  // kept unlisted, 657 of them in one session's runs (2026-10-20).
+  // Register retained roots immediately so early failures remain discoverable.
+
   if (preserve()) keep(root, 'VIEWER_TEST_PRESERVE=1');
   return root;
 }

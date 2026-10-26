@@ -1,5 +1,5 @@
 /**
- * THE PALETTE'S MODES (2026-10-24), one list for the palette, App and every command that opens
+ * THE PALETTE'S MODES, one list for the palette, App and every command that opens
  * it: commands (⌘K), files (⌘F), workspaces, and the modes a first character chooses.
  */
 export type PaletteMode = 'commands' | 'files' | 'workspaces' | 'settings' | 'line' | 'prompt';

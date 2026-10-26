@@ -13,7 +13,7 @@ import type { CommandContext, CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
 /**
- * A COMMANDER'S PAIR (2026-10-24): two folder planes as Norton's and Midnight's two panels. View side
+ * A COMMANDER'S PAIR: two folder planes as Norton's and Midnight's two panels. View side
  * by side (or stacked) pairs the planes it shows, Pair with… any two; ⌃⌘C and ⌃⌘X copy and move
  * the selection to the other, swap trades their folders, and the two may follow each other into
  * subfolders. Not ⌘F5/F6: ⌃⌘ with the letter one already knows for copy and cut.

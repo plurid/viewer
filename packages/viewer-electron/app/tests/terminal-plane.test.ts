@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE TERMINAL PLANE (2026-10-23): find lives in the plane's header (no row of its own, so opening it
+ * The terminal plane: find lives in the plane's header (no row of its own, so opening it
  * shifts nothing), searches as it is typed with next and previous and a count, opens with ⌘F, and
  * the text is set by Settings → Terminals, by default the owner's iTerm profile.
  */

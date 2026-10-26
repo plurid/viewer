@@ -60,7 +60,7 @@ export interface ApplicationSettings {
     newPlanePath: string;
     emptyWorkspaceLocation: Exclude<ApplicationSettings['browsing']['newPlaneLocation'], 'current'>;
     emptyWorkspacePath: string;
-    /** The extension New file… names a file with, and a scratch plane starts in (2026-10-23). */
+    /** Default extension for New file and scratch buffers. */
     newFileExtension: string;
   };
   folders: Record<string, FolderOverride>;
@@ -84,7 +84,7 @@ export interface ApplicationSettings {
     textLineHeight: number;
     textWordWrap: boolean;
   };
-  /** The text editor (2026-10-23); its defaults are its owner's VS Code. */
+  /** Editor appearance and behavior defaults. */
   editor: {
     fontSize: number;
     /** In pixels. */
@@ -98,7 +98,7 @@ export interface ApplicationSettings {
     /** On save, spaces and tabs at line ends go. */
     trimTrailingWhitespace: boolean;
   };
-  /** The terminal plane's text (2026-10-23); its defaults are its owner's iTerm profile. */
+  /** Terminal typography, independent of preview and editor metrics. */
   terminalFont: {
     /** A monospace family; Menlo follows it. */
     fontFamily: string;
@@ -109,26 +109,26 @@ export interface ApplicationSettings {
     /** Pixels added between characters. */
     letterSpacing: number;
   };
-  /** Tiling planes as tmux's panes (2026-10-23). */
+  /** Default tiling behavior for workspace planes. */
   tiling: {
     /** What a split adds beside the active plane: a copy of it, a folder, a terminal, a scratch plane. */
     splitWith: 'same' | 'folder' | 'terminal' | 'scratch';
     /** The layout tiling starts with. */
     defaultLayout: TileLayout;
   };
-  /** `>` prompts in the palette (2026-10-24): the model they ask; "" is the first. */
+  /** Provider for requests in words; an empty ID selects the first provider. */
   prompts: { providerID: string };
   git: { enabled: boolean };
   hotkey: { enabled: boolean; shortcut: string };
-  /** Colour themes (2026-10-23): domain/preferences/themes.ts. */
+  /** Colour themes: domain/preferences/themes.ts. */
   themes: Theme[];
   /** The theme for each appearance; empty is the built-in one. */
   theme: { dark: string; light: string };
-  /** Named sets of settings applied at once (2026-10-23): domain/preferences/profiles.ts. */
+  /** Named sets of settings applied at once: domain/preferences/profiles.ts. */
   profiles: SettingProfile[];
-  /** Named sets of planes and their tiling, to open anywhere (2026-10-23): domain/workspaces/layout-templates.ts. */
+  /** Named sets of planes and their tiling, to open anywhere: domain/workspaces/layout-templates.ts. */
   layouts: LayoutTemplate[];
-  /** Tour: flying through the space's views in turn (2026-10-23). */
+  /** Tour: flying through the space's views in turn. */
   tour: {
     /** How long each view shows, ms. */
     dwell: number;
@@ -142,7 +142,7 @@ export interface ApplicationSettings {
   recipes: ActionRecipe[];
   agents: { enabled: boolean; roots: string[]; allowLayout: boolean };
   shortcuts: Record<string, string>;
-  /** The prefix and leader keys and their sequences (2026-10-23): domain/preferences/keymap.ts. */
+  /** The prefix and leader keys and their sequences: domain/preferences/keymap.ts. */
   keymap: Keymap;
   savedSearches: {
     id: string;
@@ -194,7 +194,7 @@ export interface IndexStatus {
 }
 export interface IndexedQuery {
   query: string;
-  /** The paths of each Finder tag the query names, looked up before (main only, 2026-10-24). */
+  /** The paths of each Finder tag the query names, looked up before (main only). */
   tagged?: Record<string, string[]>;
   root?: string;
   offset?: number;

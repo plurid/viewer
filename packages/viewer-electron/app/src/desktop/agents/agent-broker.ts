@@ -653,7 +653,7 @@ export class AgentBroker {
       value = extension.requests.navigation(request, target);
       this.own((value as { id: string }).id);
       // A named client's navigation runs at once, but a project file opened installs a whole
-      // workspace from it: the person reviews that (2026-10-20).
+      // workspace from it: the person reviews that.
       const project =
         request.kind === 'open-path' && path.basename(request.path) === 'viewer.project.jsonc';
       if (!project && (await this.clients.get())) {

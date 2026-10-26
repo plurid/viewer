@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE FILE QUERY LANGUAGE WHERE IT IS TYPED (2026-10-24): a filter keeps the last query that read
+ * The file query language where it is typed: a filter keeps the last query that read
  * while the next is typed, and says what is wrong; tags are looked up in the folder; `:filter` and
  * `:find` take a query; completion offers its terms.
  */

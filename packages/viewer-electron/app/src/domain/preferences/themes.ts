@@ -66,7 +66,7 @@ export type ShellToken = (typeof shellTokens)[number];
 export type SyntaxToken = (typeof syntaxTokens)[number];
 export type TerminalToken = (typeof terminalTokens)[number];
 /**
- * A THEME (2026-10-23): the shell's colours, the code colours and the terminal's palette, for one
+ * A THEME: the shell's colours, the code colours and the terminal's palette, for one
  * appearance. What it leaves out is the built-in theme's.
  */
 export interface Theme {

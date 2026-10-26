@@ -1,5 +1,5 @@
 /**
- * TILING (2026-10-23): planes laid out face-on in the space's area as tmux lays out panes, by layout
+ * TILING: planes laid out face-on in the space's area as tmux lays out panes, by layout
  * (even across, even down, a main one beside or above the rest, a grid), with gutters between.
  */
 import { describe, expect, it } from 'vitest';

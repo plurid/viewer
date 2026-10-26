@@ -3,7 +3,7 @@ import { confirmClose, discardUnsaved } from '../editing/unsaved';
 import type { WorkspaceController } from '../workspace/context';
 
 /**
- * CLOSING MANY PLANES (2026-10-23), for `:q`, `:qa` and `:only`: each plane given closes with the
+ * CLOSING MANY PLANES, for `:q`, `:qa` and `:only`: each plane given closes with the
  * planes opened from it. Unsaved text is asked about first, as Close plane does, and Cancel closes
  * nothing; `discard` drops it without asking, as vim's `!`.
  */

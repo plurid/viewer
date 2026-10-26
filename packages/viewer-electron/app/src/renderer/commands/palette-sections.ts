@@ -2,7 +2,7 @@ import { categories } from '../../domain/preferences/catalog';
 import { commandScore, normalize, rankCommands, type ResolvedCommand } from './registry';
 
 /**
- * SETTINGS APART IN THE PALETTE (2026-10-23). Every setting is a command (window-commands/
+ * Settings apart in the palette. Every setting is a command (window-commands/
  * settings.ts), a few hundred of them, whose labels start alike ("Turn off: …", "Hide …"), so loose
  * matching listed them for nearly anything typed. The palette lists them in a Settings section after
  * the commands, found only by the words of their names and a few at a time; `,` (as ⌘, opens

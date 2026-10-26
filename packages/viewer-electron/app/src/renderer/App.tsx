@@ -135,7 +135,7 @@ function AppWindow() {
   const readyRef = useRef(false);
   const pendingPresentation = useRef<string | undefined>(undefined);
   readyRef.current = ready;
-  // once, at launch: unsaved text no plane holds comes back as planes (2026-10-23)
+  // once, at launch: unsaved text no plane holds comes back as planes
   const recovered = useRef(false);
   useEffect(() => {
     if (!ready || recovered.current) return;
@@ -375,7 +375,7 @@ function AppWindow() {
       ),
     );
   }, [saved.workspaces]);
-  /** Runs a command where it belongs; false when nothing ran (a line stops there, 2026-10-23). */
+  /** Runs a command where it belongs; false when nothing ran (a line stops there). */
   const invoke = async (id: string, remember = true): Promise<boolean> => {
     // Edit menu Undo, Redo and Select All reach a CodeMirror editor, which `webContents` does not
     if (routeToEditor(id, getState().activePane)) return true;
@@ -410,7 +410,7 @@ function AppWindow() {
   };
   const invokeRef = useRef(invoke);
   invokeRef.current = invoke;
-  // THE COMMAND LINE (2026-10-23): what a line runs against, and running one from the palette
+  // THE COMMAND LINE: what a line runs against, and running one from the palette
   const lineHost = useMemo<LineHost>(
     () => ({
       invoke: (id, remember) => invokeRef.current(id, remember),
@@ -423,7 +423,7 @@ function AppWindow() {
     }),
     [registry, controller, windowContext, transitionWorkspace, switchTo, openPalette],
   );
-  /** Lines one after another, `count` times, until one cannot run (a key's binding, 2026-10-23). */
+  /** Lines one after another, `count` times, until one cannot run (a key's binding). */
   const runLines = async (lines: readonly string[], count = 1) => {
     for (let time = 0; time < count; time++)
       for (const line of lines) {
@@ -660,13 +660,13 @@ function AppWindow() {
       for (const request of bootstrap.launches ?? []) void handleLaunch(request).catch(report);
     }
   }, [ready, bootstrap.openPaths, bootstrap.launches, controller, handleLaunch]);
-  // the theme's colours as the page's variables (2026-10-23)
+  // the theme's colours as the page's variables
   useThemeVariables(useTheme(settings, look));
   useEffect(() => {
     document.documentElement.dataset.look = look;
     document.documentElement.style.colorScheme = look;
   }, [look]);
-  // A see-through space (2026-10-23): the window lets what is behind it through (backdrop.ts); the
+  // A see-through space: the window lets what is behind it through (backdrop.ts); the
   // page draws the space at the chosen opacity, the planes opaque over it.
   const backdrop = windowUI.space.backdrop;
   const backdropOpacity = windowUI.space.backdropOpacity;

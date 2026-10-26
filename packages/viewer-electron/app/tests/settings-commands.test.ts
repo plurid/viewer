@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A COMMAND FOR EVERY SETTING (2026-10-23): each setting in Settings is also a command, in the
+ * A command for every setting: each setting in Settings is also a command, in the
  * palette, the menus, a shortcut's reach and an agent's proposals: an on/off setting toggles, a choice
  * offers each of its values, and a number or colour opens Settings at it. A setting the workspace
  * window may not change itself (programs, Trash confirmation, limits) opens Settings at it instead.

@@ -19,7 +19,7 @@ export function savedText(result: { saved: number; failed: number; unnamed: numb
 }
 
 /**
- * TEXT (2026-10-23): editing a previewed file where it is, and scratch planes of unsaved text. Each
+ * TEXT: editing a previewed file where it is, and scratch planes of unsaved text. Each
  * acts on the plane's own editing, so a command a plane does not offer is not shown. None is an
  * agent command (`agent-safety.ts`): agents neither write text nor save it.
  */

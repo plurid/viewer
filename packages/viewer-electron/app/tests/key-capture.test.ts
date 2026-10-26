@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * PRESS TO SET A KEY (2026-10-23): every shortcut, the prefix, the leader and a binding's keys are
+ * Press to set a key: every shortcut, the prefix, the leader and a binding's keys are
  * recorded by pressing them. Escape keeps the key; Backspace clears it.
  */
 import { afterEach, expect, it, vi } from 'vitest';

@@ -36,7 +36,7 @@ export function SettingsWindow() {
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [category, setCategory] = useState('Browsing');
   const [query, setQuery] = useState('');
-  // a setting's command opened Settings at it (2026-10-23): its category, the row shown and marked
+  // a setting's command opened Settings at it: its category, the row shown and marked
   const [focused, setFocused] = useState<{ path: string; at: number } | null>(null);
   const show = (path: string) => {
     const section =
@@ -87,7 +87,7 @@ export function SettingsWindow() {
       .settingsGet()
       .then((value) => {
         accept(value);
-        // the desktop passes the last category in, kept with the window's frame (2026-10-20)
+        // the desktop passes the last category in, kept with the window's frame
         const saved = new URLSearchParams(window.location.search).get('category') ?? '';
         setCategory(
           categories.find((category) => category.toLowerCase() === saved.toLowerCase()) ||
@@ -135,7 +135,7 @@ export function SettingsWindow() {
     // the rows of the shown category, once drawn
   }, [focused, category, snapshot]);
   const look = snapshot?.look;
-  // the theme's colours here too (2026-10-23)
+  // the theme's colours here too
   useThemeVariables(useTheme(snapshot?.settings ?? noThemes, look ?? 'dark'));
   useEffect(() => {
     if (look) {

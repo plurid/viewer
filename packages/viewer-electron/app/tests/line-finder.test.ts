@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE COMMAND LINE IN THE PALETTE (2026-10-23): `:` starts it; Tab completes; Enter runs a line
+ * The command line in the palette: `:` starts it; Tab completes; Enter runs a line
  * that parses and points at the column of one that does not; past lines come back with ⌃P; `help`
  * lists what it can say; the ordinary palette shows a smart row's line.
  */

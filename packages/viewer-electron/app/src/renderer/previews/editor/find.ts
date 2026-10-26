@@ -9,7 +9,7 @@ import {
 import { getSearchQuery, setSearchQuery } from '@codemirror/search';
 
 /**
- * FIND IN TEXT (2026-10-23): CodeMirror's search state and commands under Viewer's own find widget
+ * Find in text: CodeMirror's search state and commands under Viewer's own find widget
  * (`EditorFind`). Its matches are marked here only while that widget is open; CodeMirror's panel,
  * which marks them otherwise, is never shown.
  */

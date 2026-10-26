@@ -1,7 +1,7 @@
 /* THESIS: Keep one task's checkout, evidence and tools together after views close.
  * OWN-WORLD: Existing neutral Plurid Operate tool plane, flat rows, system type.
  * STORY: Name the task, link tools, inspect actual outcomes, reopen and arrange.
- * FIRST VIEWPORT: Checkout identity, compact actions, durable tool rows and status.
+ * First viewport: Checkout identity, compact actions, durable tool rows and status.
  * FORM: Existing plane/dialog primitives; task-areas-v1, no new visual world.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance */
 import { useEffect, useMemo, useState } from 'react';

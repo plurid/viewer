@@ -1,5 +1,5 @@
 /**
- * THE SMART PALETTE (2026-10-23): what a query asks for beyond a command's name. A path offers its
+ * The smart palette: what a query asks for beyond a command's name. A path offers its
  * folder's contents, `=` calculates, `z` and a name jumps to a frecent folder (as zoxide does), and a
  * command takes its argument after its name: `new folder Drafts`, `rename notes.md`, `go ~/Downloads`.
  */

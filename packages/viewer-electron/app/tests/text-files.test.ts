@@ -1,5 +1,5 @@
 /**
- * EDITING TEXT FILES (2026-10-23). What can be edited where it is, and how a save treats the version
+ * Editing text files. What can be edited where it is, and how a save treats the version
  * it replaces: the first save of an editor session sends it to the Trash, later saves of that session
  * overwrite their own, and a file someone else changed is never overwritten.
  */

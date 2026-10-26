@@ -47,7 +47,9 @@
     "make": "tsx tools/trash-previous-build.ts && tsx tools/build-helpers.ts && electron-forge make",
     "mas:preflight": "tsx tools/mas.ts preflight",
     "mas:dev": "tsx tools/mas.ts dev",
-    "mas:package": "tsx tools/mas.ts distribution"
+    "mas:package": "tsx tools/mas.ts distribution",
+    "docs:check": "node --import tsx tools/docs/check.ts",
+    "docs:media": "node --import tsx tools/docs/capture.ts"
   },
   "devDependencies": {
     "@electron-forge/cli": "8.0.1",

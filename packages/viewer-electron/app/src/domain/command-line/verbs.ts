@@ -15,7 +15,7 @@ export type CompleteKind =
   | 'query'
   | 'command';
 /**
- * A VERB OF THE COMMAND LINE (2026-10-23). Its names are vim's, in vim's notation (`q[uit]`: `q`,
+ * A verb of the command line. Its names are vim's, in vim's notation (`q[uit]`: `q`,
  * `qu`, `qui`, `quit`), then tmux's long names as synonyms; the first is the one help and hints
  * show. One table for parsing, completion and `:help`.
  */

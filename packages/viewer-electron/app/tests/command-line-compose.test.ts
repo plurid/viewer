@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * COMPOSING LINES (2026-10-23): a person's commands, named as vim's :command (capitalised), from
+ * Composing lines: a person's commands, named as vim's :command (capitalised), from
  * this session's :alias or a sequence's name, taking words as $1… and $*; Keep saves them as
  * sequences; send-keys types into a terminal; palette rows show the line they are; an import asks
  * before risky lines.

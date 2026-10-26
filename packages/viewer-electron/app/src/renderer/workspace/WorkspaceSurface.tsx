@@ -286,7 +286,7 @@ function CollectionContent() {
   return <CollectionExplorer id={plane.parameters.id ?? ''} />;
 }
 /**
- * Each plane's content carries its pane's id (2026-10-23): a plane is found by it whether or not its
+ * Each plane's content carries its pane's id: a plane is found by it whether or not its
  * header shows (focus, hints, directional focus). `display: contents` leaves the layout as it was.
  */
 const marked = (Content: React.ComponentType): React.ComponentType =>
@@ -386,7 +386,7 @@ export function WorkspaceSurface({
         setSize((previous) =>
           previous.width === next.width && previous.height === next.height ? previous : next,
         );
-        // tiled planes keep their layout in the new size, as tmux's panes do (2026-10-23)
+        // tiled planes keep their layout in the new size, as tmux's panes do
         if (activeWorkspace().tiling) {
           clearTimeout(retiling);
           retiling = setTimeout(() => applyTiling(engine, surface), 120);
@@ -399,7 +399,7 @@ export function WorkspaceSurface({
       clearTimeout(retiling);
     };
   }, [surface, engine]);
-  // a tiled plane closed, or the workspace opened tiled: the rest take its place (2026-10-23)
+  // a tiled plane closed, or the workspace opened tiled: the rest take its place
   const tiled = space.tiling?.panes
     .filter((id) => space.panes.some((pane) => pane.id === id))
     .join('\n');

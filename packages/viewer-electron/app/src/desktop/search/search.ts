@@ -21,7 +21,7 @@ export class Search {
     private spotlight:
       | ((root: string, query: string, signal: AbortSignal) => Promise<string[]>)
       | null = spotlightAvailable ? spotlightNames : null,
-    /** Spotlight's Finder tags, for `tag:` (2026-10-24). */
+    /** Spotlight's Finder tags, for `tag:`. */
     private tagged: (
       root: string,
       tag: string,

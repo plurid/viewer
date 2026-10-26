@@ -1,5 +1,5 @@
 /** A readable message for anything thrown, including non-Error values. */
-/** A validation failure in words (2026-10-23): its message was the issues as JSON. */
+/** Convert validation issues into a readable error message. */
 function issuesText(
   issues: readonly { path?: readonly PropertyKey[]; message?: string }[],
 ): string {

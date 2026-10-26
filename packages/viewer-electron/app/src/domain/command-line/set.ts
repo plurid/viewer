@@ -2,7 +2,7 @@ import { settingCatalog, type SettingDefinition } from '../preferences/catalog';
 import { LineError, type Word } from './lex';
 
 /**
- * SETTING NAMES (2026-10-23): short and fixed, as vim's option names are, so a saved line keeps
+ * Setting names: short and fixed, as vim's option names are, so a saved line keeps
  * meaning what it meant. A full path (`ui.space.grid`) always works too. vim's own names where it
  * has the setting (`wrap`, `number`, `tabstop`, `expandtab`), with its abbreviations.
  */

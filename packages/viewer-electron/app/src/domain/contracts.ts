@@ -129,9 +129,9 @@ export interface FolderPane {
   history: string[];
   historyIndex: number;
   sidebar?: PaneSidebar;
-  /** Opened by Explode folder from that plane (2026-10-23): Collapse closes it again. */
+  /** Opened by Explode folder from that plane: Collapse closes it again. */
   exploded?: string;
-  /** The folder plane it is paired with, as a commander's two panels (2026-10-24): copies and
+  /** The folder plane it is paired with, as a commander's two panels: copies and
    * moves go there; each names the other. */
   pair?: string;
   /** The pair follows each other into subfolders and back up. */
@@ -157,7 +157,7 @@ export interface PreviewPane {
   bufferID?: string;
 }
 /**
- * A plane of unsaved text (2026-10-23), kept in the profile until it is saved as a file or discarded.
+ * A plane of unsaved text, kept in the profile until it is saved as a file or discarded.
  * `path` is the folder Save As starts in, so every plane has a real folder, as a collection's does.
  */
 export interface ScratchPane {
@@ -320,16 +320,16 @@ export interface Workspace {
   epoch?: number;
   collections?: Collection[];
   basket?: BasketItem[];
-  /** This workspace's space colour, `#rrggbb`, over the general one (2026-10-23). */
+  /** This workspace's space colour, `#rrggbb`, over the general one. */
   spaceColor?: string;
-  /** This workspace's own chrome and space settings over the general ones (2026-10-23). */
+  /** This workspace's own chrome and space settings over the general ones. */
   overrides?: WorkspaceOverrides;
   /** Presentation profile used when this workspace is entered. */
   profileID?: string;
-  /** Planes tiled as tmux's panes (2026-10-23): kept in their layout as the window resizes. */
+  /** Planes tiled as tmux's panes: kept in their layout as the window resizes. */
   tiling?: Tiling;
 }
-/** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
+/** Current saved-state format. Increment with a compatible migration and preserved input. */
 export const CURRENT_STATE_VERSION = 11 as const;
 export interface SavedState {
   version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | typeof CURRENT_STATE_VERSION;
@@ -342,13 +342,13 @@ export interface SavedState {
   openWindows?: string[];
   favorites: { name: string; path: string }[];
   recents: string[];
-  /** The profile applied, and the values it replaced, to leave it again (2026-10-23). */
+  /** The profile applied, and the values it replaced, to leave it again. */
   profile?: { id: string; previous: Record<string, JSONValue> };
   /** Explicit presentation choices restored only in their owning workspace window. */
   windowProfiles?: Record<string, { id: string; previous: Record<string, JSONValue> }>;
-  /** Folders' visits for `z` in the palette (2026-10-23): how many, and the last. */
+  /** Folders' visits for `z` in the palette: how many, and the last. */
   visits?: Record<string, { count: number; last: number }>;
-  /** Lines run from the command line, the latest first (2026-10-23). */
+  /** Lines run from the command line, the latest first. */
   lineHistory?: string[];
   /** Requests and reviewed answers, retained privately without replaying a model request. */
   promptHistory?: PromptHistoryEntry[];
@@ -368,7 +368,7 @@ export interface UIPreferences {
     hidden: string[];
     labels: Record<string, string>;
   };
-  /** Viewer's title bar (2026-10-23): hidden, it comes back while the pointer is at the window's top. */
+  /** Viewer's title bar: hidden, it comes back while the pointer is at the window's top. */
   titlebar: {
     visible: boolean;
   };
@@ -381,11 +381,11 @@ export interface UIPreferences {
     dragging: boolean;
     resizing: boolean;
     opening: 'face-on' | 'pair' | 'dock';
-    /** What the space shows behind the planes (2026-10-23): its colour, or what is behind the window. */
+    /** What the space shows behind the planes: its colour, or what is behind the window. */
     backdrop: 'opaque' | 'blur' | 'clear';
     /** How much of the space's colour is drawn over what is behind, in percent. */
     backdropOpacity: number;
-    /** The space's grid lines (2026-10-23). */
+    /** The space's grid lines. */
     grid: boolean;
     /** The space's colour, `#rrggbb`; empty follows the appearance. A workspace may have its own. */
     color: string;
@@ -686,14 +686,14 @@ export interface ViewerAPI {
   executionList(): Promise<ExecutionTask[]>;
   executionCancel(id: string): Promise<void>;
   bootstrap(): Promise<Bootstrap>;
-  /** Opens Settings; with a setting's path, at that setting (2026-10-23). */
+  /** Opens Settings; with a setting's path, at that setting. */
   openSettings(focus?: string): Promise<void>;
   settingsGet(): Promise<SettingsSnapshot>;
   settingsPatch(patches: SettingsPatch[], revision: number): Promise<SettingsSnapshot>;
-  /** `>` in the palette (2026-10-24): a request in words, answered with a line to review. */
+  /** `>` in the palette: a request in words, answered with a line to review. */
   promptLine(request: PromptRequest): Promise<PromptAnswer>;
   promptCancel(id: string): Promise<void>;
-  /** `:bind` and `:alias` of this session (2026-10-23): kept in memory until quit. */
+  /** `:bind` and `:alias` of this session: kept in memory until quit. */
   sessionKeys(): Promise<SessionKeys>;
   sessionKeysSet(session: SessionKeys): Promise<SessionKeys>;
   /** Writes the session's bindings into config.jsonc, from Settings only. */
@@ -742,7 +742,7 @@ export interface ViewerAPI {
   nativeFilePanel(kind: 'preview' | 'share', paths: string[]): Promise<void>;
   applications(paths: string[]): Promise<ApplicationChoices>;
   chooseApplication(): Promise<NativeApplication | null>;
-  /** A listed application's own icon, as a data URL (Open With rows, 2026-10-23). */
+  /** A listed application's own icon, as a data URL (Open With rows). */
   applicationIcon(id: string): Promise<string>;
   /** Shows or hides the window's close, minimise and zoom buttons, with a hidden title bar. */
   windowButtons(visible: boolean): Promise<void>;

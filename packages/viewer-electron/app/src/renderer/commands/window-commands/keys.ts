@@ -7,7 +7,7 @@ import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
 /**
- * Moving the keys between planes without the pointer (2026-10-23): hints, tmux's direction keys,
+ * Moving the keys between planes without the pointer: hints, tmux's direction keys,
  * the next plane, and the workspaces in turn. A plane on screen becomes active where it is.
  */
 export function keysCommands({ actions, state, windowScope }: WindowScopes): CommandDefinition[] {

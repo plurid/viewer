@@ -27,7 +27,7 @@ export function promptProvider(settings: ApplicationSettings): ModelProvider | u
   );
 }
 /**
- * A prompt answered (2026-10-24): the model, at the "names" level its permission allows, gives a
+ * A prompt answered: the model, at the "names" level its permission allows, gives a
  * line and a sentence; the line is checked as the command line would and as a model's must be.
  */
 export async function answerPrompt(

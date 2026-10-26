@@ -15,7 +15,7 @@ export interface SettingDefinition {
   max?: number;
 }
 /**
- * What the workspace window changes itself (2026-10-23): its view and presentation. Programs, Trash
+ * What the workspace window changes itself: its view and presentation. Programs, Trash
  * confirmation, agents, providers, opening rules and limits change only in Settings, which a page
  * the workspace shows cannot reach. One list for the settings service and the setting commands.
  */

@@ -44,7 +44,7 @@ describe('owned test folders', () => {
 describe('temporary test folders', () => {
   it('lists a folder kept by VIEWER_TEST_PRESERVE=1 once, whether or not its test cleans it up', async () => {
     // A folder a test made and never handed to `trashTemporary` (an extra root) was kept unlisted:
-    // 657 of them in one session's runs (2026-10-20).
+    // 657 of them in one session's runs.
     const previous = process.env.VIEWER_TEST_PRESERVE;
     process.env.VIEWER_TEST_PRESERVE = '1';
     try {

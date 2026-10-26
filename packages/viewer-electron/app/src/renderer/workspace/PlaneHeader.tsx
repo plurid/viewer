@@ -236,7 +236,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
         )}
         {partner && (
-          // a commander's pair (2026-10-24): which plane ⌃⌘C copies to
+          // a commander's pair: which plane ⌃⌘C copies to
           <span
             className="plane-pair"
             role="img"

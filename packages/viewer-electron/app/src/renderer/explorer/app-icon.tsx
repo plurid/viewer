@@ -5,7 +5,7 @@ import { isPackage } from '../../domain/files/entries';
 const icons = new Map<string, string>();
 let reported = false;
 const limit = 600;
-/** An application or another bundle, shown by its own icon as Finder shows it (2026-10-23). */
+/** An application or another bundle, shown by its own icon as Finder shows it. */
 export const hasBundleIcon = (entry: Pick<FileEntry, 'directory' | 'extension'>) =>
   isPackage(entry);
 

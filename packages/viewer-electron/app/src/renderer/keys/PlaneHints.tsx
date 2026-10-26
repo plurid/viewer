@@ -19,7 +19,7 @@ const subscribe = (listener: () => void) => {
   };
 };
 /**
- * PLANE HINTS (2026-10-23): a label on every plane in view, as Vimium labels links; typing one
+ * Plane hints: a label on every plane in view, as Vimium labels links; typing one
  * chooses that plane. Escape, or a key no label starts with, ends them.
  */
 export function startPlaneHints(choose: (paneID: string) => void): boolean {

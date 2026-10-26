@@ -4,7 +4,7 @@ export interface VisiblePlane {
   rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom' | 'width' | 'height'>;
 }
 /**
- * The planes the person can see (2026-10-23): drawn, not set aside by a docked plane, not culled
+ * The planes the person can see: drawn, not set aside by a docked plane, not culled
  * away, at least 24px each way and overlapping the space. Found by the pane id their content
  * carries, so a plane without a header counts too.
  */

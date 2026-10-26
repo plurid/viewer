@@ -1,5 +1,5 @@
 /**
- * THE FILE QUERY LANGUAGE (2026-10-24): names, phrases and terms, OR, - and parentheses; sizes and
+ * The file query language: names, phrases and terms, OR, - and parentheses; sizes and
  * dates, relative and absolute; tags looked up before; errors with their column.
  */
 import { describe, expect, it } from 'vitest';

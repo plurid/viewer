@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A COMMANDER'S PAIR (2026-10-24): two folder planes paired, each naming the other; ⌃⌘C and ⌃⌘X
+ * A COMMANDER'S PAIR: two folder planes paired, each naming the other; ⌃⌘C and ⌃⌘X
  * copy and move the selection to the other; swap; the two following each other into subfolders;
  * select and deselect by a glob or a query.
  */

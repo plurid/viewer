@@ -7,7 +7,7 @@ export const defaultShortcuts: Record<string, string> = {
   'frame-all': 'Cmd+0',
   dock: 'Cmd+Enter',
   'toggle-sidebar': 'Cmd+Alt+S',
-  // Finder's Hide Toolbar key (2026-10-23)
+  // Finder's Hide Toolbar key
   'toggle-titlebar': 'Cmd+Alt+T',
   'go-to': 'Cmd+L',
   'open-selection': 'Cmd+O',
@@ -33,19 +33,19 @@ export const defaultShortcuts: Record<string, string> = {
   'view-gallery': 'Cmd+4',
   'view-map': 'Cmd+5',
   'toggle-hidden': 'Cmd+Shift+.',
-  // text (2026-10-23)
+  // text
   'new-scratch-plane': 'Cmd+T',
   'edit-file': 'Cmd+E',
   'save-file': 'Cmd+S',
   'save-file-as': 'Cmd+Shift+S',
-  // the chrome away and back (2026-10-23); not ⌃⌘F, the Mac's full screen
+  // the chrome away and back; not ⌃⌘F, the Mac's full screen
   'focus-mode': 'Cmd+Shift+F',
-  // a commander's pair (2026-10-24): ⌃⌘ with copy's and cut's letters, not F5/F6
+  // a commander's pair: ⌃⌘ with copy's and cut's letters, not F5/F6
   'copy-to-pair': 'Ctrl+Cmd+C',
   'move-to-pair': 'Ctrl+Cmd+X',
   'select-by-pattern': 'Ctrl+Cmd+=',
   'deselect-by-pattern': 'Ctrl+Cmd+-',
-  // the space's views (2026-10-23): ⌥⌘ goes to one, ⌃⌥⌘ saves the camera as one
+  // the space's views: ⌥⌘ goes to one, ⌃⌥⌘ saves the camera as one
   ...Object.fromEntries(
     [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((slot) => [
       [`bookmark.${slot}`, `Cmd+Alt+${slot}`],
@@ -110,7 +110,7 @@ export function validShortcut(value: string): boolean {
     new Set(parts).size === parts.length &&
     parts.every(
       (part) =>
-        // space too (2026-10-23): ⌃Space is a common prefix, as in tmux
+        // space too: ⌃Space is a common prefix, as in tmux
         ['cmd', 'ctrl', 'shift', 'alt', 'enter', 'backspace', 'delete', 'escape', 'space'].includes(
           part,
         ) ||
@@ -195,7 +195,7 @@ export function shortcutLabel(id: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 /**
- * What already answers a chord, other than `except` (2026-10-23): a built-in or menu shortcut,
+ * What already answers a chord, other than `except`: a built-in or menu shortcut,
  * a recipe's, a custom action's, or the prefix. Settings says so rather than saving a conflict.
  */
 export function shortcutOwner(

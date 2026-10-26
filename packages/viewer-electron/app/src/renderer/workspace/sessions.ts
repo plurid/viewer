@@ -135,14 +135,14 @@ export function focusFiles(id: string): void {
   };
   requestAnimationFrame(focus);
 }
-/** A pane's plane on the page, by the id its content carries: headers may be hidden (2026-10-23). */
+/** A pane's plane on the page, by the id its content carries: headers may be hidden. */
 export function planeElement(id: string): HTMLElement | undefined {
   const marker = Array.from(document.querySelectorAll<HTMLElement>('[data-viewer-pane]')).find(
     (element) => element.dataset.viewerPane === id,
   );
   return marker?.closest<HTMLElement>('[data-plurid-plane]') ?? undefined;
 }
-/** Moves the keys into a plane's content, any kind: a link followed to it (2026-10-23). */
+/** Moves the keys into a plane's content, any kind: a link followed to it. */
 export function focusPlane(id: string): void {
   const until = performance.now() + 1500;
   const focus = () => {

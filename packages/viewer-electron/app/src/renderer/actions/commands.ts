@@ -2,7 +2,7 @@ import { getState } from '../state/store';
 import type { CommandContext, CommandDefinition } from '../commands/registry';
 import type { ActionContext } from '../../domain/services';
 /** Who a plan was made for: a watch rule runs as the person, and was labelled “Your selection”
- * (2026-10-20). */
+ *. */
 export function planOrigin(context: Pick<ActionContext, 'actor' | 'workspaceID'>): string {
   if (context.actor === 'agent') return 'Agent proposal';
   return context.workspaceID === 'watch-rule' ? 'Watch rule' : 'Your selection';
@@ -43,7 +43,7 @@ export function actionCommands(): CommandDefinition[] {
       icon: 'command' as const,
       aliases: ['ai', 'task', 'agent'],
       when: (context: CommandContext) => !!context.selection.length,
-      // a recipe that exists: 'rename' could have been removed (2026-10-20)
+      // a recipe that exists: 'rename' could have been removed
       run: (context: CommandContext) => {
         const recipes = getState().settings.settings.recipes;
         requestAction(

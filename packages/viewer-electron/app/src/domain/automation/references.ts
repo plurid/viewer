@@ -9,7 +9,7 @@ import { findVerb, parseCommandLine } from '../command-line/verbs';
 import { actionInputs } from './actions';
 
 /**
- * References that name nothing (2026-10-20): a custom action's recipe or terminal profile, a built-in
+ * References that name nothing: a custom action's recipe or terminal profile, a built-in
  * command that is another custom action, a recipe's provider. They were not checked at all. They are
  * reported, not refused: config.jsonc refused would put Viewer on its defaults, and Settings deletes
  * that leave one behind would fail. A use fails visibly, and an agent cannot add one.
@@ -52,7 +52,7 @@ export function referenceIssues(settings: ApplicationSettings): string[] {
   ];
 }
 /**
- * The keymap's (2026-10-23): two spellings of one key (`Ctrl+B` and `C-b`), the later used; and
+ * The keymap's: two spellings of one key (`Ctrl+B` and `C-b`), the later used; and
  * `mode name` lines naming no mode.
  */
 function keymapIssues(keymap: Keymap): string[] {

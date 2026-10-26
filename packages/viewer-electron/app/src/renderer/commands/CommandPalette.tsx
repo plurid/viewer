@@ -154,7 +154,7 @@ function CommandFinder({
   const nested = workspaces || settings;
   const onCommands = () => onMode('commands');
   const smart = useSmartRows(nested ? '' : query, context, directory);
-  // the smart rows' own source shares the plane: listed once, above (2026-10-23)
+  // the smart rows' own source shares the plane: listed once, above
   const commands = registry
     .list({ paneID: active, scope: 'window', context })
     .filter((command) => !command.id.startsWith('smart:'));
@@ -284,7 +284,7 @@ function CommandFinder({
 }
 
 /**
- * THE SMART PALETTE'S ROWS (2026-10-23), above the commands: a typed path's folder contents, a
+ * THE SMART PALETTE'S ROWS, above the commands: a typed path's folder contents, a
  * calculation, frecent folders for `z`, or a command with its argument (smart-palette.ts).
  */
 function useSmartRows(
@@ -399,7 +399,7 @@ function useSmartRows(
       return [
         row('go', {
           label: `Go to ${name}`,
-          // the line it is, to learn: `:e ~/Downloads` (2026-10-23)
+          // the line it is, to learn: `:e ~/Downloads`
           detail: `:e ${quoteWord(name)}`,
           group: 'Go',
           icon: 'folder',
@@ -486,7 +486,7 @@ function FileFinder({
     context.folder?.showHidden || false,
   );
   const sourceID = useMemo(() => `finder:${crypto.randomUUID()}`, []);
-  // the file query language here too (2026-10-24): terms filter, the words rank the names
+  // the file query language here too: terms filter, the words rank the names
   const finderQuery = useFileQuery(query, directory);
   const matches = useMemo(() => {
     if (indexedMode) return indexed.result?.entries || [];

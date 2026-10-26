@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * THE SMART PALETTE IN USE (2026-10-23): its rows come first, and choosing one does what it says:
+ * The smart palette in use: its rows come first, and choosing one does what it says:
  * copies a calculation, opens a typed path, creates a folder by name, jumps to a frecent folder.
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';

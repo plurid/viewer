@@ -156,7 +156,7 @@ export function associateProject(project: ProjectAssociation): void {
 export function closeProject(): void {
   if (!activeWorkspace().project) return;
   // Folder panes take their view, sort and hidden items from the shared folder preferences again,
-  // as the rest of each folder's presentation does: they kept the project's (2026-10-20).
+  // as the rest of each folder's presentation does: they kept the project's.
   changeWorkspace((space) => {
     const next = { ...space, project: undefined };
     return {

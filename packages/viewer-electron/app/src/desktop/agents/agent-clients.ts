@@ -92,7 +92,7 @@ export class AgentClients {
     return publicClient(client);
   }
   async require(capability: AgentCapability, id = this.actor()): Promise<AgentClient | undefined> {
-    // the shared connection's are the person's approval (`AgentAccess`); it held every one (2026-10-20)
+    // the shared connection's are the person's approval (`AgentAccess`); it held every one
     if (id === sharedClientID && this.shared && !(await this.shared()).includes(capability))
       throw new Error(
         'The shared connection has no ' +

@@ -8,7 +8,7 @@ export interface ModelDataPermission {
   endpoint: string;
   level: ModelDataLevel;
   /** Actions agents start may send this data too. Approved apart, and cleared when the level is
-   * approved anew: an agent-started recipe reused the person's own approval (2026-10-20). */
+   * approved anew: an agent-started recipe reused the person's own approval. */
   agents?: boolean;
 }
 export const modelDataLabels: Record<ModelDataLevel, string> = {

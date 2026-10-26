@@ -1,5 +1,5 @@
 /**
- * EXPLODE FOLDER (2026-10-23): a folder's subfolders, and theirs to the depth asked, as linked planes:
+ * Explode folder: a folder's subfolders, and theirs to the depth asked, as linked planes:
  * breadth first, at most 60, without hidden folders, bundles or links.
  */
 import { expect, it } from 'vitest';

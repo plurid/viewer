@@ -94,7 +94,7 @@ function ThemeColor({
   );
 }
 /**
- * THEMES (2026-10-23): a theme for each appearance; themes made new, imported from an iTerm colour
+ * THEMES: a theme for each appearance; themes made new, imported from an iTerm colour
  * preset or a VS Code theme, edited colour by colour, renamed, copied as JSON or removed.
  */
 export function ThemeSettings({ editor }: { editor: SettingsEditor }) {

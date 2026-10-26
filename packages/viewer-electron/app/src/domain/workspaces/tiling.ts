@@ -1,5 +1,5 @@
 /**
- * TILING (2026-10-23): planes laid out face-on in the space's area as tmux lays out a window's panes,
+ * TILING: planes laid out face-on in the space's area as tmux lays out a window's panes,
  * by its layouts: even across, even down, a main plane beside or above the rest, or a grid.
  */
 import { z } from 'zod';

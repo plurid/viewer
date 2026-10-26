@@ -88,7 +88,7 @@ export async function readText(file: string): Promise<{ text: string; version: T
 }
 
 /**
- * EDITING TEXT FILES (2026-10-23). Opens previewed text for editing and saves it. The first save of an
+ * Editing text files. Opens previewed text for editing and saves it. The first save of an
  * editor session goes through the operation queue, which sends the version it replaces to the Trash
  * with an Undo step; later saves of that session overwrite their own. What a session wrote is held
  * here only, in memory, so after a relaunch or a new editor session the first save trashes again.

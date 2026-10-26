@@ -56,7 +56,7 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
       if (!view.has(key)) view.set(key, value);
   }
   // A new version of the file resets its view, notes aside, as in a workspace plane above: Quick
-  // Preview, Gallery and Columns kept stale measurements, pages and sheets (2026-10-20).
+  // Preview, Gallery and Columns kept stale measurements, pages and sheets.
   return {
     get: (key) => {
       const before = view!.get('_sourceVersion') as SourceVersion | undefined;

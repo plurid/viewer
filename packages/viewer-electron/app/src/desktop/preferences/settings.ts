@@ -65,7 +65,7 @@ const templatePath = z
   .refine((value) => !value.includes('\0'));
 /** A colour as themes keep it: `#rgb`, `#rrggbb` or `#rrggbbaa`. */
 const themeColorSchema = z.string().regex(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
-/** A colour theme (2026-10-23): the shell's, the code's and the terminal's colours. */
+/** A colour theme: the shell's, the code's and the terminal's colours. */
 export const themeSchema = z
   .object({
     id: z
@@ -122,7 +122,7 @@ function validateCustomProfiles(
     profileSchema.parse(profile);
   }
 }
-/** A layout template (2026-10-23): planes by kind and folder, and their tiling. */
+/** A layout template: planes by kind and folder, and their tiling. */
 export const layoutTemplateSchema = z
   .object({
     id: z
@@ -333,7 +333,7 @@ export const settingsSchema = z
           .strict(),
       )
       .max(100),
-    // no longer used: the Settings window keeps its frame and category privately (2026-10-20);
+    // no longer used: the Settings window keeps its frame and category privately;
     // accepted so existing files stay valid
     settingsWindow: z
       .object({
@@ -367,7 +367,7 @@ export const settingsSchema = z
     ] as const)
       if (new Set(items.map((item) => item.id)).size !== items.length)
         context.addIssue({ code: 'custom', path: [key], message: 'IDs must be unique.' });
-    // a command's name runs one sequence (2026-10-23)
+    // a command's name runs one sequence
     const named = value.customActions.flatMap((action) =>
       action.executor.kind === 'sequence' && action.executor.command
         ? [action.executor.command]
@@ -424,7 +424,7 @@ export const settingsSchema = z
         message: 'A shortcut is assigned to more than one action.',
       });
   });
-/** What an import changes that Viewer may run, reach or send: confirmed before it applies (2026-10-20). */
+/** What an import changes that Viewer may run, reach or send: confirmed before it applies. */
 export function importChanges(current: ApplicationSettings, next: ApplicationSettings): string[] {
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const programs = (settings: ApplicationSettings) =>
@@ -442,7 +442,7 @@ export function importChanges(current: ApplicationSettings, next: ApplicationSet
   ].filter((change): change is string => !!change);
 }
 /**
- * Lines of keys and sequences that act beyond the window (2026-10-23): typing into a terminal,
+ * Lines of keys and sequences that act beyond the window: typing into a terminal,
  * the Trash, renaming, and `!` dropping unsaved text. An import that changes them asks first.
  */
 function riskyLines(settings: ApplicationSettings): string[] {
@@ -475,7 +475,7 @@ function riskyLines(settings: ApplicationSettings): string[] {
 }
 /**
  * What the workspace window changes: its own preferences and views. It could patch any setting, so a
- * compromised workspace renderer could widen agent folders, add a provider or an action (2026-10-20);
+ * compromised workspace renderer could widen agent folders, add a provider or an action;
  * the rest is changed in Settings.
  */
 // the workspace window's own view and presentation: domain/preferences/catalog.ts
@@ -533,7 +533,7 @@ export class SettingsService {
       } else if (last.value) {
         // config.jsonc is missing and its last valid copy is not: the file was removed. The copy is
         // the person's settings; a removed file was a first run, which wrote the defaults over the
-        // last valid copy too (2026-10-20).
+        // last valid copy too.
         this.document = { ...last.value, revision: 0 };
         this.restored = 'config.jsonc was missing: Viewer restored it from its last valid copy.';
         await this.write();
@@ -772,7 +772,7 @@ export class SettingsService {
     const parsed = configSchema.parse(config);
     validateCustomProfiles(parsed.settings.profiles, this.document.settings.profiles);
     // An agent edits a recipe, not what binds it to the person: its shortcut, its model provider,
-    // or more data than it sent. A whole-recipes patch carried them (2026-10-20).
+    // or more data than it sent. A whole-recipes patch carried them.
     const recipes = new Map(this.document.settings.recipes.map((recipe) => [recipe.id, recipe]));
     for (const recipe of parsed.settings.recipes) {
       const before = recipes.get(recipe.id);

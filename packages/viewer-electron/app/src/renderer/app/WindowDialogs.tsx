@@ -282,7 +282,7 @@ export function WindowDialogs({
               order: actions.length,
               pinned: false,
               when: { target: 'any', extensions: [], min: 0, max: 10000 },
-              // its name as a command too, `:OpenDocs`, when no other has it (2026-10-23)
+              // its name as a command too, `:OpenDocs`, when no other has it
               executor: {
                 kind: 'sequence',
                 commands: macroDraft,

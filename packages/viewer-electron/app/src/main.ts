@@ -150,7 +150,7 @@ const windowFrames = new Map<BrowserWindow, WindowState>();
 let hotkey: HotkeyWindow | undefined;
 let desktop: Desktop | null = null;
 let windowState: WindowState | undefined;
-/** The Settings window's frame and last category: private, never config.jsonc (2026-10-20). */
+/** The Settings window's frame and last category: private, never config.jsonc. */
 let settingsWindowState: WindowState | undefined;
 let settingsWindow: BrowserWindow | null = null;
 let settingsClosing: Promise<void> | undefined;
@@ -549,7 +549,7 @@ app.on('open-file', (event, file) => {
   event.preventDefault();
   if (desktop) desktop.open([file]);
   else pendingPaths.push(file);
-  // with every window closed, the file waited for a later Dock click (2026-10-20); a window opens
+  // with every window closed, the file waited for a later Dock click; a window opens
   // for it, as `activate` would open one
   if (!mcpMode && desktop && !window && !quitPending && !quitting) void createWindow();
 });
@@ -568,7 +568,7 @@ app
       }
       quitting = true;
       // app.quit() ends with 0 whatever process.exitCode says, so an agent's client saw a failed
-      // start as success (2026-10-23): flush what was written, then exit with the failure
+      // start as success: flush what was written, then exit with the failure
       if (process.exitCode) {
         await new Promise((resolve) => process.stdout.write('', resolve));
         await new Promise((resolve) => process.stderr.write('', resolve));
@@ -780,7 +780,7 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   if (quitPending || quitAsking) return;
   // Quit cancelled queued and running file operations without a word, so queued work was never
-  // done (2026-10-21). With some in progress it asks first.
+  // done. With some in progress it asks first.
   const pending = desktop?.pendingOperations() ?? 0;
   if (!pending) {
     beginQuit();

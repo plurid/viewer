@@ -97,7 +97,7 @@
   max-width: 125px;
   padding: 3px 5px;
   /* its edge was nearly the header's colour, so the choice looked shorter than the filled Save
-     beside it (2026-10-23): the field's colour reaches its edge, as a filled button's does */
+     beside it: the field's colour reaches its edge, as a filled button's does */
   border-color: transparent;
 }
 .plane-module-controls .preview-toolbar input {
@@ -158,11 +158,11 @@
     display: none;
   }
 }
-/* the pane's id on its plane's content (2026-10-23): no box of its own */
+/* the pane's id on its plane's content: no box of its own */
 .pane-marker {
   display: contents;
 }
-/* a commander's pair (2026-10-24): the other folder ⌃⌘C copies to */
+/* a commander's pair: the other folder ⌃⌘C copies to */
 .plane-pair {
   flex-shrink: 0;
   color: var(--accent);

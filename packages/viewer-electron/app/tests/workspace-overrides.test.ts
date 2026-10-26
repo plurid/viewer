@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A WORKSPACE'S OWN SETTINGS (2026-10-23): a workspace may override the window's chrome and the
+ * A WORKSPACE'S OWN SETTINGS: a workspace may override the window's chrome and the
  * space's look (title bar, toolbar, minimap, viewcube, grid, headers, backdrop opacity) over the
  * general settings; other workspaces keep theirs.
  */

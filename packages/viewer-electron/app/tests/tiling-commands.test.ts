@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * TILING COMMANDS (2026-10-23): a split adds a plane beside the active one and tiles them, the way
+ * Tiling commands: a split adds a plane beside the active one and tiles them, the way
  * asked first and in the kept layout after; layouts, swaps, the main plane and untiling change the
  * workspace's saved tiling, which the space then follows.
  */

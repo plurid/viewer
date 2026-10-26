@@ -1,4 +1,4 @@
-/** A name as a command's (2026-10-23): “open docs” is OpenDocs, as vim's :command names need a
+/** A name as a command's: “open docs” is OpenDocs, as vim's :command names need a
  * capital; undefined when nothing of it can be one. */
 export function commandName(name: string): string | undefined {
   const words = name.split(/[^A-Za-z0-9]+/).filter(Boolean);

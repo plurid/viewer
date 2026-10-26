@@ -127,7 +127,7 @@ export function navigate(id: string, path: string, fromPair = false): void {
   if (!fromPair) followPair(id, previous, path);
 }
 /**
- * A folder plane's partner (2026-10-24), as a commander's other panel: the folder plane it is
+ * A folder plane's partner, as a commander's other panel: the folder plane it is
  * paired with, while each names the other.
  */
 export function pairOf(id: string): FolderPane | undefined {
@@ -306,7 +306,7 @@ function untitledName(): string {
   for (let number = 1; ; number++) if (!used.has(`Untitled ${number}`)) return `Untitled ${number}`;
 }
 /**
- * A new scratch plane (2026-10-23): text kept in the profile until it is saved as a file or
+ * A new scratch plane: text kept in the profile until it is saved as a file or
  * discarded. A recovered buffer comes back with its own id, title and language.
  */
 export function addScratchPane(

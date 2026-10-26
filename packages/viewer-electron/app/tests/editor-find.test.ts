@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * FIND IN TEXT (2026-10-23): ⌘F in an editor opens Viewer's own find over the text's top right, as
+ * Find in text: ⌘F in an editor opens Viewer's own find over the text's top right, as
  * an editor's find widget, in place of CodeMirror's panel (native buttons, a band pushing the text
  * down). It finds as typed, counts, steps, matches case, whole words or patterns, and replaces.
  */

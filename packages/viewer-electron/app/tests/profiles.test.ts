@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * SETTING PROFILES (2026-10-23): named sets of settings applied at once (Focus: no chrome; Present;
+ * Setting profiles: named sets of settings applied at once (Focus: no chrome; Present;
  * Full), left again to what was there before, and saved from the current values. Focus mode is one
  * key: ⇧⌘F.
  */

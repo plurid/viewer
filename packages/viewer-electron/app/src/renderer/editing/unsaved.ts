@@ -121,7 +121,7 @@ export async function confirmClose(ids: readonly string[]): Promise<boolean> {
   return true;
 }
 
-/** Planes' unsaved text dropped without asking, as vim's `:q!` (2026-10-23). Files are not touched:
+/** Planes' unsaved text dropped without asking, as vim's `:q!`. Files are not touched:
  * only text typed and never saved is lost. */
 export async function discardUnsaved(ids: readonly string[]): Promise<void> {
   for (const pane of activeWorkspace().panes.filter((item) => ids.includes(item.id))) {
@@ -143,7 +143,7 @@ export async function saveUnsaved(id: string): Promise<boolean> {
   return save(pane);
 }
 /**
- * Every edited file in the workspace saved, as vim's `:wa` (2026-10-23). A scratch plane has no
+ * Every edited file in the workspace saved, as vim's `:wa`. A scratch plane has no
  * file yet: it is counted, not asked about, as vim leaves a buffer without a name.
  */
 export async function saveAll(): Promise<{ saved: number; failed: number; unnamed: number }> {

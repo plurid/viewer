@@ -188,7 +188,7 @@ export async function newWorkspace(name: string): Promise<void> {
 export function renameWorkspace(name: string): void {
   changeWorkspace((space) => ({ ...space, name }));
 }
-/** A setting of the active workspace's own (2026-10-23); undefined goes back to the general one. */
+/** A setting of the active workspace's own; undefined goes back to the general one. */
 export function setWorkspaceOverride(path: string, value: unknown): void {
   if (!overridable(path)) return;
   changeWorkspace((space) => {
@@ -206,14 +206,14 @@ export function clearWorkspaceOverrides(): void {
     return rest;
   });
 }
-/** The active workspace's tiling (2026-10-23); undefined lets its planes go where they are. */
+/** The active workspace's tiling; undefined lets its planes go where they are. */
 export function setTiling(tiling: Tiling | undefined): void {
   changeWorkspace((space) => {
     const { tiling: _previous, ...rest } = space;
     return tiling?.panes.length ? { ...rest, tiling } : rest;
   });
 }
-/** The active workspace's own space colour; empty goes back to the general one (2026-10-23). */
+/** The active workspace's own space colour; empty goes back to the general one. */
 export function setWorkspaceSpaceColor(color: string): void {
   const chosen = spaceColor(color);
   changeWorkspace((space) => {
@@ -260,7 +260,7 @@ export async function restoreWorkspace(): Promise<void> {
   if (!deleted) return;
   await flushState();
   // A second Undo that began during this flush finds it restored: it restored it again, and the
-  // duplicate workspace ID made every later state save fail (2026-10-20).
+  // duplicate workspace ID made every later state save fail.
   if (
     getState().deletedWorkspace !== deleted ||
     getState().saved.workspaces.some((space) => space.id === deleted.workspace.id)

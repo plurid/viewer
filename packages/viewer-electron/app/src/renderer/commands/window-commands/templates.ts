@@ -44,7 +44,7 @@ async function saveLayouts(layouts: LayoutTemplate[]): Promise<void> {
 export const saveLayoutTemplate = (template: LayoutTemplate) =>
   saveLayouts([...getState().settings.settings.layouts, template]);
 /**
- * LAYOUT TEMPLATES (2026-10-23): Save layout as template… keeps the planes in view and their
+ * Layout templates: Save layout as template… keeps the planes in view and their
  * tiling; Open layout adds them, tiled, to the workspace in view, wherever it is.
  */
 export function templateCommands({

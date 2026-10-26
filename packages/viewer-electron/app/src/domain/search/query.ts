@@ -1,7 +1,7 @@
 import type { FileEntry } from '../contracts';
 
 /**
- * THE FILE QUERY LANGUAGE (2026-10-24): one parser for the folder filter, the search through
+ * The file query language: one parser for the folder filter, the search through
  * subfolders, the index and saved searches. Words are in the name; `"a phrase"` too; and terms say
  * more, as GitHub's and Gmail's search boxes do:
  *
@@ -488,7 +488,7 @@ export function withoutTopWords(query: FileQuery): FileQuery {
   };
 }
 /**
- * A pattern, as a commander selects by one (2026-10-24): globs, each word one and any matching
+ * A pattern, as a commander selects by one: globs, each word one and any matching
  * (`*.md *.txt`, `IMG_????.jpg`), or else a query (`ext:md modified<7d`).
  */
 export function parsePattern(text: string, now = Date.now()): FileQuery {

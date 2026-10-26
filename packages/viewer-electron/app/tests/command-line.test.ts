@@ -1,5 +1,5 @@
 /**
- * THE COMMAND LINE'S LANGUAGE (2026-10-23): lines of steps as vim's ex lines and tmux's commands
+ * THE COMMAND LINE'S LANGUAGE: lines of steps as vim's ex lines and tmux's commands
  * are; verbs by vim's names and tmux's; `set` by fixed setting names.
  */
 import { describe, expect, it } from 'vitest';

@@ -20,7 +20,7 @@ import { KeyCapture } from './KeyCapture';
 import type { SettingsEditor } from './editor';
 
 const keysFrom = (text: string) => text.trim().split(/\s+/).filter(Boolean);
-/** A row's lines as one line: run in turn, as `|` runs them (2026-10-23). */
+/** A row's lines as one line: run in turn, as `|` runs them. */
 const lineText = (commands: readonly string[]) => commands.join(' | ');
 const linesFrom = (text: string) => (text.trim() ? [text.trim()] : []);
 const tableName = (table: string) =>
@@ -64,7 +64,7 @@ function SessionBindings() {
   );
 }
 /**
- * Prefix keys (2026-10-23): the prefix, the leader, and the tables of keys: the prefix's, keys with
+ * Prefix keys: the prefix, the leader, and the tables of keys: the prefix's, keys with
  * no prefix, and modes. Each key is recorded by pressing it; what it runs is a line.
  */
 export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
