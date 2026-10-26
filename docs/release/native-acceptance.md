@@ -1,7 +1,0 @@
-# Native release acceptance
-
-Current qualification requirements are in
-[Native and distribution release gates](../development/releases.md). Previous run narratives remain
-in Git history; generated evidence stays with its run.
-
-[Testing guide](../development/testing.md)
