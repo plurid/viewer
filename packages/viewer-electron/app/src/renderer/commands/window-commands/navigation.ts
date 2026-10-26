@@ -1,6 +1,6 @@
 import { effectiveWindowUI } from '../../state/effective-ui';
 import { changeSetting } from './settings';
-import { activeWorkspace, getState, updatePane } from '../../state/store';
+import { activeWorkspace, changeWorkspace, getState } from '../../state/store';
 import { copyPathCommand } from '../copy-path';
 import type { CommandDefinition } from '../registry';
 import { requestProject, type ProjectCommand } from '../../workspace/projects';
@@ -194,15 +194,21 @@ export function navigationCommands({
       icon: 'sidebar',
       aliases: ['ps', 'sidebar', 'navigation'],
       when: (context) => paneScope(context) && !!context.folder,
-      run: (context) => {
+      run: async (context) => {
         const pane = activeWorkspace().panes.find((pane) => pane.id === context.paneID);
-        if (pane?.type === 'folder')
-          updatePane(pane.id, {
-            sidebar: {
-              visible: pane.sidebar?.visible === false,
-              width: pane.sidebar?.width ?? 210,
-            },
-          });
+        if (pane?.type !== 'folder') return;
+        const owner = activeWorkspace().id;
+        const visible = pane.sidebar?.visible === false;
+        await changeSetting('ui.sidebar.inNewPlanes', visible);
+        if (activeWorkspace().id !== owner) return;
+        changeWorkspace((space) => ({
+          ...space,
+          panes: space.panes.map((pane) =>
+            pane.type === 'folder'
+              ? { ...pane, sidebar: { visible, width: pane.sidebar?.width ?? 210 } }
+              : pane,
+          ),
+        }));
       },
     },
   ];

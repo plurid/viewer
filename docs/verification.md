@@ -1,5 +1,135 @@
 # Verification
 
+## October 26 navigation inheritance and closed diagnostic pipes
+
+The current local candidate is
+`/private/tmp/viewer-reliability-20261026-H/Viewer.app`. Its preserving-build
+record is `out/preserved-package-y94npD/result.json` in the Electron app package;
+build source before/after is
+`ac950e097ef5c7c793544895d3f0c725ffdc60cb39a07dfde861fcb6dcd0020a`.
+The lockfile and helper build input match the G evidence below.
+
+**1,939 tests in 279 files pass**, with fixtures retained and automated removal
+disabled. Four TypeScript targets, full lint and changed-file formatting pass.
+Full-suite evidence: `/private/tmp/viewer-reliability-suite-H-20261026.{log,json}`.
+The complete H packaged smoke also passes: previews, file jobs and Undo, all
+four explorer views, model gesture isolation, IPC/resource boundaries and cold
+workspace restoration. Log: `/private/tmp/viewer-reliability-smoke-H-20261026.log`;
+retained fixture: `viewer-verification-Wo6Zfo`; evidence:
+`out/native-evidence/electron-smoke-2026-10-26T10-47-59-047Z-a4943faa-fab6-4478-a5c4-5e87be45daba`.
+The final source witness matches the build source exactly:
+`/private/tmp/viewer-reliability-final-source-H-20261026.json`. It also records
+the runtime tree, ASAR, executable and signed image-helper hashes.
+
+Hide/Show plane navigation now updates folder panes in the active workspace,
+retains each pane's width and remembers the default for future planes through
+the existing shared/profile-local setting rules. The folder factory and normal
+creation path use the resolved preference; task folder creation no longer
+silently omits it. Native H acceptance verifies two existing panes, a third new
+pane, Show/Hide, cold restart, a fourth new pane and the persisted configuration.
+Evidence: `/private/tmp/viewer-plane-navigation-native-H-20261026.log`, fixture
+`viewer-plane-navigation-acceptance-yCP9h6`. Unit coverage also includes a local
+workspace override. Other existing workspaces are not rewritten.
+
+The preceding manual session exposed an error caused by this investigation:
+the observer was stopped while the test app still inherited its stdout pipe;
+temporary `console.info` shutdown diagnostics then caused an uncaught EPIPE
+dialog. Those diagnostics are removed. GUI stdout/stderr now tolerate only
+closed-pipe/destroyed-stream errors, installed once; other errors retain their
+normal behavior, and MCP stdio is excluded. A real subprocess test first
+reproduces EPIPE without protection, then verifies clean exit with protection.
+Evidence: `/private/tmp/viewer-diagnostic-output-20261026.log`. H was reopened
+with regular diagnostic log files and a detached launcher; the launcher exited
+and the app remained responsive, including opening the note library and review.
+
+The manual note/checklist profile remains retained at
+`viewer-note-trash-operator-WBg1M7`. A separate metadata copy made before the H
+reopen preserves the existing configuration, workspace and note documents;
+no user edits are reset. Permission remains limited to the two original named
+test documents. The operator confirmed the remaining generated note moved to
+Trash on H. Both approved documents are now absent from their source paths,
+the live library and saved open views; the other note document remains. The
+exact Trash destination was not independently inspected. Acceptance report:
+`viewer-note-trash-operator-WBg1M7/operator-result-H.json`. The corrected H app
+is left open, and all other fixtures and builds remain retained.
+
+## October 26 private image decoders, preview workers and task lifecycle
+
+The G Apple Silicon candidate is
+`/private/tmp/viewer-reliability-20261026-G/Viewer.app`. It is a preserving direct
+rebuild from the earlier task-workflow G seed; these are different candidate
+directories. Build evidence is retained in
+`packages/viewer-electron/app/out/preserved-package-gEmvqK/result.json` and
+`/private/tmp/viewer-reliability-package-G-20261026.log`.
+
+- Source before/after build: `fc1d3cfea478502c4c0364eebfc183c1506ec9d1589c7f96dbd12bfc3c5d191f`.
+- Lockfile: `bf1703c1f919ddaefa0e82f08386939e31145b07333bf3f46f107e1b18daee38`.
+- Image-helper build input: `e93de8e377e41b6bbff5d65646c507e74d50c3033565dd96e3efb24edfabf110`.
+- Packaged, signed image helper: `5504c0ee37ab852a200fb23706d607469ee1f0b2b3d38d603b590817efcac8d0`.
+
+The [reliability ledger](reliability-followup.md) records the implementation,
+paired measurements, failure investigations and per-candidate scope. Ordinary
+images and bundle icons use bounded private helpers, SVG uses an isolated
+buffer-only renderer, and OpenEXR uses a descriptor-only bundled decoder. There
+are no remaining `nativeImage.createThumbnailFromPath` calls in the source.
+CSV/TSV and OBJ/STL/PLY work uses owned workers, cancellation and decoded budgets.
+First measurement of a distant culled plane no longer blocks directed framing.
+Browser guests stop after successful saves and before their owning windows quit.
+
+Executed evidence:
+
+- **1,935 tests in 278 files pass**, with real native bindings, fixture
+  preservation and automated removals disabled. Four TypeScript targets, full
+  ESLint and required Prettier pass. The final suite report is
+  `/private/tmp/viewer-reliability-suite-G2-20261026.json`; log
+  `/private/tmp/viewer-reliability-suite-G2-20261026.log`.
+- Complete G packaged smoke passes: previews, file jobs, all four folder views,
+  model gesture isolation, IPC/resource ownership and workspace restoration.
+  Log: `/private/tmp/viewer-reliability-smoke-G-20261026.log`; fixture
+  `viewer-verification-95V6Oe`. The evidence directory is
+  `out/native-evidence/electron-smoke-2026-10-26T10-23-08-037Z-748741e3-6fd2-4b30-a16a-8f582c67f47f`
+  relative to the Electron app package.
+- G multi-tool/cold-restoration acceptance passes in
+  `viewer-native-task-areas-WHXjlU`: receipt visibility, retained private notes
+  and checklist, terminal/server reattachment, actual command output, no replay
+  after restart, explicit server restart/browser rebinding, missing-receipt
+  recovery and graceful quit.
+- G's dedicated browser acceptance passes in `viewer-native-browser-2bZbQz`:
+  real composited pixels, rotated-plane clicks, text and composition input,
+  culling, Back/zoom, bitmap fallback, cookie persistence and clean restart.
+- Native image pixel checks cover fourteen raster formats and bundle icons;
+  C's packaged seven-format test includes SVG, repeated renditions/thumbnail
+  reads and released-child denial. Source digests remain unchanged.
+- B's thirty-cycle preview run verifies worker teardown and records bounded
+  retained-heap observations; its operation-recovery run exercises genuine POSIX
+  refusal, next-job recovery and cold interruption without replay or source loss.
+- Six C table/model captures were inspected in dark, light and narrow layouts;
+  G receipt and multi-tool captures were also inspected. Ten simultaneously
+  tiled tools still produce crowded panels and crossing bridge lines; this is
+  follow-on layout work, not a many-plane usability/performance qualification.
+
+The C/D/E/F failed acceptance profiles, logs and builds are retained. The native
+browser harness now preserves its original failure, and the main lifecycle test
+fixture includes the browser-close port and asserts save/guest/window ordering.
+These two test-only updates follow the G package build and do not change packaged
+code. Their hashes and the final source/package witness are recorded in
+`/private/tmp/viewer-reliability-final-source-G2-20261026.json`:
+final source `26626f1dcb862e437f01958dd0e4beef19d2c42174eff2476abd891fa82279bf`,
+ASAR `1b5a9f0a602a3ac4b1f43449e7058a72e8bd74f57191befaeaf724f56d489672`.
+No product-source change followed that build. Native-test shutdown stage
+messages distinguish successful saves, window closure and service disposal.
+
+At the G cutoff, positive note/checklist OS Trash acceptance was pending the operator's real
+clicks. Permission was granted for exactly the two generated JSON documents in
+`viewer-note-trash-operator-WBg1M7/Profile/notes`; their containing folders and
+all other fixtures remain preserved. Automated tests continue with removal
+disabled. Physical low-space/unplug/provider failures, VRAM/display traces,
+other OS versions, notarization and signed Store acceptance remain separate.
+
+The [file-manager directions](file-manager-directions.md) document is research
+and design only. It does not establish a live `plurid.link` service, domain
+control, uploaded files, link publication or remotely accepted sharing behavior.
+
 ## October 26 task workflows and RAW thumbnail isolation
 
 The validated local Apple Silicon candidate is retained at

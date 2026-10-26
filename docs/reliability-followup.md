@@ -4,13 +4,13 @@ Requested October 26, 2026. Deliver in order; preserve all fixtures, sources,
 profiles and build artifacts. This ledger separates implemented changes,
 executed checks and remaining acceptance.
 
-| Step | Scope | Status |
-| --- | --- | --- |
-| 1 | Replace shared image-thumbnail decoding with bounded private helpers | Passed native pixels and final C packaged acceptance, including SVG |
-| 2 | Measure and reduce CSV/model interface stalls; bound decoded allocations | Implemented; paired A/B renderer measurements passed |
-| 3 | Sustained preview/plane lifecycle, resource ownership and restoration | Thirty preview/resource cycles and worker teardown passed on B; final smoke recorded below |
-| 4 | File-operation failure/recovery acceptance and private-note Trash review | Real permission denial, next-job recovery and cold restart passed on B; positive Trash movement remains unverified |
-| 5 | Reconcile roadmap and bug status with current evidence | Updated roadmap and this ledger; final validation record below |
+| Step | Scope                                                                    | Status                                                                                                            |
+| ---- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| 1    | Replace shared image-thumbnail decoding with bounded private helpers     | Passed native pixels, seven-format C packaged acceptance and complete H smoke, including SVG                      |
+| 2    | Measure and reduce CSV/model interface stalls; bound decoded allocations | Implemented; paired A/B renderer measurements passed                                                              |
+| 3    | Sustained preview/plane lifecycle, resource ownership and restoration    | Thirty cycles/worker teardown passed on B; complete H smoke, G multi-tool restoration and browser acceptance pass |
+| 4    | File-operation failure/recovery acceptance and private-note Trash review | B permission/recovery checks pass; operator confirms H note Trash, both generated documents' library/views clear  |
+| 5    | Reconcile roadmap and bug status with current evidence                   | Updated roadmap and this ledger; final validation record below                                                    |
 
 ## Step 1: private image rendering
 
@@ -47,8 +47,8 @@ Retained logs:
 - `/private/tmp/viewer-image-pixels-native-20261026-C.log`
 - `/private/tmp/viewer-reliability-package-A-20261026.log`
 
-The final local candidate is
-`/private/tmp/viewer-reliability-20261026-C/Viewer.app`. Its image-helper hash is
+The current local candidate is
+`/private/tmp/viewer-reliability-20261026-H/Viewer.app`. Its image-helper hash is
 recorded by the preserving build alongside source/lockfile fingerprints. This
 inherits the prior direct bundle's native dependencies and is not Store or
 distribution qualification. The user's ordinary Viewer instance is untouched.
@@ -121,24 +121,101 @@ The unit suite also covers receipt/disk-full failure, collisions, cancellation
 and interrupted Undo. A physical unplug, provider outage or actual full volume
 has not been tested by this scenario.
 
-**Positive note/checklist Trash movement is not yet accepted.** The repository
-requires fresh permission naming the exact generated JSON files and a real user
-click. Automated checks keep `VIEWER_TEST_NO_REMOVAL=1`; opening/cancelling a
-presenter or using an adapter does not establish OS Trash behavior. No generated
-test file, folder, profile or build has been removed during this follow-up.
+**The operator confirmed the remaining generated note moved to Trash on H.**
+The user approved exactly two generated note documents and clicked the actual
+confirmation; the agent did not confirm removal. Read-only verification finds
+both the note and checklist absent from their source paths, live library and
+saved open views. The other note document remains. The exact Trash destination
+was not independently inspected. The retained acceptance report is
+`viewer-note-trash-operator-WBg1M7/operator-result-H.json` under the macOS test
+root. Automated checks keep `VIEWER_TEST_NO_REMOVAL=1`; all other generated
+files, folders, profiles and builds remain retained.
 
 ## Candidate and combined validation
 
-The C preserving-build result is
-`packages/viewer-electron/app/out/preserved-package-4gtD0C/result.json`:
+The G preserving-build result is
+`packages/viewer-electron/app/out/preserved-package-gEmvqK/result.json`:
 
-- Source before/after build: `658702c66daf80224e4f1032b865d5f33c203f5f718b9f85568ced610b91ce90`.
+- Source before/after build: `fc1d3cfea478502c4c0364eebfc183c1506ec9d1589c7f96dbd12bfc3c5d191f`.
 - Lockfile: `bf1703c1f919ddaefa0e82f08386939e31145b07333bf3f46f107e1b18daee38`.
-- Image helper: `e93de8e377e41b6bbff5d65646c507e74d50c3033565dd96e3efb24edfabf110`.
+- Image-helper build input: `e93de8e377e41b6bbff5d65646c507e74d50c3033565dd96e3efb24edfabf110`.
+- Packaged, signed helper: `5504c0ee37ab852a200fb23706d607469ee1f0b2b3d38d603b590817efcac8d0`.
 
-Four TypeScript targets pass after the final SVG change. The earlier combined
-suite passes 1,929 tests in 277 files; the SVG-focused native run passes eleven
-tests, including existing real image/media conversion. Final complete suite,
-packaged smoke, interface captures and static checks are recorded in
-[verification](verification.md) when finished. The interface detector found no
-mechanical issues; rendered review remains a separate check.
+The G suite passes **1,935 tests in 278 files**. Four TypeScript targets,
+full lint and required formatting pass. The C combined suite passes
+1,931 tests in 277 files; the SVG-focused native run passes eleven tests,
+including existing real image/media conversion. C's complete packaged smoke
+passes. Six C table/model captures were inspected in dark, light and 760 px
+layouts, including filtered and no-result tables. The mechanical detector
+reported no issues. Captures are retained in `viewer-preview-ui-zchtg1`.
+
+### Additional failures found during final task acceptance
+
+C's multi-tool scenario exposed a newly spawned receipt with zero measured
+dimensions beyond the culling distance. Framing waited for measurement while
+culling prevented the first measurement. The adapter now uses the engine's
+public configured-size framing fallback once to reveal that single target,
+then waits for its real box before fitting. It keeps cancellation and the
+bounded frame budget. Two regressions fail before the fix and pass afterward:
+`/private/tmp/viewer-unmeasured-framing-{red,green}-20261026.log`.
+
+D then exposed browser publication after webContents destruction, and a browser
+guest preventing clean application exit. Lifecycle guards and detaching guests
+before destroying them eliminate the destroyed-object error. A minimal F probe
+proved the remaining exit problem: every save/disposal stage completed, but
+Chromium stayed alive unless the guest closed before the owning app window.
+Bitmap and texture modes both reproduced it, so switching transports was not a
+fix. G closes browser guests after all window saves succeed and before Electron
+closes those windows. Browser storage still flushes, and final disposal joins
+the same close promise. Two browser service regressions pass.
+
+The minimal G browser-open/quit probe passes, as does the complete G task-area
+scenario with note/checklist retention, terminal/server reattachment, command
+receipt output, cold restart, no command replay, explicit server restart and
+missing-receipt recovery. Logs:
+
+- `/private/tmp/viewer-browser-lifecycle-{red,green}-20261026.log`
+- `/private/tmp/viewer-browser-quit-probe-F-20261026.log`
+- `/private/tmp/viewer-browser-quit-probe-bitmap-F-20261026.log`
+- `/private/tmp/viewer-browser-quit-probe-close-first-F-20261026.log`
+- `/private/tmp/viewer-browser-quit-probe-G-20261026.log`
+- `/private/tmp/viewer-reliability-task-areas-{C,D,E,G}-20261026.log`
+
+All failed profiles and candidates remain available; none were silently
+discarded. [Verification](verification.md) records the final complete suite,
+packaged smoke and remaining human/physical gates.
+
+The final complete G packaged smoke and dedicated browser scenario pass, logs
+`/private/tmp/viewer-reliability-smoke-G-20261026.log` and
+`/private/tmp/viewer-reliability-browser-G-20261026.log`. The final suite report is
+`/private/tmp/viewer-reliability-suite-G2-20261026.json`. Its preceding run found
+the main lifecycle test fixture lacked the newly used browser-close port;
+updating that fixture also strengthens save-before-guest-before-window ordering
+and verifies failed saves keep guests open. All 26 focused lifecycle/framing
+tests and the subsequent complete suite pass.
+
+### User-reported navigation and diagnostic-pipe follow-up
+
+H additionally fixes navigation visibility not carrying over to new folders or
+task folder views. Hide/Show now applies to folder panes in the active workspace,
+preserves widths and remembers the new-plane default using the existing setting
+scope. New folders read the resolved preference, including workspace overrides.
+A dedicated packaged check passes over existing/new planes and cold restart;
+the H complete suite passes **1,939 tests in 279 files**.
+H's complete packaged smoke, four TypeScript targets, full lint and formatting
+also pass. The source witness matches its build exactly; the smoke log is
+`/private/tmp/viewer-reliability-smoke-H-20261026.log` and the generated fixture
+is retained as `viewer-verification-Wo6Zfo`.
+
+During manual acceptance, stopping the test observer left the app with a closed
+diagnostic pipe. Temporary shutdown logging caused the user's EPIPE alert. This
+was an investigation error, not a successful acceptance: the logging is removed,
+GUI diagnostic streams handle closed pipes, and real disconnected-pipe tests
+verify the behavior. MCP protocol streams keep their normal error handling.
+The corrected H app is open with the existing isolated profile preserved and
+regular log files instead of observer-owned pipes. Opening the remaining
+generated note's review succeeds after its launcher exits. The operator then
+confirmed its Trash action; read-only source, library and saved-view checks
+pass without affecting the other note. No new diagnostic pipe error is logged.
+See the latest [verification entry](verification.md) for H's exact build,
+logs, retained profile and remaining manual acceptance.

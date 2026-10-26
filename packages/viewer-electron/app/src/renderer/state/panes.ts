@@ -1,4 +1,4 @@
-import { effectiveWindowSettings } from './effective-ui';
+import { effectiveWindowSettings, effectiveWindowUI } from './effective-ui';
 // Planes in the active workspace: creation, navigation, history and removal.
 import type {
   FolderPane,
@@ -52,7 +52,12 @@ export const folderPane = (path: string, sidebar?: PaneSidebar): FolderPane => (
   ),
   history: [path],
   historyIndex: 0,
-  sidebar,
+  sidebar: sidebar ?? {
+    visible: getState()
+      ? effectiveWindowUI(getState()).sidebar.inNewPlanes
+      : normalizePreferences().sidebar.inNewPlanes,
+    width: 210,
+  },
 });
 export function setActivePane(id: string): void {
   if (getState().activePane !== id) {
@@ -206,7 +211,7 @@ export function addPane(
   const pane: Pane =
     type === 'folder'
       ? {
-          ...folderPane(path, { visible: getState().saved.ui.sidebar.inNewPlanes, width: 210 }),
+          ...folderPane(path),
           ...options?.folderView,
         }
       : { id: uuid(), type, path, keepSeparate: options?.keepSeparate || undefined };

@@ -8,6 +8,7 @@ import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const native = vi.hoisted(() => ({
   flush: vi.fn<() => Promise<void>>(),
   dispose: vi.fn<() => Promise<void>>(),
+  closeBrowsers: vi.fn<() => Promise<void>>(),
   flushSettings: vi.fn<() => Promise<void>>(),
   bridge: true,
   options: undefined as { openSettings(): Promise<void> } | undefined,
@@ -150,6 +151,7 @@ vi.mock('../src/desktop/bridge', () => ({
     workspaceForWindow = () => undefined;
     createWorkspace = () => 'workspace';
     resources = { response: vi.fn() };
+    browsers = { closeAll: native.closeBrowsers };
     workspaceSessions = {
       snapshot: () => undefined,
       create: () => 'workspace',
@@ -197,6 +199,7 @@ beforeEach(async () => {
   native.bridge = true;
   native.flush.mockReset().mockResolvedValue();
   native.dispose.mockReset().mockResolvedValue();
+  native.closeBrowsers.mockReset().mockResolvedValue();
   native.flushSettings.mockReset().mockResolvedValue();
   native.pending = 0;
   native.drained = Promise.resolve();
@@ -285,15 +288,22 @@ describe('native window and application shutdown', () => {
   it('closes every window before disposing IPC, saves once and refuses reopening during Quit', async () => {
     await native.options!.openSettings();
     const save = gate();
+    const browserStop = gate();
     const disposal = gate();
     native.flush.mockReturnValue(save.promise);
+    native.closeBrowsers.mockReturnValue(browserStop.promise);
     native.dispose.mockReturnValue(disposal.promise);
     application.quit();
     application.quit();
     expect(native.flush).toHaveBeenCalledTimes(1);
     expect(native.bridge).toBe(true);
+    expect(native.closeBrowsers).not.toHaveBeenCalled();
     expect(TestWindow.windows.every((window) => !window.destroyed)).toBe(true);
     save.resolve();
+    await vi.waitFor(() => expect(native.closeBrowsers).toHaveBeenCalledTimes(1));
+    expect(TestWindow.windows.every((window) => !window.destroyed)).toBe(true);
+    expect(native.dispose).not.toHaveBeenCalled();
+    browserStop.resolve();
     await vi.waitFor(() => expect(native.dispose).toHaveBeenCalledTimes(1));
     expect(TestWindow.windows.every((window) => window.destroyed)).toBe(true);
     application.emit('activate');
@@ -380,6 +390,7 @@ describe('native window and application shutdown', () => {
     expect(application.terminated).toBe(false);
     expect(TestWindow.windows[0].destroyed).toBe(false);
     expect(native.dispose).not.toHaveBeenCalled();
+    expect(native.closeBrowsers).not.toHaveBeenCalled();
     native.flush.mockResolvedValue(undefined);
     application.quit();
     await vi.waitFor(() => expect(application.terminated).toBe(true));

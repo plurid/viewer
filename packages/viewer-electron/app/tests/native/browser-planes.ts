@@ -300,6 +300,15 @@ try {
     fallback: 'bitmap pixels passed',
   });
 } catch (error) {
+  await writeFile(
+    path.join(root, 'failure.json'),
+    JSON.stringify(
+      { error: error instanceof Error ? error.stack : String(error), observations },
+      null,
+      2,
+    ),
+    { flag: 'wx' },
+  );
   if (connection)
     console.log(
       'Browser failure surface:',

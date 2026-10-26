@@ -35,6 +35,7 @@ export function frameWorkspace(
   let cancelled = false;
   let previous = '';
   let stable = 0;
+  let revealedUnmeasured = false;
   let remainingFrames = maximumLayoutFrames;
   const cancel = () => {
     cancelled = true;
@@ -102,6 +103,29 @@ export function frameWorkspace(
     ]);
     stable = signature === previous ? stable + 1 : 0;
     previous = signature;
+    if (
+      !revealedUnmeasured &&
+      !options.camera &&
+      resolved &&
+      expected &&
+      viewport &&
+      targets?.length === 1 &&
+      nodes.length === 1 &&
+      stable >= stableLayoutFrames &&
+      (!nodes[0]!.width || !nodes[0]!.height)
+    ) {
+      // A new distant child can be culled before its first measurement. Reveal
+      // it through the engine's configured-size fallback, then wait for its real
+      // box before the final fit. Never invent or persist substitute dimensions.
+      revealedUnmeasured = true;
+      const node = nodes[0]!;
+      if (options.dock) api.camera.dock(node.planeID, { animate: !options.recover });
+      else api.camera.frame({ planeID: node.planeID }, { animate: !options.recover });
+      stable = 0;
+      previous = '';
+      requestAnimationFrame(frame);
+      return;
+    }
     if (!(resolved && expected && measured && viewport && stable >= stableLayoutFrames)) {
       requestAnimationFrame(frame);
       return;

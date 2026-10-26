@@ -1,5 +1,7 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import type { OperationJob, OperationProgress } from '../src/domain/contracts';
+import type { CommandContext } from '../src/renderer/commands/registry';
+import { setWorkspaceOverride } from '../src/renderer/state/workspaces';
 import { stateSchema } from '../src/desktop/persistence/storage';
 import { normalizePreferences, reorder } from '../src/domain/preferences/ui';
 import { CommandRegistry } from '../src/renderer/commands/registry';
@@ -12,6 +14,7 @@ import {
   changePreferences,
   deleteWorkspace,
   flushState,
+  folderPane,
   getState,
   initialize,
   needsOperations,
@@ -353,6 +356,73 @@ describe('layout-only changes', () => {
       sidebar: { visible: true, width: 210 },
     });
     expect(operate).not.toHaveBeenCalled();
+  });
+  it('uses the resolved navigation default for task folders and ordinary new planes', () => {
+    setWorkspaceOverride('ui.sidebar.inNewPlanes', false);
+    expect(getState().saved.ui.sidebar.inNewPlanes).toBe(true);
+    expect(folderPane('/fixtures/task').sidebar?.visible).toBe(false);
+    const next = addPane('/fixtures/next', 'folder', true);
+    expect(next.type === 'folder' && next.sidebar?.visible).toBe(false);
+  });
+  it('remembers Hide/Show navigation for the workspace folders and future planes without changing their widths', async () => {
+    const first = activeWorkspace().panes[0]!;
+    const second = addPane('/fixtures/second', 'folder', true);
+    updatePane(second.id, { sidebar: { visible: true, width: 280 } });
+    const actions = {
+      workspace: {
+        isDocked: () => false,
+        arrangementHistory: () => ({ canUndo: false, canRedo: false }),
+        hasRepeatedPreviews: () => false,
+      },
+      ready: true,
+      tool: null,
+    } as unknown as WindowActions;
+    const toggle = async () => {
+      const folder = activeWorkspace().panes.find((pane) => pane.id === first.id)!;
+      const context = {
+        scope: 'plane',
+        workspaceID: activeWorkspace().id,
+        paneID: folder.id,
+        pane: folder,
+        folder,
+        selection: [],
+        clipboard: null,
+        jobs: [],
+      } as unknown as CommandContext;
+      await windowCommands(actions)
+        .find((command) => command.id === 'plane-sidebar')!
+        .run(context);
+    };
+    await toggle();
+    expect(
+      activeWorkspace()
+        .panes.filter((pane) => pane.type === 'folder')
+        .every((pane) => pane.sidebar?.visible === false),
+    ).toBe(true);
+    expect(getState().saved.ui.sidebar.inNewPlanes).toBe(false);
+    expect(activeWorkspace().panes.find((pane) => pane.id === second.id)).toMatchObject({
+      sidebar: { visible: false, width: 280 },
+    });
+    const future = addPane('/fixtures/future', 'folder', true);
+    expect(future.type === 'folder' && future.sidebar?.visible).toBe(false);
+    await flushState(false);
+    const saved = stateSchema.parse(getState().saved);
+    initialize({
+      home: '/fixtures',
+      platform: 'darwin',
+      state: saved,
+      locations: [],
+      openPaths: [],
+    });
+    const reopened = addPane('/fixtures/reopened', 'folder', true);
+    expect(reopened.type === 'folder' && reopened.sidebar?.visible).toBe(false);
+    await toggle();
+    expect(
+      activeWorkspace()
+        .panes.filter((pane) => pane.type === 'folder')
+        .every((pane) => pane.sidebar?.visible === true),
+    ).toBe(true);
+    expect(getState().saved.ui.sidebar.inNewPlanes).toBe(true);
   });
   it('migrates navigation once across all workspaces, retaining layout and spatial choices', async () => {
     await newWorkspace('Second');

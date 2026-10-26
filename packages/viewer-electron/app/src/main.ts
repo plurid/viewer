@@ -34,6 +34,7 @@ import {
 } from './desktop/windows/window-state';
 import { errorMessage } from './domain/errors';
 import { DiagnosticLog } from './desktop/diagnostics/diagnostics';
+import { protectDiagnosticOutput } from './desktop/diagnostics/output';
 import { applicationCSP } from './desktop/windows/application-csp';
 import { debuggingAllowed } from './desktop/diagnostics/debugging';
 import { HotkeyWindow } from './desktop/windows/hotkey-window';
@@ -48,6 +49,9 @@ import {
   frameNavigationAllowed,
   rendererRequestAllowed,
 } from './desktop/windows/web-content-policy';
+const mcpMode = process.argv.includes('--mcp');
+// Stdio is protocol transport in MCP mode; retain its normal failure behavior.
+if (!mcpMode) protectDiagnosticOutput([process.stdout, process.stderr]);
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -150,7 +154,6 @@ let windowState: WindowState | undefined;
 let settingsWindowState: WindowState | undefined;
 let settingsWindow: BrowserWindow | null = null;
 let settingsClosing: Promise<void> | undefined;
-const mcpMode = process.argv.includes('--mcp');
 let initialLaunch: LaunchRequest | undefined;
 let launchError: string | undefined;
 if (!mcpMode) {
@@ -754,11 +757,15 @@ function beginQuit(): void {
     },
     (error) => saveFailure(error, window ?? undefined, true),
   )
-    .then((saved) => {
+    .then(async (saved) => {
       if (!saved) {
         quitPending = false;
         return;
       }
+      // Offscreen guests must stop while their owning renderer is still alive.
+      // Letting Electron close them with the app windows can leave Chromium's
+      // shutdown waiting even after will-quit and service disposal finish.
+      await desktop?.browsers.closeAll();
       quitting = true;
       closing = true;
       app.quit();

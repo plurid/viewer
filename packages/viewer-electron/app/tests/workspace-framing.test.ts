@@ -122,6 +122,34 @@ function fixture() {
 }
 
 describe('workspace framing ownership and scheduling', () => {
+  it('reveals an unmeasured target so distance culling cannot prevent its first measurement', () => {
+    const view = fixture();
+    const target = view.nodes[1]!;
+    target.width = 0;
+    target.height = 0;
+    view.frame.mockImplementationOnce(() => {
+      // The engine uses configured geometry to reveal the culled plane; its
+      // mounted content can then report the actual dimensions.
+      target.width = 800;
+      target.height = 500;
+    });
+    frameWorkspace(view.engine, view.surface, ['chat']);
+    advance(12);
+    expect(view.frame).toHaveBeenCalledTimes(2);
+    expect(view.frame).toHaveBeenLastCalledWith({ planeID: 'engine-chat' }, { animate: true });
+    expect(frames.size).toBe(0);
+  });
+
+  it('does not repeatedly reveal a target whose content never reports a size', () => {
+    const view = fixture();
+    view.nodes[1]!.width = 0;
+    view.nodes[1]!.height = 0;
+    frameWorkspace(view.engine, view.surface, ['chat']);
+    advance(200);
+    expect(view.frame).toHaveBeenCalledTimes(1);
+    expect(frames.size).toBe(0);
+  });
+
   it('frames the requested plane after a scheduling gap before its first measured frame', () => {
     const view = fixture();
     frameWorkspace(view.engine, view.surface, ['chat']);

@@ -28,6 +28,12 @@ note/checklist OS Trash acceptance still needs exact-path permission and a real
 user click. General AI-guided folder organization remains deferred. Existing
 Chat, recipes and workflows keep their bounded inspection and reviewed proposals.
 
+[Sharing and file-manager directions](file-manager-directions.md) records the
+Loaf/Plurid research and proposed `plurid.link` modes: local reference, immutable
+snapshot and later live sharing. It prioritizes useful recipient previews,
+shareable views, explicit manifests and revocation over adding permanent chrome.
+No hosted sharing implementation or domain availability is established yet.
+
 ## Reliability and acceptance first
 
 The following table defines continuing acceptance criteria. Dated verification

@@ -19,14 +19,22 @@ interface Page {
 export class BrowserPlanes {
   private pages = new Map<string, Page>();
   private configured = false;
+  private closing?: Promise<void>;
   constructor(private owner: (id: number) => BrowserWindow | undefined) {}
   private key(owner: number, id: string) {
     return `${owner}:${id}`;
   }
   private get(owner: number, id: string): Page {
     const page = this.pages.get(this.key(owner, id));
-    if (!page || page.window.isDestroyed()) throw new Error('This browser plane has closed.');
+    if (!page || !this.live(page)) throw new Error('This browser plane has closed.');
     return page;
+  }
+  private live(page: Page): boolean {
+    return (
+      this.pages.get(this.key(page.owner, page.id)) === page &&
+      !page.window.isDestroyed() &&
+      !page.window.webContents.isDestroyed()
+    );
   }
   private snapshot(page: Page): BrowserSnapshot {
     const contents = page.window.webContents;
@@ -44,7 +52,7 @@ export class BrowserPlanes {
   }
   private publish(page: Page) {
     const owner = this.owner(page.owner);
-    if (owner && !owner.isDestroyed() && !page.window.isDestroyed())
+    if (owner && !owner.isDestroyed() && !owner.webContents.isDestroyed() && this.live(page))
       owner.webContents.send('viewer:event', { type: 'browser', browser: this.snapshot(page) });
   }
   private profile() {
@@ -69,6 +77,7 @@ export class BrowserPlanes {
     return profile;
   }
   async request(owner: number, request: BrowserRequest): Promise<BrowserSnapshot | void> {
+    if (this.closing) throw new Error('Browser planes are closing.');
     if (!this.owner(owner) || this.owner(owner)!.isDestroyed())
       throw new Error('The owning Viewer window closed.');
     if (request.kind === 'close') {
@@ -78,12 +87,13 @@ export class BrowserPlanes {
     if (request.kind === 'open') {
       const key = this.key(owner, request.id);
       const current = this.pages.get(key);
-      if (current && !current.window.isDestroyed()) {
+      if (current && this.live(current)) {
         current.visible = true;
         current.window.webContents.startPainting();
         current.window.webContents.invalidate();
         return this.snapshot(current);
       }
+      if (current) this.close(owner, request.id);
       if (this.pages.size >= 8) throw new Error('Close a browser plane before opening another.');
       const texture = request.texture === true && !!sharedTexture;
       const window = new BrowserWindow({
@@ -155,7 +165,13 @@ export class BrowserPlanes {
       contents.on('paint', (event, _dirty, image) => {
         const texture = event.texture;
         const target = this.owner(owner);
-        if (!target || target.isDestroyed() || !page.visible) {
+        if (
+          !target ||
+          target.isDestroyed() ||
+          target.webContents.isDestroyed() ||
+          !this.live(page) ||
+          !page.visible
+        ) {
           texture?.release();
           return;
         }
@@ -204,7 +220,7 @@ export class BrowserPlanes {
           .catch(() => {})
           .finally(() => {
             page.sending = false;
-            if (page.repaint && page.visible && !window.isDestroyed()) {
+            if (page.repaint && page.visible && this.live(page)) {
               page.repaint = false;
               contents.invalidate();
             }
@@ -298,7 +314,7 @@ export class BrowserPlanes {
   private navigate(page: Page, url: string) {
     page.error = undefined;
     void page.window.loadURL(browserAddress(url)).catch((error) => {
-      if (!page.window.isDestroyed()) {
+      if (this.live(page)) {
         page.error = errorMessage(error);
         this.publish(page);
       }
@@ -314,11 +330,17 @@ export class BrowserPlanes {
     for (const page of [...this.pages.values()])
       if (page.owner === owner) this.close(owner, page.id);
   }
-  async closeAll() {
-    if (this.configured) {
-      await this.profile().cookies.flushStore();
-      this.profile().flushStorageData();
-    }
-    for (const page of [...this.pages.values()]) this.close(page.owner, page.id);
+  closeAll(): Promise<void> {
+    if (this.closing) return this.closing;
+    this.closing = Promise.resolve().then(async () => {
+      // Detach before destroy fires guest events, and stop loading/painting before
+      // waiting for Chromium storage. webContents can die before its window.
+      for (const page of [...this.pages.values()]) this.close(page.owner, page.id);
+      if (this.configured) {
+        await this.profile().cookies.flushStore();
+        this.profile().flushStorageData();
+      }
+    });
+    return this.closing;
   }
 }
