@@ -1,5 +1,6 @@
 import type { FileEntry } from '../../domain/contracts';
 import type { PreviewModule } from './contracts';
+import { officeFormats } from '../../domain/previews/documents/layout';
 import { modelFormats } from '../../domain/previews/models/formats';
 import { renderedImageFormats } from '../../domain/previews/images/rendered';
 import { languageExtensions, languageFor } from '../../domain/editing/languages';
@@ -79,8 +80,8 @@ export const previewModules: PreviewModule[] = [
   {
     id: 'office',
     label: 'Office document',
-    formats: ['docx', 'xlsx'],
-    detect: extension(['docx', 'xlsx']),
+    formats: officeFormats,
+    detect: extension(officeFormats),
     load: () => import('./modules/OfficePreview'),
   },
   {

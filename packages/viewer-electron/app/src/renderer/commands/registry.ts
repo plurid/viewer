@@ -1,5 +1,6 @@
 import type { FileEntry, FolderPane, OperationJob, SidebarSection } from '../../domain/contracts';
 import type { IconName } from '../ui/Icon';
+import { typoScore } from '../../domain/search/approximate';
 
 export type CommandScope = 'window' | 'folder' | 'files' | 'preview' | 'sidebar' | 'workspace';
 export interface CommandContext {
@@ -233,7 +234,7 @@ function scoreLabel(label: string, query: string): number {
   let first = -1;
   for (const char of query) {
     position = label.indexOf(char, position + 1);
-    if (position < 0) return 0;
+    if (position < 0) return typoScore(label, query);
     if (first < 0) first = position;
   }
   return 100 - Math.min(90, position - first - query.length + 1);

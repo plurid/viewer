@@ -138,6 +138,16 @@ try {
       code: 'Space',
       windowsVirtualKeyCode: 32,
     });
+    if (file.path.endsWith('.docx')) {
+      await until(
+        () => evaluate<boolean>('!!document.querySelector(".office-mode-bar")'),
+        Boolean,
+        'Office view choices',
+      );
+      await evaluate(
+        '[...document.querySelectorAll(".office-mode-bar button")].find(b=>b.textContent.trim()==="Reading").click()',
+      );
+    }
     try {
       await until(
         () =>

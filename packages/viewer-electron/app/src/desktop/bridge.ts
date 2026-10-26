@@ -83,6 +83,8 @@ import { GitReviews } from './comparison/review';
 import { AgentSessions } from './agents/sessions';
 import { Resources } from './previews/resources';
 import { DerivedPreviews, rawDecoder } from './previews/derived';
+import { officeDecoder } from './previews/office-renderer';
+import { officeRuntimeName } from './previews/office-runtime-manifest';
 import { videoDecoder } from './previews/video-rendition';
 import { officeImageParts } from '../domain/previews/documents/office';
 import { Search } from './search/search';
@@ -410,7 +412,11 @@ export class Desktop {
       64 * 1024 * 1024,
     );
     this.thumbnails = new Thumbnails(derived, images);
-    this.resources = new Resources(access, undefined, 12000, derived, images);
+    const office = new DerivedPreviews(
+      access,
+      officeDecoder(path.join(previewAssets, officeRuntimeName)),
+    );
+    this.resources = new Resources(access, undefined, 12000, derived, images, office);
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
       if (target && !target.isDestroyed())
@@ -2257,6 +2263,7 @@ export class Desktop {
       archiveEntry: (args) => this.resources.archiveEntry(args[0], args[1]),
       imageRendition: (args) => this.resources.rendition(args[0], args[1]),
       videoRendition: ([id, requestID]) => this.resources.videoRendition(id, requestID),
+      officeLayout: ([id, request]) => this.resources.officeLayout(id, request),
       printPDF: async (args) => {
         if (process.platform !== 'darwin') throw new Error('Printing PDFs requires macOS.');
         const file = await this.resources.printableFile(args[0]);

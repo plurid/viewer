@@ -22,6 +22,11 @@ const files = path.join(root, 'Files');
 const profile = path.join(root, 'Profile');
 await Promise.all([mkdir(files), mkdir(profile)]);
 const samples = await localSamples();
+const realPDF = process.env.VIEWER_TEST_REAL_PDF;
+const realVideo = process.env.VIEWER_TEST_REAL_VIDEO;
+const realModel = process.env.VIEWER_TEST_REAL_MODEL;
+const modelName = realModel ? 'Model.glb' : 'Model.obj';
+const videoPosition = realVideo ? 245.125 : 0.125;
 const sample = (format: string) => {
   const value = samples.find((item) => item.formats.includes(format));
   assert.ok(value);
@@ -41,7 +46,9 @@ for (const name of ['Book/first.xhtml', 'Book/second.xhtml']) {
   );
 }
 const fixtures: Record<string, string | Uint8Array> = {
-  'Book.pdf': workbenchPDF(['Generated page one', 'Generated page two', 'Generated page three']),
+  'Book.pdf': realPDF
+    ? await readFile(realPDF)
+    : workbenchPDF(['Generated page one', 'Generated page two', 'Generated page three']),
   'Book.epub': zipSync(epub),
   'Document.docx': officeFixture('word', {
     'word/custom/document.xml':
@@ -63,9 +70,9 @@ const fixtures: Record<string, string | Uint8Array> = {
   'Records.csv':
     'id,name\n' +
     Array.from({ length: 5000 }, (_, index) => `${index},Generated record ${index}`).join('\n'),
-  'Motion.mp4': sample('mp4'),
+  'Motion.mp4': realVideo ? await readFile(realVideo) : sample('mp4'),
   'Tone.wav': sample('wav'),
-  'Model.obj': sample('obj'),
+  [modelName]: realModel ? await readFile(realModel) : sample('obj'),
 };
 const hashes: Record<string, string> = {};
 for (const [name, bytes] of Object.entries(fixtures)) {
@@ -176,6 +183,16 @@ for (let launch = 0; launch < 2; launch += 1) {
         (pane) => pane.type === 'preview' && pane.path === file,
       )!;
       assert.notEqual(pane.id, oldIDs.get(name), 'Reopening creates a fresh plane ID');
+      if (name === 'Document.docx') {
+        await until(
+          () => evaluate<boolean>(`!!${scope(pane.id)}?.querySelector('.office-mode-bar')`),
+          Boolean,
+          'Office view choices',
+        );
+        await evaluate(
+          `[...${scope(pane.id)}.querySelectorAll('.office-mode-bar button')].find(b=>b.textContent.trim()==='Reading').click()`,
+        );
+      }
       await until(
         () => evaluate<boolean>(`!!${scope(pane.id)}?.querySelector(${JSON.stringify(ready)})`),
         Boolean,
@@ -314,15 +331,36 @@ for (let launch = 0; launch < 2; launch += 1) {
     );
     if (launch === 0)
       await evaluate(
-        `(() => { const media = ${scope(media)}.querySelector('video'); media.currentTime = 0.125; })()`,
+        `(() => { const media = ${scope(media)}.querySelector('video'); media.currentTime = ${videoPosition}; })()`,
       );
     else
       await until(
         () => evaluate<number>(`${scope(media)}.querySelector('video').currentTime`),
-        (value) => Math.abs(value - 0.125) < 0.02,
+        (value) => Math.abs(value - videoPosition) < 0.02,
         'Exact fractional media position',
       );
     oldIDs.set('Motion.mp4', media);
+    if (realVideo) {
+      await until(
+        () =>
+          evaluate<boolean>(
+            `${scope(media)}.querySelector('video').readyState>=2&&!${scope(media)}.querySelector('video').seeking`,
+          ),
+        Boolean,
+        'Long movie decoded seek',
+      );
+      const video = await evaluate<{
+        duration: number;
+        width: number;
+        height: number;
+        time: number;
+      }>(
+        `(()=>{const v=${scope(media)}.querySelector('video');return {duration:v.duration,width:v.videoWidth,height:v.videoHeight,time:v.currentTime}})()`,
+      );
+      assert.ok(video.duration > 590);
+      assert.ok(video.width >= 640);
+      observations.push({ launch, name: 'Motion.mp4', ...video });
+    }
     await close(media);
     const audio = await open('Tone.wav', 'audio');
     await until(
@@ -342,7 +380,26 @@ for (let launch = 0; launch < 2; launch += 1) {
       );
     oldIDs.set('Tone.wav', audio);
     await close(audio);
-    const model = await open('Model.obj', '.model-info');
+    const model = await open(modelName, '.model-info');
+    if (realModel)
+      assert.equal(
+        await evaluate<string>(`${scope(model)}.querySelector('.inline-warning')?.textContent||''`),
+        '',
+        'Embedded textures load without missing-asset warnings',
+      );
+    if (realModel && launch === 0) {
+      await evaluate(
+        'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
+      );
+      const screenshot = await command<{ data: string }>('Page.captureScreenshot', {
+        format: 'png',
+      });
+      await writeFile(
+        path.join(root, 'textured-model.png'),
+        Buffer.from(screenshot.data, 'base64'),
+        { flag: 'wx' },
+      );
+    }
     if (launch === 0) {
       const bounds = await evaluate<{ x: number; y: number }>(
         `(() => { const bounds = ${scope(model)}.querySelector('.model-stage canvas').getBoundingClientRect(); return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }; })()`,
@@ -372,10 +429,10 @@ for (let launch = 0; launch < 2; launch += 1) {
     }
     await close(model);
     const camera = (await saved()).previewHistory?.recall?.find(
-      (entry) => entry.path === path.join(files, 'Model.obj'),
+      (entry) => entry.path === path.join(files, modelName),
     )?.values['model.camera'];
     assert.ok(camera, 'Orbit camera retained in file recall');
-    if (launch === 0) observations.push({ name: 'Model.obj', camera });
+    if (launch === 0) observations.push({ name: modelName, camera });
     else
       assert.deepEqual(
         camera,
@@ -385,12 +442,16 @@ for (let launch = 0; launch < 2; launch += 1) {
           }
         ).camera,
       );
-    oldIDs.set('Model.obj', model);
+    oldIDs.set(modelName, model);
     if (launch === 1) passed = true;
   } finally {
     await writeFile(
       path.join(root, `result-${launch}.json`),
-      JSON.stringify({ passed, binary, root, observations }, null, 2),
+      JSON.stringify(
+        { passed, binary: path.basename(binary), fixture: path.basename(root), observations },
+        null,
+        2,
+      ),
       { flag: 'wx' },
     );
     await app.close(connection);

@@ -30,6 +30,7 @@ const recalledKeys = new Set([
   'epub.size',
   'epub.contents',
   'office.formatted',
+  'office.mode',
   'office.sheet',
   'office.rows',
   'text.source',

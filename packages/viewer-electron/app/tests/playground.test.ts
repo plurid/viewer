@@ -146,11 +146,15 @@ describe('stable Viewer playground', () => {
       'cr2',
       'cr3',
       'dng',
+      'doc',
       'nef',
       'ogv',
       'orf',
+      'ppt',
+      'pptx',
       'raf',
       'rw2',
+      'xls',
     ]);
     const main = path.join(directory, 'git/main');
     const feature = path.join(directory, 'git/feature-worktree');

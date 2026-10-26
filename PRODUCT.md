@@ -91,3 +91,15 @@ revision, suggests an editable sibling folder and opens linked checkout/Git
 views. Occupied branches offer their existing checkout. Creation preserves source
 files/index, obeys ordinary repository hooks/filters, and never forces, switches,
 stashes, resets, prunes or removes a checkout. See [Git worktrees](docs/git-worktrees.md).
+
+Office layout previews use a bundled local engine for DOC/DOCX, XLS/XLSX and
+PPT/PPTX. They preserve supported pagination, typography, pictures and charts;
+missing fonts use substitutes. Excel has keyboard worksheet tabs and a searchable
+sheet menu. DOCX Reading and the XLSX stored-value grid remain available alongside
+layout. Source files stay unchanged. See [Office previews](docs/office-previews.md).
+
+Folder search links directly to scoped content results. Search queries can be
+edited in their plane, while content-index grants remain explicit. File and
+command discovery tolerate bounded spelling errors without changing or executing
+the input. A missing preview source identifies the last loaded view, offers
+retry/locate actions, and keeps unsaved drafts when a relocated file opens.

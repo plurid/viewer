@@ -6,9 +6,11 @@ import { modelSamples } from './samples/models';
 import { projectSamples } from './samples/project';
 import { textSamples } from './samples/text';
 import type { RemoteSample, Sample } from './types';
+import { officeLayoutSamples } from './office-layout';
 
 export const remoteSamples: RemoteSample[] = [
   ...cameraRawSamples,
+  ...officeLayoutSamples,
   {
     path: 'previews/video/Big Buck Bunny trailer.ogv',
     formats: ['ogv'],

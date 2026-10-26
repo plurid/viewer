@@ -1,8 +1,67 @@
 # Verification
 
+## October 26 extended reliability and bundled Office candidate
+
+The current candidate is
+`packages/viewer-electron/app/out/followup-office-F/Viewer.app`.
+The preserving build record is `out/preserved-package-WApdfU/result.json`,
+relative to the Electron app, with matching before/after/current source witness:
+`afd6a4172750461feb511ed29c397dd31e5d25f40d9111552b3959774243b97a`.
+The lockfile remains
+`bf1703c1f919ddaefa0e82f08386939e31145b07333bf3f46f107e1b18daee38`.
+
+**1,965 tests pass, four conditional native-binding tests are skipped, and none
+fail**: 288 files pass and three are skipped. Reports are
+`out/followup-suite-F.{log,json}`. All four TypeScript projects, full package
+ESLint, full package formatting and whitespace validation pass. The skipped
+bindings are not claimed as executed.
+
+The complete packaged smoke passes against this candidate: previews, four explorer
+views, file jobs and Undo, gesture isolation, IPC/resource boundaries and workspace
+restoration. Log: `out/packaged-smoke-F.log`; fixture: `viewer-verification-Ga8u3p`.
+Its retained native evidence directory is
+`out/native-evidence/electron-smoke-2026-10-26T15-43-33-445Z-4ed54cc3-106a-4232-80f6-9cb40ca55810`.
+The standalone portable-engine smoke also passes on macOS/arm64 for all six
+formats, including first-page text differences after changing XLS/XLSX sheets.
+Log: `out/office-engine-matrix-local-F.log`; outputs:
+`out/viewer-office-engine-smoke-G8GwEX`. Those renderer inputs and both worksheet
+PDFs remain alongside the generated profile and result.
+
+The packaged search UI probe passes in `viewer-native-search-discovery-P3h0IW`,
+log `out/search-discovery-F2.log`: folder Search contents opens scoped text results,
+selection shows the matching passage, disabling Document text excludes a
+content-only match, and editing the query changes results without stale excerpts.
+Its first attempt used an incomplete synthetic folder state and fell back to
+the default location; that failed fixture/probe is retained. The corrected
+fixture verifies its generated folder before testing search. No product change
+was needed for that setup error.
+
+The 40-cycle packaged audit passes with zero retained model stages/canvases,
+bounded DOM/listener counts and no command replay. Final evidence is
+`viewer-native-mixed-workspaces-QeoCEX`, including raw heaps and `result.json`;
+log `out/mixed-soak-F.log`. The [qualification ledger](workspace-reliability-qualification.md)
+records both diagnosed leaks, the paired negative/positive evidence, real-file
+qualification, recovery and continuous task acceptance. Modest heap growth
+remains explicit; renderer intervals are not physical compositor measurements.
+
+All seven pinned Office references pass native layout/pixel and source-hash
+checks, including actual worksheet-text changes. Larger-file restoration passes
+for a 178-page PDF, ten-minute movie and textured GLB, including a cold restart.
+The GLB regression also verifies that embedded textures load under application
+CSP. Native recovery preserves dirty drafts and retries a restarted same-address
+browser listener. The continuous worktree/task/hunk/test/build/session check
+passes with all files and command receipts retained.
+
+The bundled engine and build resources are shared by macOS, Windows and Linux.
+The executable matrix in `.github/workflows/office-runtime.yml` is included;
+Windows/Linux results remain pending. This local Apple Silicon candidate is not
+a notarized distribution or Store build. Every generated fixture, profile,
+intermediate, failed attempt and build remains preserved; automated removals
+stay disabled.
+
 ## October 26 mixed workspaces, compact headers and file-view recall
 
-The current local candidate is
+The preceding mixed-workspace candidate was
 `/private/tmp/viewer-mixed-20261026-F/Viewer.app`, a preserving JS rebuild from
 the retained reliability H runtime. Its build record is
 `packages/viewer-electron/app/out/preserved-package-HvwjhM/result.json`.
@@ -529,7 +588,7 @@ The complete `pnpm test:desktop` packaged smoke passes, including preview
 rendering/recovery, file jobs and Undo, explorer modes and metadata alignment,
 source anchoring, model gesture isolation, IPC/resource boundaries and workspace
 restoration. Log: `/private/tmp/viewer-spatial-smoke-4.log`. Fixture:
-`/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-3Nmv7R`.
+`<temporary>/viewer-verification-3Nmv7R`.
 Native evidence:
 `app/out/native-evidence/electron-smoke-2026-10-25T13-06-26-814Z-fc9c4de8-3405-4d56-af5a-afb7f8503c6f`.
 
@@ -583,7 +642,7 @@ formats and limits are in [media tools](media-tools.md), and the
 ## October 25 stable playground
 
 `pnpm playground` populated the sibling directory
-`/Users/ly3xqhl8g9/Data/i/theings/sauft/plurid/technologies/tools/viewer-playground`.
+`<user-home>/Data/i/theings/sauft/plurid/technologies/tools/viewer-playground`.
 Its manifest contains **178 catalog samples covering all 141 currently registered
 extensions**, plus conventional filenames and companions. All eight CC0 camera
 RAW files and the attributed OGV trailer match the pinned byte sizes and SHA-256
@@ -646,13 +705,13 @@ independent Clean/2 changes headers, a second view of the same checkout, an
 editable linked working-file comparison, and cold restoration of all three
 folder views and the comparison. Main-file contents, both index hashes and
 shared refs remain unchanged. Fixture and screenshots:
-`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-worktrees-C93gTj`.
+`<temporary>/viewer-native-worktrees-C93gTj`.
 The driver and result are retained beside the candidate report.
 
 The full default packaged desktop smoke also passes and quits cleanly. It covers
 previews, jobs/Undo, all explorer views, model gestures, IPC/resource boundaries
 and workspace restoration. `smoke.log` retains the result. Fixture:
-`/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-P0Gb8n`.
+`<temporary>/viewer-verification-P0Gb8n`.
 Native evidence is retained under
 `packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T08-16-08-540Z-b2d98dce-fb66-4b3e-8918-03caff634af9`.
 
@@ -697,14 +756,14 @@ services: file copy, hardened read-only Git status, local-server lifecycle,
 rejected model request without provider traffic, paused unread activity, private
 export preview, captured source/trace IDs and cold restoration. Reopening retains
 filters and history without replaying file jobs, Git or servers. Native fixture:
-`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-journal-ADWnyA`.
+`<temporary>/viewer-native-journal-ADWnyA`.
 Its `Screenshots` folder holds normal dark/light and narrow dark renders. The
 driver and result are also retained beside `verification.json`.
 
 The complete default packaged desktop smoke passes and quits cleanly, covering
 previews, file jobs/Undo, explorer views, model gestures, IPC/resource confinement
 and workspace restoration. `smoke.log` retains the outcome; fixture:
-`/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-cnNDOd`.
+`<temporary>/viewer-verification-cnNDOd`.
 The fresh interface review returned **ship**, with no material fixes; the design
 detector returned `[]`. The Journal section of `DESIGN.md` records the inherited
 surface and responsive inspector behavior.
@@ -807,7 +866,7 @@ PDF text/OCR, reviewed rename/Undo, indexed search, independent root/preview
 ownership, actual minimap hit testing, file jobs, all four explorer views, model
 gesture isolation, resource/IPC confinement, workspace restoration and clean
 Quit. Adjacent `smoke.log` records the result. Fixture:
-`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-kWRZQB`.
+`<temporary>/viewer-verification-kWRZQB`.
 Native captures and owned-process evidence:
 `packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T04-25-33-603Z-e16888a4-a179-48eb-954c-e22aab200f83`.
 
@@ -816,7 +875,7 @@ and other model previews, measurement, path clipboard restoration, additive
 recents and Settings in both appearances and normal/minimum sizes. Requested
 agent folders wrap within their row and remain pending. Adjacent
 `refinements.log` records the result. Fixture:
-`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-0ZAdIZ`.
+`<temporary>/viewer-verification-0ZAdIZ`.
 Native evidence:
 `packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T04-29-03-022Z-d1101237-aa3b-44eb-8fb4-31755ef6e41e`.
 
@@ -832,7 +891,7 @@ actions/Undo, independent preview revocation and permission recovery pass on the
 ordinary direct runtime. The unreadable PDF stays outside the browsed fixture
 tree and is retained after its mode is restored. Adjacent
 `store-file-services.log` records the result. Fixture:
-`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-verification-uhT2Hd`.
+`<temporary>/viewer-verification-uhT2Hd`.
 Native evidence:
 `packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-25T04-32-55-559Z-4d92fa5c-245d-4908-af35-34ab56d972a0`.
 This is reader-strategy evidence rather than a signed App Sandbox pass.
@@ -866,7 +925,7 @@ a scheduler pause before useful layout measurements arrived. A controlled
 offscreen Chat/Send failure. Five later snapshots retained the same idle camera,
 offscreen control and zero wrapper scroll offsets, ruling out an early snapshot
 or scrolled engine wrapper in that reproduction. The failed run remains at
-`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-ePFDwF/result.json`.
+`<temporary>/viewer-native-git-actions-ePFDwF/result.json`.
 
 Four regression cases failed before the source correction: delayed scheduling,
 resize replacing a pending destination, failed framing resurrecting the preceding
@@ -881,13 +940,13 @@ engine still performs projection and camera transitions. See
   throttling**, concurrently with the foreground spatial resize/drag scenario.
   Chat is framed inside the viewport and Send is the actual hit target at
   1280×900 and 780×560. Result:
-  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-ln2Tli/result.json`.
+  `<temporary>/viewer-native-git-actions-ln2Tli/result.json`.
 - A separate **2.5-second pause** also passes at both sizes. Result:
-  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-ycjVsL/result.json`.
+  `<temporary>/viewer-native-git-actions-ycjVsL/result.json`.
 - The concurrent spatial scenario passes native resize, plane drag, cube
   conceal/hover and compact layout, with zero failures among 894 exposed-floor
   samples. Result:
-  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-spatial-surface-5wVYDS/result.json`.
+  `<temporary>/viewer-native-spatial-surface-5wVYDS/result.json`.
 
 These scenarios use generated profiles and files, make no model requests and
 retain their evidence. The concurrency baseline originally passed; the controlled
@@ -901,7 +960,7 @@ folder** in the three native dialogs. `tests/native/agent-consent.ts --interacti
 records those production Settings-origin outcomes; stdin only starts a scenario.
 No native approval was simulated. The test profile and all generated files remain
 at
-`/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-agent-consent-z6S1WH`.
+`<temporary>/viewer-native-agent-consent-z6S1WH`.
 Its `result.json` records eight passing checks:
 
 1. Editable configuration requested access but could not authorize it; a
@@ -978,7 +1037,7 @@ Blur and opaque window options retain their existing shadow behavior.
   verifies zero on-screen fixture windows while hidden and their return on show.
   This is a source-bound ordinary Electron fixture, separately from the packaged
   operator acceptance. Result:
-  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-clear-backdrop-obLdym/result.json`.
+  `<temporary>/viewer-native-clear-backdrop-obLdym/result.json`.
 - **26 focused tests pass**, as do all four TypeScript targets, scoped ESLint,
   Prettier, whitespace checks, ordinary packaging and strict/deep signature
   verification. Logs use `/private/tmp/viewer-clear-shadow-` with `regressions`,
@@ -986,7 +1045,7 @@ Blur and opaque window options retain their existing shadow behavior.
 - The packaged spatial regression passes on these exact bytes: real resize and
   plane movement, native cube conceal/hover, compact layout and uniform exposed
   floor samples. Result:
-  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-spatial-surface-VdwzRM/result.json`.
+  `<temporary>/viewer-native-spatial-surface-VdwzRM/result.json`.
 
 WebContents screenshots alone did not expose the native shadow cache. Physical
 operator acceptance establishes the reported visual correction; other OS/channel
@@ -1025,12 +1084,12 @@ protected controls is temporarily suppressed without relocating it.
   All six snapshots retain the engine's anchors, keep the cube visible, and have
   zero mismatches among 894 exposed-floor samples at the selected 60% opacity.
   Result:
-  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-spatial-surface-7qaqC5/result.json`.
+  `<temporary>/viewer-native-spatial-surface-7qaqC5/result.json`.
 - The isolated packaged Chat/palette scenario passes again: the real Send hit
   target is unobstructed at 1280×900 and 780×560; no provider request is sent.
   Clear recent, concise help and the retained Overview command also pass.
   Result:
-  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-hDA5bx/result.json`.
+  `<temporary>/viewer-native-git-actions-hDA5bx/result.json`.
 
 An earlier concurrent Chat run on the intermediate cube candidate failed with the
 Chat plane offscreen, not with an overlay intercepting Send. Its isolated rerun
@@ -1068,7 +1127,7 @@ The adjacent `candidate.json` records source/lockfile hashes. Ordinary
   bytes: real status/history output, commit-form cancellation, five dormant
   results without replay, linked-result closing to the parent, and unchanged
   generated repository state. Result:
-  `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-git-actions-yBJx3a/result.json`.
+  `<temporary>/viewer-native-git-actions-yBJx3a/result.json`.
 - At 1280×900 and 780×560, Chat uses the interface font and themed text field,
   keeps its 8px action gap, and exposes an unobstructed Send hit target. Native
   diagnostics identified the original occluder as the engine's Viewcube face.
@@ -1197,9 +1256,9 @@ exception in `AGENTS.md`.
 | Ordinary install and package     | Fresh source/store installation and direct packaging pass; the approved replacement of the checkout's stale dependency folders also restores ordinary `pnpm install --frozen-lockfile` and `pnpm package`, without disabling metadata verification; `/private/tmp/viewer-repro-20261024-843u71fq/final-install.log`, `/private/tmp/viewer-repro-20261024-843u71fq/final-package.log`, `/private/tmp/viewer-package-native-final.log` |
 | Published Plurid provenance      | All ten installed packages match registry integrity and distribution bytes, with data `0.0.0-28` and React `0.0.0-42`; `/private/tmp/viewer-repro-20261024-843u71fq/final-plurid-check.log`                                                                                                                                                                                                                                          |
 | Complete packaged smoke          | Explorer views, previews, operations and guarded Undo, resource boundaries, independent roots, Settings, workspace restoration and native shutdown pass; `/private/tmp/viewer-native-full-final.log`; captures in `packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-24T08-55-35-656Z-5587d5d9-438f-4ed1-ac98-4d4a85c27347`                                                                                    |
-| HTML and local-server acceptance | The supplied `/Users/ly3xqhl8g9/Downloads/index.html` renders without modification; local assets/scripts and Source work. Opaque sandbox isolation, blocked cross-capability/network access, the actual linked Start command, request logs/filter/clear, Stop/Restart and plane-close shutdown pass; `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-web-oKBTxV/result.json`                                 |
+| HTML and local-server acceptance | The supplied `<user-home>/Downloads/index.html` renders without modification; local assets/scripts and Source work. Opaque sandbox isolation, blocked cross-capability/network access, the actual linked Start command, request logs/filter/clear, Stop/Restart and plane-close shutdown pass; `<temporary>/viewer-native-web-oKBTxV/result.json`                                 |
 | Compact error layout             | At 780×560, a real missing-file notice begins below the workspace; the docked preview's external-app footer button remains visible and hit-testable. The HTML/server result above retains measurements and screenshots.                                                                                                                                                                                                              |
-| Native window recovery           | Real owned windows pass repeated controller show/hide/show, minimized/app-hide recovery and independent window dispatch; `/private/tmp/viewer-native-hotkey-final.log` and `/private/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/viewer-native-hotkey-HzML8O/result.json`. This does not simulate or establish physical shortcut acceptance.                                                                                     |
+| Native window recovery           | Real owned windows pass repeated controller show/hide/show, minimized/app-hide recovery and independent window dispatch; `/private/tmp/viewer-native-hotkey-final.log` and `<temporary>/viewer-native-hotkey-HzML8O/result.json`. This does not simulate or establish physical shortcut acceptance.                                                                                     |
 | Foreground timing                | Matching harness and display conditions, five samples per workload: median menu p95 9.3→8.4ms; camera p95 8.5→8.5ms; no observed long tasks. See [performance](performance.md) for raw evidence and limitations.                                                                                                                                                                                                                     |
 
 The direct candidate is
@@ -1353,8 +1412,8 @@ errors. Registry guard regressions cover stale transitive versions, source-sync 
 linked installation roots, unstamped overlays, retained chunks and corrupt tarball integrity.
 
 The release dry run preserved tracked files and git status. The local packed-consumer work is retained
-at `/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/plurid-smoke-jAUnUd`; its supplied tarballs are
-at `/var/folders/nq/spvmjp8n4w923_2t1nj63l6r0000gn/T/plurid-prepared-tarballs-28U87K`. These came
+at `<temporary>/plurid-smoke-jAUnUd`; its supplied tarballs are
+at `<temporary>/plurid-prepared-tarballs-28U87K`. These came
 from the preserving development build. They establish consumer compatibility, not the final clean
 snapshot release manifest. The explicit release pipeline must run against the committed preparation;
 its CI gate includes the pinned Linux visual job.

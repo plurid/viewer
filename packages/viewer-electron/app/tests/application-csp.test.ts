@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { applicationCSP } from '../src/desktop/windows/application-csp';
 
 describe('application content security policy', () => {
+  it('decodes embedded model texture bytes without admitting remote connections or scripts', () => {
+    const directives = applicationCSP('/index.html').split('; ');
+    const connect = directives.find((value) => value.startsWith('connect-src '))!;
+    expect(connect).toContain('blob:');
+    expect(connect).toContain('data:');
+    expect(connect).not.toContain('http:');
+    expect(connect).not.toContain('https:');
+    expect(directives.find((value) => value.startsWith('script-src '))).not.toContain('blob:');
+  });
   it('allows OCCT dynamic bindings only in its disposable CAD worker', () => {
     const policy = applicationCSP('/assets/cad.worker-CF_27-a.js');
     expect(policy).toContain("script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'");

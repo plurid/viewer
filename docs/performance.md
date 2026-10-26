@@ -1,5 +1,37 @@
 # Performance analysis
 
+## October 26 extended resource audit and Office layout
+
+The later [reliability qualification](workspace-reliability-qualification.md)
+repeats the 20-plane workload for 40 close/reopen cycles and retains heap snapshots.
+The baseline grows from 4,048 to 11,302 DOM nodes and 4,086 to 21,753 listeners.
+Retaining paths identify two independent Three.js ownership problems: detached
+OrbitControls roots and a shared lighting texture retaining WebGL contexts.
+Layout-effect teardown and renderer-owned lookup textures fix both paths.
+
+The final Office candidate, `out/followup-office-F/Viewer.app` relative to the
+Electron app, passes all 40 cycles in `viewer-native-mixed-workspaces-QeoCEX`.
+The first/twentieth/fortieth reopened groups contain 3,735 / 3,733 / 3,733 DOM
+nodes and 3,264 / 3,260 / 3,622 listeners. Final heap analysis finds zero detached
+model stages or model canvases and six WebGL context nodes. Post-GC heap is
+25.17 / 30.36 / 32.14 MiB. Heap still grows modestly; the bounded DOM/listener
+counts and eliminated model retaining paths do not prove every cache is stable
+indefinitely. The earlier paired B run is stable at 30.87 / 30.92 MiB between its
+twentieth and fortieth groups.
+
+The final navigation sample has no observed long tasks and 16.7 ms frame p95.
+These are hidden-window renderer intervals, not physical display/compositor FPS.
+Heap snapshots perturb process RSS substantially; summed descendant RSS includes
+shared pages and does not establish unique memory or private GPU allocation.
+Browser guests and both owned shells terminate with their views and reopen
+without replaying commands. All raw snapshots and failed attempts remain.
+
+Seven real Office references reach qualified page pixels in 2.76–3.60 seconds
+from the post-launch connection checkpoint. Warm cached-resource reads take
+0.9–1.3 ms, excluding PDF parsing/painting. Each uncached layout owns one sandbox;
+conversion is serial, cancellable, time-limited and source-version cached.
+See [Office previews](office-previews.md) for the engine and its bounded limits.
+
 ## October 26 mixed workspaces
 
 The [mixed-workspace follow-up](mixed-workspace-followup.md) adds a retained

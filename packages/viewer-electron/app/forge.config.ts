@@ -53,6 +53,7 @@ const config: ForgeConfig = {
     asar: { unpack: '**/{node-pty,@napi-rs}/**' },
     extraResource: [
       'assets/licenses',
+      'assets/viewer-office-v1',
       ...(process.platform === 'darwin'
         ? [
             `assets/viewer-processors-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,

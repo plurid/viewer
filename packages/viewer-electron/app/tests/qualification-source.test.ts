@@ -23,6 +23,11 @@ async function fixture() {
     'assets/vendor/ssf-0.11.2.mjs',
     'assets/vendor/ssf-0.11.2.d.mts',
     'assets/vendor/ssf-0.11.2.json',
+    'assets/vendor/zetajs-1.2.0/zeta.js',
+    'assets/vendor/zetajs-1.2.0/zetaHelper.js',
+    'assets/licenses/zetajs-1.2.0.txt',
+    'assets/licenses/libreoffice-mpl-2.0.txt',
+    'assets/licenses/libreoffice-24.2-notices.xml',
   ];
   for (const file of files) {
     const destination = path.join(appRoot, file);

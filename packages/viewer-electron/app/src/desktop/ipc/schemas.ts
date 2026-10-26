@@ -1,6 +1,7 @@
 /** Argument schemas for every IPC method. The bridge validates each call against these
  * before it reaches a handler, and `ApiCall` carries the inferred argument types. */
 import { z } from 'zod';
+import { officeLayoutRequestSchema } from '../../domain/previews/documents/layout';
 import type { ApiMethod, DesktopEvent, ViewerAPI } from '../../domain/contracts';
 import { paneTypes } from '../../domain/contracts';
 import { modelDataLevels } from '../../domain/models/permissions';
@@ -730,6 +731,7 @@ export const schemas = {
       .optional(),
   ]),
   videoRendition: z.tuple([id, id]),
+  officeLayout: z.tuple([id, officeLayoutRequestSchema]),
   officeImage: z.tuple([
     id,
     z
@@ -938,6 +940,7 @@ export const methodWindows = {
   archiveEntry: 'viewer',
   imageRendition: 'viewer',
   videoRendition: 'viewer',
+  officeLayout: 'viewer',
   officeImage: 'viewer',
   printPDF: 'viewer',
   save: 'viewer',

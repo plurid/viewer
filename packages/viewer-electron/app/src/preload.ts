@@ -172,6 +172,7 @@ const api: ViewerAPI = {
   archiveEntry: (id, name) => invoke('archiveEntry', id, name),
   imageRendition: (id, request) => invoke('imageRendition', id, request),
   videoRendition: (id, requestID) => invoke('videoRendition', id, requestID),
+  officeLayout: (id, request) => invoke('officeLayout', id, request),
   officeImage: (id, part, requestID) => invoke('officeImage', id, part, requestID),
   printPDF: (id, password) => invoke('printPDF', id, password),
   save: (state) => invoke('save', state),

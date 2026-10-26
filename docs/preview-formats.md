@@ -50,8 +50,9 @@ records these distinctions, including file packages and directory-backed sources
 | PDF              | `.pdf`                                                                     | Pages, text-layer search/selection, thumbnails and outline navigation.                          |
 | Books            | `.epub`                                                                    | Chapter navigation and rendered book content.                                                   |
 | DjVu             | `.djvu`, `.djv`                                                            | Page rendering and text-layer search.                                                           |
-| Word             | `.docx`                                                                    | Read-only paragraphs, supported headings and simple tables.                                     |
-| Excel            | `.xlsx`                                                                    | Read-only worksheets, stored cell values and saved-formula inspection.                          |
+| Word             | `.doc`, `.docx`                                                            | Local paginated layout; DOCX also has bounded Reading view.                                     |
+| Excel            | `.xls`, `.xlsx`                                                            | Local print layout with worksheet navigation; XLSX also has stored-value cell inspection.       |
+| PowerPoint       | `.ppt`, `.pptx`                                                            | Local slide layout, including supported charts, pictures and backgrounds.                       |
 | Markdown         | `.md`, `.markdown`, `.mdx`                                                 | Rendered Markdown and source; MDX components do not execute.                                    |
 | Web documents    | `.html`, `.htm`, `.xhtml`                                                  | Sandboxed rendered preview and editable source.                                                 |
 | Structured data  | `.json`, `.jsonc`, `.json5`, `.yaml`, `.yml`                               | Searchable expandable tree and source, with bounded aliases and copy controls.                  |
@@ -151,8 +152,8 @@ readable.
 
 | Family                          | Extensions                                                                                | Proposed preview                                                                                           |
 | ------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Presentations                   | `.pptx`, `.ppt`, `.odp`                                                                   | Slides, thumbnails, text search and speaker notes.                                                         |
-| Other Office/ODF/rich text      | `.odt`, `.ods`, `.rtf`, `.doc`, `.xls`                                                    | Formatted documents and spreadsheet worksheets.                                                            |
+| OpenDocument presentations      | `.odp`                                                                                   | Slide layout; speaker notes and richer slide controls for existing PPT/PPTX previews.                      |
+| Other Office/ODF/rich text      | `.odt`, `.ods`, `.rtf`                                                                   | Formatted documents and spreadsheet worksheets.                                                            |
 | Apple iWork                     | `.pages`, `.numbers`, `.key`                                                              | Document, sheet and slide previews, with a clearly identified native rendering fallback where appropriate. |
 | Additional archives/compression | `.7z`, `.rar`, `.tar.xz`, `.tar.bz2`, `.tar.zst`; standalone `.gz`, `.bz2`, `.xz`, `.zst` | Browse supported contents or inspect decompressed data, with bounded nested previews.                      |
 | Databases                       | `.sqlite`, `.sqlite3`, `.db`, `.duckdb`                                                   | Schema, tables, filters and local read-only queries.                                                       |
@@ -207,7 +208,8 @@ assign one reader solely from an extension.
 
 For broad file-manager coverage:
 
-1. PPTX, ODF and RTF, followed by other legacy Office formats and iWork fallbacks.
+1. ODF and RTF, followed by remaining Office variants and iWork fallbacks. DOC/DOCX,
+   XLS/XLSX and PPT/PPTX now have bundled layout previews.
 2. Additional archives and compressed streams.
 3. Font specimens and metadata.
 4. Notebook cells and saved outputs.

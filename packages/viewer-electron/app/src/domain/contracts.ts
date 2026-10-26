@@ -11,6 +11,8 @@ import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
 import type { TransformPlan } from './operations/transforms';
 import type { WorksheetDocumentRequest } from './previews/documents/office';
 import type { ImageRenditionRequest } from './previews/images/rendered';
+import type { PreviewDerivationKind } from './previews/derivations';
+import type { OfficeLayoutMetadata, OfficeLayoutRequest } from './previews/documents/layout';
 import type { PreviewHistory } from './previews/history';
 import type { MediaRequest, MediaReply } from './media/documents';
 import type { BrowserRequest, BrowserSnapshot } from './previews/browser';
@@ -520,7 +522,8 @@ export interface SearchBatch {
   truncated: boolean;
 }
 export interface Resource {
-  derivation?: { kind: 'camera' | 'raw' | 'video' | 'image'; decoder: string };
+  office?: OfficeLayoutMetadata;
+  derivation?: { kind: PreviewDerivationKind; decoder: string };
   dimensions?: { width: number; height: number };
   id: string;
   url: string;
@@ -766,6 +769,7 @@ export interface ViewerAPI {
   /** A system-rendered image of a granted file Chromium cannot decode. */
   imageRendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
   videoRendition(id: string, requestID: string): Promise<Resource>;
+  officeLayout(id: string, request: OfficeLayoutRequest): Promise<Resource>;
   officeImage(id: string, part: string, requestID: string): Promise<Resource>;
   /** Opens the system print sheet for a previewed PDF stored as a file. */
   printPDF(id: string, password?: string): Promise<void>;

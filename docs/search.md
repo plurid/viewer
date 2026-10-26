@@ -1,5 +1,18 @@
 # Indexed search
 
+Folder search also offers **Search contents** for the current query/scope.
+The resulting search plane has an editable query and Document text toggle, and
+links directly to Search settings when its location lacks text-index coverage.
+These controls do not grant indexing permission or scan document bodies by
+themselves. Exact content matches retain their source excerpts and anchors.
+
+The file finder and command palette rank adjacent transpositions and bounded
+word typos below exact, prefix and subsequence matches. `git iint` can discover
+Git init without altering the input or executing a correction. Command-line
+did-you-mean uses the same bounded distance function. Literal folder filters and
+indexed content queries retain their query-language meaning. Query/root changes
+withhold previous results and evidence until the new response arrives.
+
 The desktop runs SQLite FTS5 in a utility process (a worker thread in the Mac App Store build). Filename, path, extension, kind, size and modification time are stored locally. Filename indexing starts at Home by default; Settings → Search controls locations, exclusions, pause and rebuild. Verification replaces Home with a generated fixture folder.
 
 Command-F starts at the active folder. Subfolder search uses the background index when that location is indexed; unindexed folders retain streamed filesystem search. **All indexed locations** searches configured roots. **Document text** includes extracted text from explicitly granted locations. Search results are bounded to 150 per page, with at most 500 through the desktop query API.

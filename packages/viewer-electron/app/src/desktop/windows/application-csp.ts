@@ -7,7 +7,9 @@ export function applicationCSP(pathname: string, development = false): string {
     (development && pathname === '/src/renderer/previews/model/cad.worker.ts')
   )
     return "default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'self'; worker-src 'none'; object-src 'none'; base-uri 'none'";
-  const connections = ["'self'", 'viewer-resource:'];
+  // ImageBitmapLoader fetches embedded glTF images through owned blob/data URLs.
+  // These grant no filesystem or network authority and do not enable script evaluation.
+  const connections = ["'self'", 'viewer-resource:', 'blob:', 'data:'];
   if (development)
     connections.push(
       'ws://127.0.0.1:*',

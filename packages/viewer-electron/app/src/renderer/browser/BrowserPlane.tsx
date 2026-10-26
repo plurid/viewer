@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { BrowserPane as Pane } from '../../domain/contracts';
 import type { BrowserRequest, BrowserSnapshot } from '../../domain/previews/browser';
 import { browserAddress } from '../../domain/previews/browser';
@@ -8,6 +8,7 @@ import { activeWorkspace, getState, updatePane } from '../state/store';
 import { localServerSessions } from '../local-servers/runtime';
 import { browserFrames } from './frames';
 import { connectBrowsers } from './runtime';
+import { WorkspaceContext } from '../workspace/context';
 import './browser.css';
 
 const modifiers = (event: {
@@ -21,6 +22,7 @@ const modifiers = (event: {
   (event.metaKey ? 4 : 0) |
   (event.shiftKey ? 8 : 0);
 export default function BrowserPlane({ pane, active }: { pane: Pane; active: boolean }) {
+  const workspace = useContext(WorkspaceContext);
   const surface = useRef<HTMLDivElement>(null),
     canvas = useRef<HTMLCanvasElement>(null),
     input = useRef<HTMLTextAreaElement>(null),
@@ -35,7 +37,9 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
   const click = useRef({ time: 0, x: 0, y: 0, button: -1, count: 0 });
   const sessions = localServerSessions();
   useSyncExternalStore(sessions.subscribeAll, sessions.generation);
-  const server = pane.serverRuntimeID ? sessions.snapshot(pane.serverRuntimeID).server : undefined;
+  const serverSnapshot = pane.serverRuntimeID ? sessions.snapshot(pane.serverRuntimeID) : undefined;
+  const server = serverSnapshot?.server;
+  const previousServer = useRef<{ state: string; url: string } | undefined>(undefined);
   const command = (request: BrowserRequest) =>
     window.viewer.browser(request).catch((error) => {
       setProblem(String(error.message || error));
@@ -52,6 +56,7 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
     const accept = (value: BrowserSnapshot) => {
       if (!live) return;
       setSnapshot(value);
+      if (!value.error && !value.loading) setProblem('');
       if (!/^https?:/.test(value.url)) return;
       setURL(value.url);
       const current = activeWorkspace(getState()).panes.find((item) => item.id === pane.id);
@@ -122,9 +127,11 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
     };
   }, [pane.id, active]);
   useEffect(() => {
+    const previous = previousServer.current;
+    if (server) previousServer.current = { state: server.state, url: server.url };
     if (!server || server.state !== 'running') return;
     const destination = new URL(pane.serverPath || '/', server.url).href;
-    if (destination !== pane.url)
+    if (destination !== pane.url || (previous && previous.state !== 'running'))
       void opening.current?.then(() =>
         command({ kind: 'navigate', id: pane.id, url: destination }),
       );
@@ -186,6 +193,26 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
           onClick={() => action('external')}
         />
       </form>
+      {server && server.state !== 'running' && pane.serverRuntimeID && (
+        <div className="browser-error" role="status">
+          <span>The local server is stopped.</span>
+          <button
+            disabled={!!serverSnapshot?.pending}
+            onClick={() => {
+              void sessions
+                .action(pane.serverRuntimeID!, 'restart')
+                .catch((error) => setProblem(String(error.message || error)));
+            }}
+          >
+            Start server
+          </button>
+          {workspace && (
+            <button onClick={() => workspace.openServer(pane.serverRuntimeID!)}>
+              Server details
+            </button>
+          )}
+        </div>
+      )}
       {(problem || snapshot?.error) && (
         <div className="browser-error" role="alert">
           {problem || snapshot?.error}{' '}

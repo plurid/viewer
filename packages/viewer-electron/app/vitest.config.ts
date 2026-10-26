@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
+import { threeRendererOwnership } from './tools/three-renderer.ts';
 export default defineConfig({
+  plugins: [threeRendererOwnership()],
   test: {
     include: ['tests/**/*.test.{ts,tsx}'],
     environment: 'node',

@@ -14,7 +14,14 @@ import { effectiveWindowLook, effectiveWindowSettings } from '../state/effective
 import type { FileEntry, Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files/entries';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
-import { activeWorkspace, getState, quickPreview, report, useViewer } from '../state/store';
+import {
+  activeWorkspace,
+  getState,
+  quickPreview,
+  report,
+  useViewer,
+  updatePane,
+} from '../state/store';
 import { useCommands } from '../commands/context';
 import { usePreviewControlsSlot } from './controls';
 import type { PreviewContext, PreviewModule } from './contracts';
@@ -30,6 +37,7 @@ import {
 import { parentPath } from '../../domain/workspaces/planes';
 import { editingPlane } from '../editing/planes';
 import { useResource } from './useResource';
+import { PreviewRecovery } from './PreviewRecovery';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
 function componentFor(module: PreviewModule) {
@@ -51,6 +59,7 @@ const services: PreviewContext['services'] = {
   archiveEntry: (id, name) => window.viewer.archiveEntry(id, name),
   rendition: (id, request) => window.viewer.imageRendition(id, request),
   videoRendition: (id, requestID) => window.viewer.videoRendition(id, requestID),
+  officeLayout: (id, request) => window.viewer.officeLayout(id, request),
   officeImage: (id, part, requestID) => window.viewer.officeImage(id, part, requestID),
   release: (id) => window.viewer.release(id),
 };
@@ -104,18 +113,24 @@ export const PreviewHost = memo(function PreviewHost({
   const seen = useRef<SourceVersion | undefined>(undefined);
   // the file as it is now, for the footer: a save changes its size after the preview opened
   const [current, setCurrent] = useState<FileEntry | undefined>(undefined);
+  const [sourceIssue, setSourceIssue] = useState<{ path: string; detail: string }>();
+  const [recheck, setRecheck] = useState(0);
   useEffect(() => {
     seen.current = entry ? sourceVersion(entry) : undefined;
     setCurrent(undefined);
+    setSourceIssue(undefined);
   }, [entry]);
   useEffect(() => {
     if (!path || supplied || !activated) return;
     const folder = parentPath(path);
     void window.viewer.watch(folder, subscriber).catch(() => {});
+    let live = true;
     let checking = false,
       again = false;
     const check = async (): Promise<void> => {
       const latest = await window.viewer.stat(path);
+      if (!live) return;
+      setSourceIssue(undefined);
       const version = sourceVersion(latest);
       if (!seen.current || sameSourceVersion(version, seen.current)) return;
       seen.current = version;
@@ -126,8 +141,7 @@ export const PreviewHost = memo(function PreviewHost({
       if (plane?.changedOnDisk) plane.changedOnDisk();
       else setRetry((value) => value + 1);
     };
-    const off = window.viewer.onEvent((event) => {
-      if (event.type !== 'folder-changed' || event.path !== folder) return;
+    const changed = () => {
       if (checking) {
         again = true;
         return;
@@ -136,22 +150,33 @@ export const PreviewHost = memo(function PreviewHost({
       const run = (): Promise<void> =>
         check()
           .catch(() => {
-            // gone or unreadable: the preview keeps what it shows
+            if (live)
+              setSourceIssue({
+                path,
+                detail: 'The file has moved or its location is unavailable.',
+              });
           })
           .then(() => {
-            if (!again) return;
+            if (!again || !live) return;
             again = false;
             return run();
           });
       void run().finally(() => {
         checking = false;
       });
+    };
+    const off = window.viewer.onEvent((event) => {
+      if (event.type === 'folder-changed' && event.path === folder) changed();
     });
+    window.addEventListener('focus', changed);
+    if (recheck) changed();
     return () => {
+      live = false;
       off();
+      window.removeEventListener('focus', changed);
       void window.viewer.unwatch(subscriber).catch(() => {});
     };
-  }, [paneID, path, supplied, activated, subscriber]);
+  }, [paneID, path, supplied, activated, subscriber, recheck]);
   const viewState = useMemo(
     () => previewState(paneID || path || supplied?.id || 'temporary', entry),
     [paneID, path, supplied?.id, entry],
@@ -222,10 +247,29 @@ export const PreviewHost = memo(function PreviewHost({
           },
     [paneID, resource, header, registry, signal, active],
   );
+  const locate =
+    !supplied && (paneID || workspace)
+      ? async (target: FileEntry) => {
+          // A dirty editor stays attached to its original draft. A located copy opens
+          // separately; Save As remains the person's explicit choice.
+          if (paneID && !editingPlane(paneID)?.dirty())
+            updatePane(paneID, { path: target.path, evidence: undefined });
+          else if (workspace) {
+            await workspace.openPath(target.path, { paneID, linked: true, another: true });
+            quickPreview(null);
+          }
+        }
+      : undefined;
   if (error)
     return (
       <Empty icon="warning" title="File unavailable" detail={error}>
-        {!supplied && <button onClick={() => setRetry((value) => value + 1)}>Try again</button>}
+        {!supplied && path && (
+          <PreviewRecovery
+            path={path}
+            retry={() => setRetry((value) => value + 1)}
+            locate={locate}
+          />
+        )}
         {path && (
           <button onClick={() => void window.viewer.openExternal(path).catch(report)}>
             Open in default app
@@ -269,6 +313,15 @@ export const PreviewHost = memo(function PreviewHost({
   const Viewer = componentFor(module);
   return (
     <div className="preview-host" data-preview-module={module.id}>
+      {path && sourceIssue?.path === path && (
+        <PreviewRecovery
+          path={path}
+          entry={resource.entry}
+          detail={sourceIssue.detail}
+          retry={() => setRecheck((value) => value + 1)}
+          locate={locate}
+        />
+      )}
       <div className="preview-body">
         <ErrorBoundary key={resource.id}>
           <Suspense fallback={<Loading label={`Loading ${module.label.toLowerCase()}…`} />}>

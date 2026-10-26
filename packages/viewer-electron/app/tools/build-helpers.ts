@@ -9,8 +9,10 @@ import { ensureElectronHeaders } from './native-build/headers';
 import { prepareProcessors } from './processors';
 import { preparePDFProcessors } from './pdf-processors';
 import { prepareRawProcessor } from './libraw';
+import { prepareOfficeRuntime } from './office-runtime';
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inventory = await licenseInventory();
+await prepareOfficeRuntime(appRoot);
 if (process.platform === 'darwin') {
   mkdirSync('assets', { recursive: true });
   const cache = path.join(os.tmpdir(), `viewer-swift-cache-${process.getuid?.() || 'build'}`);

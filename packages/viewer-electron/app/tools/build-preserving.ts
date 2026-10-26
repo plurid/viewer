@@ -10,6 +10,9 @@ import { build, type UserConfig } from 'vite';
 import { VitePlugin, type VitePluginConfig } from '@electron-forge/plugin-vite';
 import forge from '../forge.config';
 import { sourceHash, hashFile } from './qualification/source';
+import { prepareOfficeRuntime, verifyOfficeRuntime } from './office-runtime';
+import { officeRuntimeName } from '../src/desktop/previews/office-runtime-manifest';
+import { documentTypes } from './document-types';
 
 if (process.platform !== 'darwin') throw new Error('This local rebuild requires macOS.');
 const source = path.resolve(process.argv[2] || '');
@@ -89,6 +92,18 @@ await cp(source, output, {
 await cp(path.resolve('assets/licenses'), path.join(output, 'Contents/Resources/licenses'), {
   recursive: true,
 });
+const officeRuntime = await prepareOfficeRuntime(process.cwd());
+const officeOutput = path.join(output, 'Contents/Resources', officeRuntimeName);
+if (
+  await lstat(officeOutput).then(
+    () => true,
+    () => false,
+  )
+) {
+  await verifyOfficeRuntime(officeOutput);
+} else {
+  await cp(officeRuntime, officeOutput, { recursive: true, force: false, errorOnExist: true });
+}
 // Optional freshly compiled N-API binding. Only the new output is changed;
 // the seed and its native binary remain intact for rollback and comparison.
 const nativeBinding = process.argv[4] ? path.resolve(process.argv[4]) : undefined;
@@ -134,6 +149,13 @@ if (rawResources) {
   });
 }
 const archive = path.join(output, 'Contents/Resources/app.asar');
+await promisify(execFile)('/usr/bin/plutil', [
+  '-replace',
+  'CFBundleDocumentTypes',
+  '-json',
+  JSON.stringify(documentTypes),
+  path.join(output, 'Contents/Info.plist'),
+]);
 const imageHelper = process.argv[6] ? path.resolve(process.argv[6]) : undefined;
 if (imageHelper) {
   const info = await lstat(imageHelper);

@@ -364,12 +364,12 @@ export function defaultSettings(home: string): ApplicationSettings {
     fileOpening: {
       default: 'automatic',
       types: {
-        doc: 'native',
+        doc: 'plane',
         docx: 'plane',
-        xls: 'native',
+        xls: 'plane',
         xlsx: 'plane',
-        ppt: 'native',
-        pptx: 'native',
+        ppt: 'plane',
+        pptx: 'plane',
       },
     },
     customActions: [],

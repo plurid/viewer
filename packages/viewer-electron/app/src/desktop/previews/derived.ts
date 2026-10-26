@@ -4,13 +4,16 @@ import { fileCoordination } from '../files/file-coordination';
 import { previewContains } from './preview-work';
 import { runProcessor } from '../transforms/process';
 import { imageDimensions } from './image-dimensions';
+import type { PreviewDerivationKind } from '../../domain/previews/derivations';
+import type { OfficeLayoutMetadata } from '../../domain/previews/documents/layout';
 
-export type DerivedMode = 'camera' | 'raw' | 'video' | 'image';
+export type DerivedMode = PreviewDerivationKind;
 export interface DerivedRendition {
   data: Buffer;
-  extension: 'jpg' | 'mp4' | 'png';
+  extension: 'jpg' | 'mp4' | 'png' | 'pdf';
   kind: DerivedMode;
   decoder: string;
+  office?: OfficeLayoutMetadata;
 }
 export interface DerivedLease {
   value: DerivedRendition;
@@ -26,6 +29,7 @@ export type Decoder = (
   mode: DerivedMode,
   signal: AbortSignal,
   size?: number,
+  variant?: string,
 ) => Promise<DerivedRendition>;
 interface Cached {
   file: string;
@@ -58,8 +62,10 @@ export class DerivedPreviews {
     mode: DerivedMode,
     signal: AbortSignal,
     size = 4096,
+    variant = '',
   ): Promise<DerivedLease> {
     signal.throwIfAborted();
+    if (variant.length > 200 || variant.includes('\0')) throw new Error('Invalid preview variant.');
     if (!Number.isInteger(size) || size < 1 || size > 4096)
       throw new Error('Choose a preview size between 1 and 4096 pixels.');
     await this.access([file]);
@@ -79,6 +85,7 @@ export class DerivedPreviews {
       'libraw-0.22.2/ffmpeg-9.0.2/imageio-v1',
       mode,
       size,
+      variant,
     ]);
     let entry = this.cached.get(key);
     if (entry) entry.pins++;
@@ -116,6 +123,7 @@ export class DerivedPreviews {
                     mode,
                     abort.signal,
                     size,
+                    variant,
                   );
                   abort.signal.throwIfAborted();
                   if (

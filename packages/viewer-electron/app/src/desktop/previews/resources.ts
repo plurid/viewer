@@ -17,6 +17,7 @@ import {
   type ImageRenditionRequest,
 } from '../../domain/previews/images/rendered';
 import type { DerivedPreviews, DerivedMode } from './derived';
+import { isOfficeFormat, type OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 
 interface Grant {
   dispose?(): void;
@@ -48,6 +49,7 @@ export class Resources {
     private renditionTimeout = 12000,
     private derived?: DerivedPreviews,
     private images?: DerivedPreviews,
+    private office?: DerivedPreviews,
   ) {}
   grant(file: string, requestID?: string): Promise<Resource> {
     if (requestID && this.pending.has(requestID))
@@ -220,10 +222,12 @@ export class Resources {
     this.clearKnown(root);
     this.derived?.invalidate(root);
     this.images?.invalidate(root);
+    this.office?.invalidate(root);
     return canonical.then((actual) => {
       if (actual && actual !== root) this.clearKnown(actual);
       if (actual && actual !== root) this.derived?.invalidate(actual);
       if (actual && actual !== root) this.images?.invalidate(actual);
+      if (actual && actual !== root) this.office?.invalidate(actual);
       return actual;
     });
   }
@@ -251,6 +255,7 @@ export class Resources {
     await this.quiesce();
     await this.derived?.close();
     await this.images?.close();
+    await this.office?.close();
   }
   /** The file behind a previewed PDF; entries inside archives are not files to print. */
   async printableFile(id: string): Promise<string> {
@@ -415,12 +420,24 @@ export class Resources {
       );
     return this.derivedRendition(id, 'video', requestID);
   }
-  private derivedRendition(id: string, mode: DerivedMode, requestID: string): Promise<Resource> {
+  officeLayout(id: string, request: OfficeLayoutRequest): Promise<Resource> {
+    if (!isOfficeFormat(this.get(id).resource.entry.extension))
+      return Promise.reject(
+        new Error('Choose a Word, Excel or PowerPoint file for Office layout preview.'),
+      );
+    return this.derivedRendition(id, 'office', request.requestID, request.sheet);
+  }
+  private derivedRendition(
+    id: string,
+    mode: DerivedMode,
+    requestID: string,
+    variant?: string,
+  ): Promise<Resource> {
     const grant = this.get(id);
-    const decoder = mode === 'image' ? this.images : this.derived;
+    const decoder = mode === 'office' ? this.office : mode === 'image' ? this.images : this.derived;
     if (!decoder) return Promise.reject(new Error('The local preview decoder is unavailable.'));
     return this.documentRead(id, requestID, async (file, signal) => {
-      const lease = await decoder.read(file, mode, signal);
+      const lease = await decoder.read(file, mode, signal, 4096, variant);
       try {
         signal.throwIfAborted();
         this.get(id);
@@ -431,6 +448,7 @@ export class Resources {
           lease.value.data,
         );
         child.derivation = { kind: lease.value.kind, decoder: lease.value.decoder };
+        child.office = lease.value.office;
         this.get(child.id).dispose = lease.release;
         return child;
       } catch (error) {

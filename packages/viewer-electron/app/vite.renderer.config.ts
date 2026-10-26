@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite';
 import { pdfAssets } from './tools/pdf-assets';
+import { threeRendererOwnership } from './tools/three-renderer.ts';
 export default defineConfig({
   base: './',
-  plugins: [pdfAssets()],
+  plugins: [pdfAssets(), threeRendererOwnership()],
+  optimizeDeps: { exclude: ['three'] },
   resolve: {
     dedupe: [
       'react',

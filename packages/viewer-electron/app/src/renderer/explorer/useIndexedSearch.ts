@@ -21,7 +21,8 @@ export function useIndexedSearch(
       }
     });
   }, [enabled]);
-  const [result, setResult] = useState<IndexedResult>();
+  const key = JSON.stringify([query, root, showHidden, offset, content, recursive]);
+  const [result, setResult] = useState<{ key: string; value: IndexedResult }>();
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -38,7 +39,7 @@ export function useIndexedSearch(
         .indexedQuery({ query: query.slice(0, 300), root, showHidden, offset, content, recursive })
         .then((value) => {
           if (live) {
-            setResult(value);
+            setResult({ key, value });
             setRunning(false);
           }
         })
@@ -53,6 +54,6 @@ export function useIndexedSearch(
       live = false;
       clearTimeout(timer);
     };
-  }, [query, root, enabled, showHidden, offset, content, recursive, generation]);
-  return { result, running, error };
+  }, [query, root, enabled, showHidden, offset, content, recursive, generation, key]);
+  return { result: result?.key === key ? result.value : undefined, running, error };
 }

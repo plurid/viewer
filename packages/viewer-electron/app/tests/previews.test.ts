@@ -27,10 +27,17 @@ describe('preview extension contract', () => {
       expect(choosePreview(file(`page.${extension}`)).id).toBe('html');
     },
   );
-  it('offers Office previews for DOCX/XLSX while leaving old binary and presentation formats to the fallback', () => {
-    for (const name of ['Report.docx', 'Budget.xlsx'])
+  it('offers layout previews for current and legacy Word, Excel and PowerPoint formats', () => {
+    for (const name of [
+      'Report.docx',
+      'Budget.xlsx',
+      'Old.doc',
+      'Old.xls',
+      'Slides.ppt',
+      'Slides.pptx',
+    ])
       expect(choosePreview(file(name)).id).toBe('office');
-    for (const name of ['Old.doc', 'Old.xls', 'Slides.pptx'])
+    for (const name of ['Budget.xlsb', 'Report.docm', 'Slides.key'])
       expect(choosePreview(file(name)).id).toBe('fallback');
   });
   it('routes DXF drawings ahead of ambiguous text or image MIME and gives them a drawing icon', () => {

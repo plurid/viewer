@@ -527,6 +527,40 @@ button.markdown-link {
   gap: 8px;
   min-width: 0;
 }
+.office-viewer > .office-viewer,
+.office-viewer > .pdf-viewer {
+  flex: 1;
+  min-height: 0;
+}
+.office-mode-bar,
+.worksheet-tabs {
+  flex: none;
+}
+.worksheet-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.worksheet-tab-list {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+}
+.worksheet-tab-list button {
+  flex: none;
+  white-space: nowrap;
+}
+.worksheet-tab-list button[aria-selected='true'] {
+  background: var(--selection);
+  color: var(--ink);
+}
+.worksheet-tabs .choice-button {
+  max-width: 180px;
+}
 .worksheet-navigation {
   flex: none;
   flex-wrap: wrap;

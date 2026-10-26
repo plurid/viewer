@@ -13,6 +13,21 @@
   min-height: 0;
   overflow: hidden;
 }
+.preview-recovery {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.preview-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 .preview-info {
   height: 31px;
   flex-shrink: 0;

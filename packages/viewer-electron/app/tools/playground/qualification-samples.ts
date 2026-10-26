@@ -7,7 +7,7 @@ const records = [
     'document/saut_page.docx',
     2959626,
     '748f34f3dc285f4d48474930758b2c37382d17965545a1729cb7400cada793da',
-    'Word document with page breaks; semantic content preview, not Word layout',
+    'Word document with page breaks; bundled layout preview plus bounded Reading view',
   ],
   [
     'poi-various-pictures.docx',
@@ -28,7 +28,14 @@ const records = [
     'spreadsheet/ConditionalFormattingSamples.xlsx',
     654688,
     '8dfa997a642c00a1da8c0750c371f204553a98c537ca046028b052f9b424a074',
-    'Workbook with formatting and other Office features; saved values and structure, not full Excel rendering',
+    'Workbook with formatting and other Office features; stored-value grid and local print layout with worksheet tabs',
+  ],
+  [
+    'poi-chart-picture-background.pptx',
+    'slideshow/chart-picture-bg.pptx',
+    651648,
+    '97bad7041fa5f23408eea513cd85bf7fed47a8ba218d8791a59be14cb53fdaa5',
+    'PowerPoint chart with photographic slide background; local paginated layout',
   ],
 ] as const;
 export const qualificationSamples: RemoteSample[] = [

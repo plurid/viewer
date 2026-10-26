@@ -67,12 +67,20 @@ export async function ownedApp(
       number,
       { resolve(value: unknown): void; reject(error: Error): void }
     >();
+    const listeners = new Set<(method: string, params: Record<string, unknown>) => void>();
     socket.addEventListener('message', (event) => {
       const reply = JSON.parse(String(event.data)) as {
-        id: number;
+        id?: number;
+        method?: string;
+        params?: Record<string, unknown>;
         error?: { message: string };
         result?: unknown;
       };
+      if (reply.method) {
+        for (const listener of listeners) listener(reply.method, reply.params ?? {});
+        return;
+      }
+      if (reply.id === undefined) return;
       const request = pending.get(reply.id);
       if (!request) return;
       pending.delete(reply.id);
@@ -82,6 +90,7 @@ export async function ownedApp(
     socket.addEventListener('close', () => {
       for (const request of pending.values()) request.reject(new Error('Owned debugger closed'));
       pending.clear();
+      listeners.clear();
     });
     const command = <T = unknown>(
       method: string,
@@ -90,10 +99,13 @@ export async function ownedApp(
     ) =>
       new Promise<T>((resolve, reject) => {
         const current = ++id,
-          timeout = setTimeout(() => {
-            pending.delete(current);
-            reject(new Error('Owned CDP timeout ' + method));
-          }, 15000);
+          timeout = setTimeout(
+            () => {
+              pending.delete(current);
+              reject(new Error('Owned CDP timeout ' + method));
+            },
+            method === 'HeapProfiler.takeHeapSnapshot' ? 120000 : 15000,
+          );
         pending.set(current, {
           resolve: (value) => {
             clearTimeout(timeout);
@@ -136,7 +148,11 @@ export async function ownedApp(
       'owned renderer finished loading',
     );
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>resolve(true)))');
-    return { command, evaluate, targetID: target.id };
+    const onEvent = (listener: (method: string, params: Record<string, unknown>) => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    };
+    return { command, evaluate, onEvent, targetID: target.id };
   }
   async function close(connection?: Awaited<ReturnType<typeof connect>>) {
     try {

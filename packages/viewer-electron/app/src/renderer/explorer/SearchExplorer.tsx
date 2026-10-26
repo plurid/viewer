@@ -8,6 +8,7 @@ import {
   report,
   getState,
   refreshClipboard,
+  updatePane,
 } from '../state/store';
 import { browseSession, useBrowseField } from '../workspace/sessions';
 import { useWorkspace } from '../workspace/context';
@@ -42,6 +43,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
   const drops = useFileDrop(() => (pane?.allLocations ? undefined : pane?.path));
   const registry = useCommands();
   const opening = useViewer((state) => state.settings.settings.fileOpening);
+  const contentRoots = useViewer((state) => state.settings.settings.search.contentRoots);
   const openEntry = (entry: FileEntry, linked = false, another = false) => {
     const evidence = search.result?.evidence?.find((hit) => hit.path === entry.path);
     if (evidence && !another) {
@@ -228,13 +230,42 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       }}
     >
       <div className="search-row">
-        <span>
-          {pane.query}
-          {pane.content && ' · Document text'}
-        </span>
-        <span className="toolbar-spacer" />
+        <input
+          aria-label="Search query"
+          value={pane.query}
+          onChange={(event) => {
+            setOffset(0);
+            updatePane(id, { query: event.target.value });
+          }}
+        />
+        <label className="search-content-option">
+          <input
+            type="checkbox"
+            checked={pane.content ?? false}
+            onChange={(event) => {
+              setOffset(0);
+              updatePane(id, { content: event.target.checked });
+            }}
+          />
+          Document text
+        </label>
         <span>{pane.allLocations ? 'Indexed locations' : pane.path}</span>
       </div>
+      {pane.content &&
+        (search.result?.indexed === false ||
+          !(pane.allLocations
+            ? contentRoots.length
+            : contentRoots.some(
+                (root) =>
+                  pane.path === root || pane.path.startsWith(root.replace(/[/\\]$/, '') + '/'),
+              ))) && (
+          <div className="search-evidence" role="status">
+            <span>Choose which locations Viewer may index for document text.</span>
+            <button onClick={() => void window.viewer.openSettings('search').catch(report)}>
+              Search settings…
+            </button>
+          </div>
+        )}
       <FileTable paneID={id}>
         {search.error ? (
           <Empty title="Search failed" detail={search.error} />

@@ -213,7 +213,8 @@ export default function PDFPreview(context: PreviewContext) {
       setSearching(false);
     };
   }, [pdf, query, signal, setPage]);
-  const printable = getState().bootstrap.platform === 'darwin';
+  const printable =
+    getState().bootstrap.platform === 'darwin' && resource.derivation?.kind !== 'office';
   const print = useMemo(
     () => () => {
       void window.viewer.printPDF(resource.id, password.current || undefined).catch(report);

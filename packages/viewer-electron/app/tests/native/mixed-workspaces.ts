@@ -1,6 +1,7 @@
 /** Mixed-plane acceptance. Owns its app, loopback page and retained fixtures. */
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { closeSync, openSync, writeSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
@@ -10,12 +11,16 @@ import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { defaultSettings } from '../../src/domain/services';
 import { localSamples } from '../../tools/playground/catalog';
 import { temporaryRoot } from '../../tools/temporary';
+import { modelHeapSummary } from '../../tools/qualification/heap';
 import { ownedApp, until } from '../owned-app';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
 assert.ok(binary && path.isAbsolute(binary));
+const cycleCount = Number(process.env.VIEWER_MIXED_CYCLES ?? 3);
+assert.ok(Number.isInteger(cycleCount) && cycleCount >= 3 && cycleCount <= 50);
+const captureHeaps = process.env.VIEWER_MIXED_HEAPS === '1';
 const root = await temporaryRoot('viewer-native-mixed-workspaces-');
 const files = path.join(root, 'Files');
 const profile = path.join(root, 'Profile');
@@ -160,7 +165,25 @@ const observations: unknown[] = [];
 let passed = false;
 try {
   connection = await app.connect();
-  const { evaluate, command } = connection;
+  const { evaluate, command, onEvent } = connection;
+  const heapSnapshot = async (label: string) => {
+    if (!captureHeaps) return;
+    const file = path.join(root, label + '.heapsnapshot');
+    const descriptor = openSync(file, 'wx', 0o600);
+    const off = onEvent((method, params) => {
+      if (method === 'HeapProfiler.addHeapSnapshotChunk' && typeof params.chunk === 'string')
+        writeSync(descriptor, params.chunk);
+    });
+    try {
+      await command('HeapProfiler.takeHeapSnapshot', { reportProgress: false });
+      const record = { phase: 'heap-snapshot', label, file };
+      observations.push(record);
+      console.log(JSON.stringify(record));
+    } finally {
+      off();
+      closeSync(descriptor);
+    }
+  };
   await command('Performance.enable');
   await command('Emulation.setDeviceMetricsOverride', {
     width: 1440,
@@ -292,7 +315,16 @@ try {
         ),
       'Visible browsers finish loading and retain painted pixels',
       10000,
-    );
+    ).catch(async (error: unknown) => {
+      console.error(
+        'Browser readiness diagnostics:',
+        await evaluate(`Promise.all(["browser-0", "browser-1"].map(async id => ({
+          state: await window.viewer.browser({kind: "state", id}),
+          plane: document.querySelector('[data-viewer-plane="' + id + '"]')?.closest('[data-plurid-plane]')?.outerHTML.slice(0, 600),
+        })))`),
+      );
+      throw error;
+    });
     const record = { phase, state, frames, pageRequests };
     observations.push(record);
     console.log(JSON.stringify(record));
@@ -340,11 +372,12 @@ try {
   await palette('Tiling: Grid');
   await browserReadiness('browser-after-cycles');
   await measure('twenty-after-navigation');
+  await heapSnapshot('warm');
   const closing = panes
     .slice(10)
     .map((pane) => pane.id)
     .reverse();
-  for (let cycle = 0; cycle < 3; cycle += 1) {
+  for (let cycle = 0; cycle < cycleCount; cycle += 1) {
     for (const id of closing) {
       const selector = `.plane-controls[data-viewer-plane="${id}"] [aria-label="Close plane"]`;
       await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
@@ -373,6 +406,8 @@ try {
     );
     await measure('twenty-after-reopen-' + cycle);
     await browserReadiness('browser-after-reopen-' + cycle);
+    if (cycle === 4 || cycle === 19 || cycle === cycleCount - 1)
+      await heapSnapshot('reopened-' + (cycle + 1));
   }
   const cycles = observations.filter(
     (value): value is { phase: string; heap: { usedSize: number }; dom: { nodes: number } } =>
@@ -381,13 +416,20 @@ try {
       'phase' in value &&
       String(value.phase).startsWith('twenty-after-reopen-'),
   );
-  assert.equal(cycles.length, 3);
+  assert.equal(cycles.length, cycleCount);
+  if (captureHeaps) {
+    const summary = await modelHeapSummary(path.join(root, `reopened-${cycleCount}.heapsnapshot`));
+    observations.push({ phase: 'final-heap-summary', ...summary });
+    console.log(JSON.stringify(observations.at(-1)));
+    assert.equal(summary.detachedModelStages, 0, 'Closed model stages are collectable');
+    assert.equal(summary.detachedModelCanvases, 0, 'Disposed WebGL canvases are collectable');
+  }
   assert.ok(
-    cycles[2]!.heap.usedSize - cycles[0]!.heap.usedSize < 32 * 1024 * 1024,
+    cycles.at(-1)!.heap.usedSize - cycles[0]!.heap.usedSize < 32 * 1024 * 1024,
     'Reopened views have bounded retained heap',
   );
   assert.ok(
-    cycles[2]!.dom.nodes - cycles[0]!.dom.nodes < 1000,
+    cycles.at(-1)!.dom.nodes - cycles[0]!.dom.nodes < 1000,
     'Closed views do not accumulate detached trees',
   );
   await palette('Tiling: Grid');

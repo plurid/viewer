@@ -1,10 +1,59 @@
 # Office previews
 
-DOCX and XLSX have local, read-only previews in a file plane or Quick Preview.
+Word (`.doc`, `.docx`), Excel (`.xls`, `.xlsx`) and PowerPoint (`.ppt`, `.pptx`)
+have local, read-only layout previews in a file plane or Quick Preview.
 New settings open these formats in a plane. Existing native-app preferences and
 explicit extension overrides are preserved; Open linked plane remains available.
-Old DOC/XLS, presentations, encrypted Office files and macro-enabled package types
-still require another app.
+Protected files and macro-enabled package extensions still require another app.
+
+## Layout rendering
+
+Viewer bundles the same ZetaOffice/LibreOffice 24.2 WebAssembly build on macOS,
+Windows and Linux. No separately installed Office application or runtime download
+is needed. DOC/DOCX and PPT/PPTX open in Layout; DOCX also offers Reading.
+XLSX starts in the stored-value Sheet view and offers Print layout. XLS uses
+Print layout. Both workbook layouts expose named worksheet tabs, arrow/Home/End
+navigation and a searchable Worksheet menu. Only the selected sheet is printed;
+its source paper settings and page breaks are retained.
+
+Layout retains source typography, paragraph/page placement, headers, footers,
+pictures, charts and presentation backgrounds as supported by the engine. It
+is substantially closer to an Office document than the bounded content reader.
+Missing fonts use bundled substitutes; this is not guaranteed pixel parity with
+Microsoft Office. Calc can recalculate supported formulas for layout, whereas
+the separate stored-value grid and source evidence retain the saved values.
+
+The engine converts authorized bytes to an in-memory PDF in a fresh sandboxed
+Chromium window. There is no preload, Node access, host filesystem mount or
+Viewer IPC in that window. A nonce-protected loopback endpoint serves only the
+pinned engine assets and the current job; requests to other origins, downloads,
+new windows and permissions are denied. UNO explicitly disables macros and
+external-document updates. Generic virtual filenames carry the input format,
+without passing host file paths into the engine. Closing/cancelling destroys
+the window, dedicated workers, RAM files and listener.
+
+One expensive conversion runs at a time, with up to eight queued distinct
+requests. Limits are 64 MiB input, 32 MiB rendered output and a 45-second engine
+deadline. Versioned bytes share a 128 MiB cache; live child resources pin their
+entries and expire with the parent resource or revoked authority. Sheet variants
+have separate keys. Late UI results are released. Closing and reopening can
+reuse cached layout without rerunning the engine. Mode, sheet, page, zoom and
+scroll use the existing bounded, source-version-checked preview history.
+
+The runtime is checksum-pinned at build time, including decoded HTTP transfers;
+upstream drift fails rather than silently changing the engine. `tools/office-runtime.ts`
+prepares the shared resources and Forge includes them on all platforms. Unmodified
+ZetaJS, LibreOffice and third-party notices accompany the bundle. The
+[ZetaJS source/build instructions](https://github.com/allotropia/zetajs) and
+[LibreOffice PDF export options](https://help.libreoffice.org/latest/en-US/text/shared/guide/pdf_params.html)
+describe the underlying interfaces.
+
+Native packaged macOS checks cover all six formats, real source pixels, source
+hashes, cache reuse and worksheet switching. The same real-engine smoke is wired
+into `.github/workflows/office-runtime.yml` for all three operating systems;
+Windows and Linux execution is pending their own CI runs.
+
+## Stored-content reader
 
 DOCX shows document-body paragraphs, supported heading levels and simple tables.
 It preserves text, tabs and line breaks, excludes tracked deletions and field
@@ -17,7 +66,8 @@ original row numbers and A/B/C column headings. Blank gaps remain sparse and the
 first row is data. Filtering preserves the original addresses. Selecting a cell
 shows its stored value and optional saved formula. Missing cached values are
 explicitly labeled. Viewer never evaluates formulas, resolves external data or
-opens workbook hyperlinks. **Formatted** presents supported number, currency, percentage,
+opens workbook hyperlinks. This applies to the stored-content reader.
+**Formatted** presents supported number, currency, percentage,
 date/time and duration formats; **Stored** exposes the source value. The inspector
 always retains the raw value, saved formula and format code. The pinned local SSF
 0.11.2 formatter runs inside the document worker. It respects the workbook's

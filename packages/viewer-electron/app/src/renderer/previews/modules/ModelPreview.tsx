@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -121,7 +121,9 @@ export default function ModelPreview(context: PreviewContext) {
   }, [look]);
   const maxModelMB = context.limits?.maxModelMB ?? 256;
   const previewStore = context.state;
-  useEffect(() => {
+  // OrbitControls disconnects keyboard listeners from canvas.getRootNode().
+  // Dispose while the canvas still belongs to that root, before React detaches it.
+  useLayoutEffect(() => {
     const element = stage.current;
     if (!element) return;
     setLoading(true);

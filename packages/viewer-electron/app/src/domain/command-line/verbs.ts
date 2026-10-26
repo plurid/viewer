@@ -1,4 +1,5 @@
 import { LineError, parseLine, type Step, type Word } from './lex';
+import { boundedEditDistance } from '../search/approximate';
 
 /** What a verb's argument completes from. */
 export type CompleteKind =
@@ -414,28 +415,13 @@ export function didYouMean(name: string, candidates: Iterable<string>): string |
   let best: string | undefined;
   let distance = name.length <= 3 ? 1 : 2;
   for (const candidate of candidates) {
-    const next = editDistance(name, candidate, distance);
+    const next = boundedEditDistance(name, candidate, distance);
     if (next <= distance && (next < distance || !best)) {
       best = candidate;
       distance = next;
     }
   }
   return best;
-}
-function editDistance(a: string, b: string, limit: number): number {
-  if (Math.abs(a.length - b.length) > limit) return limit + 1;
-  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= a.length; i++) {
-    const row = [i];
-    for (let j = 1; j <= b.length; j++)
-      row[j] = Math.min(
-        previous[j]! + 1,
-        row[j - 1]! + 1,
-        previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-    previous = row;
-  }
-  return previous[b.length]!;
 }
 /** Every verb form, for did-you-mean and completion. */
 export const verbNames = () => [...byForm.keys()];

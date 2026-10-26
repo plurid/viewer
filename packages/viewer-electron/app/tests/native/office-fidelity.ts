@@ -127,6 +127,16 @@ async function run(file: string, check: (connection: Connection) => Promise<void
       deviceScaleFactor: 1,
       mobile: false,
     });
+    if (file.endsWith('.docx')) {
+      await until(
+        () => connection!.evaluate<boolean>('!!document.querySelector(".office-mode-bar")'),
+        Boolean,
+        'Office layout/reading choices',
+      );
+      await connection.evaluate(
+        '[...document.querySelectorAll(".office-mode-bar button")].find(b=>b.textContent.trim()==="Reading").click()',
+      );
+    }
     await until(
       () =>
         connection!.evaluate<boolean>(

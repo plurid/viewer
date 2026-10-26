@@ -5,6 +5,7 @@ import type { ArchiveListing, FileEntry, Resource, ResourceRead } from '../../do
 import type { HtmlPreview } from '../../domain/previews/web';
 import type { WorksheetDocumentRequest } from '../../domain/previews/documents/office';
 import type { ImageRenditionRequest } from '../../domain/previews/images/rendered';
+import type { OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {
@@ -48,6 +49,7 @@ export interface PreviewContext {
     archiveEntry(id: string, name: string): Promise<Resource>;
     rendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
     videoRendition(id: string, requestID: string): Promise<Resource>;
+    officeLayout?(id: string, request: OfficeLayoutRequest): Promise<Resource>;
     officeImage(id: string, part: string, requestID: string): Promise<Resource>;
     release(id: string): Promise<void>;
   };

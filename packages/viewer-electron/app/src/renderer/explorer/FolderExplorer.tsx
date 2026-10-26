@@ -621,6 +621,14 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             Subfolders
           </button>
           <IconButton icon="close" label="Close search" onClick={closeSearch} />
+          <button
+            disabled={!query.trim()}
+            onClick={() => {
+              workspace.newSearch(query, query, path, subtree, true);
+            }}
+          >
+            Search contents
+          </button>
           {search.running && (
             <IconButton icon="pause" label="Cancel search" onClick={search.cancel} />
           )}

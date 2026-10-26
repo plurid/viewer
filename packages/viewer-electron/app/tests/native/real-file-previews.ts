@@ -148,6 +148,16 @@ try {
       Boolean,
       'Quick Preview ' + extension,
     );
+    if (extension === 'docx') {
+      await until(
+        () => evaluate<boolean>('!!document.querySelector(".office-mode-bar")'),
+        Boolean,
+        'Office view choices',
+      );
+      await evaluate(
+        '[...document.querySelectorAll(".office-mode-bar button")].find(b=>b.textContent.trim()==="Reading").click()',
+      );
+    }
     const result = await until(
       () =>
         evaluate<{

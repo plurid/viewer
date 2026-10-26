@@ -6,11 +6,12 @@ import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { DataTable } from '../DataTable';
 import { Empty, Loading } from '../../ui/primitives';
-import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { report } from '../../state/store';
 import { useOfficeDocument } from '../useOfficeDocument';
 import { WorksheetNavigation } from '../WorksheetNavigation';
 import { WordBlock } from '../WordBlock';
+import OfficeLayoutPreview from './OfficeLayoutPreview';
+import { WorksheetTabs } from '../WorksheetTabs';
 
 /* THESIS: Read Word text and inspect worksheet cells within the existing file plane.
    OWN-WORLD: Existing flat toolbar, theme surfaces, borders and type; no source fonts or HTML.
@@ -19,6 +20,37 @@ import { WordBlock } from '../WordBlock';
    FORM: Ordinary incumbent extension; office-preview-v1, worksheet-pages-v1; no new visual world.
    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance */
 export default function OfficePreview(context: PreviewContext) {
+  const extension = context.resource.entry.extension;
+  const content = extension === 'docx' || extension === 'xlsx';
+  const workbook = extension === 'xls' || extension === 'xlsx';
+  const [mode, setMode] = usePreviewState(
+    context,
+    'office.mode',
+    extension === 'xlsx' || context.evidence ? 'content' : 'layout',
+  );
+  if (!context.services.officeLayout && content) return <OfficeContent {...context} />;
+  return (
+    <div className="office-viewer">
+      <div className="preview-toolbar office-mode-bar" role="toolbar" aria-label="Office view">
+        <button aria-pressed={mode !== 'content' || !content} onClick={() => setMode('layout')}>
+          {workbook ? 'Print layout' : 'Layout'}
+        </button>
+        {content && (
+          <button aria-pressed={mode === 'content'} onClick={() => setMode('content')}>
+            {workbook ? 'Sheet' : 'Reading'}
+          </button>
+        )}
+      </div>
+      {mode === 'content' && content ? (
+        <OfficeContent {...context} />
+      ) : (
+        <OfficeLayoutPreview {...context} />
+      )}
+    </div>
+  );
+}
+
+function OfficeContent(context: PreviewContext) {
   const fontSize = context.reading?.fontSize ?? 16;
   const [details, setDetails] = useState(false);
   const [formatted, setFormatted] = usePreviewState(context, 'office.formatted', true);
@@ -145,24 +177,6 @@ export default function OfficePreview(context: PreviewContext) {
   return (
     <div className="office-viewer" data-office-preview="worksheet-pages-v1">
       <PreviewToolbar context={context}>
-        {office.kind === 'workbook' && (
-          <label className="workbook-sheet-picker">
-            Worksheet{' '}
-            <ChoiceButton
-              label="Worksheet"
-              value={requestedSheet || sheet?.name || ''}
-              choices={office.sheets.map((sheet) => ({
-                value: sheet.name,
-                label: sheet.name + (sheet.hidden ? ' (hidden)' : ''),
-              }))}
-              onChoose={(name) => {
-                setIgnoredCitation(citationKey);
-                setSheetName(name);
-                setHistory([]);
-              }}
-            />
-          </label>
-        )}
         <span className="muted">
           {office.kind === 'workbook' ? 'Saved values' : 'Text, tables and images'}
         </span>
@@ -185,6 +199,17 @@ export default function OfficePreview(context: PreviewContext) {
           Preview details
         </button>
       </PreviewToolbar>
+      {office.kind === 'workbook' && sheet && (
+        <WorksheetTabs
+          sheets={office.sheets}
+          value={sheet.name}
+          choose={(name) => {
+            setIgnoredCitation(citationKey);
+            setSheetName(name);
+            setHistory([]);
+          }}
+        />
+      )}
       {details && (
         <section
           className="office-coverage"

@@ -1,4 +1,5 @@
 import { modelFormats } from '../src/domain/previews/models/formats';
+import { officeFormats } from '../src/domain/previews/documents/layout';
 
 interface DocumentType {
   CFBundleTypeName: string;
@@ -24,10 +25,12 @@ export const documentTypes: DocumentType[] = [
   type('PDF document', ['com.adobe.pdf']),
   type('EPUB book', ['org.idpf.epub-container']),
   type('Text', ['public.text', 'public.source-code', 'public.json']),
-  type('Office document', [
-    'org.openxmlformats.wordprocessingml.document',
-    'org.openxmlformats.spreadsheetml.sheet',
-  ]),
+  {
+    CFBundleTypeName: 'Office document',
+    CFBundleTypeRole: 'Viewer',
+    LSHandlerRank: 'Alternate',
+    CFBundleTypeExtensions: officeFormats,
+  },
   type('Archive', ['public.zip-archive', 'public.tar-archive', 'org.gnu.gnu-zip-tar-archive']),
   {
     // Drawings and 3D models have no system content types, so they match by extension.
