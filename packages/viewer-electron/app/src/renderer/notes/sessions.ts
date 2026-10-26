@@ -12,6 +12,8 @@ export interface NoteSession {
 }
 const sessions = new Map<string, NoteSession>();
 const loading = new Map<string, Promise<void>>();
+const removalLocks = new Set<string>();
+const trashedNotes = new Set<string>();
 const listeners = new Set<() => void>();
 let generation = 0;
 const notify = () => {
@@ -26,7 +28,30 @@ export const subscribeNotes = (listener: () => void) => {
   };
 };
 export const noteSession = (paneID: string) => sessions.get(paneID);
+export const noteLocked = (id: string) => removalLocks.has(id);
+export async function prepareNoteTrash(id: string): Promise<void> {
+  removalLocks.add(id);
+  notify();
+  await Promise.all(
+    [...sessions]
+      .filter(([, session]) => session.document.id === id)
+      .map(([paneID]) => flushNote(paneID)),
+  );
+}
+export function finishNoteTrash(id: string, trashed: boolean): void {
+  removalLocks.delete(id);
+  if (trashed) {
+    trashedNotes.add(id);
+    for (const [paneID, session] of sessions) {
+      if (session.document.id !== id) continue;
+      clearTimeout(session.timer);
+      sessions.delete(paneID);
+    }
+  }
+  notify();
+}
 export async function loadNote(paneID: string, id: string, refresh = false): Promise<void> {
+  if (trashedNotes.has(id)) throw new Error('This note was moved to Trash.');
   const held = sessions.get(paneID);
   if (
     held &&
@@ -40,6 +65,7 @@ export async function loadNote(paneID: string, id: string, refresh = false): Pro
   const pending = window.viewer
     .notes({ kind: 'read', id })
     .then((reply) => {
+      if (trashedNotes.has(id)) return;
       if (reply.kind !== 'document') throw new Error('The note could not be opened.');
       const latest = sessions.get(paneID);
       if (
@@ -68,7 +94,7 @@ export async function loadNote(paneID: string, id: string, refresh = false): Pro
 }
 export function changeNote(paneID: string, change: { text?: string; title?: string }): void {
   const session = sessions.get(paneID);
-  if (!session) return;
+  if (!session || noteLocked(session.document.id)) return;
   Object.assign(session, change);
   clearTimeout(session.timer);
   session.timer = setTimeout(() => {

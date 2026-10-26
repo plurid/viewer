@@ -127,6 +127,34 @@ describe("an agent's setting commands", () => {
 });
 
 describe('Settings, opened at a setting', () => {
+  it('opens Models from a provider link instead of restoring the previous category', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    history.replaceState(null, '', '/?window=settings&category=Browsing&focus=settings.providers');
+    let listener: ((event: DesktopEvent) => void) | undefined;
+    const snapshot = structuredClone(getState().settings);
+    Object.assign(window, {
+      viewer: new Proxy(
+        {
+          settingsGet: async () => snapshot,
+          onEvent: (next: typeof listener) => {
+            listener = next;
+            return () => {};
+          },
+          credentialsList: async () => [],
+          providerPermissionList: async () => [],
+        },
+        { get: (target, key) => Reflect.get(target, key) ?? vi.fn(async () => undefined) },
+      ),
+    });
+    const view = render(createElement(SettingsWindow));
+    await waitFor(() => expect(view.getByRole('heading', { level: 1 }).textContent).toBe('Models'));
+    act(() => listener?.({ type: 'settings-focus', path: 'settings.editor.wordWrap' }));
+    await waitFor(() => expect(view.getByRole('heading', { level: 1 }).textContent).toBe('Editor'));
+    act(() => listener?.({ type: 'settings-focus', path: 'settings.providers' }));
+    await waitFor(() => expect(view.getByRole('heading', { level: 1 }).textContent).toBe('Models'));
+    cleanup();
+    history.replaceState(null, '', '/');
+  });
   it('shows its category and marks its row, and moves to another when asked', async () => {
     history.replaceState(null, '', '/?window=settings&focus=ui.space.minimap');
     let listener: ((event: DesktopEvent) => void) | undefined;

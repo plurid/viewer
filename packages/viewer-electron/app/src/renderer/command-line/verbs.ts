@@ -1,4 +1,5 @@
 import { inheritedWindowPreferences } from '../state/effective-ui';
+import { operationOutcome } from '../operations/outcome';
 import {
   matchesQuery,
   parseFileQuery,
@@ -240,11 +241,13 @@ export const verbRuns: Record<string, VerbRun> = {
     const selection = host.context().selection;
     if (selection.length !== 1) throw new Error('Select one item to rename.');
     if (args[0]!.text.includes('/')) throw new Error('A name, not a path.');
-    await window.viewer.operate({
-      kind: 'rename',
-      name: args[0]!.text,
-      sources: [selection[0]!.path],
-    });
+    await operationOutcome(
+      await window.viewer.operate({
+        kind: 'rename',
+        name: args[0]!.text,
+        sources: [selection[0]!.path],
+      }),
+    );
   },
   // the file query language (domain/search/query.ts), in the folder plane's filter row
   filter: async ({ step }, host) => {
@@ -491,5 +494,5 @@ async function create(host: LineHost, kind: 'mkdir' | 'mkfile', name: string): P
   if (!destination)
     throw new Error(`:${kind === 'mkdir' ? 'mkdir' : 'touch'} needs a folder plane.`);
   if (name.includes('/')) throw new Error('A name, not a path.');
-  await window.viewer.operate({ kind, name, sources: [], destination });
+  await operationOutcome(await window.viewer.operate({ kind, name, sources: [], destination }));
 }

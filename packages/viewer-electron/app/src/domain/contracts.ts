@@ -1,4 +1,6 @@
-import type { PromptAnswer, PromptRequest } from './command-line/prompt';
+import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-line/prompt';
+import type { ReviewState, GitReviewRequest, GitReviewReply } from './comparison/review';
+import type { SessionRequest, SessionReply } from './agents/sessions';
 import type { FlushResult } from './persistence/flush';
 import type { DiffSource } from './comparison/diff';
 import type { GitRequest, GitReply, GitSource } from './comparison/git';
@@ -211,12 +213,15 @@ export interface GitChangesPane {
   id: string;
   type: 'git-changes';
   path: string;
+  review?: ReviewState;
 }
 export interface ChatPane {
   id: string;
   type: 'chat';
   path: string;
   conversationID: string;
+  /** Read-only transcript from an authenticated local agent adapter. */
+  externalSessionID?: string;
 }
 /** A local server's folder reference; listening sockets and logs remain runtime state. */
 export interface BrowserPane {
@@ -322,9 +327,9 @@ export interface Workspace {
   tiling?: Tiling;
 }
 /** The saved state's format: 5 added scratch planes and a preview's unsaved edits (2026-10-23). */
-export const CURRENT_STATE_VERSION = 10 as const;
+export const CURRENT_STATE_VERSION = 11 as const;
 export interface SavedState {
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | typeof CURRENT_STATE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
   preferencesRevision?: number;
   workspaces: Workspace[];
@@ -340,6 +345,8 @@ export interface SavedState {
   visits?: Record<string, { count: number; last: number }>;
   /** Lines run from the command line, the latest first (2026-10-23). */
   lineHistory?: string[];
+  /** Requests and reviewed answers, retained privately without replaying a model request. */
+  promptHistory?: PromptHistoryEntry[];
   look: 'dark' | 'light';
   ui?: UIPreferences;
 }
@@ -532,12 +539,15 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'prepare-note-trash'; id: string; token: string }
+  | { type: 'note-trash-finished'; id: string; trashed: boolean }
   | { type: 'note-changed'; id: string; revision: number }
   | { type: 'receipt-changed'; id: string }
   | { type: 'browser'; browser: BrowserSnapshot }
   | { type: 'journal-changed' }
   | { type: 'local-servers'; servers: LocalServer[] }
   | { type: 'chat'; document: ChatDocument }
+  | { type: 'agent-session'; id: string }
   | { type: 'launch'; request: LaunchRequest }
   | { type: 'workspaces'; state: SavedState }
   | { type: 'watch-rule'; rule: WatchRule }
@@ -578,6 +588,7 @@ export type DesktopEvent =
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
   notes(request: NoteRequest): Promise<NoteReply>;
+  agentSessions(request: SessionRequest): Promise<SessionReply>;
   receipts(request: ReceiptRequest): Promise<ReceiptReply>;
   pdfInspect(file: string): Promise<{ pages: number; version: SourceVersion }>;
   choosePDFs(): Promise<string[]>;
@@ -604,6 +615,7 @@ export interface ViewerAPI {
   newWindow(): Promise<void>;
   git(request: GitRequest): Promise<GitReply>;
   gitWorktrees(request: WorktreeRequest): Promise<WorktreeReply>;
+  gitReview(request: GitReviewRequest): Promise<GitReviewReply>;
   gitResource(source: GitSource): Promise<Resource>;
   gitAction(request: GitActionRequest): Promise<GitActionReply>;
   watchRules(request: WatchRuleRequest): Promise<WatchRuleReply>;
@@ -658,7 +670,11 @@ export interface ViewerAPI {
   terminalResize(id: string, cols: number, rows: number): Promise<void>;
   terminalAck(id: string, bytes: number): Promise<void>;
   terminalClose(id: string): Promise<void>;
-  customExecute(actionID: string, target: CapturedTarget): Promise<string>;
+  customExecute(
+    actionID: string,
+    target: CapturedTarget,
+    values?: Record<string, string>,
+  ): Promise<string>;
   runCommand(script: string, target: CapturedTarget): Promise<string>;
   commandDraft(request?: { script: string; name: string }): Promise<CustomAction | undefined>;
   executionList(): Promise<ExecutionTask[]>;

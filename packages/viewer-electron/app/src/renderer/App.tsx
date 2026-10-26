@@ -10,6 +10,8 @@ import {
 } from './state/effective-ui';
 import type { SpatialOverviewHandle } from './workspace/overlays/useSpatialOverview';
 import { failedFlush } from '../domain/persistence/flush';
+import { prepareNoteTrash, finishNoteTrash } from './notes/sessions';
+import { savePatch } from './state/core';
 import type { CapturedTarget } from '../domain/automation/actions';
 import { receiveWorkspaces } from './state/workspaces';
 import type { LaunchRequest } from '../domain/workspaces/launch';
@@ -290,7 +292,11 @@ function AppWindow() {
           {
             showServers: () => setWindowDialog({ type: 'servers' }),
             showNotes: () => setWindowDialog({ type: 'notes' }),
+            showAgentSessions: (directory) =>
+              setWindowDialog({ type: 'agent-sessions', directory }),
             showTasks: (target) => setWindowDialog({ type: 'tasks', target }),
+            branchTask: (target) =>
+              setWindowDialog({ type: 'branch-task', id: crypto.randomUUID(), target }),
             runCommand: (target) => setWindowDialog({ type: 'run-command', target }),
             newBrowser: (paneID) => setWindowDialog({ type: 'browser', paneID }),
             imageTools: (files, paneID, preset) =>
@@ -441,9 +447,8 @@ function AppWindow() {
       requestAnimationFrame(() => {
         void runLine(text, lineHost, model)
           .then((result) => {
-            if (!result.message) return;
-            if (result.ok) announce(result.message);
-            else report(new Error(result.message));
+            if (result.ok) announce(result.message || 'Command completed.');
+            else if (result.message) report(new Error(result.message));
           })
           .catch(report);
       }),
@@ -534,7 +539,46 @@ function AppWindow() {
       else if (event.type === 'job-progress' && !receiveProgress(event.progress)) resync();
       else if (event.type === 'open')
         for (const path of event.paths) void controller.openPath(path).catch(report);
-      else if (event.type === 'flush')
+      else if (event.type === 'prepare-note-trash')
+        void prepareNoteTrash(event.id)
+          .then(
+            () => window.viewer.flushed(event.token, { ok: true }),
+            (error) => window.viewer.flushed(event.token, failedFlush(error)),
+          )
+          .catch(report);
+      else if (event.type === 'note-trash-finished') {
+        finishNoteTrash(event.id, event.trashed);
+        if (event.trashed) {
+          for (const pane of activeWorkspace().panes)
+            if (pane.type === 'note' && pane.documentID === event.id) controller.closePane(pane.id);
+          savePatch({
+            workspaces: getState().saved.workspaces.map((space) => {
+              const removed = new Set(
+                space.panes
+                  .filter((pane) => pane.type === 'note' && pane.documentID === event.id)
+                  .map((pane) => pane.id),
+              );
+              const panes = space.panes.filter((pane) => !removed.has(pane.id));
+              return {
+                ...space,
+                panes,
+                roots: space.roots.filter((id) => !removed.has(id)),
+                activePane:
+                  space.activePane && removed.has(space.activePane)
+                    ? panes[0]?.id
+                    : space.activePane,
+                taskAreas: space.taskAreas?.map((area) => ({
+                  ...area,
+                  members: area.members.filter(
+                    (member) =>
+                      member.reference.kind !== 'note' || member.reference.documentID !== event.id,
+                  ),
+                })),
+              };
+            }),
+          });
+        }
+      } else if (event.type === 'flush')
         void flushState()
           .then(
             () => window.viewer.flushed(event.token, { ok: true }),

@@ -1,5 +1,65 @@
 # Verification
 
+## October 26 task workflows and RAW thumbnail isolation
+
+The validated local Apple Silicon candidate is retained at
+`/private/tmp/viewer-task-workflows-validated-20261026-G/Viewer.app`.
+Its adjacent `candidate.json` and `reports/` bind the source/package fingerprints,
+scope and executed evidence. All previous candidates, fixtures and original
+inputs remain preserved. No agent-initiated OS Trash movement or erasure was
+performed. Native dependencies are inherited; this is not a notarized or Store
+build.
+
+The complete suite passes **1,903 tests in 271 files** after the RAW thumbnail
+fix. Four TypeScript targets, required ESLint, required Prettier and strict deep
+signature checks pass. The later harness-only smoke correction is checked again
+by tools TypeScript, lint, formatting and the complete packaged smoke.
+The final package's source fingerprint is
+`b376d3d51d3c2881b2c44c5912e5e21b6cc4d0a27d782263b1ce16e9e756a27e`;
+its lockfile fingerprint is
+`bf1703c1f919ddaefa0e82f08386939e31145b07333bf3f46f107e1b18daee38`.
+
+Native acceptance on the final candidate verifies one-action branch/worktree
+task setup, its four tools, index-only Git hunk staging/unstaging, literal typed
+parameters, Test → Build ordering, explicit reported-session attachment and
+linked source navigation. Profile, result and six captures remain in
+`viewer-native-task-workflows-oUdIoI` under the macOS temporary root. The earlier
+independent interface review returns **ship**, with no material fixes, for its
+six valid C2 workflow captures. A picker focus/camera race and stale Git review
+snapshot race were fixed and regression-tested before final acceptance.
+The note Trash presenter is opened and cancelled; positive OS note removal
+remains unverified. Agent transcript import/resumption is not automatic: external
+sessions require explicit adapter reports through the documented MCP tool.
+
+Complete packaged smoke passes, with retained fixture
+`viewer-verification-mPerid`, log
+`/private/tmp/viewer-task-final-smoke-G-20261026.log` and evidence
+`packages/viewer-electron/app/out/native-evidence/electron-smoke-2026-10-26T07-21-25-015Z-16ed1ae6-a4ed-4fd3-ba76-ffa03091a140`.
+Its earlier collision-popover failure was an obsolete test assumption: collisions
+now open File operations automatically. The corrected test verifies automatic
+opening, closing and reopening before resolving the fixture's collision.
+
+During qualification, macOS's shared image-thumbnail extension stalled in
+RawCamera/CoreImage at 100% CPU and 5.4 GB, with Viewer playground/test RAW files
+mapped. System logs show Finder moves blocked on its thumbnail read claims.
+The extension ignored SIGTERM; stopping that exact worker with SIGKILL restored
+Desktop thumbnails and deletion, confirmed by the user. Finder, Spotlight and
+file-coordination services were not restarted, and no caches or files were
+deleted as remediation. Redacted system paths prevent attributing the stall to
+one particular RAW input, so Viewer testing remains a potential contributor.
+
+Folder RAW thumbnails had bypassed the existing private camera decoder. They now
+share its bounded, cancellable LibRaw pipeline and never fall back to Quick Look;
+the generic Quick Look rendition entry also refuses supported RAW extensions.
+Five regressions cover routing, failed/missing decoders, cancellation and lease
+release. A final packaged Nikon NEF thumbnail check at 128/512 pixels and a warm
+repeat passes, preserves source hashes and quits cleanly; fixture
+`viewer-native-raw-thumbnails-79PhJZ`, log
+`/private/tmp/viewer-task-final-raw-G-20261026.log`. The replacement system image
+worker remains idle at about 18 MB after the final checks. Other image formats
+still use Quick Look; isolation of the whole preview stack is not claimed.
+See [the task ledger and incident record](task-workflow-implementation.md).
+
 ## October 25 independent RAW decoder
 
 `/private/tmp/viewer-raw-20261025-E/Viewer.app` contains the pinned independent
@@ -1943,7 +2003,6 @@ request. A bounded 1280×820 comparison checks active/inactive headers in
 appearance, including switching the active plane and clearing/reselecting it.
 Both selected headers have no inset shadow; the normal separator remains. The
 desktop app was reopened with this treatment.
-
 
 ## October 25 ordered follow-up: video and Office fidelity
 

@@ -6,6 +6,7 @@ import {
   type KeymapBinding,
 } from '../preferences/keymap';
 import { findVerb, parseCommandLine } from '../command-line/verbs';
+import { actionInputs } from './actions';
 
 /**
  * References that name nothing (2026-10-20): a custom action's recipe or terminal profile, a built-in
@@ -18,6 +19,17 @@ export function referenceIssues(settings: ApplicationSettings): string[] {
   const profiles = new Set(settings.terminals.profiles.map((profile) => profile.id));
   const providers = new Set(settings.providers.map((provider) => provider.id));
   return [
+    ...settings.customActions.flatMap((action) => {
+      if (action.executor.kind !== 'workflow') return [];
+      try {
+        actionInputs(action, settings.customActions);
+        return [];
+      } catch (error) {
+        return [
+          `The workflow “${action.name}”: ${error instanceof Error ? error.message : String(error)}`,
+        ];
+      }
+    }),
     ...settings.customActions.flatMap(({ name, executor }) =>
       executor.kind === 'recipe' && !recipes.has(executor.recipeID)
         ? [`The action “${name}” runs the recipe “${executor.recipeID}”, which does not exist.`]

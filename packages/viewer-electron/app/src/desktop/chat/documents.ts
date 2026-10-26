@@ -70,9 +70,9 @@ export class ChatDocumentStore {
     const bytes = await this.bytes();
     if (!bytes) return null;
     const stored = storedChatDocumentSchema.parse(JSON.parse(bytes.toString('utf8')));
-    if (stored.version === 2) return stored;
-    const migrated = chatDocumentSchema.parse({ ...stored, version: 2 });
-    const backup = await open(this.file + '.before-chat-v2-' + randomUUID() + '.bak', 'wx', 0o600);
+    if (stored.version === 3) return stored;
+    const migrated = chatDocumentSchema.parse({ ...stored, version: 3 });
+    const backup = await open(this.file + '.before-chat-v3-' + randomUUID() + '.bak', 'wx', 0o600);
     try {
       await backup.writeFile(bytes);
       await backup.sync();

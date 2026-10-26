@@ -75,6 +75,8 @@ import { Operations } from './operations/operations';
 import { TextFiles } from './editing/text-files';
 import { TextBuffers } from './editing/text-buffers';
 import { Notes } from './editing/notes';
+import { GitReviews } from './comparison/review';
+import { AgentSessions } from './agents/sessions';
 import { Resources } from './previews/resources';
 import { DerivedPreviews, rawDecoder } from './previews/derived';
 import { videoDecoder } from './previews/video-rendition';
@@ -123,10 +125,12 @@ export class Desktop {
   readonly journal: JournalStore;
   private readonly activity: JournalActivity;
   readonly chats: Chats;
+  readonly agentSessions: AgentSessions;
   private shellCommand: ShellCommand;
   readonly workspaceSessions = new WorkspaceSessions();
   readonly git: GitReader;
   readonly worktrees: GitWorktrees;
+  readonly gitReviews: GitReviews;
   private readonly gitActions: GitActions;
   private gitResources = new Set<string>();
   private nativeSelections = new NativeSelections((source) =>
@@ -194,7 +198,7 @@ export class Desktop {
   readonly modelPermissions: ModelPermissions;
   readonly actions: ActionPlanner;
   readonly agents: AgentBroker;
-  readonly thumbnails = new Thumbnails();
+  readonly thumbnails: Thumbnails;
   private appIcons = new AppIcons(nativeAppIcon);
   private diagnosticReports = new Map<number, number[]>();
   // HOME becomes the container in App Sandbox. Sidebar/default paths describe
@@ -292,6 +296,18 @@ export class Desktop {
       this.emit({ type: 'journal-changed' }),
     );
     this.activity = new JournalActivity(this.journal);
+    this.gitReviews = new GitReviews({
+      available: () => !process.mas,
+      owner: (owner) =>
+        this.gitWindow(owner)?.alive ? this.gitWindow(owner)?.originID : undefined,
+      access: (paths) => this.fileAccess.require(paths),
+      validate: (owner, target) =>
+        validateGitTarget(target, this.gitWindow(owner), undefined, ['folder', 'git-changes']),
+      changed: (root) => {
+        this.git.invalidate();
+        this.emit({ type: 'folder-changed', path: root });
+      },
+    });
     this.worktrees = new GitWorktrees({
       available: () => !process.mas,
       access: (paths) => this.fileAccess.require(paths),
@@ -369,13 +385,15 @@ export class Desktop {
     const video = videoDecoder(
       path.join(previewAssets, `viewer-processors-${process.platform}-${process.arch}`),
     );
+    const derived = new DerivedPreviews(access, (source, mode, signal) =>
+      mode === 'video' ? video(source, mode, signal) : raw(source, mode, signal),
+    );
+    this.thumbnails = new Thumbnails(derived);
     this.resources = new Resources(
       access,
       (file, signal) => quickLookRender(file, undefined, signal),
       12000,
-      new DerivedPreviews(access, (source, mode, signal) =>
-        mode === 'video' ? video(source, mode, signal) : raw(source, mode, signal),
-      ),
+      derived,
     );
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
@@ -622,8 +640,10 @@ export class Desktop {
     );
     this.texts = new TextFiles(this.operations, access);
     this.buffers = new TextBuffers(dataPath);
-    this.notes = new Notes(dataPath, (id, revision) =>
-      emit({ type: 'note-changed', id, revision }),
+    this.notes = new Notes(
+      dataPath,
+      (id, revision) => emit({ type: 'note-changed', id, revision }),
+      fallbackTrash,
     );
     this.lenses = new Lenses(dataPath, access, {
       home: this.home,
@@ -748,6 +768,7 @@ export class Desktop {
         }),
       }),
     );
+    this.agentSessions = new AgentSessions(dataPath, (id) => emit({ type: 'agent-session', id }));
     this.agents = new AgentBroker(
       dataPath,
       () => this.settings.snapshot().settings,
@@ -767,6 +788,7 @@ export class Desktop {
             ? undefined
             : { ...snapshot.settings.agents, revision: snapshot.revision };
         }),
+        sessions: this.agentSessions,
         relationships: async (file, content) => {
           const result = await this.relationships.request({ kind: 'read', file, content });
           if (!result || !('relations' in result))
@@ -1021,6 +1043,7 @@ export class Desktop {
       this.chats.retain(sender, new Set());
       this.gitActions.stopOwner(sender);
       this.worktrees.stopOwner(sender);
+      this.gitReviews.stopOwner(sender);
       this.terminals.stopOwner(sender);
       this.executions.stopOwner(sender);
       void this.webPreviews
@@ -1152,7 +1175,9 @@ export class Desktop {
   }
   private async disposeServices(): Promise<void> {
     await this.chats.close();
+    await this.agentSessions.flush();
     await this.gitActions.close();
+    await this.gitReviews.close();
     this.git.close();
     this.worktrees.close();
     this.ready = false;
@@ -1295,10 +1320,33 @@ export class Desktop {
   private createHandlers(): ApiHandlers {
     return {
       receipts: ([request]) => this.receipts.request(request),
-      notes: ([request], owner) => {
+      notes: async ([request], owner) => {
         if ([...this.agentCommands.values()].some((item) => item.owner === owner))
           throw new Error('Notes are private to the person.');
-        return this.notes.request(request);
+        if (request.kind !== 'trash') return this.notes.request(request);
+        let trashed = false;
+        try {
+          const results = await Promise.allSettled(
+            [...this.windows.values()]
+              .filter((item) => item.role === 'viewer' && item.ready)
+              .map(({ window }) =>
+                this.flushes.request(window.webContents.id, `note-trash:${request.id}`, (token) =>
+                  window.webContents.send('viewer:event', {
+                    type: 'prepare-note-trash',
+                    id: request.id,
+                    token,
+                  }),
+                ),
+              ),
+          );
+          const failure = results.find((result) => result.status === 'rejected');
+          if (failure?.status === 'rejected') throw failure.reason;
+          const reply = await this.notes.request(request);
+          trashed = reply.kind === 'trashed';
+          return reply;
+        } finally {
+          this.emit({ type: 'note-trash-finished', id: request.id, trashed });
+        }
       },
       ...createJournalHandlers({
         store: this.journal,
@@ -1410,6 +1458,26 @@ export class Desktop {
             ? { ...request, target: await bindGitTarget(request.target, this.gitWindow(owner)) }
             : request;
         return this.worktrees.request(bound, owner);
+      },
+      gitReview: async ([request], owner) => {
+        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
+          throw new Error('Git review is available only to the person.');
+        const bound =
+          request.kind === 'open'
+            ? {
+                ...request,
+                target: await bindGitTarget(request.target, this.gitWindow(owner), undefined, [
+                  'folder',
+                  'git-changes',
+                ]),
+              }
+            : request;
+        return this.gitReviews.request(bound, owner);
+      },
+      agentSessions: ([request], owner) => {
+        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
+          throw new Error('Saved agent transcripts are available only to the person.');
+        return this.agentSessions.request(request);
       },
       gitAction: async ([request], owner) => {
         if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
@@ -1604,11 +1672,11 @@ export class Desktop {
         this.terminals.stop(args[0], senderID);
         this.activity.cancelGit(args[0], this.windows.get(senderID)?.originID);
       },
-      customExecute: (args) => {
+      customExecute: async (args, owner) => {
         // never on an agent's request: its approval was for a recipe or a command, not a program
-        if ([...this.agentCommands.values()].some(({ command }) => command === 'custom.' + args[0]))
+        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
           throw new Error('Agents cannot run programs or shell scripts.');
-        return this.executions.start(args[0], args[1]);
+        return this.executions.start(args[0], args[1], args[2], owner);
       },
       runCommand: async ([script, input], owner) => {
         if ([...this.agentCommands.values()].some((request) => request.owner === owner))
@@ -1681,6 +1749,7 @@ export class Desktop {
             this.executions.quiesce(root),
             this.gitActions.quiesce(root),
             this.worktrees.quiesce(root),
+            this.gitReviews.quiesce(root),
             this.terminals.quiesce(root),
             this.externalTerminals.quiesce(),
           ]);
@@ -1730,6 +1799,7 @@ export class Desktop {
             await this.executions.quiesce(root);
             await this.gitActions.quiesce(root);
             await this.worktrees.quiesce(root);
+            await this.gitReviews.quiesce(root);
             await this.terminals.quiesce(root);
             await this.externalTerminals.quiesce();
             await this.watchers.revoke(root);

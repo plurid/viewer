@@ -9,8 +9,10 @@ import { Composer } from './Composer';
 import { Transcript } from './Transcript';
 import { useConversation } from './useConversation';
 import './chat.css';
+import { useWorkspace } from '../workspace/context';
 
 export default function ChatPlane({ pane }: { pane: Pane }) {
+  const workspace = useWorkspace();
   const errorID = useId();
   const { state, actions } = useConversation(pane);
   const {
@@ -96,7 +98,16 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
           <p>Drop files or folders here to add context.</p>
         )}
       </div>
-      <Transcript messages={document.messages} running={running} onReview={actions.review} />
+      <Transcript
+        messages={document.messages}
+        running={running}
+        onReview={actions.review}
+        onOpen={(path) =>
+          void workspace
+            .openPath(path, { paneID: pane.id, linked: true, activate: true })
+            .catch(actions.reportError)
+        }
+      />
       <footer className="chat-footer" data-viewer-overlay-protected="chat-composer">
         {error && (
           <p className="chat-error" role="alert" id={errorID}>

@@ -15,7 +15,14 @@ export const taskReferenceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('folder'), path: local }).strict(),
   z.object({ kind: z.literal('preview'), path: local }).strict(),
   z.object({ kind: z.literal('note'), documentID: z.uuid(), path: local }).strict(),
-  z.object({ kind: z.literal('chat'), conversationID: z.uuid(), path: local }).strict(),
+  z
+    .object({
+      kind: z.literal('chat'),
+      conversationID: z.uuid(),
+      externalSessionID: z.uuid().optional(),
+      path: local,
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('terminal'),
@@ -96,7 +103,12 @@ export function taskReference(pane: Pane): TaskReference | undefined {
     case 'note':
       return { kind: 'note', documentID: pane.documentID, path: pane.path };
     case 'chat':
-      return { kind: 'chat', conversationID: pane.conversationID, path: pane.path };
+      return {
+        kind: 'chat',
+        conversationID: pane.conversationID,
+        externalSessionID: pane.externalSessionID,
+        path: pane.path,
+      };
     case 'terminal':
       return pane.gitAction
         ? undefined
@@ -128,7 +140,10 @@ export const taskReferenceKey = (reference: TaskReference) => {
   if (reference.kind === 'server')
     return JSON.stringify(['server', reference.runtimeID ?? reference.path]);
   if (reference.kind === 'note') return 'note:' + reference.documentID;
-  if (reference.kind === 'chat') return 'chat:' + reference.conversationID;
+  if (reference.kind === 'chat')
+    return reference.externalSessionID
+      ? 'agent:' + reference.externalSessionID
+      : 'chat:' + reference.conversationID;
   if (reference.kind === 'receipt') return 'receipt:' + reference.receiptID;
   if (reference.kind === 'browser' && reference.serverRuntimeID)
     return JSON.stringify([

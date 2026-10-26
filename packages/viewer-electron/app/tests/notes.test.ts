@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Notes } from '../src/desktop/editing/notes';
 import {
@@ -8,14 +8,99 @@ import {
   checklistItems,
   editChecklist,
   reorderChecklist,
+  removeChecklistItem,
 } from '../src/domain/editing/notes';
 import { temporaryRoot } from '../tools/temporary';
-import { changeNote, flushNotes, loadNote, noteSession } from '../src/renderer/notes/sessions';
+import {
+  changeNote,
+  finishNoteTrash,
+  flushNotes,
+  loadNote,
+  noteLocked,
+  noteSession,
+  prepareNoteTrash,
+} from '../src/renderer/notes/sessions';
 import { initialize } from '../src/renderer/state/store';
 import { addContentPane } from '../src/renderer/state/panes';
 import { confirmClose } from '../src/renderer/editing/unsaved';
 
 afterEach(() => vi.unstubAllGlobals());
+it('moves only a current ordinary note to the injected Trash adapter, and never resurrects it', async () => {
+  const root = await temporaryRoot('viewer-note-trash-');
+  const trash = vi.fn(async (_file: string) => {});
+  const notes = new Notes(root, undefined, trash);
+  const reply = await notes.request({ kind: 'create', format: 'checklist', directory: root });
+  if (reply.kind !== 'document') throw new Error('Expected note');
+  const file = path.join(root, 'notes', reply.document.id + '.json');
+  const bytes = await readFile(file);
+  await expect(
+    notes.request({ kind: 'trash', id: reply.document.id, revision: 1 }),
+  ).rejects.toThrow('changed');
+  expect(trash).not.toHaveBeenCalled();
+  expect(await notes.request({ kind: 'trash', id: reply.document.id, revision: 0 })).toEqual({
+    kind: 'trashed',
+    id: reply.document.id,
+  });
+  expect(trash).toHaveBeenCalledExactlyOnceWith(file);
+  await expect(
+    notes.request({
+      kind: 'write',
+      id: reply.document.id,
+      revision: 0,
+      title: 'Old view',
+      text: 'Late draft',
+    }),
+  ).rejects.toThrow('Trash');
+  expect(await notes.request({ kind: 'list' })).toMatchObject({ notes: [] });
+  // This is an adapter contract test. The stub does not move or remove its fixture.
+  expect(await readFile(file)).toEqual(bytes);
+});
+it('preserves a note when Trash fails and refuses a linked private note', async () => {
+  const root = await temporaryRoot('viewer-note-trash-refusal-');
+  const notes = new Notes(root, undefined, async () => {
+    throw new Error('Generated Trash failure');
+  });
+  const reply = await notes.request({ kind: 'create', format: 'note', directory: root });
+  if (reply.kind !== 'document') throw new Error('Expected note');
+  await expect(
+    notes.request({ kind: 'trash', id: reply.document.id, revision: 0 }),
+  ).rejects.toThrow('Trash failure');
+  expect(await notes.request({ kind: 'read', id: reply.document.id })).toMatchObject({
+    document: reply.document,
+  });
+  const linkID = randomUUID();
+  await symlink(
+    path.join(root, 'notes', reply.document.id + '.json'),
+    path.join(root, 'notes', linkID + '.json'),
+  );
+  await expect(notes.request({ kind: 'trash', id: linkID, revision: 0 })).rejects.toThrow();
+});
+it('freezes and flushes open note drafts before removal, then releases locks on failure', async () => {
+  const root = await temporaryRoot('viewer-note-trash-barrier-');
+  const notes = new Notes(root);
+  const reply = await notes.request({ kind: 'create', format: 'note', directory: root });
+  if (reply.kind !== 'document') throw new Error('Expected note');
+  vi.stubGlobal('window', {
+    viewer: { notes: (input: Parameters<Notes['request']>[0]) => notes.request(input) },
+  });
+  const paneID = randomUUID();
+  await loadNote(paneID, reply.document.id);
+  changeNote(paneID, { text: 'Latest saved draft' });
+  await prepareNoteTrash(reply.document.id);
+  expect(noteLocked(reply.document.id)).toBe(true);
+  changeNote(paneID, { text: 'Ignored while frozen' });
+  expect(noteSession(paneID)?.text).toBe('Latest saved draft');
+  expect(await notes.request({ kind: 'read', id: reply.document.id })).toMatchObject({
+    document: { text: 'Latest saved draft' },
+  });
+  finishNoteTrash(reply.document.id, false);
+  expect(noteLocked(reply.document.id)).toBe(false);
+  changeNote(paneID, { text: 'Editable again' });
+  await flushNotes();
+  finishNoteTrash(reply.document.id, true);
+  expect(noteSession(paneID)).toBeUndefined();
+  await expect(loadNote(paneID, reply.document.id)).rejects.toThrow('Trash');
+});
 it('keeps documents through view closure/restart and preserves concurrent edits in a separate recovered note', async () => {
   const root = await temporaryRoot('viewer-notes-');
   const notes = new Notes(root);
@@ -85,6 +170,8 @@ it('edits and reorders checklist source without dropping other text, and rejects
     '# Checklist\n\n- [x] Edited\n- [X] Second\n',
   );
   expect(reorderChecklist(text, 2, 3)).toBe('# Checklist\n\n- [X] Second\n- [ ] First\n');
+  expect(removeChecklistItem(text, 2)).toBe('# Checklist\n\n- [X] Second\n');
+  expect(() => removeChecklistItem(text, 0)).toThrow('changed');
   expect(noteRequestSchema.safeParse({ kind: 'remove', id: randomUUID() }).success).toBe(false);
   expect(
     noteRequestSchema.safeParse({

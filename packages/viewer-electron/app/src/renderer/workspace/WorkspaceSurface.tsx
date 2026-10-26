@@ -119,6 +119,7 @@ const LazyNotePlane = lazy(() => import('../notes/NotePlane'));
 const LazyDiffPlane = lazy(() => import('../diff/DiffPlane'));
 const LazyGitChanges = lazy(() => import('../git/GitChanges'));
 const LazyChatPlane = lazy(() => import('../chat/ChatPlane'));
+const LazySessionPlane = lazy(() => import('../chat/SessionPlane'));
 const LazyServerPlane = lazy(() => import('../local-servers/ServerPlane'));
 const LazyBrowserPlane = lazy(() => import('../browser/BrowserPlane'));
 const LazyMediaPlane = lazy(() => import('../media/MediaPlane'));
@@ -214,7 +215,7 @@ function ChatContent() {
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
       <Suspense fallback={<Empty title="Opening Chat…" />}>
-        <LazyChatPlane pane={pane} />
+        {pane.externalSessionID ? <LazySessionPlane pane={pane} /> : <LazyChatPlane pane={pane} />}
       </Suspense>
     </PreviewFrame>
   );

@@ -7,6 +7,7 @@ import { Field } from './SettingField';
 import { referencesTo } from '../../../domain/automation/references';
 import { Icon } from '../Icon';
 import { ChoiceButton } from '../ChoiceMenu';
+import { CommandFields } from './CommandFields';
 import {
   customActionEdit,
   terminalProfileEdit,
@@ -391,6 +392,7 @@ export function CustomActionSettings({
               choices={[
                 { value: 'builtin', label: 'Built-in command' },
                 { value: 'sequence', label: 'Command sequence (macro)' },
+                { value: 'workflow', label: 'Workflow' },
                 { value: 'recipe', label: 'Action recipe' },
                 { value: 'terminal', label: 'Terminal plane' },
                 { value: 'executable', label: 'Executable' },
@@ -400,20 +402,22 @@ export function CustomActionSettings({
                 const executor: CustomAction['executor'] =
                   kind === 'builtin'
                     ? { kind, command: 'open-terminal' }
-                    : kind === 'sequence'
-                      ? { kind, commands: ['select-all', 'copy'] }
-                      : kind === 'recipe'
-                        ? { kind, recipeID: snapshot.settings.recipes[0]?.id ?? 'rename' }
-                        : kind === 'terminal'
-                          ? { kind, profileID: snapshot.settings.terminals.profileID }
-                          : kind === 'shell'
-                            ? { kind, executable: '/bin/zsh', script: 'pwd', perItem: false }
-                            : {
-                                kind: 'executable',
-                                executable: '/usr/bin/printf',
-                                args: ['%s\\n', '{paths}'],
-                                perItem: false,
-                              };
+                    : kind === 'workflow'
+                      ? { kind, steps: [{ kind: 'command', line: 'refresh' }] }
+                      : kind === 'sequence'
+                        ? { kind, commands: ['select-all', 'copy'] }
+                        : kind === 'recipe'
+                          ? { kind, recipeID: snapshot.settings.recipes[0]?.id ?? 'rename' }
+                          : kind === 'terminal'
+                            ? { kind, profileID: snapshot.settings.terminals.profileID }
+                            : kind === 'shell'
+                              ? { kind, executable: '/bin/zsh', script: 'pwd', perItem: false }
+                              : {
+                                  kind: 'executable',
+                                  executable: '/usr/bin/printf',
+                                  args: ['%s\\n', '{paths}'],
+                                  perItem: false,
+                                };
                 patch(action.id, { executor });
               }}
             />
@@ -526,6 +530,11 @@ export function CustomActionSettings({
               </label>
             </>
           )}
+          <CommandFields
+            action={action}
+            actions={actions}
+            change={(update) => patch(action.id, update)}
+          />
           <button onClick={() => set((actions) => actions.filter((item) => item.id !== action.id))}>
             Remove command
           </button>

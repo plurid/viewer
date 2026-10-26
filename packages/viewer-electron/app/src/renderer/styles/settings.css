@@ -31,6 +31,31 @@
   margin: 16px 0 7px;
   font-weight: 600;
 }
+.command-parameters {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+.command-parameters > label {
+  display: grid;
+  gap: 8px;
+}
+.command-input-editor fieldset,
+.command-workflow-editor fieldset {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 12px 0;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+.command-input-editor fieldset label,
+.command-workflow-editor fieldset label {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(180px, 2fr);
+  gap: 12px;
+  align-items: center;
+}
 .settings-row {
   display: flex;
   align-items: center;

@@ -21,7 +21,7 @@ const providers: ModelProvider[] = ['Alpha', 'Beta'].map((name) => ({
   allowContent: true,
 }));
 const conversation = (): ChatDocument => ({
-  version: 2,
+  version: 3,
   id: crypto.randomUUID(),
   title: 'Example',
   path: '/fixtures',

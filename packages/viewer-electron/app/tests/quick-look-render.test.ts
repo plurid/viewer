@@ -1,7 +1,19 @@
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 const thumbnail = vi.hoisted(() => vi.fn());
 vi.mock('electron', () => ({ nativeImage: { createThumbnailFromPath: thumbnail } }));
 import { quickLookRender } from '../src/desktop/native/quick-look-render';
+import { cameraRawFormats } from '../src/domain/previews/images/rendered';
+
+beforeEach(() => thumbnail.mockReset());
+
+it('refuses camera RAW before submitting any system thumbnail request', async () => {
+  for (const format of cameraRawFormats)
+    await expect(quickLookRender('/fixture/camera.' + format.toUpperCase())).rejects.toThrow(
+      'isolated decoder',
+    );
+  expect(thumbnail).not.toHaveBeenCalled();
+});
+
 it('caps actual unanswered system requests and skips late bitmap encoding after cancellation', async () => {
   const replies: ((value: unknown) => void)[] = [];
   thumbnail.mockImplementation(
@@ -11,8 +23,8 @@ it('caps actual unanswered system requests and skips late bitmap encoding after 
       }),
   );
   const abort = new AbortController();
-  const first = quickLookRender('/fixture/one.nef', undefined, abort.signal),
-    second = quickLookRender('/fixture/two.dng');
+  const first = quickLookRender('/fixture/one.tiff', undefined, abort.signal),
+    second = quickLookRender('/fixture/two.psd');
   await expect(quickLookRender('/fixture/third.tiff')).rejects.toThrow('still busy');
   expect(thumbnail).toHaveBeenCalledTimes(2);
   const image = {

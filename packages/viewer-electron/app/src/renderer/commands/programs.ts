@@ -2,7 +2,9 @@ import { effectiveWindowSettings } from '../state/effective-ui';
 import { plainCommandID } from '../../domain/command-line/verbs';
 import { withArguments } from '../../domain/command-line/lex';
 import type { CommandContext, CommandDefinition } from './registry';
-import { actionAvailable, terminalDirectory } from '../../domain/automation/actions';
+import { actionAvailable, actionInputs, terminalDirectory } from '../../domain/automation/actions';
+import { requestParameters } from './ActionParameters';
+import { executeAction } from './execute-action';
 import { activeWorkspace, getState } from '../state/store';
 import { newPlaneFolder } from '../../domain/services';
 import type { WorkspaceController } from '../workspace/context';
@@ -23,7 +25,9 @@ import {
 export { captureTarget } from './target';
 export interface ProgramTools {
   showTasks?(target?: ReturnType<typeof captureTarget>): void;
+  branchTask?(target: ReturnType<typeof captureTarget>): void;
   showNotes?(): void;
+  showAgentSessions?(directory?: string): void;
   runCommand?(target: ReturnType<typeof captureTarget>): void;
   showServers?(): void;
   newBrowser?(paneID?: string): void;
@@ -49,6 +53,24 @@ export function programCommands(
     return { ...captured, directory: terminalDirectory(captured.directory, captured.selection) };
   };
   return [
+    {
+      id: 'agent-sessions',
+      label: 'Agent sessions…',
+      group: 'Workspace',
+      icon: 'command',
+      aliases: ['agent conversations', 'codex sessions', 'claude sessions'],
+      when: () => !!tools.showAgentSessions,
+      run: (context) => tools.showAgentSessions?.(context.directory),
+    },
+    {
+      id: 'new-task-from-branch',
+      label: 'New task from branch…',
+      group: 'Workspace',
+      icon: 'folder',
+      aliases: ['branch task', 'task worktree', 'new development task'],
+      when: (context) => !!tools.branchTask && !!context.folder && folder(context),
+      run: (context) => tools.branchTask?.(target(context)),
+    },
     {
       id: 'open-tasks',
       label: 'Tasks…',
@@ -280,21 +302,62 @@ export function programCommands(
         id: 'custom.' + action.id,
         label: action.name,
         group: 'Actions',
+        paletteFolder: action.folder,
         icon: (['terminal', 'command', 'rename', 'folder', 'external', 'code', 'copy'].includes(
           action.icon,
         )
           ? action.icon
           : 'command') as IconName,
-        aliases: action.aliases,
+        aliases: [...action.aliases, ...(action.folder ?? [])],
         shortcut: action.shortcut,
         primary: action.pinned,
         // a sequence runs anywhere a command can; the others act on a folder's selection
         when: (context) =>
-          action.executor.kind === 'sequence' && !folder(context)
+          action.executor.kind === 'sequence' &&
+          !folder(context) &&
+          !action.when.directories?.length
             ? true
             : folder(context) && actionAvailable(action, captureTarget(context, workspace)),
         run: async (context) => {
           const executor = action.executor;
+          if (executor.kind === 'workflow') {
+            const actions = structuredClone(getState().settings.settings.customActions);
+            const captured = captureTarget(context, workspace);
+            const values = await requestParameters(action.name, actionInputs(action, actions));
+            if (!values) return;
+            for (const [index, step] of executor.steps.entries()) {
+              if (activeWorkspace().id !== captured.workspaceID)
+                throw new Error('The workspace changed. The workflow stopped.');
+              if (
+                !activeWorkspace().panes.some(
+                  (pane) => pane.id === captured.paneID && pane.path === captured.panePath,
+                )
+              )
+                throw new Error('The originating plane changed. The workflow stopped.');
+              try {
+                if (step.kind === 'action') {
+                  const child = actions.find((action) => action.id === step.actionID);
+                  if (
+                    !child ||
+                    !['shell', 'executable'].includes(child.executor.kind) ||
+                    !actionAvailable(child, captured)
+                  )
+                    throw new Error('The command is unavailable in the captured folder.');
+                  await executeAction(child, captured, values);
+                } else {
+                  const result = line
+                    ? await line(step.line)
+                    : { ok: false, message: 'Command line unavailable.' };
+                  if (!result.ok) throw new Error(result.message || 'Command did not finish.');
+                }
+              } catch (error) {
+                throw new Error(
+                  `${action.name} stopped at step ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+                );
+              }
+            }
+            return;
+          }
           if (executor.kind === 'sequence') {
             for (const [index, command] of executor.commands.entries()) {
               if (command.startsWith('custom.'))
@@ -334,7 +397,11 @@ export function programCommands(
             requestAction(executor.recipeID, context);
           } else if (executor.kind === 'terminal')
             workspace.newTerminal(target(context), executor.profileID);
-          else await window.viewer.customExecute(action.id, captureTarget(context, workspace));
+          else {
+            const captured = captureTarget(context, workspace);
+            const values = await requestParameters(action.name, actionInputs(action, []));
+            if (values) await executeAction(action, captured, values);
+          }
         },
       })),
   ];

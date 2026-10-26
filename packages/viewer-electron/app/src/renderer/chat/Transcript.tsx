@@ -9,10 +9,12 @@ export const Transcript = memo(function Transcript({
   messages,
   running,
   onReview,
+  onOpen,
 }: {
   messages: readonly ChatMessage[];
   running: boolean;
   onReview(proposal: NonNullable<ChatMessage['proposal']>): void;
+  onOpen?(path: string): void;
 }) {
   const transcript = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -46,6 +48,11 @@ export const Transcript = memo(function Transcript({
           <details className="chat-tool" key={message.id}>
             <summary>Inspected context</summary>
             <pre>{message.text}</pre>
+            {message.links?.map((link) => (
+              <button key={link.path} onClick={() => onOpen?.(link.path)}>
+                Open current file: {link.path.split('/').at(-1)}
+              </button>
+            ))}
           </details>
         ) : (
           <article

@@ -12,6 +12,7 @@ import type { WorktreeSelection } from '../../domain/comparison/worktrees';
 import type { NoteKind } from '../../domain/editing/notes';
 export interface WorkspaceController {
   newTaskArea(target: CapturedTarget, name: string): Promise<string>;
+  setupTaskArea(id: string): Promise<void>;
   openTaskArea(id: string): void;
   refreshTaskArea(id: string): Promise<void>;
   openTaskMember(areaID: string, memberID: string): Promise<string>;
@@ -28,6 +29,7 @@ export interface WorkspaceController {
   openJournal(filter: JournalFilter): void;
   newChat(paths: string[], draft?: string): Promise<void>;
   openChat(id: string): Promise<void>;
+  openAgentSession(id: string, parentPaneID?: string): Promise<string>;
   openDiff(left: DiffSource, right: DiffSource, parentPaneID?: string): void;
   openGitDiff(file: string, parentPaneID?: string): Promise<void>;
   openGitChanges(path: string, parentPaneID?: string): void;

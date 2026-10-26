@@ -71,12 +71,22 @@
 .notes-library-body > p {
   margin: 0;
 }
-.notes-list > button {
+.notes-library-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.notes-library-row > button:first-child {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
   align-items: flex-start;
   text-align: left;
+}
+.notes-library-row strong {
+  overflow-wrap: anywhere;
 }
 .notes-list small {
   color: var(--muted);

@@ -12,7 +12,7 @@ import {
 } from '../../domain/comparison/git';
 
 const maximumStatus = 8 * 1024 * 1024;
-const safeOptions = [
+export const gitSafeOptions = [
   '--no-pager',
   '--no-optional-locks',
   '--no-replace-objects',
@@ -44,24 +44,25 @@ export type GitRunner = (
   limit: number,
   signal: AbortSignal,
 ) => Promise<Buffer>;
+export const gitEnvironment = () => ({
+  PATH: '/usr/bin:/bin',
+  HOME: os.homedir(),
+  LANG: 'C.UTF-8',
+  LC_ALL: 'C',
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_ASKPASS: '/usr/bin/false',
+  SSH_ASKPASS: '/usr/bin/false',
+  GIT_OPTIONAL_LOCKS: '0',
+  GIT_NO_LAZY_FETCH: '1',
+  GIT_NO_REPLACE_OBJECTS: '1',
+});
 /** No shell, inherited Git configuration overrides, credential helpers, or network transports. */
 export const runGit: GitRunner = (directory, args, limit, signal) =>
   new Promise((resolve, reject) => {
-    const child = spawn('/usr/bin/git', [...safeOptions, '-C', directory, ...args], {
-      env: {
-        PATH: '/usr/bin:/bin',
-        HOME: os.homedir(),
-        LANG: 'C.UTF-8',
-        LC_ALL: 'C',
-        GIT_CONFIG_NOSYSTEM: '1',
-        GIT_CONFIG_GLOBAL: '/dev/null',
-        GIT_TERMINAL_PROMPT: '0',
-        GIT_ASKPASS: '/usr/bin/false',
-        SSH_ASKPASS: '/usr/bin/false',
-        GIT_OPTIONAL_LOCKS: '0',
-        GIT_NO_LAZY_FETCH: '1',
-        GIT_NO_REPLACE_OBJECTS: '1',
-      },
+    const child = spawn('/usr/bin/git', [...gitSafeOptions, '-C', directory, ...args], {
+      env: gitEnvironment(),
       stdio: ['ignore', 'pipe', 'pipe'],
       signal,
       windowsHide: true,
@@ -88,7 +89,8 @@ export const runGit: GitRunner = (directory, args, limit, signal) =>
     });
     child.on('close', (code) => {
       if (failure) reject(failure);
-      else if (code !== 0) reject(new Error(errors.trim().slice(0, 1000) || 'Git is unavailable.'));
+      else if (code !== 0 && !(code === 1 && args[0] === 'diff' && args.includes('--no-index')))
+        reject(new Error(errors.trim().slice(0, 1000) || 'Git is unavailable.'));
       else resolve(Buffer.concat(chunks));
     });
   });

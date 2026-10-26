@@ -3,7 +3,7 @@ import type { PlanePlacement } from '../../domain/workspaces/project';
 import { useCallback, useMemo, useRef, type RefObject } from 'react';
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
 import { PLURID_PUBSUB_TOPIC, type TreePlane, type TreePlaneLocation } from '@plurid/plurid-data';
-import type { FileEntry } from '../../domain/contracts';
+import type { FileEntry, ChatPane } from '../../domain/contracts';
 import {
   sameSourceVersion,
   sourceVersion,
@@ -227,6 +227,29 @@ export function useWorkspaceController({
         const id = crypto.randomUUID();
         addContentPane({ id, type: 'chat', path: document.path, conversationID: document.id });
         controller.focusPane(id, { activate: true });
+      },
+      async openAgentSession(id, parentPaneID) {
+        const owner = activeWorkspace().id;
+        const existing = activeWorkspace().panes.find(
+          (pane) => pane.type === 'chat' && pane.externalSessionID === id,
+        );
+        if (existing) {
+          controller.focusPane(existing.id, { activate: true });
+          return existing.id;
+        }
+        const reply = await window.viewer.agentSessions({ kind: 'read', id });
+        if (reply.kind !== 'session' || activeWorkspace().id !== owner)
+          throw new Error('The workspace changed. Reopen the session.');
+        const pane: ChatPane = {
+          id: crypto.randomUUID(),
+          type: 'chat',
+          path: reply.session.directory,
+          conversationID: id,
+          externalSessionID: id,
+        };
+        registerContent(pane, parentPaneID);
+        controller.focusPane(pane.id, { activate: true });
+        return pane.id;
       },
       async openChat(conversationID) {
         const owner = activeWorkspace().id;

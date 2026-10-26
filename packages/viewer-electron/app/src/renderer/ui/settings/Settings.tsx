@@ -39,9 +39,15 @@ export function SettingsWindow() {
   // a setting's command opened Settings at it (2026-10-23): its category, the row shown and marked
   const [focused, setFocused] = useState<{ path: string; at: number } | null>(null);
   const show = (path: string) => {
-    if (path === 'settings.customActions') {
+    const section =
+      path === 'settings.providers'
+        ? 'Models'
+        : path === 'settings.customActions'
+          ? 'Actions'
+          : undefined;
+    if (section) {
       setQuery('');
-      setCategory('Actions');
+      setCategory(section);
       setFocused(null);
       return;
     }

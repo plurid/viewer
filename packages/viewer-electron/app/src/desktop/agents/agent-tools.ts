@@ -1,8 +1,15 @@
 import { z } from 'zod';
 import { transformPlanSchema } from '../../domain/operations/transforms';
+import { sessionReportSchema } from '../../domain/agents/sessions';
 /** The MCP tools Viewer offers agents. Every call is still authorized per client,
  * capability and folder, and anything that changes files waits for review. */
 export const agentTools = [
+  {
+    name: 'report_session',
+    description:
+      'Report your own session transcript, explicit working/waiting/done/failed status and file or Git-diff references. Uses a granted folder and metadata capability. Session IDs belong to your authenticated client; sequence increases on every report. Messages are append-only by ID. This does not open planes, launch commands or grant file access. Report user-visible content only; do not send secrets or hidden reasoning.',
+    inputSchema: z.toJSONSchema(sessionReportSchema),
+  },
   {
     name: 'propose_transform',
     description:

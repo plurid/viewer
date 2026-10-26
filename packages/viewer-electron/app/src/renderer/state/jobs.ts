@@ -65,13 +65,17 @@ export function receiveJob(job: OperationJob): void {
   if (job.undoable && !old?.undoable) undoableSince.set(job.id, Date.now());
   if (job.redoable && !old?.redoable) redoableSince.set(job.id, Date.now());
   const jobs = [job, ...getState().jobs.filter((item) => item.id !== job.id)].slice(0, 100);
+  const needsDecision =
+    job.status === 'collision' ||
+    (job.status === 'queued' && jobs.some((item) => item.status === 'collision'));
   update({
     ...getState(),
     jobs,
     operationsOpen:
-      getState().operationsOpen &&
-      (getState().operationsHistory ||
-        jobs.some((job) => ['queued', 'running', 'collision', 'failed'].includes(job.status))),
+      needsDecision ||
+      (getState().operationsOpen &&
+        (getState().operationsHistory ||
+          jobs.some((job) => ['queued', 'running', 'collision', 'failed'].includes(job.status)))),
     acknowledgedJobs:
       getState().operationsOpen && job.status === 'failed'
         ? [...new Set([...getState().acknowledgedJobs, job.id])]

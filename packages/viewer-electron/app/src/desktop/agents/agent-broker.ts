@@ -44,6 +44,8 @@ import { discardOwnTemporaryFile, removeEmptyDirectory } from '../operations/rem
 import { nativeTestRemovalsBlocked } from '../native/test-removal-policy';
 import { agentTools } from './agent-tools';
 import { transformPlanSchema } from '../../domain/operations/transforms';
+import { sessionReportSchema } from '../../domain/agents/sessions';
+import type { AgentSessions } from './sessions';
 const within = (file: string, root: string) =>
   file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 /** The person's Home folder; a Mac App Store build's os.homedir() is its container. */
@@ -108,6 +110,7 @@ export class AgentBroker {
       workspaceState?(): Promise<AgentWorkspaceSnapshot | undefined>;
       relationships?(file: string, content: boolean): Promise<RelationshipsResult>;
       agentAccess?: AgentAccess;
+      sessions?: AgentSessions;
     },
   ) {
     this.access = extension?.agentAccess ?? new AgentAccess(dataPath, () => this.settings().agents);
@@ -516,7 +519,16 @@ export class AgentBroker {
     if (capability) await this.clients.require(capability);
     else await this.clients.get();
     let value: unknown;
-    if (['list_workspaces', 'list_planes'].includes(call.name)) {
+    if (call.name === 'report_session') {
+      if (!this.extension?.sessions) throw new Error('Session reporting is unavailable.');
+      const client = await this.clients.get();
+      value = await this.extension.sessions.report(
+        this.clients.actor(),
+        client?.name ?? 'Shared local client',
+        sessionReportSchema.parse(args),
+        (file) => this.authorize(file),
+      );
+    } else if (['list_workspaces', 'list_planes'].includes(call.name)) {
       const input =
         call.name === 'list_planes'
           ? z

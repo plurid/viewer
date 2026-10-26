@@ -9,6 +9,7 @@ import {
 } from '../../domain/command-line/verbs';
 import { errorMessage } from '../../domain/errors';
 import { Stopped, type LineHost } from './host';
+import { OperationCancelled } from '../operations/outcome';
 import { withArguments } from '../../domain/command-line/lex';
 import { sessionKeys } from '../keys/session';
 import { getState } from '../state/store';
@@ -140,7 +141,7 @@ export async function runLine(text: string, host: LineHost, model = false): Prom
         const message = await item.run(host);
         if (message) messages.push(message);
       } catch (error) {
-        if (error instanceof Stopped) return { ok: false };
+        if (error instanceof Stopped || error instanceof OperationCancelled) return { ok: false };
         return { ok: false, message: [...messages, errorMessage(error)].join('  ') };
       }
     }

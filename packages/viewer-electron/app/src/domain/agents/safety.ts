@@ -186,6 +186,7 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
       case 'shell':
       case 'executable':
       case 'terminal':
+      case 'workflow':
         throw new Error(
           'Agents cannot run shell scripts, executables or terminal profiles: these can bypass Trash. Use a reviewed built-in action.',
         );

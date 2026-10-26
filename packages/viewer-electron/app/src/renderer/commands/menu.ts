@@ -132,6 +132,27 @@ function layoutSections(commands: ResolvedCommand[]): MenuSection[] {
   ].filter((item) => item.entries.length);
 }
 
+function actionSections(commands: ResolvedCommand[], depth = 0, parent = ''): MenuSection[] {
+  const direct = commands.filter((command) => (command.paletteFolder?.length ?? 0) === depth);
+  const folders = new Map<string, ResolvedCommand[]>();
+  for (const command of commands) {
+    const name = command.paletteFolder?.[depth];
+    if (name) folders.set(name, [...(folders.get(name) ?? []), command]);
+  }
+  return [
+    section(direct),
+    {
+      entries: [...folders].map(([name, rows]): MenuEntry => ({
+        kind: 'submenu',
+        id: 'action-folder:' + parent + '/' + name,
+        label: name,
+        icon: 'folder',
+        sections: actionSections(rows, depth + 1, parent + '/' + name),
+      })),
+    },
+  ].filter((section) => section.entries.length);
+}
+
 /** Keep frequent actions visible; every other applicable command remains in a named submenu. */
 export function contextMenuSections(
   commands: readonly ResolvedCommand[],
@@ -189,6 +210,7 @@ export function contextMenuSections(
     const rows = grouped.get(label)!;
     if (label === 'View') return branch(label, viewSections(rows));
     if (label === 'Layout') return branch(label, layoutSections(rows));
+    if (label === 'Actions') return branch(label, actionSections(rows));
     if (label === 'Git')
       return branch(label, [
         section(

@@ -55,6 +55,54 @@ afterEach(async () => {
 });
 
 describe('literal command execution', () => {
+  it('keeps parameter substitutions literal and enforces folder scope in the service', async () => {
+    const literal = '$(touch should-not-exist) {directory} "quotes"';
+    const action = command({
+      kind: 'executable',
+      executable: process.execPath,
+      args: ['-e', 'process.stdout.write(process.argv[1])', '{input:value}'],
+      perItem: false,
+    });
+    action.inputs = [{ name: 'value', label: 'Value', kind: 'text', required: true }];
+    action.when.directories = [root];
+    config.customActions = [action];
+    const executions = new Executions(
+      () => config,
+      () => {},
+      undefined,
+      async () => {},
+    );
+    cleanup.push(() => executions.close());
+    const id = await executions.start(action.id, target(), { value: literal });
+    await vi.waitFor(() => expect(executions.list()[0]?.status).toBe('completed'));
+    expect(executions.list().find((task) => task.id === id)?.output).toBe(literal);
+    expect(actionAvailable(action, target(root + '-other'))).toBe(false);
+    await expect(
+      executions.start(action.id, target(root + '-other'), { value: literal }),
+    ).rejects.toThrow('unavailable');
+    await expect(executions.start(action.id, target(), { other: 'unexpected' })).rejects.toThrow(
+      'unknown',
+    );
+    config.customActions = [
+      {
+        ...action,
+        executor: {
+          kind: 'shell',
+          executable: '/bin/sh',
+          script: 'printf "%s" "$VIEWER_INPUT_VALUE"',
+          perItem: false,
+        },
+      },
+    ];
+    const shell = await executions.start(action.id, target(), { value: literal });
+    await vi.waitFor(() =>
+      expect(executions.list().find((task) => task.id === shell)?.status).toBe('completed'),
+    );
+    expect(executions.list().find((task) => task.id === shell)?.output).toBe(literal);
+    await expect(fs.stat(path.join(root, 'should-not-exist'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
   it('drains an in-flight preparation without launching after folder access is revoked', async () => {
     config.customActions = [
       command({

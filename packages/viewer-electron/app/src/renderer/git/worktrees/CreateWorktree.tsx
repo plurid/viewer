@@ -14,12 +14,14 @@ export function CreateWorktree({
   create,
   show,
   cancel,
+  task,
 }: {
   catalog: WorktreeCatalog;
   busy: boolean;
   create(checkout: WorktreeCreation['checkout'], destination: string): Promise<void>;
   show(id: string): void;
   cancel(): void;
+  task?: { name: string; change(name: string): void };
 }) {
   const branches = useMemo(() => catalog.branches ?? [], [catalog.branches]);
   const [mode, setMode] = useState<'new' | 'existing'>('new');
@@ -48,7 +50,7 @@ export function CreateWorktree({
       className="worktree-create"
       onSubmit={(event) => {
         event.preventDefault();
-        if (valid && !busy && !occupied)
+        if (valid && !busy && !occupied && (!task || task.name.trim()))
           void create(
             mode === 'new'
               ? { kind: 'new', name, baseID }
@@ -57,6 +59,19 @@ export function CreateWorktree({
           );
       }}
     >
+      {task && (
+        <label>
+          Task name
+          <input
+            aria-label="Branch task name"
+            value={task.name}
+            maxLength={100}
+            required
+            disabled={busy}
+            onChange={(event) => task.change(event.target.value)}
+          />
+        </label>
+      )}
       <div className="worktree-create-mode" role="group" aria-label="Worktree branch">
         <button
           type="button"
@@ -124,8 +139,12 @@ export function CreateWorktree({
             This branch already has a checkout at{' '}
             {catalog.worktrees.find((tree) => tree.id === occupied)?.path}.
           </p>
-          <button type="button" disabled={busy} onClick={() => show(occupied)}>
-            Show worktree
+          <button
+            type="button"
+            disabled={busy || (!!task && !task.name.trim())}
+            onClick={() => show(occupied)}
+          >
+            {task ? 'Use checkout for task' : 'Show worktree'}
           </button>
         </div>
       ) : (
@@ -160,8 +179,10 @@ export function CreateWorktree({
             </div>
           </label>
           <p className="worktree-create-hint">
-            Creates a separate checkout. The destination must be a new folder. Git uses the
-            repository’s hooks and filters.
+            {task
+              ? 'Opens the checkout, notes, terminal and Git changes together. '
+              : 'Creates a separate checkout. '}
+            The destination must be a new folder.
           </p>
         </>
       )}
@@ -174,8 +195,12 @@ export function CreateWorktree({
         <button type="button" disabled={busy} onClick={cancel}>
           Back
         </button>
-        <button type="submit" className="primary" disabled={busy || !valid || !!occupied}>
-          {busy ? 'Creating worktree…' : 'Create and open'}
+        <button
+          type="submit"
+          className="primary"
+          disabled={busy || !valid || !!occupied || (!!task && !task.name.trim())}
+        >
+          {busy ? 'Creating…' : task ? 'Create task' : 'Create and open'}
         </button>
       </footer>
     </form>

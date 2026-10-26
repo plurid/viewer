@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sessionLinkSchema } from '../agents/sessions';
 
 export const chatDraftLimit = 16_000;
 
@@ -16,6 +17,7 @@ export const chatMessageSchema = z
     role: z.enum(['user', 'assistant', 'tool']),
     text: z.string().max(131072),
     at: z.number().finite(),
+    links: z.array(sessionLinkSchema).max(16).optional(),
     /** Captured when generated; later provider edits cannot rewrite attribution. */
     provider: z
       .object({
@@ -68,13 +70,25 @@ export const legacyChatDocumentSchema = z
 export const chatDocumentSchema = z
   .object({
     ...chatDocumentFields,
-    version: z.literal(2),
+    version: z.literal(3),
     messages: z.array(chatMessageSchema).max(1000),
   })
   .strict()
   .refine(withinDocumentBudget, { message: documentLimitMessage });
 
-export const storedChatDocumentSchema = z.union([legacyChatDocumentSchema, chatDocumentSchema]);
+const chatV2Schema = z
+  .object({
+    ...chatDocumentFields,
+    version: z.literal(2),
+    messages: z.array(chatMessageSchema.omit({ links: true })).max(1000),
+  })
+  .strict()
+  .refine(withinDocumentBudget, { message: documentLimitMessage });
+export const storedChatDocumentSchema = z.union([
+  legacyChatDocumentSchema,
+  chatV2Schema,
+  chatDocumentSchema,
+]);
 
 export type ChatDocument = z.infer<typeof chatDocumentSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;

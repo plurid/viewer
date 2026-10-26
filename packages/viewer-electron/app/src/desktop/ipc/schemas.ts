@@ -242,6 +242,46 @@ export const schemas = {
       z.object({ kind: z.literal('release'), catalogID: z.uuid() }).strict(),
     ]),
   ]),
+  gitReview: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('open'), target: targetSchema.strict() }).strict(),
+      z
+        .object({
+          kind: z.literal('read'),
+          reviewID: z.uuid(),
+          mode: z.enum(['unstaged', 'staged', 'branch']),
+          baseID: z.uuid().optional(),
+          baseCommit: z
+            .string()
+            .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/)
+            .optional(),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('file'),
+          reviewID: z.uuid(),
+          snapshotID: z.uuid(),
+          fileID: z.uuid(),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('apply'),
+          reviewID: z.uuid(),
+          fileID: z.uuid(),
+          hunks: z.array(z.uuid()).min(1).max(2000),
+        })
+        .strict(),
+      z.object({ kind: z.literal('release'), reviewID: z.uuid() }).strict(),
+    ]),
+  ]),
+  agentSessions: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('list'), directory: localPath.optional() }).strict(),
+      z.object({ kind: z.literal('read'), id: z.uuid() }).strict(),
+    ]),
+  ]),
   gitAction: z.tuple([gitActionRequestSchema]),
   watchRules: z.tuple([watchRuleRequestSchema]),
   relationships: z.tuple([
@@ -480,6 +520,7 @@ export const schemas = {
       workspaceID: id,
       rootID: id,
       paneID: id,
+      panePath: localPath.optional(),
       directory: localPath,
       selection: z
         .array(
@@ -502,6 +543,16 @@ export const schemas = {
         )
         .max(2000),
     }),
+    z
+      .record(
+        z.string().regex(/^[a-z][a-z0-9_]{0,31}$/),
+        z
+          .string()
+          .max(4000)
+          .refine((value) => !value.includes('\0')),
+      )
+      .refine((values) => Object.keys(values).length <= 20)
+      .optional(),
   ]),
   executionList: z.tuple([]),
   runCommand: z.tuple([
@@ -750,6 +801,8 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  gitReview: 'viewer',
+  agentSessions: 'viewer',
   receipts: 'viewer',
   notes: 'viewer',
   browser: 'viewer',

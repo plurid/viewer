@@ -1,64 +1,231 @@
-import { gitBadge } from '../../domain/comparison/git';
+import { useEffect, useRef } from 'react';
 import { Empty, Loading } from '../ui/primitives';
 import { useWorkspace } from '../workspace/context';
-import { useGitStatus } from './status';
-import { report, useViewer } from '../state/store';
+import { report } from '../state/store';
+import { useGitReview } from './useGitReview';
+import type { ReviewMode } from '../../domain/comparison/review';
+import { ChoiceButton } from '../ui/ChoiceMenu';
 
-export default function GitChanges({ path, paneID }: { path: string; paneID?: string }) {
-  const view = useGitStatus(path);
+export default function GitChanges({ path, paneID }: { path: string; paneID: string }) {
+  const review = useGitReview(path, paneID);
   const workspace = useWorkspace();
-  const enabled = useViewer((state) => state.settings.settings.git.enabled);
   const scroll = useRef<HTMLDivElement>(null);
-  const changes = view?.result.kind === 'ready' ? view.result.snapshot.changes : [];
+  const changes = review.snapshot?.files ?? [];
+  const selection = changes.findIndex((file) => file.id === review.selected?.id);
+  const move = (delta: number) => {
+    const next = changes[selection + delta];
+    if (next) review.change({ selectedPath: next.path });
+  };
+  const { file, position } = review;
+  useEffect(() => {
+    if (scroll.current && file) scroll.current.scrollTop = position(file.path);
+  }, [file, position]);
+  const files = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: changes.length,
-    getScrollElement: () => scroll.current,
-    estimateSize: () => 54,
+    getScrollElement: () => files.current,
+    estimateSize: () => 40,
     overscan: 8,
   });
-  if (!enabled)
-    return <Empty title="Git is off" detail="Enable Git in Settings → Browsing → Git." />;
-  if (!view) return <Loading label="Reading Git status…" />;
-  if (view.result.kind !== 'ready')
-    return <Empty title="Git status unavailable" detail={view.result.message} />;
-  const { snapshot } = view.result;
-  if (!snapshot.changes.length) return <Empty title="No Git changes" detail={snapshot.branch} />;
+  useEffect(() => {
+    if (selection >= 0 && files.current?.clientHeight)
+      virtual.scrollToIndex(selection, { align: 'auto' });
+  }, [selection, virtual]);
+  const stage = review.view.mode === 'staged' ? 'Unstage' : 'Stage';
   return (
-    <div className="git-changes" role="list" aria-label="Git changes" ref={scroll}>
-      <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
-        {virtual.getVirtualItems().map((item) => {
-          const change = changes[item.index]!;
-          return (
-            <div
-              className="git-change"
-              role="listitem"
-              key={change.path}
-              aria-posinset={item.index + 1}
-              aria-setsize={changes.length}
-              style={{ position: 'absolute', top: item.start, height: item.size, width: '100%' }}
+    <section
+      className="git-review"
+      aria-label="Git review"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.altKey && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+          event.preventDefault();
+          event.stopPropagation();
+          move(event.key === 'ArrowDown' ? 1 : -1);
+        }
+      }}
+    >
+      <div className="diff-toolbar">
+        <label>
+          Changes{' '}
+          <ChoiceButton
+            label="Review changes"
+            value={review.view.mode}
+            disabled={review.busy}
+            onChoose={(mode) => review.change({ mode: mode as ReviewMode })}
+            choices={[
+              { value: 'unstaged', label: 'Unstaged' },
+              { value: 'staged', label: 'Staged' },
+              { value: 'branch', label: 'Against base' },
+            ]}
+          />
+        </label>
+        {review.view.mode === 'branch' && (
+          <label>
+            Base{' '}
+            <ChoiceButton
+              label="Review base"
+              value={review.selectedBase?.id ?? (review.view.baseCommit ? 'saved' : '')}
+              onChoose={(id) => {
+                const base = review.branches.find((branch) => branch.id === id);
+                if (base) review.change({ baseCommit: base.commit, baseName: base.name });
+              }}
+              choices={[
+                ...(!review.selectedBase && review.view.baseCommit
+                  ? [
+                      {
+                        value: 'saved',
+                        label: `${review.view.baseName} · saved ${review.view.baseCommit.slice(0, 8)}`,
+                      },
+                    ]
+                  : []),
+                ...review.branches.map((branch) => ({ value: branch.id, label: branch.name })),
+              ]}
+            />
+          </label>
+        )}
+        <span className="git-review-branch">{review.snapshot?.branch}</span>
+        <button disabled={review.busy} onClick={review.refresh}>
+          Refresh
+        </button>
+      </div>
+      {review.error && (
+        <div className="git-review-error" role="alert">
+          {review.error}
+        </div>
+      )}
+      <div className="git-review-body">
+        <div className="git-review-files" role="list" aria-label="Changed files" ref={files}>
+          <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
+            {virtual.getVirtualItems().map((item) => {
+              const change = changes[item.index]!;
+              return (
+                <div
+                  role="listitem"
+                  key={change.id}
+                  style={{
+                    position: 'absolute',
+                    top: item.start,
+                    height: item.size,
+                    width: '100%',
+                  }}
+                >
+                  <button
+                    className="git-review-file"
+                    aria-pressed={change.id === review.selected?.id}
+                    disabled={review.busy}
+                    onClick={() => review.change({ selectedPath: change.path })}
+                  >
+                    <span className="git-badge">{change.status}</span>
+                    <span>{change.path}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="git-review-content">
+          <div className="diff-toolbar">
+            <button
+              aria-label="Previous changed file"
+              disabled={selection <= 0 || review.busy}
+              onClick={() => move(-1)}
             >
-              <span className={`git-badge git-${change.status}`} title={change.status}>
-                {gitBadge[change.status]}
-              </span>
-              <span className="git-change-path">
-                {change.path}
-                {change.original && <small>From {change.original}</small>}
-              </span>
+              Previous
+            </button>
+            <button
+              aria-label="Next changed file"
+              disabled={selection < 0 || selection >= changes.length - 1 || review.busy}
+              onClick={() => move(1)}
+            >
+              Next
+            </button>
+            <span className="git-review-path">{review.selected?.path ?? 'Changed files'}</span>
+            {review.selected && (
               <button
                 onClick={() =>
                   void workspace
-                    .openGitDiff(snapshot.root + '/' + change.path, paneID)
+                    .openGitDiff(review.snapshot!.root + '/' + review.selected!.path, paneID)
                     .catch(report)
                 }
               >
                 Open diff
               </button>
-            </div>
-          );
-        })}
+            )}
+            {review.file && !review.file.problem && review.view.mode !== 'branch' && (
+              <button
+                disabled={review.busy}
+                onClick={() => void review.apply(review.file!.hunks.map((hunk) => hunk.id))}
+              >
+                {stage} all hunks
+              </button>
+            )}
+          </div>
+          <div
+            className="git-review-patch"
+            ref={scroll}
+            onScroll={(event) => {
+              if (review.file) review.savePosition(review.file.path, event.currentTarget.scrollTop);
+            }}
+          >
+            {review.reading ? (
+              <Loading label="Reading changes…" />
+            ) : !changes.length ? (
+              <Empty
+                title="No changes"
+                detail={
+                  review.view.mode === 'branch'
+                    ? 'No changes against this base.'
+                    : `Nothing ${review.view.mode}.`
+                }
+              />
+            ) : review.error && !review.file ? (
+              <Empty
+                title="Patch unavailable"
+                detail="Refresh review to load the current changes."
+              />
+            ) : !review.file ? (
+              <Loading label="Reading patch…" />
+            ) : review.file.problem ? (
+              <Empty title="Text hunk review unavailable" detail={review.file.problem} />
+            ) : (
+              review.file.hunks.map((hunk, index) => (
+                <section className="git-review-hunk" key={hunk.id} aria-label={`Hunk ${index + 1}`}>
+                  <header>
+                    <code>{hunk.heading}</code>
+                    {review.view.mode !== 'branch' && (
+                      <button disabled={review.busy} onClick={() => void review.apply([hunk.id])}>
+                        {stage} hunk {index + 1}
+                      </button>
+                    )}
+                  </header>
+                  <pre>
+                    {hunk.lines.map((line, index) => (
+                      <span
+                        key={index}
+                        className={
+                          line.startsWith('+')
+                            ? 'git-line-added'
+                            : line.startsWith('-')
+                              ? 'git-line-removed'
+                              : ''
+                        }
+                      >
+                        {line || ' '}
+                      </span>
+                    ))}
+                  </pre>
+                </section>
+              ))
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+      <footer className="git-review-footer">
+        {changes.length} changed {changes.length === 1 ? 'file' : 'files'} · ⌥↑ / ⌥↓ changes file
+        {review.view.mode === 'branch' && ' · Includes working changes'}
+      </footer>
+    </section>
   );
 }
-import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';

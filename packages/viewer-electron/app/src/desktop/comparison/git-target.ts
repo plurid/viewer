@@ -25,6 +25,7 @@ export async function validateGitTarget(
   target: CapturedTarget,
   window: GitTargetWindow | undefined,
   canonical: CanonicalPath = realpath,
+  allowedTypes: readonly string[] = ['folder'],
 ): Promise<void> {
   const space = window?.workspaces?.workspaces.find((space) => space.id === target.workspaceID);
   const pane = space?.panes.find((pane) => pane.id === target.paneID);
@@ -39,7 +40,8 @@ export async function validateGitTarget(
     window.workspaceID !== target.workspaceID ||
     !space?.roots.includes(target.rootID) ||
     root !== target.rootID ||
-    pane?.type !== 'folder' ||
+    !pane ||
+    !allowedTypes.includes(pane.type) ||
     pane.path !== target.panePath
   )
     throw new Error('The originating folder or workspace changed. Run the Git action again.');
@@ -61,9 +63,10 @@ export async function bindGitTarget(
   input: CapturedTarget,
   window: GitTargetWindow | undefined,
   canonical: CanonicalPath = realpath,
+  allowedTypes: readonly string[] = ['folder'],
 ): Promise<CapturedTarget> {
   if (!window) throw new Error('The originating window closed. Choose the Git action again.');
   const target = { ...structuredClone(input), originID: window.originID };
-  await validateGitTarget(target, window, canonical);
+  await validateGitTarget(target, window, canonical, allowedTypes);
   return target;
 }

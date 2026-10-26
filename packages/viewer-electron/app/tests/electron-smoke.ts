@@ -6330,6 +6330,17 @@ async function verify(): Promise<void> {
     (value) => value,
     'conditional operations control',
   );
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".operations-panel .collision")'),
+    Boolean,
+    'collision automatically opens File operations',
+  );
+  await click('.operations-button');
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".operations-panel")'),
+    (open) => !open,
+    'operations control closes the automatic popover',
+  );
   await click('.operations-button');
   await until(text, (value) => value.includes('already exists.'), 'collision popover');
   assert.equal(

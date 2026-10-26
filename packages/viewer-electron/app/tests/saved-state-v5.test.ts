@@ -34,7 +34,7 @@ const state = (version: number, panes: unknown[]) => ({
 });
 
 it('uses the current plane format', () => {
-  expect(CURRENT_STATE_VERSION).toBe(10);
+  expect(CURRENT_STATE_VERSION).toBe(11);
 });
 it('backs up version 8 before adding durable note views', async () => {
   const storage = new Storage(path.join(root, 'state.json'));

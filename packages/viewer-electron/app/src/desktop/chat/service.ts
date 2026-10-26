@@ -253,7 +253,7 @@ export class Chats {
           if (!origin) throw new Error('Focus a folder or file plane before opening Chat.');
           const scopes = await this.scopes(request.paths);
           const document: ChatDocument = {
-            version: 2,
+            version: 3,
             id: randomUUID(),
             title: 'Chat',
             path: origin.target.directory,
@@ -408,7 +408,10 @@ export class Chats {
           throw new Error(
             'This request reached its inspection budget. Continue with a narrower question.',
           );
-        await this.append(id, this.message('tool', text));
+        const message = this.message('tool', text);
+        if (step.path && ['list', 'metadata', 'read'].includes(step.kind))
+          message.links = [{ kind: 'file', path: await this.authorize(principal, step.path) }];
+        await this.append(id, message);
       }
       throw new Error('This request reached its eight-step limit. Continue to inspect further.');
     } catch (error) {

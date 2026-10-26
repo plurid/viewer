@@ -27,9 +27,11 @@ export function OperationsPanel() {
   const jobs = useViewer((state) => state.jobs);
   const open = useViewer((state) => state.operationsOpen);
   const history = useViewer((state) => state.operationsHistory);
-  const visibleJobs = history
-    ? jobs
-    : jobs.filter((job) => ['queued', 'running', 'collision', 'failed'].includes(job.status));
+  const visibleJobs = (
+    history
+      ? jobs
+      : jobs.filter((job) => ['queued', 'running', 'collision', 'failed'].includes(job.status))
+  ).toSorted((a, b) => Number(b.status === 'collision') - Number(a.status === 'collision'));
   const [all, setAll] = useState<Record<string, boolean>>({});
   const [replace, setReplace] = useState<{ id: string; path: string; applyAll: boolean } | null>(
     null,

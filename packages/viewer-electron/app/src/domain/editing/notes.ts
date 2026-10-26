@@ -27,6 +27,9 @@ export const noteRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('list') }).strict(),
   z.object({ kind: z.literal('read'), id: z.uuid() }).strict(),
   z
+    .object({ kind: z.literal('trash'), id: z.uuid(), revision: z.number().int().nonnegative() })
+    .strict(),
+  z
     .object({
       kind: z.literal('create'),
       format: noteKindSchema,
@@ -46,6 +49,7 @@ export const noteRequestSchema = z.discriminatedUnion('kind', [
 export type NoteRequest = z.infer<typeof noteRequestSchema>;
 export type NoteReply =
   | { kind: 'list'; notes: NoteSummary[]; problems: string[] }
+  | { kind: 'trashed'; id: string }
   | { kind: 'document'; document: NoteDocument };
 
 /** Checklist editing changes Markdown source lines, preserving all surrounding prose. */
@@ -81,4 +85,12 @@ export function reorderChecklist(text: string, from: number, to: number): string
   lines[from] = second;
   lines[to] = first;
   return lines.join('\n');
+}
+export function removeChecklistItem(text: string, line: number): string {
+  if (!checklistItems(text).some((item) => item.line === line))
+    throw new Error('This checklist item changed. Try again.');
+  return text
+    .split('\n')
+    .filter((_, index) => index !== line)
+    .join('\n');
 }

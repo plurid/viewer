@@ -306,6 +306,39 @@ describe('the palette’s > mode', () => {
     );
     expect(line.value).toBe('sort.modified');
   });
+  it('reopens a recent request and its answer without another model call, and clears only request history', async () => {
+    viewer.providerPermissionGet.mockResolvedValue({
+      providerID: 'claude',
+      kind: provider.kind,
+      endpoint: new URL(provider.endpoint).href.replace(/\/+$/, ''),
+      level: 'names',
+    });
+    const first = show();
+    fireEvent.change(first.view.getByRole('combobox', { name: 'Search commands' }), {
+      target: { value: '>sort by year' },
+    });
+    const field = await waitFor(() => first.view.getByRole('combobox', { name: 'Ask in words' }));
+    await waitFor(() => first.view.getByRole('option', { name: /Ask: sort by year/ }));
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() => first.view.getByRole('option', { name: /Newest first/ }));
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(getState().saved.promptHistory?.[0]).toMatchObject({
+      prompt: 'sort by year',
+      line: 'sort.modified',
+    });
+    first.view.unmount();
+    const second = show();
+    fireEvent.change(second.view.getByRole('combobox', { name: 'Search commands' }), {
+      target: { value: '>' },
+    });
+    const recent = await waitFor(() => second.view.getByRole('option', { name: /sort by year/ }));
+    fireEvent.click(recent);
+    await waitFor(() => second.view.getByRole('option', { name: /Newest first/ }));
+    expect(viewer.promptLine).toHaveBeenCalledTimes(1);
+    fireEvent.click(second.view.getByRole('button', { name: 'Clear recent requests' }));
+    expect(getState().saved.promptHistory).toEqual([]);
+    expect(getState().saved.lineHistory).toEqual(['sort.modified']);
+  });
 });
 
 describe('sorting', () => {

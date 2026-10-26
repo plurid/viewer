@@ -32,16 +32,84 @@ export const customActionSchema = z
     shortcut: z.string().max(80).default(''),
     order: z.number().int().default(0),
     pinned: z.boolean().default(false),
+    folder: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(60)
+          .refine((value) => !value.includes('/') && !value.includes('\0')),
+      )
+      .max(4)
+      .optional(),
+    inputs: z
+      .array(
+        z
+          .object({
+            name: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/),
+            label: z.string().trim().min(1).max(100),
+            kind: z.enum(['text', 'number', 'choice', 'boolean']),
+            required: z.boolean(),
+            initial: processString.max(4000).optional(),
+            choices: z.array(processString.max(200)).min(1).max(100).optional(),
+          })
+          .strict(),
+      )
+      .max(20)
+      .refine(
+        (inputs) => new Set(inputs.map((input) => input.name)).size === inputs.length,
+        'Parameter names must be unique.',
+      )
+      .optional(),
     when: z
       .object({
         target: z.enum(['any', 'files', 'folders', 'background']).default('any'),
         extensions: z.array(z.string().max(30)).max(100).default([]),
         min: z.number().int().min(0).max(10000).default(0),
         max: z.number().int().min(0).max(10000).default(10000),
+        directories: z
+          .array(
+            processString.refine(
+              (value) => value.startsWith('/') && !value.split('/').includes('..'),
+              'Use an absolute folder path.',
+            ),
+          )
+          .max(30)
+          .optional(),
       })
       .strict()
       .default({ target: 'any', extensions: [], min: 0, max: 10000 }),
     executor: z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('workflow'),
+          steps: z
+            .array(
+              z.discriminatedUnion('kind', [
+                z
+                  .object({ kind: z.literal('action'), actionID: z.string().min(1).max(200) })
+                  .strict(),
+                z
+                  .object({
+                    kind: z.literal('command'),
+                    line: lineSchema.refine((line) => {
+                      try {
+                        return parseCommandLine(line).every(
+                          (step) => !step.name.startsWith('custom.') && !/^[A-Z]/.test(step.name),
+                        );
+                      } catch {
+                        return false;
+                      }
+                    }, 'Workflow command steps use built-in commands only.'),
+                  })
+                  .strict(),
+              ]),
+            )
+            .min(1)
+            .max(20),
+        })
+        .strict(),
       z.object({ kind: z.literal('builtin'), command: z.string().min(1).max(200) }).strict(),
       z
         .object({

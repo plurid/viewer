@@ -22,6 +22,8 @@ import {
 } from '../src/renderer/state/store';
 import { registerEditingPlane } from '../src/renderer/editing/planes';
 import { agentCommandID } from '../src/domain/agents/safety';
+import { receiveJob } from '../src/renderer/state/jobs';
+import type { OperationJob } from '../src/domain/contracts';
 
 const settingsPatch = vi.fn(async (patches: { path: string; value: unknown }[]) => {
   const snapshot = structuredClone(getState().settings);
@@ -105,9 +107,89 @@ beforeEach(() => {
   (workspace.openPath as ReturnType<typeof vi.fn>).mockClear();
   Object.assign(window, { viewer });
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
+  viewer.operate.mockImplementation(async () => {
+    const id = crypto.randomUUID();
+    receiveJob({
+      id,
+      revision: 1,
+      kind: 'mkdir',
+      status: 'completed',
+      sources: [],
+      bytesDone: 0,
+      bytesTotal: 0,
+      itemsDone: 1,
+      itemsTotal: 1,
+      completed: [],
+      errors: [],
+      errorCount: 0,
+      undoable: false,
+    });
+    return id;
+  });
 });
 
 describe('a line', () => {
+  it('waits for an actual file-operation outcome before starting its next step', async () => {
+    const id = crypto.randomUUID();
+    const job: OperationJob = {
+      id,
+      revision: 1,
+      kind: 'mkdir',
+      status: 'collision',
+      sources: [],
+      destination: '/fixtures',
+      bytesDone: 0,
+      bytesTotal: 0,
+      itemsDone: 0,
+      itemsTotal: 1,
+      completed: [],
+      errors: [],
+      errorCount: 0,
+      undoable: false,
+      collision: { source: '', destination: '/fixtures/a', replaceable: false },
+    };
+    viewer.operate.mockImplementationOnce(async () => {
+      receiveJob(job);
+      return id;
+    });
+    const result = runLine('mkdir a | mkdir b', host());
+    await vi.waitFor(() => expect(viewer.operate).toHaveBeenCalledTimes(1));
+    expect(getState().operationsOpen).toBe(true);
+    receiveJob({ ...job, revision: 2, status: 'completed', collision: undefined, itemsDone: 1 });
+    expect(await result).toEqual({ ok: true });
+    expect(viewer.operate).toHaveBeenCalledTimes(2);
+  });
+  it('stops later file creation after a failed or cancelled operation', async () => {
+    for (const status of ['failed', 'cancelled'] as const) {
+      viewer.operate.mockClear();
+      viewer.operate.mockImplementationOnce(async () => {
+        const id = crypto.randomUUID();
+        receiveJob({
+          id,
+          revision: 1,
+          kind: 'mkdir',
+          status,
+          sources: [],
+          bytesDone: 0,
+          bytesTotal: 0,
+          itemsDone: 0,
+          itemsTotal: 1,
+          completed: [],
+          errors:
+            status === 'failed'
+              ? [{ path: '/fixtures/a', message: 'Generated creation failure' }]
+              : [],
+          errorCount: status === 'failed' ? 1 : 0,
+          undoable: false,
+        });
+        return id;
+      });
+      const result = await runLine('mkdir a | mkdir b', host());
+      expect(result.ok).toBe(false);
+      expect(viewer.operate).toHaveBeenCalledTimes(1);
+      if (status === 'failed') expect(result.message).toContain('Generated creation failure');
+    }
+  });
   it('runs its steps in order, a count again, and stops at one that cannot run', async () => {
     const live = host([command('a'), command('b', false), command('c')]);
     expect(await runLine('2 a | c', live)).toEqual({ ok: true });

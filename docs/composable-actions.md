@@ -2,7 +2,40 @@
 
 Product proposal, October 24, 2026. Requested alongside
 [spatial development](spatial-development.md) and the [Journal plane](journal-plane.md).
-The builder, palette folders and directory predicates below are proposed, not shipped.
+The October 26 implementation adds palette folders, parameter forms, directory
+predicates and sequential process workflows in Settings → Actions. The broader
+builder and typed-output ideas below remain proposals.
+
+## Implemented command composition
+
+Each custom command can have up to four nested palette folders, search aliases,
+an order, pinning, a shortcut and selection/extension rules. **Only in folders**
+accepts absolute paths and includes their descendants; it controls availability
+in both the palette and native execution service. Folder names remain searchable.
+
+Executable, shell and workflow commands support up to 20 named text, number,
+choice or checkbox parameters. Configure their labels, defaults and required
+values in Settings. Executables receive `{input:name}` as literal argument text;
+shell scripts receive `VIEWER_INPUT_NAME` environment values. Parameter values
+are never substituted into shell source. Keep shell expansion quoted, for example
+`printf '%s\n' "$VIEWER_INPUT_LABEL"`. Values are transient; a process may still
+print its inputs into its output.
+
+Choose **Workflow** to compose up to 20 steps. Command steps name saved executable
+or shell actions; built-in steps contain Viewer command lines. All process
+parameters are collected once, with conflicting definitions rejected. Process
+steps use the originally captured directory and selection. Moving or closing
+that source plane stops subsequent steps. Each process must exit successfully
+before the next starts; Stop, a nonzero exit or a launch error ends the workflow.
+Command progress retains output and exit status for inspection during the session.
+Built-in commands that open a dialog still require the user's input; the workflow
+does not manufacture an approval or treat opening a dialog as applying a file change.
+
+For **Test → Build**, create two executable actions with your test and build
+arguments, then add them in that order to a workflow. No terminal plane is needed.
+Existing first-use execution confirmation applies to each exact saved process.
+Restoring a workspace does not rerun a workflow. Agents cannot invoke process
+workflows, shell actions or executable actions through aliases or saved grants.
 
 ## Build on the existing system
 

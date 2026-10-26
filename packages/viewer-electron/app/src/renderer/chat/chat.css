@@ -1,4 +1,42 @@
 /* Conversation layout and controls. */
+.session-library {
+  padding: 16px;
+  overflow: auto;
+  max-height: 65vh;
+}
+.session-library .task-tool-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.session-library .task-tool-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.session-library small {
+  display: block;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.session-reported-status,
+.session-retention {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.session-retention {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+.session-links {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 .chat-plane {
   display: flex;
   flex-direction: column;

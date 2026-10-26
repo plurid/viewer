@@ -23,6 +23,7 @@ export interface CommandDefinition {
   id: string;
   label: string | ((context: CommandContext) => string);
   group: string;
+  paletteFolder?: readonly string[];
   icon?: IconName;
   aliases?: readonly string[];
   shortcut?: string;
@@ -63,6 +64,7 @@ export interface ResolvedCommand {
   id: string;
   label: string;
   group: string;
+  paletteFolder?: readonly string[];
   icon?: IconName;
   shortcut?: string;
   aliases: readonly string[];
@@ -176,6 +178,7 @@ export class CommandRegistry {
               ? definition.detail(context)
               : definition.detail,
           group: definition.group,
+          paletteFolder: definition.paletteFolder,
           icon: definition.icon,
           aliases: definition.aliases ?? [],
           shortcut: this.shortcut(definition.id) ?? definition.shortcut,

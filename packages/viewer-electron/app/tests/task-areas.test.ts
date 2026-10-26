@@ -12,7 +12,7 @@ import {
   type TaskArea,
 } from '../src/domain/workspaces/tasks';
 import { taskController } from '../src/renderer/tasks/controller';
-import { attachCommandReceipt } from '../src/renderer/tasks/state';
+import { attachCommandReceipt, attachTaskReference } from '../src/renderer/tasks/state';
 import {
   initialize,
   activeWorkspace,
@@ -128,6 +128,31 @@ it('keeps a named area and document reference after closing its views, then reop
   expect(note).toMatchObject({ type: 'note', documentID });
   expect(f.documents.size).toBe(1);
 });
+it('sets up checkout, note, terminal and Git views once and reopens the same resources on retry', async () => {
+  const f = fixture();
+  const id = await f.methods.newTaskArea(f.target, 'Branch task');
+  await f.methods.setupTaskArea(id);
+  const first = activeWorkspace().taskAreas![0]!;
+  expect(first.members.map((member) => member.reference.kind).sort()).toEqual([
+    'folder',
+    'git-changes',
+    'note',
+    'terminal',
+  ]);
+  expect(f.documents.size).toBe(1);
+  const note = activeWorkspace().panes.find((pane) => pane.type === 'note')!;
+  const terminal = activeWorkspace().panes.find((pane) => pane.type === 'terminal')!;
+  removePanes([note.id, terminal.id]);
+  await f.methods.setupTaskArea(id);
+  const next = activeWorkspace().taskAreas![0]!;
+  expect(next.members).toHaveLength(4);
+  expect(next.members.map((member) => member.reference)).toEqual(
+    first.members.map((member) => member.reference),
+  );
+  expect(f.documents.size).toBe(1);
+  expect(f.api.runCommand).not.toHaveBeenCalled();
+  expect(f.api.terminalStart).not.toHaveBeenCalled();
+});
 it('links command receipts only to explicit source-view membership and keeps separate logical terminals', async () => {
   const f = fixture(),
     id = await f.methods.newTaskArea(f.target, 'Task'),
@@ -166,6 +191,40 @@ it('links command receipts only to explicit source-view membership and keeps sep
     activeWorkspace().taskAreas![0]!.members.filter((member) => member.reference.kind === 'server'),
   ).toHaveLength(2);
 });
+it('keeps the chosen agent conversation title when opening its durable reference', async () => {
+  const f = fixture();
+  const area = await f.methods.newTaskArea(f.target, 'Task');
+  const id = randomUUID();
+  window.viewer.agentSessions = vi.fn<typeof window.viewer.agentSessions>(async () => ({
+    kind: 'session',
+    session: {
+      id,
+      clientID: 'adapter',
+      clientName: 'Adapter',
+      externalID: 'external',
+      directory: f.target.directory,
+      identity: '1:2',
+      title: 'Review parser',
+      sequence: 1,
+      status: 'waiting',
+      updated: 1,
+      reportHash: 'a'.repeat(64),
+      entries: [],
+    },
+  }));
+  attachTaskReference(
+    area,
+    { kind: 'chat', conversationID: id, externalSessionID: id, path: f.target.directory },
+    'Review parser',
+  );
+  const member = activeWorkspace().taskAreas![0]!.members.find(
+    (member) => member.reference.kind === 'chat',
+  )!;
+  await f.methods.openTaskMember(area, member.id);
+  expect(activeWorkspace().taskAreas![0]!.members.find((row) => row.id === member.id)?.title).toBe(
+    'Review parser',
+  );
+});
 it('does not retarget an area when its checkout directory identity changes', async () => {
   const f = fixture(),
     id = await f.methods.newTaskArea(f.target, 'Task');
@@ -190,7 +249,7 @@ it('backs up version 9 and persists areas and closed-view references without rep
     original = JSON.stringify(state);
   await writeFile(file, original);
   const loaded = await storage.load();
-  expect(loaded.state?.version).toBe(10);
+  expect(loaded.state?.version).toBe(CURRENT_STATE_VERSION);
   const backup = (await readdir(root)).find((name) => name.includes('before-task-areas-v10'))!;
   expect(await readFile(path.join(root, backup), 'utf8')).toBe(original);
   const retained = {

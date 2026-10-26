@@ -10,6 +10,7 @@ import type { IconName } from '../ui/Icon';
 import { useModelPermission } from '../ui/models/ModelDataPermission';
 import type { LineHost } from './host';
 import { planLine, userCommands } from './run';
+import { clearPromptHistory, rememberPrompt } from './prompt-history';
 
 const examples = [
   'sort by date modified, newest first',
@@ -71,6 +72,7 @@ export function PromptFinder({
     | { kind: 'failed'; message: string }
   >({ kind: 'idle' });
   const settings = useViewer((current) => current.settings.settings);
+  const history = useViewer((current) => current.saved.promptHistory);
   const provider = useMemo(
     () =>
       settings.providers.find((item) => item.id === settings.prompts.providerID) ??
@@ -94,7 +96,11 @@ export function PromptFinder({
     setState({ kind: 'asking', id });
     try {
       const answer = await window.viewer.promptLine({ id, prompt, context: promptContext(host) });
-      if (asking.current === id) setState({ kind: 'answer', asked: prompt, answer });
+      if (asking.current === id) {
+        setState({ kind: 'answer', asked: prompt, answer });
+        if (answer.line && !answer.problem)
+          rememberPrompt({ prompt, line: answer.line, explanation: answer.explanation });
+      }
     } catch (error) {
       if (asking.current === id) setState({ kind: 'failed', message: (error as Error).message });
     } finally {
@@ -114,7 +120,7 @@ export function PromptFinder({
     rememberLine(line);
     onRun(line);
   };
-  const rows: Row[] = !provider
+  const defaultRows: Row[] = !provider
     ? [
         {
           id: 'add-model',
@@ -194,6 +200,23 @@ export function PromptFinder({
                   icon: 'info' as const,
                   run: () => setQuery(example),
                 }));
+  const recentRows: Row[] = !query.trim()
+    ? (history ?? []).slice(0, 5).map((item, index) => ({
+        id: `recent-prompt:${index}`,
+        label: item.prompt,
+        detail: item.line,
+        icon: 'clock',
+        run: () => {
+          setQuery(item.prompt);
+          setState({
+            kind: 'answer',
+            asked: item.prompt,
+            answer: { line: item.line, explanation: item.explanation },
+          });
+        },
+      }))
+    : [];
+  const rows = [...recentRows, ...defaultRows];
   const context = host.context();
   const resolved: ResolvedCommand[] = rows.map((row) => ({
     id: row.id,
@@ -217,6 +240,9 @@ export function PromptFinder({
           if (state.kind === 'failed') setState({ kind: 'idle' });
         }}
         rows={resolved}
+        recent={recentRows.map((row) => row.id)}
+        onClearRecent={history?.length ? clearPromptHistory : undefined}
+        clearRecentLabel="Clear recent requests"
         onClose={() => {
           if (asking.current) void window.viewer.promptCancel(asking.current).catch(() => {});
           onBack();

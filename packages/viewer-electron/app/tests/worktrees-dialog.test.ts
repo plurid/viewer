@@ -10,6 +10,7 @@ import { activeWorkspace, flushState, getState, initialize } from '../src/render
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { gitCommands } from '../src/renderer/git/commands';
 import { windowScopes, type WindowActions } from '../src/renderer/commands/window-commands/scope';
+import { addContentPane } from '../src/renderer/state/panes';
 
 HTMLDialogElement.prototype.showModal ??= function () {
   this.setAttribute('open', '');
@@ -109,6 +110,64 @@ const mount = () =>
   );
 
 describe('existing worktree picker', () => {
+  it('creates one branch task and retries its tool setup without creating another checkout or task', async () => {
+    const baseID = crypto.randomUUID();
+    catalog.branches = [{ id: baseID, name: 'main', branch: 'main', commit: 'a'.repeat(40) }];
+    catalog.defaultBaseID = baseID;
+    const next = { ...catalog, id: crypto.randomUUID() };
+    const treeID = crypto.randomUUID();
+    const old = api.getMockImplementation()!;
+    api.mockImplementation(async (request) =>
+      request.kind === 'create'
+        ? {
+            kind: 'created',
+            catalog: next,
+            worktreeID: treeID,
+            entry: { path: '/fixture/task-checkout' } as FileEntry,
+          }
+        : old(request),
+    );
+    const source = activeWorkspace().panes[0]!;
+    if (source.type !== 'folder') throw new Error('Fixture folder unavailable.');
+    open.mockImplementationOnce(async () => {
+      addContentPane({ ...source, id: 'created-checkout', path: '/fixture/task-checkout' });
+      return 'created-checkout';
+    });
+    const newTask = vi.fn(async () => 'area');
+    const setup = vi.fn(async () => {});
+    setup.mockRejectedValueOnce(new Error('Generated tool setup failure'));
+    render(
+      createElement(WorktreesDialog, {
+        target,
+        taskMode: true,
+        onClose: close,
+        workspace: {
+          openWorktree: open,
+          newTaskArea: newTask,
+          setupTaskArea: setup,
+          rootID: () => 'created-checkout',
+        } as unknown as WorkspaceController,
+      }),
+    );
+    fireEvent.change(await screen.findByLabelText('Branch task name'), {
+      target: { value: 'Review images' },
+    });
+    fireEvent.change(screen.getByLabelText('New branch name'), {
+      target: { value: 'feature/images' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+    await screen.findByText('Generated tool setup failure');
+    expect(newTask).toHaveBeenCalledWith(
+      expect.objectContaining({ directory: '/fixture/task-checkout', paneID: 'created-checkout' }),
+      'Review images',
+    );
+    expect(close).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish task setup' }));
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(api.mock.calls.filter(([request]) => request.kind === 'create')).toHaveLength(1);
+    expect(newTask).toHaveBeenCalledOnce();
+    expect(setup).toHaveBeenCalledTimes(2);
+  });
   it('captures a pinned new branch and editable sibling destination, then links its Git view', async () => {
     const baseID = crypto.randomUUID();
     catalog.branches = [

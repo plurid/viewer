@@ -30,10 +30,12 @@ export function WorktreesDialog({
   target,
   workspace,
   onClose,
+  taskMode = false,
 }: {
   target: CapturedTarget;
   workspace: WorkspaceController;
   onClose(): void;
+  taskMode?: boolean;
 }) {
   const [catalog, setCatalog] = useState<WorktreeCatalog>();
   const [selectedID, setSelectedID] = useState('');
@@ -43,7 +45,9 @@ export function WorktreesDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(taskMode);
+  const [taskName, setTaskName] = useState('');
+  const [partialTask, setPartialTask] = useState<string>();
   const enabled = useViewer((state) => state.settings.settings.git.enabled);
   const panes = useViewer(
     (state) => state.saved.workspaces.find((space) => space.id === target.workspaceID)?.panes,
@@ -66,6 +70,28 @@ export function WorktreesDialog({
     ? (panes?.filter((pane) => pane.type === 'folder' && pane.path === selected.path).length ?? 0)
     : 0;
   const status = inspection?.id === selected?.id ? inspection : undefined;
+  const finishTask = async (paneID: string) => {
+    const space = getState().saved.workspaces.find((space) => space.id === target.workspaceID);
+    const pane = space?.panes.find((pane) => pane.id === paneID);
+    if (pane?.type !== 'folder' || getState().saved.activeWorkspace !== space?.id)
+      throw new Error(
+        'The checkout was created, but its workspace changed. Open it from Worktrees.',
+      );
+    const id = await workspace.newTaskArea(
+      {
+        ...target,
+        paneID,
+        panePath: pane.path,
+        directory: pane.path,
+        rootID: workspace.rootID(paneID) ?? paneID,
+        selection: [],
+      },
+      taskName,
+    );
+    setPartialTask(id);
+    await workspace.setupTaskArea(id);
+    setPartialTask(undefined);
+  };
 
   useEffect(() => {
     mounted.current = true;
@@ -136,17 +162,24 @@ export function WorktreesDialog({
     };
   }, [catalog, selected?.id, selected?.available]);
 
-  const open = async (another = false) => {
-    if (!catalog || !selected?.available || pending.current) return;
+  const open = async (another = false, id = selected?.id) => {
+    if (
+      !catalog ||
+      !catalog.worktrees.find((tree) => tree.id === id)?.available ||
+      pending.current ||
+      partialTask
+    )
+      return;
     pending.current = true;
     setBusy(true);
     setError('');
     try {
-      await workspace.openWorktree(
+      const paneID = await workspace.openWorktree(
         target,
-        { catalogID: catalog.id, worktreeID: selected.id },
+        { catalogID: catalog.id, worktreeID: id! },
         another,
       );
+      if (taskMode) await finishTask(paneID);
       if (mounted.current) onClose();
     } catch (error) {
       if (mounted.current) setError(errorMessage(error));
@@ -156,11 +189,19 @@ export function WorktreesDialog({
     }
   };
   const create = async (checkout: WorktreeCreation['checkout'], destination: string) => {
-    if (!catalog || pending.current) return;
+    if (!catalog || pending.current || partialTask) return;
     pending.current = true;
     setBusy(true);
     setError('');
     try {
+      if (taskMode) {
+        const space = getState().saved.workspaces.find((space) => space.id === target.workspaceID);
+        if (!taskName.trim()) throw new Error('Enter a task name.');
+        if (!space || space.panes.length > 194 || (space.taskAreas?.length ?? 0) >= 50)
+          throw new Error(
+            'Make room for a task and its four tool views before creating a checkout.',
+          );
+      }
       const result = await window.viewer.gitWorktrees({
         kind: 'create',
         catalogID: catalog.id,
@@ -184,7 +225,8 @@ export function WorktreesDialog({
         catalogID: result.catalog.id,
         worktreeID: result.worktreeID,
       });
-      workspace.openGitChanges(result.entry.path, paneID);
+      if (taskMode) await finishTask(paneID);
+      else workspace.openGitChanges(result.entry.path, paneID);
       if (mounted.current) onClose();
     } catch (value) {
       if (mounted.current) setError(errorMessage(value));
@@ -196,14 +238,14 @@ export function WorktreesDialog({
 
   return (
     <Dialog
-      title={creating ? 'Create worktree' : 'Open worktree'}
+      title={taskMode ? 'New task from branch' : creating ? 'Create worktree' : 'Open worktree'}
       wide
       className="worktrees-dialog"
       onClose={() => {
         if (!pending.current) onClose();
       }}
     >
-      {!creating && (
+      {!creating && !partialTask && (
         <div className="worktrees-controls">
           <input
             type="search"
@@ -243,176 +285,204 @@ export function WorktreesDialog({
           {error}
         </p>
       )}
-      {creating && catalog ? (
+      {partialTask && (
+        <div className="worktree-create">
+          <p>
+            The checkout and task were kept. Finish opening their tools without creating another
+            checkout.
+          </p>
+          <button
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void workspace
+                .setupTaskArea(partialTask)
+                .then(onClose)
+                .catch((value) => setError(errorMessage(value)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            Finish task setup
+          </button>
+        </div>
+      )}
+      {!partialTask && creating && catalog ? (
         <CreateWorktree
           key={catalog.id}
           catalog={catalog}
           busy={busy}
+          task={taskMode ? { name: taskName, change: setTaskName } : undefined}
           create={create}
           cancel={() => setCreating(false)}
           show={(id) => {
+            if (taskMode) {
+              void open(false, id);
+              return;
+            }
             setSelectedID(id);
             setSearch('');
             setCreating(false);
           }}
         />
       ) : (
-        <>
-          {catalog?.creationProblem && (
-            <p className="worktrees-creation-problem">{catalog.creationProblem}</p>
-          )}
-          <div
-            className="worktrees-list"
-            ref={list}
-            role="listbox"
-            aria-label="Repository worktrees"
-            aria-busy={loading}
-            tabIndex={0}
-            aria-activedescendant={selected ? `worktree-${selected.id}` : undefined}
-            onKeyDown={(event) => {
-              if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !visible.length)
-                return;
-              event.preventDefault();
-              const current = visible.findIndex((tree) => tree.id === selected?.id);
-              const index =
-                event.key === 'Home'
-                  ? 0
-                  : event.key === 'End'
-                    ? visible.length - 1
-                    : Math.max(
-                        0,
-                        Math.min(
-                          visible.length - 1,
-                          current + (event.key === 'ArrowDown' ? 1 : -1),
-                        ),
-                      );
-              setSelectedID(visible[index]!.id);
-              document
-                .getElementById(`worktree-${visible[index]!.id}`)
-                ?.scrollIntoView({ block: 'nearest' });
-            }}
-          >
-            {visible.map((tree) => (
-              <button
-                type="button"
-                role="option"
-                aria-selected={tree.id === selected?.id}
-                id={`worktree-${tree.id}`}
-                key={tree.id}
-                tabIndex={-1}
-                className="worktree-option"
-                onClick={() => {
-                  setSelectedID(tree.id);
-                  list.current?.focus();
-                }}
-              >
-                <span className="worktree-branch">{worktreeLabel(tree)}</span>
-                <span className="worktree-location" title={tree.path}>
-                  {tree.path}
-                </span>
-                <span className="worktree-state">
-                  {tree.path === catalog?.currentPath
-                    ? 'Current checkout'
-                    : tree.bare
-                      ? 'Bare'
-                      : tree.prunable !== undefined
-                        ? 'Prunable'
-                        : !tree.available
-                          ? 'Unavailable'
-                          : 'Checkout'}
-                  {tree.locked !== undefined ? ' · Locked' : ''}
-                </span>
-              </button>
-            ))}
-            {!visible.length && (
-              <p className="worktrees-empty">
-                {loading
-                  ? 'Reading existing worktrees…'
-                  : search
-                    ? 'No worktrees match.'
-                    : 'No registered checkouts found.'}
-              </p>
+        !partialTask && (
+          <>
+            {catalog?.creationProblem && (
+              <p className="worktrees-creation-problem">{catalog.creationProblem}</p>
             )}
-          </div>
-          {selected && (
-            <section className="worktree-inspection" aria-label="Selected checkout">
-              <strong>{worktreeLabel(selected)}</strong>
-              <p className="worktree-inspection-path">{selected.path}</p>
-              {!selected.available ? (
-                <p>{selected.problem}</p>
-              ) : status?.error ? (
-                <p className="worktrees-error" role="status">
-                  {status.error}
-                </p>
-              ) : status?.snapshot ? (
-                <p role="status">
-                  {status.snapshot.changes.length
-                    ? `${status.snapshot.changes.length} ${status.snapshot.changes.length === 1 ? 'change' : 'changes'}`
-                    : 'Clean'}
-                  {status.snapshot.ahead ? ` · ${status.snapshot.ahead} ahead` : ''}
-                  {status.snapshot.behind ? ` · ${status.snapshot.behind} behind` : ''}
-                  {selected.commit ? ` · ${selected.commit.slice(0, 8)}` : ' · No commits yet'}
-                </p>
-              ) : (
-                <p role="status">Reading checkout status…</p>
-              )}
-              {selected.locked !== undefined && (
-                <p>Locked{selected.locked ? `: ${selected.locked}` : ''}</p>
-              )}
-            </section>
-          )}
-          <div className="worktrees-preferences">
-            <label>
-              <input
-                type="checkbox"
-                checked={enabled}
-                disabled={busy}
-                onChange={(event) => {
-                  const enabled = event.target.checked;
-                  void window.viewer
-                    .settingsPatch(
-                      [{ path: 'settings.git.enabled', value: enabled }],
-                      getState().settings.revision,
-                    )
-                    .then(receiveSettings)
-                    .catch((error) => {
-                      if (mounted.current) setError(errorMessage(error));
-                    });
-                }}
-              />
-              Show Git status in folder planes
-            </label>
-            <p>
-              Views of one checkout share files and staging. Each view keeps its own navigation.
-            </p>
-          </div>
-          <footer>
-            {existing > 0 && (
-              <button
-                type="button"
-                disabled={busy || loading || !selected?.available}
-                onClick={() => {
-                  void open(true);
-                }}
-              >
-                Another view beside
-              </button>
-            )}
-            <button type="button" disabled={busy} onClick={onClose}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={busy || loading || !selected?.available}
-              onClick={() => {
-                void open();
+            <div
+              className="worktrees-list"
+              ref={list}
+              role="listbox"
+              aria-label="Repository worktrees"
+              aria-busy={loading}
+              tabIndex={0}
+              aria-activedescendant={selected ? `worktree-${selected.id}` : undefined}
+              onKeyDown={(event) => {
+                if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !visible.length)
+                  return;
+                event.preventDefault();
+                const current = visible.findIndex((tree) => tree.id === selected?.id);
+                const index =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? visible.length - 1
+                      : Math.max(
+                          0,
+                          Math.min(
+                            visible.length - 1,
+                            current + (event.key === 'ArrowDown' ? 1 : -1),
+                          ),
+                        );
+                setSelectedID(visible[index]!.id);
+                document
+                  .getElementById(`worktree-${visible[index]!.id}`)
+                  ?.scrollIntoView({ block: 'nearest' });
               }}
             >
-              {busy ? 'Opening…' : existing ? 'Show existing plane' : 'Open beside'}
-            </button>
-          </footer>
-        </>
+              {visible.map((tree) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={tree.id === selected?.id}
+                  id={`worktree-${tree.id}`}
+                  key={tree.id}
+                  tabIndex={-1}
+                  className="worktree-option"
+                  onClick={() => {
+                    setSelectedID(tree.id);
+                    list.current?.focus();
+                  }}
+                >
+                  <span className="worktree-branch">{worktreeLabel(tree)}</span>
+                  <span className="worktree-location" title={tree.path}>
+                    {tree.path}
+                  </span>
+                  <span className="worktree-state">
+                    {tree.path === catalog?.currentPath
+                      ? 'Current checkout'
+                      : tree.bare
+                        ? 'Bare'
+                        : tree.prunable !== undefined
+                          ? 'Prunable'
+                          : !tree.available
+                            ? 'Unavailable'
+                            : 'Checkout'}
+                    {tree.locked !== undefined ? ' · Locked' : ''}
+                  </span>
+                </button>
+              ))}
+              {!visible.length && (
+                <p className="worktrees-empty">
+                  {loading
+                    ? 'Reading existing worktrees…'
+                    : search
+                      ? 'No worktrees match.'
+                      : 'No registered checkouts found.'}
+                </p>
+              )}
+            </div>
+            {selected && (
+              <section className="worktree-inspection" aria-label="Selected checkout">
+                <strong>{worktreeLabel(selected)}</strong>
+                <p className="worktree-inspection-path">{selected.path}</p>
+                {!selected.available ? (
+                  <p>{selected.problem}</p>
+                ) : status?.error ? (
+                  <p className="worktrees-error" role="status">
+                    {status.error}
+                  </p>
+                ) : status?.snapshot ? (
+                  <p role="status">
+                    {status.snapshot.changes.length
+                      ? `${status.snapshot.changes.length} ${status.snapshot.changes.length === 1 ? 'change' : 'changes'}`
+                      : 'Clean'}
+                    {status.snapshot.ahead ? ` · ${status.snapshot.ahead} ahead` : ''}
+                    {status.snapshot.behind ? ` · ${status.snapshot.behind} behind` : ''}
+                    {selected.commit ? ` · ${selected.commit.slice(0, 8)}` : ' · No commits yet'}
+                  </p>
+                ) : (
+                  <p role="status">Reading checkout status…</p>
+                )}
+                {selected.locked !== undefined && (
+                  <p>Locked{selected.locked ? `: ${selected.locked}` : ''}</p>
+                )}
+              </section>
+            )}
+            <div className="worktrees-preferences">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    void window.viewer
+                      .settingsPatch(
+                        [{ path: 'settings.git.enabled', value: enabled }],
+                        getState().settings.revision,
+                      )
+                      .then(receiveSettings)
+                      .catch((error) => {
+                        if (mounted.current) setError(errorMessage(error));
+                      });
+                  }}
+                />
+                Show Git status in folder planes
+              </label>
+              <p>
+                Views of one checkout share files and staging. Each view keeps its own navigation.
+              </p>
+            </div>
+            <footer>
+              {existing > 0 && (
+                <button
+                  type="button"
+                  disabled={busy || loading || !selected?.available}
+                  onClick={() => {
+                    void open(true);
+                  }}
+                >
+                  Another view beside
+                </button>
+              )}
+              <button type="button" disabled={busy} onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy || loading || !selected?.available}
+                onClick={() => {
+                  void open();
+                }}
+              >
+                {busy ? 'Opening…' : existing ? 'Show existing plane' : 'Open beside'}
+              </button>
+            </footer>
+          </>
+        )
       )}
     </Dialog>
   );

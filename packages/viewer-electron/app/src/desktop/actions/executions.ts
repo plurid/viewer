@@ -6,8 +6,9 @@ import type {
   CustomAction,
   ExecutionTask,
   TerminalProfile,
+  ActionValues,
 } from '../../domain/automation/actions';
-import { actionArguments, actionAvailable } from '../../domain/automation/actions';
+import { actionArguments, actionAvailable, actionValues } from '../../domain/automation/actions';
 import type { ApplicationSettings } from '../../domain/services';
 import { entry, absolute } from '../files/filesystem';
 import { executablePath } from '../terminals/terminal-launch';
@@ -51,8 +52,13 @@ export class Executions {
         owner === undefined || !this.owners.has(task.id) || this.owners.get(task.id) === owner,
     );
   }
-  start(actionID: string, target: CapturedTarget): Promise<string> {
-    return this.enqueue(actionID, target);
+  start(
+    actionID: string,
+    target: CapturedTarget,
+    values: ActionValues = {},
+    owner?: number,
+  ): Promise<string> {
+    return this.enqueue(actionID, target, undefined, values, owner);
   }
   /** Only the window's manual command form calls this. No configuration or agent
    * request supplies an executor, environment or an approval override. */
@@ -65,13 +71,20 @@ export class Executions {
     actionID: string,
     target: CapturedTarget,
     manual?: { script: string; owner: number },
+    values: ActionValues = {},
+    owner = manual?.owner,
   ): Promise<string> {
     if (this.closed) return Promise.reject(new Error('Custom commands have closed.'));
-    const ticket = { target, owner: manual?.owner, cancelled: false, promise: Promise.resolve('') };
+    const ticket = { target, owner, cancelled: false, promise: Promise.resolve('') };
     this.preparing.add(ticket);
-    ticket.promise = this.prepare(actionID, target, () => ticket.cancelled, manual).finally(() =>
-      this.preparing.delete(ticket),
-    );
+    ticket.promise = this.prepare(
+      actionID,
+      target,
+      () => ticket.cancelled,
+      manual,
+      values,
+      owner,
+    ).finally(() => this.preparing.delete(ticket));
     return ticket.promise;
   }
   private async prepare(
@@ -79,6 +92,8 @@ export class Executions {
     target: CapturedTarget,
     cancelled: () => boolean,
     manual?: { script: string; owner: number },
+    supplied: ActionValues = {},
+    owner = manual?.owner,
   ): Promise<string> {
     if (this.closed) throw new Error('Custom commands have closed.');
     await this.access([target.directory, ...target.selection.map((file) => file.path)]);
@@ -114,6 +129,7 @@ export class Executions {
       : settings.customActions.find((action) => action.id === actionID);
     if (!action || !actionAvailable(action, target))
       throw new Error('This action is unavailable for the captured selection.');
+    const values = actionValues(action.inputs ?? [], supplied);
     const executor = action.executor;
     if (executor.kind !== 'executable' && executor.kind !== 'shell')
       throw new Error('This action must run through the command registry.');
@@ -154,14 +170,14 @@ export class Executions {
         : {}),
     };
     this.tasks.set(task.id, task);
-    if (manual) this.owners.set(task.id, manual.owner);
+    if (owner !== undefined) this.owners.set(task.id, owner);
     while (this.tasks.size > 100) {
       const removable = [...this.tasks].find(([, task]) => task.status !== 'running');
       if (!removable) break;
       this.tasks.delete(removable[0]);
       this.owners.delete(removable[0]);
     }
-    this.emit(task, manual?.owner);
+    this.emit(task, owner);
     this.targets.set(task.id, target);
     const isCancelled = () => this.closed || cancelled() || task.status === 'cancelled';
     const work = (async () => {
@@ -178,7 +194,7 @@ export class Executions {
             manual && profile
               ? [...profile.args, '-c', manual.script, 'viewer-command']
               : executor.kind === 'executable'
-                ? actionArguments(executor.args, target, item)
+                ? actionArguments(executor.args, target, item, values)
                 : [
                     '-c',
                     executor.script,
@@ -188,7 +204,15 @@ export class Executions {
           await new Promise<void>((resolve, reject) => {
             const child = spawn(executable, args, {
               cwd,
-              env: childEnvironment(profile?.env),
+              env: childEnvironment({
+                ...profile?.env,
+                ...Object.fromEntries(
+                  Object.entries(values).map(([name, value]) => [
+                    'VIEWER_INPUT_' + name.toUpperCase(),
+                    value,
+                  ]),
+                ),
+              }),
               shell: false,
               detached: process.platform !== 'win32',
               stdio: ['ignore', 'pipe', 'pipe'],
@@ -201,7 +225,7 @@ export class Executions {
               task.output = bytes.subarray(-256 * 1024).toString('utf8');
               timer ??= setTimeout(() => {
                 timer = undefined;
-                this.emit({ ...task }, manual?.owner);
+                this.emit({ ...task }, owner);
               }, 80);
             };
             child.stdout?.on('data', output);
@@ -231,7 +255,7 @@ export class Executions {
         }
       }
       task.ended = Date.now();
-      this.emit({ ...task }, manual?.owner);
+      this.emit({ ...task }, owner);
     })().finally(() => {
       this.work.delete(task.id);
       this.targets.delete(task.id);

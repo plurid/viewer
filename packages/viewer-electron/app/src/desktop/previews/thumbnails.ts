@@ -4,6 +4,9 @@ import { realpath } from 'node:fs/promises';
 import { entry } from '../files/filesystem';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
 import { fileCoordination } from '../files/file-coordination';
+import path from 'node:path';
+import { cameraRawFormats } from '../../domain/previews/images/rendered';
+import type { DerivedPreviews } from './derived';
 /** Cache bounded, resized PNGs, never original decoded images. */
 export class Thumbnails {
   private cache = new Map<string, { file: string; source: string; value: string }>();
@@ -11,6 +14,7 @@ export class Thumbnails {
   private queue: Promise<unknown> = Promise.resolve();
   private work = new PreviewWork();
   private closed = false;
+  constructor(private derived?: Pick<DerivedPreviews, 'read'>) {}
   get(file: string, size: number): Promise<string> {
     if (this.closed) return Promise.resolve('');
     return this.work.track([file], (scope) => this.read(file, size, scope)).catch(() => '');
@@ -30,21 +34,28 @@ export class Thumbnails {
       .then(async () => {
         if (this.closed) return '';
         scope.check();
-        const value = await fileCoordination.run(
-          [{ path: actual, mode: 'read' }],
-          async (signal) => {
-            signal?.throwIfAborted();
-            scope.check();
-            if ((await entry(fileCoordination.path(actual))).size > thumbnailByteLimit) return '';
-            const image = await nativeImage.createThumbnailFromPath(fileCoordination.path(actual), {
-              width: size,
-              height: size,
-            });
-            signal?.throwIfAborted();
-            scope.check();
-            return image.toDataURL();
-          },
+        const camera = [file, actual].some((source) =>
+          cameraRawFormats.includes(path.extname(source).slice(1).toLowerCase()),
         );
+        const value = camera
+          ? await this.cameraThumbnail(file, size, scope)
+          : await fileCoordination.run(
+              [{ path: actual, mode: 'read' }],
+              async (signal) => {
+                signal?.throwIfAborted();
+                scope.check();
+                if ((await entry(fileCoordination.path(actual))).size > thumbnailByteLimit)
+                  return '';
+                const image = await nativeImage.createThumbnailFromPath(
+                  fileCoordination.path(actual),
+                  { width: size, height: size },
+                );
+                signal?.throwIfAborted();
+                scope.check();
+                return image.toDataURL();
+              },
+              scope.signal,
+            );
         if (this.closed) return '';
         scope.check();
         if (value.length > 1000000) return '';
@@ -64,6 +75,28 @@ export class Thumbnails {
       return await work;
     } finally {
       this.pending.delete(key);
+    }
+  }
+  private async cameraThumbnail(file: string, size: number, scope: PreviewScope): Promise<string> {
+    // Quick Look shares a system worker with Finder. A RAW decode can keep that
+    // worker and its file claims alive after Viewer closes. Never fall back to it.
+    if (!this.derived) return '';
+    const lease = await this.derived.read(file, 'camera', scope.signal);
+    try {
+      scope.check();
+      const image = nativeImage.createFromBuffer(lease.value.data);
+      if (image.isEmpty()) return '';
+      const { width, height } = image.getSize();
+      if (!width || !height) return '';
+      const scale = Math.min(1, size / Math.max(width, height));
+      return image
+        .resize({
+          width: Math.max(1, Math.round(width * scale)),
+          height: Math.max(1, Math.round(height * scale)),
+        })
+        .toDataURL();
+    } finally {
+      lease.release();
     }
   }
   private clearKnown(root?: string): void {

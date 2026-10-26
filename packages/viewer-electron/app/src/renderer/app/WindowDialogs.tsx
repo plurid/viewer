@@ -2,6 +2,8 @@ import { lazy, Suspense, useState } from 'react';
 import type { CapturedTarget, CustomAction } from '../../domain/automation/actions';
 import { CommitDialog } from '../git/CommitDialog';
 import { WorktreesDialog } from '../git/worktrees/WorktreesDialog';
+import { ActionParameters } from '../commands/ActionParameters';
+import { SessionsDialog } from '../chat/SessionsDialog';
 import { ServersDialog } from '../local-servers/ServersDialog';
 import { RunCommandDialog } from '../terminals/RunCommandDialog';
 import { NotesDialog } from '../notes/NotesDialog';
@@ -38,6 +40,7 @@ const LazyTasksDialog = lazy(() =>
 export type WindowDialog =
   | { type: 'tasks'; target?: CapturedTarget }
   | { type: 'notes' }
+  | { type: 'agent-sessions'; directory?: string }
   | { type: 'run-command'; target: CapturedTarget }
   | { type: 'servers' }
   | { type: 'browser'; paneID?: string }
@@ -50,6 +53,7 @@ export type WindowDialog =
   | { type: 'macro'; commands: string[] }
   | { type: 'git-commit'; id: string; target: CapturedTarget }
   | { type: 'git-worktrees'; id: string; target: CapturedTarget }
+  | { type: 'branch-task'; id: string; target: CapturedTarget }
   | { type: 'shortcut'; path: string; name: string };
 
 /** Window-level dialogs have one owner; opening another replaces the previous request. */
@@ -80,6 +84,10 @@ export function WindowDialogs({
   const tagging = dialog?.type === 'tag';
   return (
     <>
+      <ActionParameters />
+      {dialog?.type === 'agent-sessions' && (
+        <SessionsDialog directory={dialog.directory} onClose={onClose} />
+      )}
       {dialog?.type === 'notes' && <NotesDialog workspace={controller} onClose={onClose} />}
       {dialog?.type === 'tasks' && (
         <Suspense fallback={null}>
@@ -124,10 +132,11 @@ export function WindowDialogs({
           }}
         />
       )}
-      {dialog?.type === 'git-worktrees' && (
+      {(dialog?.type === 'git-worktrees' || dialog?.type === 'branch-task') && (
         <WorktreesDialog
           key={dialog.id}
           target={dialog.target}
+          taskMode={dialog.type === 'branch-task'}
           workspace={controller}
           onClose={onClose}
         />

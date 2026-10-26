@@ -17,6 +17,8 @@ import { Empty } from '../ui/primitives';
 import { renameTaskArea } from './state';
 import { receiptOutcome } from './ReceiptPlane';
 import './tasks.css';
+import { SessionsDialog } from '../chat/SessionsDialog';
+import type { AgentSessionSummary } from '../../domain/agents/sessions';
 const toolNames = {
   folder: 'Folder',
   note: 'Note',
@@ -37,6 +39,32 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
     [selected, setSelected] = useState(''),
     [browser, setBrowser] = useState(false),
     [url, setURL] = useState('');
+  const [conversations, setConversations] = useState(false);
+  const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
+  const sessionDirectory = area?.checkout.path;
+  useEffect(() => {
+    if (!active || !sessionDirectory) return;
+    let live = true;
+    const read = async () => {
+      try {
+        const result = await window.viewer.agentSessions({
+          kind: 'list',
+          directory: sessionDirectory,
+        });
+        if (live && result.kind === 'list') setSessions(result.sessions);
+      } catch {
+        /* A failed listing leaves saved links available to open. */
+      }
+    };
+    void read();
+    const stop = window.viewer.onEvent((event) => {
+      if (event.type === 'agent-session') void read();
+    });
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [active, sessionDirectory]);
   const [receipts, setReceipts] = useState<{ [id: string]: ReceiptSummary }>({}),
     [servers, setServers] = useState<LocalServer[]>([]);
   const receiptKey =
@@ -138,6 +166,9 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
           <button disabled={busy} onClick={() => setAttaching((value) => !value)}>
             Attach open plane…
           </button>
+          <button disabled={busy} onClick={() => setConversations(true)}>
+            Attach conversation…
+          </button>
         </div>
       </header>
       {error && (
@@ -228,15 +259,24 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
                     )
                   : undefined;
             const state =
-              ref.kind === 'receipt'
-                ? receipt
-                  ? receiptOutcome(receipt)
-                  : 'Open to inspect receipt'
-                : ref.kind === 'server'
-                  ? (server?.state ?? 'Open to inspect server')
-                  : live
-                    ? 'View open'
-                    : 'View closed';
+              ref.kind === 'chat' && ref.externalSessionID
+                ? (() => {
+                    const session = sessions.find(
+                      (session) => session.id === ref.externalSessionID,
+                    );
+                    return session
+                      ? `Reported ${session.status} · ${new Date(session.updated).toLocaleTimeString()}`
+                      : 'Open to inspect last report';
+                  })()
+                : ref.kind === 'receipt'
+                  ? receipt
+                    ? receiptOutcome(receipt)
+                    : 'Open to inspect receipt'
+                  : ref.kind === 'server'
+                    ? (server?.state ?? 'Open to inspect server')
+                    : live
+                      ? 'View open'
+                      : 'View closed';
             return (
               <section className="task-tool-row" role="listitem" key={member.id}>
                 <div>
@@ -268,6 +308,7 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
           agents are never replayed. Use a terminal for Codex or Claude.
         </p>
       </div>
+      {conversations && <SessionsDialog area={area} onClose={() => setConversations(false)} />}
     </div>
   );
 }

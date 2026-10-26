@@ -154,36 +154,45 @@ describe('read-only Chat', () => {
         name: provider.name,
         model: provider.model,
       });
-    expect(result.version).toBe(2);
+    expect(result.version).toBe(3);
   });
 
-  it('preserves exact legacy bytes before migrating and leaves old attribution unknown', async () => {
-    const conversation = await create();
-    await chat.close();
-    const folder = path.join(root, 'private', 'chat-documents');
-    const file = path.join(folder, conversation.id + '.json');
-    const legacy = {
-      ...conversation,
-      version: 1,
-      messages: [{ id: crypto.randomUUID(), role: 'assistant', text: 'Historical answer', at: 1 }],
-    };
-    const original = Buffer.from(JSON.stringify(legacy, null, 2).replaceAll('\n', '\r\n') + '\r\n');
-    await writeFile(file, original);
-    chat = new Chats(path.join(root, 'private'), ports);
-    const migrated = document(await chat.request({ kind: 'open', id: conversation.id }, 1, origin));
-    expect(migrated.version).toBe(2);
-    expect(migrated.messages[0]?.provider).toBeUndefined();
-    const backups = (await readdir(folder)).filter((name) => name.includes('.before-chat-v2-'));
-    expect(backups).toHaveLength(1);
-    const backup = path.join(folder, backups[0]!);
-    expect(await readFile(backup)).toEqual(original);
-    expect((await stat(backup)).mode & 0o777).toBe(0o600);
-    expect(JSON.parse(await readFile(file, 'utf8')).version).toBe(2);
-    await chat.request({ kind: 'open', id: conversation.id }, 1, origin);
-    expect((await readdir(folder)).filter((name) => name.includes('.before-chat-v2-'))).toEqual(
-      backups,
-    );
-  });
+  it.each([1, 2])(
+    'preserves exact v%s bytes before migrating and leaves old attribution unknown',
+    async (version) => {
+      const conversation = await create();
+      await chat.close();
+      const folder = path.join(root, 'private', 'chat-documents');
+      const file = path.join(folder, conversation.id + '.json');
+      const legacy = {
+        ...conversation,
+        version,
+        messages: [
+          { id: crypto.randomUUID(), role: 'assistant', text: 'Historical answer', at: 1 },
+        ],
+      };
+      const original = Buffer.from(
+        JSON.stringify(legacy, null, 2).replaceAll('\n', '\r\n') + '\r\n',
+      );
+      await writeFile(file, original);
+      chat = new Chats(path.join(root, 'private'), ports);
+      const migrated = document(
+        await chat.request({ kind: 'open', id: conversation.id }, 1, origin),
+      );
+      expect(migrated.version).toBe(3);
+      expect(migrated.messages[0]?.provider).toBeUndefined();
+      const backups = (await readdir(folder)).filter((name) => name.includes('.before-chat-v3-'));
+      expect(backups).toHaveLength(1);
+      const backup = path.join(folder, backups[0]!);
+      expect(await readFile(backup)).toEqual(original);
+      expect((await stat(backup)).mode & 0o777).toBe(0o600);
+      expect(JSON.parse(await readFile(file, 'utf8')).version).toBe(3);
+      await chat.request({ kind: 'open', id: conversation.id }, 1, origin);
+      expect((await readdir(folder)).filter((name) => name.includes('.before-chat-v3-'))).toEqual(
+        backups,
+      );
+    },
+  );
 
   it('keeps draft authority after stopping a window and flushes before closing', async () => {
     const conversation = await create();
@@ -253,7 +262,7 @@ describe('read-only Chat', () => {
       chat = new Chats(path.join(root, 'private'), ports);
       expect(
         document(await chat.request({ kind: 'open', id: conversation.id }, 1, origin)).version,
-      ).toBe(2);
+      ).toBe(3);
     },
   );
 

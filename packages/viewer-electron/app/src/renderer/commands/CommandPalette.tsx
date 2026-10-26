@@ -34,6 +34,7 @@ import {
 } from './palette-sections';
 import { palettePrefixes, type PaletteMode } from './palette-modes';
 import { clearRecentCommands } from './history';
+import { commandFolders } from './folders';
 
 export function CommandPalette({
   mode,
@@ -147,6 +148,7 @@ function CommandFinder({
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
   const [query, setQuery] = useState(initialQuery);
+  const [folder, setFolder] = useState<string[]>([]);
   const workspaces = mode === 'workspaces';
   const settings = mode === 'settings';
   const nested = workspaces || settings;
@@ -170,7 +172,17 @@ function CommandFinder({
     : settings
       ? settingRows(commands, query)
       : paletteRows(commands, query, recent);
-  const rows = paletteSuggestions(view.rows, smart, query);
+  const folderView = commandFolders(
+    commands,
+    paletteSuggestions(view.rows, smart, query),
+    folder,
+    query,
+  );
+  const rows = folderView.rows;
+  const back = () => {
+    setFolder(folder.slice(0, -1));
+    setQuery('');
+  };
   return (
     <>
       <CommandResults
@@ -187,9 +199,17 @@ function CommandFinder({
         rows={rows}
         headings={view.headings}
         hint={workspaces ? undefined : lineHint}
-        onClose={nested ? onCommands : onClose}
-        onEmptyBackspace={nested ? onCommands : undefined}
-        label={workspaces ? 'Search workspaces' : settings ? 'Search settings' : 'Search commands'}
+        onClose={folder.length ? back : nested ? onCommands : onClose}
+        onEmptyBackspace={folder.length ? back : nested ? onCommands : undefined}
+        label={
+          folder.length
+            ? `Search ${folder.join(' / ')}`
+            : workspaces
+              ? 'Search workspaces'
+              : settings
+                ? 'Search settings'
+                : 'Search commands'
+        }
         placeholder={
           workspaces
             ? 'Type a workspace name…'
@@ -199,8 +219,12 @@ function CommandFinder({
         }
         empty={settings ? 'No matching settings' : undefined}
         leading={
-          nested ? (
-            <IconButton icon="left" label="Back to commands" onClick={onCommands} />
+          nested || folder.length ? (
+            <IconButton
+              icon="left"
+              label={folder.length ? 'Back to parent folder' : 'Back to commands'}
+              onClick={folder.length ? back : onCommands}
+            />
           ) : undefined
         }
         recent={
@@ -209,6 +233,12 @@ function CommandFinder({
         onClearRecent={!settings && recent.length ? clearRecentCommands : undefined}
         clearRecentLabel="Clear recent commands"
         onSelect={(command) => {
+          const next = folderView.folders.get(command.id);
+          if (next) {
+            setFolder(next);
+            setQuery('');
+            return;
+          }
           if (command.id === moreSettingsID) {
             onMode('settings', query);
             return;

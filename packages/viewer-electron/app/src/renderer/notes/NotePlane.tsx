@@ -5,21 +5,28 @@ import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { NotePane as NotePaneRecord } from '../../domain/contracts';
-import { checklistItems, editChecklist, reorderChecklist } from '../../domain/editing/notes';
+import {
+  checklistItems,
+  editChecklist,
+  reorderChecklist,
+  removeChecklistItem,
+} from '../../domain/editing/notes';
 import { errorMessage } from '../../domain/errors';
 import { effectiveWindowSettings } from '../state/effective-ui';
 import { report, updatePane, useViewer } from '../state/store';
 import { registerEditingPlane, type EditorHandle } from '../editing/planes';
 import { usePreviewControlsSlot } from '../previews/controls';
-import { Empty, Loading } from '../ui/primitives';
+import { Empty, IconButton, Loading } from '../ui/primitives';
 import {
   changeNote,
   flushNote,
   loadNote,
   noteGeneration,
   noteSession,
+  noteLocked,
   subscribeNotes,
 } from './sessions';
+import { TrashNoteDialog } from './TrashNoteDialog';
 import './notes.css';
 
 const TextEditor = lazy(() => import('../previews/editor/TextEditor'));
@@ -30,7 +37,8 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
   const settings = useViewer((state) => effectiveWindowSettings(state));
   const [source, setSource] = useState(false),
     [error, setError] = useState(''),
-    [item, setItem] = useState('');
+    [item, setItem] = useState(''),
+    [trashing, setTrashing] = useState(false);
   const editor = useRef<EditorHandle | null>(null);
   const current = useRef(session);
   current.current = session;
@@ -119,6 +127,7 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
       </span>
       <span className="toolbar-spacer" />
       <button onClick={() => void exportNote().catch(report)}>Export…</button>
+      <button onClick={() => setTrashing(true)}>Move to Trash…</button>
     </div>
   );
   const markdown = (text: string) => (
@@ -136,6 +145,7 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
   return (
     <div
       className="note-plane"
+      inert={noteLocked(session.document.id) || undefined}
       style={{ '--note-font-size': `${settings.previews.textFontSize}px` } as React.CSSProperties}
     >
       {header ? createPortal(toolbar, header) : toolbar}
@@ -225,6 +235,13 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
                 >
                   Down
                 </button>
+                <IconButton
+                  icon="close"
+                  label={`Remove item ${index + 1}`}
+                  onClick={() =>
+                    changeNote(pane.id, { text: removeChecklistItem(session.text, row.line) })
+                  }
+                />
               </li>
             ))}
           </ol>
@@ -264,6 +281,7 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
         </article>
       )}
       {!visible && <span className="sr-only">Note remains saved while out of view.</span>}
+      {trashing && <TrashNoteDialog note={session.document} onClose={() => setTrashing(false)} />}
     </div>
   );
 }

@@ -35,6 +35,15 @@ export interface PromptAnswer {
   /** Why the line may not run as the model gave it; the line is then not offered. */
   problem?: string;
 }
+export const promptHistoryEntrySchema = z
+  .object({
+    prompt: z.string().trim().min(1).max(2000),
+    line: z.string().trim().min(1).max(8000),
+    explanation: z.string().max(300),
+    at: z.number().finite().nonnegative(),
+  })
+  .strict();
+export type PromptHistoryEntry = z.infer<typeof promptHistoryEntrySchema>;
 /** Generation and local validation share one structured-answer contract. */
 export const promptAnswerSchema = z
   .object({

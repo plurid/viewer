@@ -21,6 +21,7 @@ import { attachTaskPlane, attachTaskReference, changeTaskArea } from './state';
 type Methods = Pick<
   WorkspaceController,
   | 'newTaskArea'
+  | 'setupTaskArea'
   | 'openTaskArea'
   | 'openTaskMember'
   | 'addTaskTool'
@@ -80,6 +81,20 @@ export function taskController(ports: {
     return { path: source.path, identity: source.identity, observed: Date.now() };
   };
   const methods: Methods = {
+    async setupTaskArea(id) {
+      const owner = activeWorkspace().id;
+      // Retry reopens the same durable references rather than creating another
+      // note or logical terminal after a partially completed setup.
+      for (const kind of ['folder', 'note', 'terminal', 'git-changes'] as const) {
+        check(owner);
+        const member = area(id).members.find((member) => member.reference.kind === kind);
+        if (member) await methods.openTaskMember(id, member.id);
+        else await methods.addTaskTool(id, kind);
+      }
+      check(owner);
+      methods.openTaskArea(id);
+      methods.arrangeTaskArea(id);
+    },
     async newTaskArea(target, name) {
       const space = activeWorkspace(),
         source = space.panes.find((pane) => pane.id === target.paneID);
@@ -201,6 +216,21 @@ export function taskController(ports: {
           break;
         }
         case 'chat': {
+          if (ref.externalSessionID) {
+            const reply = await window.viewer.agentSessions({
+              kind: 'read',
+              id: ref.externalSessionID,
+            });
+            if (reply.kind !== 'session') throw new Error('Agent session unavailable.');
+            pane = {
+              id: paneID,
+              type: 'chat',
+              path: reply.session.directory,
+              conversationID: ref.conversationID,
+              externalSessionID: ref.externalSessionID,
+            };
+            break;
+          }
           const result = await window.viewer.chat({ kind: 'open', id: ref.conversationID });
           if (Array.isArray(result)) throw new Error('Conversation unavailable.');
           pane = {
@@ -251,7 +281,12 @@ export function taskController(ports: {
       check(owner);
       area(id);
       ports.register(pane, overview(id)?.id);
-      attachTaskPlane(id, pane);
+      attachTaskReference(
+        id,
+        taskReference(pane)!,
+        pane.type === 'note' ? pane.title : member.title,
+        pane.id,
+      );
       ports.controller().focusPane(pane.id, { activate: true });
       return pane.id;
     },

@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { AgentNavigation, AgentWorkspaceSnapshot } from '../src/domain/agents/requests';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import { AgentBroker } from '../src/desktop/agents/agent-broker';
+import { AgentSessions } from '../src/desktop/agents/sessions';
 import { AgentRequests } from '../src/desktop/agents/agent-requests';
 import type { AgentAccessChange } from '../src/desktop/agents/agent-access';
 import { SettingsService } from '../src/desktop/preferences/settings';
@@ -35,6 +36,7 @@ vi.mock('../src/desktop/files/file-coordination', async (importOriginal) => {
 
 let root: string, files: string, secret: string, token: string;
 let settings: SettingsService, broker: AgentBroker, requests: AgentRequests;
+let sessions: AgentSessions;
 let catalog: { target: CapturedTarget; commands: [] } | undefined;
 let snapshot: AgentWorkspaceSnapshot;
 let denied: boolean;
@@ -150,6 +152,7 @@ beforeEach(async () => {
       cancelExecution: () => {},
     },
   );
+  sessions = new AgentSessions(data, () => {});
   broker = new AgentBroker(
     data,
     () => settings.snapshot().settings,
@@ -194,6 +197,7 @@ beforeEach(async () => {
       catalog: () => catalog,
       config: settings,
       requests,
+      sessions,
       workspaceState: async () => snapshot,
       relationships: async (file: string) => ({
         file,
@@ -224,6 +228,55 @@ afterEach(async () => {
   await broker.close();
   settings.close();
   await trashTemporary(root);
+});
+
+it('stores only explicitly reported own sessions with granted references and no navigation or execution', async () => {
+  const report = {
+    sessionID: 'local-session',
+    directory: files,
+    title: 'Generated report',
+    sequence: 1,
+    status: 'waiting',
+    entries: [
+      {
+        id: 'first',
+        role: 'assistant',
+        text: 'Review this file.',
+        links: [{ kind: 'file', path: path.join(files, 'Résumé.txt') }],
+      },
+    ],
+  };
+  const reported = await call<{ id: string; status: string }>('report_session', report);
+  expect(reported.status).toBe('waiting');
+  const stored = await sessions.request({ kind: 'read', id: reported.id });
+  expect(stored).toMatchObject({
+    kind: 'session',
+    session: {
+      sequence: 1,
+      status: 'waiting',
+      entries: [expect.objectContaining({ text: 'Review this file.' })],
+    },
+  });
+  expect(navigate).not.toHaveBeenCalled();
+  await expect(
+    call('report_session', {
+      ...report,
+      sequence: 2,
+      entries: [
+        {
+          id: 'secret',
+          role: 'tool',
+          text: 'Forbidden reference',
+          links: [{ kind: 'file', path: secret }],
+        },
+      ],
+    }),
+  ).rejects.toThrow('outside');
+  expect(await sessions.request({ kind: 'read', id: reported.id })).toMatchObject({
+    session: { sequence: 1 },
+  });
+  denied = true;
+  await expect(call('report_session', { ...report, sequence: 2 })).rejects.toThrow('revoked');
 });
 
 describe('reviewed MCP workspace navigation', () => {

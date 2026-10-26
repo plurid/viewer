@@ -9,6 +9,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { gitActionKinds } from '../../domain/comparison/git-actions';
+import { promptHistoryEntrySchema } from '../../domain/command-line/prompt';
+import { reviewStateSchema } from '../../domain/comparison/review';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../domain/contracts';
 import { collectionSchema, basketItemSchema } from '../../domain/workspaces/collections';
 import { evidenceNavigationSchema } from '../../domain/files/inspection';
@@ -83,7 +85,14 @@ const pane = z.discriminatedUnion('type', [
         .optional(),
     })
     .strict(),
-  z.object({ id, type: z.literal('git-changes'), path: localPath }).strict(),
+  z
+    .object({
+      id,
+      type: z.literal('git-changes'),
+      path: localPath,
+      review: reviewStateSchema.optional(),
+    })
+    .strict(),
   z.object({ id, type: z.literal('media'), path: localPath, draftID: z.uuid() }).strict(),
   z
     .object({
@@ -100,7 +109,15 @@ const pane = z.discriminatedUnion('type', [
       serverPath: z.string().max(8192).optional(),
     })
     .strict(),
-  z.object({ id, type: z.literal('chat'), path: localPath, conversationID: z.uuid() }).strict(),
+  z
+    .object({
+      id,
+      type: z.literal('chat'),
+      path: localPath,
+      conversationID: z.uuid(),
+      externalSessionID: z.uuid().optional(),
+    })
+    .strict(),
   z
     .object({
       id,
@@ -179,6 +196,7 @@ const savedStateSchema = z
       z.literal(7),
       z.literal(8),
       z.literal(9),
+      z.literal(10),
       z.literal(CURRENT_STATE_VERSION),
     ]),
     previewStates: z.record(id, previewValuesSchema).optional(),
@@ -261,6 +279,7 @@ const savedStateSchema = z
       .refine((visits) => Object.keys(visits).length <= 500)
       .optional(),
     lineHistory: z.array(z.string().max(500)).max(200).optional(),
+    promptHistory: z.array(promptHistoryEntrySchema).max(20).optional(),
     look: z.enum(['dark', 'light']),
     ui: z.unknown().optional().transform(normalizePreferences),
   })
@@ -387,6 +406,7 @@ export class Storage {
     if (state.version < 8) await this.preserve(bytes, '.before-spatial-workbench-v8');
     if (state.version < 9) await this.preserve(bytes, '.before-notes-v9');
     if (state.version < 10) await this.preserve(bytes, '.before-task-areas-v10');
+    if (state.version < 11) await this.preserve(bytes, '.before-task-workflows-v11');
     if (state.version < CURRENT_STATE_VERSION) state = { ...state, version: CURRENT_STATE_VERSION };
     return { state };
   }
