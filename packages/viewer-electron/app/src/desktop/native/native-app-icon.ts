@@ -1,16 +1,35 @@
-import { app, nativeImage } from 'electron';
+import { app } from 'electron';
+import path from 'node:path';
 import type { AppIconSize } from './app-icons';
+import { runProcessor } from '../transforms/process';
+import { imageDimensions } from '../previews/image-dimensions';
 
 /**
- * A bundle's own icon, as Finder shows it, from Quick Look's rendering of the bundle: 64 px for list
- * rows (crisp at 2×) and 256 px for grids and the gallery. The system's file icon, the fallback, gave
- * every application the same blank placeholder (2026-10-23).
+ * A bundle's own NSWorkspace icon, rendered by the bounded private helper.
+ * app.getFileIcon returned generic placeholders; Quick Look shares Finder's
+ * thumbnail worker. Neither is the image decoder for these bundle icons.
  */
-export async function nativeAppIcon(file: string, size: AppIconSize): Promise<string> {
+export async function nativeAppIcon(
+  file: string,
+  size: AppIconSize,
+  signal = new AbortController().signal,
+): Promise<string> {
   const pixels = size === 'large' ? 256 : 64;
-  const image = await nativeImage
-    .createThumbnailFromPath(file, { width: pixels, height: pixels })
-    .catch(() => undefined);
-  if (image && !image.isEmpty()) return image.toDataURL();
-  return (await app.getFileIcon(file, { size: 'normal' })).toDataURL();
+  const root = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'assets');
+  const data = await runProcessor(
+    path.join(root, 'viewer-image-preview'),
+    ['icon', String(pixels)],
+    [],
+    signal,
+    { input: Buffer.from(JSON.stringify(file)), timeout: 8000, outputLimit: 1_000_000 },
+  );
+  signal.throwIfAborted();
+  const dimensions = imageDimensions(data);
+  if (
+    data.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' ||
+    dimensions?.width !== pixels ||
+    dimensions.height !== pixels
+  )
+    throw new Error('The bundle icon decoder returned an invalid image.');
+  return 'data:image/png;base64,' + data.toString('base64');
 }

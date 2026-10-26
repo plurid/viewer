@@ -40,13 +40,14 @@ export class Resources {
   readonly archives = new Archives();
   constructor(
     private access: (files: readonly string[]) => Promise<void> = async () => {},
-    /** Renders formats the renderer cannot decode; see `quick-look-render.ts`. */
+    /** Optional renderer adapter for tests/other platforms. macOS uses private images. */
     private render?: (
       file: string,
       signal: AbortSignal,
     ) => Promise<{ data: Buffer; extension: string }>,
     private renditionTimeout = 12000,
     private derived?: DerivedPreviews,
+    private images?: DerivedPreviews,
   ) {}
   grant(file: string, requestID?: string): Promise<Resource> {
     if (requestID && this.pending.has(requestID))
@@ -218,9 +219,11 @@ export class Resources {
     const canonical = this.work.invalidate(root);
     this.clearKnown(root);
     this.derived?.invalidate(root);
+    this.images?.invalidate(root);
     return canonical.then((actual) => {
       if (actual && actual !== root) this.clearKnown(actual);
       if (actual && actual !== root) this.derived?.invalidate(actual);
+      if (actual && actual !== root) this.images?.invalidate(actual);
       return actual;
     });
   }
@@ -247,6 +250,7 @@ export class Resources {
     this.work.stop();
     await this.quiesce();
     await this.derived?.close();
+    await this.images?.close();
   }
   /** The file behind a previewed PDF; entries inside archives are not files to print. */
   async printableFile(id: string): Promise<string> {
@@ -382,7 +386,7 @@ export class Resources {
     this.get(id); // A parent closed while its entry was loading cannot leave an orphan grant.
     return this.dataChild(id, path.basename(name), `${grant.file} → ${name}`, data);
   }
-  /** A preview of a file Chromium cannot decode, rendered by the system and held in memory. */
+  /** A preview of a file Chromium cannot decode, produced by a private decoder. */
   rendition(id: string, request?: ImageRenditionRequest): Promise<Resource> {
     const grant = this.get(id);
     if (cameraRawFormats.includes(grant.resource.entry.extension))
@@ -393,6 +397,7 @@ export class Resources {
       );
     if (request?.mode === 'raw')
       return Promise.reject(new Error('RAW rendering requires a camera RAW file.'));
+    if (this.images) return this.derivedRendition(id, 'image', request?.requestID ?? randomUUID());
     return this.work.track(this.paths(id), (scope) =>
       this.coordinated(id, () => this.renderFile(id, scope.signal)),
     );
@@ -412,10 +417,10 @@ export class Resources {
   }
   private derivedRendition(id: string, mode: DerivedMode, requestID: string): Promise<Resource> {
     const grant = this.get(id);
-    if (!this.derived)
-      return Promise.reject(new Error('The local preview decoder is unavailable.'));
+    const decoder = mode === 'image' ? this.images : this.derived;
+    if (!decoder) return Promise.reject(new Error('The local preview decoder is unavailable.'));
     return this.documentRead(id, requestID, async (file, signal) => {
-      const lease = await this.derived!.read(file, mode, signal);
+      const lease = await decoder.read(file, mode, signal);
       try {
         signal.throwIfAborted();
         this.get(id);
@@ -576,6 +581,16 @@ export class Resources {
         const actual = await opened.stat();
         if (!actual.isFile() || actual.dev !== info.dev || actual.ino !== info.ino)
           return new Response(null, { status: 403 });
+        if (grant.root && file !== grant.file && (lookup(file!) || '').startsWith('image/')) {
+          // Reject oversized companion bitmaps before Chromium decodes them.
+          // A later renderer budget also accounts for combined texture storage.
+          if (actual.size > 64 * 1024 * 1024) return new Response(null, { status: 413 });
+          const header = Buffer.alloc(Math.min(actual.size, 512000));
+          const { bytesRead } = await opened.read(header, 0, header.length, 0);
+          const dimensions = imageDimensions(header.subarray(0, bytesRead));
+          if (dimensions && dimensions.width * dimensions.height * 4 > 128 * 1024 * 1024)
+            return new Response(null, { status: 413 });
+        }
       }
       this.get(url.hostname);
       const size = grant.data?.length ?? info!.size;

@@ -28,6 +28,39 @@ const cache = (...args: ConstructorParameters<typeof DerivedPreviews>) => {
   return instance;
 };
 describe('bounded derived preview leases', () => {
+  it('separates image sizes and shares private rendered resources with the same captured source', async () => {
+    const file = path.join(root, 'image.tiff');
+    await writeFile(file, 'image source');
+    const decode = vi.fn(async () => ({
+      ...value(),
+      extension: 'png' as const,
+      kind: 'image' as const,
+    }));
+    const images = cache(async () => {}, decode);
+    const small = await images.read(file, 'image', signal(), 128);
+    small.release();
+    const warm = await images.read(file, 'image', signal(), 128);
+    warm.release();
+    expect(decode).toHaveBeenCalledTimes(1);
+    const large = await images.read(file, 'image', signal(), 512);
+    large.release();
+    expect(decode).toHaveBeenCalledTimes(2);
+    const legacy = vi.fn(async () => {
+      throw new Error('Shared renderer must not run');
+    });
+    const resources = new Resources(async () => {}, legacy, 12000, undefined, images);
+    try {
+      const source = await resources.grant(file);
+      const output = await resources.rendition(source.id);
+      expect(output.derivation?.kind).toBe('image');
+      expect(legacy).not.toHaveBeenCalled();
+      resources.release(source.id);
+      await expect(resources.read(output.id)).rejects.toThrow('expired');
+    } finally {
+      await resources.close();
+    }
+  });
+
   it('shares exact-source bytes across views and warm opens, but separates processing mode and changed versions', async () => {
     const file = path.join(root, 'camera.nef');
     await writeFile(file, 'source');

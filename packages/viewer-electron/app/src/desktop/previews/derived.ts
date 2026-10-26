@@ -5,10 +5,10 @@ import { previewContains } from './preview-work';
 import { runProcessor } from '../transforms/process';
 import { imageDimensions } from './image-dimensions';
 
-export type DerivedMode = 'camera' | 'raw' | 'video';
+export type DerivedMode = 'camera' | 'raw' | 'video' | 'image';
 export interface DerivedRendition {
   data: Buffer;
-  extension: 'jpg' | 'mp4';
+  extension: 'jpg' | 'mp4' | 'png';
   kind: DerivedMode;
   decoder: string;
 }
@@ -25,6 +25,7 @@ export type Decoder = (
   source: Source,
   mode: DerivedMode,
   signal: AbortSignal,
+  size?: number,
 ) => Promise<DerivedRendition>;
 interface Cached {
   file: string;
@@ -52,8 +53,15 @@ export class DerivedPreviews {
     private decode: Decoder,
     private budget = 128 * 1024 * 1024,
   ) {}
-  async read(file: string, mode: DerivedMode, signal: AbortSignal): Promise<DerivedLease> {
+  async read(
+    file: string,
+    mode: DerivedMode,
+    signal: AbortSignal,
+    size = 4096,
+  ): Promise<DerivedLease> {
     signal.throwIfAborted();
+    if (!Number.isInteger(size) || size < 1 || size > 4096)
+      throw new Error('Choose a preview size between 1 and 4096 pixels.');
     await this.access([file]);
     const actual = await realpath(file);
     await this.access([actual]);
@@ -65,7 +73,13 @@ export class DerivedPreviews {
       throw new Error(
         'This file exceeds the local preview input limit. Open it in its original app.',
       );
-    const key = JSON.stringify([actual, version(before), 'libraw-0.22.2/ffmpeg-9.0.2-v3', mode]);
+    const key = JSON.stringify([
+      actual,
+      version(before),
+      'libraw-0.22.2/ffmpeg-9.0.2/imageio-v1',
+      mode,
+      size,
+    ]);
     let entry = this.cached.get(key);
     if (entry) entry.pins++;
     if (!entry) {
@@ -101,6 +115,7 @@ export class DerivedPreviews {
                     { file: actual, handle, info: before },
                     mode,
                     abort.signal,
+                    size,
                   );
                   abort.signal.throwIfAborted();
                   if (

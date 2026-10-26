@@ -10,10 +10,30 @@ vi.mock('electron', () => ({
     createFromBuffer: native.fromBuffer,
   },
 }));
+vi.mock('../src/desktop/files/file-coordination', () => ({
+  fileCoordination: {
+    path: (file: string) => file,
+    run: async (
+      _intents: unknown,
+      work: (signal?: AbortSignal) => Promise<unknown>,
+      signal?: AbortSignal,
+    ) => work(signal),
+  },
+}));
 import { Thumbnails } from '../src/desktop/previews/thumbnails';
 import { cameraRawFormats } from '../src/domain/previews/images/rendered';
 
 let root: string, first: string, second: string, thumbnails: Thumbnails;
+const imageRead = vi.fn();
+const imageLease = (file: string) => ({
+  value: {
+    data: Buffer.from('generated:' + file),
+    extension: 'png' as const,
+    kind: 'image' as const,
+    decoder: 'test',
+  },
+  release: vi.fn(),
+});
 beforeEach(async () => {
   root = await temporaryRoot('viewer-thumbnail-scopes-');
   first = path.join(root, 'first');
@@ -28,13 +48,53 @@ beforeEach(async () => {
   native.thumbnail.mockImplementation(async (file: string) => ({
     toDataURL: () => 'generated:' + file,
   }));
-  thumbnails = new Thumbnails();
+  imageRead.mockReset().mockImplementation(async (file: string) => imageLease(file));
+  thumbnails = new Thumbnails(undefined, { read: imageRead });
 });
 afterEach(async () => {
   await thumbnails.close();
   await trashTemporary(root);
 });
 describe('thumbnail permission lifetime', () => {
+  it('keeps ordinary image thumbnails out of the shared macOS service too', async () => {
+    const data = Buffer.from('private PNG');
+    const release = vi.fn();
+    const read = vi.fn(async () => ({
+      value: { data, extension: 'png' as const, kind: 'image' as const, decoder: 'ImageIO' },
+      release,
+    }));
+    const isolated = new Thumbnails(undefined, { read });
+    const file = path.join(first, 'image.png');
+    try {
+      expect(await isolated.get(file, 128)).toBe(
+        'data:image/png;base64,' + data.toString('base64'),
+      );
+      expect(read).toHaveBeenCalledWith(file, 'image', expect.any(AbortSignal), 128);
+      expect(release).toHaveBeenCalledOnce();
+      expect(native.thumbnail).not.toHaveBeenCalled();
+      expect(await isolated.get(file, 128)).toBe(
+        'data:image/png;base64,' + data.toString('base64'),
+      );
+      expect(read).toHaveBeenCalledOnce();
+    } finally {
+      await isolated.close();
+    }
+  });
+
+  it('does not fall back to Quick Look after a failed ordinary image decode', async () => {
+    const isolated = new Thumbnails(undefined, {
+      read: vi.fn(async () => {
+        throw new Error('Image decoder timed out');
+      }),
+    });
+    try {
+      expect(await isolated.get(path.join(first, 'image.png'), 128)).toBe('');
+      expect(native.thumbnail).not.toHaveBeenCalled();
+    } finally {
+      await isolated.close();
+    }
+  });
+
   it('keeps every supported camera RAW thumbnail out of the shared macOS service', async () => {
     const data = Buffer.from('isolated camera JPEG');
     const release = vi.fn();
@@ -140,9 +200,10 @@ describe('thumbnail permission lifetime', () => {
     await thumbnails.get(b, 64);
     await thumbnails.quiesce(second);
     expect(await thumbnails.get(a, 64)).toBe(firstValue);
-    expect(native.thumbnail).toHaveBeenCalledTimes(2);
+    expect(imageRead).toHaveBeenCalledTimes(2);
     await thumbnails.get(b, 64);
-    expect(native.thumbnail).toHaveBeenCalledTimes(3);
+    expect(imageRead).toHaveBeenCalledTimes(3);
+    expect(native.thumbnail).not.toHaveBeenCalled();
   });
   it('suppresses revoked bytes and lets an independent pending thumbnail finish', async () => {
     let resume!: () => void, entered!: () => void;
@@ -152,17 +213,20 @@ describe('thumbnail permission lifetime', () => {
     const gate = new Promise<void>((resolve) => {
       resume = resolve;
     });
-    native.thumbnail.mockImplementationOnce(async (file: string) => {
+    imageRead.mockImplementationOnce(async (file: string) => {
       entered();
       await gate;
-      return { toDataURL: () => 'generated:' + file };
+      return imageLease(file);
     });
     const a = thumbnails.get(path.join(first, 'image.png'), 64);
     await enteredNative;
     const b = thumbnails.get(path.join(second, 'image.png'), 64);
     const drained = thumbnails.quiesce(second);
     resume();
-    expect(await a).toContain(first);
+    expect(await a).toBe(
+      'data:image/png;base64,' +
+        Buffer.from('generated:' + path.join(first, 'image.png')).toString('base64'),
+    );
     expect(await b).toBe('');
     await drained;
   });

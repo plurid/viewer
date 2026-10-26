@@ -7,7 +7,7 @@ import { cameraRawFormats } from '../../../domain/previews/images/rendered';
 import { PreviewToolbar } from '../controls';
 import { usePreviewState } from '../state';
 
-/** RAW uses an independent cancellable helper; other formats use macOS rendering. */
+/** Every rendered image uses a cancellable private decoder. */
 export default function RenderedImagePreview(context: PreviewContext) {
   const { resource, services } = context;
   const [rendered, setRendered] = useState<Resource>();
@@ -21,7 +21,7 @@ export default function RenderedImagePreview(context: PreviewContext) {
     setError('');
     const requestID = crypto.randomUUID();
     void services
-      .rendition(resource.id, raw ? { requestID, mode } : undefined)
+      .rendition(resource.id, { requestID, mode: raw ? mode : 'camera' })
       .then((value) => {
         if (!live) {
           void services.release(value.id);
@@ -35,7 +35,7 @@ export default function RenderedImagePreview(context: PreviewContext) {
       });
     return () => {
       live = false;
-      if (raw) void services.cancelDocument(resource.id, requestID);
+      void services.cancelDocument(resource.id, requestID);
       if (owned) void services.release(owned.id);
     };
   }, [resource.id, services, raw, mode]);

@@ -149,7 +149,7 @@ export async function inspectFile(
             value: table.rows[0]?.length || 0,
             source: 'bounded table reader',
           };
-          if (table.malformed) document.truncated = true;
+          if (table.malformed || table.truncated) document.truncated = true;
         }
         result.coverage = {
           content: document.truncated || document.coverageReason ? 'partial' : 'complete',

@@ -61,7 +61,12 @@ const config: ForgeConfig = {
           ]
         : []),
       ...(process.platform === 'darwin'
-        ? ['assets/viewer-ocr', 'assets/viewer-applications', 'assets/viewer-macos-files.node']
+        ? [
+            'assets/viewer-ocr',
+            'assets/viewer-applications',
+            'assets/viewer-macos-files.node',
+            'assets/viewer-image-preview',
+          ]
         : []),
     ],
     appBundleId: channel === 'direct' ? 'com.plurid.viewer' : storeConfig.bundleID,

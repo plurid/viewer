@@ -49,6 +49,33 @@ type Sharp = (
   input: Buffer,
   options: { limitInputPixels: number; sequentialRead: boolean; failOn: string },
 ) => Pipeline;
+
+/** Buffer input deliberately has no base URI: librsvg cannot resolve filesystem
+ * or network companions. Raster export remains a separate, raster-only route. */
+export async function previewSvg(root: string, input: Buffer, size: number): Promise<Buffer> {
+  if (!input.length || input.length > 8 * 1024 * 1024)
+    throw new Error('SVG preview input must fit within 8 MB.');
+  if (!Number.isInteger(size) || size < 1 || size > 4096)
+    throw new Error('Choose an SVG preview size between 1 and 4096 pixels.');
+  const sharp = createRequire(path.join(root, 'image-loader.cjs'))(
+    path.join(root, 'node_modules/sharp'),
+  ) as Sharp;
+  const image = sharp(input, {
+    limitInputPixels: 100_000_000,
+    sequentialRead: true,
+    failOn: 'warning',
+  });
+  const metadata = await image.metadata();
+  if (metadata.format !== 'svg' || !metadata.width || !metadata.height)
+    throw new Error('Choose a valid SVG image.');
+  const output = await image
+    .resize(size, size, { fit: 'inside', withoutEnlargement: true })
+    .png()
+    .toBuffer();
+  if (output.length > 32 * 1024 * 1024)
+    throw new Error('SVG preview exceeds the 32 MB output limit.');
+  return output;
+}
 /** A deliberately small EXIF reader: only descriptive ASCII IFD0 tags survive
  * the default policy. GPS, device serials and opaque nested metadata do not. */
 export function imageCredits(exif?: Buffer): Record<string, string> {

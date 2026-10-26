@@ -1,6 +1,6 @@
 # Remaining file-manager work
 
-Updated October 24, 2026. The [capability map](capabilities.md) records what the
+Updated October 26, 2026. The [capability map](capabilities.md) records what the
 current implementation exposes to new users, advanced users and agents, including
 review/Undo, resource limits and gaps. The [feature ledger](feature-delivery.md)
 retains milestone history. Neither source implementation nor an older passing
@@ -8,23 +8,31 @@ candidate establishes native acceptance for the current package.
 
 [Spatial development](spatial-development.md) records the October 24 research and
 proposal for worktrees, read-only branch folders, linked Git review and structured
-Codex/Claude sessions. It distinguishes proposed features from current behavior;
-the current reliability and native acceptance work still comes first.
+Codex/Claude sessions. The later [task workflow implementation](task-workflow-implementation.md)
+records delivered branch/worktree task creation, Git hunk review, composable
+commands and explicitly reported agent-session navigation. Automatic external
+transcript import/resumption remains future work.
 
-The [Journal plane proposal](journal-plane.md) records structured local event
-inspection, workspace/plane/task filters and correlation. It remains proposed;
-existing diagnostic logs and durable operation receipts keep their current owners.
+The [Journal plane](journal-plane.md) and its [ownership decision](adr/0006-bounded-human-journal.md)
+record implemented bounded event inspection and correlation. Diagnostic logs,
+durable operation receipts and agent audit retain their distinct owners.
 
-[Composable actions](composable-actions.md) records the proposed action builder,
-typed inputs/outputs, directory predicates and user-organized palette. It builds
-on the existing custom actions, command language and workflow runner.
+[Composable actions](composable-actions.md) records typed parameters, contextual
+directory predicates, user-organized palette folders and sequential/DAG workflows.
+The task workflow ledger distinguishes the delivered paths from broader proposals.
 
-The current continuation fixes profile/window isolation, minimap hit-testing,
-dependency provenance, consent and save reliability, and groups the code into
-feature modules. General AI-guided folder organization remains deferred. Existing
+The current [reliability follow-up](reliability-followup.md) replaces the remaining
+shared image-thumbnail path, moves large table/mesh parsing off the interface
+thread, bounds decoded allocations and checks lifecycle/recovery. Positive
+note/checklist OS Trash acceptance still needs exact-path permission and a real
+user click. General AI-guided folder organization remains deferred. Existing
 Chat, recipes and workflows keep their bounded inspection and reviewed proposals.
 
 ## Reliability and acceptance first
+
+The following table defines continuing acceptance criteria. Dated verification
+records establish which candidate passed each check; it is not a list of wholly
+unimplemented features.
 
 | Priority | Work                              | Acceptance behavior                                                                                                                                                                                                 |
 | -------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

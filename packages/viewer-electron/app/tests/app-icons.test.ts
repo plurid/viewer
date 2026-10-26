@@ -2,18 +2,37 @@ import { describe, expect, it, vi } from 'vitest';
 
 const native = vi.hoisted(() => ({
   thumbnail: vi.fn(),
-  fileIcon: vi.fn(),
+  processor: vi.fn(),
 }));
 vi.mock('electron', () => ({
-  app: { getFileIcon: native.fileIcon },
+  app: { isPackaged: false, getAppPath: () => '/viewer' },
   nativeImage: { createThumbnailFromPath: native.thumbnail },
 }));
+vi.mock('../src/desktop/transforms/process', () => ({ runProcessor: native.processor }));
 import { AppIcons } from '../src/desktop/native/app-icons';
 import { nativeAppIcon } from '../src/desktop/native/native-app-icon';
 import { hasBundleIcon } from '../src/renderer/explorer/app-icon';
 import { isPackage } from '../src/domain/files/entries';
 
 describe('application icons', () => {
+  it('cancels the active helper and never starts queued icon decoders during shutdown', async () => {
+    let active: AbortSignal | undefined;
+    const render = vi.fn(async (_file: string, _size: string, signal: AbortSignal) => {
+      active = signal;
+      return new Promise<string>((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+      );
+    });
+    const icons = new AppIcons(render);
+    const first = icons.get('/fixture/A.app', 'small', 1);
+    const second = icons.get('/fixture/B.app', 'small', 1);
+    const settled = Promise.allSettled([first, second]);
+    await vi.waitFor(() => expect(active).toBeDefined());
+    await icons.close();
+    expect(active!.aborted).toBe(true);
+    expect(render).toHaveBeenCalledOnce();
+    expect((await settled).every((result) => result.status === 'rejected')).toBe(true);
+  });
   it('render once per bundle, size and version, sharing concurrent requests', async () => {
     const render = vi.fn(async (file: string, size: string) => `data:${size}:${file}`);
     const icons = new AppIcons(render, 2);
@@ -47,25 +66,36 @@ describe('application icons', () => {
     expect(hasBundleIcon({ directory: false, extension: 'app' })).toBe(false);
     expect(hasBundleIcon({ directory: true, extension: '' })).toBe(false);
   });
-  it("renders an app's own icon with Quick Look: the system's small icon was a blank placeholder", async () => {
-    // 2026-10-23: `app.getFileIcon` gave every application the same generic square
-    const image = (url: string) => ({ isEmpty: () => false, toDataURL: () => url });
-    native.thumbnail.mockResolvedValue(image('data:thumbnail'));
-    native.fileIcon.mockResolvedValue(image('data:generic'));
-    expect(await nativeAppIcon('/Applications/Claude.app', 'small')).toBe('data:thumbnail');
-    expect(native.thumbnail).toHaveBeenLastCalledWith('/Applications/Claude.app', {
-      width: 64,
-      height: 64,
-    });
-    await nativeAppIcon('/Applications/Claude.app', 'large');
-    expect(native.thumbnail).toHaveBeenLastCalledWith('/Applications/Claude.app', {
-      width: 256,
-      height: 256,
-    });
-    // without a thumbnail, the system's icon is better than none
-    native.thumbnail.mockRejectedValueOnce(new Error('no preview'));
-    expect(await nativeAppIcon('/Applications/Old.app', 'small')).toBe('data:generic');
-    expect(native.fileIcon).toHaveBeenLastCalledWith('/Applications/Old.app', { size: 'normal' });
+  it('renders correctly sized bundle icons in the private helper without Quick Look fallback', async () => {
+    const png = (size: number) => {
+      const data = Buffer.alloc(24);
+      Buffer.from('89504e470d0a1a0a', 'hex').copy(data);
+      data.writeUInt32BE(size, 16);
+      data.writeUInt32BE(size, 20);
+      return data;
+    };
+    for (const [size, pixels] of [
+      ['small', 64],
+      ['large', 256],
+    ] as const) {
+      native.processor.mockResolvedValueOnce(png(pixels));
+      expect(await nativeAppIcon('/Applications/Claude.app', size)).toBe(
+        'data:image/png;base64,' + png(pixels).toString('base64'),
+      );
+      expect(native.processor).toHaveBeenLastCalledWith(
+        '/viewer/assets/viewer-image-preview',
+        ['icon', String(pixels)],
+        [],
+        expect.any(AbortSignal),
+        expect.objectContaining({
+          timeout: 8000,
+          input: Buffer.from(JSON.stringify('/Applications/Claude.app')),
+        }),
+      );
+    }
+    native.processor.mockRejectedValueOnce(new Error('Decoder unavailable'));
+    await expect(nativeAppIcon('/Applications/Old.app', 'small')).rejects.toThrow('unavailable');
+    expect(native.thumbnail).not.toHaveBeenCalled();
   });
   it('forgets only the bundles that changed', async () => {
     const render = vi.fn(async (file: string) => `data:${file}`);

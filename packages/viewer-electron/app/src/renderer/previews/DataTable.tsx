@@ -7,7 +7,9 @@ import type {
   WorkbookMerge,
 } from '../../domain/previews/documents/office';
 import { columnName } from '../../domain/previews/documents/office';
-import { parseDelimited } from '../../domain/previews/data/delimited';
+import { createTableSession } from './table-session';
+import { delimitedRows, type DelimitedPreview } from './table-data';
+import { Empty, Loading } from '../ui/primitives';
 type CellAnchor = Extract<EvidenceAnchor, { kind: 'cells' }>;
 const noMerges: readonly WorkbookMerge[] = [];
 
@@ -22,6 +24,8 @@ export function DataTable({
   sourceLastRow,
   formatted = false,
   merges = noMerges,
+  filterRows,
+  retryFilter,
 }: {
   rows: readonly WorkbookRow[];
   headers: readonly string[];
@@ -32,12 +36,45 @@ export function DataTable({
   sourceLastRow?: number;
   formatted?: boolean;
   merges?: readonly WorkbookMerge[];
+  filterRows?: (query: string, signal: AbortSignal) => Promise<Uint32Array>;
+  retryFilter?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
   const [viewportWidth, setViewportWidth] = useState(840);
   const [selection, setSelection] = useState<{ row: number; cell: WorkbookCell; merge?: string }>();
+  const [filtered, setFiltered] = useState<{
+    rows: readonly WorkbookRow[];
+    query: string;
+    indices?: Uint32Array;
+    error?: string;
+  }>();
+  useEffect(() => {
+    if (!filterRows || !query) return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      void filterRows(query, abort.signal).then(
+        (indices) => {
+          if (!abort.signal.aborted) setFiltered({ rows, query, indices });
+        },
+        (error) => {
+          if (!abort.signal.aborted) setFiltered({ rows, query, error: (error as Error).message });
+        },
+      );
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [rows, query, filterRows]);
+  const filtering =
+    !!filterRows && !!query && (filtered?.rows !== rows || filtered.query !== query);
   const body = useMemo(() => {
+    if (!query) return rows;
+    if (filterRows)
+      return filtered?.rows === rows && filtered.indices
+        ? Array.from(filtered.indices, (index) => rows[index]!).filter(Boolean)
+        : rows;
     const term = query.toLocaleLowerCase();
     return rows.filter(
       (row) =>
@@ -46,7 +83,7 @@ export function DataTable({
           (cell.value + ' ' + (cell.formatted ?? '')).toLocaleLowerCase().includes(term),
         ),
     );
-  }, [rows, query]);
+  }, [rows, query, filterRows, filtered]);
   const merged = useMemo(
     () =>
       merges.flatMap((merge) => {
@@ -122,12 +159,17 @@ export function DataTable({
   const display = (cell: WorkbookCell) =>
     formatted && cell.formatted !== undefined ? cell.formatted : cell.value;
   return (
-    <div className="data-viewer">
+    <div className="data-viewer" aria-busy={filtering}>
       <div className="preview-toolbar">
         <span className="muted">
           {body.length.toLocaleString()} {numbered ? 'stored rows' : 'rows'} · {columns} columns
         </span>
         <span className="toolbar-spacer" />
+        {filtering && (
+          <span className="muted" role="status">
+            Filtering…
+          </span>
+        )}
         <input
           aria-label={paged ? 'Filter current worksheet page' : 'Filter table rows'}
           placeholder={paged ? 'Filter this page' : 'Filter rows'}
@@ -135,6 +177,11 @@ export function DataTable({
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
+      {filtered?.rows === rows && filtered.query === query && filtered.error && (
+        <p className="inline-warning">
+          {filtered.error} {retryFilter && <button onClick={retryFilter}>Retry table</button>}
+        </p>
+      )}
       {numbered && (
         <div className="workbook-cell-detail" aria-live="polite">
           {current?.cell ? (
@@ -357,24 +404,53 @@ export function DelimitedTable({
   delimiter: string;
   anchor?: CellAnchor;
 }) {
-  const parsed = useMemo(() => {
-    const { rows, malformed } = parseDelimited(text, delimiter);
-    const columns = Math.min(
-      100,
-      Math.max(rows[0]?.length || 0, ...rows.slice(0, 100).map((row) => row.length), 1),
-    );
-    return {
-      malformed,
-      headers: Array.from(
-        { length: columns },
-        (_, index) => rows[0]?.[index] || `Column ${index + 1}`,
-      ),
-      rows: rows.slice(1).map((cells, index) => ({
-        row: index + 2,
-        cells: cells.slice(0, columns).map((value, index) => ({ column: index + 1, value })),
-      })),
+  const [retry, setRetry] = useState(0);
+  const request = useMemo(() => ({ text, delimiter, retry }), [text, delimiter, retry]);
+  const [loaded, setLoaded] = useState<{
+    request: typeof request;
+    parsed?: Omit<DelimitedPreview, 'rows'> & { rows: WorkbookRow[] };
+    reader?: ReturnType<typeof createTableSession>;
+    error?: string;
+  }>();
+  useEffect(() => {
+    const { text, delimiter } = request;
+    let live = true;
+    let reader: ReturnType<typeof createTableSession> | undefined;
+    try {
+      reader = createTableSession();
+      const owned = reader;
+      void reader.load(text, delimiter).then(
+        (parsed) => {
+          if (live)
+            setLoaded({
+              request,
+              parsed: { ...parsed, rows: delimitedRows(parsed) },
+              reader: owned,
+            });
+        },
+        (error) => {
+          if (live) {
+            owned.close();
+            setLoaded({ request, error: (error as Error).message });
+          }
+        },
+      );
+    } catch (error) {
+      setLoaded({ request, error: (error as Error).message });
+    }
+    return () => {
+      live = false;
+      reader?.close();
     };
-  }, [text, delimiter]);
+  }, [request]);
+  if (loaded?.request !== request) return <Loading label="Reading table…" />;
+  if (loaded.error)
+    return (
+      <Empty icon="warning" title="Table unavailable" detail={loaded.error}>
+        <button onClick={() => setRetry((value) => value + 1)}>Retry table</button>
+      </Empty>
+    );
+  const parsed = loaded.parsed!;
   return (
     <>
       {parsed.malformed && (
@@ -382,11 +458,19 @@ export function DelimitedTable({
           Unclosed quoted field; the displayed data may be incomplete.
         </p>
       )}
+      {parsed.truncated && (
+        <p className="inline-warning">
+          Showing a bounded preview: at most 100 columns, 100,000 records and 500,000 cells. Open
+          the source for the complete table.
+        </p>
+      )}
       <DataTable
         rows={parsed.rows}
         headers={parsed.headers}
         label="Delimited data"
         anchor={anchor}
+        filterRows={loaded.reader!.filter}
+        retryFilter={() => setRetry((value) => value + 1)}
       />
     </>
   );

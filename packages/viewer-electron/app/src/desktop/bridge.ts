@@ -4,7 +4,11 @@ import { createWebHandlers } from './ipc/web-handlers';
 import { WebPreviews } from './previews/web/service';
 import { BrowserPlanes } from './browser/browser-planes';
 import { Transforms } from './transforms/transforms';
-import { imageProcess, imageInspectionProcess } from './transforms/image-process';
+import {
+  imageProcess,
+  imageInspectionProcess,
+  svgPreviewProcess,
+} from './transforms/image-process';
 import { MediaDocuments } from './transforms/media-documents';
 import { imageTransformSchema } from '../domain/operations/transforms';
 import { answerPrompt } from './models/prompts';
@@ -70,7 +74,7 @@ import { absolute, entry, list } from './files/filesystem';
 import { isPackage } from '../domain/files/entries';
 import { spotlightTagged } from './search/spotlight';
 import { nativeImageConverter } from './native/native-image-convert';
-import { quickLookRender } from './native/quick-look-render';
+import { imageDecoder } from './native/quick-look-render';
 import { Operations } from './operations/operations';
 import { TextFiles } from './editing/text-files';
 import { TextBuffers } from './editing/text-buffers';
@@ -388,13 +392,25 @@ export class Desktop {
     const derived = new DerivedPreviews(access, (source, mode, signal) =>
       mode === 'video' ? video(source, mode, signal) : raw(source, mode, signal),
     );
-    this.thumbnails = new Thumbnails(derived);
-    this.resources = new Resources(
+    const images = new DerivedPreviews(
       access,
-      (file, signal) => quickLookRender(file, undefined, signal),
-      12000,
-      derived,
+      imageDecoder(
+        path.join(previewAssets, 'viewer-image-preview'),
+        path.join(previewAssets, `viewer-processors-${process.platform}-${process.arch}`, 'ffmpeg'),
+        (bytes, size, signal) =>
+          svgPreviewProcess(
+            path.join(path.dirname(options.worker), 'image-worker.cjs'),
+            path.join(previewAssets, `viewer-processors-${process.platform}-${process.arch}`),
+            bytes,
+            size,
+            signal,
+            options.fileBackend,
+          ),
+      ),
+      64 * 1024 * 1024,
     );
+    this.thumbnails = new Thumbnails(derived, images);
+    this.resources = new Resources(access, undefined, 12000, derived, images);
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
       if (target && !target.isDestroyed())
@@ -1205,6 +1221,7 @@ export class Desktop {
       this.search.close(),
       this.executions.close(),
       this.resources.close(),
+      this.appIcons.close(),
       this.webPreviews.close(),
       Promise.resolve(this.browsers.closeAll()),
       (this.mediaDocuments.invalidate(), this.transforms.quiesce()),
@@ -1980,7 +1997,9 @@ export class Desktop {
         const item = await entry(file);
         if (!isPackage(item))
           throw new Error('Icons are offered for applications and other bundles only.');
-        return this.appIcons.get(item.path, size, item.modified);
+        const icon = await this.appIcons.get(item.path, size, item.modified);
+        await this.fileAccess.require([file]);
+        return icon;
       },
       thumbnail: async (args) => {
         await this.fileAccess.require([args[0]]);

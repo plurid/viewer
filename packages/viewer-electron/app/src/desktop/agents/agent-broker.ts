@@ -948,7 +948,8 @@ export class AgentBroker {
                 anchor: { kind: 'cells', row: offset + index + 2, column: 1 },
               })),
               more: table.rows.length > offset + 1 + limit,
-              coverage: document.truncated || table.malformed ? 'partial' : 'complete',
+              coverage:
+                document.truncated || table.malformed || table.truncated ? 'partial' : 'complete',
             };
           }
         } else

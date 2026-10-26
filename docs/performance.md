@@ -1,5 +1,18 @@
 # Performance analysis
 
+## October 26 private preview workers
+
+The [reliability follow-up](reliability-followup.md) records a paired hidden-window
+comparison using the same generated CSV/OBJ corpus and workload driver on this
+Mac. Warm 55,000-record CSV script work decreased from 43–45 ms to about 16 ms;
+warm 96,800-triangle OBJ renderer task work decreased from 81–94 ms to 33–37 ms.
+Table search remains around 10 ms when measured inside the renderer; native
+polling overhead is reported separately. Workers terminate when views close.
+
+This supplements the foreground measurements below. It does not establish
+physical compositor FPS/INP or VRAM behavior. The raw before/after logs and
+30-cycle memory observations are linked from the reliability ledger.
+
 ## Isolated foreground workload runner
 
 The native performance scenario shares the existing menu-wheel and camera-wheel

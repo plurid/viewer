@@ -134,6 +134,19 @@ if (rawResources) {
   });
 }
 const archive = path.join(output, 'Contents/Resources/app.asar');
+const imageHelper = process.argv[6] ? path.resolve(process.argv[6]) : undefined;
+if (imageHelper) {
+  const info = await lstat(imageHelper);
+  if (
+    !info.isFile() ||
+    info.isSymbolicLink() ||
+    path.basename(imageHelper) !== 'viewer-image-preview'
+  )
+    throw new Error('Provide the compiled viewer-image-preview helper.');
+  const target = path.join(output, 'Contents/Resources/viewer-image-preview');
+  await cp(imageHelper, target, { force: false, errorOnExist: true });
+  await promisify(execFile)('/usr/bin/codesign', ['--force', '--sign', '-', target]);
+}
 await asar.createPackageWithOptions(unpacked, archive, { unpack: '**/node-pty/**' });
 const hash = createHash('sha256').update(asar.getRawHeader(archive).headerString).digest('hex');
 const run = promisify(execFile);
@@ -200,11 +213,14 @@ await writeFile(
       sourceAfter: await sourceHash(process.cwd()),
       lockHash,
       seed: source,
-      scope: nativeBinding
-        ? 'Local direct rebuild with the specified fresh N-API binding. Seed and intermediates preserved. Not a Store/distribution build.'
-        : 'Local JS-only direct rebuild. Source seed and intermediates preserved. Not a Store/distribution build.',
+      scope: imageHelper
+        ? 'Local direct rebuild with a fresh isolated image helper. Seed and intermediates preserved. Not a Store/distribution build.'
+        : nativeBinding
+          ? 'Local direct rebuild with the specified fresh N-API binding. Seed and intermediates preserved. Not a Store/distribution build.'
+          : 'Local JS-only direct rebuild. Source seed and intermediates preserved. Not a Store/distribution build.',
       ...(nativeBinding ? { nativeBinding } : {}),
       ...(rawResources ? { rawResources } : {}),
+      ...(imageHelper ? { imageHelper, imageHelperHash: await hashFile(imageHelper) } : {}),
       inheritedVersion: JSON.parse(await readFile(path.join(unpacked, 'package.json'), 'utf8'))
         .version,
     },

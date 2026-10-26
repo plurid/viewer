@@ -3,7 +3,6 @@ import { thumbnailByteLimit } from '../../domain/previews/images/thumbnails';
 import { realpath } from 'node:fs/promises';
 import { entry } from '../files/filesystem';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
-import { fileCoordination } from '../files/file-coordination';
 import path from 'node:path';
 import { cameraRawFormats } from '../../domain/previews/images/rendered';
 import type { DerivedPreviews } from './derived';
@@ -14,7 +13,10 @@ export class Thumbnails {
   private queue: Promise<unknown> = Promise.resolve();
   private work = new PreviewWork();
   private closed = false;
-  constructor(private derived?: Pick<DerivedPreviews, 'read'>) {}
+  constructor(
+    private derived?: Pick<DerivedPreviews, 'read'>,
+    private images?: Pick<DerivedPreviews, 'read'>,
+  ) {}
   get(file: string, size: number): Promise<string> {
     if (this.closed) return Promise.resolve('');
     return this.work.track([file], (scope) => this.read(file, size, scope)).catch(() => '');
@@ -39,23 +41,7 @@ export class Thumbnails {
         );
         const value = camera
           ? await this.cameraThumbnail(file, size, scope)
-          : await fileCoordination.run(
-              [{ path: actual, mode: 'read' }],
-              async (signal) => {
-                signal?.throwIfAborted();
-                scope.check();
-                if ((await entry(fileCoordination.path(actual))).size > thumbnailByteLimit)
-                  return '';
-                const image = await nativeImage.createThumbnailFromPath(
-                  fileCoordination.path(actual),
-                  { width: size, height: size },
-                );
-                signal?.throwIfAborted();
-                scope.check();
-                return image.toDataURL();
-              },
-              scope.signal,
-            );
+          : await this.imageThumbnail(file, size, scope);
         if (this.closed) return '';
         scope.check();
         if (value.length > 1000000) return '';
@@ -75,6 +61,16 @@ export class Thumbnails {
       return await work;
     } finally {
       this.pending.delete(key);
+    }
+  }
+  private async imageThumbnail(file: string, size: number, scope: PreviewScope): Promise<string> {
+    if (!this.images) return '';
+    const lease = await this.images.read(file, 'image', scope.signal, size);
+    try {
+      scope.check();
+      return 'data:image/png;base64,' + lease.value.data.toString('base64');
+    } finally {
+      lease.release();
     }
   }
   private async cameraThumbnail(file: string, size: number, scope: PreviewScope): Promise<string> {

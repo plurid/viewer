@@ -517,7 +517,7 @@ export interface SearchBatch {
   truncated: boolean;
 }
 export interface Resource {
-  derivation?: { kind: 'camera' | 'raw' | 'video'; decoder: string };
+  derivation?: { kind: 'camera' | 'raw' | 'video' | 'image'; decoder: string };
   dimensions?: { width: number; height: number };
   id: string;
   url: string;

@@ -33,6 +33,21 @@ if (process.platform === 'darwin') {
   if (arch !== 'arm64' && arch !== 'x64')
     throw new Error('Native helpers support arm64 and x64 builds.');
   const target = `${arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx${minimum}`;
+  execFileSync(
+    'xcrun',
+    [
+      'swiftc',
+      '-target',
+      target,
+      '-module-cache-path',
+      cache,
+      '-O',
+      'tools/image-preview.swift',
+      '-o',
+      'assets/viewer-image-preview',
+    ],
+    { stdio: 'inherit' },
+  );
   await prepareProcessors(minimum, arch);
   await preparePDFProcessors(minimum, arch);
   await prepareRawProcessor(minimum, arch);

@@ -26,6 +26,18 @@ export function imageInspectionProcess(
 ): Promise<ImageInspection> {
   return requestImage<ImageInspection>(worker, root, bytes, undefined, signal, backend);
 }
+export function svgPreviewProcess(
+  worker: string,
+  root: string,
+  bytes: Buffer,
+  size: number,
+  signal: AbortSignal,
+  backend?: 'process' | 'thread',
+): Promise<Buffer> {
+  return requestImage<Uint8Array>(worker, root, bytes, undefined, signal, backend, size).then(
+    (value) => Buffer.from(value),
+  );
+}
 function requestImage<T>(
   worker: string,
   root: string,
@@ -33,6 +45,7 @@ function requestImage<T>(
   plan: ImageTransform | undefined,
   signal: AbortSignal,
   backend?: 'process' | 'thread',
+  previewSize?: number,
 ): Promise<T> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
@@ -51,8 +64,8 @@ function requestImage<T>(
     };
     const cancel = () => settle(signal.reason ?? new Error('Image conversion cancelled.'));
     const timer = setTimeout(
-      () => settle(new Error('Image conversion timed out. Its source was kept.')),
-      90000,
+      () => settle(new Error('Image processing timed out. Its source was kept.')),
+      previewSize === undefined ? 90000 : 10000,
     );
     signal.addEventListener('abort', cancel, { once: true });
     child.exit(() => settle(new Error('Image processor stopped. Try again.')));
@@ -62,7 +75,7 @@ function requestImage<T>(
         settle(reply.error ? new Error(reply.error) : undefined, reply.value as T);
     });
     try {
-      child.postMessage({ id, root, bytes, plan });
+      child.postMessage({ id, root, bytes, plan, previewSize });
     } catch (error) {
       settle(error);
     }

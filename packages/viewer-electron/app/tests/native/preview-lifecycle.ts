@@ -17,7 +17,7 @@ const root = await temporaryRoot('viewer-native-preview-lifecycle-');
 const folder = path.join(root, 'Files');
 const profile = path.join(root, 'Profile');
 await Promise.all([mkdir(folder), mkdir(profile)]);
-const selected = ['docx', 'xlsx', 'obj', 'mp4', 'json', 'css'];
+const selected = ['docx', 'xlsx', 'obj', 'mp4', 'json', 'css', 'csv', 'tiff', 'heic', 'exr'];
 const samples = await localSamples();
 const files = selected.map((extension) => {
   const sample = samples.find((sample) => sample.formats.includes(extension));
@@ -104,7 +104,18 @@ try {
     'video',
     '.json-scroll',
     '.code-scroll',
+    '.data-viewer',
+    '.image-stage img',
+    '.image-stage img',
+    '.image-stage img',
   ];
+  const memory: {
+    iteration: number;
+    usedSize: number;
+    backingStorageSize?: number;
+    nodes: number;
+    jsEventListeners: number;
+  }[] = [];
   for (let index = 0; index < 30; index += 1) {
     const slot = index % files.length;
     const file = files[slot]!;
@@ -183,7 +194,43 @@ try {
       Boolean,
       'preview closed',
     );
+    await until(
+      async () => {
+        const result = await command<{ targetInfos: { type: string; url: string }[] }>(
+          'Target.getTargets',
+        );
+        return result.targetInfos.filter(
+          (target) => target.type === 'worker' && /(?:mesh|table)\.worker/.test(target.url),
+        ).length;
+      },
+      (count) => count === 0,
+      'closed previews release their owned parser workers',
+    );
+    if (index === 9 || index === 29) {
+      await command('HeapProfiler.collectGarbage');
+      const heap = await command<{ usedSize: number; backingStorageSize?: number }>(
+        'Runtime.getHeapUsage',
+      );
+      const dom = await command<{ nodes: number; jsEventListeners: number }>(
+        'Memory.getDOMCounters',
+      );
+      memory.push({ iteration: index + 1, ...heap, ...dom });
+    }
   }
+  assert.equal(memory.length, 2);
+  assert.ok(
+    memory[1]!.usedSize - memory[0]!.usedSize < 32 * 1024 * 1024,
+    'Retained renderer heap stays bounded after warmup',
+  );
+  assert.ok(
+    (memory[1]!.backingStorageSize || 0) - (memory[0]!.backingStorageSize || 0) < 32 * 1024 * 1024,
+    'Retained array/string storage stays bounded',
+  );
+  assert.ok(
+    memory[1]!.nodes - memory[0]!.nodes < 1000,
+    'Closed previews do not accumulate detached view trees',
+  );
+  observations.push({ kind: 'retained-memory', snapshots: memory });
   const overlapped = await evaluate<{ phase: string }>(`(async () => {
     const resources = [];
     const responses = [];

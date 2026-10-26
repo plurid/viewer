@@ -2,12 +2,11 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
-import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { importMesh, meshObjects } from '../model/mesh';
+import { assertModelMemory } from '../model/memory';
 import { cadFormats } from '../../../domain/previews/models/formats';
 import { importCad } from '../model/cad';
 import { printingScale } from '../model/printing';
@@ -145,6 +144,8 @@ export default function ModelPreview(context: PreviewContext) {
     let frameRequest = 0,
       renderActive = visibility.current.active,
       controlsInteractive = visibility.current.interactive,
+      graphicsFailed = false,
+      memoryCheck = true,
       runningAnimation = false,
       dirty = true;
     const scene = new THREE.Scene();
@@ -288,6 +289,7 @@ export default function ModelPreview(context: PreviewContext) {
       renderer.shadowMap.enabled = value.shadows && value.shading !== 'normals' && !wireframe;
       lighting.apply(value.lighting, renderer.shadowMap.enabled);
       surfaces?.apply(value, wireframe);
+      memoryCheck = true;
       dirty = true;
       schedule();
     };
@@ -307,11 +309,12 @@ export default function ModelPreview(context: PreviewContext) {
     renderer.domElement.addEventListener('webglcontextrestored', contextRestored);
     let lastFrame = performance.now();
     function schedule() {
-      if (!disposed && renderActive && !frameRequest) frameRequest = requestAnimationFrame(render);
+      if (!disposed && !graphicsFailed && renderActive && !frameRequest)
+        frameRequest = requestAnimationFrame(render);
     }
     function render() {
       frameRequest = 0;
-      if (disposed || !renderActive) return;
+      if (disposed || graphicsFailed || !renderActive) return;
       const now = performance.now(),
         delta = Math.min((now - lastFrame) / 1000, 0.05);
       lastFrame = now;
@@ -321,8 +324,17 @@ export default function ModelPreview(context: PreviewContext) {
         dirty = true;
       }
       if (dirty || changed) {
-        lighting.update();
-        renderer.render(scene, camera);
+        try {
+          if (object && memoryCheck) assertModelMemory(object);
+          memoryCheck = false;
+          lighting.update();
+          renderer.render(scene, camera);
+        } catch (error) {
+          graphicsFailed = true;
+          setError((error as Error).message);
+          setLoading(false);
+          return;
+        }
         dirty = false;
       }
       if (runningAnimation || changed) schedule();
@@ -357,6 +369,15 @@ export default function ModelPreview(context: PreviewContext) {
     });
     resize.observe(element);
     const manager = new THREE.LoadingManager();
+    const assetsChanged = () => {
+      if (!disposed) {
+        memoryCheck = true;
+        dirty = true;
+        schedule();
+      }
+    };
+    manager.onLoad = assetsChanged;
+    manager.onProgress = assetsChanged;
     const missing = new Set<string>();
     const base = new URL('.', resource.url).href;
     manager.setURLModifier((url) => {
@@ -386,37 +407,26 @@ export default function ModelPreview(context: PreviewContext) {
         clips = gltf.animations;
       } else if (ext === 'obj') {
         const source = await response.text();
-        const loader = new OBJLoader(manager);
+        const parsing = importMesh(source, 'obj', abort.signal);
+        // Attach the rejection immediately while a companion request is pending.
+        void parsing.catch(() => {});
+        let materials: ReturnType<MTLLoader['parse']> | undefined;
         const library = /^mtllib\s+(.+)$/m.exec(source)?.[1]?.trim();
         if (library) {
           try {
             const mtlURL = manager.resolveURL(new URL(library, base).href);
             const mtl = await fetch(mtlURL, { signal: abort.signal });
             if (!mtl.ok) throw new Error(library);
-            const materials = new MTLLoader(manager).parse(
-              await mtl.text(),
-              new URL('.', mtlURL).href,
-            );
+            materials = new MTLLoader(manager).parse(await mtl.text(), new URL('.', mtlURL).href);
             materials.preload();
-            loader.setMaterials(materials);
           } catch {
             missing.add(library);
             if (!disposed) setWarnings([...missing]);
           }
         }
-        loaded = loader.parse(source);
+        loaded = meshObjects(await parsing, materials);
       } else if (ext === 'stl') {
-        const geometry = new STLLoader(manager).parse(await response.arrayBuffer());
-        geometry.computeVertexNormals();
-        loaded = new THREE.Mesh(
-          geometry,
-          new THREE.MeshStandardMaterial({
-            color: 0xb5c4cc,
-            roughness: 0.55,
-            metalness: 0.08,
-            side: THREE.DoubleSide,
-          }),
-        );
+        loaded = meshObjects(await importMesh(await response.arrayBuffer(), 'stl', abort.signal));
       } else if (cadFormats.includes(ext)) {
         if (resource.entry.size > 64 * 1024 * 1024)
           throw new Error('This CAD file exceeds the conversion limit (64 MB).');
@@ -439,16 +449,7 @@ export default function ModelPreview(context: PreviewContext) {
         loaded = new ThreeMFLoader(manager).parse(data);
         loaded.scale.multiplyScalar(scale);
       } else if (ext === 'ply') {
-        const geometry = new PLYLoader(manager).parse(await response.arrayBuffer());
-        geometry.computeVertexNormals();
-        loaded = new THREE.Mesh(
-          geometry,
-          new THREE.MeshStandardMaterial({
-            color: 0xb5c4cc,
-            vertexColors: !!geometry.attributes.color,
-            side: THREE.DoubleSide,
-          }),
-        );
+        loaded = meshObjects(await importMesh(await response.arrayBuffer(), 'ply', abort.signal));
       } else if (ext === 'fbx') {
         loaded = new FBXLoader(manager).parse(await response.arrayBuffer(), base);
         clips = loaded.animations;
@@ -458,6 +459,7 @@ export default function ModelPreview(context: PreviewContext) {
         return;
       }
       object = loaded;
+      assertModelMemory(loaded);
       let meshes = 0,
         vertices = 0,
         triangles = 0;
@@ -733,7 +735,9 @@ export default function ModelPreview(context: PreviewContext) {
         )}
         {error && (
           <div className="preview-overlay">
-            <Empty icon="model" title="Model could not be loaded" detail={error} />
+            <Empty icon="model" title="Model could not be loaded" detail={error}>
+              {context.retry && <button onClick={context.retry}>Retry preview</button>}
+            </Empty>
           </div>
         )}
       </div>

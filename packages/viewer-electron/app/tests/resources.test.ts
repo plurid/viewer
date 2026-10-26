@@ -14,6 +14,22 @@ afterEach(async () => {
   await trashTemporary(root);
 });
 describe('scoped preview resources', () => {
+  it('refuses an oversized model companion bitmap before starting its response stream', async () => {
+    const model = path.join(root, 'scene.gltf');
+    const texture = path.join(root, 'huge.png');
+    const header = Buffer.alloc(24);
+    Buffer.from('89504e470d0a1a0a', 'hex').copy(header);
+    header.writeUInt32BE(20000, 16);
+    header.writeUInt32BE(20000, 20);
+    await writeFile(model, '{}');
+    await writeFile(texture, header);
+    const source = await resources.grant(model);
+    const response = await resources.response(new Request(new URL('huge.png', source.url)));
+    expect(response.status).toBe(413);
+    expect(response.body).toBe(null);
+    // The refusal does not revoke the independent source or authorize a wider path.
+    expect((await resources.read(source.id)).text).toBe('{}');
+  });
   it('cancels only the matching preview page and keeps independent resources usable', async () => {
     const file = path.join(root, 'Workbook.xlsx');
     await writeFile(file, 'source');
