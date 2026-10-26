@@ -7,6 +7,8 @@ import {
   type SourceVersion,
 } from '../../domain/files/inspection';
 import { activeWorkspace, getState, previewValues, savePreviewValue } from '../state/store';
+import { rememberPreviewFile } from '../state/persistence';
+import type { JSONValue } from '../../domain/workspaces/project';
 const views = new Map<string, Map<string, unknown>>();
 export function previewState(id: string, file?: FileEntry): NonNullable<PreviewContext['state']> {
   const owner = getState() && activeWorkspace().id;
@@ -32,11 +34,26 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
         savePreviewValue(id, key, value, owner);
       },
     };
-  let view = views.get(id);
+  const cacheID = owner ? owner + ':' + id : id;
+  let view = views.get(cacheID);
   if (!view) {
-    view = new Map();
-    views.set(id, view);
+    const remembered =
+      file && owner
+        ? getState().saved.previewHistory?.[owner]?.find((entry) => entry.path === file.path)
+            ?.values
+        : undefined;
+    view = new Map(Object.entries(remembered ?? {}));
+    views.set(cacheID, view);
     while (views.size > 500) views.delete(views.keys().next().value!);
+  }
+  // A loading PreviewHost asks for state before its resource metadata exists.
+  // Hydrate that placeholder too, before its first rendered view can save zero.
+  if (file && owner && !view.has('_sourceVersion')) {
+    const remembered = getState().saved.previewHistory?.[owner]?.find(
+      (entry) => entry.path === file.path,
+    )?.values;
+    for (const [key, value] of Object.entries(remembered ?? {}))
+      if (!view.has(key)) view.set(key, value);
   }
   // A new version of the file resets its view, notes aside, as in a workspace plane above: Quick
   // Preview, Gallery and Columns kept stale measurements, pages and sheets (2026-10-20).
@@ -60,6 +77,10 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
         view!.set('_sourceVersion', sourceVersion(file));
       }
       view!.set(key, value);
+      if (file && owner) {
+        const values = Object.fromEntries(view!) as Record<string, JSONValue>;
+        rememberPreviewFile(owner, file.path, values);
+      }
     },
   };
 }

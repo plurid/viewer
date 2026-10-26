@@ -23,9 +23,11 @@ The task workflow ledger distinguishes the delivered paths from broader proposal
 
 The current [reliability follow-up](reliability-followup.md) replaces the remaining
 shared image-thumbnail path, moves large table/mesh parsing off the interface
-thread, bounds decoded allocations and checks lifecycle/recovery. Positive
-note/checklist OS Trash acceptance still needs exact-path permission and a real
-user click. General AI-guided folder organization remains deferred. Existing
+thread, bounds decoded allocations and checks lifecycle/recovery. The operator
+confirmed the remaining approved generated note moved to Trash; both generated
+documents are absent from their source paths, library and saved open views.
+Exact Trash destinations were not independently inspected. General AI-guided
+folder organization remains deferred. Existing
 Chat, recipes and workflows keep their bounded inspection and reviewed proposals.
 
 [Sharing and file-manager directions](file-manager-directions.md) records the
@@ -68,7 +70,7 @@ Add permanent UI only when contextual actions cannot make a capability discovera
 | Operations and recovery  | Journaled jobs, conflicts, guarded eligible Undo/Redo, archives, deterministic reviewed rename and checkpoints    | Low-space/provider/device failures across supported filesystems; cross-volume Undo policy; bulk metadata                     |
 | Search and inspection    | Local indexed names/metadata, granted content evidence, source-addressed tables, DOCX/XLSX and DXF facts          | Rich filter UI, snippets/navigation refinements, semantic/media indexing and mount recovery                                  |
 | Comparison and storage   | Folder metadata/hash comparison, text/image diff, exact duplicates and explicit logical-size scans                | Richer synchronization, perceptual matching, hard-link/allocation accounting and cache freshness                             |
-| Spatial work             | Independent roots/windows, tiling, per-tile resize, views/Tour, culling sessions and guarded Overview placement   | Durable camera/playback state for every preview, missing project-path placeholders and measured many-plane work              |
+| Spatial work             | Independent roots/windows, readable tiling, compact related navigation, file-view recall and measured 20-plane close/reopen work | Longer mixed-session soak, wider preview-restoration corpus, missing project-path placeholders and physical compositor/GPU measurements |
 | Automation and models    | Recipes, portable DAGs, dormant imports, private watch approvals, scoped agent tasks/audit and proposal-only Chat | Broader real-document evaluations, format transformations and richer content readers; general AI organization stays deferred |
 | Formats and distribution | Modular document/media/archive/CAD previews and isolated platform adapters                                        | Larger codec/model/CSV corpora, release signing/notarization, other supported macOS versions and Windows/Linux qualification |
 
@@ -79,8 +81,9 @@ Add permanent UI only when contextual actions cannot make a capability discovera
    distinct at their typed boundaries.
 2. Complete baseline desktop gaps and adverse-I/O evidence through the existing
    commands, native scope checks, proposal review and operation queue.
-3. Measure cold startup, large listings, repeated previews and many-plane work
-   before expanding background indexing or parsing budgets.
+3. Extend the [20-plane measurements and preview recall](mixed-workspace-followup.md)
+   with longer mixed-session runs, representative larger files and physical
+   compositor/GPU evidence before expanding background indexing or parsing budgets.
 4. Improve publication recipes against a representative corpus, then extend
    bounded format readers and transformations with evidence and recovery.
 5. Revisit broader intelligent organization only through a separate product

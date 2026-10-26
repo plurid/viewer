@@ -1,5 +1,37 @@
 # Performance analysis
 
+## October 26 mixed workspaces
+
+The [mixed-workspace follow-up](mixed-workspace-followup.md) adds a retained
+20-plane workload: four folders with 480 entries, twelve document/data/model/media
+previews, two real local browser pages and two live ordinary shell sessions.
+Candidate E passes three close/reopen cycles. Both shells and browser guests end
+on closing their views; reopening creates fresh shells without command replay.
+
+During navigation, 80 hidden-window frame intervals have median/p95 16.7 ms and
+maximum 16.8 ms, with no observed long tasks. Renderer heap is 25.01 MiB after the
+first reopen and 27.52 MiB after the third; DOM nodes rise from 4,048 to 4,420.
+Summed descendant process RSS is 1,156–1,194 MiB across reopened groups and
+883–950 MiB with ten planes. Shared pages can be counted more than once in RSS.
+These short-run observations do not establish physical display FPS, private GPU
+allocation, unique memory or a leak-free long-running session.
+
+Tiling now gives each plane at least 420 × 260 logical pixels, fitting the group
+with camera scale rather than forcing content into smaller logical surfaces.
+Painted `frozen` Plurid planes remain active; only hidden/detached planes pause.
+This fixes browser surfaces going blank in a crowded overview. Candidate E's
+four final dark/light desktop captures show rendered pages and accessible
+Frame/Dock controls. Measurement and capture evidence is retained at
+`viewer-native-mixed-workspaces-Zs8PhR` in the system temporary directory.
+
+After the narrow docked navigation correction, candidate F passes the same
+workload again in `viewer-native-mixed-workspaces-lGts8s`. Navigation intervals
+and long-task observations match E. First/third reopened heap is 25.26 / 29.09 MiB,
+DOM nodes 4,050 / 4,420 and listeners 3,733 / 4,992. Reopened summed RSS is
+1,121–1,132 MiB. All four header geometry checks pass with zero overflow; both
+browser pages remain rendered. The retained growth and short-run limits remain
+part of the result.
+
 ## October 26 private preview workers
 
 The [reliability follow-up](reliability-followup.md) records a paired hidden-window

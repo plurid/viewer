@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { columnName } from '../../../domain/previews/documents/office';
 import type { PreviewContext } from '../contracts';
 import { usePreviewState } from '../state';
+import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { DataTable } from '../DataTable';
 import { Empty, Loading } from '../../ui/primitives';
@@ -59,6 +60,10 @@ export default function OfficePreview(context: PreviewContext) {
   );
   const { document, loading, error, retry } = useOfficeDocument(context, request);
   const wordRef = useRef<HTMLDivElement>(null);
+  usePreviewScroll(context.state, wordRef, 'office', {
+    ready: !!document && !workbook,
+    restore: !context.evidence,
+  });
   useEffect(() => {
     if (anchor?.kind === 'document' && document)
       wordRef.current
@@ -246,6 +251,7 @@ export default function OfficePreview(context: PreviewContext) {
       ) : sheet ? (
         <DataTable
           key={sheet.name + ':' + (page?.fromRow ?? '')}
+          state={context.state}
           label={sheet.name}
           rows={sheet.rows}
           headers={headers}

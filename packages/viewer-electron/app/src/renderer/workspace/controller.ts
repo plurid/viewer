@@ -1119,6 +1119,9 @@ export function useWorkspaceController({
         for (const [child, owner] of serverParents.current)
           if (owner.workspaceID === space.id && removed.has(owner.parentID)) removed.add(child);
         const closesActive = removed.has(active);
+        // Capture pending scroll, playback and orbit samples while their plane
+        // records still exist. Closing a view never removes its file recall.
+        window.dispatchEvent(new Event('viewer-preview-flush'));
         const wasDocked = closesActive && !!api.camera.docked();
         const surviving = new Set(
           space.panes.filter((pane) => !removed.has(pane.id)).map((pane) => pane.id),
@@ -1144,6 +1147,10 @@ export function useWorkspaceController({
         api.history.transaction(() => {
           api.tree.remove(node.planeID);
           removePanes([...removed]);
+          // Removing a tile and arranging its survivors form one user action.
+          // The later React effect sees identical geometry and adds no history step.
+          if (space.tiling?.panes.some((id) => removed.has(id)))
+            applyTiling(engine, surface, 0, false);
           if (!closesActive) return;
           // Independent roots retain the store's established first-survivor fallback.
           const next = destination ?? space.panes.find((pane) => surviving.has(pane.id))?.id;

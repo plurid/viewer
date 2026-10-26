@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { ResolvedCommand } from '../commands/registry';
 import { ContextMenuResults } from './ContextMenuResults';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { dialogOpen } from './modal';
 
 export interface Choice {
@@ -125,6 +125,7 @@ export function ChoiceButton({
   placeholder,
   disabled,
   className,
+  icon,
 }: {
   label: string;
   value: string;
@@ -134,6 +135,7 @@ export function ChoiceButton({
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  icon?: IconName;
 }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
@@ -162,6 +164,7 @@ export function ChoiceButton({
           }
         }}
       >
+        {icon && <Icon name={icon} size={15} />}
         <span className={current ? undefined : 'choice-placeholder'}>
           {current?.label ?? placeholder ?? value}
         </span>

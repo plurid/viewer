@@ -8,6 +8,7 @@ import { previewValuesSchema, type JSONValue } from '../../domain/workspaces/pro
 import { activeWorkspace, getState, replaceState, report } from './core';
 import { flushPreferences } from './preferences';
 import { installPersistenceScheduler } from './persistence-request';
+import { boundPreviewHistory, rememberFileView } from '../../domain/previews/history';
 
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingEngineFlush = false;
@@ -88,6 +89,12 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   const saved = {
     ...getState().saved,
     previewStates: retainedPreviewStates(),
+    previewHistory:
+      getState().saved.previewHistory &&
+      boundPreviewHistory(
+        getState().saved.previewHistory!,
+        new Set(getState().saved.workspaces.map((space) => space.id)),
+      ),
     workspaces: getState().saved.workspaces.map((space) =>
       dirtyArrangements.has(space.id)
         ? { ...space, arrangement: Object.fromEntries(adapters.get(space.id) ?? []) }
@@ -128,7 +135,15 @@ export function previewValues(
   paneID: string,
   owner = activeWorkspace().id,
 ): Record<string, JSONValue> {
-  return getState().saved.previewStates?.[owner + ':' + paneID] ?? {};
+  const state = getState().saved;
+  const own = state.previewStates?.[owner + ':' + paneID];
+  if (own) return own;
+  const pane = state.workspaces
+    .find((space) => space.id === owner)
+    ?.panes.find((pane) => pane.id === paneID);
+  return pane?.type === 'preview'
+    ? (state.previewHistory?.[owner]?.find((entry) => entry.path === pane.path)?.values ?? {})
+    : {};
 }
 export function savePreviewValue(
   paneID: string,
@@ -137,12 +152,10 @@ export function savePreviewValue(
   owner = activeWorkspace().id,
   resetView = false,
 ): boolean {
-  if (
-    !getState()
-      .saved.workspaces.find((space) => space.id === owner)
-      ?.panes.some((pane) => pane.id === paneID)
-  )
-    return false;
+  const pane = getState()
+    .saved.workspaces.find((space) => space.id === owner)
+    ?.panes.find((pane) => pane.id === paneID);
+  if (!pane) return false;
   const previous = previewValues(paneID, owner);
   const values = {
     ...(resetView
@@ -164,6 +177,10 @@ export function savePreviewValue(
         ...getState().saved.previewStates,
         [owner + ':' + paneID]: parsed.data,
       },
+      previewHistory:
+        pane.type === 'preview'
+          ? rememberFileView(getState().saved.previewHistory, owner, pane.path, parsed.data)
+          : getState().saved.previewHistory,
       workspaces: getState().saved.workspaces.map((space) =>
         space.id === owner && space.project
           ? { ...space, project: { ...space.project, dirty: true } }
@@ -173,4 +190,21 @@ export function savePreviewValue(
   });
   schedulePersist(false);
   return true;
+}
+
+/** Quick Preview and embedded views share file recall without becoming saved planes. */
+export function rememberPreviewFile(
+  owner: string,
+  path: string,
+  values: Record<string, JSONValue>,
+): void {
+  if (!getState().saved.workspaces.some((space) => space.id === owner)) return;
+  replaceState({
+    ...getState(),
+    saved: {
+      ...getState().saved,
+      previewHistory: rememberFileView(getState().saved.previewHistory, owner, path, values),
+    },
+  });
+  schedulePersist(false);
 }

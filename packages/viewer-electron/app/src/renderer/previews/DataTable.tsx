@@ -10,6 +10,8 @@ import { columnName } from '../../domain/previews/documents/office';
 import { createTableSession } from './table-session';
 import { delimitedRows, type DelimitedPreview } from './table-data';
 import { Empty, Loading } from '../ui/primitives';
+import type { PreviewContext } from './contracts';
+import { usePreviewScroll } from './scroll';
 type CellAnchor = Extract<EvidenceAnchor, { kind: 'cells' }>;
 const noMerges: readonly WorkbookMerge[] = [];
 
@@ -26,6 +28,7 @@ export function DataTable({
   merges = noMerges,
   filterRows,
   retryFilter,
+  state,
 }: {
   rows: readonly WorkbookRow[];
   headers: readonly string[];
@@ -38,9 +41,11 @@ export function DataTable({
   merges?: readonly WorkbookMerge[];
   filterRows?: (query: string, signal: AbortSignal) => Promise<Uint32Array>;
   retryFilter?: () => void;
+  state?: PreviewContext['state'];
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
+
   const [viewportWidth, setViewportWidth] = useState(840);
   const [selection, setSelection] = useState<{ row: number; cell: WorkbookCell; merge?: string }>();
   const [filtered, setFiltered] = useState<{
@@ -124,6 +129,10 @@ export function DataTable({
         if (view.first <= range.endIndex && view.last >= range.startIndex) included.add(view.first);
       return [...included].sort((a, b) => a - b);
     },
+  });
+  usePreviewScroll(state, ref, 'table', {
+    section: `${label}:${rows[0]?.row ?? 0}:${query}`,
+    restore: !anchor,
   });
   const width = columns * columnWidth + (numbered ? 48 : 0);
   const template = { display: 'block', position: 'relative', width, minWidth: width } as const;
@@ -399,10 +408,12 @@ export function DelimitedTable({
   text,
   delimiter,
   anchor,
+  state,
 }: {
   text: string;
   delimiter: string;
   anchor?: CellAnchor;
+  state?: PreviewContext['state'];
 }) {
   const [retry, setRetry] = useState(0);
   const request = useMemo(() => ({ text, delimiter, retry }), [text, delimiter, retry]);
@@ -466,6 +477,7 @@ export function DelimitedTable({
       )}
       <DataTable
         rows={parsed.rows}
+        state={state}
         headers={parsed.headers}
         label="Delimited data"
         anchor={anchor}

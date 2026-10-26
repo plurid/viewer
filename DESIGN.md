@@ -871,6 +871,32 @@ Selection opens a plain field-surface inspector beside the table (320px, bounded
 
 Export Journal reuses the wide modal with count/size context, a bounded read-only monospace JSON preview and the existing Cancel/Save export… footer. Empty, loading and no-match states use the shared empty primitive. The plane footer keeps event counts, the local-history explanation and Move history to Trash… in normal flow. Reviewed native desktop dark/light and compact dark captures show generated-fixture service events; the finish disposition is ship with no material fixes, and the design detector returned `[]` once. These captures introduce no shipping imagery.
 
+### Crowded workspaces and preview recall
+
+Tiling preserves at least 420 × 260 logical pixels per plane, then fits the
+group with one camera scale. It remains an overview: Frame and Dock provide a
+larger reading surface. Compact headers retain those two controls, a truncated
+content title and Actions. Secondary controls leave the header as available
+width narrows. Related planes uses the existing searchable choice menu with an
+existing link glyph and count; entries say Parent or Child beside the actual
+tool/file title, with path or URL context. Keyboard navigation remains available.
+The engine's bridge/link geometry hides in tiled mode and returns in free space.
+
+The final [20-plane captures](docs/mixed-workspace-followup.md) were inspected
+in dark and light appearances at 1440 × 940 and 900 × 940 desktop sizes. All
+headers fit and retain Frame/Dock; both browser pages show actual rendered
+content after navigation and resize. Painted frozen planes remain active, and
+stale browser-open replies cannot replace newer loaded-page events. The existing
+optional minimap and viewcube retain their engine treatment. These views add no
+new visual tokens or shipping raster assets and do not qualify mobile layouts
+or physical assistive technology.
+
+Preview recall returns the user to the unchanged file's page, chapter, scroll,
+playback position or model camera. Restoration waits for content and yields to
+user input. Closing flushes pending samples before the view disappears; private
+notes and unsaved edits keep their existing ownership. Recent-file eviction and
+changed source versions reset positions without adding permanent UI.
+
 ### Operations
 
 The operations control appears for pending work, conflicts, or unseen failures. Its anchored popover shows bounded progress, cancellation, paths, errors, and available undo; past jobs open through Commands or the native menu. Conflicts provide Skip, Keep both, and Replace, with an explicit remaining-conflicts checkbox. Replace explains that the existing item goes to Trash and requires its own confirmation. Idle browsing keeps the workspace open.

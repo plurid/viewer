@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
+import { usePreviewScroll } from '../scroll';
 import { pdfCanvasRatio, pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
@@ -66,6 +67,9 @@ export default function DjVuPreview(context: PreviewContext) {
   const texts = useRef(new Map<number, string>());
   const canvas = useRef<HTMLCanvasElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
+  const [renderedPage, setRenderedPage] = useState('');
+  const section = `${page}:${zoom}`;
+  usePreviewScroll(context.state, scroll, 'djvu', { ready: renderedPage === section, section });
   const searchInput = useRef<HTMLInputElement>(null);
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   useEffect(() => {
@@ -128,6 +132,7 @@ export default function DjVuPreview(context: PreviewContext) {
           0,
           0,
         );
+      setRenderedPage(`${page}:${zoom}`);
     })().catch((value: Error) => {
       if (!cancelled) setError(value.message);
     });
@@ -135,9 +140,6 @@ export default function DjVuPreview(context: PreviewContext) {
       cancelled = true;
     };
   }, [client, pages, page, zoom, available, active]);
-  useEffect(() => {
-    scroll.current?.scrollTo(0, 0);
-  }, [page, zoom]);
   useEffect(() => {
     if (!client || !pages || !query.trim()) {
       setMatches([]);

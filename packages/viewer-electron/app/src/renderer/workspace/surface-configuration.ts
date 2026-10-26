@@ -16,6 +16,7 @@ export function surfaceConfiguration({
   preferences,
   color,
   palette,
+  tiled = false,
 }: {
   look: keyof typeof looks;
   size: { width: number; height: number };
@@ -24,6 +25,7 @@ export function surfaceConfiguration({
   color?: string;
   /** The theme's colours plurid derives its look from. */
   palette?: LookPalette;
+  tiled?: boolean;
 }): PluridPartialConfiguration {
   return {
     global: {
@@ -64,6 +66,10 @@ export function surfaceConfiguration({
       navigation: { onClose: 'parent', framing: { fill: 0.92 }, childFraming: 'plane' },
     },
     elements: {
+      // Face-on tiles retain their relationships in Related planes. Spatial
+      // bridges would cross unrelated tiles and obscure their controls.
+      planeBridge: { show: !tiled },
+      planeLinks: { show: !tiled },
       minimap: { show: preferences.minimap },
       viewcube: { show: preferences.viewcube },
       toolbar: { show: preferences.toolbar, drawers },

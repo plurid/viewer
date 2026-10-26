@@ -125,6 +125,21 @@ function MediaPlayer(
   const [attempt, setAttempt] = useState(0);
   const [position, setPosition] = usePreviewState(context, 'media.position', 0);
   const restored = useRef(false);
+  const state = context.state;
+  useEffect(() => {
+    const media = ref.current;
+    const save = () => {
+      if (media && restored.current && Number.isFinite(media.currentTime))
+        state?.set('media.position', media.currentTime);
+    };
+    window.addEventListener('pagehide', save);
+    window.addEventListener('viewer-preview-flush', save);
+    return () => {
+      save();
+      window.removeEventListener('pagehide', save);
+      window.removeEventListener('viewer-preview-flush', save);
+    };
+  }, [state, resource.id, error, attempt, pictureUnavailable]);
   useEffect(() => {
     if (ready && context.evidence?.anchor.kind === 'media' && ref.current)
       ref.current.currentTime = context.evidence.anchor.seconds;

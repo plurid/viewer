@@ -1,4 +1,43 @@
 import type { Pane, Workspace } from '../contracts';
+import { gitActionLabels } from '../comparison/git-actions';
+
+/** Shared identity for plane headers, related-plane navigation and saved views. */
+export function paneTitle(pane: Pane, collectionName?: string): string {
+  const name = baseName(pane.path);
+  switch (pane.type) {
+    case 'task':
+      return pane.title;
+    case 'receipt':
+      return 'Command receipt';
+    case 'media':
+      return 'Edit media · ' + name;
+    case 'browser':
+      return pane.title || new URL(pane.url).hostname;
+    case 'scratch':
+    case 'note':
+      return pane.title || 'Untitled';
+    case 'journal':
+      return 'Journal';
+    case 'chat':
+      return 'Chat';
+    case 'server':
+      return 'Server · ' + name;
+    case 'diff':
+      return 'Compare · ' + name;
+    case 'git-changes':
+      return 'Git changes · ' + name;
+    case 'collection':
+      return collectionName || 'Collection';
+    case 'search':
+      return pane.name;
+    case 'terminal':
+      return (
+        (pane.gitAction ? 'Git ' + gitActionLabels[pane.gitAction] : 'Terminal') + ' · ' + name
+      );
+    default:
+      return name;
+  }
+}
 
 /** The last path component, for display; a root or empty path is returned unchanged. */
 export function baseName(path: string): string {

@@ -1,7 +1,8 @@
-import { createElement, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DocumentData } from '../../../domain/services';
 import type { PreviewContext } from '../contracts';
 import { usePreviewState } from '../state';
+import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 const allowed = new Set([
@@ -107,6 +108,12 @@ export default function EPUBPreview(context: PreviewContext) {
   const position = Math.min(chapter, Math.max(0, chapters.length - 1));
   const html = chapters[position]?.html || '';
   const nodes = useMemo(() => chapterNodes(html), [html]);
+  const chapterRef = useRef<HTMLElement>(null);
+  usePreviewScroll(context.state, chapterRef, 'epub', {
+    ready: !!document,
+    section: String(position),
+    restore: !context.evidence,
+  });
   usePreviewCommands(
     context,
     useMemo(
@@ -181,7 +188,12 @@ export default function EPUBPreview(context: PreviewContext) {
             ))}
           </nav>
         )}
-        <article key={position} className="epub-chapter" style={{ fontSize: size }}>
+        <article
+          ref={chapterRef}
+          key={position}
+          className="epub-chapter"
+          style={{ fontSize: size }}
+        >
           {nodes}
           {document.truncated && (
             <p className="muted">This preview reached its extraction limit.</p>

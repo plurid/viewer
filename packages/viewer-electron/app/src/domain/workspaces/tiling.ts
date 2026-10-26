@@ -257,6 +257,19 @@ export function tilingRects(
   visit(tree, { x: 0, y: 0, width: area.width, height: area.height });
   return tiling.panes.map((id) => result.get(id) ?? { x: 0, y: 0, width: 0, height: 0 });
 }
+
+/** Keep controls usable inside each plane; the camera fits the larger arrangement. */
+export function readableTiling(tiling: Tiling, area: { width: number; height: number }) {
+  const initial = tilingRects(tiling, area);
+  const expansion = Math.max(
+    1,
+    ...initial.map((rect) =>
+      Math.max(420 / Math.max(1, rect.width), 260 / Math.max(1, rect.height)),
+    ),
+  );
+  const size = { width: area.width * expansion, height: area.height * expansion };
+  return { rects: tilingRects(tiling, size), scale: 1 / expansion };
+}
 /** Grow the active tile toward a neighbor; outside edges stay fixed. */
 export function resizeTile(
   tiling: Tiling,

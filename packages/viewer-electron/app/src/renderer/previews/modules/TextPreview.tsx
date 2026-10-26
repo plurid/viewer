@@ -17,6 +17,7 @@ import { relativeLinkTarget } from '../../../domain/workspaces/planes';
 import { highlightedLines } from '../highlight';
 import { languageByID, languageFor, loadPrismGrammar } from '../languages';
 import { usePreviewState } from '../state';
+import { usePreviewScroll } from '../scroll';
 import { StructuredTree } from '../StructuredTree';
 import { isStructured, inspectStructured } from '../../../domain/previews/data/structured';
 import type { ApplicationSettings } from '../../../domain/services';
@@ -75,6 +76,7 @@ function Code({
   line: targetLine,
   settings,
   wordWrap,
+  state,
 }: {
   text: string;
   /** Prism's grammar id, from the language table. */
@@ -82,8 +84,10 @@ function Code({
   line?: number;
   settings: ApplicationSettings['editor'];
   wordWrap: boolean;
+  state?: PreviewContext['state'];
 }) {
   const scroll = useRef<HTMLDivElement>(null);
+
   const lines = useMemo(() => text.split('\n'), [text]);
   const grammar = usePrismGrammar(language);
   // Whole-document tokens for ordinary files; very large ones fall back to single lines.
@@ -97,6 +101,7 @@ function Code({
     estimateSize: () => settings.lineHeight,
     overscan: 12,
   });
+  usePreviewScroll(state, scroll, 'source', { restore: !targetLine });
   useEffect(() => {
     if (targetLine)
       virtual.scrollToIndex(Math.min(lines.length - 1, targetLine - 1), { align: 'center' });
@@ -178,6 +183,7 @@ export default function TextPreview(context: TextPreviewProps) {
   );
   const [error, setError] = useState('');
   const [raw, setRaw] = usePreviewState(context, 'text.source', false);
+  const markdownRef = useRef<HTMLElement>(null);
   const preferences = useViewer((state) => effectiveWindowSettings(state));
   const [scale, setScale] = usePreviewState(context, 'text.scale', 1);
   const [wrap, setWrap] = usePreviewState(
@@ -200,6 +206,10 @@ export default function TextPreview(context: TextPreviewProps) {
   const [editing, setEditing] = useState<'asked' | 'restored' | false>(() =>
     !paneID ? false : continuesEditing(paneID) ? 'asked' : bufferID ? 'restored' : false,
   );
+  usePreviewScroll(context.state, markdownRef, 'markdown', {
+    ready: !!data && !raw && !editing,
+    restore: !context.evidence,
+  });
   const onEditingChange = context.onEditingChange;
   useEffect(() => onEditingChange?.(!!editing), [editing, onEditingChange]);
   const startEditing = useCallback(() => {
@@ -354,11 +364,12 @@ export default function TextPreview(context: TextPreviewProps) {
       {['csv', 'tsv'].includes(ext) ? (
         <DelimitedTable
           text={data.text}
+          state={context.state}
           delimiter={ext === 'tsv' ? '\t' : ','}
           anchor={context.evidence?.anchor.kind === 'cells' ? context.evidence.anchor : undefined}
         />
       ) : markdown && !raw ? (
-        <article className="markdown">
+        <article className="markdown" ref={markdownRef}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             skipHtml
@@ -409,6 +420,7 @@ export default function TextPreview(context: TextPreviewProps) {
           )}
           <Code
             text={data.text}
+            state={context.state}
             language={language}
             line={evidenceLine}
             settings={textSettings}

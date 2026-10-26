@@ -60,6 +60,19 @@ Settings and external editors share a versioned `config.jsonc`, with comments, t
 
 Local persistence is versioned and atomic, with backups before settings migrations. UI version 3 enables navigation in existing folder planes and hides window navigation once, after backing up the original layout metadata. Later visibility choices persist. Legacy code and ~/.viewer data stay untouched. Remote/cloud accounts, third-party plugin installation, release certificate signing, notarization, and publishing are outside this first implementation. macOS development bundles use local ad-hoc signatures so they can run on Apple Silicon.
 
+Crowded tiled workspaces keep each plane at least 420 × 260 logical pixels and
+fit the group through camera scale. Frame and Dock remain accessible in compact
+headers; a searchable Related planes menu names parents and children by their
+actual content. Spatial connection lines hide while tiled and return in free
+space. Closing a tile and arranging its survivors takes one Undo action.
+
+Closing a file preview retains recent page, scroll, playback and camera state
+for a fresh view of the unchanged file, including after restarting Viewer.
+Simultaneous copies keep independent positions. This private session cache is
+bounded to 50 files per workspace and 200 overall; it carries view metadata,
+while notes and editing buffers remain with their existing owners. Changed
+sources reset recalled positions. See [mixed workspaces and preview recall](docs/mixed-workspace-followup.md).
+
 Confirmed by the user during the planning interview and subsequent interface review; implementation authorized with “Implement the plan.” Existing files and folders must not be deleted during this work.
 
 

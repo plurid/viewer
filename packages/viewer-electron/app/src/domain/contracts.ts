@@ -11,6 +11,7 @@ import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
 import type { TransformPlan } from './operations/transforms';
 import type { WorksheetDocumentRequest } from './previews/documents/office';
 import type { ImageRenditionRequest } from './previews/images/rendered';
+import type { PreviewHistory } from './previews/history';
 import type { MediaRequest, MediaReply } from './media/documents';
 import type { BrowserRequest, BrowserSnapshot } from './previews/browser';
 import type {
@@ -331,6 +332,8 @@ export const CURRENT_STATE_VERSION = 11 as const;
 export interface SavedState {
   version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
+  /** Bounded, private file view positions, independent of disposable plane IDs. */
+  previewHistory?: PreviewHistory;
   preferencesRevision?: number;
   workspaces: Workspace[];
   activeWorkspace: string;

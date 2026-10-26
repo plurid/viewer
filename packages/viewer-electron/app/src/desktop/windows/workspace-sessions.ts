@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { boundPreviewHistory } from '../../domain/previews/history';
 import { CURRENT_STATE_VERSION, type SavedState, type Workspace } from '../../domain/contracts';
 
 interface Session {
@@ -246,6 +247,23 @@ export class WorkspaceSessions {
       if (other === undefined || other === owner) delete previewStates[key];
     }
     merged.previewStates = previewStates;
+    const previewHistory = { ...merged.previewHistory };
+    for (const [workspace, entries] of Object.entries(input.previewHistory ?? {})) {
+      if (equal(entries, baseline.previewHistory?.[workspace])) continue;
+      const other = this.owner(workspace);
+      if (next.has(workspace) && (other === undefined || other === owner))
+        previewHistory[workspace] = entries;
+    }
+    for (const workspace of Object.keys(previewHistory)) {
+      if (!next.has(workspace)) delete previewHistory[workspace];
+      else if (
+        baseline.previewHistory?.[workspace] &&
+        !input.previewHistory?.[workspace] &&
+        (this.owner(workspace) === undefined || this.owner(workspace) === owner)
+      )
+        delete previewHistory[workspace];
+    }
+    merged.previewHistory = boundPreviewHistory(previewHistory);
     merged.activeWorkspace = input.activeWorkspace;
     merged.profile = input.profile;
     const profiles = { ...merged.windowProfiles };

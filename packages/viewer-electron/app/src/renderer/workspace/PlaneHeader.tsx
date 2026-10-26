@@ -1,5 +1,4 @@
 import { useCallback, useState, useSyncExternalStore } from 'react';
-import { gitActionLabels } from '../../domain/comparison/git-actions';
 import type { PluridPlaneChromeContext, TreePlane } from '@plurid/plurid-data';
 import {
   activeWorkspace,
@@ -20,7 +19,7 @@ import { IconButton } from '../ui/primitives';
 import { ContextMenu } from '../ui/ContextMenu';
 import { setPreviewControlsSlot } from '../previews/controls';
 import { useWorkspace } from './context';
-import { baseName } from '../../domain/workspaces/planes';
+import { baseName, paneTitle } from '../../domain/workspaces/planes';
 import { hostID } from './tree';
 import { buffersGeneration, heldBuffer, subscribeBuffers } from '../editing/buffers';
 import { GitBranch } from '../git/status';
@@ -232,39 +231,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           }
           size={16}
         />
-        <span className="plane-title">
-          {pane?.type === 'task'
-            ? pane.title
-            : pane?.type === 'receipt'
-              ? 'Command receipt'
-              : pane?.type === 'media'
-                ? 'Edit media · ' + baseName(pane.path)
-                : pane?.type === 'browser'
-                  ? pane.title || new URL(pane.url).hostname
-                  : pane?.type === 'scratch' || pane?.type === 'note'
-                    ? (pane.title ?? 'Untitled')
-                    : pane?.type === 'journal'
-                      ? 'Journal'
-                      : pane?.type === 'chat'
-                        ? 'Chat'
-                        : pane?.type === 'server'
-                          ? 'Server · ' + baseName(pane.path)
-                          : pane?.type === 'diff'
-                            ? 'Compare · ' + baseName(pane.path)
-                            : pane?.type === 'git-changes'
-                              ? 'Git changes · ' + baseName(pane.path)
-                              : pane?.type === 'collection'
-                                ? (collection?.name ?? 'Collection')
-                                : pane?.type === 'search'
-                                  ? pane.name
-                                  : pane?.type === 'terminal'
-                                    ? (pane.gitAction
-                                        ? 'Git ' + gitActionLabels[pane.gitAction]
-                                        : 'Terminal') +
-                                      ' · ' +
-                                      baseName(pane.path)
-                                    : (pane && baseName(pane.path)) || 'Plane'}
-        </span>
+        <span className="plane-title">{pane ? paneTitle(pane, collection?.name) : 'Plane'}</span>
         {unsaved && (
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
         )}
@@ -332,6 +299,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
             <IconButton
               icon="resize"
               label="Layout"
+              className="plane-layout-button"
               aria-haspopup="dialog"
               aria-expanded={menu?.kind === 'layout'}
               onClick={(event) => openMenu(event, planeLayoutCommandIDs, 'layout')}

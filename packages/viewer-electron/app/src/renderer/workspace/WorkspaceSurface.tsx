@@ -30,7 +30,7 @@ import { SearchExplorer } from '../explorer/SearchExplorer';
 import { CollectionExplorer } from '../explorer/CollectionExplorer';
 import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
-import { PreviewActivity } from '../previews/activity';
+import { planeIsActive, PreviewActivity } from '../previews/activity';
 import { PreviewFrame } from './preview-frame';
 import { Empty } from '../ui/primitives';
 import { Sidebar } from '../ui/navigation/Sidebar';
@@ -68,7 +68,7 @@ function useInteractive(): boolean {
 function FolderContent() {
   const plane = usePluridPlane();
   const interactive = useInteractive();
-  const active = plane.shown && plane.culled === 'visible';
+  const active = planeIsActive(plane);
   // A folder's embedded previews follow its plane, as a preview plane does (see PreviewActivity).
   const activity = useMemo(() => ({ active, interactive }), [active, interactive]);
   return (
@@ -88,7 +88,7 @@ function PreviewContent() {
     return (
       <PreviewFrame activate={() => setActivePane(record.id)}>
         <Suspense fallback={<Empty title="Opening note…" />}>
-          <LazyNotePlane pane={record} visible={plane.shown && plane.culled === 'visible'} />
+          <LazyNotePlane pane={record} visible={planeIsActive(plane)} />
         </Suspense>
       </PreviewFrame>
     );
@@ -97,7 +97,7 @@ function PreviewContent() {
     return (
       <PreviewFrame activate={() => setActivePane(record.id)}>
         <Suspense fallback={<Empty title="Opening scratch plane…" />}>
-          <LazyScratchPlane pane={record} visible={plane.shown && plane.culled === 'visible'} />
+          <LazyScratchPlane pane={record} visible={planeIsActive(plane)} />
         </Suspense>
       </PreviewFrame>
     );
@@ -107,7 +107,7 @@ function PreviewContent() {
         path={record.path}
         evidence={record.type === 'preview' ? record.evidence : undefined}
         paneID={record.id}
-        active={plane.shown && plane.culled === 'visible'}
+        active={planeIsActive(plane)}
         interactive={interactive}
         editable
       />
@@ -134,7 +134,7 @@ function TaskContent() {
   );
   if (pane?.type !== 'task' && pane?.type !== 'receipt')
     return <Empty title="Task view unavailable" />;
-  const active = plane.shown && plane.culled === 'visible';
+  const active = planeIsActive(plane);
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
       <Suspense fallback={<Empty title="Opening task context…" />}>
@@ -157,7 +157,7 @@ function JournalContent() {
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
       <Suspense fallback={<Empty title="Opening Journal…" />}>
-        <LazyJournalPlane pane={pane} active={plane.shown && plane.culled === 'visible'} />
+        <LazyJournalPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
   );
@@ -172,7 +172,7 @@ function BrowserContent() {
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
       <Suspense fallback={<Empty title="Opening browser…" />}>
-        <LazyBrowserPlane pane={pane} active={plane.shown && plane.culled === 'visible'} />
+        <LazyBrowserPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
   );
@@ -186,7 +186,7 @@ function MediaContent() {
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
       <Suspense fallback={<Empty title="Opening media tools…" />}>
-        <LazyMediaPlane pane={pane} active={plane.shown && plane.culled === 'visible'} />
+        <LazyMediaPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
   );
@@ -200,7 +200,7 @@ function ServerContent() {
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
       <Suspense fallback={<Empty title="Opening server controls…" />}>
-        <LazyServerPlane pane={pane} active={plane.shown && plane.culled === 'visible'} />
+        <LazyServerPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
   );
@@ -415,8 +415,16 @@ export function WorkspaceSurface({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const storage = useMemo(() => storageAdapter(space.id), [space.id, space.epoch]);
   const configuration = useMemo(
-    () => surfaceConfiguration({ look, size, preferences, color: space.spaceColor, palette }),
-    [look, size, preferences, space.spaceColor, palette],
+    () =>
+      surfaceConfiguration({
+        look,
+        size,
+        preferences,
+        color: space.spaceColor,
+        palette,
+        tiled: !!space.tiling,
+      }),
+    [look, size, preferences, space.spaceColor, palette, space.tiling],
   );
   useEffect(() => {
     if (!api) return;
@@ -425,19 +433,21 @@ export function WorkspaceSurface({
     let scheduled = false;
     const synchronize = () => {
       if (publishing || api.store !== engine.current?.store) return;
-      const { elements, space } = api.getSnapshot().configuration;
+      const { elements, space: engineSpace } = api.getSnapshot().configuration;
       if (
         elements.toolbar.show === preferences.toolbar &&
         elements.minimap?.show === preferences.minimap &&
         elements.viewcube.show === preferences.viewcube &&
+        elements.planeBridge?.show === !space.tiling &&
+        elements.planeLinks?.show === !space.tiling &&
         elements.plane.controls.show === preferences.planeHeaders &&
         elements.plane.resizable === preferences.resizing &&
         elements.plane.backface === 'visible' &&
-        space.gestures?.wheel === configuration.space?.gestures?.wheel &&
-        space.gestures?.dragHandle === configuration.space?.gestures?.dragHandle &&
-        space.navigation?.childFraming === 'plane' &&
-        space.bridge?.planeAngle === 90.1 &&
-        space.transformOrigin.show === preferences.origin
+        engineSpace.gestures?.wheel === configuration.space?.gestures?.wheel &&
+        engineSpace.gestures?.dragHandle === configuration.space?.gestures?.dragHandle &&
+        engineSpace.navigation?.childFraming === 'plane' &&
+        engineSpace.bridge?.planeAngle === 90.1 &&
+        engineSpace.transformOrigin.show === preferences.origin
       )
         return;
       // Saved engine configuration must not undo the host's preference migration,
@@ -462,7 +472,7 @@ export function WorkspaceSurface({
       disposed = true;
       unsubscribe();
     };
-  }, [api, configuration, preferences, engine]);
+  }, [api, configuration, preferences, engine, space.tiling]);
   // Stable callbacks: the engine memoizes plane chrome on their identity, so inline
   // functions would re-render every plane header on each store change.
   const handleReady = (api: PluridApi) => {

@@ -2,6 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 
 describe('native workspace ownership', () => {
+  it('keeps file recall private to its owning workspace across overlapping saves', () => {
+    const sessions = new WorkspaceSessions();
+    const first = sessions.create('/fixtures', 'First');
+    const second = sessions.create('/fixtures', 'Second');
+    const a = sessions.open(1, '/fixtures', first);
+    const b = sessions.open(2, '/fixtures', second);
+    const entry = (page: number) => [
+      { path: '/fixtures/Book.pdf', updated: page, values: { 'pdf.page': page } },
+    ];
+    a.previewHistory = { [first]: entry(3), [second]: entry(99) };
+    sessions.save(1, a);
+    b.previewHistory = { [second]: entry(8) };
+    sessions.save(2, b);
+    expect(sessions.snapshot()?.previewHistory?.[first]?.[0]?.values['pdf.page']).toBe(3);
+    expect(sessions.snapshot()?.previewHistory?.[second]?.[0]?.values['pdf.page']).toBe(8);
+  });
   it('protects a window reservation from peer claims and saves before renderer bootstrap', () => {
     const sessions = new WorkspaceSessions();
     const first = sessions.create('/fixtures', 'First');

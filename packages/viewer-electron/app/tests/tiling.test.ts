@@ -3,7 +3,14 @@
  * (even across, even down, a main one beside or above the rest, a grid), with gutters between.
  */
 import { describe, expect, it } from 'vitest';
-import { nextLayout, tileRects, type TileLayout } from '../src/domain/workspaces/tiling';
+import {
+  nextLayout,
+  readableTiling,
+  tileRects,
+  tileTree,
+  tileLayouts,
+  type TileLayout,
+} from '../src/domain/workspaces/tiling';
 
 const area = { width: 1212, height: 812 };
 const round = (rects: { x: number; y: number; width: number; height: number }[]) =>
@@ -47,5 +54,24 @@ describe('tile rectangles', () => {
   it('steps through the layouts in turn', () => {
     expect(nextLayout('even-horizontal')).toBe('even-vertical');
     expect(nextLayout('tiled')).toBe('even-horizontal');
+  });
+  it('keeps crowded tiles usable and fits them with one camera scale', () => {
+    for (const layout of tileLayouts) {
+      for (const count of [10, 20]) {
+        const panes = Array.from({ length: count }, (_, index) => String(index));
+        for (const tree of [undefined, tileTree(panes, layout)]) {
+          const result = readableTiling({ panes, layout, main: 0.6, tree }, area);
+          expect(result.rects).toHaveLength(count);
+          expect(result.scale).toBeGreaterThan(0);
+          expect(result.scale).toBeLessThanOrEqual(1);
+          for (const rect of result.rects) {
+            expect(rect.width).toBeGreaterThanOrEqual(419.99);
+            expect(rect.height).toBeGreaterThanOrEqual(259.99);
+            expect((rect.x + rect.width) * result.scale).toBeLessThanOrEqual(area.width + 0.01);
+            expect((rect.y + rect.height) * result.scale).toBeLessThanOrEqual(area.height + 0.01);
+          }
+        }
+      }
+    }
   });
 });

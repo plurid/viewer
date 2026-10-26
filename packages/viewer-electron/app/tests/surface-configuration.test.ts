@@ -26,4 +26,16 @@ describe('the plurid configuration of a workspace (2026-10-21)', () => {
     expect(configuration(false).elements?.toolbar?.show).toBe(false);
     expect(configuration().elements?.plane?.width).toBe(992 - 64);
   });
+  it('hides spatial bridges while tiled and restores them in free space', () => {
+    const tiled = surfaceConfiguration({
+      look: 'dark',
+      size: { width: 1440, height: 940 },
+      preferences: normalizePreferences().space,
+      tiled: true,
+    });
+    expect(tiled.elements?.planeBridge?.show).toBe(false);
+    expect(tiled.elements?.planeLinks?.show).toBe(false);
+    expect(configuration().elements?.planeBridge?.show).toBe(true);
+    expect(configuration().elements?.planeLinks?.show).toBe(true);
+  });
 });

@@ -46,10 +46,11 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
     void command({ kind: 'input', id: pane.id, event });
   useEffect(() => {
     connectBrowsers();
+    let live = true;
+    let updates = 0;
     const offFrame = browserFrames(pane.id, canvas.current!);
-    const off = window.viewer.onEvent((event) => {
-      if (event.type !== 'browser' || event.browser.id !== pane.id) return;
-      const value = event.browser;
+    const accept = (value: BrowserSnapshot) => {
+      if (!live) return;
       setSnapshot(value);
       if (!/^https?:/.test(value.url)) return;
       setURL(value.url);
@@ -76,13 +77,20 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
             : {}),
         });
       }
+    };
+    const off = window.viewer.onEvent((event) => {
+      if (event.type !== 'browser' || event.browser.id !== pane.id) return;
+      updates += 1;
+      accept(event.browser);
     });
     opening.current = command({ kind: 'open', id: pane.id, url: pane.url, ...size.current }).then(
       (value) => {
-        if (value) setSnapshot(value);
+        // Loading/title events may arrive before this initial IPC reply.
+        if (value && updates === 0) accept(value);
       },
     );
     return () => {
+      live = false;
       off();
       offFrame();
       void command({ kind: 'viewport', id: pane.id, ...size.current, visible: false });
@@ -92,21 +100,26 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
   }, [pane.id]);
   useEffect(() => {
     const element = surface.current!;
+    let live = true;
     const observer = new ResizeObserver(() => {
       size.current = {
         width: Math.max(160, Math.min(2048, Math.round(element.clientWidth))),
         height: Math.max(160, Math.min(2048, Math.round(element.clientHeight))),
       };
       projection.current = undefined;
-      void opening.current?.then(() =>
-        command({ kind: 'viewport', id: pane.id, ...size.current, visible: active }),
-      );
+      void opening.current?.then(() => {
+        if (live)
+          return command({ kind: 'viewport', id: pane.id, ...size.current, visible: active });
+      });
     });
     observer.observe(element);
-    void opening.current?.then(() =>
-      command({ kind: 'viewport', id: pane.id, ...size.current, visible: active }),
-    );
-    return () => observer.disconnect();
+    void opening.current?.then(() => {
+      if (live) return command({ kind: 'viewport', id: pane.id, ...size.current, visible: active });
+    });
+    return () => {
+      live = false;
+      observer.disconnect();
+    };
   }, [pane.id, active]);
   useEffect(() => {
     if (!server || server.state !== 'running') return;

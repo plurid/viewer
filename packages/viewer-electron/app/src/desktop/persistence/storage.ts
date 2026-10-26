@@ -31,6 +31,7 @@ import { localPath, id } from '../schemas';
 import { diffModes, diffSourceSchema } from '../../domain/comparison/diff';
 import { journalFilterSchema } from '../../domain/journal/events';
 import { taskAreaSchema } from '../../domain/workspaces/tasks';
+import { previewHistorySchema } from '../../domain/previews/history';
 
 const pane = z.discriminatedUnion('type', [
   z
@@ -200,6 +201,7 @@ const savedStateSchema = z
       z.literal(CURRENT_STATE_VERSION),
     ]),
     previewStates: z.record(id, previewValuesSchema).optional(),
+    previewHistory: previewHistorySchema.optional(),
     openWindows: z.array(id).max(30).optional(),
     preferencesRevision: z.number().int().min(0).optional(),
     workspaces: z

@@ -10,6 +10,7 @@ import {
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
+import { usePreviewScroll } from '../scroll';
 import { pdfCanvasRatio, pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
@@ -52,6 +53,13 @@ export default function PDFPreview(context: PreviewContext) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const text = useRef<HTMLDivElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
+  const [rendered, setRendered] = useState('');
+  const section = `${page}:${zoom}`;
+  usePreviewScroll(context.state, scroll, 'pdf', {
+    ready: rendered === section,
+    section,
+    restore: !context.evidence,
+  });
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   useEffect(() => {
     const local = new URL('/pdfjs/', document.baseURI).href;
@@ -147,6 +155,7 @@ export default function PDFPreview(context: PreviewContext) {
           viewport,
         });
         await layer.render();
+        if (!cancelled) setRendered(`${page}:${zoom}`);
       })
       .catch((error) => {
         if (!cancelled && error.name !== 'RenderingCancelledException') setError(error.message);
@@ -157,9 +166,6 @@ export default function PDFPreview(context: PreviewContext) {
       layer?.cancel();
     };
   }, [pdf, page, zoom, available, active]);
-  useEffect(() => {
-    scroll.current?.scrollTo(0, 0);
-  }, [page, zoom]);
   useEffect(() => {
     if (!pdf || !query.trim()) {
       setMatches([]);

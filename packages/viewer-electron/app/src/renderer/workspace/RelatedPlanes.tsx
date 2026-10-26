@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { activeWorkspace, useViewer } from '../state/store';
-import { baseName } from '../../domain/workspaces/planes';
+import { paneTitle } from '../../domain/workspaces/planes';
 import { useWorkspace } from './context';
 
 /** A route through related content without changing the authored arrangement. */
@@ -14,6 +14,7 @@ export function RelatedPlanes({ id }: { id: string }) {
       .join('\n'),
   );
   const panes = useViewer((state) => activeWorkspace(state).panes);
+  const collections = useViewer((state) => activeWorkspace(state).collections);
   const parent = workspace.parentPaneID(id);
   const ids = [...(parent ? [parent] : []), ...related.split('\n').filter(Boolean)];
   const choices = ids.flatMap((value) => {
@@ -22,7 +23,8 @@ export function RelatedPlanes({ id }: { id: string }) {
       ? [
           {
             value,
-            label: `${value === parent ? 'Parent' : pane.type === 'server' ? 'Server' : 'Child'} · ${baseName(pane.path)}`,
+            label: `${value === parent ? 'Parent' : 'Child'} · ${paneTitle(pane, pane.type === 'collection' ? collections?.find((item) => item.id === pane.collectionID)?.name : undefined)}`,
+            detail: pane.type === 'browser' ? pane.url : pane.path,
           },
         ]
       : [];
@@ -31,9 +33,11 @@ export function RelatedPlanes({ id }: { id: string }) {
   return (
     <ChoiceButton
       label="Related planes"
+      icon="link"
+      className="plane-related"
       value=""
       choices={choices}
-      placeholder={`Related (${choices.length})`}
+      placeholder={String(choices.length)}
       onChoose={(id) => workspace.focusPane(id, { activate: true })}
     />
   );

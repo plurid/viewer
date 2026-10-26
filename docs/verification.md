@@ -1,5 +1,71 @@
 # Verification
 
+## October 26 mixed workspaces, compact headers and file-view recall
+
+The current local candidate is
+`/private/tmp/viewer-mixed-20261026-F/Viewer.app`, a preserving JS rebuild from
+the retained reliability H runtime. Its build record is
+`packages/viewer-electron/app/out/preserved-package-HvwjhM/result.json`.
+Source before/after and the final source witness match:
+`ebac3b67381b7c8a37740a7dc2c18ca2ae3fd9ed8e4187134add8e4731725486`.
+The witness `/private/tmp/viewer-mixed-final-source-F-20261026.json` also records
+runtime-source, ASAR, executable and inherited signed image-helper hashes.
+The lockfile remains `bf1703c1f919ddaefa0e82f08386939e31145b07333bf3f46f107e1b18daee38`.
+
+**1,948 tests pass, four conditional native-binding tests are skipped, and none
+fail**: 280 files pass and three are skipped. Full-suite evidence is
+`/private/tmp/viewer-mixed-suite-F-20261026.{log,json}`. All four TypeScript
+targets, full lint, changed-source formatting and `git diff --check HEAD` pass.
+The four skipped tests require separately supplied native recording/metadata
+bindings; they are not claimed as executed. Automated removals remain disabled
+and every generated fixture/build remains retained.
+
+The complete F packaged smoke passes: previews, file jobs and Undo, all four
+explorer views, model gesture isolation, IPC/resource boundaries, root creation,
+projected sidebar resizing, narrow docked navigation and workspace restoration.
+Log: `/private/tmp/viewer-mixed-smoke-F-20261026.log`; fixture
+`viewer-verification-rC07iE`; evidence directory, relative to the Electron app:
+`out/native-evidence/electron-smoke-2026-10-26T12-24-58-403Z-e89c1d78-17d8-4b21-80ec-0d06971dbe13`.
+The preceding E smoke caught a genuine 420 px docked-header regression: hiding
+the whole navigation strip hid its visibility toggle. F's CSS keeps that strip
+available and the existing real hit-testing check now passes.
+
+The [mixed-workspace ledger](mixed-workspace-followup.md) retains the baseline,
+close/retile Undo failure, browser repaint/loading races, fixes and measurements.
+Candidate E passes the 20-plane, three-cycle workload with live browser guests
+and shells, zero observed navigation long tasks, keyboard Related navigation and
+four inspected dark/light desktop captures. The per-file recall and browser
+JavaScript is unchanged in F; only the compact navigation CSS differs.
+
+F's final 20-plane run also passes three close/reopen cycles, browser pixel/loading
+checks and four dark/light header checks: all 20 headers have zero overflow and
+accessible Frame/Dock controls. Both shell children and browser guest targets end
+with their views. Its 80 navigation samples have median/p95 16.7 ms, maximum
+16.8 ms and no observed long tasks. Retained heap rises from 25.26 to 29.09 MiB
+between first/third reopened groups, with DOM nodes 4,050 to 4,420; this is a
+short-run observation, not zero growth. Evidence:
+`/private/tmp/viewer-mixed-native-F-20261026.log`, fixture
+`viewer-native-mixed-workspaces-lGts8s`, `result.json` and four captures. The dark
+1440 px and light 900 px final captures were inspected after the correction.
+
+E's cold-restart restoration passes with fresh plane IDs: source/Markdown/CSV/
+DOCX offsets, EPUB chapter two, PDF page three at 200% plus scroll, fractional
+video/audio positions and a model camera changed by real orbit input. Fixture
+hashes remain unchanged. Log:
+`/private/tmp/viewer-preview-restoration-native-E-20261026.log`; retained fixture
+`viewer-native-preview-restoration-fqHYT9`, `result-1.json`.
+Dedicated E browser acceptance also passes real composited pixels, rotated-plane
+clicks, text/composition input, culling, Back/zoom, bitmap fallback, cookie
+persistence and graceful restart:
+`/private/tmp/viewer-browser-planes-native-E-20261026.log`, fixture
+`viewer-native-browser-Z0GU63`.
+
+These local macOS checks use generated files and hidden test windows. Frame
+intervals describe renderer scheduling, and process RSS can count shared pages
+more than once. They do not establish physical compositor FPS, private GPU
+allocation, long-running leak absence, physical assistive technology, other
+platforms or signed Store/distribution acceptance.
+
 ## October 26 navigation inheritance and closed diagnostic pipes
 
 The current local candidate is

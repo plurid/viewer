@@ -210,6 +210,11 @@ export default function ModelPreview(context: PreviewContext) {
       dirty = true;
       schedule();
     });
+    const flushCamera = () => {
+      if (cameraTimer && !disposed) rememberCamera();
+    };
+    window.addEventListener('pagehide', flushCamera);
+    window.addEventListener('viewer-preview-flush', flushCamera);
     // Stop gesture initiation at the canvas. OrbitControls receives subsequent
     // pointer moves/up on ownerDocument, so those events must keep bubbling.
     const isolate = (event: Event) => {
@@ -563,6 +568,8 @@ export default function ModelPreview(context: PreviewContext) {
     });
     return () => {
       if (cameraTimer) rememberCamera();
+      window.removeEventListener('pagehide', flushCamera);
+      window.removeEventListener('viewer-preview-flush', flushCamera);
       disposed = true;
       abort.abort();
       session.current = null;
