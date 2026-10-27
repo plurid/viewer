@@ -16,6 +16,17 @@ assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
 assert.ok(binary);
+const corpusDirectory = path.resolve(
+  process.env.VIEWER_TEST_REAL_CORPUS ?? defaultPlaygroundDirectory,
+);
+const previewSelectors = new Map([
+  ['docx', '.office-document'],
+  ['xlsx', '.worksheet-tab-list'],
+  ['pptx', '.pdf-sheet canvas'],
+  ['pdf', '.pdf-sheet canvas'],
+  ['dng', '.image-stage img'],
+  ['nef', '.image-stage img'],
+]);
 const root = await temporaryRoot('viewer-native-real-files-'),
   files = path.join(root, 'Files'),
   profile = path.join(root, 'Profile');
@@ -31,7 +42,7 @@ const hash = async (file: string) =>
     .update(await readFile(file))
     .digest('hex');
 for (const sample of corpus) {
-  const source = path.join(defaultPlaygroundDirectory, sample.path),
+  const source = path.join(corpusDirectory, sample.path),
     destination = path.join(files, path.basename(sample.path));
   const info = await lstat(source);
   assert.ok(info.isFile() && !info.isSymbolicLink());
@@ -82,6 +93,7 @@ await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [];
+let passed = false;
 try {
   connection = await app.connect();
   const { evaluate, command } = connection;
@@ -170,7 +182,23 @@ try {
           media?: { duration: number; width: number; height: number };
           image?: { width: number; height: number };
         }>(
-          `(()=>{const root=document.querySelector('.quick-preview'),image=root?.querySelector('.image-stage img'),media=root?.querySelector('video,audio'),error=root?.querySelector('.empty-state')?.innerText||'';return {ready:!!root?.querySelector(${JSON.stringify(extension === 'docx' ? '.office-document' : extension === 'xlsx' ? '.worksheet-tab-list' : extension === 'pdf' ? '.pdf-sheet canvas' : ['dng', 'nef'].includes(extension) ? '.image-stage img' : 'video,audio')}) && (!image || image.complete&&image.naturalWidth>0) && (!media || media.readyState>=2 && !root.querySelector('.media-loading')),error,warning:root?.querySelector('.inline-warning')?.textContent||'',media:media&&media.readyState>=2?{duration:media.duration,width:media.videoWidth,height:media.videoHeight}:undefined,image:image&&image.complete?{width:image.naturalWidth,height:image.naturalHeight}:undefined}})()`,
+          `(() => {
+            const root = document.querySelector('.quick-preview');
+            const image = root?.querySelector('.image-stage img');
+            const media = root?.querySelector('video,audio');
+            const canvas = root?.querySelector('.pdf-sheet canvas');
+            const content = root?.querySelector(${JSON.stringify(previewSelectors.get(extension) ?? 'video,audio')});
+            const mediaReady = media && media.readyState >= 2;
+            return {
+              ready: !!content && (!image || image.complete && image.naturalWidth > 0)
+                && (!canvas || canvas.width > 0)
+                && (!media || mediaReady && !root.querySelector('.media-loading')),
+              error: root?.querySelector('.empty-state')?.innerText || '',
+              warning: root?.querySelector('.inline-warning')?.textContent || '',
+              media: mediaReady ? { duration: media.duration, width: media.videoWidth, height: media.videoHeight } : undefined,
+              image: image?.complete ? { width: image.naturalWidth, height: image.naturalHeight } : undefined,
+            };
+          })()`,
         ),
       (value) => value.ready || value.error,
       'decoded ' + extension,
@@ -179,7 +207,7 @@ try {
     if (expectedRejection) {
       assert.ok(result.error.includes(expectedRejection));
       assert.equal(result.ready, false);
-    } else if (['docx', 'xlsx', 'pdf'].includes(extension))
+    } else if (['docx', 'xlsx', 'pptx', 'pdf'].includes(extension))
       assert.equal(result.error, '', extension + ' content opens');
     if (extension === 'pdf')
       assert.equal(
@@ -219,9 +247,10 @@ try {
   }
   assert.equal((await evaluate<unknown[]>('window.viewer.jobs()')).length, 0);
   for (const sample of corpus) {
-    assert.equal(await hash(path.join(defaultPlaygroundDirectory, sample.path)), sample.sha256);
+    assert.equal(await hash(path.join(corpusDirectory, sample.path)), sample.sha256);
     assert.equal(await hash(path.join(files, path.basename(sample.path))), sample.sha256);
   }
+  passed = true;
   console.log('Real-file qualification passed:', root);
 } catch (error) {
   if (connection)
@@ -236,6 +265,7 @@ try {
     path.join(root, 'result.json'),
     JSON.stringify(
       {
+        passed,
         root,
         observations,
         corpus: corpus.map(({ path, sha256, size, license }) => ({ path, sha256, size, license })),

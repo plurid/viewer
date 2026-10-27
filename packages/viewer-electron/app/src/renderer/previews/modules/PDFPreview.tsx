@@ -53,10 +53,10 @@ export default function PDFPreview(context: PreviewContext) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const text = useRef<HTMLDivElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
-  const [rendered, setRendered] = useState('');
+  const [laidOut, setLaidOut] = useState('');
   const section = `${page}:${zoom}`;
   usePreviewScroll(context.state, scroll, 'pdf', {
-    ready: rendered === section,
+    ready: laidOut === section,
     section,
     restore: !context.evidence,
   });
@@ -146,16 +146,20 @@ export default function PDFPreview(context: PreviewContext) {
         container.style.height = `${viewport.height}px`;
         container.style.setProperty('--scale-factor', String(viewport.scale));
         container.style.setProperty('--total-scale-factor', String(viewport.scale));
+        // Scroll restoration needs page geometry. Waiting for the text layer
+        // can reset a scroll the reader already made while the page appeared.
+        setLaidOut(`${page}:${zoom}`);
         render = sheet.render({ canvas: target, viewport, transform: [ratio, 0, 0, ratio, 0, 0] });
         await render.promise;
         if (cancelled) return;
+        const textContentSource = await sheet.getTextContent();
+        if (cancelled) return;
         layer = new TextLayer({
-          textContentSource: await sheet.getTextContent(),
+          textContentSource,
           container,
           viewport,
         });
         await layer.render();
-        if (!cancelled) setRendered(`${page}:${zoom}`);
       })
       .catch((error) => {
         if (!cancelled && error.name !== 'RenderingCancelledException') setError(error.message);

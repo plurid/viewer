@@ -78,12 +78,27 @@ const processAction = (id: string, script: string): CustomAction => ({
   when: { target: 'any', extensions: [], min: 0, max: 100 },
   executor: { kind: 'shell', executable: '/bin/sh', script, perItem: false },
 });
+const testScript = [
+  'set -eu',
+  'test "$(sed -n \'2p\' source.txt)" = "first edit"',
+  'test "$(sed -n \'27p\' source.txt)" = "second edit"',
+  'test "$(wc -l < source.txt)" -eq 30',
+  'printf "%s\\n" "$VIEWER_INPUT_LABEL" > test-result.txt',
+  'printf "test\\n" >> order.txt',
+].join('\n');
+// Prove this is a real check of the edits before using it in the app's workflow.
+await assert.rejects(execute('/bin/sh', ['-c', testScript], { cwd: repository }), { code: 1 });
 settings.customActions = [
+  processAction('Generated test', testScript),
   processAction(
-    'Generated test',
-    'printf "%s\\n" "$VIEWER_INPUT_LABEL" > test-result.txt; printf "test\\n" >> order.txt',
+    'Generated build',
+    [
+      'set -eu',
+      'test "$(cat order.txt)" = "test"',
+      'test -s test-result.txt',
+      'printf "build\\n" >> order.txt',
+    ].join('\n'),
   ),
-  processAction('Generated build', 'printf "build\\n" >> order.txt'),
 ];
 settings.customActions[0]!.inputs = [
   { name: 'label', label: 'Run label', kind: 'text', required: true },
@@ -98,7 +113,7 @@ settings.customActions.push({
     ],
   },
 });
-// Only these exact generated printf scripts are preconfirmed in this owned QA profile.
+// Only these exact fixture checks are preconfirmed in this owned QA profile.
 await writeFile(
   path.join(profile, 'confirmed-actions-v1.json'),
   JSON.stringify(
@@ -332,7 +347,9 @@ try {
     'literal $(touch marker) {directory}\n',
   );
   await assert.rejects(readFile(path.join(checkout, 'marker')), { code: 'ENOENT' });
-  checks.push('Typed parameters remain literal and test completes before build');
+  checks.push(
+    'Fixture tests reject the baseline and pass the edits before build; typed parameters remain literal',
+  );
   const sessions = new AgentSessions(profile, () => {});
   const reported = await sessions.report(
     'generated-adapter',

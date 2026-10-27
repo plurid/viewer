@@ -60,6 +60,10 @@ Use larger public files as well as generated samples: paginated PDFs, complex Of
 textured models and long media. Pin source hashes, preserve originals, inspect actual rendered
 content, and test cancellation and a cold restart.
 
+`tests/native/real-file-previews.ts` uses the stable playground by default. Set
+`VIEWER_TEST_REAL_CORPUS` to a separate retained corpus with the same relative sample paths to
+qualify files without changing the playground. Every input still requires its pinned size and hash.
+
 ### Independent Office references
 
 `tests/native/office-layout.ts` opens pinned public DOC/DOCX, XLS/XLSX and PPT/PPTX samples in the

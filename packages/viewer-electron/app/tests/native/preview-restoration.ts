@@ -124,6 +124,7 @@ await writeFile(stateFile, JSON.stringify(initial), { flag: 'wx' });
 const saved = async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
 const observations: unknown[] = [];
 const oldIDs = new Map<string, string>();
+let pdfTextElements: number | undefined;
 let passed = false;
 
 for (let launch = 0; launch < 2; launch += 1) {
@@ -321,6 +322,28 @@ for (let launch = 0; launch < 2; launch += 1) {
         (value) => Math.abs(value - 400) < 2,
         'PDF page and scroll recall',
       );
+    const pdfOffsets = await evaluate<{ milliseconds: number; top: number; text: number }[]>(
+      `(async () => {
+        const element = ${scope(pdf)}.querySelector('.pdf-scroll');
+        const started = performance.now();
+        const samples = [];
+        for (let index = 0; index < 12; index++) {
+          samples.push({ milliseconds: performance.now() - started, top: element.scrollTop, text: element.querySelector('.textLayer')?.childElementCount || 0 });
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        return samples;
+      })()`,
+    );
+    observations.push({ launch, name: 'Book.pdf', offsets: pdfOffsets });
+    console.log(JSON.stringify({ launch, name: 'Book.pdf', offsets: pdfOffsets }));
+    assert.ok(
+      pdfOffsets.every((sample) => Math.abs(sample.top - 400) < 2),
+      "Late PDF text rendering preserves the reader's scroll",
+    );
+    const textElements = pdfOffsets.at(-1)!.text;
+    assert.ok(textElements > 0, 'The PDF text layer finished rendering');
+    if (launch === 0) pdfTextElements = textElements;
+    else assert.equal(textElements, pdfTextElements, 'Reopening must not duplicate the PDF text');
     oldIDs.set('Book.pdf', pdf);
     await close(pdf);
     const media = await open('Motion.mp4', 'video');
