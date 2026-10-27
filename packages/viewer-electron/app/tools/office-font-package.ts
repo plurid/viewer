@@ -2,6 +2,7 @@ import { open } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
+import { officeFontConfiguration } from '../src/desktop/previews/office-font-manifest';
 
 const metadataSchema = z
   .object({
@@ -20,14 +21,14 @@ const metadataSchema = z
   })
   .strict();
 
-export interface OfficeFontFile {
+export interface OfficeFontAsset {
   virtualPath: string;
   bytes: number;
 }
 
-/** Append fixed font ranges to the engine's virtual filesystem. Reject aliases,
- * gaps and overlaps rather than changing how any existing engine file is loaded. */
-export function officeFontMetadata(raw: unknown, fonts: readonly OfficeFontFile[]): Buffer {
+/** Append fonts and their owned fallback configuration without shifting engine
+ * ranges. Reject duplicate or escaping paths, gaps and overlaps. */
+export function officeFontMetadata(raw: unknown, fonts: readonly OfficeFontAsset[]): Buffer {
   const metadata = metadataSchema.parse(raw);
   const names = new Set<string>();
   let position = 0;
@@ -48,9 +49,10 @@ export function officeFontMetadata(raw: unknown, fonts: readonly OfficeFontFile[
     throw new Error('Office filesystem size does not match its file ranges.');
   for (const font of fonts) {
     if (
-      !/^\/instdir\/share\/fonts\/truetype\/[A-Za-z0-9_-]+\.(?:ttf|ttc|otf)$/.test(
+      (!/^\/instdir\/share\/fonts\/truetype\/[A-Za-z0-9_-]+\.(?:ttf|ttc|otf)$/.test(
         font.virtualPath,
-      ) ||
+      ) &&
+        font.virtualPath !== officeFontConfiguration.virtualPath) ||
       !Number.isSafeInteger(font.bytes) ||
       font.bytes <= 0 ||
       !Number.isSafeInteger(position + font.bytes) ||

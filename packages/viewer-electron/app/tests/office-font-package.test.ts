@@ -5,6 +5,7 @@ import { appendOfficeData, officeFontMetadata } from '../tools/office-font-packa
 import { temporaryRoot } from '../tools/temporary';
 import { prepareOfficeRuntime } from '../tools/office-runtime';
 import { officeEngineName } from '../src/desktop/previews/office-runtime-manifest';
+import { officeFontConfiguration } from '../src/desktop/previews/office-font-manifest';
 
 const base = { files: [{ filename: '/engine', start: 0, end: 4 }], remote_package_size: 4 };
 const font = { virtualPath: '/instdir/share/fonts/truetype/Example.ttc', bytes: 3 };
@@ -45,10 +46,25 @@ it('refuses damaged ranges and duplicate or escaping virtual paths', () => {
     '/tmp/Font.ttc',
     font.virtualPath + '\0',
     '/instdir/share/fonts/truetype/../Font.ttc',
+    '/instdir/share/fontconfig/conf.d/unreviewed.conf',
+    '/instdir/share/fontconfig/conf.d/../99-viewer-cjk.conf',
   ])
     expect(() => officeFontMetadata(base, [{ ...font, virtualPath }])).toThrow();
   expect(() => officeFontMetadata(base, [font, font])).toThrow();
   expect(() => officeFontMetadata(base, [{ ...font, bytes: 0 }])).toThrow();
+});
+
+it('appends only the owned fallback configuration after the fonts', () => {
+  const configuration = { virtualPath: officeFontConfiguration.virtualPath, bytes: 5 };
+  expect(JSON.parse(officeFontMetadata(base, [font, configuration]).toString())).toEqual({
+    files: [
+      ...base.files,
+      { filename: font.virtualPath, start: 4, end: 7 },
+      { filename: configuration.virtualPath, start: 7, end: 12 },
+    ],
+    remote_package_size: 12,
+  });
+  expect(() => officeFontMetadata(base, [configuration, configuration])).toThrow();
 });
 
 it('streams source bytes in order and refuses to replace an existing output', async () => {

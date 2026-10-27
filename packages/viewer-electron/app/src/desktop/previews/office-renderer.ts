@@ -11,6 +11,7 @@ import {
 } from '../../domain/previews/documents/layout';
 import { verifyOfficeRuntime } from './office-assets';
 import { officeInput } from './office-input';
+import { createOfficeJob, type OfficeRenderOptions } from './office-job';
 import { officeCSP, officeMain, officePage, officeThread } from './office-page';
 import {
   officeInputLimit,
@@ -52,12 +53,13 @@ export async function renderOffice(
   input: Buffer,
   extension: string,
   outer: AbortSignal,
-  sheet?: string,
+  options: OfficeRenderOptions = {},
 ): Promise<{ data: Buffer; office: OfficeLayoutMetadata }> {
   if (!isOfficeFormat(extension) || input.length > officeInputLimit)
     throw new Error(
       'Choose a Word, Excel or PowerPoint file smaller than 64 MB for layout preview.',
     );
+  const job = createOfficeJob(extension, options);
   const signal = AbortSignal.any([outer, AbortSignal.timeout(45000)]);
   signal.throwIfAborted();
   const nonce = randomBytes(24).toString('hex');
@@ -108,7 +110,7 @@ export async function renderOffice(
     }
     if (request.method === 'GET' && name === 'job') {
       response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify({ extension, sheet }));
+      response.end(JSON.stringify(job));
       return;
     }
     if (
@@ -243,7 +245,7 @@ export function officeDecoder(directory: string): Decoder {
       await officeInput(source, signal),
       path.extname(source.file).slice(1).toLowerCase(),
       signal,
-      sheet || undefined,
+      { name: path.basename(source.file), sheet: sheet || undefined },
     );
     return { ...result, extension: 'pdf', kind: 'office', decoder: officeRuntimeVersion };
   };

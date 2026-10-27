@@ -3,11 +3,24 @@ import assert from 'node:assert/strict';
 import { app } from 'electron';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
+import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { renderOffice } from '../../src/desktop/previews/office-renderer';
 import { verifyOfficeRuntime } from '../../src/desktop/previews/office-assets';
 
 const root = process.argv[2];
+// Qualification failures must be retained without Electron's native error dialog.
+const fatal = (error: unknown) => {
+  try {
+    if (root && path.isAbsolute(root))
+      appendFileSync(path.join(root, 'fatal.log'), String(error) + '\n');
+  } catch {
+    // Exiting remains possible when even the diagnostic file cannot be written.
+  }
+  app.exit(1);
+};
+process.on('uncaughtException', fatal);
+process.on('unhandledRejection', fatal);
 assert.ok(root && path.isAbsolute(root));
 app.setName('Viewer Office qualification');
 app.setPath('userData', path.join(root, 'Profile'));
@@ -32,6 +45,7 @@ async function run() {
         bytes,
         path.extname(input.name).slice(1),
         new AbortController().signal,
+        { name: input.name },
       );
       assert.equal(result.data.subarray(0, 5).toString(), '%PDF-');
       assert.ok(result.data.length > 100);
@@ -57,7 +71,7 @@ async function run() {
           bytes,
           path.extname(input.name).slice(1),
           new AbortController().signal,
-          alternate.name,
+          { name: input.name, sheet: alternate.name },
         );
         assert.equal(second.office.selectedSheet, alternate.name);
         await writeFile(path.join(root, input.name + '.second-sheet.pdf'), second.data, {

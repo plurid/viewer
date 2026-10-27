@@ -10,7 +10,11 @@ import {
 } from '../src/desktop/previews/office-runtime-manifest';
 import type { OfficeAssetPin } from '../src/desktop/previews/office-runtime-manifest';
 import { verifyOfficeRuntime, verifyOfficeEngine } from '../src/desktop/previews/office-assets';
-import { officeFontCache, officeFonts } from '../src/desktop/previews/office-font-manifest';
+import {
+  officeFontCache,
+  officeFonts,
+  officeFontConfiguration,
+} from '../src/desktop/previews/office-font-manifest';
 import { appendOfficeData, officeFontMetadata } from './office-font-package';
 import { hashFile } from './qualification/source';
 export { verifyOfficeRuntime } from '../src/desktop/previews/office-assets';
@@ -104,9 +108,26 @@ export async function prepareOfficeRuntime(appRoot: string): Promise<string> {
     )
       throw new Error('Bundled Office font differs from its reviewed source: ' + font.name);
   }
+  const configuration = Buffer.from(officeFontConfiguration.text);
+  const configurationFile = path.join(fontDirectory, officeFontConfiguration.name);
+  const configurationInfo = await lstat(configurationFile).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error;
+    return undefined;
+  });
+  if (!configurationInfo) await writeFile(configurationFile, configuration, { flag: 'wx' });
+  else if (
+    !configurationInfo.isFile() ||
+    configurationInfo.isSymbolicLink() ||
+    configurationInfo.size !== configuration.length ||
+    (await hashFile(configurationFile)) !== createHash('sha256').update(configuration).digest('hex')
+  )
+    throw new Error('Bundled Office font configuration differs from its reviewed package.');
   const metadata = officeFontMetadata(
     JSON.parse(await readFile(path.join(engine, 'soffice.data.js.metadata'), 'utf8')),
-    officeFonts,
+    [
+      ...officeFonts,
+      { virtualPath: officeFontConfiguration.virtualPath, bytes: configuration.length },
+    ],
   );
   const metadataPin = officeRuntimeFiles.find(([name]) => name === 'soffice.data.js.metadata')!;
   if (
@@ -120,6 +141,7 @@ export async function prepareOfficeRuntime(appRoot: string): Promise<string> {
       await appendOfficeData(path.join(directory, name), [
         path.join(engine, name),
         ...officeFonts.map((font) => path.join(fontDirectory, font.name)),
+        configurationFile,
       ]);
     else if (name === 'soffice.data.js.metadata')
       await writeFile(path.join(directory, name), metadata, { flag: 'wx' });

@@ -101,9 +101,8 @@ assets/viewer-processors-*/
 assets/viewer-pdf-processors-*/
 assets/viewer-optimizers-*/
 assets/viewer-raw-*/
-assets/viewer-office-v1/
-assets/viewer-office-v2/
-assets/viewer-office-fonts-v1/
+assets/viewer-office-v[0-9]*/
+assets/viewer-office-fonts-v[0-9]*/
 assets/licenses/dependencies.json
 assets/licenses/third-party-notices.txt
 assets/licenses/electron.txt

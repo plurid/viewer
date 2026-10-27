@@ -1,6 +1,7 @@
 /** Real universal-engine check, runnable on all desktop platforms. All outputs stay. */
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -13,6 +14,7 @@ import { prepareOfficeRuntime } from './office-runtime';
 import { downloadSample } from './playground/camera-raw';
 import { officeLayoutSamples } from './playground/office-layout';
 import { qualificationSamples } from './playground/qualification-samples';
+import { officeFontFixture } from '../tests/fixtures/office-fonts';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -33,6 +35,19 @@ for (const sample of samples) {
   await writeFile(path.join(root, name), await downloadSample(sample), { flag: 'wx' });
   inputs.push({ name, sha256: sample.sha256 });
 }
+// Exercise an actual FILENAME field with characters that have URL semantics.
+// This is a byte-identical public fixture, renamed only inside the owned root.
+const filenameSource = inputs.find((input) => input.name === 'FloatingPictures.doc');
+assert.ok(filenameSource);
+const fieldName = "見積 #1 (50%) 'draft'.doc";
+await writeFile(path.join(root, fieldName), await readFile(path.join(root, filenameSource.name)), {
+  flag: 'wx',
+});
+inputs.push({ name: fieldName, sha256: filenameSource.sha256 });
+const fontName = 'Regional serif and sans.docx';
+const fontFixture = officeFontFixture();
+await writeFile(path.join(root, fontName), fontFixture, { flag: 'wx' });
+inputs.push({ name: fontName, sha256: createHash('sha256').update(fontFixture).digest('hex') });
 await writeFile(path.join(root, 'job.json'), JSON.stringify({ runtime, inputs }), { flag: 'wx' });
 const output = path.join(root, 'Application');
 await build({
@@ -72,11 +87,34 @@ async function pageText(file: string, number = 1): Promise<string> {
   }
 }
 for (const item of result.cases) {
-  if (item.name.endsWith('.doc'))
+  if (item.name === fontName) {
+    const pdf = await readFile(path.join(root, item.name + '.pdf'));
+    for (const family of [
+      'NotoSerifCJKjp',
+      'NotoSansCJKjp',
+      'NotoSerifCJKsc',
+      'NotoSansCJKsc',
+      'NotoSerifCJKtc',
+      'NotoSansCJKtc',
+      'NotoSerifCJKhk',
+      'NotoSerifCJKkr',
+      'NotoSansCJKkr',
+    ])
+      assert.ok(pdf.includes(Buffer.from(family)), 'Embedded regional font: ' + family);
+    assert.ok((await pageText(path.join(root, item.name + '.pdf'))).includes('日本語の明朝体'));
+  }
+  if (item.name.endsWith('.doc')) {
+    assert.ok(
+      (await pageText(path.join(root, item.name + '.pdf')))
+        .replace(/\s+/g, '')
+        .includes(item.name.replace(/\s+/g, '')),
+      'Legacy DOC filename fields preserve the source basename.',
+    );
     assert.ok(
       (await pageText(path.join(root, item.name + '.pdf'), 7)).includes('文京区と目黒区。'),
       'Legacy DOC layout includes readable Japanese glyphs.',
     );
+  }
   if (item.office?.sheets.length > 1)
     assert.notEqual(
       await pageText(path.join(root, item.name + '.pdf')),

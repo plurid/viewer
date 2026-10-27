@@ -21,10 +21,11 @@ helper.start(() => {
       if (event.data.cmd === 'ready') {
         const response = await fetch('./input');
         if (!response.ok) throw Error('Input unavailable');
-        const {extension, sheet} = await (await fetch('./job')).json();
+        const {extension, sheet, inputPath, inputURL} = await (await fetch('./job')).json();
         if (!Object.hasOwn(${JSON.stringify(officeFamilies)},extension)) throw Error('Invalid format');
-        helper.FS.writeFile('/tmp/input.' + extension, new Uint8Array(await response.arrayBuffer()));
-        helper.thrPort.postMessage({cmd:'convert', extension, sheet});
+        helper.FS.mkdir('/tmp/viewer-input');
+        helper.FS.writeFile(inputPath, new Uint8Array(await response.arrayBuffer()));
+        helper.thrPort.postMessage({cmd:'convert', extension, sheet, inputURL});
       } else if (event.data.cmd === 'converted') {
         const bytes = helper.FS.readFile('/tmp/output.pdf');
         await fetch('./metadata', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(event.data.office)});
@@ -44,7 +45,7 @@ helper.thrPort.onmessage = event => {
   if (event.data.cmd !== 'convert' || !Object.hasOwn(families,event.data.extension)) return;
   let model;
   try {
-    model = helper.desktop.loadComponentFromURL('file:///tmp/input.' + event.data.extension, '_blank', 0, [
+    model = helper.desktop.loadComponentFromURL(event.data.inputURL, '_blank', 0, [
       property('Hidden', true), property('ReadOnly', true),
       property('MacroExecutionMode', new z.Any(z.type.short, css.document.MacroExecMode.NEVER_EXECUTE)),
       property('UpdateDocMode', new z.Any(z.type.short, css.document.UpdateDocMode.NO_UPDATE))

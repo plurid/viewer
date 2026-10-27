@@ -1,4 +1,4 @@
-/** Real public Office files through the packaged UI. Retain every copy/capture. */
+/** Public and generated Office files through the packaged UI. Retain every copy/capture. */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -11,6 +11,7 @@ import { ownedApp, until } from '../owned-app';
 import { officeLayoutSamples } from '../../tools/playground/office-layout';
 import { qualificationSamples } from '../../tools/playground/qualification-samples';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { officeFontFixture } from '../fixtures/office-fonts';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -27,6 +28,7 @@ const names = [
   'ArtisticEffectSample.pptx',
   'chart-picture-bg.pptx',
   'saut_page.docx',
+  'Regional serif and sans.docx',
 ];
 const requested = new Set(process.argv.slice(2));
 for (const name of requested) assert.ok(names.includes(name), 'Unknown Office sample: ' + name);
@@ -65,13 +67,18 @@ async function painted(connection: Connection) {
 try {
   for (const name of names.filter((name) => !requested.size || requested.has(name))) {
     const file = path.join(root, name);
-    await copyFile(path.join(corpus!, name), file, 1);
+    const generated = name === 'Regional serif and sans.docx' ? officeFontFixture() : undefined;
+    if (generated) await writeFile(file, generated, { flag: 'wx' });
+    else await copyFile(path.join(corpus!, name), file, 1);
     const before = await hash(file);
     const reference = [...officeLayoutSamples, ...qualificationSamples].find((sample) =>
       decodeURIComponent(new URL(sample.url).pathname).endsWith('/' + name),
     );
-    assert.ok(reference, 'Pinned public reference: ' + name);
-    assert.equal(before, reference.sha256, 'Pinned input bytes: ' + name);
+    if (generated) assert.equal(before, createHash('sha256').update(generated).digest('hex'));
+    else {
+      assert.ok(reference, 'Pinned public reference: ' + name);
+      assert.equal(before, reference.sha256, 'Pinned input bytes: ' + name);
+    }
     const profile = path.join(root, name + '-Profile');
     await mkdir(profile);
     const settings = defaultSettings(root),
@@ -210,6 +217,10 @@ try {
             .map((item) => ('str' in item ? item.str : ''))
             .join('');
           assert.ok(
+            text.includes(name) && !text.includes('input.doc'),
+            'Filename fields show the actual source basename instead of the helper input name.',
+          );
+          assert.ok(
             text.includes(
               '文京区と目黒区。総長の挨拶、入学案内、学部や研究所組織、附属施設のサイトへのリンク。',
             ),
@@ -218,6 +229,14 @@ try {
         } finally {
           await task.destroy();
         }
+      }
+      if (generated) {
+        const visible = await evaluate<string>('document.querySelector(".textLayer")?.textContent');
+        assert.ok(visible.includes('日本語の明朝体'));
+        assert.ok(visible.includes('한국어 고딕체'));
+        const bytes = Buffer.from(pdf, 'base64');
+        assert.ok(bytes.includes(Buffer.from('NotoSerifCJKjp-Regular')));
+        assert.ok(bytes.includes(Buffer.from('NotoSansCJKkr-Regular')));
       }
       const targets = await command<{ targetInfos: { url: string }[] }>('Target.getTargets');
       assert.equal(

@@ -1,7 +1,10 @@
 Noto Sans CJK 2.004
-
 Copyright 2014-2021 Adobe (http://www.adobe.com/).
-Unmodified collection from notofonts/noto-cjk, commit 523d033d6cb47f4a80c58a35753646f5c3608a78.
+
+Noto Serif CJK 2.001
+Copyright 2017-2022 Adobe (http://www.adobe.com/).
+
+Unmodified collections from notofonts/noto-cjk, commit 523d033d6cb47f4a80c58a35753646f5c3608a78.
 
 This Font Software is licensed under the SIL Open Font License,
 Version 1.1.
