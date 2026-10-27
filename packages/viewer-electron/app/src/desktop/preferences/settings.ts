@@ -1,4 +1,5 @@
 import { presentationValuesSchema } from '../../domain/preferences/presentation/profile-fields';
+import { toolbarsSchema } from '../../domain/preferences/toolbars';
 import { profileDiagnostics } from '../../domain/preferences/presentation/resolver';
 import { builtInProfileIDs, type SettingProfile } from '../../domain/preferences/profiles';
 import {
@@ -111,7 +112,7 @@ const storedProfileSchema = z
 /** New/edited profiles must contain only validated window-local settings. */
 export const profileSchema = storedProfileSchema.extend({ values: presentationValuesSchema });
 
-function validateCustomProfiles(
+export function validateCustomProfiles(
   next: readonly SettingProfile[],
   previous: readonly SettingProfile[] = [],
 ): void {
@@ -164,6 +165,7 @@ export const layoutTemplateSchema = z
   .strict();
 export const settingsSchema = z
   .object({
+    toolbars: toolbarsSchema,
     checkpoints: z
       .object({
         budgetBytes: z

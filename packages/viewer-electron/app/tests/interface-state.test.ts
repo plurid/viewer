@@ -63,6 +63,39 @@ afterEach(async () => {
 });
 
 describe('layout-only changes', () => {
+  it('can discover the real command catalog outside each command’s guarded context', () => {
+    const actions = {
+      workspace: {
+        parentPaneID: () => undefined,
+        isDocked: () => false,
+        arrangementHistory: () => ({ canUndo: false, canRedo: false }),
+        hasRepeatedPreviews: () => false,
+      },
+      ready: true,
+      tool: null,
+    } as unknown as WindowActions;
+    const registry = new CommandRegistry();
+    const context: CommandContext = {
+      scope: 'folder',
+      workspaceID: activeWorkspace().id,
+      paneID: getState().activePane,
+      folder: activeWorkspace().panes[0] as never,
+      selection: [],
+      clipboard: null,
+      jobs: [],
+    };
+    registry.register('window', {
+      context: () => context,
+      definitions: () => windowCommands(actions),
+    });
+    for (const scope of ['folder', 'files', 'preview', 'sidebar', 'window'] as const) {
+      expect(() => registry.discover({ scope })).not.toThrow();
+      const rows = registry.discover({ scope });
+      expect(rows.length).toBeGreaterThan(40);
+      for (const command of rows)
+        expect(registry.label(command.id, { ...context, scope })).toBeTruthy();
+    }
+  });
   it('uses independent first-plane and populated-workspace folder preferences', () => {
     const snapshot = getState().settings;
     receiveSettings({

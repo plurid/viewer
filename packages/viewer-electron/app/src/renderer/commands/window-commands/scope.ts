@@ -11,6 +11,8 @@ export interface WindowActions {
   overviewAvailable?: boolean;
   palette(mode: PaletteMode, query?: string): void;
   settings(): void;
+  backup?(): void;
+  capabilities?(context: CommandContext): void;
   workspaceDialog(kind: 'new' | 'rename' | 'delete' | 'background'): void;
   renameShortcut(path: string, name: string): void;
   switchWorkspace(id: string): Promise<void>;

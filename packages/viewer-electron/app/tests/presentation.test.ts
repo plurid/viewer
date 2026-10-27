@@ -54,6 +54,7 @@ describe('window presentation resolution', () => {
       'dark',
       'light',
       'system',
+      'always',
       'list',
       'grid',
       'columns',

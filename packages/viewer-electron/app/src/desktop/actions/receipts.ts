@@ -13,6 +13,10 @@ import { DocumentStore } from '../persistence/document-store';
 
 /** Private human-command evidence. Closing a view never removes a receipt or replays a command. */
 export class CommandReceipts {
+  /** A personal import adds new identities without changing any existing live receipt. */
+  refreshDocuments(): void {
+    this.admission = undefined;
+  }
   private stores = new Map<string, DocumentStore<CommandReceipt>>();
   private latest = new Map<string, CommandReceipt>();
   private writes = new Map<string, Promise<void>>();

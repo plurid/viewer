@@ -18,10 +18,22 @@ export class PreviewDocumentCache {
   private entries = new Map<string, CachedDocument>();
   private bytes = 0;
   private pending = new Set<{ path: string; invalidated: boolean }>();
+  private hits = 0;
+  private misses = 0;
   constructor(
     private maximumEntries = 16,
     private maximumBytes = 32 * 1024 * 1024,
   ) {}
+  /** Numeric diagnostics only; no file paths or document data leave the cache owner. */
+  snapshot() {
+    return {
+      entries: this.entries.size,
+      bytes: this.bytes,
+      pending: this.pending.size,
+      hits: this.hits,
+      misses: this.misses,
+    };
+  }
 
   key(owner: string, resource: Resource, page?: Partial<WorksheetWindow>): string | undefined {
     const file = resource.entry;
@@ -53,15 +65,33 @@ export class PreviewDocumentCache {
   ): Promise<DocumentData> {
     signal.throwIfAborted();
     const cached = this.get(key);
-    if (cached) return cached;
+    if (cached) {
+      this.hits++;
+      return cached;
+    }
+    if (this.pending.size >= 64)
+      throw new Error('Wait for another document preview to finish opening.');
+    this.misses++;
     const pending = { path: file, invalidated: false };
     this.pending.add(pending);
+    // The caller can cancel immediately. Keep the admission slot until the real loader settles,
+    // so repeated cancellation cannot create unbounded background work.
+    const loaded = (async () => load())().finally(() => this.pending.delete(pending));
+    let aborted: (() => void) | undefined;
     let value: DocumentData;
     try {
-      value = await load();
+      value = await Promise.race([
+        loaded,
+        new Promise<never>((_resolve, reject) => {
+          aborted = () =>
+            reject(signal.reason ?? new DOMException('Preview cancelled.', 'AbortError'));
+          signal.addEventListener('abort', aborted, { once: true });
+          if (signal.aborted) aborted();
+        }),
+      ]);
       if (pending.invalidated) throw new Error('Preview access changed. Open the file again.');
     } finally {
-      this.pending.delete(pending);
+      if (aborted) signal.removeEventListener('abort', aborted);
     }
     signal.throwIfAborted();
     if (!key) return value;

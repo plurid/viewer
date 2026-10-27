@@ -13,6 +13,26 @@ export function toolsCommands({
 }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [
     {
+      id: 'personal-backup',
+      label: 'Backup and restore…',
+      group: 'Workspace',
+      icon: 'file',
+      aliases: ['portable', 'backup', 'restore', 'move computer'],
+      detail: 'Workspaces, notes, unsaved text and personal preferences.',
+      when: () => !!actions.backup,
+      run: () => actions.backup?.(),
+    },
+    {
+      id: 'capabilities',
+      label: 'What can I do here?',
+      group: 'Help',
+      icon: 'info',
+      aliases: ['help', 'discover', 'pin', 'customize toolbar', 'available actions'],
+      detail: 'Find actions, shortcuts and pinned tools for the current selection.',
+      when: () => !!actions.capabilities,
+      run: (context) => actions.capabilities?.(context),
+    },
+    {
       id: 'related-files',
       label: 'Related files…',
       group: 'Files',

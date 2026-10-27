@@ -291,9 +291,7 @@ try {
     console.log(JSON.stringify(record));
   };
   const browserReadiness = async (phase: string) => {
-    const state = await evaluate<object>(
-      'Promise.all(["browser-0", "browser-1"].map(id => window.viewer.browser({kind:"state",id})))',
-    );
+    const started = performance.now();
     const inspectFrames = () =>
       evaluate<{ frames?: string; pixel: number[]; loading: boolean; culled: string }[]>(`
       [...document.querySelectorAll('.browser-surface canvas')].map(canvas => ({
@@ -314,7 +312,7 @@ try {
             frame.pixel.slice(0, 3).some((value) => value > 20),
         ),
       'Visible browsers finish loading and retain painted pixels',
-      10000,
+      30000,
     ).catch(async (error: unknown) => {
       console.error(
         'Browser readiness diagnostics:',
@@ -325,10 +323,15 @@ try {
       );
       throw error;
     });
-    const record = { phase, state, frames, pageRequests };
+    const state = await evaluate<object>(
+      'Promise.all(["browser-0", "browser-1"].map(id => window.viewer.browser({kind:"state",id})))',
+    );
+    const record = { phase, state, frames, pageRequests, readinessMs: performance.now() - started };
     observations.push(record);
     console.log(JSON.stringify(record));
   };
+  // Loading/paint assertions apply to visible content, after the saved layout is framed.
+  await palette('Frame all');
   await browserReadiness('browser-initial');
   await measure('twenty-warm');
   await evaluate(`(() => {

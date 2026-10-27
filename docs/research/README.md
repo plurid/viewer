@@ -5,6 +5,7 @@ instructions or a list of shipped features. Current behavior is in the [guides](
 [capability reference](../reference/capabilities.md).
 
 - [Product priorities](roadmap.md)
+- [Desktop quality and durable workspaces](desktop-quality.md)
 - [Professional file ecosystems](formats.md)
 - [Spatial development and review](spatial-development.md)
 - [Composable tools](actions.md)

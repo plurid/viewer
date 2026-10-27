@@ -1,4 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
+import { BackupDialog } from '../persistence/BackupDialog';
+import { CapabilitiesDialog } from '../commands/CapabilitiesDialog';
+import type { CommandRequest } from '../commands/registry';
 import type { CapturedTarget, CustomAction } from '../../domain/automation/actions';
 import { CommitDialog } from '../git/CommitDialog';
 import { WorktreesDialog } from '../git/worktrees/WorktreesDialog';
@@ -38,6 +41,8 @@ const LazyTasksDialog = lazy(() =>
   import('../tasks/TasksDialog').then((module) => ({ default: module.TasksDialog })),
 );
 export type WindowDialog =
+  | { type: 'backup' }
+  | { type: 'capabilities'; request: CommandRequest }
   | { type: 'tasks'; target?: CapturedTarget }
   | { type: 'notes' }
   | { type: 'agent-sessions'; directory?: string }
@@ -85,6 +90,12 @@ export function WindowDialogs({
   return (
     <>
       <ActionParameters />
+      {dialog?.type === 'backup' && (
+        <BackupDialog workspace={controller} transition={transitionWorkspace} onClose={onClose} />
+      )}
+      {dialog?.type === 'capabilities' && (
+        <CapabilitiesDialog request={dialog.request} onClose={onClose} />
+      )}
       {dialog?.type === 'agent-sessions' && (
         <SessionsDialog directory={dialog.directory} onClose={onClose} />
       )}

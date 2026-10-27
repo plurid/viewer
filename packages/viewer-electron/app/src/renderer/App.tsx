@@ -317,6 +317,12 @@ function AppWindow() {
           settings: () => {
             void window.viewer.openSettings().catch(report);
           },
+          backup: () => setWindowDialog({ type: 'backup' }),
+          capabilities: (context) =>
+            setWindowDialog({
+              type: 'capabilities',
+              request: { paneID: context.paneID, scope: context.scope, context },
+            }),
           workspaceDialog: (kind) =>
             setWindowDialog({ type: 'workspace', kind, id: activeWorkspace().id }),
           renameShortcut: (path, name) => setWindowDialog({ type: 'shortcut', path, name }),
@@ -668,6 +674,9 @@ function AppWindow() {
     document.documentElement.dataset.look = look;
     document.documentElement.style.colorScheme = look;
   }, [look]);
+  useEffect(() => {
+    document.documentElement.dataset.scrollbars = settings.browsing.scrollbars;
+  }, [settings.browsing.scrollbars]);
   // A see-through space: the window lets what is behind it through (backdrop.ts); the
   // page draws the space at the chosen opacity, the planes opaque over it.
   const backdrop = windowUI.space.backdrop;

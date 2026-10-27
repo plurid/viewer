@@ -1,0 +1,75 @@
+.backup-body {
+  display: grid;
+  gap: 16px;
+}
+.backup-body p {
+  margin: 0;
+  line-height: 1.5;
+}
+.backup-choices {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.backup-choices button,
+.backup-roots button {
+  border-color: var(--line);
+  background: var(--field);
+}
+.backup-counts {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.backup-counts dt {
+  text-transform: capitalize;
+  color: var(--muted);
+  font-size: 12px;
+}
+.backup-counts dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+.backup-notices {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+}
+.backup-roots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.backup-roots li {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.backup-roots li > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.backup-roots small,
+.backup-preferences small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.backup-preferences {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.backup-preferences input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}

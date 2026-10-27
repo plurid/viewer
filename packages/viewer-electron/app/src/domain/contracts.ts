@@ -2,6 +2,7 @@ import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-
 import type { ReviewState, GitReviewRequest, GitReviewReply } from './comparison/review';
 import type { SessionRequest, SessionReply } from './agents/sessions';
 import type { FlushResult } from './persistence/flush';
+import type { BackupRequest, BackupReply } from './persistence/backup';
 import type { DiffSource } from './comparison/diff';
 import type { GitRequest, GitReply, GitSource } from './comparison/git';
 import type { GitActionKind, GitActionRequest, GitActionReply } from './comparison/git-actions';
@@ -669,6 +670,7 @@ export interface ViewerAPI {
   configOpen(): Promise<void>;
   configValidate(): Promise<SettingsSnapshot>;
   configTransfer(kind: 'import' | 'export'): Promise<SettingsSnapshot>;
+  backup(request: BackupRequest): Promise<BackupReply>;
   /** Writes a removed config.jsonc back from the settings in effect. */
   configRestore(): Promise<SettingsSnapshot>;
   /** Lets actions agents start send a provider's approved data too, or no longer; Settings only. */

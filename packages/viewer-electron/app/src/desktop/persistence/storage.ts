@@ -376,6 +376,21 @@ export class Storage {
       bytes = await readFile(this.file);
       if (bytes.length > 32 * 1024 * 1024) throw new Error('State exceeds the size limit.');
       original = JSON.parse(bytes.toString('utf8'));
+      // A newer application owns this format. Keep its original in place and refuse writes.
+      if (
+        original &&
+        typeof original === 'object' &&
+        'version' in original &&
+        typeof original.version === 'number' &&
+        original.version > CURRENT_STATE_VERSION
+      ) {
+        this.retained = this.file;
+        return {
+          state: null,
+          recovery:
+            'This workspace was saved by a newer Viewer. Open it with that version. The original is unchanged; this session will not save over it.',
+        };
+      }
       state = stateSchema.parse(original);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: null };

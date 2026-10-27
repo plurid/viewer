@@ -198,18 +198,55 @@ select {
   background: var(--selection);
   color: var(--ink);
 }
-::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-::-webkit-scrollbar-thumb {
+:root[data-scrollbars='always'] ::-webkit-scrollbar-thumb {
   background: var(--line);
   border: 2px solid transparent;
   border-radius: var(--radius-panel);
   background-clip: padding-box;
 }
-::-webkit-scrollbar-track {
+:root[data-scrollbars='always'] ::-webkit-scrollbar-track {
   background: transparent;
+}
+/* An explicit desktop preference keeps position indicators and drag targets
+ * stable. Embedded web pages and terminal rendering retain their own controls. */
+:root[data-scrollbars='always'] ::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+:root[data-scrollbars='always']
+  :is(
+    .file-scroll,
+    .pdf-scroll,
+    .settings-content,
+    .settings-navigation,
+    .settings-page,
+    .dialog-body,
+    .optimization-content,
+    .optimization-review-scroll,
+    .epub-chapter,
+    .office-document-scroll,
+    .office-table-scroll
+  ) {
+  overflow-y: scroll;
+  scrollbar-width: auto;
+  scrollbar-gutter: stable;
+}
+:root[data-scrollbars='always'] :is(.breadcrumbs, .plane-module-controls, .columns-view) {
+  overflow-x: scroll;
+  scrollbar-width: auto;
+}
+:root[data-scrollbars='always'] :is(.plane-module-controls, .plane-pinned-tools) {
+  scrollbar-width: thin;
+}
+:root[data-scrollbars='always']
+  :is(.plane-module-controls, .plane-pinned-tools)::-webkit-scrollbar {
+  height: 6px;
+}
+.dialog footer > button:not(.primary),
+.media-destination > button,
+.action-button {
+  border-color: var(--line);
+  background: var(--field);
 }
 .icon-button {
   display: inline-flex;

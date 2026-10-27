@@ -1,4 +1,5 @@
 import type { Theme } from './preferences/themes';
+import type { Toolbars } from './preferences/toolbars';
 import type { SettingProfile } from './preferences/profiles';
 import type { LayoutTemplate } from './workspaces/layout-templates';
 import type { TileLayout } from './workspaces/tiling';
@@ -34,6 +35,7 @@ export interface ActionRecipe {
   shortcut?: string;
 }
 export interface ApplicationSettings {
+  toolbars: Toolbars;
   checkpoints: { budgetBytes: number };
   appearance: 'system' | 'dark' | 'light';
   browsing: {
@@ -44,6 +46,7 @@ export interface ApplicationSettings {
     group: 'none' | 'kind' | 'modified';
     columnWidth: number;
     density: 'comfortable' | 'compact';
+    scrollbars: 'system' | 'always';
     foldersFirst: boolean;
     showHidden: boolean;
     restoreSession: boolean;
@@ -343,6 +346,7 @@ export const builtInRecipes: ActionRecipe[] = [
 ];
 export function defaultSettings(home: string): ApplicationSettings {
   return {
+    toolbars: {},
     checkpoints: { budgetBytes: 5 * 1024 ** 3 },
     appearance: 'system',
     browsing: {
@@ -352,6 +356,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       group: 'none',
       columnWidth: 280,
       density: 'comfortable',
+      scrollbars: 'system',
       foldersFirst: true,
       showHidden: false,
       restoreSession: true,

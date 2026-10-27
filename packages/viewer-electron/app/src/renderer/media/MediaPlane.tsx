@@ -5,7 +5,7 @@ import { mediaTime, transformExtension } from '../../domain/operations/transform
 import { baseName, parentPath } from '../../domain/workspaces/planes';
 import { Empty, IconButton, Loading } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
-import { report, useViewer } from '../state/store';
+import { report, useViewer, updatePane } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { useResource } from '../previews/useResource';
 import { mediaDraft, mediaSession } from './drafts';
@@ -212,6 +212,26 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
   if (!draft || snapshot.unavailable)
     return (
       <Empty icon="warning" title="Media unavailable" detail={snapshot.error}>
+        <p>
+          The saved edits are kept. After relinking or replacing files, you can apply those edits to
+          their current versions. The original draft stays saved.
+        </p>
+        <button
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void window.viewer
+              .media({ kind: 'recover', id: pane.draftID })
+              .then((reply) => {
+                const recovered = mediaDraft(reply);
+                updatePane(pane.id, { draftID: recovered.id });
+              })
+              .catch(report)
+              .finally(() => setBusy(false));
+          }}
+        >
+          Apply saved edits to current files
+        </button>
         <button onClick={() => void session.reload()}>Reload draft</button>
         <button
           onClick={() =>

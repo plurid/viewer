@@ -23,6 +23,7 @@ import { baseName, paneTitle } from '../../domain/workspaces/planes';
 import { hostID } from './tree';
 import { buffersGeneration, heldBuffer, subscribeBuffers } from '../editing/buffers';
 import { GitBranch } from '../git/status';
+import { PinnedTools } from '../commands/PinnedTools';
 import { RelatedPlanes } from './RelatedPlanes';
 
 /** Chooses and edits a folder's lenses; shown once the folder has one, and on the Map. */
@@ -317,6 +318,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           )}
         </div>
       )}
+      {controls.actions && pane && <PinnedTools pane={pane} scope={request.scope} />}
       {controls.actions && (
         <IconButton
           icon="more"

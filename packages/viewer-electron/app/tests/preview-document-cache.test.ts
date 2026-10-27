@@ -35,6 +35,45 @@ const data = (text = 'Book'): DocumentData => ({
 });
 const signal = () => new AbortController().signal;
 
+it('cancels immediately, bounds outstanding loaders and never caches their late results', async () => {
+  const cache = new PreviewDocumentCache();
+  const finishes: ((value: DocumentData) => void)[] = [];
+  const attempts: Promise<unknown>[] = [];
+  for (let index = 0; index < 64; index++) {
+    const controller = new AbortController();
+    const pending = cache.read(
+      String(index),
+      '/fixtures/' + index,
+      () => new Promise((resolve) => finishes.push(resolve)),
+      controller.signal,
+    );
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    controller.abort();
+    attempts.push(rejected);
+  }
+  await Promise.all(attempts);
+  expect(cache.snapshot()).toMatchObject({ entries: 0, pending: 64 });
+  await expect(
+    cache.read('overflow', '/fixtures/overflow', async () => data(), signal()),
+  ).rejects.toThrow('Wait for another');
+  finishes.forEach((finish) => finish(data()));
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(cache.snapshot()).toMatchObject({ entries: 0, pending: 0 });
+  await cache.read('fresh', '/fixtures/fresh', async () => data(), signal());
+  for (let index = 0; index < 50; index++)
+    await cache.read(
+      'fresh',
+      '/fixtures/fresh',
+      async () => {
+        throw new Error('Warm view must not reload');
+      },
+      signal(),
+    );
+  expect(cache.snapshot()).toMatchObject({ entries: 1, pending: 0, hits: 50 });
+});
+
 it('reuses completed document data across separately authorized resource leases', async () => {
   previewDocuments.invalidate();
   const document = vi.fn(async () => data());

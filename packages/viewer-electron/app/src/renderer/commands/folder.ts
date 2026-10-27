@@ -275,6 +275,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'rename',
+      unavailable: 'Select exactly one file or folder.',
       label: 'Rename…',
       group: 'Files',
       icon: 'rename',
@@ -384,6 +385,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'new-folder',
+      unavailable: 'Open a folder plane to create a folder inside it.',
       label: 'New folder…',
       group: 'Folder',
       icon: 'plus',

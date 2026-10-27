@@ -50,5 +50,9 @@ Right-click a file for its available actions, or press **⌘K** and type what yo
 Image tools, Optimize, New note or Open terminal plane. Commands use your current folder and
 selection.
 
+Choose **Help → What Can I Do Here?**, or the information button in a plane header, to explore
+actions and their shortcuts. Search with ordinary words; approximate spellings suggest actions for
+you to choose. Pin useful actions to that kind of plane without changing how they run.
+
 Keep going with [everyday file work](files.md), [quick creative tools](create.md), or
 [a project workspace](develop.md).

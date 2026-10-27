@@ -143,6 +143,10 @@ export function SettingsWindow() {
       document.documentElement.style.colorScheme = look;
     }
   }, [look]);
+  const scrollbars = snapshot?.settings.browsing.scrollbars ?? 'system';
+  useEffect(() => {
+    document.documentElement.dataset.scrollbars = scrollbars;
+  }, [scrollbars]);
   const enqueue = (build: SettingsChange) => {
     setError('');
     writes.current!.enqueue(build);

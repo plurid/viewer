@@ -82,6 +82,36 @@ Themes can override shell, syntax and terminal roles. Settings can import an iTe
 supported VS Code theme. App controls, read-only previews, the editor and terminal retain their own
 metrics.
 
+## Personal backups
+
+The desktop **Backup and restore** command uses the `viewer-personal-backup` format, version `1`.
+The `.viewer-backup.json` file contains saved workspace state, bounded private documents and an
+explicit selection of personal settings. It is readable JSON, with a 64 MiB limit including
+formatting. Export creates a new file exclusively; an existing backup is never overwritten.
+
+Included documents are notes/checklists, unsaved text, media editing decisions, local conversations
+and command receipts. Original files, caches, model credentials, provider permissions, agent grants,
+browser cookies, live terminal sessions and server processes are excluded. Import assigns new
+identities and adds independent workspaces, subject to the existing 30-workspace limit.
+
+The optional preference restore covers browsing, folder presentation, editor/terminal typography,
+tiling, tours, themes, presentation profiles, layout templates, shortcuts, keymaps, saved searches,
+action recipes, optimization recipes and `settings.toolbars`. It does not import executable
+definitions or change effective permissions. `settings.toolbars` maps stable plane-kind or preview
+module keys to ordered command IDs; each list has at most eight unique IDs. Unknown IDs remain
+stored for repair. `settings.browsing.scrollbars` accepts `system` or `always` and defaults to
+`system` for older profiles.
+
+Relinking rewrites typed file and folder references. It leaves document prose, commands and web
+addresses literal. Shared project associations and external agent connections need explicit
+reconnection. A restored conversation is stopped and its saved context scopes are cleared. Command
+receipts remain historical; a previously running receipt becomes interrupted.
+
+The importer validates before creating documents, refuses symbolic-link inputs and writes only fresh
+UUID-named private records. Existing documents and the backup are preserved. If writing fails
+partway, generated records are kept for recovery; no cleanup removes them. Profiles saved by a newer
+Viewer stay in place and cannot be overwritten by an older session.
+
 ## External edits and recovery
 
 Valid changes reload live. Invalid or newer-version files remain on disk for correction; Viewer

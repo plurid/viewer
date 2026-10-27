@@ -22,6 +22,7 @@ export interface SettingDefinition {
 export const workspaceSettingPaths: readonly (readonly string[])[] = [
   ['ui'],
   ['settings', 'folders'],
+  ['settings', 'toolbars'],
   ['settings', 'appearance'],
   ['settings', 'browsing'],
   ['settings', 'savedSearches'],
@@ -68,6 +69,17 @@ export const categories = [
   'Privacy',
 ];
 export const settingCatalog: SettingDefinition[] = [
+  {
+    path: 'settings.browsing.scrollbars',
+    category: 'Browsing',
+    label: 'Scrollbars',
+    detail: 'Follow the system, or keep scrollbars visible with a wider drag target.',
+    kind: 'choice',
+    choices: [
+      ['system', 'Follow system'],
+      ['always', 'Always visible'],
+    ],
+  },
   {
     path: 'settings.hotkey.enabled',
     category: 'Navigation',

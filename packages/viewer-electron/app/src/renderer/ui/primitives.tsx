@@ -74,9 +74,23 @@ export function Dialog({
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
+    const opener = document.activeElement;
     dialog?.showModal();
     dialog?.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
-    return () => dialog?.close();
+    return () => {
+      dialog?.close();
+      queueMicrotask(() => {
+        const top = [...document.querySelectorAll('dialog[open]')].at(-1);
+        if (
+          opener instanceof HTMLElement &&
+          opener.isConnected &&
+          !opener.matches(':disabled') &&
+          !opener.closest('[hidden], [inert]') &&
+          (!top || top.contains(opener))
+        )
+          opener.focus({ preventScroll: true });
+      });
+    };
   }, []);
   return (
     <dialog

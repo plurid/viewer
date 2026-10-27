@@ -312,9 +312,14 @@ The palette has a stable search position, bounded scrolling and keyboard navigat
 names, omit tooltips that repeat visible menu labels, and keep recent-history clearing discoverable.
 
 Preserve the established keyboard feedback: selected/active fills and input carets, without adding
-focus halos. Icon buttons need accessible action labels. Use normal document flow for warnings and
-recovery; they must not cover toolbars, lists or dialog actions. Modeless Settings keeps stable
-dimensions across sections and flushes changes on close.
+focus halos. Dialog and Settings controls use visible surface/text feedback for keyboard focus;
+dialog icon buttons use the selected fill. Icon buttons need accessible action labels. Use normal
+document flow for warnings and recovery; they must not cover toolbars, lists or dialog actions.
+Modeless Settings keeps stable dimensions across sections and flushes changes on close.
+
+Respect the system-following and always-visible scrollbar choices. Reserve stable scrollbar space in
+long lists and keep overflowing plane tools horizontally scrollable, with compact scrollbars that
+preserve room for the surrounding header controls.
 
 ## Preview controls
 
@@ -385,6 +390,32 @@ Settings rows keep a shared control edge, including shortcut recorders. Color sw
 square bounds. Permission checkboxes keep their own width and sit beside their text. Models lists
 show the full saved model ID, an honest connection status and the effective default before setup
 details; opening Settings must not connect to a provider.
+
+## Components
+
+### Contextual discovery and pinned tools
+
+What can I do here? uses the shared dialog and ordinary action rows. Show the context name first;
+keep the full captured path selectable in a secondary disclosure. Keep search and Done stationary
+around the scrolling action list. With optional sections closed, the minimum window (760 × 540px)
+shows two complete action rows even with eight saved pins.
+
+**The Discovery Space Rule.** Pinned tools and keyboard help start closed. Opening either closes the
+other; each expanded section has bounded scrolling while search and the footer stay reachable.
+Escape closes an open disclosure before dismissing the dialog.
+
+Keep the pin count in the collapsed summary. At 8/8, explain that a tool must be unpinned before
+another can be added. Empty results offer Clear search or Show all actions when applicable.
+
+**The Captured Action Rule.** Discovery, pinned tools, menus and shortcuts retain the captured
+target. Show why an action is unavailable, and preserve missing saved action IDs for repair or
+explicit unpinning without substituting another action.
+
+### Backup review
+
+**The Backup Summary Rule.** Use singular or plural workspace labels and scaled file-size units
+beside the creation date. Keep workspace names, document counts and inclusion notices readable in
+the existing dialog, with Cancel and the save or restore action reachable around scrolling content.
 
 ## Maintaining this document
 

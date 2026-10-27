@@ -43,6 +43,7 @@ export const mediaRequestSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ kind: z.literal('get'), id }).strict(),
+  z.object({ kind: z.literal('recover'), id }).strict(),
   z
     .object({
       kind: z.literal('update'),

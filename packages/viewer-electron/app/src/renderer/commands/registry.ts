@@ -22,6 +22,7 @@ export interface CommandContext {
 }
 export interface CommandDefinition {
   id: string;
+  /** Dynamic metadata may rely on when(). Discovery uses an ID label outside that context. */
   label: string | ((context: CommandContext) => string);
   group: string;
   paletteFolder?: readonly string[];
@@ -35,6 +36,7 @@ export interface CommandDefinition {
    * value (on or off, or the current value) and whether it is a workspace's own. */
   setting?: CommandSetting;
   when(context: CommandContext): boolean;
+  unavailable?: string | ((context: CommandContext) => string);
   run(context: CommandContext): void | Promise<void>;
 }
 export interface CommandSetting {
@@ -75,6 +77,21 @@ export interface ResolvedCommand {
   source: string;
   context: CommandContext;
 }
+export interface DiscoverableCommand extends ResolvedCommand {
+  available: boolean;
+  unavailable?: string;
+}
+
+function commandLabel(
+  definition: CommandDefinition,
+  context: CommandContext,
+  available: boolean,
+): string {
+  if (typeof definition.label === 'string') return definition.label;
+  if (available) return definition.label(context);
+  const words = definition.id.replace(/[.:_-]+/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 /** One action path for menus, shortcuts, toolbars and preview extensions. */
 export class CommandRegistry {
@@ -110,10 +127,13 @@ export class CommandRegistry {
     (this.revisions.get(`folder:${paneID}`) || 0) +
     (this.revisions.get(`preview:${paneID}`) || 0) +
     (this.revisions.get(`collection:${paneID}`) || 0);
-  touch = (source = 'window') => {
-    this.revisions.set(source, (this.revisions.get(source) || 0) + 1);
+  private publish() {
     this.revision++;
     for (const listener of this.listeners) listener();
+  }
+  touch = (source = 'window') => {
+    this.revisions.set(source, this.revision + 1);
+    this.publish();
   };
   register(id: string, source: CommandSource): () => void {
     this.sources.set(id, source);
@@ -122,7 +142,8 @@ export class CommandRegistry {
       if (this.sources.get(id) !== source) return;
       this.sources.delete(id);
       this.definitions.delete(id);
-      this.touch(id);
+      this.revisions.delete(id);
+      this.publish();
     };
   }
   context(paneID?: string): CommandContext | undefined {
@@ -135,13 +156,14 @@ export class CommandRegistry {
   }
   /** A command's label in a context, available there or not: which-key names every binding. */
   label(id: string, context: CommandContext): string | undefined {
+    let fallback: string | undefined;
     for (const source of this.sources.values())
       for (const definition of source.definitions())
-        if (definition.id === id)
-          return typeof definition.label === 'string'
-            ? definition.label
-            : definition.label(context);
-    return undefined;
+        if (definition.id === id) {
+          if (definition.when(context)) return commandLabel(definition, context, true);
+          fallback ??= commandLabel(definition, context, false);
+        }
+    return fallback;
   }
   /** Every command id the sources define, available or not: a line may name any. */
   ids(): string[] {
@@ -151,8 +173,15 @@ export class CommandRegistry {
     return [...ids];
   }
   list(request: CommandRequest = {}): ResolvedCommand[] {
-    const commands: ResolvedCommand[] = [];
-    const seen = new Set<string>();
+    return this.resolve(request, false);
+  }
+  /** Discovery uses the same definitions and captured target, including disabled actions. */
+  discover(request: CommandRequest = {}): DiscoverableCommand[] {
+    return this.resolve(request, true);
+  }
+  private resolve(request: CommandRequest, includeUnavailable: boolean): DiscoverableCommand[] {
+    const commands: DiscoverableCommand[] = [];
+    const indices = new Map<string, number>();
     for (const [id, source] of this.sources) {
       if (
         request.sources
@@ -168,15 +197,24 @@ export class CommandRegistry {
       };
       for (const definition of this.catalog(id, source)) {
         if (request.ids && !request.ids.includes(definition.id)) continue;
-        if (seen.has(definition.id) || !definition.when(context)) continue;
-        seen.add(definition.id);
-        commands.push({
+        const previous = indices.get(definition.id);
+        if (previous !== undefined && commands[previous]?.available) continue;
+        const available = definition.when(context);
+        if (!available && (previous !== undefined || !includeUnavailable)) continue;
+        const command: DiscoverableCommand = {
+          available,
+          unavailable: available
+            ? undefined
+            : typeof definition.unavailable === 'function'
+              ? definition.unavailable(context)
+              : (definition.unavailable ?? 'Unavailable for this selection and view.'),
           id: definition.id,
-          label:
-            typeof definition.label === 'function' ? definition.label(context) : definition.label,
+          label: commandLabel(definition, context, available),
           detail:
             typeof definition.detail === 'function'
-              ? definition.detail(context)
+              ? available
+                ? definition.detail(context)
+                : undefined
               : definition.detail,
           group: definition.group,
           paletteFolder: definition.paletteFolder,
@@ -185,12 +223,16 @@ export class CommandRegistry {
           shortcut: this.shortcut(definition.id) ?? definition.shortcut,
           primary:
             typeof definition.primary === 'function'
-              ? definition.primary(context)
+              ? available && definition.primary(context)
               : !!definition.primary,
           ...(definition.setting ? { setting: definition.setting } : {}),
           source: id,
           context,
-        });
+        };
+        if (previous === undefined) {
+          indices.set(definition.id, commands.length);
+          commands.push(command);
+        } else commands[previous] = command;
       }
     }
     return commands;

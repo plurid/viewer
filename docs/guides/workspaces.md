@@ -43,6 +43,41 @@ A Viewer project records relative file references and workspace presentation in
 `viewer.project.jsonc`. It does not pack your files into a library or copy private terminal,
 conversation or credential state into the project.
 
+## Keep everyday tools close
+
+Open **What can I do here?** from a plane's information button or the Help menu. It lists actions
+for the captured folder and selection, including shortcuts. Turn off **Available here** to see why
+other actions are unavailable.
+
+Use **Pin** beside an action; expand **Pinned tools** to unpin or change the order. Image, PDF, text
+and folder planes keep separate choices. **Use defaults** restores the starting set. A missing
+extension keeps its named pin so you can repair it; it never turns into another command.
+
+For persistent position indicators and larger drag targets, choose **Settings → Browsing →
+Scrollbars → Always visible**. **Follow system** uses the platform's scrollbar behavior.
+
+## Back up personal work
+
+Choose **Workspace → Backup and Restore…**, then **Create backup…**. Review the workspace and
+document counts before choosing a new filename. Keep the resulting JSON file private: it contains
+notes, drafts, conversation text, file paths and command history. It does not contain your original
+files, credentials, file-access grants, browser sessions or running processes.
+
+On another profile or computer, choose **Open backup…**. Relink folders that moved, then choose
+**Restore copies**. Your existing work stays beside the restored workspaces. The optional preference
+checkbox also restores appearance, shortcuts, pinned tools and recipes; access must be granted
+separately. Terminals, servers and conversations remain stopped.
+
+Reading positions follow relinked files. Unsaved text remains a private draft; an unchanged copied
+file can be recognized by its original content hash. If a media file's identity changed, choose
+**Apply saved edits to current files** in its recovery view. This checks the current sources and
+creates a new draft, keeping the original edits. A shorter file cannot silently truncate a saved
+edit.
+
+The backup stays unchanged. A backup that needs a newer Viewer, has missing documents or exceeds the
+size limit is refused. [Backup format and limits](../reference/configuration.md#personal-backups)
+describe the exact scope.
+
 ## Understand what closing means
 
 Closing a preview keeps the file. Closing a note view keeps its note. Closing an embedded terminal

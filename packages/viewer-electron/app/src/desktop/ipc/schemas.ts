@@ -1,6 +1,7 @@
 /** Argument schemas for every IPC method. The bridge validates each call against these
  * before it reaches a handler, and `ApiCall` carries the inferred argument types. */
 import { z } from 'zod';
+import { backupRequestSchema } from '../../domain/persistence/backup';
 import { officeLayoutRequestSchema } from '../../domain/previews/documents/layout';
 import type { ApiMethod, DesktopEvent, ViewerAPI } from '../../domain/contracts';
 import { paneTypes } from '../../domain/contracts';
@@ -472,6 +473,7 @@ export const schemas = {
   configOpen: z.tuple([]),
   configValidate: z.tuple([]),
   configTransfer: z.tuple([z.enum(['import', 'export'])]),
+  backup: z.tuple([backupRequestSchema]),
   configRestore: z.tuple([]),
   settingsCategory: z.tuple([z.string().max(40)]),
   agentAccess: z.tuple([
@@ -858,6 +860,7 @@ export const methodWindows = {
   configOpen: 'both',
   configValidate: 'both',
   configTransfer: 'settings',
+  backup: 'viewer',
   configRestore: 'settings',
   settingsCategory: 'settings',
   agentAccess: 'settings',

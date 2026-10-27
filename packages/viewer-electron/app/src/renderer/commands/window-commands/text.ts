@@ -46,6 +46,7 @@ export function textCommands({
     },
     {
       id: 'edit-file',
+      unavailable: 'Open a text preview that supports editing.',
       label: 'Edit text',
       group: 'Text',
       icon: 'rename',
@@ -56,6 +57,7 @@ export function textCommands({
     },
     {
       id: 'save-file',
+      unavailable: 'Open a text editor with changes to save.',
       label: 'Save',
       group: 'Text',
       icon: 'check',

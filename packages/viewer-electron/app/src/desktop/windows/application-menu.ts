@@ -345,12 +345,15 @@ export function installApplicationMenu(
           { label: 'Rename Workspace…', click: command('rename-workspace') },
           { label: 'Delete Workspace…', click: command('delete-workspace') },
           { label: 'Undo Workspace Deletion', click: command('restore-workspace') },
+          { type: 'separator' },
+          { label: 'Backup and Restore…', click: command('personal-backup') },
         ],
       },
       { role: 'windowMenu' },
       {
         role: 'help',
         submenu: [
+          { label: 'What Can I Do Here?', click: command('capabilities') },
           { label: 'Commands…', click: command('palette') },
           { type: 'separator' },
           {

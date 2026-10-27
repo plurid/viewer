@@ -1,4 +1,5 @@
 import { createGitHandlers } from './ipc/git-handlers';
+import { PersonalBackups } from './persistence/backup';
 import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
 import { createWebHandlers } from './ipc/web-handlers';
@@ -161,6 +162,7 @@ export class Desktop {
   readonly transforms: Transforms;
   readonly optimizationReviews: OptimizationReviews;
   readonly mediaDocuments: MediaDocuments;
+  readonly backups: PersonalBackups;
   readonly browsers = new BrowserPlanes((owner) => this.windows.get(owner)?.window);
   readonly fileAccess: FileAccess;
   readonly information: FileInformationService;
@@ -880,6 +882,65 @@ export class Desktop {
     });
     this.search = new Search((batch) => emit({ type: 'search', batch }));
     this.storage = new Storage(path.join(dataPath, 'viewer-state-v1.json'));
+    this.backups = new PersonalBackups(dataPath, {
+      flush: async () => {
+        // Snapshot editors without cancelling an active conversation or its process ownership.
+        await Promise.all(
+          [...this.windows.values()]
+            .filter((item) => item.ready && item.role === 'viewer')
+            .map(({ window }) =>
+              this.flushes.request(window.webContents.id, 'flush', (token) =>
+                window.webContents.send('viewer:event', { type: 'flush', token }),
+              ),
+            ),
+        );
+        await Promise.all([
+          this.storage.flush(),
+          this.settings.flush(),
+          this.buffers.flush(),
+          this.notes.flush(),
+          this.chats.flush(),
+          this.receipts.flush(),
+        ]);
+      },
+      state: async () => (await this.storage.load()).state,
+      settings: () => ({ ...this.settings.snapshot(), credentials: this.credentials.ids() }),
+      textVersion: async (file) => {
+        const result = await this.texts.open(file);
+        return result.editable ? result.document.version : undefined;
+      },
+      imported: () => this.receipts.refreshDocuments(),
+      apply: async (patches) => ({
+        ...(await this.settings.patch(patches, this.settings.snapshot().revision)),
+        credentials: this.credentials.ids(),
+      }),
+      choose: async (owner, kind) => {
+        if (kind === 'folder') return this.chooseFolder(owner);
+        const window = this.windows.get(owner)?.window;
+        if (!window || window.isDestroyed()) throw new Error('The backup window closed.');
+        if (kind === 'export') {
+          const result = await dialog.showSaveDialog(window, {
+            title: 'Save personal backup',
+            defaultPath: 'Viewer-' + new Date().toISOString().slice(0, 10) + '.viewer-backup.json',
+            securityScopedBookmarks: this.fileAccess.scoped,
+          });
+          if (result.canceled || !result.filePath) return null;
+          await this.fileAccess.allowOnce(result.filePath, result.bookmark);
+          await this.fileAccess.require([result.filePath]);
+          return result.filePath;
+        }
+        const result = await dialog.showOpenDialog(window, {
+          title: 'Open personal backup',
+          properties: ['openFile'],
+          filters: [{ name: 'Viewer backup', extensions: ['json'] }],
+          securityScopedBookmarks: this.fileAccess.scoped,
+        });
+        if (result.canceled || !result.filePaths[0]) return null;
+        await this.fileAccess.allowOnce(result.filePaths[0], result.bookmarks?.[0]);
+        await this.fileAccess.require([result.filePaths[0]]);
+        return result.filePaths[0];
+      },
+    });
     ipcMain.handle(
       'viewer:request',
       async (event, method: unknown, args: unknown): Promise<ApiResult<unknown>> => {
@@ -1079,6 +1140,7 @@ export class Desktop {
       if (role === 'viewer') this.selectWindow(sender);
     });
     window.on('closed', () => {
+      this.backups.stopOwner(sender);
       this.browsers.stopOwner(sender);
       this.mediaDocuments.stopOwner(sender);
       void this.optimizationReviews
@@ -1675,6 +1737,7 @@ export class Desktop {
         }
         return this.settings.snapshot();
       },
+      backup: ([request], owner) => this.backups.request(request, owner),
       terminalApplication: () => this.externalTerminals.application(),
       terminalExternal: async (args) => {
         await this.fileAccess.require([args[0]]);

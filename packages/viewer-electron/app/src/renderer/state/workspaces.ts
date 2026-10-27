@@ -185,6 +185,31 @@ export async function newWorkspace(name: string): Promise<void> {
   update({ ...getState(), activePane: pane.id });
   await flushState(false);
 }
+/** Imported copies are appended; current documents, layouts and session ownership stay intact. */
+export async function appendRestoredWorkspaces(imported: SavedState): Promise<void> {
+  await flushState();
+  const current = getState().saved;
+  if (current.workspaces.length + imported.workspaces.length > 30)
+    throw new Error(
+      'There is room for at most 30 workspaces. The restored documents were preserved.',
+    );
+  if (imported.workspaces.some((space) => current.workspaces.some((item) => item.id === space.id)))
+    throw new Error('A restored workspace identity is already open.');
+  for (const space of imported.workspaces)
+    adapters.set(space.id, new Map(Object.entries(space.arrangement)));
+  const favorites = [...current.favorites];
+  for (const item of imported.favorites)
+    if (!favorites.some((existing) => existing.path === item.path)) favorites.push(item);
+  savePatch({
+    workspaces: [...current.workspaces, ...imported.workspaces],
+    previewStates: { ...current.previewStates, ...imported.previewStates },
+    previewHistory: { ...current.previewHistory, ...imported.previewHistory },
+    favorites: favorites.slice(0, 200),
+    recents: [...new Set([...current.recents, ...imported.recents])].slice(0, 50),
+  });
+  await flushState(false);
+  await switchWorkspace(imported.activeWorkspace);
+}
 export function renameWorkspace(name: string): void {
   changeWorkspace((space) => ({ ...space, name }));
 }

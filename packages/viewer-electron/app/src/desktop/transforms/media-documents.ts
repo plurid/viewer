@@ -148,6 +148,30 @@ export class MediaDocuments {
           await this.store(draft.id).save(draft);
           return draft;
         }
+        if (request.kind === 'recover') {
+          const original = await this.store(request.id).load();
+          if (!original) throw new Error('The original editing decisions are unavailable.');
+          const sources: MediaDraft['sources'] = [];
+          for (const source of original.sources) sources.push(await this.source(source.path));
+          const plan = validateTransform(original.plan, sources.length) as MediaDraft['plan'];
+          if (
+            plan.segments.some(
+              (segment) => segment.end > (sources[segment.source]?.info.duration ?? 0) + 0.001,
+            )
+          )
+            throw new Error(
+              'A current file is shorter than a saved edit. The original draft was preserved.',
+            );
+          const recovered: MediaDraft = {
+            ...original,
+            id: randomUUID(),
+            revision: 1,
+            sources,
+            plan,
+          };
+          await this.store(recovered.id).save(recovered);
+          return recovered;
+        }
         const draft = await this.read(request.id);
         if (request.kind === 'get') return draft;
         if (draft.revision !== request.revision)

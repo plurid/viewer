@@ -19,6 +19,7 @@ export const browsingSchema = z
     group: z.enum(['none', 'kind', 'modified']).default('none'),
     columnWidth: z.number().int().min(160).max(1600).default(280),
     density: z.enum(['comfortable', 'compact']),
+    scrollbars: z.enum(['system', 'always']).default('system'),
     foldersFirst: z.boolean(),
     showHidden: z.boolean(),
     restoreSession: z.boolean(),

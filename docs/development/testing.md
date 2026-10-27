@@ -17,6 +17,9 @@ Types cover main, preload, renderer and tooling. Tests cover pure rules, compone
 desktop services. Passing these does not qualify native pickers, Finder, physical accessibility or a
 distribution package.
 
+Use the [desktop task protocol](usability.md) to qualify complete flows with people. Keep automated
+evidence and observed human sessions separate.
+
 Tooling types include both `.ts` and React `.tsx` test files. Lint requires top-level type imports
 throughout source, tests and tools. Source CI also checks production dependency advisories; see
 [runtime dependencies](dependencies.md).

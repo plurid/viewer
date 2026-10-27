@@ -101,6 +101,7 @@ const api: ViewerAPI = {
   configOpen: () => invoke('configOpen'),
   configValidate: () => invoke('configValidate'),
   configTransfer: (kind) => invoke('configTransfer', kind),
+  backup: (request) => invoke('backup', request),
   configRestore: () => invoke('configRestore'),
   providerPermissionAgents: (id, endpoint, allow) =>
     invoke('providerPermissionAgents', id, endpoint, allow),

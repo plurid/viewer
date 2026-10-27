@@ -2,8 +2,10 @@ import type { TextEditCommand } from '../../domain/contracts';
 
 export function editable(target: EventTarget | null): boolean {
   return (
-    target instanceof HTMLElement &&
-    !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
+    target instanceof Element &&
+    !!target.closest(
+      'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]',
+    )
   );
 }
 const textCommands: Record<string, TextEditCommand> = {
