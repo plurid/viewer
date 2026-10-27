@@ -65,6 +65,7 @@ content, and test cancellation and a cold restart.
 `tests/native/office-layout.ts` opens pinned public DOC/DOCX, XLS/XLSX and PPT/PPTX samples in the
 candidate, exercises page/sheet navigation and retains the rendered PDFs. Set
 `VIEWER_TEST_OFFICE_CORPUS` to the retained public corpus and use the preservation variables above.
+Pass known sample filenames as arguments to rerun only those cases; no arguments runs the corpus.
 
 On macOS, `tests/native/office-references.ts` exports independent PDFs with installed Microsoft
 Word, Excel and PowerPoint. It opens verified copies, never saves the sources and closes only its

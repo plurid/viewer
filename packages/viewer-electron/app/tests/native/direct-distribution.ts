@@ -9,6 +9,7 @@ import { FuseState, FuseV1Options, FuseVersion, getCurrentFuseWire } from '@elec
 import { hashFile } from '../../tools/qualification/source';
 import { temporaryRoot } from '../../tools/temporary';
 import { verifyOfficeRuntime } from '../../src/desktop/previews/office-assets';
+import { officeRuntimeName } from '../../src/desktop/previews/office-runtime-manifest';
 import { storeConfiguration } from '../../tools/mas-configuration';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -136,7 +137,7 @@ try {
   ])
     assert.equal(fuses[option], FuseState.ENABLE);
   const resources = path.join(installed, 'Contents/Resources');
-  await verifyOfficeRuntime(path.join(resources, 'viewer-office-v1'));
+  await verifyOfficeRuntime(path.join(resources, officeRuntimeName));
   for (const name of [
     'viewer-processors-darwin-arm64',
     'viewer-optimizers-darwin-arm64',

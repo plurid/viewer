@@ -23,7 +23,9 @@ Run `pnpm direct:release` to produce the signed Apple Silicon app and notarized 
 command submits the app archive and disk image separately, staples both tickets and checks
 Gatekeeper acceptance. It keeps the archives, disk-image source and Apple's responses under
 `packages/viewer-electron/app/out/direct-release/`, including failed submissions. It does not
-publish the installer. Use the resulting `SHA256SUMS.txt` to verify the distribution bytes.
+publish the installer. Use the resulting `SHA256SUMS.txt` to verify the distribution bytes. The
+receipt points to the retained notarized app in that run's staging directory, so a later build
+cannot change which app the receipt identifies.
 
 Qualify the installer itself with `tests/native/direct-distribution.ts`, run from the app directory.
 Set `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1` and `VIEWER_TEST_DISTRIBUTION_RECEIPT` to

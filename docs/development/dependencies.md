@@ -21,6 +21,9 @@ Review the upstream advisory or release notes and verify the patched bytes. Reta
 sources, licenses and notices for bundled processors.
 
 Build-time downloads must match their reviewed hashes. Preserve mismatched caches for inspection.
+The Office build appends the pinned, unmodified Noto CJK font collection to a new virtual-filesystem
+package. Upstream engine files and earlier packages stay intact. The resulting data and metadata
+have their own pins; the font source, copyright and SIL Open Font License are supplied with Viewer.
 The installed application must use its bundled resources rather than inheriting tools from a
 developer's PATH. Follow [AGENTS.md](../../AGENTS.md) before replacing or removing existing folders.
 

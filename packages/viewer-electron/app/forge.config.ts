@@ -11,6 +11,7 @@ import store from './mac-app-store.json' with { type: 'json' };
 import { macChannel, storeConfiguration, storeInputs } from './tools/mas-configuration';
 import { documentTypes } from './tools/document-types';
 import { copyPDFRuntime } from './tools/pdf-runtime';
+import { officeRuntimeName } from './src/desktop/previews/office-runtime-manifest';
 import { prepareNativeRebuild } from './tools/native-build/rebuild';
 const require = createRequire(import.meta.url);
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -53,7 +54,7 @@ const config: ForgeConfig = {
     asar: { unpack: '**/{node-pty,@napi-rs}/**' },
     extraResource: [
       'assets/licenses',
-      'assets/viewer-office-v1',
+      `assets/${officeRuntimeName}`,
       ...(process.platform === 'darwin'
         ? [
             `assets/viewer-processors-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,

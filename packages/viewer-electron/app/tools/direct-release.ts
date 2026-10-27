@@ -168,7 +168,9 @@ async function main() {
       JSON.stringify(
         {
           version: 1,
-          app: path.relative(root, app),
+          // A later package replaces the regular output. Retain the exact
+          // notarized app used by this installer beside its receipt.
+          app: path.relative(root, path.join(stage, 'Viewer.app')),
           installer: path.relative(root, dmg),
           appSubmissionID: appSubmission.id,
           submissionID: result.id,

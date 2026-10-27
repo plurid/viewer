@@ -10,6 +10,7 @@ import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { officeLayoutSamples } from '../../tools/playground/office-layout';
 import { qualificationSamples } from '../../tools/playground/qualification-samples';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -27,6 +28,8 @@ const names = [
   'chart-picture-bg.pptx',
   'saut_page.docx',
 ];
+const requested = new Set(process.argv.slice(2));
+for (const name of requested) assert.ok(names.includes(name), 'Unknown Office sample: ' + name);
 const observations: unknown[] = [];
 const hash = async (file: string) =>
   createHash('sha256')
@@ -60,7 +63,7 @@ async function painted(connection: Connection) {
 }
 
 try {
-  for (const name of names) {
+  for (const name of names.filter((name) => !requested.size || requested.has(name))) {
     const file = path.join(root, name);
     await copyFile(path.join(corpus!, name), file, 1);
     const before = await hash(file);
@@ -198,6 +201,24 @@ try {
       await writeFile(path.join(root, name + '.viewer.pdf'), Buffer.from(pdf, 'base64'), {
         flag: 'wx',
       });
+      if (name === 'FloatingPictures.doc') {
+        const task = getDocument({ data: new Uint8Array(Buffer.from(pdf, 'base64')) });
+        try {
+          const document = await task.promise;
+          const page = await document.getPage(7);
+          const text = (await page.getTextContent()).items
+            .map((item) => ('str' in item ? item.str : ''))
+            .join('');
+          assert.ok(
+            text.includes(
+              '文京区と目黒区。総長の挨拶、入学案内、学部や研究所組織、附属施設のサイトへのリンク。',
+            ),
+            'Bundled CJK fonts preserve the actual Japanese text instead of repeated missing glyphs.',
+          );
+        } finally {
+          await task.destroy();
+        }
+      }
       const targets = await command<{ targetInfos: { url: string }[] }>('Target.getTargets');
       assert.equal(
         targets.targetInfos.filter((t) => /^http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{48}\/$/.test(t.url))

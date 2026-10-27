@@ -26,7 +26,8 @@ Office pixel parity is not guaranteed.
 
 Font metrics and line wrapping, chart plot/label placement, and worksheet drawing styles can differ
 from Office. Some rotated floating pictures in legacy DOC files lose their rotation and change text
-wrapping. Fonts without CJK coverage can leave missing glyphs. Dynamic filename fields can show the
+wrapping. The bundled Noto CJK collection supplies Chinese, Japanese and Korean fallback glyphs;
+exact font matching still depends on the available families. Dynamic filename fields can show the
 generic virtual input name. Revision/comment balloons are not a qualified review view; use the
 original application when those annotations matter.
 

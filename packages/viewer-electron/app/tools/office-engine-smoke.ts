@@ -59,11 +59,11 @@ await promisify(execFile)(electron, [path.join(output, 'main.mjs'), root], {
 });
 const result = JSON.parse(await readFile(path.join(root, 'result.json'), 'utf8'));
 assert.equal(result.passed, true);
-async function firstPageText(file: string): Promise<string> {
+async function pageText(file: string, number = 1): Promise<string> {
   const task = getDocument({ data: new Uint8Array(await readFile(file)) });
   try {
     const document = await task.promise,
-      page = await document.getPage(1);
+      page = await document.getPage(number);
     return (await page.getTextContent()).items
       .map((item) => ('str' in item ? item.str : ''))
       .join(' ');
@@ -72,10 +72,15 @@ async function firstPageText(file: string): Promise<string> {
   }
 }
 for (const item of result.cases) {
+  if (item.name.endsWith('.doc'))
+    assert.ok(
+      (await pageText(path.join(root, item.name + '.pdf'), 7)).includes('文京区と目黒区。'),
+      'Legacy DOC layout includes readable Japanese glyphs.',
+    );
   if (item.office?.sheets.length > 1)
     assert.notEqual(
-      await firstPageText(path.join(root, item.name + '.pdf')),
-      await firstPageText(path.join(root, item.name + '.second-sheet.pdf')),
+      await pageText(path.join(root, item.name + '.pdf')),
+      await pageText(path.join(root, item.name + '.second-sheet.pdf')),
       'Worksheet selection changes rendered content: ' + item.name,
     );
 }
