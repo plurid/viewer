@@ -24,6 +24,12 @@ pages, headers, footers, images, charts and slide backgrounds to an in-memory PD
 substitutes. Output is closer to the document's layout than the semantic reader, but Microsoft
 Office pixel parity is not guaranteed.
 
+Font metrics and line wrapping, chart plot/label placement, and worksheet drawing styles can differ
+from Office. Some rotated floating pictures in legacy DOC files lose their rotation and change text
+wrapping. Fonts without CJK coverage can leave missing glyphs. Dynamic filename fields can show the
+generic virtual input name. Revision/comment balloons are not a qualified review view; use the
+original application when those annotations matter.
+
 The engine runs in a fresh sandbox without Node, preload, host filesystem access or Viewer IPC.
 Macros and external-document updates are disabled. Inputs use generic virtual filenames; requests
 are limited to the job's loopback origin. The same pinned assets are packaged for macOS, Windows and

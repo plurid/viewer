@@ -119,7 +119,15 @@ async function frame(container: HTMLElement): Promise<HTMLIFrameElement> {
 
 async function editor(container: HTMLElement): Promise<EditorView> {
   await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull());
-  return EditorView.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!;
+  const view = EditorView.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!;
+  // Wait for CodeMirror's initial layout before dispatching synthetic selection changes.
+  await act(
+    () =>
+      new Promise<void>((resolve) =>
+        view.requestMeasure({ read: () => undefined, write: () => resolve() }),
+      ),
+  );
+  return view;
 }
 
 describe('isolated HTML rendering', () => {

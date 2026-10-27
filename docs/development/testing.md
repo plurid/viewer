@@ -60,6 +60,40 @@ Use larger public files as well as generated samples: paginated PDFs, complex Of
 textured models and long media. Pin source hashes, preserve originals, inspect actual rendered
 content, and test cancellation and a cold restart.
 
+### Independent Office references
+
+`tests/native/office-layout.ts` opens pinned public DOC/DOCX, XLS/XLSX and PPT/PPTX samples in the
+candidate, exercises page/sheet navigation and retains the rendered PDFs. Set
+`VIEWER_TEST_OFFICE_CORPUS` to the retained public corpus and use the preservation variables above.
+
+On macOS, `tests/native/office-references.ts` exports independent PDFs with installed Microsoft
+Word, Excel and PowerPoint. It opens verified copies, never saves the sources and closes only its
+own documents. The operator may need to grant Office access to the generated inputs. Native
+reference exports require those applications; they are not part of routine unit tests.
+
+Word references exclude revision/comment markup. Excel exports the complete workbook: identify the
+selected worksheet's native page range before comparing it with Viewer's single-sheet layout.
+Copying a worksheet into a new workbook can change its theme and is unsuitable as a reference.
+Rasterize matching pages and inspect images, tables, charts, typography and page breaks; extracted
+text or matching page counts alone do not establish fidelity.
+
+Set `VIEWER_TEST_OFFICE_REFERENCE_RETRY` to an earlier reference run to reuse its input copies and
+granted file access. Each retry creates new output. `VIEWER_TEST_OFFICE_REFERENCE_FORMATS` accepts a
+comma-separated format subset such as `doc,xls,xlsx`.
+
+### Live model acceptance
+
+`tests/native/live-model.ts` requires `VIEWER_TEST_LIVE_MODEL=1` and an explicit candidate binary.
+It uses the saved Gemini provider and encrypted key from the normal macOS profile, creates a private
+test profile and asks for native data-sharing approval. No saved data grant or agent access is
+copied. The test sends generated filenames/metadata and short test prompts to the configured
+endpoint; it can consume provider credits.
+
+It checks discovery, default selection, structured output, Ask Viewer, an unavailable remote model
+and revocation. The native Allow decision belongs to the operator. Test grants are revoked at the
+end; the original configuration, encrypted credentials and sharing permissions must remain
+unchanged.
+
 ## What evidence means
 
 | Check                     | Establishes                                            |

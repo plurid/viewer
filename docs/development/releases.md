@@ -25,6 +25,17 @@ Gatekeeper acceptance. It keeps the archives, disk-image source and Apple's resp
 `packages/viewer-electron/app/out/direct-release/`, including failed submissions. It does not
 publish the installer. Use the resulting `SHA256SUMS.txt` to verify the distribution bytes.
 
+Qualify the installer itself with `tests/native/direct-distribution.ts`, run from the app directory.
+Set `VIEWER_TEST_PRESERVE=1`, `VIEWER_TEST_NO_REMOVAL=1` and `VIEWER_TEST_DISTRIBUTION_RECEIPT` to
+that run's `notarization.json`. The scenario verifies the disk image, mounts it read-only and copies
+Viewer into a new retained installation directory. It checks signatures, tickets, Gatekeeper, fuses
+and bundled resource identities while retaining download quarantine.
+
+Use the resulting installed binary as `VIEWER_TEST_BINARY` for packaged startup, Office, media and
+PDF checks. Exercise helpers through the installed application after its normal first launch; a
+standalone helper invocation before that launch is a separate Gatekeeper diagnostic. Static package
+verification does not establish that a conversion or export succeeds.
+
 ## Store build
 
 Run `pnpm mas:preflight` before `pnpm mas:dev` or `pnpm mas:package`. Supply the matching

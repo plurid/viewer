@@ -25,6 +25,7 @@ const names = [
   'SampleShow.ppt',
   'ArtisticEffectSample.pptx',
   'chart-picture-bg.pptx',
+  'saut_page.docx',
 ];
 const observations: unknown[] = [];
 const hash = async (file: string) =>
@@ -182,14 +183,21 @@ try {
         milliseconds: number;
         bytes: number;
         kind: string;
+        pdf: string;
       }>(`(async()=>{
         const parent=await window.viewer.resource(${JSON.stringify(file)});
         try {const start=performance.now();const output=await window.viewer.officeLayout(parent.id,{requestID:crypto.randomUUID()});
-          const bytes=await (await fetch(output.url)).arrayBuffer();return {milliseconds:performance.now()-start,bytes:bytes.byteLength,kind:output.derivation.kind};
+          const bytes=new Uint8Array(await (await fetch(output.url)).arrayBuffer());
+          let content='';for(let index=0;index<bytes.length;index+=32768)content+=String.fromCharCode(...bytes.subarray(index,index+32768));
+          return {milliseconds:performance.now()-start,bytes:bytes.byteLength,kind:output.derivation.kind,pdf:btoa(content)};
         } finally {await window.viewer.release(parent.id);}
       })()`);
       assert.equal(warm.kind, 'office');
       assert.ok(warm.bytes > 100);
+      const { pdf, ...warmTiming } = warm;
+      await writeFile(path.join(root, name + '.viewer.pdf'), Buffer.from(pdf, 'base64'), {
+        flag: 'wx',
+      });
       const targets = await command<{ targetInfos: { url: string }[] }>('Target.getTargets');
       assert.equal(
         targets.targetInfos.filter((t) => /^http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{48}\/$/.test(t.url))
@@ -198,7 +206,14 @@ try {
         'Engine windows terminate after conversion',
       );
       assert.equal(await hash(file), before, 'Source bytes preserved');
-      observations.push({ name, sourceHash: before, ...first, loadMilliseconds, warm, sheets });
+      observations.push({
+        name,
+        sourceHash: before,
+        ...first,
+        loadMilliseconds,
+        warm: warmTiming,
+        sheets,
+      });
       console.log(
         'Office reference passed:',
         name,
