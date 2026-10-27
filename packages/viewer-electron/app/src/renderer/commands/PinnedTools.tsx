@@ -2,7 +2,7 @@ import type { Pane } from '../../domain/contracts';
 import { toolbarCommands } from '../../domain/preferences/toolbars';
 import { useCommands, useCommandRevision } from './context';
 import { report, setActivePane, useViewer } from '../state/store';
-import { toolbarKind } from './toolbar';
+import { toolbarKind, toolbarRequest } from './toolbar';
 import { IconButton } from '../ui/primitives';
 import type { CommandRequest } from './registry';
 import './capabilities.css';
@@ -13,16 +13,7 @@ export function PinnedTools({ pane, scope }: { pane: Pane; scope: CommandRequest
   const toolbars = useViewer((state) => state.settings.settings.toolbars);
   const kind = toolbarKind(pane)!;
   const target = registry.context(pane.id);
-  const request: CommandRequest = {
-    paneID: pane.id,
-    scope: target?.selection.length ? 'files' : scope,
-    context: {
-      ...target,
-      paneID: pane.id,
-      path: pane.path,
-      selection: target?.paneID === pane.id ? target.selection : [],
-    },
-  };
+  const request = toolbarRequest(pane, target, scope);
   const pins = toolbarCommands(toolbars, kind);
   const commands = registry.discover({ ...request, ids: pins });
   return (

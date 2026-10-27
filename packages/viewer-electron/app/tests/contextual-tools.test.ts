@@ -9,6 +9,32 @@ import {
 import { settingsSchema } from '../src/desktop/preferences/settings';
 import { defaultSettings } from '../src/domain/services';
 import { workspaceMayChange } from '../src/domain/preferences/catalog';
+import { toolbarRequest } from '../src/renderer/commands/toolbar';
+
+it('does not borrow another plane’s folder, resource or selection for an inactive toolbar', () => {
+  const context: CommandContext = {
+    scope: 'folder',
+    workspaceID: 'one',
+    paneID: 'other',
+    folder: { id: 'other', type: 'folder', path: '/other' } as never,
+    resourceID: 'other-resource',
+    rootID: 'other-root',
+    directory: '/other',
+    sidebar: { section: 'favorites' },
+    selection: [{ path: '/other/secret.txt' } as never],
+    clipboard: null,
+    jobs: [],
+  };
+  const request = toolbarRequest(
+    { id: 'browser', type: 'browser', path: '/wanted', url: 'http://localhost/' },
+    context,
+    'preview',
+  );
+  expect(request.scope).toBe('preview');
+  expect(request.context).toMatchObject({ paneID: 'browser', path: '/wanted', selection: [] });
+  for (const key of ['folder', 'resourceID', 'rootID', 'directory', 'sidebar'] as const)
+    expect(request.context?.[key]).toBeUndefined();
+});
 
 it('retires scoped revisions when successive views close', () => {
   const registry = new CommandRegistry();
