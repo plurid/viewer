@@ -17,6 +17,9 @@ assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 assert.ok(process.env.VIEWER_TEST_BINARY);
 const interactive = process.argv.includes('--interactive');
+const denialOnly = process.argv.includes('--deny-only');
+if (denialOnly && !interactive)
+  throw new Error('Denial acceptance requires an interactive operator session.');
 if (interactive)
   assert.ok(process.stdin.isTTY, 'Operator acceptance requires a supervised terminal.');
 const binary = path.resolve(process.env.VIEWER_TEST_BINARY);
@@ -184,6 +187,8 @@ async function nativeReview(stage: string, instruction: string, request: AgentAc
   );
   assert.equal(outcome.error, undefined, outcome.error ?? 'Native review completes successfully.');
   assert.ok(outcome.state);
+  result.lastNativeOutcome = { stage, state: outcome.state };
+  await save();
   return outcome.state;
 }
 
@@ -302,96 +307,106 @@ try {
       'Click Cancel in “Allow local agent clients to use Viewer?”',
       { kind: 'enable', enabled: true },
     );
-    assert.equal(cancelled.enabled, false, 'The operator must actually cancel this native dialog.');
+    assert.equal(
+      cancelled.enabled,
+      false,
+      'Cancelling native consent must leave agent access disabled.',
+    );
     assert.deepEqual(cancelled.roots, []);
     await assert.rejects(lstat(path.join(profile, 'agent-connection-v1.json')), { code: 'ENOENT' });
     await passed('native-cancel', { enabled: false, brokerStarted: false });
+    result.nativeDenialComplete = true;
 
-    const enabled = await nativeReview(
-      'allow-enable',
-      'Allow the shared client; no folder is authorized by this dialog.',
-      { kind: 'enable', enabled: true },
-    );
-    assert.equal(enabled.enabled, true);
-    assert.deepEqual(enabled.roots, []);
-    assert.deepEqual([...enabled.capabilities].sort(), ['metadata', 'navigation', 'propose']);
-    const configuration = JSON.parse(
-      await preferences!.evaluate<string>('window.viewer.agentToken()'),
-    ) as {
-      mcpServers: { viewer: { env: { VIEWER_AGENT_TOKEN: string } } };
-    };
-    credential = configuration.mcpServers.viewer.env.VIEWER_AGENT_TOKEN;
-    assert.match(credential, /^[a-f0-9]{64}$/);
-    client = await initializeClient();
-    await assert.rejects(metadata(client, file), /outside|authorized folders/i);
-    await passed('enabled-without-folder-cannot-read', { capabilities: enabled.capabilities });
+    if (!denialOnly) {
+      const enabled = await nativeReview(
+        'allow-enable',
+        'Allow the shared client; no folder is authorized by this dialog.',
+        { kind: 'enable', enabled: true },
+      );
+      assert.equal(enabled.enabled, true);
+      assert.deepEqual(enabled.roots, []);
+      assert.deepEqual([...enabled.capabilities].sort(), ['metadata', 'navigation', 'propose']);
+      const configuration = JSON.parse(
+        await preferences!.evaluate<string>('window.viewer.agentToken()'),
+      ) as {
+        mcpServers: { viewer: { env: { VIEWER_AGENT_TOKEN: string } } };
+      };
+      credential = configuration.mcpServers.viewer.env.VIEWER_AGENT_TOKEN;
+      assert.match(credential, /^[a-f0-9]{64}$/);
+      client = await initializeClient();
+      await assert.rejects(metadata(client, file), /outside|authorized folders/i);
+      await passed('enabled-without-folder-cannot-read', { capabilities: enabled.capabilities });
 
-    const granted = await nativeReview(
-      'allow-folder',
-      'Allow only this generated folder: ' + allowed,
-      { kind: 'allow', roots: [allowed] },
-    );
-    assert.deepEqual(granted.roots, [allowed]);
-    const info = await metadata(client, file);
-    assert.equal(info.path, file);
-    assert.equal(info.size, Buffer.byteLength(contents));
-    await assert.rejects(metadata(client, deniedFile), /outside|authorized folders/i);
-    await assert.rejects(metadata(client, link), /outside|authorized folders/i);
-    await assert.rejects(
-      metadata(client, path.join(profile, 'config.jsonc')),
-      /private Viewer|private.*data/i,
-    );
-    const invalid = (credential[0] === '0' ? '1' : '0') + credential.slice(1);
-    await assert.rejects(initializeClient(invalid), /token|invalid|disabled/i);
-    await passed('authenticated-scoped-read', {
-      metadataPath: info.path,
-      outsideDenied: true,
-      symlinkDenied: true,
-      privateDataDenied: true,
-      invalidTokenDenied: true,
-    });
-    await reviewedCommandBoundary();
+      const granted = await nativeReview(
+        'allow-folder',
+        'Allow only this generated folder: ' + allowed,
+        { kind: 'allow', roots: [allowed] },
+      );
+      assert.deepEqual(granted.roots, [allowed]);
+      const info = await metadata(client, file);
+      assert.equal(info.path, file);
+      assert.equal(info.size, Buffer.byteLength(contents));
+      await assert.rejects(metadata(client, deniedFile), /outside|authorized folders/i);
+      await assert.rejects(metadata(client, link), /outside|authorized folders/i);
+      await assert.rejects(
+        metadata(client, path.join(profile, 'config.jsonc')),
+        /private Viewer|private.*data/i,
+      );
+      const invalid = (credential[0] === '0' ? '1' : '0') + credential.slice(1);
+      await assert.rejects(initializeClient(invalid), /token|invalid|disabled/i);
+      await passed('authenticated-scoped-read', {
+        metadataPath: info.path,
+        outsideDenied: true,
+        symlinkDenied: true,
+        privateDataDenied: true,
+        invalidTokenDenied: true,
+      });
+      await reviewedCommandBoundary();
 
-    await preferences!.evaluate(
-      `window.viewer.agentAccess({kind:'remove-folder',root:${JSON.stringify(allowed)}})`,
-    );
-    await assert.rejects(metadata(client, file), /outside|authorized folders/i);
-    await passed('folder-revocation-live-client', { roots: (await access()).roots });
-    await preferences!.evaluate('window.viewer.agentAccess({kind:"enable",enabled:false})');
-    assert.equal((await access()).enabled, false);
-    await assert.rejects(metadata(client, file), /disconnected|disabled|invalid|outside/i);
-    await client.close();
-    client = undefined;
-    const connection = JSON.parse(
-      await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
-    ) as { socket: string };
-    const retainedSocketDirectory = path.dirname(connection.socket);
-    assert.ok(
-      (await lstat(retainedSocketDirectory)).isDirectory(),
-      'The generated socket directory is retained.',
-    );
-    await passed('disabled-broker-and-retained-fixture', {
-      enabled: false,
-      retainedSocketDirectory,
-    });
+      await preferences!.evaluate(
+        `window.viewer.agentAccess({kind:'remove-folder',root:${JSON.stringify(allowed)}})`,
+      );
+      await assert.rejects(metadata(client, file), /outside|authorized folders/i);
+      await passed('folder-revocation-live-client', { roots: (await access()).roots });
+      await preferences!.evaluate('window.viewer.agentAccess({kind:"enable",enabled:false})');
+      assert.equal((await access()).enabled, false);
+      await assert.rejects(metadata(client, file), /disconnected|disabled|invalid|outside/i);
+      await client.close();
+      client = undefined;
+      const connection = JSON.parse(
+        await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
+      ) as { socket: string };
+      const retainedSocketDirectory = path.dirname(connection.socket);
+      assert.ok(
+        (await lstat(retainedSocketDirectory)).isDirectory(),
+        'The generated socket directory is retained.',
+      );
+      await passed('disabled-broker-and-retained-fixture', {
+        enabled: false,
+        retainedSocketDirectory,
+      });
 
-    await patchRequested(true, [allowed]);
-    assert.equal((await access()).enabled, false);
-    await app!.close(main);
-    app = undefined;
-    main = undefined;
-    preferences = undefined;
-    await connect();
-    const cold = await access();
-    assert.equal(cold.enabled, false);
-    assert.deepEqual(cold.roots, []);
-    assert.equal(cold.pending.enable, true);
-    assert.deepEqual(cold.pending.roots, [allowed]);
-    await assert.rejects(initializeClient(), /disconnected|disabled|invalid|start/i);
-    await patchRequested(false, []);
-    assert.equal((await access()).enabled, false);
-    await passed('cold-restart-configuration-cannot-regrant', { enabled: false, roots: [] });
-    result.nativeConsentComplete = true;
+      await patchRequested(true, [allowed]);
+      assert.equal((await access()).enabled, false);
+      await app!.close(main);
+      app = undefined;
+      main = undefined;
+      preferences = undefined;
+      await connect();
+      const cold = await access();
+      assert.equal(cold.enabled, false);
+      assert.deepEqual(cold.roots, []);
+      assert.equal(cold.pending.enable, true);
+      assert.deepEqual(cold.pending.roots, [allowed]);
+      await assert.rejects(initializeClient(), /disconnected|disabled|invalid|start/i);
+      await patchRequested(false, []);
+      assert.equal((await access()).enabled, false);
+      await passed('cold-restart-configuration-cannot-regrant', { enabled: false, roots: [] });
+      result.nativeConsentComplete = true;
+    } else {
+      result.nativeConsentComplete = false;
+      result.unverified = ['native-allow', 'scoped-read', 'revocation', 'cold-restart'];
+    }
   } else {
     result.nativeConsentComplete = false;
     result.unverified = [
@@ -409,9 +424,11 @@ try {
   result.stage = 'complete';
   await save();
   console.log(
-    interactive
-      ? 'PASS native agent consent and packaged authenticated reads.'
-      : 'PASS agent consent preflight only; native operator acceptance remains unverified.',
+    denialOnly
+      ? 'PASS native agent denial; grant checks were not run.'
+      : interactive
+        ? 'PASS native agent consent and packaged authenticated reads.'
+        : 'PASS agent consent preflight only; native operator acceptance remains unverified.',
   );
 } catch (error) {
   result.error = error instanceof Error ? error.stack : String(error);

@@ -2,11 +2,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { lstat, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { privateStage } from '../src/desktop/operations/staging';
+import * as removal from '../src/desktop/operations/removal';
 import { temporaryRoot } from '../tools/temporary';
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe('transfer staging during preserved validation', () => {
+  it('keeps staging when the operator enabled exact Trash actions but retained fixture cleanup', async () => {
+    vi.stubEnv('VIEWER_TEST_NO_REMOVAL', '0');
+    vi.stubEnv('VIEWER_TEST_PRESERVE', '1');
+    const remove = vi
+      .spyOn(removal, 'removeEmptyDirectory')
+      .mockRejectedValue(new Error('Unexpected cleanup'));
+    const root = await temporaryRoot('viewer-stage-preservation-');
+    const stage = await privateStage(root, '.viewer-transfer-');
+    await expect(stage.dispose()).resolves.toBeUndefined();
+    expect(remove).not.toHaveBeenCalled();
+    expect((await lstat(path.dirname(stage.file))).isDirectory()).toBe(true);
+  });
+
   it('keeps an empty stage without failing a published transfer', async () => {
     vi.stubEnv('VIEWER_TEST_NO_REMOVAL', '1');
     const root = await temporaryRoot('viewer-stage-preservation-');

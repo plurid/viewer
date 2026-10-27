@@ -20,6 +20,10 @@ Text Save rechecks the source version. External edits offer conflict recovery; u
 private until saved or discarded. Closing a view is separate from discarding its draft or removing a
 saved document.
 
+The first save of an existing file in an editor session moves its previous version to the OS Trash.
+Saved or explicitly discarded private drafts also go to Trash. If that fails, Viewer keeps the draft
+reference available for retry instead of silently forgetting it.
+
 Eligible operation Undo checks its receipt and outputs before reversal. A changed output may prevent
 Undo. Arrangement Undo affects views and geometry, independently of file changes. Git actions and
 changes made by other applications are not Viewer file-operation Undo.

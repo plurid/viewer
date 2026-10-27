@@ -78,3 +78,13 @@ historical test counts. Report passed, failed, skipped and unexecuted checks dis
 Fixtures and failed artifacts remain until exact-path removal is approved. Human removal/consent
 confirmations must be clicked by the operator when required; agents never approve their own removal.
 See [AGENTS.md](../../AGENTS.md) and [release gates](releases.md).
+
+`tests/native/save-recovery.ts --interactive` prepares a generated original and draft, then waits
+for exact-path approval before opening the operator Save step. Its recovery check copies the
+verified original from Trash to a new file; it never empties Trash or replaces a recovery target.
+`VIEWER_TEST_PRESERVE=1` keeps staging and abandoned temporary artifacts even during an operator
+session where explicitly approved Trash actions are enabled.
+
+`tests/native/agent-consent.ts --interactive` exercises denial, grants, scoped reads and revocation.
+Add `--deny-only` to check native cancellation without granting any access. Its receipt marks the
+remaining grant checks unverified; an operator denial check is not full consent acceptance.

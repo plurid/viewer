@@ -43,6 +43,11 @@ The workspace controller is the Plurid adapter. It owns engine IDs, placement, f
 restoration. Explorer session state and shared path-keyed folder presentation have different owners.
 Input selection and camera input stay separate.
 
+`workspace/content-planes.ts` owns content-view reuse and checks asynchronous results against the
+captured workspace. It delegates placement to the workspace adapter. Desktop IPC groups, including
+`ipc/git-handlers.ts`, keep feature dispatch together; the bridge validates sender and window role
+before calling them. Git mutations still bind and validate the captured target before service entry.
+
 Views are not resources. Notes, task references and command receipts can outlive their views.
 Terminals and window-owned servers have different close behavior. Preview leases, decoders, browser
 guests and cancellation release their own work. Restoring a task or project never authorizes replay

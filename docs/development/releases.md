@@ -13,6 +13,18 @@ Certificate signing and notarization need the release identities and configurati
 bundle does not establish either. Verify downloaded distribution bytes, startup and required bundled
 native dependencies before publishing.
 
+Create a notarization profile privately in Terminal with
+`xcrun notarytool store-credentials viewer-notary`. The tool prompts for the account credentials;
+keep passwords and private keys out of chat, scripts and the repository. Pass only that profile name
+through `VIEWER_NOTARY_PROFILE`, and select a valid Developer ID Application identity with
+`VIEWER_DIRECT_IDENTITY`. An Expo/EAS iOS build profile is separate from this macOS configuration.
+
+Run `pnpm direct:release` to produce the signed Apple Silicon app and notarized disk image. The
+command submits the app archive and disk image separately, staples both tickets and checks
+Gatekeeper acceptance. It keeps the archives, disk-image source and Apple's responses under
+`packages/viewer-electron/app/out/direct-release/`, including failed submissions. It does not
+publish the installer. Use the resulting `SHA256SUMS.txt` to verify the distribution bytes.
+
 ## Store build
 
 Run `pnpm mas:preflight` before `pnpm mas:dev` or `pnpm mas:package`. Supply the matching

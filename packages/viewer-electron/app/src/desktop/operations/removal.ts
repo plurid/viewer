@@ -25,7 +25,8 @@ export function assertTestRemovalAllowed(file: string): void {
 export async function discardOwnTemporaryFile(file: string): Promise<void> {
   // Atomic publication usually consumed this path already. Retaining a leftover temporary
   // file must not turn an otherwise successful write into a validation failure.
-  if (process.env.VIEWER_TEST_NO_REMOVAL === '1') return;
+  if (process.env.VIEWER_TEST_NO_REMOVAL === '1' || process.env.VIEWER_TEST_PRESERVE === '1')
+    return;
   await unlink(file).catch(ignoreMissing);
 }
 

@@ -41,10 +41,18 @@ describe('preserved validation filesystem', () => {
 
   it('retains ordinary adapter behavior outside preservation checks', async () => {
     vi.stubEnv('VIEWER_TEST_NO_REMOVAL', '0');
+    vi.stubEnv('VIEWER_TEST_PRESERVE', '0');
     await discardOwnTemporaryFile('/generated/temporary');
     await removeEmptyDirectory('/generated/empty');
     await unlinkVerified('/generated/source');
     expect(unlink).toHaveBeenCalledTimes(2);
     expect(rmdir).toHaveBeenCalledExactlyOnceWith('/generated/empty');
+  });
+
+  it('retains temporary artifacts during operator acceptance with explicit Trash enabled', async () => {
+    vi.stubEnv('VIEWER_TEST_NO_REMOVAL', '0');
+    vi.stubEnv('VIEWER_TEST_PRESERVE', '1');
+    await discardOwnTemporaryFile('/generated/temporary');
+    expect(unlink).not.toHaveBeenCalled();
   });
 });

@@ -94,7 +94,16 @@ export function FileEditor({
     if (!id) return;
     buffer.current = undefined;
     updatePane(paneID, { bufferID: undefined });
-    await discardBuffer(id);
+    try {
+      await discardBuffer(id);
+    } catch (error) {
+      // Keep a failed retirement reachable without replacing newer edits made during the request.
+      if (!buffer.current) {
+        buffer.current = id;
+        updatePane(paneID, { bufferID: id });
+      }
+      throw error;
+    }
   }, [paneID]);
   const open = useCallback(
     async (restore: boolean) => {
@@ -189,9 +198,9 @@ export function FileEditor({
         session,
         document.bom,
       );
-      saved.current = text;
       setConflict(null);
       await forget();
+      saved.current = text;
       // text typed while the save was written stays unsaved
       const now = editor.current?.text() ?? text;
       if (now !== text) keep(now);

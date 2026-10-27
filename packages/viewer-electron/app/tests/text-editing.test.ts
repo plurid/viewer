@@ -85,6 +85,26 @@ const type = (view: EditorView, text: string) =>
 const pane = (id: string) => activeWorkspace().panes.find((item) => item.id === id);
 
 describe('editing a previewed file', () => {
+  it('retains the draft reference and text when its Trash retirement fails after saving', async () => {
+    const { id } = addPane('/fixtures/notes.md', 'preview', true);
+    const view = render(
+      createElement(FileEditor, { resourceID: 'resource', paneID: id, onClose: vi.fn() }),
+    );
+    await type(await editor(view.container), 'recoverable ');
+    await waitFor(() => expect(pane(id)).toHaveProperty('bufferID'));
+    await flushState(false);
+    const edited = pane(id);
+    const bufferID = edited?.type === 'preview' ? edited.bufferID : undefined;
+    expect(bufferID).toBeTypeOf('string');
+    viewer.bufferDiscard.mockRejectedValueOnce(new Error('Trash unavailable'));
+    expect(await editingPlane(id)!.save!()).toBe(false);
+    expect(pane(id)).toHaveProperty('bufferID', bufferID);
+    expect(editingPlane(id)!.dirty!()).toBe(true);
+    await flushState(false);
+    expect(kept.get(bufferID!)?.text).toBe('recoverable one\n');
+    expect(viewer.bufferDiscard).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps its unsaved edits as they are typed, and a save checks the version read', async () => {
     const { id } = addPane('/fixtures/notes.md', 'preview', true);
     const view = render(

@@ -8,6 +8,69 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   exec = promisify(execFile);
+
+interface Notarization {
+  status: string;
+  id: string;
+}
+type NotaryCommand = (args: string[]) => Promise<string>;
+
+/** Keep Apple's response even when a submission fails; never clean up its archive. */
+export async function notarizeRetained(
+  artifact: string,
+  profile: string,
+  record: string,
+  run: NotaryCommand = async (args) =>
+    (await exec('xcrun', args, { timeout: 30 * 60000, maxBuffer: 2_000_000 })).stdout,
+): Promise<Notarization> {
+  let output: string;
+  try {
+    output = await run([
+      'notarytool',
+      'submit',
+      artifact,
+      '--keychain-profile',
+      profile,
+      '--wait',
+      '--output-format',
+      'json',
+    ]);
+  } catch (error) {
+    await writeFile(
+      record,
+      JSON.stringify(
+        {
+          status: 'Command failed',
+          error: error instanceof Error ? error.message : String(error),
+          ...(error && typeof error === 'object' && 'stdout' in error
+            ? { stdout: String(error.stdout) }
+            : {}),
+        },
+        null,
+        2,
+      ) + '\n',
+      { flag: 'wx' },
+    );
+    throw error;
+  }
+  await writeFile(record, output, { flag: 'wx' });
+  const result: unknown = JSON.parse(output);
+  if (
+    !result ||
+    typeof result !== 'object' ||
+    !('id' in result) ||
+    typeof result.id !== 'string' ||
+    !('status' in result) ||
+    typeof result.status !== 'string'
+  )
+    throw new Error('Apple returned an invalid notarization response; the response was retained.');
+  if (result.status !== 'Accepted')
+    throw new Error(
+      'Apple did not accept notarization: ' + result.status + ' (' + result.id + ').',
+    );
+  return { id: result.id, status: result.status };
+}
+
 async function main() {
   if (process.platform !== 'darwin' || process.arch !== 'arm64')
     throw new Error('The initial direct release targets Apple Silicon macOS.');
@@ -28,13 +91,15 @@ async function main() {
     );
   const signedIdentity = row.trim().split(/\s+/)[1];
   await new Promise<void>((resolve, reject) => {
-    const child = spawn('pnpm', ['make'], {
+    const child = spawn('pnpm', ['package'], {
       cwd: root,
       env: {
         ...process.env,
         VIEWER_MAC_CHANNEL: 'direct',
         VIEWER_DIRECT_IDENTITY: signedIdentity,
-        VIEWER_NOTARY_PROFILE: profile,
+        // Forge's automatic notarizer permanently removes its temporary archive.
+        // This command owns the retained archive and submission instead.
+        VIEWER_NOTARY_PROFILE: '',
       },
       stdio: 'inherit',
     });
@@ -45,17 +110,25 @@ async function main() {
   });
   const app = path.join(root, 'out/Viewer-darwin-arm64/Viewer.app');
   await exec('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]);
-  await exec('xcrun', ['stapler', 'validate', app]);
-  await exec('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', app]);
   const version = (
     JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as { version: string }
   ).version;
-  const directory = path.join(
-    root,
-    'out/direct-release',
-    new Date().toISOString().replace(/[:.]/g, '-'),
+  const parent = path.join(root, 'out/direct-release');
+  await mkdir(parent, { recursive: true });
+  const directory = await mkdtemp(
+    path.join(parent, new Date().toISOString().replace(/[:.]/g, '-') + '-'),
   );
-  await mkdir(directory, { recursive: true });
+  const archive = path.join(directory, `Viewer-${version}-arm64.app.zip`);
+  console.log('Notarizing app; evidence kept at ' + path.relative(root, directory));
+  await exec('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, archive]);
+  const appSubmission = await notarizeRetained(
+    archive,
+    profile,
+    path.join(directory, 'app-notarization.json'),
+  );
+  await exec('xcrun', ['stapler', 'staple', app]);
+  await exec('xcrun', ['stapler', 'validate', app]);
+  await exec('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', app]);
   const stage = await mkdtemp(path.join(directory, 'stage-')),
     dmg = path.join(directory, `Viewer-${version}-arm64.dmg`);
   try {
@@ -75,28 +148,12 @@ async function main() {
       { maxBuffer: 2_000_000 },
     );
     await exec('/usr/bin/codesign', ['--force', '--timestamp', '--sign', signedIdentity, dmg]);
-    const result = JSON.parse(
-      (
-        await exec(
-          'xcrun',
-          [
-            'notarytool',
-            'submit',
-            dmg,
-            '--keychain-profile',
-            profile,
-            '--wait',
-            '--output-format',
-            'json',
-          ],
-          { timeout: 30 * 60000, maxBuffer: 2_000_000 },
-        )
-      ).stdout,
-    ) as { status: string; id: string };
-    if (result.status !== 'Accepted')
-      throw new Error(
-        'Apple did not accept the DMG notarization: ' + result.status + ' (' + result.id + ').',
-      );
+    console.log('Notarizing disk image.');
+    const result = await notarizeRetained(
+      dmg,
+      profile,
+      path.join(directory, 'dmg-notarization.json'),
+    );
     await exec('xcrun', ['stapler', 'staple', dmg]);
     await exec('xcrun', ['stapler', 'validate', dmg]);
     await exec('/usr/bin/hdiutil', ['verify', dmg], { maxBuffer: 2_000_000 });
@@ -109,20 +166,30 @@ async function main() {
     await writeFile(
       path.join(directory, 'notarization.json'),
       JSON.stringify(
-        { version: 1, app, installer: dmg, submissionID: result.id, status: result.status },
+        {
+          version: 1,
+          app: path.relative(root, app),
+          installer: path.relative(root, dmg),
+          appSubmissionID: appSubmission.id,
+          submissionID: result.id,
+          status: result.status,
+        },
         null,
         2,
       ) + '\n',
     );
     console.log(
-      'Signed and notarized local installer: ' + dmg + '\nNo public publishing was performed.',
+      'Signed and notarized local installer: ' +
+        path.relative(root, dmg) +
+        '\nNo public publishing was performed.',
     );
   } finally {
     // The disk-image source stays beside the installer for review; nothing is deleted.
-    console.log('Disk image staging kept at ' + stage);
+    console.log('Disk image staging kept at ' + path.relative(root, stage));
   }
 }
-await main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  await main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });

@@ -29,7 +29,7 @@ export async function privateStage(
     async dispose(): Promise<string | undefined> {
       if (!(await owned(root)))
         throw new Error('The temporary transfer location changed. It was kept for inspection.');
-      if (process.env.VIEWER_TEST_NO_REMOVAL === '1') {
+      if (process.env.VIEWER_TEST_NO_REMOVAL === '1' || process.env.VIEWER_TEST_PRESERVE === '1') {
         // Successful publication leaves only an empty artifact. Partial content remains at
         // its original generated path and is reported without invoking a removal adapter.
         return (await readdir(root)).length ? root : undefined;

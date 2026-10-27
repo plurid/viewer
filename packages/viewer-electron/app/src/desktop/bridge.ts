@@ -1,3 +1,4 @@
+import { createGitHandlers } from './ipc/git-handlers';
 import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
 import { createWebHandlers } from './ipc/web-handlers';
@@ -661,7 +662,11 @@ export class Desktop {
       },
     );
     this.texts = new TextFiles(this.operations, access);
-    this.buffers = new TextBuffers(dataPath);
+    this.buffers = new TextBuffers(dataPath, async (reviewed) => {
+      if (process.platform === 'darwin')
+        await macFiles().trash(reviewed.path, fileCoordination.purpose(), reviewed);
+      else await fallbackTrash(reviewed.path);
+    });
     this.notes = new Notes(
       dataPath,
       (id, revision) => emit({ type: 'note-changed', id, revision }),
@@ -1342,6 +1347,20 @@ export class Desktop {
   /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
   private createHandlers(): ApiHandlers {
     return {
+      ...createGitHandlers({
+        reader: this.git,
+        worktrees: this.worktrees,
+        reviews: this.gitReviews,
+        actions: this.gitActions,
+        resources: this.resources,
+        activity: this.activity,
+        window: (owner) => this.gitWindow(owner),
+        isAgent: (owner) =>
+          [...this.agentCommands.values()].some((pending) => pending.owner === owner),
+        retainResource: (id) => {
+          this.gitResources.add(id);
+        },
+      }),
       receipts: ([request]) => this.receipts.request(request),
       notes: async ([request], owner) => {
         if ([...this.agentCommands.values()].some((item) => item.owner === owner))
@@ -1469,54 +1488,10 @@ export class Desktop {
         if (!this.options.newWindow) throw new Error('New windows are unavailable.');
         await this.options.newWindow(this.createWorkspace());
       },
-      git: ([request]) =>
-        request.kind === 'status'
-          ? this.git.status(request.path, request.refresh)
-          : this.git.head(request.path),
-      gitWorktrees: async ([request], owner) => {
-        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
-          throw new Error('Worktree browsing is available only to the person.');
-        const bound =
-          request.kind === 'create'
-            ? { ...request, target: await bindGitTarget(request.target, this.gitWindow(owner)) }
-            : request;
-        return this.worktrees.request(bound, owner);
-      },
-      gitReview: async ([request], owner) => {
-        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
-          throw new Error('Git review is available only to the person.');
-        const bound =
-          request.kind === 'open'
-            ? {
-                ...request,
-                target: await bindGitTarget(request.target, this.gitWindow(owner), undefined, [
-                  'folder',
-                  'git-changes',
-                ]),
-              }
-            : request;
-        return this.gitReviews.request(bound, owner);
-      },
       agentSessions: ([request], owner) => {
         if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
           throw new Error('Saved agent transcripts are available only to the person.');
         return this.agentSessions.request(request);
-      },
-      gitAction: async ([request], owner) => {
-        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
-          throw new Error('Agents cannot run Git program actions.');
-        const target = await bindGitTarget(request.target, this.gitWindow(owner));
-        return this.activity.at({ workspaceID: target.workspaceID, planeID: target.paneID }, () =>
-          this.activity.git(request.id, request.kind, () =>
-            this.gitActions.start({ ...request, target }, owner),
-          ),
-        );
-      },
-      gitResource: async ([source]) => {
-        const bytes = await this.git.blob(source);
-        const resource = await this.resources.grantBytes(source.repository, source.path, bytes);
-        this.gitResources.add(resource.id);
-        return resource;
       },
       compare: (args) => {
         const request = args[0];

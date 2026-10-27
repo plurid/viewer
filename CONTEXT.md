@@ -25,6 +25,10 @@ A **plane** is a view record. Its engine route, framing and geometry belong to
 `src/renderer/workspace/controller.ts`. A **root** is an independent spatial branch: preview reuse
 is scoped to that root. Keep engine IDs inside the adapter.
 
+Content-plane opening and reuse live in `src/renderer/workspace/content-planes.ts`; asynchronous
+results keep their originating workspace. Git IPC dispatch lives in
+`src/desktop/ipc/git-handlers.ts`, with sender validation still owned by the desktop bridge.
+
 An **explorer session** owns selection, cursor, range anchor, scroll and column trail. **Folder
 presentation** is shared by path and owns view/sort/column choices. Navigation and operation
 selection remain independent of camera input.
