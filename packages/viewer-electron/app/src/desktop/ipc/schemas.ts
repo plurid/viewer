@@ -24,6 +24,7 @@ import { journalQuerySchema } from '../../domain/journal/events';
 import { browserRequestSchema } from '../../domain/previews/browser';
 import { transformPlanSchema } from '../../domain/operations/transforms';
 import { mediaRequestSchema } from '../../domain/media/documents';
+import { optimizationRequestSchema } from '../../domain/operations/optimization-review';
 import { worksheetDocumentRequestSchema } from '../../domain/previews/documents/office';
 import { noteRequestSchema } from '../../domain/editing/notes';
 
@@ -174,6 +175,7 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export const schemas = {
+  optimization: z.tuple([optimizationRequestSchema]),
   receipts: z.tuple([receiptRequestSchema]),
   notes: z.tuple([noteRequestSchema]),
   imageInspect: z.tuple([localPath]),
@@ -803,6 +805,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  optimization: 'viewer',
   gitReview: 'viewer',
   agentSessions: 'viewer',
   receipts: 'viewer',

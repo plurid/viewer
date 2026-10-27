@@ -147,7 +147,57 @@ try {
   );
   await evaluate('document.querySelector(\'[data-menu-id="choice:lossless"]\').click()');
   await evaluate(
-    'Array.from(document.querySelectorAll(".optimize-dialog button")).find(button=>button.textContent.trim()==="Optimize 2 files").click()',
+    'Array.from(document.querySelectorAll(".optimize-dialog button")).find(button=>button.textContent.trim()==="Prepare candidates").click()',
+  );
+  await until(
+    () =>
+      evaluate<boolean>(
+        `[...document.querySelectorAll('.optimize-dialog button')].some(button=>button.textContent.trim()==='Save 2 smaller copies'&&!button.disabled)`,
+      ),
+    Boolean,
+    'measured candidates',
+    60000,
+  );
+  const review = async (name: string) => {
+    await evaluate(
+      `(()=>{const row=[...document.querySelectorAll('[data-optimization-file]')].find(row=>row.dataset.optimizationFile===${JSON.stringify(name)});[...row.querySelectorAll('button')].find(button=>button.textContent.trim()==='Review').click()})()`,
+    );
+    await until(
+      () =>
+        evaluate<boolean>(
+          `document.querySelectorAll('.optimization-review-panes img').length===2&&[...document.querySelectorAll('.optimization-review-panes img')].every(image=>image.complete&&image.naturalWidth>0&&!image.hidden)`,
+        ),
+      Boolean,
+      'loaded before and after',
+      30000,
+    );
+  };
+  await review('Artwork.png');
+  const reviewedHash = await evaluate<string>(
+    `(async()=>{const url=document.querySelector('.optimization-review-panes figure:last-child img').src;const bytes=await (await fetch(url)).arrayBuffer();return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join('')})()`,
+  );
+  await evaluate(
+    `document.querySelector('.optimization-comparison').scrollIntoView({block:'center'})`,
+  );
+  await capture('review-image-dark');
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 780,
+    height: 560,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await evaluate(
+    `document.querySelector('.optimization-comparison').scrollIntoView({block:'end'})`,
+  );
+  await capture('review-image-minimum');
+  await command('Emulation.clearDeviceMetricsOverride');
+  await review('Searchable plan.pdf');
+  await evaluate(
+    `document.querySelector('.optimization-comparison').scrollIntoView({block:'center'})`,
+  );
+  await capture('review-pdf-dark');
+  await evaluate(
+    `Array.from(document.querySelectorAll('.optimize-dialog button')).find(button=>button.textContent.trim()==='Save 2 smaller copies').click()`,
   );
   const jobs = await until(
     () => evaluate<OperationJob[]>('window.viewer.jobs()'),
@@ -164,7 +214,7 @@ try {
   );
   await until(
     () => evaluate<string>('document.querySelector(".optimize-dialog").textContent'),
-    (text) => text.includes('2 of 2 processed'),
+    (text) => text.includes('2 of 2 prepared') && text.includes('saved'),
     'size results',
   );
   await capture('optimize-dark');
@@ -185,6 +235,10 @@ try {
   });
   await capture('optimize-narrow');
   await command('Emulation.clearDeviceMetricsOverride');
+  assert.equal(
+    await hash(results.find((result) => result.source === png)!.destination!),
+    reviewedHash,
+  );
   const optimizedPDF = results.find((result) => result.source === pdf)!.destination!;
   const readable = await evaluate<{ text: string }>(
     `(async()=>{const resource=await window.viewer.resource(${JSON.stringify(optimizedPDF)});try{return await window.viewer.document(resource.id)}finally{await window.viewer.release(resource.id)}})()`,

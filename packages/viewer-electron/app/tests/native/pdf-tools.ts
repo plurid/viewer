@@ -263,7 +263,8 @@ try {
     Boolean,
     'scan optimization',
   );
-  await evaluate('document.querySelector(".optimize-scan-options input[type=checkbox]").click()');
+  await evaluate('document.querySelector(".optimization-advanced summary").click()');
+  await evaluate('document.querySelector(\'[aria-label="Recompress scanned images"]\').click()');
   await evaluate(
     '(()=>{const field=document.querySelector(\'[aria-label="PDF maximum image edge"]\');field.focus();field.select()})()',
   );
@@ -277,7 +278,17 @@ try {
     );
   }
   await capture('pdf-scan-light');
-  await click('Optimize file', '.optimize-dialog');
+  await click('Prepare candidates', '.optimize-dialog');
+  await until(
+    () =>
+      evaluate<boolean>(
+        `[...document.querySelectorAll('.optimize-dialog button')].some(button => button.textContent.trim() === 'Save 1 smaller copy' && !button.disabled)`,
+      ),
+    Boolean,
+    'reviewed scan candidate',
+    60000,
+  );
+  await click('Save 1 smaller copy', '.optimize-dialog');
   jobs = await until(
     () => evaluate<OperationJob[]>('window.viewer.jobs()'),
     (jobs) => jobs.length === 6 && jobs.every((job) => job.status === 'completed'),

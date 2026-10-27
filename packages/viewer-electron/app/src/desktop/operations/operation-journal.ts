@@ -4,6 +4,7 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, readlink, rename } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { optimizationOutcomeSchema } from '../../domain/operations/optimization-target';
 import { transformPlanSchema } from '../../domain/operations/transforms';
 import { DocumentStore } from '../persistence/document-store';
 import { discardOwnTemporaryFile, removePrivateData } from './removal';
@@ -69,6 +70,7 @@ const job = z
             inputBytes: count.optional(),
             outputBytes: count.optional(),
             optimized: z.boolean().optional(),
+            targetSize: optimizationOutcomeSchema.optional(),
           })
           .strict(),
       )
@@ -112,6 +114,14 @@ const record = z
         name: z.string().max(255).optional(),
         conversion: z.enum(['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf']).optional(),
         transform: transformPlanSchema.optional(),
+        reviewedDestination: z
+          .object({ path: file, identity: z.string().max(300) })
+          .strict()
+          .optional(),
+        preparedTransforms: z
+          .array(z.object({ path: file, id: z.string().uuid() }).strict())
+          .max(1000)
+          .optional(),
         expectedSources: z
           .array(z.object({ path: file, version: sourceVersionSchema }).strict())
           .max(10000)

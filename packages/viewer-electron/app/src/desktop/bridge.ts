@@ -5,6 +5,7 @@ import { createWebHandlers } from './ipc/web-handlers';
 import { WebPreviews } from './previews/web/service';
 import { BrowserPlanes } from './browser/browser-planes';
 import { Transforms } from './transforms/transforms';
+import { OptimizationReviews } from './transforms/optimization-reviews';
 import {
   imageProcess,
   imageInspectionProcess,
@@ -158,6 +159,7 @@ export class Desktop {
   readonly resources: Resources;
   readonly webPreviews: WebPreviews;
   readonly transforms: Transforms;
+  readonly optimizationReviews: OptimizationReviews;
   readonly mediaDocuments: MediaDocuments;
   readonly browsers = new BrowserPlanes((owner) => this.windows.get(owner)?.window);
   readonly fileAccess: FileAccess;
@@ -599,6 +601,18 @@ export class Desktop {
           options.fileBackend,
         ),
     );
+    this.optimizationReviews = new OptimizationReviews(
+      path.join(dataPath, 'optimization-candidates'),
+      this.transforms,
+      this.resources,
+      access,
+      (request) => this.operations.start(request),
+      (file) =>
+        process.platform === 'darwin'
+          ? macFiles().trash(file, fileCoordination.purpose())
+          : fallbackTrash(file),
+      (message) => options.diagnose?.(message),
+    );
     this.operations = new Operations(
       (file, expected) =>
         process.platform === 'darwin'
@@ -606,6 +620,7 @@ export class Desktop {
           : fallbackTrash(file),
       (job) => {
         emit({ type: 'job', job });
+        this.optimizationReviews.jobChanged(job);
         this.agentRequests?.operation(job);
       },
       (progress) => emit({ type: 'job-progress', progress }),
@@ -631,7 +646,7 @@ export class Desktop {
           return this.transforms.execute(plan, sources, output, signal, () => {}).then(() => {});
         },
       },
-      this.transforms,
+      this.optimizationReviews,
     );
     this.mediaDocuments = new MediaDocuments(
       dataPath,
@@ -1066,6 +1081,9 @@ export class Desktop {
     window.on('closed', () => {
       this.browsers.stopOwner(sender);
       this.mediaDocuments.stopOwner(sender);
+      void this.optimizationReviews
+        .stopOwner(sender)
+        .catch((error) => this.options.diagnose?.(String(error)));
       this.flushes.disconnected(sender);
       this.chats.retain(sender, new Set());
       this.gitActions.stopOwner(sender);
@@ -1236,6 +1254,7 @@ export class Desktop {
       this.webPreviews.close(),
       Promise.resolve(this.browsers.closeAll()),
       (this.mediaDocuments.invalidate(), this.transforms.quiesce()),
+      this.optimizationReviews.invalidate(),
       this.thumbnails.close(),
       this.information.close(),
       this.projects.flush(),
@@ -1428,6 +1447,7 @@ export class Desktop {
       }),
       browser: ([request], owner) => this.browsers.request(owner, request),
       media: ([request], owner) => this.mediaDocuments.request(request, owner),
+      optimization: ([request], owner) => this.optimizationReviews.request(request, owner),
       imageInspect: async ([file]) => {
         const before = sourceVersion(await entry(file));
         const value = await this.transforms.inspectImage(file);
@@ -1738,6 +1758,7 @@ export class Desktop {
             this.resources.quiesce(root),
             this.webPreviews.quiesce(root),
             (this.mediaDocuments.invalidate(root), this.transforms.quiesce(root)),
+            this.optimizationReviews.invalidate(root),
             this.thumbnails.quiesce(root),
             this.watchers.revoke(root),
             this.watchRules.revoke(root),
@@ -1789,6 +1810,7 @@ export class Desktop {
             const previews = this.resources.quiesce(root);
             const webPreviews = this.webPreviews.quiesce(root);
             this.mediaDocuments.invalidate(root);
+            await this.optimizationReviews.invalidate(root);
             const transforms = this.transforms.quiesce(root);
             const thumbnails = this.thumbnails.quiesce(root);
             const coordinated = fileCoordination.quiesce(root);

@@ -10,6 +10,12 @@ import {
 } from '../../domain/operations/transforms';
 import { jpegMetadata } from './jpeg-metadata';
 import { runProcessor as nativeProcessor } from './process';
+import { encodeToTarget } from './target-size';
+import { optimizationAttemptLimit } from '../../domain/operations/optimization-target';
+import type {
+  OptimizationOutcome,
+  OptimizationStatistics,
+} from '../../domain/operations/optimization-target';
 
 const runProcessor: typeof nativeProcessor = (...args) =>
   nativeProcessor(...args).catch((error: Error) => {
@@ -189,7 +195,7 @@ async function scanUpdates(
       imageTransformSchema.parse({
         kind: 'image',
         format: 'jpeg',
-        quality: plan.preset === 'small' ? 65 : 85,
+        quality: plan.quality ?? (plan.preset === 'small' ? 65 : 85),
         width: plan.maxImageEdge,
         height: plan.maxImageEdge,
         metadata: 'strip',
@@ -221,6 +227,15 @@ async function scanUpdates(
     : undefined;
 }
 
+async function writeBuffer(target: FileHandle, bytes: Buffer): Promise<void> {
+  await target.truncate(0);
+  for (let offset = 0; offset < bytes.length;) {
+    const { bytesWritten } = await target.write(bytes, offset, bytes.length - offset, offset);
+    if (!bytesWritten) throw new Error('The compact PDF could not be written.');
+    offset += bytesWritten;
+  }
+}
+
 export async function transformPDF(
   executable: string,
   sources: PDFSource[],
@@ -229,7 +244,7 @@ export async function transformPDF(
   image: (bytes: Buffer, plan: ImageTransform, signal: AbortSignal) => Promise<Buffer>,
   signal: AbortSignal,
   progress: (fraction: number, detail: string) => void,
-): Promise<void | { inputBytes: number; outputBytes: number }> {
+): Promise<void | OptimizationStatistics> {
   signal = AbortSignal.any([signal, AbortSignal.timeout(180000)]);
   if (sources.reduce((sum, source) => sum + source.size, 0) > 512 * 1024 * 1024)
     throw new Error('PDF sources may total at most 512 MB.');
@@ -238,6 +253,7 @@ export async function transformPDF(
   const documents: PDFJSON[] = [];
   for (const source of sources) documents.push(await inspectPDF(executable, source, signal));
   const target = await open(output, 'wx+', 0o644);
+  let targetSize: OptimizationOutcome | undefined;
   try {
     if (plan.kind === 'pdf-pages') {
       if (plan.pages.some((page) => page.page > documents[page.source]!.pages.length))
@@ -262,67 +278,95 @@ export async function transformPDF(
         { timeout: 120000 },
       );
     } else {
-      const patch = plan.recompressImages
-        ? await scanUpdates(executable, sources[0]!, documents[0]!, plan, image, signal, progress)
-        : undefined;
-      const args = [
-        ...limits,
-        ...compression,
-        ...(plan.preset === 'lossless' || patch
-          ? []
-          : ['--optimize-images', `--jpeg-quality=${plan.preset === 'small' ? 65 : 85}`]),
-        '/dev/fd/3',
-      ];
-      progress(0.85, 'Writing compact PDF');
-      if (patch) {
-        // Reuse the private operation staging file for the seekable JSON update. qpdf
-        // needs seeks, so a pipe is insufficient. No extra scratch file or removal.
-        await target.writeFile(patch);
-        const reader = await open(
-          output,
-          constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-        );
-        let bytes: Buffer;
-        try {
-          const [written, read] = await Promise.all([target.stat(), reader.stat()]);
-          if (
-            !read.isFile() ||
-            written.dev !== read.dev ||
-            written.ino !== read.ino ||
-            written.size !== read.size
-          )
-            throw new Error('The private PDF staging file changed. Export again.');
-          bytes = await runProcessor(
-            executable,
-            [...args, '--update-from-json=/dev/fd/4', '-'],
-            [sources[0]!.handle.fd, reader.fd],
-            signal,
-            { timeout: 120000, outputLimit: 256 * 1024 * 1024 },
+      const encode = async (quality: number, attempt: number, encodingSignal: AbortSignal) => {
+        const report = (fraction: number, detail: string) =>
+          progress(
+            plan.targetSize ? (attempt - 1 + fraction) / optimizationAttemptLimit : fraction,
+            detail,
           );
-        } finally {
-          await reader.close();
-        }
-        signal.throwIfAborted();
-        await target.truncate(0);
-        for (let offset = 0; offset < bytes.length;) {
-          const { bytesWritten } = await target.write(bytes, offset, bytes.length - offset, offset);
-          if (!bytesWritten)
-            throw new Error('The compact PDF could not be written. Try another destination.');
-          offset += bytesWritten;
-        }
-      } else
-        await runProcessor(
-          executable,
-          [...args, '/dev/fd/4'],
-          [sources[0]!.handle.fd, target.fd],
+        const patch = plan.recompressImages
+          ? await scanUpdates(
+              executable,
+              sources[0]!,
+              documents[0]!,
+              { ...plan, quality },
+              image,
+              encodingSignal,
+              report,
+            )
+          : undefined;
+        const args = [
+          ...limits,
+          ...compression,
+          ...(plan.preset === 'lossless' || patch
+            ? []
+            : ['--optimize-images', `--jpeg-quality=${quality}`]),
+          '/dev/fd/3',
+        ];
+        report(0.85, `Writing compact PDF · quality ${quality}`);
+        if (patch) {
+          // Reuse the private operation staging file for the seekable JSON update. qpdf
+          // needs seeks, so a pipe is insufficient. No extra scratch file or removal.
+          await writeBuffer(target, patch);
+          const reader = await open(
+            output,
+            constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+          );
+          try {
+            const [written, read] = await Promise.all([target.stat(), reader.stat()]);
+            if (
+              !read.isFile() ||
+              written.dev !== read.dev ||
+              written.ino !== read.ino ||
+              written.size !== read.size
+            )
+              throw new Error('The private PDF staging file changed. Export again.');
+            return await runProcessor(
+              executable,
+              [...args, '--update-from-json=/dev/fd/4', '-'],
+              [sources[0]!.handle.fd, reader.fd],
+              encodingSignal,
+              { timeout: 120000, outputLimit: 256 * 1024 * 1024 },
+            );
+          } finally {
+            await reader.close();
+          }
+        } else
+          return runProcessor(executable, [...args, '-'], [sources[0]!.handle.fd], encodingSignal, {
+            timeout: 120000,
+            outputLimit: 256 * 1024 * 1024,
+          });
+      };
+      let bytes: Buffer;
+      if (plan.targetSize && plan.preset !== 'lossless') {
+        const sized = await encodeToTarget(
+          plan.targetSize,
+          plan.quality ?? (plan.preset === 'small' ? 65 : 85),
+          encode,
           signal,
-          { timeout: 120000 },
         );
+        bytes = sized.data;
+        targetSize = sized.outcome;
+      } else {
+        bytes = await encode(plan.quality ?? (plan.preset === 'small' ? 65 : 85), 1, signal);
+        if (plan.targetSize)
+          targetSize = {
+            bytes: plan.targetSize.bytes,
+            met: bytes.length <= plan.targetSize.bytes,
+            attempts: 1,
+          };
+      }
+      signal.throwIfAborted();
+      await writeBuffer(target, bytes);
     }
     await target.sync();
     progress(1, 'PDF ready');
     if (plan.kind === 'pdf')
-      return { inputBytes: sources[0]!.size, outputBytes: (await target.stat()).size };
+      return {
+        inputBytes: sources[0]!.size,
+        outputBytes: (await target.stat()).size,
+        ...(targetSize ? { targetSize } : {}),
+      };
   } finally {
     await target.close();
   }

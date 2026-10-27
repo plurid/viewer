@@ -179,7 +179,9 @@ try {
     '1600',
   );
   assert.equal(
-    await evaluate('document.querySelector(".optimize-scan-options input[type=checkbox]").checked'),
+    await evaluate(
+      'document.querySelector(\'[aria-label=\"Recompress scanned images\"]\').checked',
+    ),
     true,
   );
   assert.ok(
@@ -188,7 +190,17 @@ try {
     ),
   );
   await capture('pdf-for-email-dark');
-  await click('Optimize file', '.optimize-dialog');
+  await click('Prepare candidates', '.optimize-dialog');
+  await until(
+    () =>
+      evaluate<boolean>(
+        `[...document.querySelectorAll('.optimize-dialog button')].some(button => button.textContent.trim() === 'Save 1 smaller copy' && !button.disabled)`,
+      ),
+    Boolean,
+    'email optimization candidate',
+    60000,
+  );
+  await click('Save 1 smaller copy', '.optimize-dialog');
   await completed(3);
   await click('Close', '.optimize-dialog');
   await choose('Recording.wav');

@@ -30,6 +30,7 @@ export const workspaceSettingPaths: readonly (readonly string[])[] = [
   ['settings', 'tour'],
   ['settings', 'tiling'],
   ['settings', 'layouts'],
+  ['settings', 'optimizationRecipes'],
   ['settings', 'profiles'],
   // which theme shows is presentation; the themes themselves are edited in Settings
   ['settings', 'theme'],

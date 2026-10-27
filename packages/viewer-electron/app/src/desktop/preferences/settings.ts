@@ -45,6 +45,7 @@ import {
 import { localPath, id } from '../schemas';
 import { referenceIssues } from '../../domain/automation/references';
 import { modelDataLevels } from '../../domain/models/permissions';
+import { optimizationRecipeSchema } from '../../domain/operations/optimization';
 const recipe = z
   .object({
     id,
@@ -310,6 +311,7 @@ export const settingsSchema = z
       )
       .max(20),
     recipes: z.array(recipe).max(100),
+    optimizationRecipes: z.array(optimizationRecipeSchema).max(100).default([]),
     agents: z
       .object({
         enabled: z.boolean(),
@@ -361,6 +363,7 @@ export const settingsSchema = z
     for (const [key, items] of [
       ['providers', value.providers],
       ['recipes', value.recipes],
+      ['optimizationRecipes', value.optimizationRecipes],
       ['savedSearches', value.savedSearches],
       ['customActions', value.customActions],
       ['terminalProfiles', value.terminals.profiles],

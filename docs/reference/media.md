@@ -39,9 +39,28 @@ Optimize supports selected PDF, JPEG, PNG, WebP and AVIF files, including mixed 
 **Balanced** and **Smaller** trade image quality for compression; **Lossless** retains decoded
 pixels, with coefficient-preserving JPEG optimization. Maximum raster dimensions are optional.
 
-Every result shows original size, output size and savings or failure. Only smaller candidates
-publish. **Already compact** keeps the original. See [PDF tools](pdf.md) for structural versus
-scanned-image compression and signature limits.
+Choose **Prepare candidates** before saving anything. Each row shows the measured original and
+candidate sizes. **Review** compares images side by side, with an actual-size option and linked
+panning; PDFs share a page selector. **Save smaller copies** exports the exact bytes prepared for
+review. **Already compact** keeps the original.
+
+Enable **Target size per file** for a budget such as 500 kB or 2 MB. These units are decimal; the
+allowed budget is 1 KiB–256 MiB. Lossy compression tries at most eight quality settings and respects
+the chosen minimum quality. **Target not met** reports the measured result without selecting it for
+export. You can explicitly select a smaller candidate even when it misses the target. Lossless mode
+never lowers quality to reach a budget. A size target cannot guarantee a particular visual quality:
+inspect the comparison before exporting.
+
+Under **Saved batch recipes**, name and save the compression, target and folder-layout choices.
+Recipes remain available after restart; they contain no file locations or access grants. **Keep
+folders relative to…** preserves the displayed source hierarchy inside the chosen output folder.
+Output name collisions receive separate names, leaving existing files intact.
+
+**Retry** prepares only that row using its current source version. A file changed after preparation
+must be retried before export. Private prepared candidates are limited to 512 MiB at a time, with a
+256 MiB limit per candidate. Closing the dialog releases its previews; admitted exports finish
+through Recent file operations. See [PDF tools](pdf.md) for structural versus scanned-image
+compression and signature limits.
 
 ## Quick presets
 

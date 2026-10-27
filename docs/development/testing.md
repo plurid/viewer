@@ -41,6 +41,11 @@ a test pass.
 
 ## Focused native scenarios
 
+`tests/native/optimization.ts` checks loaded image/PDF comparisons, exact-byte export, source
+preservation and normal/minimum-window layouts. `tests/native/optimization-recipes.ts` checks target
+misses, individual retry, changed-source rejection, relative-folder outputs and recipe restoration
+after restart. Both use generated isolated profiles and retain their evidence.
+
 `tests/native/document-navigation.ts` measures cold and warm EPUB/XLSX opening through fresh
 resource leases, alternating with another file for 30 cycles. It checks chapter/worksheet
 restoration and unchanged fixture hashes. Set `VIEWER_TEST_WARM_BUDGET_MS` to enforce a

@@ -1,9 +1,194 @@
 .optimize-dialog {
   width: min(980px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+}
+.optimize-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.optimize-dialog > header,
+.optimize-dialog > footer {
+  flex-shrink: 0;
+}
+.optimization-content {
+  min-height: 0;
+  overflow: auto;
+}
+.optimize-dialog .optimize-options {
+  max-height: none;
+  overflow: visible;
 }
 .optimize-options {
   display: grid;
   gap: 14px;
+}
+.optimization-main-options,
+.optimization-target,
+.optimization-review-toolbar,
+.optimization-pagination,
+.optimization-recipe-fields,
+.optimization-row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.optimization-main-options > label:first-child {
+  display: grid;
+  gap: 5px;
+  flex: 1 1 220px;
+}
+.optimize-options .optimization-target-toggle,
+.optimize-options .optimization-preserve {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.optimization-target input {
+  width: 100px;
+}
+.optimization-advanced,
+.optimization-recipes {
+  font-size: 12px;
+}
+.optimization-advanced summary,
+.optimization-recipes summary {
+  cursor: pointer;
+  padding-block: 4px;
+}
+.optimization-advanced-fields {
+  display: grid;
+  gap: 12px;
+  margin-block-start: 12px;
+}
+.optimization-advanced-fields label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.optimization-advanced-fields input[type='number'] {
+  width: 90px;
+}
+.optimization-recipe-fields {
+  margin-block-start: 12px;
+}
+.optimization-recipe-fields > input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.optimization-recipe-fields > p {
+  flex-basis: 100%;
+}
+.optimization-target-missed {
+  display: block;
+  color: var(--ink);
+}
+.optimize-results td > .muted {
+  display: block;
+}
+.optimization-row-actions {
+  flex-wrap: nowrap;
+}
+.optimization-row-actions button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.optimize-results table {
+  min-width: 620px;
+}
+.optimization-pagination {
+  justify-content: center;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.optimization-comparison {
+  min-width: 0;
+  border-block-end: 1px solid var(--line);
+}
+.optimization-review-toolbar {
+  padding: 10px 16px;
+  font-size: 12px;
+}
+.optimization-review-toolbar > strong {
+  overflow-wrap: anywhere;
+  max-width: 35ch;
+}
+.optimization-review-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.optimization-review-toolbar input {
+  width: 64px;
+}
+.optimization-review-panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.optimization-review-panes figure {
+  margin: 0;
+  min-width: 0;
+}
+.optimization-review-panes figure + figure {
+  border-inline-start: 1px solid var(--line);
+}
+.optimization-review-panes figcaption {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--raised);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.optimization-review-panes figcaption span {
+  color: var(--muted);
+}
+.optimization-review-scroll {
+  overflow: auto;
+  height: min(42vh, 420px);
+  background: var(--space);
+}
+.optimization-review-scroll > img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  margin: auto;
+}
+.actual-size .optimization-review-scroll > img {
+  max-width: none;
+  max-height: none;
+}
+.optimization-review-scroll .pdf-tools-page {
+  min-height: 100%;
+  display: grid;
+  place-items: start center;
+}
+.optimization-review-scroll .pdf-tools-page > img:not([hidden]) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+@media (max-width: 640px) {
+  .optimize-dialog {
+    width: calc(100vw - 16px);
+  }
+  .optimization-review-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .optimization-review-panes figure + figure {
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--line);
+  }
+  .optimization-review-scroll {
+    height: 30vh;
+  }
+  .optimization-main-options {
+    align-items: start;
+  }
 }
 .optimize-options > label {
   display: flex;

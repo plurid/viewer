@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { Empty, Loading } from '../ui/primitives';
+import type { Resource } from '../../domain/contracts';
 GlobalWorkerOptions.workerSrc = workerURL;
 
 /** One bounded page bitmap, one scoped resource. Switching pages cancels the old render;
@@ -10,8 +11,10 @@ export function PDFPagePreview({
   file,
   page,
   rotate,
+  resource: suppliedResource,
 }: {
-  file: string;
+  file?: string;
+  resource?: Resource;
   page: number;
   rotate: number;
 }) {
@@ -33,14 +36,19 @@ export function PDFPagePreview({
       if (live)
         setError('The page preview is taking longer than expected. Retry to load it again.');
     }, 15000);
-    void window.viewer
-      .resource(file)
+    void (
+      suppliedResource
+        ? Promise.resolve(suppliedResource)
+        : file
+          ? window.viewer.resource(file)
+          : Promise.reject(new Error('Choose a PDF to preview.'))
+    )
       .then(async (value) => {
         if (!live) {
-          await window.viewer.release(value.id);
+          if (!suppliedResource) await window.viewer.release(value.id);
           return;
         }
-        resource = value.id;
+        if (!suppliedResource) resource = value.id;
         const local = new URL('/pdfjs/', document.baseURI).href;
         task = getDocument({
           url: value.url,
@@ -72,7 +80,8 @@ export function PDFPagePreview({
     const off = window.viewer.onEvent((event) => {
       if (
         event.type === 'file-access' &&
-        (file === event.path || file.startsWith(event.path.replace(/\/$/, '') + '/'))
+        ((file ?? suppliedResource?.entry.path) === event.path ||
+          (file ?? suppliedResource?.entry.path)?.startsWith(event.path.replace(/\/$/, '') + '/'))
       ) {
         setPDF(undefined);
         setError('File access changed. Retry after restoring access.');
@@ -86,7 +95,7 @@ export function PDFPagePreview({
       void task?.destroy();
       if (resource) void window.viewer.release(resource).catch(() => {});
     };
-  }, [file, attempt]);
+  }, [file, suppliedResource, attempt]);
   useEffect(() => {
     if (!pdf || !canvas.current) return;
     let cancelled = false,

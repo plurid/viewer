@@ -338,6 +338,22 @@ Use persistent labels, clear action verbs, inline validation and reachable foote
 branch name must explain the problem instead of silently disabling creation. Keep the checkout,
 branch/base and destination visible together.
 
+Optimize follows Prepare candidates → Review/select → Save smaller copies. Keep the optional target
+size per file beside the preset; quality/dimensions and saved recipes use disclosures. Show relative
+paths when preserving folders. Recipes remember settings and folder layout; file locations belong to
+the current batch.
+
+Keep each prepared candidate selectable, with Review and Retry beside it and Open beside a saved
+result. Mark missed targets explicitly and leave them initially unselected. Use decimal kB/MB for
+targets, original/candidate sizes, comparison captions and savings, retaining enough precision to
+distinguish a near-boundary miss.
+
+Before/after review keeps Original and Optimized together. PDF panes share page controls; images
+share fit/actual-size mode and synchronized pan. Keep the Optimize header and footer fixed while the
+work area scrolls. Paginate large batches and let narrow result tables scroll horizontally so action
+names stay whole. Comparison controls and Save remain reachable at the shipped minimum window width
+(780px).
+
 File proposals expose exact scope, per-row inclusion, evidence and conflicts before Apply. Removal
 review names every selected path and folder contents; Reject/Cancel and the affirmative action
 remain reachable while long scope scrolls. Cancel receives initial focus in private-note Trash

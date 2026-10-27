@@ -9,6 +9,8 @@ import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
 import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
 import type { TransformPlan } from './operations/transforms';
+import type { OptimizationOutcome } from './operations/optimization-target';
+import type { OptimizationRequest, OptimizationReply } from './operations/optimization-review';
 import type { WorksheetDocumentRequest } from './previews/documents/office';
 import type { ImageRenditionRequest } from './previews/images/rendered';
 import type { PreviewDerivationKind } from './previews/derivations';
@@ -449,6 +451,10 @@ export interface OperationRequest {
   /** Required for `convert`. */
   conversion?: ImageConversion;
   transform?: TransformPlan;
+  /** Desktop-owned candidate capabilities; ordinary operation IPC cannot supply these. */
+  preparedTransforms?: { path: string; id: string }[];
+  /** The desktop pins a batch output folder so a later link/replacement cannot redirect it. */
+  reviewedDestination?: { path: string; identity: string };
   /** Source versions captured in a reviewed plan; checked again when queued work starts. */
   expectedSources?: { path: string; version: SourceVersion }[];
   /** A reviewed folder's contents (`outputProof`), set by the desktop for an agent's approved Trash;
@@ -486,6 +492,7 @@ export interface OperationJob {
     inputBytes?: number;
     outputBytes?: number;
     optimized?: boolean;
+    targetSize?: OptimizationOutcome;
   }[];
   errors: { path: string; message: string }[];
   errorCount: number;
@@ -593,6 +600,7 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  optimization(request: OptimizationRequest): Promise<OptimizationReply>;
   notes(request: NoteRequest): Promise<NoteReply>;
   agentSessions(request: SessionRequest): Promise<SessionReply>;
   receipts(request: ReceiptRequest): Promise<ReceiptReply>;

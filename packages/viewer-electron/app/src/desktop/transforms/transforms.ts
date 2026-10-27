@@ -11,6 +11,12 @@ import type { ImageInspection } from './image';
 import { inspectPDF, pdfProcessor, transformPDF } from './pdf';
 import { jpegMetadata } from './jpeg-metadata';
 import { optimizerDirectory } from './processor-paths';
+import { encodeToTarget } from './target-size';
+import { optimizationAttemptLimit } from '../../domain/operations/optimization-target';
+import type {
+  OptimizationOutcome,
+  OptimizationStatistics,
+} from '../../domain/operations/optimization-target';
 
 interface Source {
   file: string;
@@ -26,7 +32,8 @@ export interface TransformExecutor {
     output: string,
     signal: AbortSignal,
     progress: (fraction: number, detail: string) => void,
-  ): Promise<void | { inputBytes: number; outputBytes: number }>;
+    preparedID?: string,
+  ): Promise<void | OptimizationStatistics>;
 }
 export class Transforms implements TransformExecutor {
   private work = new PreviewWork();
@@ -197,7 +204,7 @@ export class Transforms implements TransformExecutor {
     output: string,
     signal: AbortSignal,
     progress: (fraction: number, detail: string) => void,
-  ): Promise<void | { inputBytes: number; outputBytes: number }> {
+  ): Promise<void | OptimizationStatistics> {
     const plan = validateTransform(value, files.length);
     return this.work.track(
       files,
@@ -225,6 +232,7 @@ export class Transforms implements TransformExecutor {
               progress(0.1, 'Decoding image');
               const input = await sources[0]!.handle.readFile();
               let data: Buffer;
+              let targetSize: OptimizationOutcome | undefined;
               if (plan.lossless && plan.format === 'jpeg') {
                 jpegMetadata(input, plan.metadata);
                 const optimizer = path.join(optimizerDirectory(this.root), 'jpegtran');
@@ -236,7 +244,28 @@ export class Transforms implements TransformExecutor {
                   { input, outputLimit: 256 * 1024 * 1024, timeout: 90000 },
                 );
                 data = jpegMetadata(encoded, plan.metadata);
+              } else if (plan.targetSize && !plan.lossless) {
+                const sized = await encodeToTarget(
+                  plan.targetSize,
+                  plan.quality,
+                  (quality, attempt, signal) => {
+                    progress(
+                      (attempt - 1) / optimizationAttemptLimit,
+                      `Trying image quality ${quality}`,
+                    );
+                    return this.image(input, { ...plan, quality }, signal);
+                  },
+                  scope.signal,
+                );
+                data = sized.data;
+                targetSize = sized.outcome;
               } else data = await this.image(input, plan, scope.signal);
+              if (plan.targetSize && !targetSize)
+                targetSize = {
+                  bytes: plan.targetSize.bytes,
+                  met: data.length <= plan.targetSize.bytes,
+                  attempts: 1,
+                };
               scope.check();
               const target = await open(output, 'wx', 0o644);
               try {
@@ -246,8 +275,12 @@ export class Transforms implements TransformExecutor {
                 await target.close();
               }
               progress(1, 'Image ready');
-              return plan.optimize
-                ? { inputBytes: sources[0]!.size, outputBytes: data.length }
+              return plan.optimize || plan.targetSize
+                ? {
+                    inputBytes: sources[0]!.size,
+                    outputBytes: data.length,
+                    ...(targetSize ? { targetSize } : {}),
+                  }
                 : undefined;
             }
             progress(0, 'Inspecting media');

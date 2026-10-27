@@ -49,9 +49,15 @@ it('bounds typed PDF plans, refuses duplicate references and does not allow loss
     ),
   ).toThrow('Balanced');
   expect(
-    optimizationPlan({ kind: 'file', extension: 'pdf' }, 'small', undefined, { maximum: 1600 }),
+    optimizationPlan(
+      { kind: 'file', extension: 'pdf' },
+      { preset: 'small', pdfImages: { maximum: 1600 } },
+    ),
   ).toMatchObject({ recompressImages: true, maxImageEdge: 1600 });
   expect(
-    optimizationPlan({ kind: 'file', extension: 'pdf' }, 'lossless', undefined, { maximum: 1600 }),
+    optimizationPlan(
+      { kind: 'file', extension: 'pdf' },
+      { preset: 'lossless', pdfImages: { maximum: 1600 } },
+    ),
   ).toMatchObject({ recompressImages: false });
 });

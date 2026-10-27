@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { optimizationTargetSchema } from './optimization-target';
 const seconds = z.number().finite().min(0).max(86400);
 const source = z.number().int().min(0).max(15);
 const dimension = z.number().int().min(1).max(32768);
@@ -9,6 +10,7 @@ export const imageTransformSchema = z
     quality: z.number().int().min(1).max(100).default(85),
     optimize: z.boolean().default(false),
     lossless: z.boolean().default(false),
+    targetSize: optimizationTargetSchema.optional(),
     width: dimension.optional(),
     height: dimension.optional(),
     fit: z.enum(['inside', 'cover', 'fill']).default('inside'),
@@ -87,6 +89,8 @@ export const transformPlanSchema = z.discriminatedUnion('kind', [
       preset: z.enum(['lossless', 'balanced', 'small']).default('balanced'),
       recompressImages: z.boolean().default(false),
       maxImageEdge: z.number().int().min(256).max(8192).default(2400),
+      quality: z.number().int().min(1).max(100).optional(),
+      targetSize: optimizationTargetSchema.optional(),
     })
     .strict(),
 ]);
@@ -133,6 +137,13 @@ export function validateTransform(value: unknown, sources: number): TransformPla
   }
   if (plan.kind === 'pdf' && plan.preset === 'lossless' && plan.recompressImages)
     throw new Error('Choose Balanced or Smaller to recompress scanned images.');
+  if (
+    (plan.kind === 'image' || plan.kind === 'pdf') &&
+    plan.targetSize &&
+    plan.targetSize.minimumQuality >
+      (plan.kind === 'image' ? plan.quality : (plan.quality ?? (plan.preset === 'small' ? 65 : 85)))
+  )
+    throw new Error('Minimum quality must not exceed the starting quality.');
   if (plan.kind === 'image' && plan.width && plan.height && plan.width * plan.height > 100_000_000)
     throw new Error('Choose output dimensions below 100 megapixels.');
   if (

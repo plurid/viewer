@@ -2,7 +2,7 @@ import type { FileChange } from '../../domain/files/changes';
 import type { TrashOrigin } from '../../domain/files/trash';
 import type { ObservedOperationLink } from '../../domain/files/relationships';
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readFile, readdir, stat } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   CollisionDecision,
@@ -43,6 +43,7 @@ import {
   combinedTransform,
 } from '../../domain/operations/transforms';
 import type { TransformExecutor } from '../transforms/transforms';
+import type { OptimizationStatistics } from '../../domain/operations/optimization-target';
 import {
   aliasName,
   copyTree,
@@ -330,6 +331,16 @@ export class Operations {
       request = { ...request, expectedSources: pinned(request.expectedSources) };
     if (request.expectedContents)
       request = { ...request, expectedContents: pinned(request.expectedContents) };
+    if (request.preparedTransforms) {
+      if (request.kind !== 'convert' || !request.transform)
+        throw new Error('Prepared candidates require a conversion plan.');
+      request = { ...request, preparedTransforms: pinned(request.preparedTransforms) };
+    }
+    if (
+      request.reviewedDestination &&
+      absolute(request.reviewedDestination.path) !== request.destination
+    )
+      throw new Error('The reviewed output folder no longer matches this operation.');
     if (request.name !== undefined) validName(request.name);
     if (request.name && ['copy', 'move', 'transfer'].includes(request.kind) && roots.length !== 1)
       throw new Error('A destination name requires a single source.');
@@ -781,7 +792,12 @@ export class Operations {
     // An agent approval's contents pins are not carried over: Redo is the person's own, pinned to
     // what Undo put back. A save kept no text to write again.
     if (task.request.textSHA256 === undefined) {
-      task.redo = { ...task.request, expectedSources, expectedContents: undefined };
+      task.redo = {
+        ...task.request,
+        expectedSources,
+        expectedContents: undefined,
+        preparedTransforms: undefined,
+      };
       task.job.redoable = true;
     }
     this.emit(task);
@@ -1035,6 +1051,19 @@ export class Operations {
    * collision is decided and inside the claim that publishes it. Checked only at the start, a source
    * edited while its collision prompt was open was copied or moved. */
   private async checkPins(task: Task, source: string): Promise<void> {
+    const destination = task.request.reviewedDestination;
+    if (destination) {
+      await this.access([destination.path]);
+      const info = await entry(destination.path);
+      if (
+        info.kind !== 'directory' ||
+        info.identity !== destination.identity ||
+        (await realpath(destination.path)) !== destination.path
+      )
+        throw new Error(
+          'The output folder changed after review. Choose it again before exporting.',
+        );
+    }
     for (const expected of task.request.expectedSources ?? []) {
       if (source && expected.path !== source && !expected.path.startsWith(source + path.sep))
         continue;
@@ -1234,8 +1263,7 @@ export class Operations {
             if (request.kind === 'trash') await this.checkpoint(task);
             this.progress(task);
             let destination: string | undefined;
-            let statistics:
-              { inputBytes: number; outputBytes: number; optimized: boolean } | undefined;
+            let statistics: (OptimizationStatistics & { optimized: boolean }) | undefined;
             // A transfer moves only within one volume. Its destination folder is resolved, as
             // the transfer itself resolves it, so a link to a folder on another volume copies.
             const move =
@@ -1295,7 +1323,6 @@ export class Operations {
                 throw new Error('Save the archive outside the selected folders.');
               // Resolve symlinks in the destination's ancestry as well.
               if (source && (await lstat(source)).isDirectory()) {
-                const { realpath } = await import('node:fs/promises');
                 const realSource = await realpath(source);
                 const realDestination = path.join(
                   await realpath(path.dirname(destination)),
@@ -1453,6 +1480,8 @@ export class Operations {
                           job.detail = detail;
                           this.progress(task);
                         },
+                        request.preparedTransforms?.find((candidate) => candidate.path === source)
+                          ?.id,
                       );
                       if (result) {
                         await this.checkPins(task, source);

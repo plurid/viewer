@@ -10,6 +10,7 @@ import type { CustomAction, TerminalProfile } from './automation/actions';
 import type { ProviderKind } from './models/providers';
 import type { ChangePlan } from './operations/change-plan';
 import type { OfficeContent } from './previews/documents/office';
+import type { OptimizationRecipe } from './operations/optimization';
 export type { ProviderKind } from './models/providers';
 export interface ModelProvider {
   id: string;
@@ -140,6 +141,7 @@ export interface ApplicationSettings {
   search: { roots: string[]; exclusions: string[]; contentRoots: string[]; paused: boolean };
   providers: ModelProvider[];
   recipes: ActionRecipe[];
+  optimizationRecipes: OptimizationRecipe[];
   agents: { enabled: boolean; roots: string[]; allowLayout: boolean };
   shortcuts: Record<string, string>;
   /** The prefix and leader keys and their sequences: domain/preferences/keymap.ts. */
@@ -422,6 +424,7 @@ export function defaultSettings(home: string): ApplicationSettings {
     },
     providers: [],
     recipes: builtInRecipes.map((recipe) => ({ ...recipe })),
+    optimizationRecipes: [],
     agents: { enabled: false, roots: [], allowLayout: false },
     shortcuts: {},
     keymap: structuredClone(defaultKeymap) as Keymap,

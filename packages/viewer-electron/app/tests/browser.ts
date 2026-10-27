@@ -20,6 +20,9 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  optimization: async () => {
+    throw new Error('Optimization requires the desktop app.');
+  },
   notes: (request) => invoke('notes', request),
   receipts: (request) => invoke('receipts', request),
   runCommand: async () => {
