@@ -99,7 +99,7 @@ try {
   }
   const selectors = [
     '.office-document',
-    '.workbook-sheet-picker',
+    '.worksheet-tab-list',
     '.model-stage canvas',
     'video',
     '.json-scroll',
@@ -140,12 +140,15 @@ try {
     });
     if (file.path.endsWith('.docx')) {
       await until(
-        () => evaluate<boolean>('!!document.querySelector(".office-mode-bar")'),
+        () =>
+          evaluate<boolean>(
+            `[...document.querySelectorAll('.preview-toolbar button')].some(button=>['Layout','Print layout','Reading','Sheet'].includes(button.textContent.trim()))`,
+          ),
         Boolean,
         'Office view choices',
       );
       await evaluate(
-        '[...document.querySelectorAll(".office-mode-bar button")].find(b=>b.textContent.trim()==="Reading").click()',
+        '[...document.querySelectorAll(".preview-toolbar button")].find(b=>b.textContent.trim()==="Reading").click()',
       );
     }
     try {

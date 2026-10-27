@@ -129,12 +129,15 @@ async function run(file: string, check: (connection: Connection) => Promise<void
     });
     if (file.endsWith('.docx')) {
       await until(
-        () => connection!.evaluate<boolean>('!!document.querySelector(".office-mode-bar")'),
+        () =>
+          connection!.evaluate<boolean>(
+            `[...document.querySelectorAll('.preview-toolbar button')].some(button=>['Layout','Print layout','Reading','Sheet'].includes(button.textContent.trim()))`,
+          ),
         Boolean,
         'Office layout/reading choices',
       );
       await connection.evaluate(
-        '[...document.querySelectorAll(".office-mode-bar button")].find(b=>b.textContent.trim()==="Reading").click()',
+        '[...document.querySelectorAll(".preview-toolbar button")].find(b=>b.textContent.trim()==="Reading").click()',
       );
     }
     await until(

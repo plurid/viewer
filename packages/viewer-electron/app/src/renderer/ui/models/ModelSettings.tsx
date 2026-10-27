@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ModelProvider, SettingsSnapshot } from '../../../domain/services';
 import {
   newModelProvider,
@@ -14,6 +14,15 @@ import { ChoiceButton } from '../ChoiceMenu';
 import { referencesTo } from '../../../domain/automation/references';
 import { ProviderDataPermission } from './ModelDataPermission';
 import { ProviderCheck } from './ProviderCheck';
+import { Icon } from '../Icon';
+
+interface ConnectionResult {
+  identity: string;
+  message: string;
+  connected: boolean;
+}
+const connectionIdentity = (provider: ModelProvider) =>
+  JSON.stringify([provider.kind, provider.endpoint, provider.model]);
 
 export function ModelSettings({
   snapshot,
@@ -25,9 +34,17 @@ export function ModelSettings({
   error(message: string): void;
 }) {
   const [kind, setKind] = useState<ProviderKind>('openai');
+  const [adding, setAdding] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(
+    snapshot.settings.providers[0]?.id ?? null,
+  );
   const [models, setModels] = useState<Record<string, string[]>>({});
+  const [connections, setConnections] = useState<Record<string, ConnectionResult>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [savingKey, setSavingKey] = useState<Record<string, boolean>>({});
+  const currentProviders = useRef(snapshot.settings.providers);
+  currentProviders.current = snapshot.settings.providers;
+  const requests = useRef(new Map<string, number>());
   const patch = (id: string, values: Partial<ModelProvider>) =>
     save((current) => [
       {
@@ -38,23 +55,39 @@ export function ModelSettings({
       },
     ]);
   const credential = (id: string, key: string) => {
+    requests.current.set(id, (requests.current.get(id) ?? 0) + 1);
+    setConnections((previous) =>
+      Object.fromEntries(Object.entries(previous).filter(([key]) => key !== id)),
+    );
     setSavingKey((previous) => ({ ...previous, [id]: true }));
     void window.viewer
       .providerCredential(id, key)
       .catch((value) => error(value.message))
       .finally(() => setSavingKey((previous) => ({ ...previous, [id]: false })));
   };
+  const selectedDefault =
+    snapshot.settings.providers.find(
+      (provider) => provider.id === snapshot.settings.prompts.providerID,
+    ) ?? snapshot.settings.providers[0];
   return (
     <>
-      <p className="settings-note">
-        Choose a provider and model for each recipe. Requests run only when you invoke an action.
-      </p>
+      <div className="models-introduction">
+        <p className="settings-note">Manage the models you use for Ask Viewer and actions.</p>
+        <button onClick={() => setAdding((value) => !value)} aria-expanded={adding}>
+          Add model
+        </button>
+      </div>
       {snapshot.settings.providers.length > 0 && (
         // `>` in the palette: which model turns words into a command line
         <label className="settings-row">
-          <span>Ask in words (&gt;) with</span>
+          <span>
+            Default for Ask Viewer
+            <small>
+              {selectedDefault?.name} · {selectedDefault?.model || 'Choose a model to finish setup'}
+            </small>
+          </span>
           <ChoiceButton
-            label="Ask in words with"
+            label="Default model for Ask Viewer"
             value={
               snapshot.settings.providers.some(
                 (provider) => provider.id === snapshot.settings.prompts.providerID,
@@ -72,27 +105,36 @@ export function ModelSettings({
           />
         </label>
       )}
-      <div className="settings-actions settings-provider-add">
-        <ChoiceButton
-          label="New model provider"
-          value={kind}
-          choices={providerKinds.map((kind) => ({
-            value: kind,
-            label: providerPresets[kind].name,
-          }))}
-          onChoose={(kind) => setKind(kind as ProviderKind)}
-        />
-        <button
-          onClick={() => {
-            const provider = newModelProvider(kind, crypto.randomUUID());
-            save((current) => [
-              { path: 'settings.providers', value: [...current.settings.providers, provider] },
-            ]);
-          }}
-        >
-          Add provider
-        </button>
-      </div>
+      {adding && (
+        <div className="settings-actions settings-provider-add" aria-label="Add a model">
+          <ChoiceButton
+            label="New model provider"
+            value={kind}
+            choices={providerKinds.map((kind) => ({
+              value: kind,
+              label: providerPresets[kind].name,
+            }))}
+            onChoose={(kind) => setKind(kind as ProviderKind)}
+          />
+          <button
+            onClick={() => {
+              const provider = newModelProvider(kind, crypto.randomUUID());
+              save((current) => [
+                { path: 'settings.providers', value: [...current.settings.providers, provider] },
+              ]);
+              setExpanded(provider.id);
+              setAdding(false);
+            }}
+          >
+            Set up model
+          </button>
+        </div>
+      )}
+      {!snapshot.settings.providers.length && !adding && (
+        <p className="settings-note">
+          No models added. Add a model to connect your provider and choose a model ID.
+        </p>
+      )}
       <datalist id="qwen-endpoints">
         {qwenEndpoints.map((item) => (
           <option key={item.endpoint} value={item.endpoint}>
@@ -105,145 +147,228 @@ export function ModelSettings({
         const choices = [
           ...new Set([...(models[provider.id] ?? []), ...(preset.suggestedModels ?? [])]),
         ];
+        const connection = connections[provider.id];
+        const currentConnection =
+          connection?.identity === connectionIdentity(provider) ? connection : undefined;
+        const status = savingKey[provider.id]
+          ? 'Saving key…'
+          : loading[provider.id]
+            ? 'Connecting…'
+            : (currentConnection?.message ??
+              (!provider.model
+                ? 'Choose a model'
+                : !snapshot.credentials.includes(provider.id) && provider.kind !== 'local'
+                  ? 'API key needed'
+                  : 'Configured · connection not checked'));
         return (
-          <section
+          <details
             className="settings-editor settings-provider"
             key={provider.id}
             data-provider-kind={provider.kind}
+            open={expanded === provider.id}
+            onToggle={(event) => {
+              const open = event.currentTarget.open;
+              setExpanded((current) =>
+                open ? provider.id : current === provider.id ? null : current,
+              );
+            }}
           >
-            <div className="settings-editor-heading">
-              <h2>{provider.name}</h2>
-              <IconButton
-                icon="close"
-                label={
-                  referencesTo(snapshot.settings, 'provider', provider.id).length
-                    ? `${provider.name} is used by ${referencesTo(snapshot.settings, 'provider', provider.id).join(', ')}: change them to remove it`
-                    : `Remove ${provider.name} provider`
-                }
-                disabled={!!referencesTo(snapshot.settings, 'provider', provider.id).length}
-                onClick={() =>
-                  save((current) => [
-                    {
-                      path: 'settings.providers',
-                      value: current.settings.providers.filter((item) => item.id !== provider.id),
-                    },
-                  ])
-                }
-              />
-            </div>
-            {preset.note && <p className="settings-note">{preset.note}</p>}
-            <label>
-              Name
-              <Field
-                label="Provider name"
-                value={provider.name}
-                save={(name) => patch(provider.id, { name })}
-              />
-            </label>
-            <label>
-              Endpoint
-              <Field
-                label="Provider endpoint"
-                value={provider.endpoint}
-                list={provider.kind === 'qwen' ? 'qwen-endpoints' : undefined}
-                readOnly={!['local', 'qwen'].includes(provider.kind)}
-                save={(endpoint) => patch(provider.id, { endpoint })}
-              />
-            </label>
-            <label>
-              Model
-              <Field
-                label="Model"
-                value={provider.model}
-                list={'models-' + provider.id}
-                placeholder={preset.suggestedModels?.[0] ?? 'Enter a model ID or load models'}
-                save={(model) => patch(provider.id, { model })}
-              />
-              <datalist id={'models-' + provider.id}>
-                {choices.map((model) => (
-                  <option key={model} value={model} />
-                ))}
-              </datalist>
-            </label>
-            <label>
-              API key
-              <input
-                type="password"
-                aria-label="API key"
-                autoComplete="off"
-                placeholder={
-                  snapshot.credentials.includes(provider.id)
-                    ? 'Stored securely'
-                    : provider.kind === 'local'
-                      ? 'Optional for local servers'
-                      : `Paste your ${preset.name} API key`
-                }
-                onBlur={(event) => {
-                  const key = event.target.value;
-                  if (key) {
-                    event.target.value = '';
-                    credential(provider.id, key);
+            <summary className="model-summary">
+              <Icon name="right" size={12} />
+              <span className="model-identity">
+                <strong>{provider.name}</strong>
+                <span>{provider.model || 'No model selected'}</span>
+              </span>
+              <span
+                className="model-status"
+                data-connected={currentConnection?.connected || undefined}
+              >
+                {status}
+              </span>
+              {selectedDefault?.id === provider.id && (
+                <span className="model-default">Default for Ask</span>
+              )}
+            </summary>
+            <div className="model-editor-body">
+              <div className="settings-editor-heading">
+                <h2>Model setup</h2>
+                <IconButton
+                  icon="close"
+                  label={
+                    referencesTo(snapshot.settings, 'provider', provider.id).length
+                      ? `${provider.name} is used by ${referencesTo(snapshot.settings, 'provider', provider.id).join(', ')}: change them to remove it`
+                      : `Remove ${provider.name} provider`
                   }
-                }}
-              />
-            </label>
-            <ProviderDataPermission
-              key={provider.id + provider.endpoint}
-              provider={provider}
-              error={error}
-            />
-            {provider.kind === 'gemini' && (
-              <ProviderCheck
-                key={JSON.stringify([provider.id, provider.endpoint, provider.model])}
-                providerID={provider.id}
-                onError={error}
-              />
-            )}
-            <div className="settings-actions">
-              {!preset.suggestedModels && (
-                <button
-                  disabled={loading[provider.id] || savingKey[provider.id]}
-                  onClick={() => {
-                    error('');
-                    setLoading((previous) => ({ ...previous, [provider.id]: true }));
-                    void window.viewer
-                      .providerModels(provider.id)
-                      .then((values) => {
-                        setModels((previous) => ({ ...previous, [provider.id]: values }));
-                        if (!values.length)
-                          error(
-                            'Connected, but no compatible model IDs were returned. Enter a model ID manually.',
-                          );
-                      })
-                      .catch((value) => error(value.message))
-                      .finally(() =>
-                        setLoading((previous) => ({ ...previous, [provider.id]: false })),
-                      );
+                  disabled={!!referencesTo(snapshot.settings, 'provider', provider.id).length}
+                  onClick={() =>
+                    save((current) => [
+                      {
+                        path: 'settings.providers',
+                        value: current.settings.providers.filter((item) => item.id !== provider.id),
+                      },
+                    ])
+                  }
+                />
+              </div>
+              {preset.note && <p className="settings-note">{preset.note}</p>}
+              <label>
+                Name
+                <Field
+                  label="Provider name"
+                  value={provider.name}
+                  save={(name) => patch(provider.id, { name })}
+                />
+              </label>
+              <details className="model-advanced">
+                <summary>Provider address</summary>
+                <label className="model-address-field">
+                  Endpoint
+                  <Field
+                    label="Provider endpoint"
+                    value={provider.endpoint}
+                    list={provider.kind === 'qwen' ? 'qwen-endpoints' : undefined}
+                    readOnly={!['local', 'qwen'].includes(provider.kind)}
+                    save={(endpoint) => patch(provider.id, { endpoint })}
+                  />
+                </label>
+              </details>
+              <label>
+                API key
+                <input
+                  type="password"
+                  aria-label="API key"
+                  autoComplete="off"
+                  placeholder={
+                    snapshot.credentials.includes(provider.id)
+                      ? 'Stored securely'
+                      : provider.kind === 'local'
+                        ? 'Optional for local servers'
+                        : `Paste your ${preset.name} API key`
+                  }
+                  onBlur={(event) => {
+                    const key = event.target.value;
+                    if (key) {
+                      event.target.value = '';
+                      credential(provider.id, key);
+                    }
                   }}
-                >
-                  {loading[provider.id] ? 'Loading models…' : 'Connect and load models'}
-                </button>
+                />
+              </label>
+              <label>
+                Model
+                <Field
+                  label="Model"
+                  value={provider.model}
+                  list={'models-' + provider.id}
+                  placeholder={preset.suggestedModels?.[0] ?? 'Enter a model ID or load models'}
+                  save={(model) => patch(provider.id, { model })}
+                />
+                <datalist id={'models-' + provider.id}>
+                  {choices.map((model) => (
+                    <option key={model} value={model} />
+                  ))}
+                </datalist>
+              </label>
+              <div className="settings-actions">
+                {!preset.suggestedModels && (
+                  <button
+                    disabled={loading[provider.id] || savingKey[provider.id]}
+                    onClick={() => {
+                      error('');
+                      const request = (requests.current.get(provider.id) ?? 0) + 1;
+                      requests.current.set(provider.id, request);
+                      const current = () =>
+                        requests.current.get(provider.id) === request &&
+                        currentProviders.current.some(
+                          (value) =>
+                            value.id === provider.id &&
+                            connectionIdentity(value) === connectionIdentity(provider),
+                        );
+                      setLoading((previous) => ({ ...previous, [provider.id]: true }));
+                      void window.viewer
+                        .providerModels(provider.id)
+                        .then((values) => {
+                          if (!current()) return;
+                          setModels((previous) => ({ ...previous, [provider.id]: values }));
+                          setConnections((previous) => ({
+                            ...previous,
+                            [provider.id]: {
+                              identity: connectionIdentity(provider),
+                              connected: true,
+                              message: 'Connected · ' + values.length + ' model IDs available',
+                            },
+                          }));
+                          if (!values.length)
+                            error(
+                              'Connected, but no compatible model IDs were returned. Enter a model ID manually.',
+                            );
+                        })
+                        .catch((value: Error) => {
+                          if (!current()) return;
+                          setConnections((previous) => ({
+                            ...previous,
+                            [provider.id]: {
+                              identity: connectionIdentity(provider),
+                              connected: false,
+                              message: 'Connection failed',
+                            },
+                          }));
+                          error(value.message);
+                        })
+                        .finally(() =>
+                          setLoading((previous) => ({ ...previous, [provider.id]: false })),
+                        );
+                    }}
+                  >
+                    {loading[provider.id] ? 'Loading models…' : 'Connect and load models'}
+                  </button>
+                )}
+                {snapshot.credentials.includes(provider.id) && (
+                  <button
+                    disabled={savingKey[provider.id]}
+                    onClick={() => credential(provider.id, '')}
+                  >
+                    Clear stored key
+                  </button>
+                )}
+                {selectedDefault?.id !== provider.id && (
+                  <button
+                    onClick={() =>
+                      save(() => [{ path: 'settings.prompts', value: { providerID: provider.id } }])
+                    }
+                  >
+                    Use for Ask Viewer
+                  </button>
+                )}
+              </div>
+              {(loading[provider.id] || savingKey[provider.id]) && (
+                <p className="settings-note" role="status">
+                  {savingKey[provider.id] ? 'Saving key…' : 'Loading model IDs…'}
+                </p>
               )}
-              {snapshot.credentials.includes(provider.id) && (
-                <button
-                  disabled={savingKey[provider.id]}
-                  onClick={() => credential(provider.id, '')}
-                >
-                  Clear stored key
-                </button>
+              {models[provider.id]?.length ? (
+                <p className="settings-note" role="status">
+                  {models[provider.id]?.length} model IDs loaded. Choose one in the Model field
+                  above.
+                </p>
+              ) : null}
+              {provider.kind === 'gemini' && (
+                <details className="model-advanced">
+                  <summary>Test model compatibility</summary>
+                  <ProviderCheck
+                    key={JSON.stringify([provider.id, provider.endpoint, provider.model])}
+                    providerID={provider.id}
+                    onError={error}
+                  />
+                </details>
               )}
+              <ProviderDataPermission
+                key={provider.id + provider.endpoint}
+                provider={provider}
+                error={error}
+              />
             </div>
-            {(loading[provider.id] || savingKey[provider.id]) && (
-              <p className="settings-note" role="status">
-                {savingKey[provider.id] ? 'Saving key…' : 'Loading model IDs…'}
-              </p>
-            )}
-            {models[provider.id]?.length ? (
-              <p className="settings-note" role="status">
-                {models[provider.id]?.length} models available in the Model field.
-              </p>
-            ) : null}
-          </section>
+          </details>
         );
       })}
     </>

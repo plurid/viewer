@@ -185,12 +185,12 @@ for (let launch = 0; launch < 2; launch += 1) {
       assert.notEqual(pane.id, oldIDs.get(name), 'Reopening creates a fresh plane ID');
       if (name === 'Document.docx') {
         await until(
-          () => evaluate<boolean>(`!!${scope(pane.id)}?.querySelector('.office-mode-bar')`),
+          () => evaluate<boolean>(`!!${scope(pane.id)}?.querySelector('.preview-toolbar')`),
           Boolean,
           'Office view choices',
         );
         await evaluate(
-          `[...${scope(pane.id)}.querySelectorAll('.office-mode-bar button')].find(b=>b.textContent.trim()==='Reading').click()`,
+          `[...${scope(pane.id)}.querySelectorAll('.preview-toolbar button')].find(b=>b.textContent.trim()==='Reading').click()`,
         );
       }
       await until(

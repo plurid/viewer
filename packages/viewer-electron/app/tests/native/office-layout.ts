@@ -127,12 +127,15 @@ try {
       });
       if (name.endsWith('.xlsx')) {
         await until(
-          () => evaluate<boolean>('!!document.querySelector(".office-mode-bar")'),
+          () =>
+            evaluate<boolean>(
+              `[...document.querySelectorAll('.preview-toolbar button')].some(button=>['Layout','Print layout','Reading','Sheet'].includes(button.textContent.trim()))`,
+            ),
           Boolean,
           'Office mode controls',
         );
         await evaluate(
-          '[...document.querySelectorAll(".office-mode-bar button")].find(b=>b.textContent.trim()==="Print layout").click()',
+          '[...document.querySelectorAll(".preview-toolbar button")].find(b=>b.textContent.trim()==="Print layout").click()',
         );
       }
       const first = await painted(connection);

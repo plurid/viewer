@@ -18,6 +18,7 @@ import {
 } from '../../domain/previews/images/rendered';
 import type { DerivedPreviews, DerivedMode } from './derived';
 import { isOfficeFormat, type OfficeLayoutRequest } from '../../domain/previews/documents/layout';
+import { xmlEncoding } from '../../domain/previews/data/xml';
 
 interface Grant {
   dispose?(): void;
@@ -359,13 +360,19 @@ export class Resources {
       }
     }
     const sample = buffer.subarray(0, 8192);
+    const encoding = grant.resource.entry.extension === 'xml' ? xmlEncoding(buffer) : 'utf-8';
     const binary =
-      sample.includes(0) ||
-      [...sample].filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length >
-        sample.length / 20;
+      encoding === 'utf-8' &&
+      (sample.includes(0) ||
+        [...sample].filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length >
+          sample.length / 20);
     if (grant.authority) await this.access([grant.authority]);
     this.get(id);
-    return { text: binary ? '' : buffer.toString('utf8'), binary, truncated: size > limit };
+    return {
+      text: binary ? '' : new TextDecoder(encoding).decode(buffer),
+      binary,
+      truncated: size > limit,
+    };
   }
   archive(id: string) {
     return this.work.track(this.paths(id), () => this.coordinated(id, () => this.listArchive(id)));

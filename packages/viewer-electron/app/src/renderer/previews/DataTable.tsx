@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useVirtualizer, defaultRangeExtractor } from '@tanstack/react-virtual';
 import type { EvidenceAnchor } from '../../domain/files/inspection';
 import type {
@@ -12,8 +12,38 @@ import { delimitedRows, type DelimitedPreview } from './table-data';
 import { Empty, Loading } from '../ui/primitives';
 import type { PreviewContext } from './contracts';
 import { usePreviewScroll } from './scroll';
+import { usePreviewState } from './state';
 type CellAnchor = Extract<EvidenceAnchor, { kind: 'cells' }>;
 const noMerges: readonly WorkbookMerge[] = [];
+
+export interface TableControls {
+  query: string;
+  setQuery(value: string): void;
+  rows: number;
+  columns: number;
+  filtering: boolean;
+}
+interface TableView {
+  query?: string;
+  row?: number;
+  column?: number;
+}
+/** Keep addresses and filters, never duplicate cell values into workspace state. */
+export function rememberTableView(
+  views: Record<string, TableView>,
+  label: string,
+  change: TableView,
+): Record<string, TableView> {
+  const next = Object.fromEntries([
+    ...Object.entries(views && typeof views === 'object' ? views : {})
+      .filter(([key]) => key !== label)
+      .slice(-15),
+    [label, { ...views?.[label], ...change }],
+  ]);
+  while (Object.keys(next).length > 1 && JSON.stringify(next).length * 2 > 3000)
+    delete next[Object.keys(next)[0]!];
+  return next;
+}
 
 /** CSV and worksheets share virtual rows while retaining original source addresses. */
 export function DataTable({
@@ -29,6 +59,7 @@ export function DataTable({
   filterRows,
   retryFilter,
   state,
+  renderControls,
 }: {
   rows: readonly WorkbookRow[];
   headers: readonly string[];
@@ -42,9 +73,21 @@ export function DataTable({
   filterRows?: (query: string, signal: AbortSignal) => Promise<Uint32Array>;
   retryFilter?: () => void;
   state?: PreviewContext['state'];
+  renderControls?(controls: TableControls): ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [query, setQuery] = useState('');
+  const [views, setViews] = usePreviewState<Record<string, TableView>>(
+    { state },
+    'table.views',
+    {},
+  );
+  const remembered = views?.[label];
+  const query = typeof remembered?.query === 'string' ? remembered.query : '';
+  const setQuery = useCallback(
+    (query: string) =>
+      setViews((previous) => rememberTableView(previous, label, { query: query.slice(0, 160) })),
+    [setViews, label],
+  );
 
   const [viewportWidth, setViewportWidth] = useState(840);
   const [selection, setSelection] = useState<{ row: number; cell: WorkbookCell; merge?: string }>();
@@ -146,7 +189,7 @@ export function DataTable({
   useEffect(() => horizontal.measure(), [horizontal, columnWidth]);
   useEffect(() => {
     if (anchor) setQuery('');
-  }, [anchor]);
+  }, [anchor, setQuery]);
   useEffect(() => {
     if (!anchor || query) return;
     const index = body.findIndex((row) => row.row === anchor.row);
@@ -159,6 +202,13 @@ export function DataTable({
   }, [anchor, query, body, virtual, columnWidth]);
   const current =
     selection ||
+    (remembered?.row &&
+      remembered.column && {
+        row: remembered.row,
+        cell: rows
+          .find((row) => row.row === remembered.row)
+          ?.cells.find((cell) => cell.column === remembered.column),
+      }) ||
     (anchor && {
       row: anchor.row,
       cell: rows
@@ -169,51 +219,49 @@ export function DataTable({
     formatted && cell.formatted !== undefined ? cell.formatted : cell.value;
   return (
     <div className="data-viewer" aria-busy={filtering}>
-      <div className="preview-toolbar">
-        <span className="muted">
-          {body.length.toLocaleString()} {numbered ? 'stored rows' : 'rows'} · {columns} columns
-        </span>
-        <span className="toolbar-spacer" />
-        {filtering && (
-          <span className="muted" role="status">
-            Filtering…
+      {renderControls ? (
+        renderControls({ query, setQuery, rows: body.length, columns, filtering })
+      ) : (
+        <div className="preview-toolbar">
+          <span className="muted">
+            {body.length.toLocaleString()} {numbered ? 'stored rows' : 'rows'} · {columns} columns
           </span>
-        )}
-        <input
-          aria-label={paged ? 'Filter current worksheet page' : 'Filter table rows'}
-          placeholder={paged ? 'Filter this page' : 'Filter rows'}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
+          <span className="toolbar-spacer" />
+          {filtering && (
+            <span className="muted" role="status">
+              Filtering…
+            </span>
+          )}
+          <input
+            aria-label={paged ? 'Filter current worksheet page' : 'Filter table rows'}
+            placeholder={paged ? 'Filter this page' : 'Filter rows'}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+      )}
       {filtered?.rows === rows && filtered.query === query && filtered.error && (
         <p className="inline-warning">
           {filtered.error} {retryFilter && <button onClick={retryFilter}>Retry table</button>}
         </p>
       )}
-      {numbered && (
+      {numbered && current?.cell && (
         <div className="workbook-cell-detail" aria-live="polite">
-          {current?.cell ? (
-            <>
-              <strong>
-                {columnName(current.cell.column)}
-                {current.row}
-              </strong>
-              <span>
-                {current.cell.formula !== undefined
-                  ? `${current.cell.cached ? 'Saved value: ' + current.cell.value : 'No saved value'} · Formula: ${current.cell.formula || '(shared formula)'}`
-                  : current.cell.value || 'Empty cell'}
-                {current.cell.formatted !== undefined &&
-                  current.cell.formatted !== current.cell.value &&
-                  ` · Formatted: ${current.cell.formatted || '(empty)'}`}
-                {current.cell.numberFormat && ` · Format: ${current.cell.numberFormat}`}
-                {current.cell.formatWarning && ` · ${current.cell.formatWarning}`}
-                {'merge' in current && current.merge && ` · Merged ${current.merge}`}
-              </span>
-            </>
-          ) : (
-            <span className="muted">Select a cell to see its value or saved formula.</span>
-          )}
+          <strong>
+            {columnName(current.cell.column)}
+            {current.row}
+          </strong>
+          <span>
+            {current.cell.formula !== undefined
+              ? `${current.cell.cached ? 'Saved value: ' + current.cell.value : 'No saved value'} · Formula: ${current.cell.formula || '(shared formula)'}`
+              : current.cell.value || 'Empty cell'}
+            {current.cell.formatted !== undefined &&
+              current.cell.formatted !== current.cell.value &&
+              ` · Formatted: ${current.cell.formatted || '(empty)'}`}
+            {current.cell.numberFormat && ` · Format: ${current.cell.numberFormat}`}
+            {current.cell.formatWarning && ` · ${current.cell.formatWarning}`}
+            {'merge' in current && current.merge && ` · Merged ${current.merge}`}
+          </span>
         </div>
       )}
       {anchor &&
@@ -369,7 +417,15 @@ export function DataTable({
                         <button
                           className={`workbook-cell${merge ? ' workbook-merged-cell' : ''}`}
                           aria-label={`${columnName(cell.column)}${sourceRow}: ${cell.formula !== undefined && !cell.cached ? 'No saved value' : display(cell) || 'Empty'}${mergeLabel ? ' · Merged ' + mergeLabel : ''}`}
-                          onClick={() => setSelection({ row: sourceRow, cell, merge: mergeLabel })}
+                          onClick={() => {
+                            setSelection({ row: sourceRow, cell, merge: mergeLabel });
+                            setViews((previous) =>
+                              rememberTableView(previous, label, {
+                                row: sourceRow,
+                                column: cell.column,
+                              }),
+                            );
+                          }}
                         >
                           {continuation && (
                             <small>

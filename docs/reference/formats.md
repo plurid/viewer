@@ -20,7 +20,7 @@ thumbnail is different from full semantic inspection. See [platform status](plat
 | PowerPoint       | `.ppt`, `.pptx`                                                            | Local slide layout, including supported charts, pictures and backgrounds.                                                              |
 | Markdown         | `.md`, `.markdown`, `.mdx`                                                 | Rendered Markdown and source; MDX components do not execute.                                                                           |
 | Web documents    | `.html`, `.htm`, `.xhtml`                                                  | Sandboxed rendered preview and editable source.                                                                                        |
-| Structured data  | `.json`, `.jsonc`, `.json5`, `.yaml`, `.yml`                               | Searchable expandable tree and source, with bounded aliases and copy controls.                                                         |
+| Structured data  | `.json`, `.jsonc`, `.json5`, `.yaml`, `.yml`, `.xml`                       | Searchable expandable tree and source, with bounded parsing and copy controls.                                                         |
 | Delimited data   | `.csv`, `.tsv`                                                             | Table preview with filtering.                                                                                                          |
 | Archives         | `.zip`, `.tar`, `.tar.gz`, `.tgz`                                          | Browse supported archive entries and open previewable contents.                                                                        |
 | 3D meshes/scenes | `.glb`, `.gltf`, `.obj`, `.stl`, `.fbx`, `.3mf`, `.ply`                    | Interactive 3D viewing, dimensions, appearance controls and surface-point distance measurement.                                        |
@@ -74,11 +74,16 @@ Recognized conventional filenames include:
 - `.env` and `.env.*`, `.gitignore`, `.gitconfig` and `.editorconfig`.
 - `.bashrc`, `.bash_profile`, `.zshrc`, `.zprofile`, `.zshenv` and `.profile`.
 
-Vue/Svelte files are source previews, not running components. JSON, JSONC, JSON5, YAML and YML offer
-a shared searchable tree with Expand all, Collapse all, copy path/value and retained expansion
+Vue/Svelte files are source previews, not running components. JSON, JSONC, JSON5, YAML, YML and XML
+offer a shared searchable tree with Expand all, Collapse all, copy path/value and retained expansion
 state. Alias references remain explicit; bounded parsing prevents recursive expansion. Invalid or
 oversized structures retain Source with a visible explanation. JSONL remains source text. Other
 readable files may use the bounded generic text fallback.
+
+XML Tree preserves qualified element/attribute names, repeated children and mixed text order. UTF-8
+and BOM-marked UTF-16 sources are supported. DTDs, custom entity declarations and external
+resolution are rejected; source remains available. Tree inspection is bounded to 1 million decoded
+characters and 50,000 nodes. It does not render domain-specific documents such as invoices.
 
 Reading text uses separate preview font/line-height/wrap preferences, initially 16px/20px, with
 local zoom/reset controls. This does not change editor settings. CSS selectors and property names

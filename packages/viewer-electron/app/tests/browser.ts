@@ -25,9 +25,7 @@ const api: ViewerAPI = {
   runCommand: async () => {
     throw new Error('Commands require the desktop app.');
   },
-  commandDraft: async () => {
-    throw new Error('Command drafts require the desktop app.');
-  },
+  commandDraft: async () => undefined,
   pdfInspect: async () => {
     throw new Error('PDF tools require the desktop app.');
   },

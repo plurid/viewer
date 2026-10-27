@@ -14,6 +14,23 @@ afterEach(async () => {
   await trashTemporary(root);
 });
 describe('scoped preview resources', () => {
+  it('reads BOM-marked UTF-16 XML as text without treating its zero bytes as a binary file', async () => {
+    const text = '<Invoice currency="RON">Neamț</Invoice>';
+    const little = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+    for (const [name, bytes] of [
+      ['little.xml', little],
+      ['big.xml', Buffer.from(little).swap16()],
+    ] as const) {
+      const file = path.join(root, name);
+      await writeFile(file, bytes);
+      const resource = await resources.grant(file);
+      expect(await resources.read(resource.id)).toMatchObject({
+        binary: false,
+        text,
+        truncated: false,
+      });
+    }
+  });
   it('refuses an oversized model companion bitmap before starting its response stream', async () => {
     const model = path.join(root, 'scene.gltf');
     const texture = path.join(root, 'huge.png');

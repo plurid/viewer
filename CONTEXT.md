@@ -38,6 +38,11 @@ owner checks versions, bounds work and releases dependent resources on cancellat
 Office layout uses a bundled sandboxed engine; Office content inspection is a separate bounded
 saved-value reader.
 
+Completed document data can outlive a view in `renderer/previews/document-cache.ts`, bounded per
+window and keyed by workspace and validated source version. It retains no resource URLs or mounted
+viewers. Every reuse follows fresh resource authorization; revocation invalidates pending and
+completed matching data. Desktop extraction and in-flight deduplication remain desktop-owned.
+
 ## Documents and runtimes
 
 | Concept               | Lifetime and owner                                                                                                 |

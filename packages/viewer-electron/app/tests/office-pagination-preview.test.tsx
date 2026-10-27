@@ -87,9 +87,9 @@ it('pages, jumps with original row numbers, remembers each sheet and rejects inv
   await screen.findByText('Data:1');
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   await screen.findByText('Data:101');
-  fireEvent.change(screen.getByLabelText('Worksheet'), { target: { value: 'Other' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Other' }));
   await screen.findByText('Other:1');
-  fireEvent.change(screen.getByLabelText('Worksheet'), { target: { value: 'Data' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Data' }));
   await screen.findByText('Data:101');
   const row = screen.getByLabelText('Go to source row');
   fireEvent.change(row, { target: { value: '0' } });
@@ -115,7 +115,7 @@ it('cancels superseded pages and prevents an older completion from replacing the
   await screen.findByText('Data:1');
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   expect(screen.queryByTestId('page-cells')).toBeNull();
-  fireEvent.change(screen.getByLabelText('Worksheet'), { target: { value: 'Other' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Other' }));
   await waitFor(() => expect(waiting).toHaveLength(2));
   expect(current.services.cancelDocument).toHaveBeenCalledWith(
     'book',

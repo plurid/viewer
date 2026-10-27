@@ -532,7 +532,6 @@ button.markdown-link {
   flex: 1;
   min-height: 0;
 }
-.office-mode-bar,
 .worksheet-tabs {
   flex: none;
 }
@@ -541,7 +540,7 @@ button.markdown-link {
   gap: 8px;
   align-items: center;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
 }
 .worksheet-tab-list {
   display: flex;
@@ -562,6 +561,11 @@ button.markdown-link {
   max-width: 180px;
 }
 .worksheet-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-top: 1px solid var(--line);
   flex: none;
   flex-wrap: wrap;
 }
@@ -596,8 +600,50 @@ button.markdown-link {
   gap: 12px;
   padding: 8px 12px;
   font-size: 12px;
-  border-bottom: 1px solid var(--line);
+  order: 2;
+  flex: none;
+  border-top: 1px solid var(--line);
   min-height: 34px;
+}
+.office-viewer > .data-viewer {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.structured-viewer {
+  container-type: inline-size;
+}
+.structured-viewer .preview-toolbar input {
+  min-width: 80px;
+  flex: 1 1 140px;
+  max-width: none;
+}
+.structured-viewer .preview-toolbar > .choice-button {
+  width: auto;
+  flex: none;
+}
+@container (max-width: 640px) {
+  .tree-expand-inline {
+    display: none;
+  }
+}
+.office-row-count {
+  white-space: nowrap;
+  font-size: 12px;
+}
+.office-viewer .preview-toolbar input[type='search'] {
+  min-width: 80px;
+  flex: 1 1 140px;
+  max-width: 280px;
+}
+.office-viewer .preview-toolbar > .choice-button {
+  width: auto;
+  flex: none;
+}
+@container (max-width: 600px) {
+  .office-row-count {
+    display: none;
+  }
 }
 .workbook-cell-detail strong {
   flex: none;

@@ -13,8 +13,9 @@ opening defaults use Viewer; explicit native-app preferences are preserved.
 | XLSX     | Stored-value Sheet view and Print layout |
 | PPT/PPTX | Slide Layout                             |
 
-Worksheet tabs support arrow keys, Home and End. The searchable **Worksheet** menu selects the same
-sheet. Print layout renders only that sheet, retaining its supported page settings and breaks.
+Worksheet tabs support arrow keys, Home and End. In Sheet view they sit below the grid; **All
+worksheets** appears when the tabs overflow. Print layout renders only the selected sheet, retaining
+its supported page settings and breaks.
 
 ## Layout fidelity
 
@@ -40,15 +41,16 @@ images. It omits full pagination, floating placement, headers, footnotes and som
 features. Unsupported images have placeholders.
 
 XLSX Sheet shows original row/column addresses and saved values. Select a cell to inspect its value,
-format and saved formula. **Formatted** applies supported number/date formats; **Stored** shows the
-raw value. Missing cached values are identified. The reader does not evaluate formulas or follow
-external data. Calc may recalculate supported formulas in Print layout, so the two views can show
-different values.
+format and saved formula. **More → Stored values** switches from supported number/date formats to
+raw values; **Formatted values** switches back. Missing cached values are identified. The reader
+does not evaluate formulas or follow external data. Calc may recalculate supported formulas in Print
+layout, so the two views can show different values.
 
-The grid loads one selected worksheet and up to 100 stored rows at a time. Previous, Next and Row/Go
-use source row numbers. Sparse sheets can skip gaps; page filtering searches loaded values. Bounded
-merged ranges retain their anchor, including a **Continued from…** value when the anchor is on an
-earlier page.
+The grid loads one selected worksheet and up to 100 stored rows at a time. Pagination appears only
+when there are other rows to visit. Previous, Next and Row/Go use source row numbers. Sparse sheets
+can skip gaps; page filtering searches loaded values. Cell details appear only after selecting a
+cell. Bounded merged ranges retain their anchor, including a **Continued from…** value when the
+anchor is on an earlier page.
 
 ## Evidence, search and limits
 

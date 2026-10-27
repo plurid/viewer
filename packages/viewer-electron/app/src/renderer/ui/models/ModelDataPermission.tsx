@@ -58,6 +58,7 @@ export function ProviderDataPermission({
   const { permission, loading, error: loadError } = useModelPermission(provider);
   const [level, setLevel] = useState<ModelDataLevel>('names');
   const [busy, setBusy] = useState(false);
+  useEffect(() => setLevel(permission?.level ?? 'names'), [permission?.level]);
   const save = async (level: ModelDataLevel | null) => {
     setBusy(true);
     try {
@@ -69,12 +70,16 @@ export function ProviderDataPermission({
     }
   };
   return (
-    <fieldset className="model-data-permission">
-      <legend>Data access</legend>
+    <details className="model-data-permission">
+      <summary>
+        Data access
+        <span>
+          {loading ? 'Checking…' : permission ? modelDataLabels[permission.level] : 'Not allowed'}
+          {permission && ` · Agent actions ${permission.agents ? 'allowed' : 'off'}`}
+        </span>
+      </summary>
       <p className="settings-note">
-        Actions send your instructions and the allowed data to{' '}
-        <span className="model-endpoint">{provider.endpoint}</span>. Your approval is stored
-        privately. Configuration and agents cannot grant it.
+        Choose what this provider may receive. Access is granted only after your approval.
       </p>
       <p className="settings-note" role="status">
         {loading
@@ -127,12 +132,12 @@ export function ProviderDataPermission({
                 .finally(() => setBusy(false));
             }}
           />
-          Actions agents start may send this data too
+          <span>Allow agent-started actions to send the same data</span>
         </label>
       )}
       <p className="settings-note">
         Changing the endpoint or clearing the key revokes access and stops running requests.
       </p>
-    </fieldset>
+    </details>
   );
 }

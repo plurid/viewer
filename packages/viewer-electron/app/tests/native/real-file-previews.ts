@@ -150,12 +150,15 @@ try {
     );
     if (extension === 'docx') {
       await until(
-        () => evaluate<boolean>('!!document.querySelector(".office-mode-bar")'),
+        () =>
+          evaluate<boolean>(
+            `[...document.querySelectorAll('.preview-toolbar button')].some(button=>['Layout','Print layout','Reading','Sheet'].includes(button.textContent.trim()))`,
+          ),
         Boolean,
         'Office view choices',
       );
       await evaluate(
-        '[...document.querySelectorAll(".office-mode-bar button")].find(b=>b.textContent.trim()==="Reading").click()',
+        '[...document.querySelectorAll(".preview-toolbar button")].find(b=>b.textContent.trim()==="Reading").click()',
       );
     }
     const result = await until(
@@ -167,7 +170,7 @@ try {
           media?: { duration: number; width: number; height: number };
           image?: { width: number; height: number };
         }>(
-          `(()=>{const root=document.querySelector('.quick-preview'),image=root?.querySelector('.image-stage img'),media=root?.querySelector('video,audio'),error=root?.querySelector('.empty-state')?.innerText||'';return {ready:!!root?.querySelector(${JSON.stringify(extension === 'docx' ? '.office-document' : extension === 'xlsx' ? '.workbook-sheet-picker' : extension === 'pdf' ? '.pdf-sheet canvas' : ['dng', 'nef'].includes(extension) ? '.image-stage img' : 'video,audio')}) && (!image || image.complete&&image.naturalWidth>0) && (!media || media.readyState>=2 && !root.querySelector('.media-loading')),error,warning:root?.querySelector('.inline-warning')?.textContent||'',media:media&&media.readyState>=2?{duration:media.duration,width:media.videoWidth,height:media.videoHeight}:undefined,image:image&&image.complete?{width:image.naturalWidth,height:image.naturalHeight}:undefined}})()`,
+          `(()=>{const root=document.querySelector('.quick-preview'),image=root?.querySelector('.image-stage img'),media=root?.querySelector('video,audio'),error=root?.querySelector('.empty-state')?.innerText||'';return {ready:!!root?.querySelector(${JSON.stringify(extension === 'docx' ? '.office-document' : extension === 'xlsx' ? '.worksheet-tab-list' : extension === 'pdf' ? '.pdf-sheet canvas' : ['dng', 'nef'].includes(extension) ? '.image-stage img' : 'video,audio')}) && (!image || image.complete&&image.naturalWidth>0) && (!media || media.readyState>=2 && !root.querySelector('.media-loading')),error,warning:root?.querySelector('.inline-warning')?.textContent||'',media:media&&media.readyState>=2?{duration:media.duration,width:media.videoWidth,height:media.videoHeight}:undefined,image:image&&image.complete?{width:image.naturalWidth,height:image.naturalHeight}:undefined}})()`,
         ),
       (value) => value.ready || value.error,
       'decoded ' + extension,

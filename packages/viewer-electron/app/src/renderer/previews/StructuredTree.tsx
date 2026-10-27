@@ -1,21 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { PreviewContext } from './contracts';
 import { usePreviewState } from './state';
 import {
   copyDataValue,
+  copyXMLValue,
   visibleDataRows,
   type StructuredData,
   type TreeExpansion,
 } from '../../domain/previews/data/structured';
 import { report } from '../state/store';
+import { ChoiceButton } from '../ui/ChoiceMenu';
 
 export function StructuredTree({
   context,
   data,
+  viewControls,
 }: {
   context: PreviewContext;
   data: StructuredData;
+  viewControls?: ReactNode;
 }) {
   const [expansion, setExpansion] = usePreviewState<TreeExpansion>(context, 'tree.expansion', {
     all: false,
@@ -54,13 +58,28 @@ export function StructuredTree({
     virtual.scrollToIndex(index, { align: 'auto' });
   };
   const copy = (value: string) => void navigator.clipboard.writeText(value).catch(report);
+  const copyValue = () => {
+    if (!node) return;
+    try {
+      copy(data.format === 'xml' ? copyXMLValue(node.value) : copyDataValue(node.value));
+    } catch (error) {
+      report(error);
+    }
+  };
   return (
     <div className="structured-viewer">
       <div className="preview-toolbar">
-        <button onClick={() => setExpansion({ all: true, open: [], closed: [] })}>
+        {viewControls}
+        <button
+          className="tree-expand-inline"
+          onClick={() => setExpansion({ all: true, open: [], closed: [] })}
+        >
           Expand all
         </button>
-        <button onClick={() => setExpansion({ all: false, open: [], closed: [] })}>
+        <button
+          className="tree-expand-inline"
+          onClick={() => setExpansion({ all: false, open: [], closed: [] })}
+        >
           Collapse all
         </button>
         <input
@@ -71,22 +90,27 @@ export function StructuredTree({
           onChange={(event) => setQuery(event.target.value)}
         />
         <span className="toolbar-spacer" />
-        <button disabled={!node} onClick={() => node && copy(node.path || '/')}>
-          Copy path
-        </button>
-        <button
-          disabled={!node}
-          onClick={() => {
-            if (node)
-              try {
-                copy(copyDataValue(node.value));
-              } catch (error) {
-                report(error);
-              }
+        <ChoiceButton
+          label="Tree actions"
+          value=""
+          placeholder="More"
+          choices={[
+            { value: 'expand', label: 'Expand all' },
+            { value: 'collapse', label: 'Collapse all' },
+            ...(node
+              ? [
+                  { value: 'path', label: 'Copy path' },
+                  { value: 'value', label: 'Copy value' },
+                ]
+              : []),
+          ]}
+          onChoose={(action) => {
+            if (action === 'expand' || action === 'collapse')
+              setExpansion({ all: action === 'expand', open: [], closed: [] });
+            else if (action === 'path' && node) copy(node.path || '/');
+            else if (action === 'value') copyValue();
           }}
-        >
-          Copy value
-        </button>
+        />
       </div>
       {data.limited && (
         <p className="inline-warning">

@@ -57,14 +57,13 @@
   align-items: center;
 }
 .settings-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
-  justify-content: space-between;
   min-height: calc(40px * var(--density-scale, 1));
 }
 .settings-row > span {
-  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -192,7 +191,7 @@
 .settings-page {
   container-type: inline-size;
 }
-.settings-page button:not(.icon-button),
+.settings-page :where(button:not(.icon-button)),
 .settings-page .button-label {
   min-height: 32px;
   padding: 6px 10px;
@@ -270,7 +269,7 @@
   .settings-page .settings-row:has(> .choice-button),
   .settings-page .settings-row:has(> input:not([type='checkbox'])),
   .settings-page .settings-row:has(> div) {
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
     gap: 8px;
   }
@@ -336,6 +335,67 @@
 .settings-provider {
   border-bottom: 1px solid var(--line);
 }
+.models-introduction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.models-introduction .settings-note {
+  margin: 0;
+}
+.settings-provider > .model-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  cursor: pointer;
+  padding: 16px 0;
+}
+.model-identity {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.model-summary > svg {
+  flex: none;
+  color: var(--muted);
+}
+.settings-provider[open] > .model-summary > svg {
+  transform: rotate(90deg);
+}
+.model-identity > span,
+.model-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+.model-status {
+  max-width: 240px;
+}
+.model-status[data-connected='true'],
+.model-default {
+  color: var(--accent);
+}
+.model-default {
+  font-size: 12px;
+}
+.model-editor-body {
+  padding-bottom: 12px;
+}
+.model-advanced {
+  margin: 16px 0;
+}
+.model-advanced > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.model-address-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
 .model-data-permission {
   min-inline-size: 0;
   margin: 20px 0 0;
@@ -348,6 +408,34 @@
 .model-data-permission legend {
   padding-inline-end: 8px;
   font-weight: 600;
+}
+.model-data-permission > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.model-data-permission > summary > span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 5px;
+}
+.model-data-permission[open] > :not(summary) {
+  margin-top: 12px;
+}
+.settings-provider .model-editor-body > label {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  margin: 14px 0;
+  color: var(--muted);
+}
+@container (max-width: 540px) {
+  .settings-provider .model-editor-body > label {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
 }
 .model-data-permission p,
 .model-data-permission .settings-actions {
@@ -408,6 +496,16 @@
 .settings-editor input,
 .settings-editor .choice-button {
   width: 100%;
+}
+.settings-editor .check-row input[type='checkbox'] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+}
+.settings-editor .check-row {
+  justify-content: flex-start;
 }
 .settings-editor .choice-button {
   max-width: none;
@@ -526,6 +624,9 @@
   position: relative;
   width: 24px;
   height: 24px;
+  min-height: 24px;
+  flex: 0 0 24px;
+  aspect-ratio: 1;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
   border-radius: 50%;
@@ -636,6 +737,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  justify-self: end;
+  justify-content: flex-end;
 }
 .shortcut-reset {
   height: 24px;

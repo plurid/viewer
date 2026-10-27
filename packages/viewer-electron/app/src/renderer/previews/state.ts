@@ -85,7 +85,7 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
   };
 }
 export function usePreviewState<T>(
-  context: PreviewContext,
+  context: Pick<PreviewContext, 'state'>,
   key: string,
   initial: T,
 ): [T, Dispatch<SetStateAction<T>>] {

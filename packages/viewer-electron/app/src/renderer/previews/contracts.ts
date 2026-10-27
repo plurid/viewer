@@ -3,7 +3,10 @@ import type { DocumentData } from '../../domain/services';
 import type { ComponentType } from 'react';
 import type { ArchiveListing, FileEntry, Resource, ResourceRead } from '../../domain/contracts';
 import type { HtmlPreview } from '../../domain/previews/web';
-import type { WorksheetDocumentRequest } from '../../domain/previews/documents/office';
+import type {
+  WorksheetDocumentRequest,
+  WorksheetWindow,
+} from '../../domain/previews/documents/office';
 import type { ImageRenditionRequest } from '../../domain/previews/images/rendered';
 import type { OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 
@@ -43,6 +46,8 @@ export interface PreviewContext {
     htmlPreviewClose(id: string): Promise<void>;
     thumbnail(file: string, size: number): Promise<string>;
     document(id: string, request?: WorksheetDocumentRequest): Promise<DocumentData>;
+    /** Available only after this view acquired an authorized, versioned resource. */
+    cachedDocument?(request?: WorksheetWindow): DocumentData | undefined;
     cancelDocument(id: string, requestID: string): Promise<void>;
     read(id: string, limit?: number): Promise<ResourceRead>;
     archive(id: string): Promise<ArchiveListing>;

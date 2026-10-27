@@ -38,6 +38,7 @@ import { parentPath } from '../../domain/workspaces/planes';
 import { editingPlane } from '../editing/planes';
 import { useResource } from './useResource';
 import { PreviewRecovery } from './PreviewRecovery';
+import { documentServices } from './document-cache';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
 function componentFor(module: PreviewModule) {
@@ -108,6 +109,11 @@ export const PreviewHost = memo(function PreviewHost({
     if (active) setActivated(true);
   }, [active]);
   const entry = resource?.entry;
+  const owner = useViewer((state) => state.saved.activeWorkspace);
+  const scopedServices = useMemo(
+    () => (resource ? documentServices(services, owner, resource, signal) : services),
+    [owner, resource, signal],
+  );
   // A PREVIEW PLANE FOLLOWS ITS FILE: saved in another app, it shows the new version.
   // Its folder is watched; a change there is the file's only when the file's version changed.
   const seen = useRef<SourceVersion | undefined>(undefined);
@@ -336,7 +342,7 @@ export const PreviewHost = memo(function PreviewHost({
               active={active}
               interactive={interactive}
               signal={signal}
-              services={services}
+              services={scopedServices}
               look={look}
               commands={commands}
               state={viewState}

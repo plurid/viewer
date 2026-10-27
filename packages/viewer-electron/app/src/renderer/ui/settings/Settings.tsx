@@ -195,7 +195,7 @@ export function SettingsWindow() {
           ))}
         </nav>
       </aside>
-      <main className="settings-page">
+      <main className="settings-page" key={query ? 'search' : category}>
         <header>
           <h1>{query ? 'Search results' : category}</h1>
         </header>

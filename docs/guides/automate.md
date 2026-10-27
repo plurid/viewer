@@ -36,9 +36,16 @@ automatically.
 
 ## Add a model when it helps
 
-Configure a provider in **Settings → Models**. Model-assisted naming, organization, summaries and
-requests in words use explicit data-sharing choices. Previewing files and using built-in tools do
-not require a model.
+Open **Settings → Models → Add model**, choose the provider and select **Set up model**. Enter its
+API key and model ID; **Connect and load models** lists IDs offered by compatible providers. Local
+servers can use **Provider address** to change the endpoint. The list shows each saved model's full
+name and ID, whether its connection has been checked, and which is the **Default for Ask Viewer**.
+Use that selector, or **Use for Ask Viewer**, to change the default.
+
+Open **Data access** for the model's current sharing permission. Allowing agent-started actions to
+send the same data is a separate choice. Model-assisted naming, organization, summaries and requests
+in words use these explicit permissions. Previewing files and using built-in tools do not require a
+model.
 
 Start with a small selection, inspect the evidence and review the proposed changes. A structured
 answer is still a proposal.

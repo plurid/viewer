@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 
 interface Sheet {
@@ -15,9 +15,20 @@ export function WorksheetTabs({
   choose(name: string): void;
 }) {
   const id = useId();
+  const tabs = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
+  useEffect(() => {
+    const element = tabs.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setOverflow(element.scrollWidth > element.clientWidth + 1);
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    measure();
+    return () => observer.disconnect();
+  }, [sheets]);
   return (
     <div className="worksheet-tabs">
-      <div role="tablist" aria-label="Worksheets" className="worksheet-tab-list">
+      <div ref={tabs} role="tablist" aria-label="Worksheets" className="worksheet-tab-list">
         {sheets.map((sheet, index) => (
           <button
             key={sheet.name}
@@ -48,17 +59,19 @@ export function WorksheetTabs({
           </button>
         ))}
       </div>
-      <div className="workbook-sheet-picker">
-        <ChoiceButton
-          label="Worksheet"
-          value={value}
-          choices={sheets.map((sheet) => ({
-            value: sheet.name,
-            label: sheet.name + (sheet.hidden ? ' (hidden)' : ''),
-          }))}
-          onChoose={choose}
-        />
-      </div>
+      {overflow && (
+        <div className="workbook-sheet-picker">
+          <ChoiceButton
+            label="All worksheets"
+            value={value}
+            choices={sheets.map((sheet) => ({
+              value: sheet.name,
+              label: sheet.name + (sheet.hidden ? ' (hidden)' : ''),
+            }))}
+            onChoose={choose}
+          />
+        </div>
+      )}
     </div>
   );
 }

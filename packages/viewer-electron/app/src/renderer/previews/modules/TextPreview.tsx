@@ -316,7 +316,7 @@ export default function TextPreview(context: TextPreviewProps) {
   const language = languageFor(resource.entry)?.prism;
   return (
     <div className="text-viewer">
-      {
+      {!(structured && !raw && !structured.error) && (
         <PreviewToolbar context={context}>
           {(markdown || isStructured(ext)) && (
             <>
@@ -355,7 +355,7 @@ export default function TextPreview(context: TextPreviewProps) {
             Wrap
           </button>
         </PreviewToolbar>
-      }
+      )}
       {data.truncated && (
         <p className="inline-warning">
           Showing the first 4 MB. Open in another app to read the entire file.
@@ -407,7 +407,19 @@ export default function TextPreview(context: TextPreviewProps) {
           </ReactMarkdown>
         </article>
       ) : structured && !raw && !structured.error ? (
-        <StructuredTree context={context} data={structured} />
+        <StructuredTree
+          context={context}
+          data={structured}
+          viewControls={
+            <>
+              <button aria-pressed={true} onClick={() => setRaw(false)}>
+                Tree
+              </button>
+              <button onClick={() => setRaw(true)}>Source</button>
+              {editable && <button onClick={startEditing}>Edit</button>}
+            </>
+          }
+        />
       ) : (
         <>
           {structured?.error && !raw && (

@@ -22,7 +22,7 @@ export function WorksheetNavigation({
   }, [page.sheet, page.fromRow]);
   return (
     <>
-      <nav className="preview-toolbar worksheet-navigation" aria-label="Worksheet rows">
+      <nav className="worksheet-navigation" aria-label="Worksheet rows">
         <button
           disabled={loading || page.fromRow <= 1}
           onClick={() => navigate(previous, 'previous')}

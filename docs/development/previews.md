@@ -21,6 +21,14 @@ parsing/decoding off the UI thread. Source version and authority must be checked
 reusing derived content. Cache leases pin live consumers; last-consumer cancellation terminates
 owned work.
 
+`PreviewHost` wraps document reads in a window-local completed-data cache: at most 16 entries and 32
+MiB of estimated retained data. Keys include workspace, file identity/version and worksheet window,
+never a resource lease ID. Every hit requires a newly acquired authorized resource. Access changes
+invalidate matching cached and pending results. Symlink entries bypass this layer because their
+metadata describes the link; the desktop extraction owner checks the resolved target.
+`DocumentCache` remains responsible for extraction and in-flight deduplication. Keep cached data
+separate from resource URLs and mounted viewers; those belong to live consumers.
+
 Release resources, workers, observers, controls and object URLs. Cleanup that needs the original DOM
 root runs before detachment. Imperative canvas/model code must dispose renderer-owned resources
 rather than relying on a global shared object to release its listeners.

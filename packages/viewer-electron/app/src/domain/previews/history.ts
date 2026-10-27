@@ -33,6 +33,7 @@ const recalledKeys = new Set([
   'office.mode',
   'office.sheet',
   'office.rows',
+  'table.views',
   'text.source',
   'text.scale',
   'text.wrap',

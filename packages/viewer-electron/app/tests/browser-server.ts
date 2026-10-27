@@ -11,7 +11,7 @@ import type { FileInformationPatch } from '../src/domain/files/information';
 import type { AgentClientRequest } from '../src/domain/agents/clients';
 import type { ReadableStream } from 'node:stream/web';
 import { createServer } from 'vite';
-import { rename, mkdir, realpath } from 'node:fs/promises';
+import { rename, mkdir, realpath, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -49,11 +49,15 @@ import { FileInformationService } from '../src/desktop/files/file-information';
 import { FileIndex } from '../src/desktop/search/index-core';
 import { ActionPlanner } from '../src/desktop/actions/planner';
 import { extractDocument } from '../src/desktop/previews/formats';
+import { newModelProvider } from '../src/domain/models/providers';
+import { localSamples } from '../tools/playground/catalog';
+import { emptySessionKeys } from '../src/domain/preferences/session-keys';
 import type {
   SettingsPatch,
   IndexedQuery,
   ActionRequest,
   ActionApproval,
+  SettingsSnapshot,
 } from '../src/domain/services';
 import type {
   ApiMethod,
@@ -78,6 +82,9 @@ const worktrees = new GitWorktrees({
   owner: () => 'browser-fixture',
 });
 const permissionScenario = process.env.VIEWER_TEST_SCENARIO === 'folder-access';
+const settingsPreviewScenario = process.env.VIEWER_TEST_SCENARIO === 'settings-previews';
+const settingsSnapshot = (snapshot: SettingsSnapshot) =>
+  settingsPreviewScenario ? { ...snapshot, credentials: ['fixture-gemini'] } : snapshot;
 const restrictedFolder = path.join(fixture.files, 'Models');
 let permissionGranted = false;
 let pickerRequests = 0;
@@ -167,7 +174,7 @@ const settings = new SettingsService(
   fixture.files,
   () => true,
   (snapshot) => {
-    emit({ type: 'settings', snapshot });
+    emit({ type: 'settings', snapshot: settingsSnapshot(snapshot) });
     const next = JSON.stringify(snapshot.settings.search);
     if (next !== indexSettings) {
       indexSettings = next;
@@ -176,6 +183,41 @@ const settings = new SettingsService(
   },
 );
 await settings.load(fixture.state);
+if (settingsPreviewScenario) {
+  // UI-only provider fixtures: no real credentials, grants or external requests.
+  await settings.patch(
+    [
+      {
+        path: 'settings.providers',
+        value: [
+          {
+            ...newModelProvider('gemini', 'fixture-gemini'),
+            name: 'Research model',
+            model: 'example-long-model-name-for-layout-verification',
+          },
+          {
+            ...newModelProvider('local', 'fixture-local'),
+            name: 'Local work',
+            model: 'local-example',
+          },
+        ],
+      },
+      { path: 'settings.prompts', value: { providerID: 'fixture-gemini' } },
+    ],
+    settings.snapshot().revision,
+  );
+  const samples = await localSamples();
+  const workbook = samples.find((sample) => sample.formats.includes('xlsx'));
+  if (!workbook) throw new Error('Workbook fixture is required.');
+  await writeFile(path.join(fixture.files, 'Documents', 'Materials.xlsx'), workbook.bytes, {
+    flag: 'wx',
+  });
+  await writeFile(
+    path.join(fixture.files, 'Documents', 'Invoice.xml'),
+    '<Invoice xmlns="urn:example:invoice" currency="RON"><Supplier>Example studio</Supplier><Line id="1"><Description>Panel</Description><Amount>102</Amount></Line><Line id="2"><Description>Spacer</Description><Amount>30</Amount></Line><Total>132</Total></Invoice>',
+    { flag: 'wx' },
+  );
+}
 index.configure(settings.snapshot().settings.search);
 const git = new GitReader(
   () => settings.snapshot().settings.git.enabled,
@@ -380,7 +422,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
           })),
         ],
         ...(await storage.load()),
-        settings: settings.snapshot(),
+        settings: settingsSnapshot(settings.snapshot()),
         openPaths: [],
       };
     case 'fileInformation':
@@ -412,7 +454,9 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'agentStop':
       return;
     case 'settingsGet':
-      return settings.snapshot();
+      return settingsSnapshot(settings.snapshot());
+    case 'sessionKeys':
+      return emptySessionKeys;
     case 'settingsPatch': {
       const patches = args[0] as SettingsPatch[];
       for (const patch of patches)
@@ -476,8 +520,22 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'contextPublish':
       return;
     case 'providerModels':
-      return [];
+      return settingsPreviewScenario
+        ? ['example-long-model-name-for-layout-verification', 'example-second-model']
+        : [];
     case 'providerPermissionGet':
+      if (settingsPreviewScenario && args[0] === 'fixture-gemini') {
+        const provider = settings
+          .snapshot()
+          .settings.providers.find((provider) => provider.id === args[0])!;
+        return {
+          providerID: provider.id,
+          kind: provider.kind,
+          endpoint: provider.endpoint,
+          level: 'names',
+          agents: false,
+        };
+      }
       return null;
     case 'trashList': {
       const folder = args[0] ? trashFixturePath(args[0] as string) : undefined;
@@ -665,6 +723,7 @@ const server = await createServer({
   configFile: false,
   // Each preserved fixture keeps its own dependency build, including locally synced Plurid.
   cacheDir: path.join(fixture.root, 'vite-cache'),
+  optimizeDeps: { ...rendererConfig.optimizeDeps, entries: ['tests/browser.html'] },
   server: { ...rendererConfig.server, host: '127.0.0.1', port: fixturePort, strictPort: true },
   plugins: [
     ...(rendererConfig.plugins || []),

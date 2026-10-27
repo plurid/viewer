@@ -66,6 +66,7 @@ import { RelationshipControls } from './ui/relationships/Relationships';
 import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
+import { previewDocuments } from './previews/document-cache';
 import { useTitlebar } from './ui/titlebar';
 import { useTheme, useThemeVariables } from './ui/theme';
 import { useKeySequences } from './keys/sequences';
@@ -523,6 +524,7 @@ function AppWindow() {
       else if (event.type === 'folder-size') receiveFolderSize(event.task);
       else if (event.type === 'folder-changed') invalidateFolderSizes(event.path);
       else if (event.type === 'file-access') {
+        previewDocuments.invalidate(event.path);
         invalidateFolderSizes(event.path);
         window.dispatchEvent(new Event('viewer:refresh'));
       } else if (event.type === 'settings') receiveSettings(event.snapshot);

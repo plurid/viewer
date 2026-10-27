@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { columnName } from '../../../domain/previews/documents/office';
 import type { PreviewContext } from '../contracts';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
-import { DataTable } from '../DataTable';
+import { DataTable, type TableControls } from '../DataTable';
+import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { Empty, Loading } from '../../ui/primitives';
 import { report } from '../../state/store';
 import { useOfficeDocument } from '../useOfficeDocument';
@@ -13,12 +14,6 @@ import { WordBlock } from '../WordBlock';
 import OfficeLayoutPreview from './OfficeLayoutPreview';
 import { WorksheetTabs } from '../WorksheetTabs';
 
-/* THESIS: Read Word text and inspect worksheet cells within the existing file plane.
-   OWN-WORLD: Existing flat toolbar, theme surfaces, borders and type; no source fonts or HTML.
-   STORY: Choose a sheet, page or jump to source rows, inspect saved values and follow citations.
-   FIRST VIEWPORT: Existing sheet selector, a wrapping Previous/Next/Row strip and the full-height table.
-   FORM: Ordinary incumbent extension; office-preview-v1, worksheet-pages-v1; no new visual world.
-   FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance */
 export default function OfficePreview(context: PreviewContext) {
   const extension = context.resource.entry.extension;
   const content = extension === 'docx' || extension === 'xlsx';
@@ -29,28 +24,29 @@ export default function OfficePreview(context: PreviewContext) {
     extension === 'xlsx' || context.evidence ? 'content' : 'layout',
   );
   if (!context.services.officeLayout && content) return <OfficeContent {...context} />;
-  return (
-    <div className="office-viewer">
-      <div className="preview-toolbar office-mode-bar" role="toolbar" aria-label="Office view">
-        <button aria-pressed={mode !== 'content' || !content} onClick={() => setMode('layout')}>
-          {workbook ? 'Print layout' : 'Layout'}
+  const viewControls = (
+    <>
+      <button aria-pressed={mode !== 'content' || !content} onClick={() => setMode('layout')}>
+        {workbook ? 'Print layout' : 'Layout'}
+      </button>
+      {content && (
+        <button aria-pressed={mode === 'content'} onClick={() => setMode('content')}>
+          {workbook ? 'Sheet' : 'Reading'}
         </button>
-        {content && (
-          <button aria-pressed={mode === 'content'} onClick={() => setMode('content')}>
-            {workbook ? 'Sheet' : 'Reading'}
-          </button>
-        )}
-      </div>
-      {mode === 'content' && content ? (
-        <OfficeContent {...context} />
-      ) : (
-        <OfficeLayoutPreview {...context} />
       )}
+    </>
+  );
+  return mode === 'content' && content ? (
+    <OfficeContent {...context} viewControls={viewControls} />
+  ) : (
+    <div className="office-viewer">
+      <PreviewToolbar context={context}>{viewControls}</PreviewToolbar>
+      <OfficeLayoutPreview {...context} />
     </div>
   );
 }
 
-function OfficeContent(context: PreviewContext) {
+function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
   const fontSize = context.reading?.fontSize ?? 16;
   const [details, setDetails] = useState(false);
   const [formatted, setFormatted] = usePreviewState(context, 'office.formatted', true);
@@ -174,42 +170,56 @@ function OfficeContent(context: PreviewContext) {
     );
   if (!document || !office)
     return <Loading label={workbook ? 'Reading worksheet rows…' : 'Reading Office document…'} />;
-  return (
-    <div className="office-viewer" data-office-preview="worksheet-pages-v1">
-      <PreviewToolbar context={context}>
-        <span className="muted">
-          {office.kind === 'workbook' ? 'Saved values' : 'Text, tables and images'}
-        </span>
-        {office.kind === 'workbook' && (
-          <>
-            <button aria-pressed={formatted} onClick={() => setFormatted(true)}>
-              Formatted
-            </button>
-            <button aria-pressed={!formatted} onClick={() => setFormatted(false)}>
-              Stored
-            </button>
-          </>
-        )}
-        <span className="toolbar-spacer" />
-        <button
-          aria-expanded={details}
-          aria-controls={'office-details-' + context.resource.id}
-          onClick={() => setDetails(!details)}
-        >
-          Preview details
-        </button>
-      </PreviewToolbar>
-      {office.kind === 'workbook' && sheet && (
-        <WorksheetTabs
-          sheets={office.sheets}
-          value={sheet.name}
-          choose={(name) => {
-            setIgnoredCitation(citationKey);
-            setSheetName(name);
-            setHistory([]);
-          }}
+  const toolbar = (filter?: TableControls) => (
+    <PreviewToolbar context={context}>
+      {context.viewControls}
+      {filter && (
+        <input
+          type="search"
+          aria-label="Filter current worksheet page"
+          placeholder="Filter rows shown"
+          value={filter.query}
+          onChange={(event) => filter.setQuery(event.target.value)}
         />
       )}
+      <span className="toolbar-spacer" />
+      {filter && (
+        <span className="muted office-row-count">
+          {filter.rows.toLocaleString()} rows · {filter.columns} columns
+        </span>
+      )}
+      <ChoiceButton
+        label="Preview options"
+        value=""
+        placeholder="More"
+        choices={[
+          ...(office.kind === 'workbook'
+            ? [
+                {
+                  value: 'formatted',
+                  label: 'Formatted values',
+                  detail: formatted ? 'Selected' : undefined,
+                },
+                {
+                  value: 'stored',
+                  label: 'Stored values',
+                  detail: !formatted ? 'Selected' : undefined,
+                },
+              ]
+            : []),
+          { value: 'details', label: details ? 'Hide preview details' : 'Show preview details' },
+        ]}
+        onChoose={(value) =>
+          value === 'details'
+            ? setDetails((previous) => !previous)
+            : setFormatted(value === 'formatted')
+        }
+      />
+    </PreviewToolbar>
+  );
+  return (
+    <div className="office-viewer" data-office-preview="worksheet-pages-v1">
+      {(office.kind !== 'workbook' || loading || error) && toolbar()}
       {details && (
         <section
           className="office-coverage"
@@ -253,15 +263,6 @@ function OfficeContent(context: PreviewContext) {
             The referenced worksheet is outside the available preview.
           </p>
         )}
-      {sheet && page && !error && (
-        <WorksheetNavigation
-          page={page}
-          sheet={sheet}
-          loading={loading}
-          previous={history.at(-1) ?? Math.max(1, page.fromRow - 100)}
-          navigate={navigate}
-        />
-      )}
       {loading ? (
         <Loading label={workbook ? 'Reading worksheet rows…' : 'Reading Office document…'} />
       ) : error ? (
@@ -290,6 +291,7 @@ function OfficeContent(context: PreviewContext) {
           paged={Boolean(page)}
           formatted={formatted}
           merges={sheet.merges}
+          renderControls={toolbar}
         />
       ) : (
         office.kind === 'word' && (
@@ -317,6 +319,26 @@ function OfficeContent(context: PreviewContext) {
             </article>
           </div>
         )
+      )}
+      {sheet && page && !error && (page.fromRow > 1 || page.nextRow !== undefined) && (
+        <WorksheetNavigation
+          page={page}
+          sheet={sheet}
+          loading={loading}
+          previous={history.at(-1) ?? Math.max(1, page.fromRow - 100)}
+          navigate={navigate}
+        />
+      )}
+      {office.kind === 'workbook' && sheet && (
+        <WorksheetTabs
+          sheets={office.sheets}
+          value={sheet.name}
+          choose={(name) => {
+            setIgnoredCitation(citationKey);
+            setSheetName(name);
+            setHistory([]);
+          }}
+        />
       )}
     </div>
   );

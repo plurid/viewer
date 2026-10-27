@@ -74,9 +74,12 @@ export function useOfficeDocument(context: PreviewContext, worksheet?: Worksheet
     };
   }, [context.services, context.resource.id, context.signal, key, enabled, sheet, fromRow, limit]);
   const current = result?.key === key && result.resource === context.resource.id;
+  const cached = !context.signal.aborted ? context.services.cachedDocument?.(worksheet) : undefined;
   return {
-    document: result?.resource === context.resource.id ? result.data : undefined,
-    loading: !current,
+    document: current
+      ? result.data
+      : (cached ?? (result?.resource === context.resource.id ? result.data : undefined)),
+    loading: !current && !cached,
     error: current ? result.error || '' : '',
     retry: () => setAttempt((value) => value + 1),
   };

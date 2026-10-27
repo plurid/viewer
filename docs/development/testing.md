@@ -41,6 +41,12 @@ a test pass.
 
 ## Focused native scenarios
 
+`tests/native/document-navigation.ts` measures cold and warm EPUB/XLSX opening through fresh
+resource leases, alternating with another file for 30 cycles. It checks chapter/worksheet
+restoration and unchanged fixture hashes. Set `VIEWER_TEST_WARM_BUDGET_MS` to enforce a
+renderer-ready budget; these hidden-window measurements do not measure physical compositor frame
+rate.
+
 The app's `tests/native/` directory contains scenario drivers for Office layout, preview
 restoration/recovery, mixed workspaces, task workflows, media and other features. Run them with the
 same preservation variables and candidate binary. Their result identifies retained inputs, captures

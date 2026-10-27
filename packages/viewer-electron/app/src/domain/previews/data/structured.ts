@@ -1,8 +1,9 @@
 import JSON5 from 'json5';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import { parseAllDocuments } from 'yaml';
+import { parseXML, type XMLNode } from './xml';
 
-export const structuredFormats = ['json', 'jsonc', 'json5', 'yaml', 'yml'] as const;
+export const structuredFormats = ['json', 'jsonc', 'json5', 'yaml', 'yml', 'xml'] as const;
 export const isStructured = (extension: string) =>
   (structuredFormats as readonly string[]).includes(extension);
 export interface DataNode {
@@ -16,6 +17,7 @@ export interface DataNode {
   children: string[];
 }
 export interface StructuredData {
+  format?: 'xml';
   nodes: DataNode[];
   roots: string[];
   error?: string;
@@ -36,6 +38,7 @@ export function inspectStructured(
   try {
     if (text.length > 1_000_000)
       throw new Error('Tree inspection is limited to 1 MB. Use Source to read this file.');
+    if (extension === 'xml') return inspectXMLTree(text, maximum);
     let values: unknown[];
     if (extension === 'yaml' || extension === 'yml') {
       const documents = parseAllDocuments(text, {
@@ -118,6 +121,78 @@ export function inspectStructured(
     result.error = String((error as Error).message || error);
   }
   return result;
+}
+
+function inspectXMLTree(text: string, maximum: number): StructuredData {
+  const root = parseXML(new TextEncoder().encode(text), maximum);
+  const result: StructuredData = { format: 'xml', nodes: [], roots: [], limited: false };
+  const add = (
+    value: XMLNode | string,
+    name: string,
+    path: string,
+    depth: number,
+    parent?: string,
+  ): void => {
+    if (result.nodes.length >= maximum) {
+      result.limited = true;
+      return;
+    }
+    const element = typeof value !== 'string';
+    const node: DataNode = {
+      value,
+      name,
+      path,
+      parent,
+      depth,
+      kind: element ? 'object' : 'value',
+      summary: element
+        ? `${Object.keys(value.attributes).length} attributes · ${value.children.length} children`
+        : JSON.stringify(value).slice(0, 500),
+      children: [],
+    };
+    result.nodes.push(node);
+    if (!parent) result.roots.push(path);
+    if (!element) return;
+    for (const [name, attribute] of Object.entries(value.attributes)) {
+      const child = path + '/@' + name;
+      node.children.push(child);
+      add(attribute, '@' + name, child, depth + 1, path);
+    }
+    const counts = new Map<string, number>();
+    for (const item of value.children) {
+      if (typeof item === 'string' && !item.trim()) continue;
+      const name = typeof item === 'string' ? 'text()' : item.name;
+      const index = (counts.get(name) ?? 0) + 1;
+      counts.set(name, index);
+      const child = `${path}/${name}[${index}]`;
+      node.children.push(child);
+      add(item, name, child, depth + 1, path);
+    }
+  };
+  add(root, root.name, '/' + root.name + '[1]', 0);
+  return result;
+}
+
+/** Serialize one selected XML subtree on demand, avoiding a copy per ancestor. */
+export function copyXMLValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  const node = value as XMLNode;
+  const escape = (text: string) =>
+    text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const serialize = (node: XMLNode): string =>
+    '<' +
+    node.name +
+    Object.entries(node.attributes)
+      .map(([key, value]) => ` ${key}="${escape(value)}"`)
+      .join('') +
+    '>' +
+    node.children
+      .map((item) => (typeof item === 'string' ? escape(item) : serialize(item)))
+      .join('') +
+    '</' +
+    node.name +
+    '>';
+  return serialize(node);
 }
 
 export interface TreeExpansion {

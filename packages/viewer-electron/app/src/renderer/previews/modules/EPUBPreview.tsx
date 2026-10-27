@@ -1,10 +1,10 @@
-import { createElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { DocumentData } from '../../../domain/services';
+import { createElement, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import type { PreviewContext } from '../contracts';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { useOfficeDocument } from '../useOfficeDocument';
 const allowed = new Set([
   'h1',
   'h2',
@@ -82,28 +82,13 @@ export function chapterNodes(html: string): ReactNode {
   return Array.from(document.body.childNodes).map((node) => convert(node));
 }
 export default function EPUBPreview(context: PreviewContext) {
-  const [document, setDocument] = useState<DocumentData>();
-  const [error, setError] = useState('');
+  const { document, error, retry } = useOfficeDocument(context);
   const [chapter, setChapter] = usePreviewState(context, 'epub.chapter', 0);
   useEffect(() => {
     if (context.evidence?.anchor.kind === 'epub') setChapter(context.evidence.anchor.chapter);
   }, [context.evidence, setChapter]);
-  const [size, setSize] = usePreviewState(context, 'epub.size', 17);
+  const [size, setSize] = usePreviewState(context, 'epub.size', context.reading?.fontSize ?? 16);
   const [contents, setContents] = usePreviewState(context, 'epub.contents', true);
-  useEffect(() => {
-    let live = true;
-    void context.services
-      .document(context.resource.id)
-      .then((document) => {
-        if (live && !context.signal.aborted) setDocument(document);
-      })
-      .catch((error) => {
-        if (live) setError(error.message);
-      });
-    return () => {
-      live = false;
-    };
-  }, [context.resource.id, context.services, context.signal]);
   const chapters = document?.chapters || [];
   const position = Math.min(chapter, Math.max(0, chapters.length - 1));
   const html = chapters[position]?.html || '';
@@ -140,7 +125,12 @@ export default function EPUBPreview(context: PreviewContext) {
       [chapters.length, position, setChapter, setContents],
     ),
   );
-  if (error) return <Empty icon="warning" title="EPUB could not be opened" detail={error} />;
+  if (error)
+    return (
+      <Empty icon="warning" title="EPUB could not be opened" detail={error}>
+        <button onClick={context.retry ?? retry}>Try again</button>
+      </Empty>
+    );
   if (!document) return <Loading label="Reading EPUB…" />;
   return (
     <div className="epub-viewer">

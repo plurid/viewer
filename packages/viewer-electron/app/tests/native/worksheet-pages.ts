@@ -151,24 +151,23 @@ async function ready(connection: Connection, from: number, name?: string) {
     (value) =>
       Boolean(
         value.ready &&
-        value.value === String(from) &&
+        (value.value === String(from) || (from === 1 && value.value === undefined)) &&
         (!name || value.name === name) &&
-        (value.firstRow !== undefined || value.range?.startsWith('No rows')) &&
+        (value.firstRow !== undefined ||
+          value.range?.startsWith('No rows') ||
+          (from === 1 && value.value === undefined)) &&
         ((from === 1 && name) || value.range?.startsWith(`Rows ${from.toLocaleString()}–`)),
       ),
     `worksheet ${name || ''} from ${from}`,
   );
 }
 async function choose(connection: Connection, value: string) {
-  await connection.evaluate('document.querySelector("button[aria-label=Worksheet]").click()');
-  const selector = `.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`;
-  await until(
-    () => connection.evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
-    Boolean,
-    'worksheet choice ' + value,
+  const name = JSON.stringify(value);
+  await connection.evaluate(
+    `[...document.querySelectorAll('[role="tab"]')].find(tab => tab.textContent.trim() === ${name} || tab.textContent.trim() === ${name} + ' (hidden)').click()`,
   );
-  await connection.evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
 }
+
 async function press(
   connection: Connection,
   key: string,

@@ -365,6 +365,11 @@ global arrangement toolbar, theme button, shortcut footer or operations rail. Se
 contextual commands own those controls. Keep foreground profiling separate from routine hidden
 functional verification.
 
+Settings rows keep a shared control edge, including shortcut recorders. Color swatches have fixed
+square bounds. Permission checkboxes keep their own width and sit beside their text. Models lists
+show the full saved model ID, an honest connection status and the effective default before setup
+details; opening Settings must not connect to a provider.
+
 ## Maintaining this document
 
 Record durable interface rules here. Put feature instructions in [user guides](docs/README.md),
