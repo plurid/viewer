@@ -1,7 +1,7 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { notarizeRetained } from '../tools/direct-release';
+import { notarizeRetained, stapleApplicationRetained } from '../tools/direct-release';
 import { temporaryRoot } from '../tools/temporary';
 
 async function fixture() {
@@ -13,6 +13,52 @@ async function fixture() {
 }
 
 describe('retained release submissions', () => {
+  it('staples and validates a retained short-path app copy without changing the signed source', async () => {
+    const root = await temporaryRoot('viewer-staple-source-');
+    const app = path.join(root, 'Generated.app');
+    await mkdir(path.join(app, 'Contents'), { recursive: true });
+    await writeFile(path.join(app, 'Contents', 'fixture.txt'), 'Generated signed-source stand-in');
+    const run = vi.fn(async () => 'Generated successful Apple-tool result');
+    const result = await stapleApplicationRetained(app, run);
+    expect(path.basename(result)).toBe('Generated.app');
+    expect(result).not.toBe(app);
+    expect(run.mock.calls).toEqual([
+      [['stapler', 'staple', result]],
+      [['stapler', 'validate', result]],
+    ]);
+    for (const location of [app, result])
+      expect(await readFile(path.join(location, 'Contents', 'fixture.txt'), 'utf8')).toBe(
+        'Generated signed-source stand-in',
+      );
+  });
+
+  it('retains both app copies when Apple stapling fails and does not attempt validation', async () => {
+    const root = await temporaryRoot('viewer-staple-failed-');
+    const app = path.join(root, 'Generated.app');
+    await mkdir(app);
+    const run = vi.fn(async (_args: string[]) => {
+      throw new Error('Generated stapler failure');
+    });
+    await expect(stapleApplicationRetained(app, run)).rejects.toThrow('Generated stapler failure');
+    expect(run).toHaveBeenCalledOnce();
+    const result = run.mock.calls[0]![0].at(-1)!;
+    expect((await lstat(app)).isDirectory()).toBe(true);
+    expect((await lstat(result)).isDirectory()).toBe(true);
+  });
+
+  it('only validates an existing ticket instead of replacing it on a repeat', async () => {
+    const root = await temporaryRoot('viewer-staple-existing-');
+    const app = path.join(root, 'Generated.app');
+    await mkdir(path.join(app, 'Contents'), { recursive: true });
+    await writeFile(path.join(app, 'Contents', 'CodeResources'), 'Generated ticket stand-in');
+    const run = vi.fn(async () => 'Generated successful validation');
+    const result = await stapleApplicationRetained(app, run);
+    expect(run).toHaveBeenCalledExactlyOnceWith(['stapler', 'validate', result]);
+    expect(await readFile(path.join(result, 'Contents', 'CodeResources'), 'utf8')).toBe(
+      'Generated ticket stand-in',
+    );
+  });
+
   it('submits a literal archive path and Keychain profile, retaining the accepted response', async () => {
     const { artifact, record } = await fixture();
     const response = JSON.stringify({ id: 'generated-submission', status: 'Accepted' });

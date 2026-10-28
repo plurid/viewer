@@ -2,10 +2,11 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { temporaryRoot } from './temporary';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   exec = promisify(execFile);
 
@@ -14,14 +15,42 @@ interface Notarization {
   id: string;
 }
 type NotaryCommand = (args: string[]) => Promise<string>;
+const runNotaryCommand: NotaryCommand = async (args) =>
+  (await exec('xcrun', args, { timeout: 30 * 60000, maxBuffer: 2_000_000 })).stdout;
+
+/** Stapler can fail at deeply nested checkout paths. Let Apple's tool modify a short,
+ * retained whole-app copy; the submitted source and failed copies stay intact. */
+export async function stapleApplicationRetained(
+  app: string,
+  run: NotaryCommand = runNotaryCommand,
+): Promise<string> {
+  const source = await lstat(app);
+  if (!source.isDirectory() || source.isSymbolicLink())
+    throw new Error('Stapling requires an ordinary application bundle directory.');
+  const directory = await temporaryRoot('viewer-staple-');
+  const copy = path.join(directory, path.basename(app));
+  await cp(app, copy, {
+    recursive: true,
+    force: false,
+    errorOnExist: true,
+    verbatimSymlinks: true,
+  });
+  const ticket = await lstat(path.join(copy, 'Contents', 'CodeResources')).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    return undefined;
+  });
+  // A repeat must validate the retained ticket, never ask stapler to remove it.
+  if (!ticket) await run(['stapler', 'staple', copy]);
+  await run(['stapler', 'validate', copy]);
+  return copy;
+}
 
 /** Keep Apple's response even when a submission fails; never clean up its archive. */
 export async function notarizeRetained(
   artifact: string,
   profile: string,
   record: string,
-  run: NotaryCommand = async (args) =>
-    (await exec('xcrun', args, { timeout: 30 * 60000, maxBuffer: 2_000_000 })).stdout,
+  run: NotaryCommand = runNotaryCommand,
 ): Promise<Notarization> {
   let output: string;
   try {
@@ -126,13 +155,12 @@ async function main() {
     profile,
     path.join(directory, 'app-notarization.json'),
   );
-  await exec('xcrun', ['stapler', 'staple', app]);
-  await exec('xcrun', ['stapler', 'validate', app]);
-  await exec('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', app]);
+  const stapled = await stapleApplicationRetained(app);
+  await exec('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', stapled]);
   const stage = await mkdtemp(path.join(directory, 'stage-')),
     dmg = path.join(directory, `Viewer-${version}-arm64.dmg`);
   try {
-    await cp(app, path.join(stage, 'Viewer.app'), {
+    await cp(stapled, path.join(stage, 'Viewer.app'), {
       recursive: true,
       dereference: false,
       verbatimSymlinks: true,

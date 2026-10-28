@@ -46,6 +46,21 @@ owner before changing a cache.
 
 ## Index and preview work
 
+`tools/search-benchmark.ts` compares real filesystem traversal and content extraction with common
+exclusions enabled and disabled. From the app directory, run:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+node --expose-gc --import tsx tools/search-benchmark.ts 2000
+```
+
+The argument is the file count per generated dependency/cache folder, between 100 and 10,000. The
+benchmark retains six such trees and a working-document folder. It alternates traversal order,
+checks identical useful matches, verifies zero authorization/extraction inside excluded trees and
+measures cancellation, event-loop delay and process memory. Spotlight is disabled; content indexing
+uses actual file reads with in-memory SQLite. Treat its timings as local synthetic observations, not
+application-wide latency or network-volume guarantees. All fixtures and the result remain.
+
 `tools/index-benchmark.ts` measures synthetic SQLite metadata queries independently of filesystem
 crawling and content extraction. Keep those costs separate from mounted-provider latency and
 first-open parsing.
