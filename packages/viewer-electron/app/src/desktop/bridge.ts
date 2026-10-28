@@ -1549,7 +1549,11 @@ export class Desktop {
         const work = () => this.chats.request(request, sender, this.windows.get(sender)?.catalog);
         return request.kind === 'send' ? this.activity.send(request.id, work) : work();
       },
-      shellCommand: ([action]) => this.shellCommand[action](),
+      shellCommand: ([action], sender) => {
+        if (action === 'uninstall' && this.windows.get(sender)?.role !== 'settings')
+          throw new Error('Uninstall the Viewer CLI from Settings → Navigation.');
+        return this.shellCommand[action]();
+      },
       hotkeyStatus: () => this.options.hotkeyStatus?.() ?? { registered: false, shortcut: '' },
       restoreWindow: () => this.options.restoreWindow?.(),
       workspaceClaim: ([workspaceID], sender) => {

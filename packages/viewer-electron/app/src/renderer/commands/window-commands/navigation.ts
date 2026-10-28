@@ -1,6 +1,6 @@
 import { effectiveWindowUI } from '../../state/effective-ui';
 import { changeSetting } from './settings';
-import { activeWorkspace, changeWorkspace, getState } from '../../state/store';
+import { activeWorkspace, announce, changeWorkspace, getState } from '../../state/store';
 import { copyPathCommand } from '../copy-path';
 import type { CommandDefinition } from '../registry';
 import { requestProject, type ProjectCommand } from '../../workspace/projects';
@@ -161,6 +161,27 @@ export function navigationCommands({
       shortcut: '⌘,',
       when: windowScope,
       run: actions.settings,
+    },
+    {
+      id: 'install-viewer-cli',
+      label: 'Install Viewer CLI',
+      group: 'App',
+      icon: 'terminal',
+      aliases: ['install viewer', 'install cli', 'shell command', 'terminal launcher', 'PATH'],
+      detail: 'Create ~/.local/bin/viewer to open files and folders from your terminal.',
+      when: windowScope,
+      run: async () => {
+        const status = await window.viewer.shellCommand('install');
+        if (status.problem) throw new Error(status.problem);
+        if (!status.installed) throw new Error('The Viewer CLI could not be installed.');
+        if (status.executable === false)
+          throw new Error(
+            'The Viewer CLI exists but is not executable. Open Settings → Navigation to review it.',
+          );
+        announce(
+          'Viewer CLI is ready. Run viewer . in your terminal, or ~/.local/bin/viewer . if it is not on PATH.',
+        );
+      },
     },
     {
       id: 'toggle-sidebar',

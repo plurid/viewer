@@ -109,6 +109,55 @@ describe('a command for every setting', () => {
   });
 });
 
+describe('Viewer CLI palette installation', () => {
+  const install = () => {
+    const command = windowCommands(actions).find((item) => item.id === 'install-viewer-cli');
+    if (!command) throw new Error('Missing Viewer CLI installation command.');
+    return command.run(context);
+  };
+
+  it('uses the existing installer and reports a usable launcher, including repeat installation', async () => {
+    const shellCommand = vi.fn(async () => ({
+      path: '/fixtures/.local/bin/viewer',
+      installed: true,
+      executable: true,
+    }));
+    Object.assign(window.viewer, { shellCommand });
+    await install();
+    await install();
+    expect(shellCommand.mock.calls).toEqual([['install'], ['install']]);
+    expect(getState()).toMatchObject({
+      noticeKind: 'info',
+      notice: expect.stringContaining('~/.local/bin/viewer .'),
+    });
+    expect(() => agentCommandID('install-viewer-cli', [])).toThrow();
+  });
+
+  it('preserves installer failure details instead of reporting success', async () => {
+    Object.assign(window.viewer, {
+      shellCommand: vi.fn(async () => ({
+        path: '/fixtures/.local/bin/viewer',
+        installed: false,
+        problem: 'This path contains another command. It will be preserved.',
+      })),
+    });
+    await expect(install()).rejects.toThrow('another command');
+    expect(getState().notice).toBeNull();
+  });
+
+  it('does not claim a non-executable launcher is ready', async () => {
+    Object.assign(window.viewer, {
+      shellCommand: vi.fn(async () => ({
+        path: '/fixtures/.local/bin/viewer',
+        installed: true,
+        executable: false,
+      })),
+    });
+    await expect(install()).rejects.toThrow('not executable');
+    expect(getState().notice).toBeNull();
+  });
+});
+
 describe("an agent's setting commands", () => {
   it('may propose the view and presentation it may configure, and nothing else', () => {
     expect(agentCommandID('setting.ui.space.minimap', [])).toBe('setting.ui.space.minimap');

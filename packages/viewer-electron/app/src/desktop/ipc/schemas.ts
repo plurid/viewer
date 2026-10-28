@@ -828,7 +828,7 @@ export const methodWindows = {
   localServerInspect: 'viewer',
   localServerAction: 'viewer',
   chat: 'viewer',
-  shellCommand: 'settings',
+  shellCommand: 'both',
   hotkeyStatus: 'both',
   restoreWindow: 'viewer',
   workspaceClaim: 'viewer',

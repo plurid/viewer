@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { methodWindows, schemas, settingsEvents } from '../src/desktop/ipc/schemas';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  methodWindows,
+  schemas,
+  settingsEvents,
+  type ApiHandlers,
+} from '../src/desktop/ipc/schemas';
+import { Desktop } from '../src/desktop/bridge';
 import { paneTypes } from '../src/domain/contracts';
 
 describe('IPC method table', () => {
@@ -23,6 +29,33 @@ describe('IPC method table', () => {
   });
   it('assigns every method a window', () => {
     expect(Object.keys(methodWindows).sort()).toEqual(Object.keys(schemas).sort());
+  });
+  it('allows CLI installation in a workspace while keeping uninstall in Settings', async () => {
+    expect(methodWindows.shellCommand).toBe('both');
+    const status = { path: '/fixtures/.local/bin/viewer', installed: true, executable: true };
+    const installer = {
+      status: vi.fn(async () => status),
+      install: vi.fn(async () => status),
+      uninstall: vi.fn(async () => ({ ...status, installed: false })),
+    };
+    const desktop = Object.create(Desktop.prototype) as Desktop;
+    Reflect.set(desktop, 'shellCommand', installer);
+    Reflect.set(
+      desktop,
+      'windows',
+      new Map([
+        [1, { role: 'viewer' }],
+        [2, { role: 'settings' }],
+      ]),
+    );
+    const createHandlers = Reflect.get(desktop, 'createHandlers') as () => ApiHandlers;
+    const handler = createHandlers.call(desktop).shellCommand;
+    await expect(handler(['status'], 1)).resolves.toEqual(status);
+    await expect(handler(['install'], 1)).resolves.toEqual(status);
+    expect(() => handler(['uninstall'], 1)).toThrow('Settings');
+    expect(installer.uninstall).not.toHaveBeenCalled();
+    await expect(handler(['uninstall'], 2)).resolves.toMatchObject({ installed: false });
+    expect(installer.uninstall).toHaveBeenCalledOnce();
   });
   it('keeps credentials in Settings and file changes in the workspace window', () => {
     for (const method of [

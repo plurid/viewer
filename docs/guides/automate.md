@@ -27,8 +27,10 @@ application.
 
 ## Open Viewer from your terminal
 
-In a direct build, open **Settings → Navigation → Install shell command**. This installs the
-`viewer` launcher at `~/.local/bin/viewer` without replacing another command at that path.
+In a direct build, press **⌘K** and choose **Install Viewer CLI**, or open **Settings → Navigation →
+Install shell command**. Both install the `viewer` launcher at `~/.local/bin/viewer` without
+replacing another command at that path. A message confirms when the launcher is ready or explains
+the problem.
 
 Run `viewer .` to open the current folder. If your shell cannot find it, run `~/.local/bin/viewer .`
 and add `~/.local/bin` to your shell's `PATH` when convenient. Viewer does not edit your shell

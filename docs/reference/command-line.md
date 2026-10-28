@@ -83,10 +83,12 @@ supported command IDs rather than command-language lines. See [agent authority](
 
 ## Launch from a terminal
 
-The direct build provides **Install shell command** in **Settings → Navigation**. It creates an
-executable launcher at `~/.local/bin/viewer` pointing to that Viewer installation. It does not edit
-`PATH` or replace an existing different command. This installer is not a palette command or a
-terminal subcommand named `install viewer`.
+The direct build provides **Install Viewer CLI** in the command palette and **Install shell
+command** in **Settings → Navigation**. Both create an executable launcher at `~/.local/bin/viewer`
+pointing to that Viewer installation. Palette searches for `install viewer`, `install cli` or
+`shell command` find the command. It can be run again for the same installation. It does not edit
+`PATH` or replace an existing different command. There is no terminal subcommand named
+`install viewer`.
 
 ```sh
 viewer .

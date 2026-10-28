@@ -90,7 +90,7 @@ export class ShellCommand {
     if (existing) {
       if (!existing.bytes.equals(Buffer.from(this.script)))
         throw new Error(
-          'The existing command was preserved. Choose another installation before continuing.',
+          'The existing command at ~/.local/bin/viewer was preserved. Inspect that file before retrying installation.',
         );
       return this.status();
     }
