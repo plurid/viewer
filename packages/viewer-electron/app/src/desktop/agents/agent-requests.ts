@@ -581,25 +581,53 @@ export class AgentRequests {
     }
   }
   stop(clientID: string): void {
+    const failures: unknown[] = [];
     for (const proposal of this.proposals.values()) {
       if (
         (proposal.clientID ?? sharedClientID) !== clientID ||
         !['review', 'running'].includes(proposal.status)
       )
         continue;
-      this.cancel(proposal.id, clientID);
+      try {
+        this.cancel(proposal.id, clientID);
+      } catch (error) {
+        failures.push(error);
+      }
     }
+    if (failures.length)
+      throw new AggregateError(failures, 'Some proposal owners could not be stopped.');
   }
   cancel(id: string, clientID: string): void {
     const proposal = this.get(id);
     if ((proposal.clientID ?? sharedClientID) !== clientID)
       throw new Error('Proposal belongs to another actor.');
     if (!['review', 'running'].includes(proposal.status)) return;
-    if (proposal.taskID) this.authority?.cancelExecution(proposal.taskID);
-    if (proposal.kind === 'speech') this.authority?.cancelSpeech?.(proposal.id);
-    if (proposal.taskSetup) this.authority?.cancelTaskWorkflow?.(proposal.taskSetup.id);
-    if (proposal.operationID) this.authority?.cancelOperation?.(proposal.operationID);
+    // Retire admission before calling owners: one failed cancellation must not leave
+    // this proposal executable or prevent other independent owners from stopping.
     proposal.status = 'cancelled';
+    const cancellations = [
+      () => {
+        if (proposal.taskID) this.authority?.cancelExecution(proposal.taskID);
+      },
+      () => {
+        if (proposal.kind === 'speech') this.authority?.cancelSpeech?.(proposal.id);
+      },
+      () => {
+        if (proposal.taskSetup) this.authority?.cancelTaskWorkflow?.(proposal.taskSetup.id);
+      },
+      () => {
+        if (proposal.operationID) this.authority?.cancelOperation?.(proposal.operationID);
+      },
+    ];
+    const failures: unknown[] = [];
+    for (const cancel of cancellations)
+      try {
+        cancel();
+      } catch (error) {
+        failures.push(error);
+      }
     this.emit(proposal);
+    if (failures.length)
+      throw new AggregateError(failures, 'Some proposal owners could not be stopped.');
   }
 }

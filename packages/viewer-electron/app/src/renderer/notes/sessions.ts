@@ -13,6 +13,7 @@ export interface NoteSession {
 }
 const sessions = new Map<string, NoteSession>();
 const loading = new Map<string, Promise<void>>();
+const retired = new Set<string>();
 const removalLocks = new Set<string>();
 const trashedNotes = new Set<string>();
 const listeners = new Set<() => void>();
@@ -29,9 +30,34 @@ export const subscribeNotes = (listener: () => void) => {
   };
 };
 export const noteSession = (paneID: string) => sessions.get(paneID);
+function releaseRetired(paneID: string): void {
+  if (!retired.has(paneID) || loading.has(paneID)) return;
+  const session = sessions.get(paneID);
+  if (
+    session &&
+    (session.pending ||
+      session.text !== session.document.text ||
+      session.title !== session.document.title)
+  )
+    return;
+  if (session) clearTimeout(session.timer);
+  sessions.delete(paneID);
+  retired.delete(paneID);
+}
+/** Keep open views and bounded arrangement Undo; dirty or pending writes retain their owner. */
+export function trimNoteSessions(keep: ReadonlySet<string>): void {
+  for (const paneID of new Set([...sessions.keys(), ...loading.keys()])) {
+    if (keep.has(paneID)) retired.delete(paneID);
+    else {
+      retired.add(paneID);
+      releaseRetired(paneID);
+    }
+  }
+}
 /** A typed task handoff carries only its new blank note. It never needs a private
  * read during agent dispatch, and retries cannot overwrite a person's edits. */
 export function initializeTaskNote(paneID: string, input: NoteDocument): void {
+  retired.delete(paneID);
   const document = noteSchema.parse(input);
   if (document.text || document.revision !== 0 || document.kind !== 'note')
     throw new Error('A new task can initialize only its blank note.');
@@ -67,11 +93,13 @@ export function finishNoteTrash(id: string, trashed: boolean): void {
       if (session.document.id !== id) continue;
       clearTimeout(session.timer);
       sessions.delete(paneID);
+      retired.delete(paneID);
     }
   }
   notify();
 }
 export async function loadNote(paneID: string, id: string, refresh = false): Promise<void> {
+  retired.delete(paneID);
   if (trashedNotes.has(id)) throw new Error('This note was moved to Trash.');
   const held = sessions.get(paneID);
   if (
@@ -109,7 +137,10 @@ export async function loadNote(paneID: string, id: string, refresh = false): Pro
       });
       notify();
     })
-    .finally(() => loading.delete(paneID));
+    .finally(() => {
+      loading.delete(paneID);
+      releaseRetired(paneID);
+    });
   loading.set(paneID, pending);
   return pending;
 }
@@ -156,6 +187,7 @@ export async function flushNote(paneID: string): Promise<void> {
     })
     .finally(() => {
       session.pending = undefined;
+      releaseRetired(paneID);
       notify();
     });
   notify();

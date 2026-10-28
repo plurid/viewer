@@ -1,16 +1,20 @@
 import { EventEmitter } from 'node:events';
 import { beforeEach, expect, it, vi } from 'vitest';
+import type { BrowserWindowConstructorOptions } from 'electron';
 
 const fixture = vi.hoisted(() => ({
   guests: [] as {
     webContents: EventEmitter & { gone: boolean };
     destroy(): void;
     gone: boolean;
+    options: BrowserWindowConstructorOptions;
+    show(): void;
+    close(): void;
   }[],
   flush: vi.fn(async () => {}),
 }));
 vi.mock('electron', () => ({
-  BrowserWindow: class {
+  BrowserWindow: class extends EventEmitter {
     gone = false;
     webContents = Object.assign(new EventEmitter(), {
       gone: false,
@@ -29,9 +33,14 @@ vi.mock('electron', () => ({
       setWindowOpenHandler: vi.fn(),
       debugger: { attach: vi.fn(), sendCommand: vi.fn(async () => {}) },
     });
-    constructor() {
+    constructor(public options: BrowserWindowConstructorOptions) {
+      super();
       fixture.guests.push(this);
     }
+    show = vi.fn();
+    focus = vi.fn();
+    setTitle = vi.fn();
+    close = vi.fn(() => this.destroy());
     isDestroyed() {
       return this.gone;
     }
@@ -42,6 +51,7 @@ vi.mock('electron', () => ({
       this.webContents.gone = true;
       this.webContents.emit('did-stop-loading');
       this.gone = true;
+      this.emit('closed');
     }
   },
   session: {
@@ -66,7 +76,11 @@ beforeEach(() => {
 
 async function opened() {
   const send = vi.fn();
-  const owner = { isDestroyed: () => false, webContents: { isDestroyed: () => false, send } };
+  const owner = {
+    isDestroyed: () => false,
+    isVisible: () => false,
+    webContents: { isDestroyed: () => false, send },
+  };
   const browsers = new BrowserPlanes(() => owner as unknown as BrowserWindow);
   await browsers.request(1, {
     kind: 'open',
@@ -77,6 +91,35 @@ async function opened() {
   });
   return { browsers, guest: fixture.guests[0]!, send };
 }
+
+it('opens a bounded normal page window without preload or Node authority, and retires it with its owner', async () => {
+  const { browsers, guest } = await opened();
+  await browsers.request(1, { kind: 'action', id: 'page', action: 'native-window' });
+  const native = fixture.guests[1]!;
+  expect(native.options.webPreferences).toMatchObject({
+    sandbox: true,
+    contextIsolation: true,
+    nodeIntegration: false,
+    webSecurity: true,
+  });
+  expect(native.options.webPreferences?.preload).toBeUndefined();
+  expect(native.options.webPreferences?.offscreen).toBeUndefined();
+  expect(native.show).not.toHaveBeenCalled();
+  const prevented = vi.fn();
+  native.webContents.emit(
+    'will-navigate',
+    { preventDefault: prevented },
+    'file:///private/fixture.txt',
+  );
+  expect(prevented).toHaveBeenCalledOnce();
+  await browsers.request(1, { kind: 'action', id: 'page', action: 'native-window' });
+  expect(fixture.guests).toHaveLength(2);
+  expect(guest.gone).toBe(false);
+  browsers.stopOwner(1);
+  expect(native.close).toHaveBeenCalledOnce();
+  expect(native.gone).toBe(true);
+  await browsers.closeAll();
+});
 
 it('ignores guest events after webContents destruction, before its window finishes closing', async () => {
   const { browsers, guest, send } = await opened();

@@ -20,6 +20,7 @@ import type {
   IndexStatus,
 } from '../../domain/services';
 import { absolute, entry } from '../files/filesystem';
+import { searchExclusions, searchExclusionRules } from './exclusions';
 const fold = (value: string) =>
   value
     .normalize('NFD')
@@ -43,6 +44,7 @@ export class FileIndex {
   private generation = 0;
   private count?: number;
   private config?: ApplicationSettings['search'];
+  private excluded: (file: string) => boolean;
   /** The configuration the last `configure` applied (not the initial scope), to tell a repeat. */
   private applied?: string;
   /** A rebuild extracts every document again; any other crawl keeps text stored for its version. */
@@ -56,6 +58,7 @@ export class FileIndex {
     initialScope?: ApplicationSettings['search'],
   ) {
     this.config = initialScope;
+    this.excluded = searchExclusions(initialScope?.exclusions ?? []);
     this.db = new DatabaseSync(file);
     try {
       this.db.exec(
@@ -214,14 +217,15 @@ export class FileIndex {
       roots?.length ? `files.root IN (${roots.map(() => '?').join(',')})` : roots ? '0=1' : '1=1',
     ];
     const params: (string | number)[] = [...(roots || [])];
-    for (const rule of this.config?.exclusions || []) {
-      if (rule.startsWith('/')) {
-        where.push('NOT (files.path=? OR substr(files.path,1,?)=?)');
-        params.push(rule, rule.length + 1, rule + '/');
-      } else {
-        where.push("instr('/'||files.path||'/',?)=0");
-        params.push('/' + rule + '/');
-      }
+    const rules = searchExclusionRules(this.config?.exclusions ?? []);
+    for (const rule of rules.paths) {
+      const prefix = rule.endsWith(path.sep) ? rule : rule + path.sep;
+      where.push('NOT (files.path=? OR substr(files.path,1,?)=?)');
+      params.push(rule, prefix.length, prefix);
+    }
+    for (const rule of rules.names) {
+      where.push('instr(?||files.path||?,?)=0');
+      params.push(path.sep, path.sep, path.sep + rule + path.sep);
     }
     return { where, params };
   }
@@ -417,11 +421,6 @@ export class FileIndex {
       coverage: 'indexed-matches',
     };
   }
-  private excluded(file: string): boolean {
-    return !!this.config?.exclusions.some((rule) =>
-      rule.startsWith('/') ? inside(file, rule) : file.split('/').includes(rule),
-    );
-  }
   configure(config: ApplicationSettings['search'], rebuild = false): void {
     // An unchanged configuration crawls again only the roots it could not read, which a folder pick
     // may have made readable: every pick configured the index anew, and every configuration crawled
@@ -434,6 +433,7 @@ export class FileIndex {
     this.applied = applied;
     this.rebuilding = rebuild;
     this.config = config;
+    this.excluded = searchExclusions(config.exclusions);
     // Revoked folder authority must remove names and metadata as well as body text.
     const deniedPaths: string[] = [],
       deniedArgs: (string | number)[] = [];

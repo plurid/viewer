@@ -121,6 +121,81 @@ describe('private model data authority', () => {
     ).rejects.toThrow('Allow this provider');
     await permissions.set(provider, null);
   });
+  it('withdraws agent access before a failed write while preserving user-only work', async () => {
+    await permissions.set(provider, 'full-text');
+    await permissions.allowAgents(provider, true);
+    let finishAgent!: () => void;
+    let finishUser!: () => void;
+    let agentSignal!: AbortSignal;
+    let userSignal!: AbortSignal;
+    const agent = permissions.run(
+      provider,
+      'names',
+      signal(),
+      async (running) => {
+        agentSignal = running;
+        await new Promise<void>((resolve) => {
+          finishAgent = resolve;
+        });
+        return 'late agent result';
+      },
+      'agent',
+    );
+    const user = permissions.run(provider, 'names', signal(), async (running) => {
+      userSignal = running;
+      await new Promise<void>((resolve) => {
+        finishUser = resolve;
+      });
+      return 'user result';
+    });
+    await vi.waitFor(() => {
+      expect(finishAgent).toBeTypeOf('function');
+      expect(finishUser).toBeTypeOf('function');
+    });
+    const rejected = expect(agent).rejects.toThrow();
+    vi.spyOn(DocumentStore.prototype, 'save').mockRejectedValueOnce(new Error('disk full'));
+    const revoked = permissions.allowAgents(provider, false);
+    expect(agentSignal.aborted).toBe(true);
+    expect(userSignal.aborted).toBe(false);
+    await expect(revoked).rejects.toThrow('disk full');
+    expect(await permissions.get(provider)).toMatchObject({ level: 'full-text', agents: false });
+    const unexpected = vi.fn(async () => 'must not run');
+    await expect(permissions.run(provider, 'names', signal(), unexpected, 'agent')).rejects.toThrow(
+      'agents',
+    );
+    expect(unexpected).not.toHaveBeenCalled();
+    finishAgent();
+    finishUser();
+    await rejected;
+    await expect(user).resolves.toBe('user result');
+  });
+  it('does not let an older agent grant revive a later failed withdrawal', async () => {
+    await permissions.set(provider, 'names');
+    let finish!: () => void;
+    const save = vi.spyOn(DocumentStore.prototype, 'save');
+    save.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const granting = permissions.allowAgents(provider, true);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    save.mockRejectedValueOnce(new Error('disk full'));
+    const withdrawing = permissions.allowAgents(provider, false);
+    const rejected = expect(withdrawing).rejects.toThrow('disk full');
+    finish();
+    await granting;
+    expect((await permissions.get(provider))?.agents).not.toBe(true);
+    await rejected;
+    await expect(
+      permissions.run(provider, 'names', signal(), async () => 'secret', 'agent'),
+    ).rejects.toThrow('agents');
+    await permissions.allowAgents(provider, true);
+    await expect(
+      permissions.run(provider, 'names', signal(), async () => 'allowed', 'agent'),
+    ).resolves.toBe('allowed');
+  });
   it('serializes simultaneous approval and revocation without restoring stale authority', async () => {
     await Promise.all([permissions.set(provider, 'full-text'), permissions.set(provider, null)]);
     expect(await permissions.get(provider)).toBeNull();

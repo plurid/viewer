@@ -27,7 +27,7 @@ export interface AgentServiceContext {
   own(id: string): void;
 }
 interface Dependencies {
-  git: Pick<GitReader, 'root' | 'status' | 'diff'>;
+  git: Pick<GitReader, 'root' | 'inspectStatus' | 'inspectDiff'>;
   workflows: Pick<Workflows, 'request'>;
   speech: Pick<SpeechModels, 'status' | 'describe'>;
   proposals: Pick<AgentRequests, 'speech'> & Partial<Pick<AgentRequests, 'taskWorkflow'>>;
@@ -65,13 +65,22 @@ export class AgentServiceTools {
   async stop(clientID: string): Promise<void> {
     const runs = await this.ports.workflows.request({ kind: 'list' });
     if (!Array.isArray(runs)) return;
-    for (const run of runs)
-      if (
-        run.context.actor === 'agent' &&
-        run.context.clientID === clientID &&
-        ['running', 'paused', 'waiting-review'].includes(run.status)
-      )
-        await this.ports.workflows.request({ kind: 'cancel', id: run.id });
+    const results = await Promise.allSettled(
+      runs
+        .filter(
+          (run) =>
+            run.context.actor === 'agent' &&
+            run.context.clientID === clientID &&
+            ['running', 'paused', 'waiting-review'].includes(run.status),
+        )
+        .map((run) => this.ports.workflows.request({ kind: 'cancel', id: run.id })),
+    );
+    const failures = results.filter((result) => result.status === 'rejected');
+    if (failures.length)
+      throw new AggregateError(
+        failures.map((result) => result.reason),
+        'Some workflows could not be stopped.',
+      );
   }
   async call(
     name: string,
@@ -120,13 +129,13 @@ export class AgentServiceTools {
     const root = await this.ports.git.root(input.path);
     await context.authorize(root);
     if (name === 'git_status') {
-      const status = await this.ports.git.status(root, true);
+      const status = await this.ports.git.inspectStatus(root, context.signal);
       if (status.kind !== 'ready') throw new Error(status.message);
       await context.authorize(status.snapshot.root);
       return status;
     }
     await context.require('content');
-    const result = await this.ports.git.diff(root, String(input.base), context.signal);
+    const result = await this.ports.git.inspectDiff(root, String(input.base), context.signal);
     await context.authorize(result.root);
     return result;
   }

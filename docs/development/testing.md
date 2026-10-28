@@ -21,7 +21,8 @@ Use the [desktop task protocol](usability.md) to qualify complete flows with peo
 evidence and observed human sessions separate.
 
 Tooling types include both `.ts` and React `.tsx` test files. Lint requires top-level type imports
-throughout source, tests and tools. Source CI also checks production dependency advisories; see
+throughout source, tests and tools. Source CI runs the complete regression suite after preparing the
+verified native helpers and audits the full dependency graph, including Electron; see
 [runtime dependencies](dependencies.md).
 
 ## Browser and packaged checks

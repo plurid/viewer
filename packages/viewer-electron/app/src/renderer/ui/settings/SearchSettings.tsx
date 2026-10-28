@@ -3,11 +3,13 @@ import type { IndexStatus } from '../../../domain/services';
 import { Field } from './SettingField';
 import { IconButton } from '../primitives';
 import type { SettingsEditor } from './editor';
+import { commonSearchExclusions } from '../../../domain/search/exclusions';
 
-/** Indexed locations with live status, saved searches and index exclusions. */
+/** Search scope, traversal exclusions and permission to index document contents. */
 export function SearchSettings({ editor }: { editor: SettingsEditor }) {
-  const { snapshot, patch, patches, error: setError } = editor;
+  const { snapshot, patch, patches, save, error: setError } = editor;
   const settings = snapshot.settings;
+  const recommended = [...new Set([...settings.search.exclusions, ...commonSearchExclusions])];
   const [index, setIndex] = useState<IndexStatus>();
   useEffect(() => {
     void window.viewer
@@ -115,9 +117,14 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
         </div>
       ))}
       <h2>Excluded names and paths</h2>
+      <p className="settings-note">
+        One name or full path per line. A matching folder and everything inside it are skipped
+        during indexing, document text search and subfolder searches. Names such as node_modules and
+        .venv match anywhere; full paths exclude one location. These are not glob patterns.
+      </p>
       <Field
         multiline
-        label="Index exclusions"
+        label="Excluded search names and paths"
         value={settings.search.exclusions.join('\n')}
         save={(value) =>
           patch(
@@ -129,6 +136,27 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
           )
         }
       />
+      <div className="settings-actions">
+        <button
+          disabled={
+            commonSearchExclusions.every((rule) => settings.search.exclusions.includes(rule)) ||
+            recommended.length > 200
+          }
+          onClick={() =>
+            save((current) => [
+              {
+                path: 'settings.search.exclusions',
+                // A textarea blur may still be saving. Merge after that write settles.
+                value: [
+                  ...new Set([...current.settings.search.exclusions, ...commonSearchExclusions]),
+                ],
+              },
+            ])
+          }
+        >
+          Add common exclusions
+        </button>
+      </div>
       <p className="settings-note">
         Filenames and metadata are indexed locally. Content indexing reads supported documents only
         in the locations you enable. Offline drives retain their last results.

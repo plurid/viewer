@@ -45,6 +45,8 @@ export class AgentAccess {
   private generation = 0;
   private reviews = new WeakMap<AgentAccessReview, CapturedReview>();
   private writes: Promise<unknown> = Promise.resolve();
+  private withdrawals = new Set<() => Promise<void>>();
+  private dirtyWithdrawal = false;
   constructor(
     dataPath: string,
     private requested: () => RequestedAgentAccess | undefined,
@@ -87,6 +89,12 @@ export class AgentAccess {
     return (this.loading ??= this.load());
   }
 
+  /** Consumers retire work admitted under the previous authority, before saving a withdrawal. */
+  onWithdrawal(listener: () => Promise<void>): () => void {
+    this.withdrawals.add(listener);
+    return () => this.withdrawals.delete(listener);
+  }
+
   /** Keep unreadable authority bytes before an explicit review replaces them. */
   private async preserveUnreadable(): Promise<void> {
     if (!this.unreadable) return;
@@ -126,8 +134,32 @@ export class AgentAccess {
   }
 
   private async save(next: AgentAuthority): Promise<void> {
+    const previous = await this.approved();
+    const narrowed: AgentAuthority = {
+      ...previous,
+      enabled: previous.enabled && next.enabled,
+      roots: previous.roots.filter((root) => next.roots.includes(root)),
+      capabilities: previous.capabilities.filter((capability) =>
+        next.capabilities.includes(capability),
+      ),
+    };
+    if (
+      narrowed.enabled !== previous.enabled ||
+      narrowed.roots.length !== previous.roots.length ||
+      narrowed.capabilities.length !== previous.capabilities.length
+    ) {
+      // Failed storage must not restore withdrawn permission in the running app.
+      this.approval = narrowed;
+      this.loading = Promise.resolve(narrowed);
+      this.generation++;
+      this.dirtyWithdrawal = true;
+      await Promise.allSettled(
+        [...this.withdrawals].map((listener) => Promise.resolve().then(listener)),
+      );
+    }
     await this.preserveUnreadable();
     await this.store.save(next);
+    this.dirtyWithdrawal = false;
     this.approval = next;
     this.loading = Promise.resolve(next);
     this.unreadable = false;
@@ -176,7 +208,12 @@ export class AgentAccess {
         enabled: approval.enabled && requested.enabled,
         roots: approval.roots.filter((root) => named.has(root)),
       };
-      if (next.enabled === approval.enabled && next.roots.length === approval.roots.length) return;
+      if (
+        !this.dirtyWithdrawal &&
+        next.enabled === approval.enabled &&
+        next.roots.length === approval.roots.length
+      )
+        return;
       await this.save(next);
     });
   }
@@ -271,6 +308,12 @@ export class AgentAccess {
         requiresReapproval: change.enabled === true ? false : approval.requiresReapproval,
       };
       await this.save(agentAuthoritySchema.parse(next));
+    });
+  }
+
+  flush(): Promise<void> {
+    return this.serial(async () => {
+      if (this.dirtyWithdrawal) await this.save(await this.approved());
     });
   }
 }

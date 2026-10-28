@@ -19,12 +19,48 @@ import {
   noteLocked,
   noteSession,
   prepareNoteTrash,
+  trimNoteSessions,
 } from '../src/renderer/notes/sessions';
 import { initialize } from '../src/renderer/state/store';
 import { addContentPane } from '../src/renderer/state/panes';
 import { confirmClose } from '../src/renderer/editing/unsaved';
 
 afterEach(() => vi.unstubAllGlobals());
+it('bounds retained note views while preserving dirty sessions and in-flight saves', async () => {
+  const root = await temporaryRoot('viewer-note-retention-');
+  const notes = new Notes(root);
+  const created = await notes.request({ kind: 'create', format: 'note', directory: root });
+  if (created.kind !== 'document') throw new Error('Expected note');
+  let fail = false;
+  vi.stubGlobal('window', {
+    viewer: {
+      notes: (request: Parameters<Notes['request']>[0]) => {
+        if (fail && request.kind === 'write')
+          return Promise.reject(new Error('Fixture save failure'));
+        return notes.request(request);
+      },
+    },
+  });
+  const panes = Array.from({ length: 450 }, () => randomUUID());
+  for (const pane of panes) await loadNote(pane, created.document.id);
+  const keep = new Set(panes.slice(-200));
+  const dirty = panes[0]!;
+  changeNote(dirty, { text: 'Retain this unsaved edit' });
+  fail = true;
+  trimNoteSessions(keep);
+  expect(panes.filter((pane) => noteSession(pane))).toHaveLength(201);
+  await expect(flushNotes()).rejects.toThrow('Fixture save failure');
+  expect(noteSession(dirty)?.text).toBe('Retain this unsaved edit');
+  fail = false;
+  await flushNotes();
+  expect(noteSession(dirty)).toBeUndefined();
+  expect(panes.filter((pane) => noteSession(pane))).toHaveLength(200);
+  trimNoteSessions(new Set());
+  expect(panes.filter((pane) => noteSession(pane))).toHaveLength(0);
+  expect(await notes.request({ kind: 'read', id: created.document.id })).toMatchObject({
+    document: { text: 'Retain this unsaved edit' },
+  });
+});
 it('moves only a current ordinary note to the injected Trash adapter, and never resurrects it', async () => {
   const root = await temporaryRoot('viewer-note-trash-');
   const trash = vi.fn(async (_file: string) => {});

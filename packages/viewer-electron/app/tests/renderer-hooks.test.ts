@@ -62,6 +62,8 @@ const viewer = {
   },
 };
 const emit = (event: DesktopEvent) => listeners.forEach((listener) => listener(event));
+// These intent tests have no layout. Auto-scroll hit testing is covered by its own fixtures.
+document.elementFromPoint ??= () => null;
 // jsdom has no modal dialogs; opening one only needs the `open` attribute here.
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
   this.setAttribute('open', '');

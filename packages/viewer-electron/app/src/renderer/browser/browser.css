@@ -52,11 +52,13 @@
 }
 .browser-status > span {
   flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .browser-status button {
+  flex-shrink: 0;
   font-size: inherit;
   padding: 2px 6px;
 }

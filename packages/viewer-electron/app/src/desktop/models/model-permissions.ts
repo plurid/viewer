@@ -29,6 +29,9 @@ const schema = z
       .max(128),
   })
   .strict();
+type RequestActor = 'user' | 'agent';
+type ActiveRequest = { provider: ModelProvider; actor: RequestActor };
+
 export class ModelPermissionRequired extends Error {
   readonly code = 'MODEL_DATA_PERMISSION_REQUIRED';
   constructor(agent = false) {
@@ -47,9 +50,10 @@ export class ModelPermissions {
   private loading?: Promise<void>;
   private writes: Promise<void> = Promise.resolve();
   private blocked = new Map<string, number>();
+  private agentBlocked = new Map<string, number>();
   private revision = 0;
   private closed = false;
-  private active = new Map<AbortController, ModelProvider>();
+  private active = new Map<AbortController, ActiveRequest>();
   private known = new Map<string, string>();
   constructor(
     dataPath: string,
@@ -82,19 +86,23 @@ export class ModelPermissions {
   private block(id: string) {
     const revision = ++this.revision;
     this.blocked.set(id, revision);
-    for (const [controller, provider] of this.active) if (provider.id === id) controller.abort();
+    for (const [controller, { provider }] of this.active)
+      if (provider.id === id) controller.abort();
     return revision;
   }
   async get(provider: ModelProvider): Promise<ModelDataPermission | null> {
     await this.load();
     if (this.closed || this.blocked.has(provider.id) || !this.current(provider)) return null;
+    const permission = this.permissions.find(
+      (item) =>
+        item.providerID === provider.id &&
+        item.kind === provider.kind &&
+        item.endpoint === modelEndpoint(provider),
+    );
+    if (!permission) return null;
+    // A withdrawal takes effect before persistence, including when that write fails.
     return structuredClone(
-      this.permissions.find(
-        (item) =>
-          item.providerID === provider.id &&
-          item.kind === provider.kind &&
-          item.endpoint === modelEndpoint(provider),
-      ) ?? null,
+      this.agentBlocked.has(provider.id) ? { ...permission, agents: false } : permission,
     );
   }
   set(provider: ModelProvider, level: ModelDataLevel | null): Promise<void> {
@@ -128,10 +136,16 @@ export class ModelPermissions {
   allowAgents(provider: ModelProvider, allow: boolean): Promise<void> {
     if (this.closed || !this.current(provider))
       return Promise.reject(new ModelPermissionRequired());
+    const revision = ++this.revision;
+    this.agentBlocked.set(provider.id, revision);
+    if (!allow)
+      for (const [controller, active] of this.active)
+        if (active.provider.id === provider.id && active.actor === 'agent') controller.abort();
     const work = this.writes
       .catch(() => {})
       .then(async () => {
         await this.load();
+        if (this.closed || !this.current(provider)) throw new ModelPermissionRequired();
         const existing = this.permissions.find(
           (item) =>
             item.providerID === provider.id &&
@@ -147,9 +161,7 @@ export class ModelPermissions {
         });
         await this.store.save(document);
         this.permissions = document.permissions;
-        if (!allow)
-          for (const [controller, active] of this.active)
-            if (active.id === provider.id) controller.abort();
+        if (this.agentBlocked.get(provider.id) === revision) this.agentBlocked.delete(provider.id);
       });
     this.writes = work;
     return work;
@@ -166,7 +178,7 @@ export class ModelPermissions {
       .filter(([id, identity]) => next.get(id) !== identity)
       .map(([id]) => id);
     this.known = next;
-    for (const [controller, provider] of this.active)
+    for (const [controller, { provider }] of this.active)
       if (!this.current(provider)) controller.abort();
     const invalid = this.permissions.filter(
       (item) =>
@@ -208,7 +220,7 @@ export class ModelPermissions {
     level: ModelDataLevel,
     signal: AbortSignal,
     work: (signal: AbortSignal) => Promise<T>,
-    actor: 'user' | 'agent' = 'user',
+    actor: RequestActor = 'user',
   ): Promise<T> {
     await this.writes.catch(() => {});
     const permission = await this.get(provider);
@@ -217,6 +229,7 @@ export class ModelPermissions {
     if (
       this.closed ||
       this.blocked.has(provider.id) ||
+      (actor === 'agent' && this.agentBlocked.has(provider.id)) ||
       !this.current(provider) ||
       !modelPermissionCovers(permission, provider, level, actor)
     )
@@ -224,10 +237,11 @@ export class ModelPermissions {
         actor === 'agent' && modelPermissionCovers(permission, provider, level),
       );
     const controller = new AbortController();
-    this.active.set(controller, structuredClone(provider));
+    this.active.set(controller, { provider: structuredClone(provider), actor });
+    const combined = AbortSignal.any([signal, controller.signal]);
     try {
-      const result = await work(AbortSignal.any([signal, controller.signal]));
-      controller.signal.throwIfAborted();
+      const result = await work(combined);
+      combined.throwIfAborted();
       return result;
     } finally {
       this.active.delete(controller);

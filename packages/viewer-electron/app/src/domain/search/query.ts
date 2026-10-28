@@ -1,4 +1,5 @@
 import type { FileEntry } from '../contracts';
+import { searchPattern, type SearchPattern } from './pattern';
 
 /**
  * The file query language: one parser for the folder filter, the search through
@@ -18,7 +19,7 @@ export type QueryNode =
   | { kind: 'not'; node: QueryNode }
   /** In the name, folded: case and accents aside. */
   | { kind: 'text'; text: string }
-  | { kind: 'regex'; regex: RegExp; source: string }
+  | { kind: 'regex'; regex: SearchPattern; source: string }
   | { kind: 'ext'; extensions: string[] }
   | { kind: 'type'; type: QueryType }
   | { kind: 'path'; text: string }
@@ -336,9 +337,12 @@ export function parseFileQuery(text: string, now = Date.now()): FileQuery {
     if (token.kind === 'or') throw new QueryError('OR needs a term before it.', token.at);
     if (token.kind === 'regex') {
       try {
-        return { kind: 'regex', regex: new RegExp(token.text, 'iu'), source: token.text };
-      } catch {
-        throw new QueryError(`~${token.text} is not a pattern.`, token.at);
+        return { kind: 'regex', regex: searchPattern(token.text), source: token.text };
+      } catch (error) {
+        throw new QueryError(
+          `~${token.text} is not a pattern. ${(error as Error).message}`,
+          token.at,
+        );
       }
     }
     if (token.kind === 'word') {

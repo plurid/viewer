@@ -13,11 +13,19 @@ Provider data permission is separate from the credential. Requests in words use 
 and permitted names, not file contents. Content-based recipes need their own permitted data level.
 Revoke data permission in Settings.
 
+Withdrawing agent sharing cancels agent requests immediately, including if saving the permission
+fails. Requests you started yourself retain their separate approval. A failed or superseded write
+cannot re-enable sharing in the running app.
+
 ## Connect a local agent
 
 Settings → Agents manages local service consent, named clients, capability/folder scopes and
 terminal-output read grants. Effective grants stay private; editable JSONC cannot turn them on.
 Native file access and model permission remain separate.
+
+Disabling the connection or narrowing shared folders/capabilities cancels outstanding agent
+proposals, recipes and workflows. Updating or revoking a named client retires that client's work.
+Re-enabling access does not resume cancelled work. Requests you started yourself are separate.
 
 An authenticated client discovers contextual commands and can submit supported proposals. Captured
 origins, destinations, canonical folder scope and file identity are checked again after review.
@@ -45,7 +53,9 @@ The [terminal CLI](cli.md) uses this same authenticated connection. `tools/list`
 schemas; the CLI reference lists the corresponding terminal commands.
 
 - `git_status` and `git_diff` read a granted checkout. Patch content requires a named content
-  client.
+  client. On macOS these reads run in a process sandbox that denies child processes, file writes and
+  network access. Repositories with executable Git filters are refused. Other platforms fail closed
+  until equivalent containment is available; use the ordinary Git review tools there.
 - `list_task_areas` returns only names and checkout metadata for granted folders.
 - `read_workflow`, `run_workflow`, `list_workflows`, `get_workflow`, `resume_workflow` and
   `cancel_workflow` use existing typed workflow services. Runs belong to their client and check

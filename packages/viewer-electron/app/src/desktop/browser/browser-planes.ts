@@ -1,4 +1,5 @@
 import { BrowserWindow, session, sharedTexture } from 'electron';
+import type { WebContents, Event } from 'electron';
 import type { BrowserRequest, BrowserSnapshot } from '../../domain/previews/browser';
 import { browserAddress } from '../../domain/previews/browser';
 import { errorMessage } from '../../domain/errors';
@@ -14,10 +15,16 @@ interface Page {
   error?: string;
   repaint?: boolean;
 }
+interface NativePage {
+  owner: number;
+  address: string;
+  window: BrowserWindow;
+}
 /** Web pages are guests in an isolated persistent Chromium profile. They never
  * receive Viewer's preload, filesystem protocols, agent routes or app session. */
 export class BrowserPlanes {
   private pages = new Map<string, Page>();
+  private nativePages = new Set<NativePage>();
   private configured = false;
   private closing?: Promise<void>;
   constructor(private owner: (id: number) => BrowserWindow | undefined) {}
@@ -76,6 +83,104 @@ export class BrowserPlanes {
     }
     return profile;
   }
+  private protect(contents: WebContents, navigate: (url: string) => void) {
+    contents.setWindowOpenHandler(({ url }) => {
+      try {
+        navigate(browserAddress(url));
+      } catch {
+        /* Unsupported schemes remain blocked. */
+      }
+      return { action: 'deny' };
+    });
+    const guard = (event: Event, url: string) => {
+      try {
+        browserAddress(url);
+      } catch {
+        event.preventDefault();
+      }
+    };
+    contents.on('will-navigate', guard);
+    contents.on('will-redirect', guard);
+  }
+  /** A separate normal Chromium view exposes the page's own semantic tree and focus.
+   * It shares the isolated browser profile, never the app's session or preload. */
+  private async openNative(page: Page): Promise<void> {
+    const parent = this.owner(page.owner);
+    if (!parent || parent.isDestroyed()) throw new Error('The owning Viewer window closed.');
+    const address = browserAddress(page.window.webContents.getURL());
+    const existing = [...this.nativePages].find(
+      (item) => item.owner === page.owner && item.address === address && !item.window.isDestroyed(),
+    );
+    if (existing) {
+      if (parent.isVisible()) {
+        existing.window.show();
+        existing.window.focus();
+      }
+      return;
+    }
+    if (this.nativePages.size >= 8) throw new Error('Close a page window before opening another.');
+    const window = new BrowserWindow({
+      width: 1000,
+      height: 740,
+      minWidth: 400,
+      minHeight: 300,
+      title: address + ' — Viewer',
+      show: false,
+      backgroundColor: '#ffffff',
+      webPreferences: {
+        session: this.profile(),
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        webSecurity: true,
+        spellcheck: true,
+      },
+    });
+    const native = { owner: page.owner, address, window };
+    this.nativePages.add(native);
+    window.once('closed', () => this.nativePages.delete(native));
+    this.protect(window.webContents, (url) => {
+      void window.loadURL(url).catch(() => {});
+    });
+    const title = () => {
+      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+        try {
+          window.setTitle(browserAddress(window.webContents.getURL()) + ' — Viewer');
+        } catch {
+          /* Preserve the last valid address while navigation is pending. */
+        }
+      }
+    };
+    window.webContents.on('page-title-updated', (event) => {
+      event.preventDefault();
+      title();
+    });
+    window.webContents.on('did-navigate', title);
+    window.webContents.on('did-navigate-in-page', title);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        window.loadURL(address),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(new Error('The page took too long to open. Retry from its browser plane.')),
+            20000,
+          );
+        }),
+      ]);
+      if (this.closing || this.owner(page.owner)?.isDestroyed() !== false)
+        throw new Error('The owning Viewer window closed.');
+      // Hidden acceptance windows must not take native focus.
+      if (parent.isVisible()) window.show();
+    } catch (error) {
+      this.nativePages.delete(native);
+      if (!window.isDestroyed()) window.destroy();
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   async request(owner: number, request: BrowserRequest): Promise<BrowserSnapshot | void> {
     if (this.closing) throw new Error('Browser planes are closing.');
     if (!this.owner(owner) || this.owner(owner)!.isDestroyed())
@@ -124,28 +229,7 @@ export class BrowserPlanes {
       this.pages.set(key, page);
       const contents = window.webContents;
       contents.setFrameRate(texture ? 30 : 15);
-      contents.setWindowOpenHandler(({ url }) => {
-        try {
-          this.navigate(page, browserAddress(url));
-        } catch {
-          /* unsupported scheme stays outside Viewer */
-        }
-        return { action: 'deny' };
-      });
-      contents.on('will-navigate', (event, url) => {
-        try {
-          browserAddress(url);
-        } catch {
-          event.preventDefault();
-        }
-      });
-      contents.on('will-redirect', (event, url) => {
-        try {
-          browserAddress(url);
-        } catch {
-          event.preventDefault();
-        }
-      });
+      this.protect(contents, (url) => this.navigate(page, url));
       const changed = () => this.publish(page);
       contents.on('did-start-loading', changed);
       contents.on('did-stop-loading', changed);
@@ -267,6 +351,9 @@ export class BrowserPlanes {
     }
     if (request.kind === 'action') {
       switch (request.action) {
+        case 'native-window':
+          await this.openNative(page);
+          break;
         case 'back':
           if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
           break;
@@ -329,6 +416,8 @@ export class BrowserPlanes {
   stopOwner(owner: number) {
     for (const page of [...this.pages.values()])
       if (page.owner === owner) this.close(owner, page.id);
+    for (const page of this.nativePages)
+      if (page.owner === owner && !page.window.isDestroyed()) page.window.close();
   }
   closeAll(): Promise<void> {
     if (this.closing) return this.closing;
@@ -336,6 +425,7 @@ export class BrowserPlanes {
       // Detach before destroy fires guest events, and stop loading/painting before
       // waiting for Chromium storage. webContents can die before its window.
       for (const page of [...this.pages.values()]) this.close(page.owner, page.id);
+      for (const page of this.nativePages) if (!page.window.isDestroyed()) page.window.close();
       if (this.configured) {
         await this.profile().cookies.flushStore();
         this.profile().flushStorageData();

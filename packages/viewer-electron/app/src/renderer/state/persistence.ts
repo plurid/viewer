@@ -2,7 +2,7 @@
 import { flushBuffers } from '../editing/buffers';
 import { flushMediaDrafts } from '../media/drafts';
 import { flushChatDrafts } from '../chat/drafts';
-import { flushNotes } from '../notes/sessions';
+import { flushNotes, trimNoteSessions } from '../notes/sessions';
 import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../domain/contracts';
 import { previewValuesSchema, type JSONValue } from '../../domain/workspaces/project';
 import { activeWorkspace, getState, replaceState, report } from './core';
@@ -31,6 +31,13 @@ export const adapters = new Map<string, Map<string, string>>();
 const dirtyArrangements = new Map<string, number>();
 // Host records survive an arrangement undo in memory, never as unreferenced saved panes.
 export const closedPanes = new Map<string, Map<string, { pane: Pane; root: boolean }>>();
+export function retainedPaneIDs(): Set<string> {
+  return new Set([
+    ...getState().saved.workspaces.flatMap((space) => space.panes.map((pane) => pane.id)),
+    ...[...closedPanes.values()].flatMap((records) => [...records.keys()]),
+    ...(getState().deletedWorkspace?.workspace.panes.map((pane) => pane.id) ?? []),
+  ]);
+}
 export function resetPersistence(): void {
   clearTimeout(persistTimer);
   pendingEngineFlush = false;
@@ -80,6 +87,7 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   // unsaved text first: a quit waits for this flush
   await flushBuffers();
   await flushNotes();
+  trimNoteSessions(retainedPaneIDs());
   await flushMediaDrafts();
   await flushChatDrafts();
   // After the engine's synchronous flush: a save it scheduled is covered by this one.

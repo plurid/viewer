@@ -9,6 +9,7 @@ import {
   type RequestedAgentAccess,
 } from '../src/desktop/agents/agent-access';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { DocumentStore } from '../src/desktop/persistence/document-store';
 
 const canonicalOverrides = vi.hoisted(() => new Map<string, string>());
 vi.mock('node:fs/promises', async (original) => {
@@ -50,6 +51,24 @@ afterEach(async () => {
 });
 
 describe('private version-2 agent authority', () => {
+  it('withdraws authority and notifies consumers even if persistence fails', async () => {
+    const access = create();
+    await enable(access);
+    const stopped = vi.fn(async () => {});
+    const off = access.onWithdrawal(stopped);
+    const save = vi
+      .spyOn(DocumentStore.prototype, 'save')
+      .mockRejectedValueOnce(new Error('disk full'));
+    try {
+      await expect(access.approve({ capabilities: [] })).rejects.toThrow('disk full');
+      expect(stopped).toHaveBeenCalledOnce();
+      expect(await access.capabilities()).toEqual([]);
+      expect((await access.state()).enabled).toBe(true);
+    } finally {
+      save.mockRestore();
+      off();
+    }
+  });
   it('does not infer approval or capabilities from cold-start configuration', async () => {
     expect(await create().state()).toMatchObject({
       enabled: false,

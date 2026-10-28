@@ -64,6 +64,13 @@ source identities are rechecked after asynchronous work or review. Editable conf
 effective authority. The desktop removal boundary enforces agent approval and OS Trash; see
 [AGENTS.md](../../AGENTS.md).
 
+`AgentAccess` notifies the broker before persisting a withdrawal. The broker owns authority
+lifetimes independently of socket lifetimes: a completed CLI request can leave a task running, while
+revocation cancels its proposals, workflows and recipe planning. Later reads and queued admission
+check the captured authority signal, so re-enabling access cannot revive old work. Model requests
+additionally retain their user/agent origin; withdrawing agent sharing leaves separately authorized
+user requests alone.
+
 ## Performance boundaries
 
 Large parsing, image/media rendering, indexing and folder-size scans use bounded workers/utility
@@ -74,6 +81,11 @@ Model controls must disconnect before their DOM root detaches; renderer-owned GP
 be retained through module-global texture listeners. Tests and heap snapshots cover these known
 lifecycle regressions. Hidden-window frame intervals do not establish physical compositor/GPU
 performance.
+
+Search compiles one exclusion policy for traversal, watcher registration and extraction; indexed
+queries apply the same normalized names and paths. Name patterns use RE2 with no backtracking
+fallback. Clean note sessions outlive a closed view only within retained workspace/arrangement
+history; unsaved and pending documents keep their owner until a successful save.
 
 Read the [domain map](../../CONTEXT.md), [ADRs](../adr/README.md),
 [preview extension guide](previews.md) and [testing guide](testing.md) for the next level of detail.

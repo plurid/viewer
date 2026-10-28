@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { ApplicationSettings } from '../../domain/services';
 import { watchDirectory, type DirectoryWatch } from '../files/directory-watch';
+import { searchExclusions } from './exclusions';
 
 const inside = (file: string, root: string) => {
   const relative = path.relative(root, file);
@@ -20,14 +21,12 @@ export class IndexWatcher {
     private changed: (file: string) => Promise<void>,
     failed: (root: string, error: Error) => void,
   ) {
+    const excluded = searchExclusions(config.exclusions);
     for (const root of new Set(config.roots))
       this.watches.push(
         watchDirectory(root, {
           recursive: true,
-          ignored: (file) =>
-            config.exclusions.some((rule) =>
-              path.isAbsolute(rule) ? inside(file, rule) : file.split(path.sep).includes(rule),
-            ),
+          ignored: excluded,
           changed: (file) => this.queue(root, file),
           failed: (error) => failed(root, error),
         }),

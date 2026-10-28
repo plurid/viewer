@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import BrowserPlane from '../src/renderer/browser/BrowserPlane';
 import { initialize, flushState } from '../src/renderer/state/store';
@@ -96,4 +96,10 @@ it('does not let a delayed open reply replace a newer loaded-page event', async 
   });
   expect(screen.queryByRole('button', { name: 'Reload page' })).not.toBeNull();
   expect(screen.queryByRole('button', { name: 'Stop loading' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Open page in window' }));
+  expect(window.viewer.browser).toHaveBeenCalledWith({
+    kind: 'action',
+    id: pane.id,
+    action: 'native-window',
+  });
 });

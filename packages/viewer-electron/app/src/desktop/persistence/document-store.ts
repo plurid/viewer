@@ -4,7 +4,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { discardOwnTemporaryFile } from '../operations/removal';
 import { syncParentDirectory } from './directory-sync';
-/** Writes application-owned metadata only. Failed writes leave the old document intact. */
+/** Atomically publishes application-owned metadata, then syncs its directory for durability.
+ * Failures before rename preserve the old document; a directory-sync failure can follow publication. */
 export class DocumentStore<T> {
   private writes: Promise<void> = Promise.resolve();
   constructor(

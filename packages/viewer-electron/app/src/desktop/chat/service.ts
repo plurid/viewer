@@ -577,6 +577,7 @@ export class Chats {
         async (file) => {
           await this.authorize(principal, file);
         },
+        () => [...this.ports.settings().search.exclusions, this.dataPath],
       );
       const cancel = () => search.cancel(id);
       signal.addEventListener('abort', cancel, { once: true });

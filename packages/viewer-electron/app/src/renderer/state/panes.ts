@@ -37,7 +37,8 @@ import {
   update,
   uuid,
 } from './core';
-import { closedPanes } from './persistence';
+import { closedPanes, retainedPaneIDs } from './persistence';
+import { trimNoteSessions } from '../notes/sessions';
 import { remember } from './places';
 import { folderPresentation, updateFolderPresentation } from './presentation';
 
@@ -366,6 +367,7 @@ export function removePanes(ids: string[]): void {
     activePane: space.activePane && removed.has(space.activePane) ? undefined : space.activePane,
   }));
   if (removed.has(getState().activePane)) setActivePane(activeWorkspace().panes[0]?.id || '');
+  trimNoteSessions(retainedPaneIDs());
 }
 export function reconcilePanes(ids: string[]): void {
   const live = new Set(ids);

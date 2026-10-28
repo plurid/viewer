@@ -143,6 +143,8 @@ const planSchema = z.object({
         approved: z.boolean(),
         completed: z.boolean().optional(),
         stagedPath: z.string().optional(),
+        scopeRoot: z.string().optional(),
+        restoration: z.object({ destination: z.string(), root: z.string() }).optional(),
         error: z.string().optional(),
       }),
     )
@@ -276,15 +278,28 @@ export class ActionPlanner {
     this.dependencies.emit(structuredClone(plan));
     if (durable) await this.store.save([...this.plans.values()].slice(-100));
   }
-  start(request: ActionRequest, expectedRecipe?: ActionRecipe): Promise<string> {
+  start(
+    request: ActionRequest,
+    expectedRecipe?: ActionRecipe,
+    signal?: AbortSignal,
+  ): Promise<string> {
     if (this.closed) return Promise.reject(new Error('Actions have closed.'));
-    const work = this.create(request, expectedRecipe).finally(() => this.starting.delete(work));
+    const work = this.create(request, expectedRecipe, signal).finally(() =>
+      this.starting.delete(work),
+    );
     this.starting.add(work);
     return work;
   }
-  private async create(request: ActionRequest, expectedRecipe?: ActionRecipe): Promise<string> {
+  private async create(
+    request: ActionRequest,
+    expectedRecipe?: ActionRecipe,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    signal?.throwIfAborted();
     await this.load();
+    signal?.throwIfAborted();
     await this.dependencies.access?.(request.context.sources);
+    signal?.throwIfAborted();
     if (this.closed) throw new Error('Actions have closed.');
     const recipe = this.dependencies.recipes().find((recipe) => recipe.id === request.recipeID);
     if (!recipe) throw new Error('This action recipe is unavailable.');
@@ -312,8 +327,19 @@ export class ActionPlanner {
       undoable: false,
     };
     const abort = new AbortController();
+    const cancel = () => abort.abort(signal?.reason);
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
     this.aborts.set(plan.id, abort);
-    await this.publish(plan);
+    try {
+      await this.publish(plan);
+    } catch (error) {
+      signal?.removeEventListener('abort', cancel);
+      this.aborts.delete(plan.id);
+      plan.status = 'failed';
+      plan.error = errorMessage(error);
+      throw error;
+    }
     const work = this.planning
       .catch(() => {})
       .then(() => this.plan(plan, recipe, request, abort.signal))
@@ -323,6 +349,7 @@ export class ActionPlanner {
         await this.publish(plan);
       })
       .finally(() => {
+        signal?.removeEventListener('abort', cancel);
         this.aborts.delete(plan.id);
         this.work.delete(plan.id);
       });
@@ -419,6 +446,7 @@ export class ActionPlanner {
     request: ActionRequest,
     signal: AbortSignal,
   ): Promise<void> {
+    signal.throwIfAborted();
     const files = await this.collect(request, recipe, signal);
     if (!files.length) throw new Error('No supported files were found in the selection.');
     if (recipe.kind === 'summarize') plan.summaryInputs = files;
@@ -584,6 +612,7 @@ export class ActionPlanner {
       }
     }
     signal.throwIfAborted();
+    for (const row of plan.rows) if (row.source) row.scopeRoot = await realpath(row.source.parent);
     await this.checkRows(plan.rows);
     plan.status = 'review';
     await this.publish(plan);
@@ -620,7 +649,12 @@ export class ActionPlanner {
       if (row.issue) row.approved = false;
     }
   }
-  private async scope(destination: string, source?: FileEntry, roots?: string[]): Promise<void> {
+  private async scope(
+    destination: string,
+    source?: FileEntry,
+    roots?: string[],
+    canonical = false,
+  ): Promise<void> {
     absolute(destination);
     validName(path.basename(destination));
     if (Buffer.byteLength(path.basename(destination), 'utf8') > 255)
@@ -634,9 +668,61 @@ export class ActionPlanner {
     const actual = await realpath(parent);
     const allowed = source
       ? [await realpath(source.parent)]
-      : await Promise.all((roots || []).map((root) => realpath(root)));
+      : canonical
+        ? (roots ?? [])
+        : await Promise.all((roots || []).map((root) => realpath(root)));
     if (!allowed.some((root) => contained(actual, root)))
       throw new Error('The destination escapes the selected file scope through a symbolic link.');
+  }
+  private async scopeRow(plan: ActionPlan, row: ProposedChange): Promise<void> {
+    if (row.restoration) {
+      if (row.destination !== row.restoration.destination)
+        throw new Error('A restoration can only return the file to its recorded original path.');
+      return this.scope(row.destination, undefined, [row.restoration.root], true);
+    }
+    return this.scope(
+      row.destination,
+      row.source,
+      plan.outputRoot
+        ? [plan.outputRoot]
+        : plan.context.sources.map((source) => path.dirname(source)),
+    );
+  }
+  private async restoreRow(
+    original: ProposedChange,
+    current: string,
+    evidence: DocumentEvidence[] = [],
+  ): Promise<ProposedChange> {
+    if (!original.source) throw new Error('This row has no original file to restore.');
+    const source = await entry(current);
+    if (!same(original.source, source))
+      throw new Error('A recorded file changed. Restoration is unavailable.');
+    let root = original.scopeRoot;
+    if (!root) {
+      // Older plans have no canonical scope. Derive it from the verified surviving file,
+      // then require its recorded parent to still resolve to that same ancestor.
+      const relative = path.relative(original.source.parent, current);
+      if (
+        !relative ||
+        relative === '..' ||
+        relative.startsWith('..' + path.sep) ||
+        path.isAbsolute(relative)
+      )
+        throw new Error(
+          'The recorded restoration scope is unavailable. Inspect the original paths.',
+        );
+      root = await realpath(current);
+      for (const _part of relative.split(path.sep)) root = path.dirname(root);
+      if ((await realpath(original.source.parent)) !== root)
+        throw new Error(
+          'The original folder changed through a symbolic link. Inspect its path before restoring.',
+        );
+    }
+    return {
+      ...this.row(source, original.source.path, evidence),
+      scopeRoot: root,
+      restoration: { destination: original.source.path, root },
+    };
   }
   async apply(approval: ActionApproval): Promise<void> {
     await this.load();
@@ -673,13 +759,7 @@ export class ActionPlanner {
     for (const row of selected) {
       if (row.source && !same(row.source, await entry(row.source.path)))
         throw new Error('A source changed after planning. Run the action again.');
-      await this.scope(
-        row.destination,
-        row.source,
-        plan.outputRoot
-          ? [plan.outputRoot]
-          : plan.context.sources.map((source) => path.dirname(source)),
-      );
+      await this.scopeRow(plan, row);
     }
     plan.rows = updated;
     plan.status = 'applying';
@@ -728,25 +808,13 @@ export class ActionPlanner {
           }
           for (const row of selected) {
             abort.signal.throwIfAborted();
-            await this.scope(
-              row.destination,
-              row.source,
-              plan.outputRoot
-                ? [plan.outputRoot]
-                : plan.context.sources.map((source) => path.dirname(source)),
-            );
+            await this.scopeRow(plan, row);
             if (!(await exists(path.dirname(row.destination))))
               await fileCoordination.run(
                 [{ path: path.dirname(row.destination), mode: 'write' }],
                 async (signal) => {
                   signal?.throwIfAborted();
-                  await this.scope(
-                    row.destination,
-                    row.source,
-                    plan.outputRoot
-                      ? [plan.outputRoot]
-                      : plan.context.sources.map((source) => path.dirname(source)),
-                  );
+                  await this.scopeRow(plan, row);
                   await mkdir(fileCoordination.path(path.dirname(row.destination)), {
                     recursive: true,
                   });
@@ -773,13 +841,7 @@ export class ActionPlanner {
                 [{ path: row.destination, mode: 'write' }],
                 async (signal) => {
                   signal?.throwIfAborted();
-                  await this.scope(
-                    row.destination,
-                    row.source,
-                    plan.outputRoot
-                      ? [plan.outputRoot]
-                      : plan.context.sources.map((source) => path.dirname(source)),
-                  );
+                  await this.scopeRow(plan, row);
                   if (row.kind === 'summary') {
                     await this.validateSummary(plan);
                     const handle = await open(fileCoordination.path(row.destination), 'wx', 0o600);
@@ -863,7 +925,7 @@ export class ActionPlanner {
       rows: await Promise.all(
         plan.rows
           .filter((row) => row.completed && row.source)
-          .map(async (row) => this.row(await entry(row.destination), row.source!.path)),
+          .map((row) => this.restoreRow(row, row.destination)),
       ),
     };
     await this.publish(reverse);
@@ -934,7 +996,7 @@ export class ActionPlanner {
           if (!same(row.source, item))
             throw new Error('A recorded file changed. Inspect its path before recovery.');
           rows.push(
-            this.row(item, row.source.path, [{ source: 'Recovery journal', text: current }]),
+            await this.restoreRow(row, current, [{ source: 'Recovery journal', text: current }]),
           );
         }
       }

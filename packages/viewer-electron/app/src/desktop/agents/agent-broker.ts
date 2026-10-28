@@ -1,4 +1,5 @@
 import type { CapturedTarget } from '../../domain/automation/actions';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   AgentNavigation,
   AgentPlane,
@@ -82,9 +83,19 @@ export function redactedSettings(settings: ApplicationSettings): ApplicationSett
   };
 }
 export class AgentBroker {
+  private lifetime = new AbortController();
+  private closed = false;
+  private closing?: Promise<void>;
+  private admissions = new AsyncLocalStorage<AbortSignal>();
+  private clientLifetimes = new Map<string, AbortController>();
   private taskAdmissions: Promise<unknown> = Promise.resolve();
   private admitTask<T>(work: () => Promise<T>): Promise<T> {
-    const task = this.taskAdmissions.catch(() => {}).then(work);
+    const task = this.taskAdmissions
+      .catch(() => {})
+      .then(() => {
+        this.admissions.getStore()?.throwIfAborted();
+        return work();
+      });
     this.taskAdmissions = task;
     return task;
   }
@@ -120,6 +131,7 @@ export class AgentBroker {
     },
   ) {
     this.access = extension?.agentAccess ?? new AgentAccess(dataPath, () => this.settings().agents);
+    this.access.onWithdrawal?.(() => this.stopAll());
     this.clients = new AgentClients(
       dataPath,
       (paths) => this.checkFolders(paths),
@@ -148,10 +160,14 @@ export class AgentBroker {
     }
   }
   async start(): Promise<void> {
+    while (this.closing) await this.closing;
     if (this.starting) return this.starting;
     if (this.server) return;
+    this.closed = false;
     this.starting = (async () => {
-      if ((await this.access.state()).enabled) await this.startNow();
+      if ((await this.access.state()).enabled && !this.closed) {
+        await this.startNow();
+      }
     })().finally(() => {
       this.starting = undefined;
     });
@@ -266,16 +282,64 @@ export class AgentBroker {
     return result;
   }
   async stop(clientID: string): Promise<void> {
-    this.extension?.requests.stop(clientID);
-    await this.extension?.services?.stop(clientID);
+    this.clientLifetimes.get(clientID)?.abort();
+    this.clientLifetimes.delete(clientID);
+    const failures: unknown[] = [];
+    try {
+      this.extension?.requests.stop(clientID);
+    } catch (error) {
+      failures.push(error);
+    }
     for (const [id, owner] of this.owned)
       if (owner === clientID) {
-        this.actions.cancel(id);
+        try {
+          this.actions.cancel(id);
+        } catch (error) {
+          failures.push(error);
+        }
         this.owned.delete(id);
       }
-    for (const plan of await this.actions.all())
-      if (plan.context.actor === 'agent' && plan.context.clientID === clientID)
-        this.actions.cancel(plan.id);
+    const results = await Promise.allSettled([
+      this.extension?.services?.stop(clientID),
+      this.actions.all().then((plans) => {
+        for (const plan of plans)
+          if (plan.context.actor === 'agent' && plan.context.clientID === clientID)
+            try {
+              this.actions.cancel(plan.id);
+            } catch (error) {
+              failures.push(error);
+            }
+      }),
+    ]);
+    for (const result of results) if (result.status === 'rejected') failures.push(result.reason);
+    if (failures.length)
+      throw new AggregateError(failures, 'Some agent work could not be stopped.');
+  }
+  private async stopAll(): Promise<void> {
+    this.lifetime.abort();
+    this.lifetime = new AbortController();
+    const actors = new Set([
+      sharedClientID,
+      ...this.clientLifetimes.keys(),
+      ...this.owned.values(),
+    ]);
+    // Start each cancellation before awaiting any owner that may be slow or unavailable.
+    const failures: unknown[] = [];
+    const stop = (actor: string) =>
+      this.stop(actor).catch((error) => {
+        failures.push(error);
+      });
+    // Observe each rejection immediately, while client storage may still be loading.
+    const stopping = [...actors].map(stop);
+    try {
+      for (const client of await this.clients.list())
+        if (!actors.has(client.id)) stopping.push(stop(client.id));
+    } catch (error) {
+      failures.push(error);
+    }
+    await Promise.all(stopping);
+    if (failures.length)
+      throw new AggregateError(failures, 'Some agent work could not be stopped.');
   }
   async authorizeProposal(proposal: AgentProposal): Promise<void> {
     await this.clients.context.run(proposal.clientID ?? sharedClientID, async () => {
@@ -373,6 +437,7 @@ export class AgentBroker {
     }
   }
   async authorize(file: string): Promise<string> {
+    this.admissions.getStore()?.throwIfAborted();
     const access = await this.access.state();
     if (!access.enabled) throw new Error('Agent access is disabled.');
     if (within(absolute(file), path.resolve(this.dataPath)))
@@ -407,6 +472,7 @@ export class AgentBroker {
       throw new Error('Client folder permissions changed. Try again.');
     if (!roots.some((root) => root && within(actual, root)))
       throw new Error('This file is outside the agent’s authorized folders.');
+    this.admissions.getStore()?.throwIfAborted();
     return actual;
   }
   /** Rechecked by the desktop executor after review; neither review nor layout prefs grant paths. */
@@ -447,7 +513,9 @@ export class AgentBroker {
       signal,
       authorize: (file) => this.authorize(file),
       require: async (capability) => {
+        signal.throwIfAborted();
         const client = await this.clients.require(capability);
+        signal.throwIfAborted();
         if (capability === 'content' && !client)
           throw new Error('Use a named client with content permission.');
       },
@@ -472,6 +540,8 @@ export class AgentBroker {
     request: unknown,
     signal: AbortSignal = AbortSignal.timeout(120000),
   ): Promise<unknown> {
+    if (this.closed) throw new Error('Agent access is disabled.');
+    const lifetime = this.lifetime.signal;
     signal.throwIfAborted();
     if (typeof token !== 'string' || token.length !== 64 || !(await this.access.state()).enabled)
       throw new Error('Agent access is disabled or its token is invalid.');
@@ -480,49 +550,64 @@ export class AgentBroker {
       timingSafeEqual(Buffer.from(token), Buffer.from(this.token));
     const actor = shared ? sharedClientID : await this.clients.authenticate(token);
     if (!actor) throw new Error('Agent access is disabled or its token is invalid.');
-    return this.clients.context.run(actor, async () => {
-      const client = await this.clients.get();
-      const policy = this.policy();
-      const active = this.activeCalls.get(actor) ?? 0;
-      if (active >= (client?.budgets.maxTasks ?? 20))
-        throw new Error('This client has reached its concurrent request budget.');
-      this.activeCalls.set(actor, active + 1);
-      const parsed = z
-        .object({ method: z.string(), params: z.unknown().optional() })
-        .safeParse(request);
-      const tool =
-        parsed.success && parsed.data.method === 'tools/call'
-          ? z
-              .object({ name: z.string().max(200) })
-              .passthrough()
-              .safeParse(parsed.data.params)
-          : undefined;
-      try {
-        const result = await this.handleAuthenticated(request, signal);
-        const latest = await this.clients.get();
-        if (
-          (client && latest?.revision !== client.revision) ||
-          (await policy) !== (await this.policy())
-        )
-          throw new Error('Agent permissions changed while this request was running. Try again.');
-        if (tool?.success)
-          await this.clients
-            .audit(tool.data.name, 'completed', 'Request completed.')
-            .catch(() => {});
-        return result;
-      } catch (error) {
-        if (tool?.success)
-          await this.clients.audit(tool.data.name, 'failed', 'Request failed.').catch(() => {});
-        throw error;
-      } finally {
-        this.activeCalls.set(actor, (this.activeCalls.get(actor) ?? 1) - 1);
-      }
-    });
+    let clientLifetime = this.clientLifetimes.get(actor);
+    if (!clientLifetime) this.clientLifetimes.set(actor, (clientLifetime = new AbortController()));
+    const authority = AbortSignal.any([lifetime, clientLifetime.signal]);
+    signal = AbortSignal.any([signal, authority]);
+    signal.throwIfAborted();
+    return this.admissions.run(authority, () =>
+      this.clients.context.run(actor, async () => {
+        const client = await this.clients.get();
+        const policy = this.policy();
+        const active = this.activeCalls.get(actor) ?? 0;
+        if (active >= (client?.budgets.maxTasks ?? 20))
+          throw new Error('This client has reached its concurrent request budget.');
+        this.activeCalls.set(actor, active + 1);
+        const parsed = z
+          .object({ method: z.string(), params: z.unknown().optional() })
+          .safeParse(request);
+        const tool =
+          parsed.success && parsed.data.method === 'tools/call'
+            ? z
+                .object({ name: z.string().max(200) })
+                .passthrough()
+                .safeParse(parsed.data.params)
+            : undefined;
+        try {
+          const result = await this.handleAuthenticated(request, signal);
+          signal.throwIfAborted();
+          const latest = await this.clients.get();
+          if (
+            (client && latest?.revision !== client.revision) ||
+            (await policy) !== (await this.policy())
+          )
+            throw new Error('Agent permissions changed while this request was running. Try again.');
+          if (tool?.success)
+            await this.clients
+              .audit(tool.data.name, 'completed', 'Request completed.')
+              .catch(() => {});
+          return result;
+        } catch (error) {
+          if (tool?.success)
+            await this.clients.audit(tool.data.name, 'failed', 'Request failed.').catch(() => {});
+          throw error;
+        } finally {
+          const remaining = (this.activeCalls.get(actor) ?? 1) - 1;
+          if (remaining) this.activeCalls.set(actor, remaining);
+          else this.activeCalls.delete(actor);
+        }
+      }),
+    );
   }
   /** What a request ran under: a change while it ran fails it. */
   private async policy(): Promise<string> {
-    const { enabled, roots } = await this.access.state();
-    return JSON.stringify({ enabled, roots, allowLayout: this.settings().agents.allowLayout });
+    const { enabled, roots, capabilities } = await this.access.state();
+    return JSON.stringify({
+      enabled,
+      roots,
+      capabilities,
+      allowLayout: this.settings().agents.allowLayout,
+    });
   }
   private async handleAuthenticated(request: unknown, signal: AbortSignal): Promise<unknown> {
     const message = z.object({ method: z.string(), params: z.unknown().optional() }).parse(request);
@@ -1118,7 +1203,8 @@ export class AgentBroker {
             recursive: input.recursive,
           },
         };
-        const id = await this.actions.start(request);
+        signal.throwIfAborted();
+        const id = await this.actions.start(request, undefined, this.admissions.getStore());
         this.own(id);
         return { id, applyRequiresUserReview: true };
       });
@@ -1156,6 +1242,11 @@ export class AgentBroker {
   }
   /** Records which client may read a proposal or task; bounded like the requests it tracks. */
   private own(id: string): void {
+    if (this.admissions.getStore()?.aborted) {
+      this.actions.cancel(id);
+      this.extension?.requests.stop(this.clients.actor());
+      this.admissions.getStore()!.throwIfAborted();
+    }
     this.owned.set(id, this.clients.actor());
     if (this.owned.size <= 1000) return;
     // what is gone goes first; a proposal still kept stays its client's (2026-10-20: the oldest half
@@ -1177,14 +1268,32 @@ export class AgentBroker {
     await discardOwnTemporaryFile(path.join(directory, 'v.sock'));
     await removeEmptyDirectory(directory).catch(() => {});
   }
-  async close(): Promise<void> {
-    await this.clients.close();
+  close(): Promise<void> {
+    if (this.closing) return this.closing;
+    this.closed = true;
+    const work = this.closeNow().finally(() => {
+      if (this.closing === work) this.closing = undefined;
+    });
+    this.closing = work;
+    return work;
+  }
+  private async closeNow(): Promise<void> {
+    const stopping = Promise.allSettled([this.stopAll()]);
     await this.starting?.catch(() => {});
     for (const stream of this.streams) stream.destroy();
     await new Promise<void>((resolve) =>
       this.server ? this.server.close(() => resolve()) : resolve(),
     );
     this.server = undefined;
-    await this.removeSocketDirectory();
+    const results = [
+      ...(await stopping),
+      ...(await Promise.allSettled([
+        this.access.flush?.(),
+        this.clients.close(),
+        this.removeSocketDirectory(),
+      ])),
+    ];
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') throw failure.reason;
   }
 }

@@ -1,7 +1,9 @@
-import { spawn } from 'node:child_process';
+import { runGit, type GitRunner } from './git-process';
+export { runGit, gitEnvironment, gitSafeOptions, type GitRunner } from './git-process';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
+import { runGitInspection } from './git-inspection';
+import { assertNoGitFilters } from './git-filters';
 import { parseGitWorktrees } from '../../domain/comparison/worktrees';
 import {
   gitSourceSchema,
@@ -12,91 +14,10 @@ import {
 } from '../../domain/comparison/git';
 
 const maximumStatus = 8 * 1024 * 1024;
-export const gitSafeOptions = [
-  '--no-pager',
-  '--no-optional-locks',
-  '--no-replace-objects',
-  '--literal-pathspecs',
-  '-c',
-  'core.hooksPath=/dev/null',
-  '-c',
-  'core.fsmonitor=false',
-  '-c',
-  'core.untrackedCache=false',
-  '-c',
-  'gc.auto=0',
-  '-c',
-  'maintenance.auto=false',
-  '-c',
-  'status.submoduleSummary=false',
-  '-c',
-  'submodule.recurse=false',
-  '-c',
-  'protocol.allow=never',
-  '-c',
-  'credential.helper=',
-  '-c',
-  'core.askPass=/usr/bin/false',
-];
-export type GitRunner = (
-  directory: string,
-  args: readonly string[],
-  limit: number,
-  signal: AbortSignal,
-) => Promise<Buffer>;
-export const gitEnvironment = () => ({
-  PATH: '/usr/bin:/bin',
-  HOME: os.homedir(),
-  LANG: 'C.UTF-8',
-  LC_ALL: 'C',
-  GIT_CONFIG_NOSYSTEM: '1',
-  GIT_CONFIG_GLOBAL: '/dev/null',
-  GIT_TERMINAL_PROMPT: '0',
-  GIT_ASKPASS: '/usr/bin/false',
-  SSH_ASKPASS: '/usr/bin/false',
-  GIT_OPTIONAL_LOCKS: '0',
-  GIT_NO_LAZY_FETCH: '1',
-  GIT_NO_REPLACE_OBJECTS: '1',
-});
-/** No shell, inherited Git configuration overrides, credential helpers, or network transports. */
-export const runGit: GitRunner = (directory, args, limit, signal) =>
-  new Promise((resolve, reject) => {
-    const child = spawn('/usr/bin/git', [...gitSafeOptions, '-C', directory, ...args], {
-      env: gitEnvironment(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      signal,
-      windowsHide: true,
-    });
-    const chunks: Buffer[] = [];
-    let size = 0,
-      errors = '',
-      failure: Error | undefined;
-    const stop = (message: string) => {
-      failure ??= new Error(message);
-      child.kill('SIGKILL');
-    };
-    child.stdout.on('data', (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > limit) stop('Git output exceeded its size limit.');
-      else chunks.push(chunk);
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      if (errors.length + chunk.length > 65536) stop('Git diagnostics exceeded their size limit.');
-      else errors += chunk.toString('utf8');
-    });
-    child.on('error', (error) => {
-      failure ??= error;
-    });
-    child.on('close', (code) => {
-      if (failure) reject(failure);
-      else if (code !== 0 && !(code === 1 && args[0] === 'diff' && args.includes('--no-index')))
-        reject(new Error(errors.trim().slice(0, 1000) || 'Git is unavailable.'));
-      else resolve(Buffer.concat(chunks));
-    });
-  });
 
 /** Shared repository snapshots; disabled means no executable probe and no filesystem work. */
 export class GitReader {
+  private inspections = new Set<GitReader>();
   private pending = new Map<string, Promise<GitResult>>();
   private cached = new Map<string, { at: number; result: GitResult }>();
   private lifetime = new AbortController();
@@ -109,6 +30,43 @@ export class GitReader {
     private access: (paths: readonly string[]) => Promise<void>,
     private run: GitRunner = runGit,
   ) {}
+  private async inspect<T>(
+    signal: AbortSignal,
+    read: (reader: GitReader) => Promise<T>,
+  ): Promise<T> {
+    this.check();
+    if (this.inspections.size >= 8)
+      throw new Error(
+        'Git inspection has reached its concurrent request limit. Retry after another request finishes.',
+      );
+    signal.throwIfAborted();
+    const lifetime = AbortSignal.any([signal, this.lifetime.signal]);
+    const reader = new GitReader(
+      this.enabled,
+      this.access,
+      async (directory, args, limit, inner) => {
+        const current = AbortSignal.any([lifetime, inner]);
+        if (args[0] === 'status' || args[0] === 'diff')
+          await assertNoGitFilters(runGitInspection, directory, current);
+        return runGitInspection(directory, args, limit, current);
+      },
+    );
+    this.inspections.add(reader);
+    try {
+      const result = await read(reader);
+      lifetime.throwIfAborted();
+      return result;
+    } finally {
+      reader.close();
+      this.inspections.delete(reader);
+    }
+  }
+  inspectStatus(file: string, signal: AbortSignal): Promise<GitResult> {
+    return this.inspect(signal, (reader) => reader.status(file, true));
+  }
+  inspectDiff(directory: string, base: string, signal: AbortSignal) {
+    return this.inspect(signal, (reader) => reader.diff(directory, base, signal));
+  }
   private check() {
     if (!this.enabled()) throw new Error('Git is disabled in Settings.');
     this.lifetime.signal.throwIfAborted();

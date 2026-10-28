@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 import { pdfAssets } from './tools/pdf-assets';
 import { threeRendererOwnership } from './tools/three-renderer.ts';
+import { pluridCameraCache } from './tools/plurid-camera.ts';
 export default defineConfig({
   base: './',
-  plugins: [pdfAssets(), threeRendererOwnership()],
+  plugins: [pdfAssets(), threeRendererOwnership(), pluridCameraCache()],
   optimizeDeps: { exclude: ['three'] },
   resolve: {
     dedupe: [

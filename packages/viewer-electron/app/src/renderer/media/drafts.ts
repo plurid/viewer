@@ -19,6 +19,8 @@ class DraftSession {
   private value: Snapshot = { loading: true, dirty: false, saving: false };
   private listeners = new Set<() => void>();
   private revision = 0;
+  private edits = 0;
+  private reloads = 0;
   private pending?: Promise<void>;
   private timer?: ReturnType<typeof setTimeout>;
   private off: () => void;
@@ -53,11 +55,21 @@ class DraftSession {
     for (const listener of this.listeners) listener();
   }
   async reload() {
+    const request = ++this.reloads;
     try {
+      // A source/access retry must never replace editing decisions that failed to autosave.
+      await this.flush();
+      const edits = this.edits;
       const draft = mediaDraft(await this.api.media({ kind: 'get', id: this.id }));
+      if (request !== this.reloads) return;
+      if (edits !== this.edits || this.value.dirty || this.pending) {
+        this.publish({ loading: false, unavailable: false });
+        return;
+      }
       this.revision = draft.revision;
       this.publish({ draft, loading: false, dirty: false, error: undefined, unavailable: false });
     } catch (error) {
+      if (request !== this.reloads) return;
       this.publish({
         loading: false,
         error: String((error as Error).message || error),
@@ -67,6 +79,7 @@ class DraftSession {
   }
   plan(update: (value: MediaTransform) => MediaTransform) {
     if (!this.value.draft) return;
+    this.edits++;
     this.publish({
       draft: { ...this.value.draft, plan: update(this.value.draft.plan) },
       dirty: true,
@@ -76,6 +89,8 @@ class DraftSession {
     this.timer = setTimeout(() => void this.flush().catch(() => {}), 200);
   }
   replace(draft: MediaDraft) {
+    this.edits++;
+    this.reloads++;
     this.revision = draft.revision;
     this.publish({ draft, dirty: false, saving: false, error: undefined });
   }

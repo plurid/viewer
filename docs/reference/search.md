@@ -31,11 +31,15 @@ parentheses for grouping.
 | Dates        | `modified<7d`, `modified:today`, `created>=2026-01-01`; durations h, d, w, mo, y          |
 | Finder tags  | `tag:red`, `tag:"Project X"`                                                              |
 | Flags        | `is:hidden`, `is:link`, `is:file`, `is:folder`                                            |
-| Name pattern | `~^IMG_\d+` for a case-insensitive regular expression                                     |
+| Name pattern | `~^IMG_\d+` for a case-insensitive RE2 regular expression                                 |
 
 The older `size:>10mb` and `modified:>2025-01-01` forms remain accepted. Finder tags use Spotlight
 and require the direct macOS build. Invalid syntax identifies its column; a folder filter keeps its
 last valid query while you correct it.
+
+Name patterns use a linear-time engine and are limited to 512 characters. Groups, alternatives,
+character classes and repetition work; lookaround and backreferences are unavailable. Quote a
+pattern containing spaces or parentheses, for example `~"(draft|notes).*\.md$"`.
 
 ## Names and document text
 
@@ -54,6 +58,20 @@ old results and excerpts until the new response arrives.
 
 Removing a content grant purges its stored body text, including while indexing is paused. Exclusions
 hide matching paths immediately. Removing a root removes its rows and corresponding content grant.
+
+### Skip dependency and cache folders
+
+In **Settings → Search → Excluded names and paths**, enter one name or absolute path per line. A
+name matches any path component; a full path excludes that location and its descendants. Matching
+folders are skipped before traversal or document extraction, including in recursive searches of
+unindexed folders and Spotlight-assisted results. These rules do not hide files from ordinary folder
+browsing and are not glob patterns.
+
+New configurations exclude common dependency, environment and cache trees such as `node_modules`,
+`.venv`, `venv`, `__pycache__`, `.git`, `.cache`, `.next` and `target`. Existing custom lists are
+preserved. **Add common exclusions** adds the current recommendations without replacing your rules.
+Remove any rule to search that folder again; subsequent searches use the updated list. Rebuilding
+the index can refresh previously skipped content.
 
 ## Fuzzy discovery and saved searches
 

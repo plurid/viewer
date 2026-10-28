@@ -83,7 +83,113 @@ async function batch(prefix = 'New ') {
   await planner.settled(id);
   return planner.get(id);
 }
+type Generate = ConstructorParameters<typeof ActionPlanner>[1]['generate'];
+async function organizePlanner(generate: Generate): Promise<void> {
+  settings.providers = [
+    {
+      id: 'fixture',
+      name: 'Fixture',
+      kind: 'local',
+      endpoint: 'http://localhost:1234/v1',
+      model: 'fixture',
+      allowContent: false,
+    },
+  ];
+  settings.recipes = settings.recipes.map((recipe) =>
+    recipe.id === 'organize' ? { ...recipe, providerID: 'fixture', data: 'names' } : recipe,
+  );
+  await planner.close();
+  planner = new ActionPlanner(root, {
+    recipes: () => settings.recipes,
+    providers: () => settings.providers,
+    extract: async () => {
+      throw new Error('Names-only fixture');
+    },
+    generate,
+    operations,
+    emit: () => {},
+    changed: () => {},
+  });
+}
+const organizeOutput = (input: unknown) => ({
+  rows: (input as { sourceID: string; filename: string }[]).map((file) => ({
+    sourceID: file.sourceID,
+    destination: 'Organized/' + file.filename,
+    summary: '',
+    fields: { year: null, authors: null, title: null, publisher: null },
+    evidence: [],
+  })),
+});
 describe('reviewed file action transactions', () => {
+  it('cancels a queued agent recipe on global withdrawal without cancelling a user recipe', async () => {
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const generate = vi.fn<Generate>(async (_provider, _instructions, input) => {
+      await gate;
+      return organizeOutput(input);
+    });
+    await organizePlanner(generate);
+    const user = await planner.start({ recipeID: 'organize', context: context() });
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+    settings.agents = { enabled: true, roots: [files], allowLayout: false };
+    const broker = new AgentBroker(
+      path.join(root, 'AgentProfile'),
+      () => settings,
+      context,
+      {} as FileServices,
+      planner,
+    );
+    const change = { enabled: true, add: [files], capabilities: ['metadata', 'propose'] as const };
+    await broker.access.approve(change, await broker.access.captureReview(change));
+    const token = await broker.credential();
+    try {
+      const response = (await broker.handle(token, {
+        method: 'tools/call',
+        params: {
+          name: 'run_action',
+          arguments: { recipeID: 'organize', sources: context().sources },
+        },
+      })) as { content: { text: string }[] };
+      const { id } = JSON.parse(response.content[0]!.text) as { id: string };
+      await broker.access.approve({ enabled: false });
+      finish();
+      await planner.settled(user);
+      await planner.settled(id);
+      expect(generate).toHaveBeenCalledOnce();
+      expect((await planner.get(user)).status).toBe('review');
+      expect((await planner.get(id)).status).toBe('cancelled');
+    } finally {
+      finish();
+      await broker.close();
+    }
+  });
+  it('refuses restoration when the original parent is replaced by a symbolic link', async () => {
+    await organizePlanner(async (_provider, _instructions, input) => organizeOutput(input));
+    const id = await planner.start({ recipeID: 'organize', context: context() });
+    await planner.settled(id);
+    await planner.apply(approve(await planner.get(id)));
+    const relocated = path.join(root, 'relocated-files');
+    await rename(files, relocated);
+    await symlink(relocated, files);
+    await expect(planner.undo(id)).rejects.toThrow('symbolic link');
+    expect(await readFile(path.join(relocated, 'Organized', 'A.txt'), 'utf8')).toBe('original A');
+  });
+  it('restores organized files to their original parent after a restart, without widening restoration scope', async () => {
+    await organizePlanner(async (_provider, _instructions, input) => organizeOutput(input));
+    const id = await planner.start({ recipeID: 'organize', context: context() });
+    await planner.settled(id);
+    await planner.apply(approve(await planner.get(id)));
+    expect((await planner.get(id)).status).toBe('completed');
+    await planner.close();
+    planner = create();
+    await planner.get(id);
+    await planner.undo(id);
+    expect(await readFile(path.join(files, 'A.txt'), 'utf8')).toBe('original A');
+    expect(await readFile(path.join(files, 'B.txt'), 'utf8')).toBe('original B');
+    expect((await planner.get(id)).undoable).toBe(false);
+  });
   it('retains summary source checks across restart and revalidates immediately before Apply', async () => {
     settings.providers = [
       {

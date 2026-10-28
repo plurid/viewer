@@ -1,12 +1,15 @@
 import { providerKinds, providerPresets } from '../../../domain/models/providers';
 import type { ApplicationSettings } from '../../../domain/services';
+import { commonSearchExclusions } from '../../../domain/search/exclusions';
 
 /** Categories whose settings live in dedicated editors, offered when a search matches them. */
 export function settingsDiscovery(settings: ApplicationSettings, query: string) {
   return [
     {
       category: 'Search',
-      terms: 'indexed locations exclusions content indexing saved searches offline drives',
+      terms:
+        'indexed locations exclude exclusions skip dependency folders Python environments caches content indexing saved searches offline drives ' +
+        [...settings.search.exclusions, ...commonSearchExclusions].join(' '),
     },
     {
       category: 'Actions',

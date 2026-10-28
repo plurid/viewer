@@ -10,6 +10,8 @@ import {
   type QueryEntry,
 } from '../../domain/search/query';
 import { absolute, entry } from '../files/filesystem';
+import { searchExclusions } from './exclusions';
+import { commonSearchExclusions } from '../../domain/search/exclusions';
 
 export class Search {
   private requests = new Map<string, AbortController>();
@@ -28,6 +30,7 @@ export class Search {
       signal: AbortSignal,
     ) => Promise<string[]> = spotlightTagged,
     private authorize: (file: string) => Promise<void> = async () => {},
+    private exclusions: () => readonly string[] = () => commonSearchExclusions,
   ) {}
   cancel(id: string): void {
     this.requests.get(id)?.abort();
@@ -66,6 +69,7 @@ export class Search {
     query: FileQuery,
     abort: AbortController,
   ): Promise<void> {
+    const excluded = searchExclusions(this.exclusions());
     const queue = [request.root];
     let visited = 0,
       errors = 0,
@@ -80,6 +84,10 @@ export class Search {
     };
     // a tag's files from Spotlight first: the walk then asks each item about them
     const tags = new Map<string, Set<string>>();
+    if (excluded(request.root)) {
+      flush(true);
+      return;
+    }
     try {
       for (const tag of query.tags)
         tags.set(tag, new Set(await this.tagged(request.root, tag, abort.signal)));
@@ -102,7 +110,7 @@ export class Search {
           if (abort.signal.aborted || shown.size >= 2000) break;
           const relative = path.relative(request.root, file);
           if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue;
-          if (hiddenPart(relative)) continue;
+          if (hiddenPart(relative) || excluded(file)) continue;
           try {
             await this.authorize(file);
             const item = await entry(file);
@@ -120,8 +128,10 @@ export class Search {
         // Spotlight is only a shortcut; the walk is authoritative.
       }
     try {
-      while (queue.length && !abort.signal.aborted) {
-        const folder = queue.shift()!;
+      let cursor = 0;
+      while (cursor < queue.length && !abort.signal.aborted) {
+        const folder = queue[cursor++]!;
+        if (excluded(folder)) continue;
         try {
           await this.authorize(folder);
           const directory = await opendir(folder);
@@ -130,6 +140,7 @@ export class Search {
             if (!request.showHidden && child.name.startsWith('.')) continue;
             visited++;
             const file = path.join(folder, child.name);
+            if (excluded(file)) continue;
             // Do not recurse through symlinks (cycles and unintended external trees).
             if (child.isDirectory()) queue.push(file);
             if (!shown.has(file)) {

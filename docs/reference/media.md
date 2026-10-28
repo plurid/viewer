@@ -33,6 +33,9 @@ Drafts save editing decisions and source versions privately. Closing a draft's p
 culling pauses playback. Changed/revoked sources block further use, with **New draft from current
 files** preserving the old draft.
 
+Reload first saves pending editing decisions. If saving still fails, the unsaved plan stays in
+memory for another retry; a stale reload response cannot replace a newer edit.
+
 ## Optimize
 
 Optimize supports selected PDF, JPEG, PNG, WebP and AVIF files, including mixed batches.

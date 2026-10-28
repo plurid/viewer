@@ -9,6 +9,12 @@ and Open externally. It uses an isolated persistent browser profile and remains 
 spatial perspective. Site compatibility, login and device permissions depend on the site and
 available browser support.
 
+**Open page in window** opens the current address in a separate Viewer window with the page's own
+keyboard focus and accessibility tree. Use it for reading and interacting with a screen reader. The
+spatial plane stays open. The new page shares the isolated browser login profile; unsaved form
+values and scroll position are not copied. Page windows are bounded to eight and are not restored
+automatically after quitting. **Open in default browser** remains available for other site needs.
+
 A failed navigation has retry controls. For an associated stopped local server, the plane offers
 **Start server** and **Server details**. Restarting at the same address navigates again rather than
 keeping an old error.

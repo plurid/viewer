@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, realpath, symlink } from 'node:fs/promises';
 import { runGit } from './git';
 import { gitBlobs } from './git-blobs';
+import { assertNoGitFilters } from './git-filters';
 
 interface TreeFile {
   name: string;
@@ -15,19 +16,7 @@ const maximumTotal = 512 * 1024 * 1024;
 
 /** Automatic folder badges also ask Git for status, which may invoke clean filters. */
 export async function assertAgentCheckoutSafe(repo: string, signal: AbortSignal): Promise<void> {
-  const config = (await runGit(repo, ['config', '--null', '--list'], 1024 * 1024, signal)).toString(
-    'utf8',
-  );
-  for (const row of config.split('\0')) {
-    const newline = row.indexOf('\n');
-    if (newline < 0) continue;
-    const key = row.slice(0, newline),
-      value = row.slice(newline + 1);
-    if (/^filter\..+\.(?:clean|smudge|process)$/i.test(key) && value.trim())
-      throw new Error(
-        'This repository configures executable Git filters. Use the human worktree dialog to create its task. CLI task creation never runs repository filters.',
-      );
-  }
+  await assertNoGitFilters(runGit, repo, signal);
 }
 
 /** Checkout filters and post-checkout hooks are executable code. Agent worktrees

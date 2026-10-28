@@ -150,6 +150,7 @@ const descriptions: Record<string, string[]> = {
   'settings.search.roots': ['Absolute folders to index recursively for filename/metadata search.'],
   'settings.search.exclusions': [
     'Absolute paths exclude their subtree; bare names exclude matching path components.',
+    'Applies to indexing, document text search and recursive folder search, before reading files.',
     'Examples: "/absolute/path/private", ".git", "node_modules". These are not glob patterns.',
   ],
   'settings.search.contentRoots': [

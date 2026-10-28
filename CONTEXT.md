@@ -95,6 +95,11 @@ Effective grants and credentials stay outside editable JSONC. Agent terminal rea
 not grant input or process containment. Every agent removal requires fresh exact-scope approval and
 operating-system Trash; see the authoritative [removal policy](AGENTS.md).
 
+The broker owns cancellable authority lifetimes independently of RPC sockets. Shared withdrawal
+retires agent work; per-client withdrawal retires that client's work. Model data permission also
+tracks the request's user/agent origin. Agent Git inspection uses a contained process on macOS and
+never falls back to an uncontained status or diff.
+
 An **operation receipt** records mutation intent and guarded Undo. **Journal** is a bounded
 human-readable projection; it cannot authorize or replay an event. An external session's
 **Reported** state comes from its authenticated adapter, not terminal output or elapsed time.

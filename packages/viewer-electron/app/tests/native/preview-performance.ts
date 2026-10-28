@@ -151,27 +151,32 @@ try {
       observations.push(result);
       console.log(JSON.stringify(result));
       if (target.name.endsWith('.csv')) {
+        const filterText = 'Generated detail record ' + (54999 - trial);
         await evaluate(`(() => {
           window.__previewLongTasks = [];
-          document.querySelector('[aria-label="Filter table rows"]').focus();
+          const input = document.querySelector('[aria-label="Filter table rows"]');
+          input.focus(); input.select();
           window.__filterMilliseconds = undefined;
-          const start = performance.now();
+          let start;
+          input.addEventListener('input', () => { start = performance.now(); }, {once: true, capture: true});
           const root = document.querySelector('.quick-preview .data-viewer');
+          window.__filterObserver?.disconnect();
           const observer = new MutationObserver(() => {
             const count = root.querySelector('.preview-toolbar .muted')?.textContent || '';
-            if (count.startsWith('1 rows')) {
+            if (start !== undefined && count.startsWith('1 rows') && input.value === ${JSON.stringify(filterText)} && root.textContent.includes(${JSON.stringify(filterText)})) {
               window.__filterMilliseconds = performance.now() - start;
               observer.disconnect();
             }
           });
           observer.observe(root, {subtree: true, childList: true, characterData: true});
+          window.__filterObserver = observer;
         })()`);
         const filterStart = performance.now();
-        await command('Input.insertText', { text: 'Generated detail record 54999' });
+        await command('Input.insertText', { text: filterText });
         await until(
           () =>
             evaluate<boolean>(
-              'document.querySelector(".quick-preview .data-viewer").textContent.includes("1 rows")',
+              `Number.isFinite(window.__filterMilliseconds) && document.querySelector('[aria-label="Filter table rows"]').value === ${JSON.stringify(filterText)}`,
             ),
           Boolean,
           'filtered source row',

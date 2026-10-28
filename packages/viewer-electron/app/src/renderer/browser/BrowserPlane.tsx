@@ -392,6 +392,9 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
       </div>
       <footer className="browser-status">
         <span>{snapshot?.loading ? 'Loading…' : snapshot?.title || 'Browser'}</span>
+        <button disabled={!snapshot?.url} onClick={() => action('native-window')}>
+          Open page in window
+        </button>
         <button onClick={() => action('zoom-reset')}>
           {Math.round((snapshot?.zoom ?? 1) * 100)}%
         </button>

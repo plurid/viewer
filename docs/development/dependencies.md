@@ -15,10 +15,11 @@ to install an Office suite, FFmpeg or a package manager to use those features.
 
 ## Change a dependency
 
-Update the manifest and lockfile together. Check the installed version and production advisories
-with `pnpm audit --prod`; an audit of npm packages does not cover every bundled native library.
-Review the upstream advisory or release notes and verify the patched bytes. Retain corresponding
-sources, licenses and notices for bundled processors.
+Update the manifest and lockfile together. Check installed versions and run `pnpm audit` for the
+complete graph. `pnpm audit --prod` is a useful additional view, but it omits Electron because the
+shipped runtime is declared as a development dependency. An audit of npm packages does not cover
+every bundled native library. Review the upstream advisory or release notes and verify the patched
+bytes. Retain corresponding sources, licenses and notices for bundled processors.
 
 Build-time downloads must match their reviewed hashes. Preserve mismatched caches for inspection.
 The Office build appends the pinned, unmodified Noto CJK font collection to a new virtual-filesystem
@@ -30,6 +31,12 @@ developer's PATH. Follow [AGENTS.md](../../AGENTS.md) before replacing or removi
 After a change, run types, lint, affected regressions and the full tests. Package the app and repeat
 the relevant real workflow: a source test cannot establish that its native dependency was bundled or
 that the exported file renders correctly.
+
+The renderer applies narrowly guarded build adaptations for Three.js texture ownership and Plurid's
+camera-selector cache. The camera adaptation bounds both argument and result caches and applies
+during development prebundling as well as production builds. Tests use the installed dependency
+source and reject drift when its selector changes. The installed package files stay intact; review
+these adaptations when upgrading either dependency.
 
 ## Validate the package
 

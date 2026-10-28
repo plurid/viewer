@@ -54,11 +54,11 @@ function fixture() {
   };
   const git = {
     root: vi.fn(async () => '/shared'),
-    status: vi.fn(async () => ({
+    inspectStatus: vi.fn(async () => ({
       kind: 'ready' as const,
       snapshot: { root: '/shared', updated: Date.now(), branch: 'main', changes: [] },
     })),
-    diff: vi.fn(async () => ({
+    inspectDiff: vi.fn(async () => ({
       root: '/shared',
       base: 'HEAD',
       commit: 'a'.repeat(40),
@@ -159,14 +159,14 @@ describe('scoped CLI service adapters', () => {
     const f = fixture();
     f.git.root.mockResolvedValue('/private/checkout');
     await expect(f.call('git_status', { path: '/shared/subfolder' })).rejects.toThrow('Outside');
-    expect(f.git.status).not.toHaveBeenCalled();
+    expect(f.git.inspectStatus).not.toHaveBeenCalled();
     f.git.root.mockResolvedValue('/shared');
     f.restrict('metadata');
     await expect(f.call('git_status', { path: '/shared' })).resolves.toMatchObject({
       kind: 'ready',
     });
     await expect(f.call('git_diff', { path: '/shared' })).rejects.toThrow('content');
-    expect(f.git.diff).not.toHaveBeenCalled();
+    expect(f.git.inspectDiff).not.toHaveBeenCalled();
   });
   it('filters task names by checkout scope', async () => {
     const f = fixture();

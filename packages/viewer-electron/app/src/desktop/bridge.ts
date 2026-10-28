@@ -1074,7 +1074,13 @@ export class Desktop {
       aliases: () =>
         namedLines(this.settings.snapshot().settings.customActions, this.sessionKeys.aliases),
     });
-    this.search = new Search((batch) => emit({ type: 'search', batch }));
+    this.search = new Search(
+      (batch) => emit({ type: 'search', batch }),
+      undefined,
+      undefined,
+      (file) => this.fileAccess.require([file]),
+      () => [...this.settings.snapshot().settings.search.exclusions, dataPath],
+    );
     this.storage = new Storage(path.join(dataPath, 'viewer-state-v1.json'));
     this.backups = new PersonalBackups(dataPath, {
       flush: async () => {
@@ -1178,6 +1184,7 @@ export class Desktop {
     if (key === this.indexConfiguration) return;
     this.indexConfiguration = key;
     try {
+      await this.search.quiesce();
       await this.files.configure(config, rebuild);
     } catch (error) {
       this.indexConfiguration = '';

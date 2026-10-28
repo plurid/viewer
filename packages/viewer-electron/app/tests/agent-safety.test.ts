@@ -229,6 +229,33 @@ beforeEach(() => {
 });
 
 describe('agent removal safety', () => {
+  it.each(['disable', 'remove-folder', 'capabilities'] as const)(
+    'retires proposals when shared authority narrows: %s',
+    async (kind) => {
+      const f = await fixture();
+      const grant = { capabilities: ['metadata', 'propose'] as const };
+      await f.broker.access.approve(grant, await f.broker.access.captureReview(grant));
+      const proposal = await f.call<{ id: string }>('propose_command', { commandID: 'copy-path' });
+      expect(f.requests.get(proposal.id).status).toBe('review');
+      await f.broker.access.approve(
+        kind === 'disable'
+          ? { enabled: false }
+          : kind === 'remove-folder'
+            ? { remove: ['/Granted'] }
+            : { capabilities: ['metadata'] },
+      );
+      expect(f.requests.get(proposal.id).status).toBe('cancelled');
+      expect(f.execute).not.toHaveBeenCalled();
+      await f.broker.close();
+    },
+  );
+  it('cancels outstanding reviews on broker close and rejects new requests until restarted', async () => {
+    const f = await fixture();
+    const proposal = await f.call<{ id: string }>('propose_command', { commandID: 'copy-path' });
+    await f.broker.close();
+    expect(f.requests.get(proposal.id).status).toBe('cancelled');
+    await expect(f.call('list_commands')).rejects.toThrow('disabled');
+  });
   it('admits only granted typed exports with content permission, fresh review and unchanged sources', async () => {
     const denied = await fixture();
     const input = {

@@ -125,7 +125,15 @@ const information = new FileInformationService(
 );
 const sizes = new FolderSizes((task) => emit({ type: 'folder-size', task }));
 const watchers = new Watchers(emit);
-const search = new Search((batch) => emit({ type: 'search', batch }));
+const search = new Search(
+  (batch) => emit({ type: 'search', batch }),
+  undefined,
+  undefined,
+  async (file) => {
+    scoped(file);
+  },
+  () => settings.snapshot().settings.search.exclusions,
+);
 const trash = path.join(fixture.root, 'trash');
 await mkdir(trash);
 const operations = new Operations(

@@ -91,6 +91,7 @@ export const browserRequestSchema = z.discriminatedUnion('kind', [
         'reload',
         'stop',
         'external',
+        'native-window',
         'zoom-in',
         'zoom-out',
         'zoom-reset',

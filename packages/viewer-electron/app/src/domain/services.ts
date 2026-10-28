@@ -1,4 +1,5 @@
 import type { Theme } from './preferences/themes';
+import { commonSearchExclusions } from './search/exclusions';
 import type { Toolbars } from './preferences/toolbars';
 import type { SettingProfile } from './preferences/profiles';
 import type { LayoutTemplate } from './workspaces/layout-templates';
@@ -268,6 +269,9 @@ export interface ProposedChange {
   approved: boolean;
   completed?: boolean;
   stagedPath?: string;
+  /** Canonical source scope captured before moving; retained for guarded restoration. */
+  scopeRoot?: string;
+  restoration?: { destination: string; root: string };
   error?: string;
 }
 export interface ActionPlan extends ChangePlan<ProposedChange> {
@@ -423,7 +427,7 @@ export function defaultSettings(home: string): ApplicationSettings {
     tour: { dwell: 3000, duration: 900, loop: true },
     search: {
       roots: [home],
-      exclusions: [home + '/Library', '.git', 'node_modules', '.cache', '.vite', 'out'],
+      exclusions: [home + '/Library', ...commonSearchExclusions],
       contentRoots: [],
       paused: false,
     },
