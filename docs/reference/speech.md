@@ -58,6 +58,17 @@ characters. There are no automatic retries, fallbacks or background uploads. Aut
 server errors omit response bodies and credentials. Cancelling, revoking consent, clearing a key or
 editing a provider invalidates its active sessions and rejects late results.
 
+**Check connection and model** uses only explicit GET requests. Meta and OpenAI-compatible adapters
+request `/models` with the saved key. Deepgram checks `/auth/token`, then its public `/models`
+catalog for recorded-audio support. An unlisted custom Deepgram model or an endpoint without
+discovery remains unverified. A successful catalog check does not establish transcription support,
+quality, quota or billing status and never grants audio access.
+
+Checks have a 15-second deadline and a 2 MB response limit. They reject redirects and omit provider
+error bodies. Checks are cancelled on owner closure, key/model/endpoint changes or revocation; late
+credential reads cannot trigger a request. Results last only for the current session and clear on
+provider or key edits. Audio permission remains separate.
+
 ## Data and permissions
 
 Only a trusted top-level Viewer or Settings window with an active person-started session can request

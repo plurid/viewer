@@ -77,6 +77,24 @@ chooses the provider and data permission. The model's line cannot perform restri
 opaque programs, type into a terminal, change bindings or silently discard/save text. Unsupported
 requests explain why.
 
+### Branch task form
+
+```text
+:task-new "Improve search" --repo /projects/viewer --branch feature/search --path /projects/Search --workspace Development
+```
+
+`task-new [name] [--repo PATH] [--branch NAME] [--path NEW_FOLDER] [--base LOCAL_BRANCH | --existing] [--workspace ID_OR_NAME]`
+opens an editable form. Options follow the task name; quote values with spaces. Paths resolve once
+from the originating folder. Omitted fields remain editable; the current folder and workspace
+provide defaults. New branches default to the repository's current revision. `--existing` selects an
+unattached local branch and cannot be combined with `--base`.
+
+The request must run alone, without a count, pipeline or named sequence. It cannot execute a shell
+command. Creating the task requires desktop confirmation after parameter review. Cancelling returns
+to the form; a failure reports any retained worktree and prevents blindly repeating the creation.
+The terminal stays stopped and Git review loads explicitly. The external CLI uses the same typed
+task schema and engine, with its own client grants and proposal review.
+
 Manual terminal-input verbs and imported keymaps have their own trust rules. Agents propose
 supported command IDs rather than command-language lines. See [agent authority](agents.md) and
 [search syntax](search.md).

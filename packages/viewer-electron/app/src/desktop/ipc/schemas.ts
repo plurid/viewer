@@ -29,6 +29,7 @@ import { optimizationRequestSchema } from '../../domain/operations/optimization-
 import { worksheetDocumentRequestSchema } from '../../domain/previews/documents/office';
 import { noteRequestSchema } from '../../domain/editing/notes';
 import { speechRequestSchema } from '../../domain/speech/recognition';
+import { taskWorkflowInputSchema } from '../../domain/agents/task-workflow';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
@@ -193,6 +194,7 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
 ]);
 export const schemas = {
   speech: z.tuple([speechRequestSchema]),
+  createTask: z.tuple([taskWorkflowInputSchema]),
   optimization: z.tuple([optimizationRequestSchema]),
   receipts: z.tuple([receiptRequestSchema]),
   notes: z.tuple([noteRequestSchema]),
@@ -826,6 +828,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  */
 export const methodWindows = {
   speech: 'both',
+  createTask: 'viewer',
   optimization: 'viewer',
   gitReview: 'viewer',
   agentSessions: 'viewer',

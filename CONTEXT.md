@@ -85,6 +85,11 @@ and bounded responses. Local and hosted paths share capture and reviewed inserti
 worktree leases. Its raw checkout writer cannot run hooks or filters; the renderer task controller
 persists the approved bundle before acknowledging completion.
 
+`desktop/workspaces/task-requests` binds a person's editable task form to that same engine using
+ordinary folder access and native confirmation, independently of agent grants. `task-new` only fills
+the form; Ask Viewer and reviewed speech do not gain a second executor. Hosted speech catalog checks
+belong to `desktop/speech/provider-check`; results are session-only and separate from audio consent.
+
 Native file permission, provider data permission and local agent authority have separate owners.
 Effective grants and credentials stay outside editable JSONC. Agent terminal read permission does
 not grant input or process containment. Every agent removal requires fresh exact-scope approval and

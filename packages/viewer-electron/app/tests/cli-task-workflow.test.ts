@@ -18,6 +18,8 @@ import {
 } from '../src/domain/agents/task-workflow';
 import type { AgentWorkspaceSnapshot } from '../src/domain/agents/requests';
 import { gitBlobs } from '../src/desktop/comparison/git-blobs';
+import { TaskRequests } from '../src/desktop/workspaces/task-requests';
+import { taskWorkflowInputSchema } from '../src/domain/agents/task-workflow';
 
 const execute = promisify(execFile);
 const services: AgentTaskWorkflows[] = [];
@@ -49,13 +51,10 @@ it('does not probe Git or folders when task creation is unavailable', async () =
         existing: false,
       },
       {
-        clientID: 'test',
         signal: new AbortController().signal,
         authorize,
         require,
         workspaceState: async () => undefined,
-        catalog: () => undefined,
-        own: () => {},
       },
     ),
   ).rejects.toThrow('direct build only');
@@ -283,7 +282,25 @@ it('supports an unattached existing branch and rejects occupied branches and cha
 });
 it('rechecks scope and the workspace owner, refuses symlinks, collisions and parameter tampering', async () => {
   const f = await fixture();
-  const setup = await f.tasks.prepare(f.input, f.context);
+  const parsed = parseCLI(
+    [
+      'task',
+      'create',
+      f.input.name,
+      '--repo',
+      f.repo,
+      '--branch',
+      f.input.branch,
+      '--path',
+      f.input.path,
+      '--workspace',
+      f.input.workspace,
+      '--json',
+    ],
+    (file) => path.resolve(file),
+  );
+  expect(parsed.command?.tool).toBe('propose_task_create');
+  const setup = await f.tasks.prepare({ ...f.input, ...parsed.parameters }, f.context);
   await expect(f.tasks.execute({ ...setup, branch: 'tampered' }, () => {})).rejects.toThrow(
     'changed',
   );
@@ -396,7 +413,24 @@ it('keeps the same native review boundary for parameterized CLI task creation', 
     undefined,
     (setup, progress) => f.tasks.execute(setup, progress),
   );
-  const setup = await f.tasks.prepare(f.input, f.context);
+  const parsed = parseCLI(
+    [
+      'task',
+      'create',
+      f.input.name,
+      '--repo',
+      f.repo,
+      '--branch',
+      f.input.branch,
+      '--path',
+      f.input.path,
+      '--workspace',
+      f.input.workspace,
+      '--json',
+    ],
+    (file) => path.resolve(file),
+  );
+  const setup = await f.tasks.prepare(taskWorkflowInputSchema.parse(parsed.parameters), f.context);
   const proposal = requests.taskWorkflow(setup);
   await expect(requests.review(proposal.id, true)).rejects.toThrow('not confirmed');
   expect(requests.get(proposal.id).status).toBe('review');
@@ -407,4 +441,71 @@ it('keeps the same native review boundary for parameterized CLI task creation', 
     status: 'completed',
     taskResult: { stage: 'ready', workspaceID: 'second', terminal: 'stopped' },
   });
+});
+it('uses person folder access and native confirmation without requiring MCP grants', async () => {
+  const f = await fixture(),
+    confirm = vi.fn(async () => false),
+    authorize = vi.fn(async (file: string) => file);
+  const requests = new TaskRequests({
+    tasks: f.tasks,
+    person: () => ({ originID: 'person-window', workspaceID: 'first', state: f.state }),
+    authorize,
+    confirm,
+  });
+  expect(await requests.create(f.input, 1)).toEqual({ kind: 'cancelled' });
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(f.context.require).not.toHaveBeenCalled();
+  expect(authorize).toHaveBeenCalledWith(f.repo);
+  await expect(readFile(path.join(f.input.path, 'Hello.txt'))).rejects.toMatchObject({
+    code: 'ENOENT',
+  });
+  confirm.mockResolvedValue(true);
+  const result = await requests.create(f.input, 1);
+  expect(result).toMatchObject({
+    kind: 'created',
+    result: { stage: 'ready', workspaceID: 'second', terminal: 'stopped' },
+  });
+  expect(await readFile(path.join(f.input.path, 'Hello.txt'), 'utf8')).toContain('Generated');
+});
+it('cancels a person request if its window closes during native confirmation and rejects concurrent creation', async () => {
+  const f = await fixture();
+  let resolve!: (allow: boolean) => void;
+  const confirm = vi.fn(
+    () =>
+      new Promise<boolean>((done) => {
+        resolve = done;
+      }),
+  );
+  const requests = new TaskRequests({
+    tasks: f.tasks,
+    person: () => ({ originID: 'person-window', workspaceID: 'first', state: f.state }),
+    authorize: async (file) => file,
+    confirm,
+  });
+  const work = requests.create(f.input, 1);
+  await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+  await expect(requests.create(f.input, 1)).rejects.toThrow('current task');
+  requests.stopOwner(1);
+  resolve(true);
+  expect(await work).toMatchObject({ kind: 'failed' });
+  expect(f.present).not.toHaveBeenCalled();
+  await expect(readFile(path.join(f.input.path, 'Hello.txt'))).rejects.toMatchObject({
+    code: 'ENOENT',
+  });
+});
+it('returns structured retained worktree recovery when a person task cannot reach the canvas', async () => {
+  const f = await fixture();
+  f.present.mockRejectedValueOnce(new Error('Canvas closed'));
+  const requests = new TaskRequests({
+    tasks: f.tasks,
+    person: () => ({ originID: 'person-window', workspaceID: 'first', state: f.state }),
+    authorize: async (file) => file,
+    confirm: async () => true,
+  });
+  expect(await requests.create(f.input, 1)).toMatchObject({
+    kind: 'failed',
+    error: 'Canvas closed',
+    result: { path: f.input.path, stage: 'worktree-created', terminal: 'stopped' },
+  });
+  expect(await readFile(path.join(f.input.path, 'Hello.txt'), 'utf8')).toContain('Generated');
 });

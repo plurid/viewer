@@ -17,6 +17,12 @@ and task setup. Choose a workspace with `--workspace ID_OR_NAME`; `--repo` and `
 repository and local starting branch. The terminal restores stopped, and the Git view waits for
 **Load Git changes**. See [CLI task parameters and recovery](cli.md#create-a-task-from-a-branch).
 
+Ask Viewer and the in-app `task-new` command can prefill a form using those same task parameters.
+The person edits the fields and confirms creation in a desktop dialog. This person-owned route uses
+ordinary folder access rather than MCP grants; it shares the bounded worktree writer, private lease
+and durable task handoff with the CLI. It does not run hooks or filters. Failed setup retains output
+and reports the worktree location; it does not remove files or retry creation automatically.
+
 Add a checklist, note, conversation, browser or server view, or attach a supported open plane.
 **Arrange open tools** tiles the available views. Closing a tool view keeps its task reference;
 closing a note view keeps its saved document. Removing a saved note/checklist uses its separate Move

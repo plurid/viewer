@@ -151,6 +151,7 @@ const state: SavedState = {
         },
       ],
     },
+    { id: 'other', name: 'Other generated workspace', panes: [], roots: [], arrangement: {} },
   ],
 };
 await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1, settings, ui }), {
@@ -199,6 +200,16 @@ async function verifyRestoredTask(
     assert.equal(
       (await git(checkout, 'branch', '--show-current')).trim(),
       'feature/generated-task',
+    );
+    await actions.palette('Generated branch task');
+    await evaluate(`(() => {
+      const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.querySelector('.task-tool-kind')?.textContent.startsWith('note ·'));
+      row.querySelector('button').click();
+    })()`);
+    await until(
+      () => evaluate<string>('document.querySelector(".note-plane")?.textContent || ""'),
+      (text) => text.includes('Keep the task context'),
+      'Restored edited task note',
     );
     await actions.palette('Generated branch task');
     await until(
@@ -289,6 +300,39 @@ try {
   );
   await capture('task-tools');
   checks.push('One action creates a worktree, task and four durable tools');
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.querySelector('.task-tool-kind')?.textContent.startsWith('note ·'));
+    row.querySelector('button').click();
+  })()`);
+  await until(
+    () => evaluate<boolean>('!!document.querySelector(".note-plane")'),
+    Boolean,
+    'Task note mounted',
+  );
+  await actions.button('Source');
+  await actions.text(
+    '.note-plane .cm-content',
+    '# Keep the task context\n\nReview both hunks before running checks.',
+  );
+  await actions.palette('Other generated workspace');
+  await until(
+    async () => (await saved()).activeWorkspace,
+    (id) => id === 'other',
+    'Switched away after editing',
+  );
+  await actions.palette('Task workflow acceptance');
+  await actions.palette('Generated branch task');
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.querySelector('.task-tool-kind')?.textContent.startsWith('note ·'));
+    row.querySelector('button').click();
+  })()`);
+  await until(
+    () => evaluate<string>('document.querySelector(".note-plane")?.textContent || ""'),
+    (text) => text.includes('Keep the task context'),
+    'Task note retained after workspace switch',
+  );
+  checks.push('Live task tools mount and an edited note survives switching workspaces');
+  await actions.palette('Generated branch task');
   const changed = original
     .replace('line 2\n', 'first edit\n')
     .replace('line 27\n', 'second edit\n');

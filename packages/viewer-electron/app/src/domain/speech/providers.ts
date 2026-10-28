@@ -82,9 +82,25 @@ export const speechProviderSchema = z
     'Use the supported provider endpoint, or choose Compatible endpoint.',
   );
 export type SpeechProvider = z.infer<typeof speechProviderSchema>;
+export type SpeechProviderCheckOutcome =
+  | 'available'
+  | 'unverified'
+  | 'model-unavailable'
+  | 'auth-error'
+  | 'http-error'
+  | 'connection-error'
+  | 'invalid-response';
+/** Catalog checks never upload audio and cannot grant audio permission. */
+export interface SpeechProviderCheck {
+  outcome: SpeechProviderCheckOutcome;
+  detail: string;
+  checkedAt: number;
+  httpStatus?: number;
+}
 export interface SpeechProviderState extends SpeechProvider {
   hasKey: boolean;
   allowed: boolean;
+  check?: SpeechProviderCheck;
 }
 export interface SpeechProvidersSnapshot {
   providers: SpeechProviderState[];
@@ -104,6 +120,7 @@ export const speechProviderRequestSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ kind: z.literal('provider-consent'), id: z.uuid(), allow: z.boolean() }).strict(),
+  z.object({ kind: z.literal('provider-check'), id: z.uuid() }).strict(),
 ]);
 export type SpeechProviderRequest = z.infer<typeof speechProviderRequestSchema>;
 /** Audio consent binds the model as well as the protocol and endpoint. */

@@ -8,11 +8,14 @@ import {
   type SpeechProvider,
   type SpeechProviderRequest,
   type SpeechProvidersSnapshot,
+  type SpeechProviderCheck,
 } from '../../domain/speech/providers';
 import type { SpeechLanguage, SpeechTranscript } from '../../domain/speech/recognition';
 import { DocumentStore } from '../persistence/document-store';
 import type { Credentials } from '../models/providers';
 import { HostedTranscription } from './transcription';
+import { SpeechProviderChecks } from './provider-check';
+import { providerAbort, waitForProvider } from '../models/provider-response';
 
 const documentSchema = z
   .object({
@@ -44,12 +47,15 @@ export class SpeechProviders {
   private revisions = new Map<string, number>();
   private blocked = new Map<string, number>();
   private active = new Map<AbortController, string>();
+  private checks = new Map<string, SpeechProviderCheck>();
+  private checking = new Map<string, AbortController>();
   private closed = false;
   constructor(
     directory: string,
     private credentials: Pick<Credentials, 'load' | 'get' | 'set' | 'ids'>,
     private ports: Ports,
     private transport = new HostedTranscription(),
+    private checker = new SpeechProviderChecks(),
   ) {
     this.store = new DocumentStore(path.join(directory, 'speech-providers-v1.json'), (value) =>
       documentSchema.parse(value),
@@ -74,10 +80,11 @@ export class SpeechProviders {
     if (!provider) throw new Error('Choose a saved speech provider in Settings → Speech.');
     return structuredClone(provider);
   }
-  private invalidate(id: string): number {
+  private invalidate(id: string, clearCheck = true): number {
     const revision = (this.revisions.get(id) ?? 0) + 1;
     this.revisions.set(id, revision);
     this.blocked.set(id, revision);
+    if (clearCheck) this.checks.delete(id);
     for (const [controller, owner] of this.active) if (owner === id) controller.abort();
     this.ports.invalidated(id);
     return revision;
@@ -86,9 +93,10 @@ export class SpeechProviders {
     id: string,
     change: (document: ProviderDocument) => Promise<ProviderDocument>,
     revoke: boolean | ((document: ProviderDocument) => boolean) = false,
+    clearCheck = true,
   ): Promise<void> {
     if (this.closed) return Promise.reject(new Error('Speech providers are closed.'));
-    const revision = this.invalidate(id);
+    const revision = this.invalidate(id, clearCheck);
     const work = this.writes
       .catch(() => {})
       .then(async () => {
@@ -123,10 +131,15 @@ export class SpeechProviders {
           !this.closed &&
           !this.blocked.has(provider.id) &&
           state.consents[provider.id] === speechProviderIdentity(provider),
+        check: this.checks.get(provider.id),
       })),
     };
   }
   async request(request: SpeechProviderRequest): Promise<void> {
+    if (request.kind === 'provider-check') {
+      await this.check(request.id);
+      return;
+    }
     if (request.kind === 'provider-save') {
       const provider = speechProviderSchema.parse(request.provider);
       await this.mutate(
@@ -175,15 +188,20 @@ export class SpeechProviders {
         throw new Error(
           'The speech provider changed while permission was being reviewed. Review it again.',
         );
-      await this.mutate(provider.id, async (state) => {
-        if (
-          speechProviderIdentity(state.providers.find((item) => item.id === provider.id)!) !==
-          identity
-        )
-          throw new Error('The speech provider changed.');
-        state.consents[provider.id] = identity;
-        return state;
-      });
+      await this.mutate(
+        provider.id,
+        async (state) => {
+          if (
+            speechProviderIdentity(state.providers.find((item) => item.id === provider.id)!) !==
+            identity
+          )
+            throw new Error('The speech provider changed.');
+          state.consents[provider.id] = identity;
+          return state;
+        },
+        false,
+        false,
+      );
       return;
     }
     await this.mutate(
@@ -202,7 +220,47 @@ export class SpeechProviders {
         return state;
       },
       true,
+      request.kind !== 'provider-consent',
     );
+  }
+  async check(id: string, outer?: AbortSignal): Promise<void> {
+    if (this.closed) throw new Error('Speech providers are closed.');
+    this.checking.get(id)?.abort();
+    const controller = new AbortController(),
+      signal = AbortSignal.any([
+        controller.signal,
+        AbortSignal.timeout(15000),
+        ...(outer ? [outer] : []),
+      ]);
+    this.checking.set(id, controller);
+    this.active.set(controller, id);
+    this.checks.delete(id);
+    this.ports.changed();
+    try {
+      await waitForProvider(this.writes, signal);
+      const provider = await waitForProvider(this.provider(id), signal),
+        lease = { provider, revision: this.revisions.get(id) ?? 0 };
+      this.checkIdentity(await waitForProvider(this.state(), signal), lease);
+      let key: string;
+      try {
+        key = await waitForProvider(this.credentials.get(this.keyID(provider)), signal);
+      } catch {
+        if (signal.aborted) throw providerAbort(signal);
+        throw new Error(
+          'The stored speech key could not be read. Save the key again in Settings → Speech.',
+        );
+      }
+      this.checkIdentity(await waitForProvider(this.state(), signal), lease);
+      signal.throwIfAborted();
+      const result = await this.checker.check(provider, key, signal);
+      this.checkIdentity(await waitForProvider(this.state(), signal), lease);
+      signal.throwIfAborted();
+      this.checks.set(id, result);
+    } finally {
+      this.active.delete(controller);
+      if (this.checking.get(id) === controller) this.checking.delete(id);
+      this.ports.changed();
+    }
   }
   async prepare(id: string | undefined, language: SpeechLanguage): Promise<SpeechProviderLease> {
     await this.writes;
@@ -219,13 +277,17 @@ export class SpeechProviders {
     this.checkCurrent(await this.state(), lease);
   }
   private checkCurrent(state: ProviderDocument, lease: SpeechProviderLease): void {
+    this.checkIdentity(state, lease);
+    if (state.consents[lease.provider.id] !== speechProviderIdentity(lease.provider))
+      throw new Error('Allow this endpoint and model to receive recordings in Settings → Speech.');
+  }
+  private checkIdentity(state: ProviderDocument, lease: SpeechProviderLease): void {
     const id = lease.provider.id,
       identity = speechProviderIdentity(lease.provider);
     if (
       this.closed ||
       this.blocked.has(id) ||
       (this.revisions.get(id) ?? 0) !== lease.revision ||
-      state.consents[id] !== identity ||
       !state.providers.some((item) => speechProviderIdentity(item) === identity)
     )
       throw new Error('Allow this endpoint and model to receive recordings in Settings → Speech.');

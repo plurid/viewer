@@ -5,6 +5,64 @@
   height: 100%;
   min-height: 0;
 }
+.dialog.task-request-dialog {
+  width: min(580px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+}
+.dialog.task-request-dialog[open],
+.dialog.task-request-dialog > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dialog.task-request-dialog > header,
+.dialog.task-request-dialog form footer {
+  flex: 0 0 auto;
+}
+.dialog.task-request-dialog > form {
+  padding: 0;
+  overflow: hidden;
+}
+.dialog.task-request-dialog form footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+}
+.task-request-fields {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.task-request-fields p {
+  margin: 0;
+  line-height: 1.5;
+}
+.task-request-fields input,
+.task-request-fields .choice-button {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+.task-request-recovery p {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.task-request-progress {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
+  margin: 0 auto;
+  max-width: 580px;
+  padding: 12px 16px;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 4px);
+  z-index: 1000;
+}
 .task-area-summary {
   flex: 0 0 auto;
   padding: 20px 24px 16px;

@@ -11,9 +11,13 @@ provider**. Choose Meta, OpenAI, Deepgram or a compatible endpoint. Check the na
 model ID, then choose **Save provider**. The saved provider and its model appear together in **Use
 provider**. Speech providers are separate from chat and Ask Viewer models.
 
-Enter the provider's API key and choose **Save key**. Choose **Allow recordings…** and review the
-endpoint and model in the system dialog. Microphone access is a separate permission. The key alone
-does not authorize uploading audio.
+Enter the provider's API key and choose **Save key**, then **Check connection and model**. This
+requests provider metadata without recording or sending audio. Check any key, endpoint or model
+error before trying a recording. A listed model still needs a short transcription test; a compatible
+endpoint that lacks discovery is shown as unverified.
+
+Choose **Allow recordings…** and review the endpoint and model in the system dialog. Microphone
+access is a separate permission. The key alone does not authorize uploading audio.
 
 Choose **Test microphone and transcription**, record, then choose **Finish and transcribe**. Correct
 the editable transcript before inserting it into a draft. Releasing the dictation shortcut also
@@ -46,6 +50,12 @@ microphone access.
 
 Nothing runs directly from a recording. Ask Viewer uses the reasoning model and data permissions
 configured in **Settings → Models**. Local transcription itself does not send audio to that model.
+
+For example, ask to create a named branch task and supply its repository, branch and destination.
+Ask Viewer can propose `task-new`, which opens an editable form. Fill any missing parameters, review
+the workspace and choose **Create task…**. The desktop asks for confirmation before creating the
+worktree. The new terminal stays stopped and Git review waits for **Load Git changes**. See
+[branch tasks](develop.md#start-a-task-from-a-branch).
 
 ## Stop or recover
 

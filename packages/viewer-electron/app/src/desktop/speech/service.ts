@@ -49,6 +49,7 @@ export class Speech {
   private setup = new Map<string, { owner: number; task: SpeechSetupTask; work: Promise<void> }>();
   private work?: Promise<SpeechReply>;
   private transcribing = false;
+  private providerChecks = new Map<number, AbortController>();
   private closed = false;
   constructor(
     directory: string,
@@ -92,6 +93,22 @@ export class Speech {
       throw new Error('Speech input is available only to the person in a trusted Viewer window.');
     const request = speechRequestSchema.parse(raw);
     if (request.kind === 'status') return this.status(owner);
+    if (request.kind === 'provider-check') {
+      this.settings(owner);
+      if (!this.hosted) throw new Error('Hosted speech is unavailable in this build.');
+      if (this.providerChecks.has(owner))
+        throw new Error('A speech provider check is already running.');
+      const controller = new AbortController();
+      this.providerChecks.set(owner, controller);
+      try {
+        await this.hosted.check(request.id, controller.signal);
+        controller.signal.throwIfAborted();
+        if (!this.ports.human(owner)) throw new Error('The Settings window closed.');
+        return this.status(owner);
+      } finally {
+        if (this.providerChecks.get(owner) === controller) this.providerChecks.delete(owner);
+      }
+    }
     if (
       request.kind === 'provider-save' ||
       request.kind === 'provider-remove' ||
@@ -307,6 +324,8 @@ export class Speech {
     }
   }
   stopOwner(owner: number): void {
+    this.providerChecks.get(owner)?.abort();
+    this.providerChecks.delete(owner);
     this.cancelSession(owner);
     for (const { owner: initiator, task } of this.setup.values())
       if (owner === initiator && task.state === 'running') {
@@ -316,6 +335,7 @@ export class Speech {
   }
   async close(): Promise<void> {
     this.closed = true;
+    for (const owner of this.providerChecks.keys()) this.stopOwner(owner);
     if (this.session) this.stopOwner(this.session.owner);
     for (const { owner } of this.setup.values()) this.stopOwner(owner);
     await Promise.allSettled([...this.setup.values()].map((item) => item.work));

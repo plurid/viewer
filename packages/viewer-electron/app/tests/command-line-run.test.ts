@@ -129,6 +129,35 @@ beforeEach(() => {
 });
 
 describe('a line', () => {
+  it('opens a typed task form without touching files or running a process; requests cannot be pipelined', async () => {
+    const open = vi.fn(),
+      runtime = host([command('frame-all')]);
+    window.addEventListener('viewer:task-request', open);
+    try {
+      const result = await runLine(
+        'task-new "Ship it" --repo . --branch feature/ship --path ../Ship',
+        runtime,
+        true,
+      );
+      expect(result.ok).toBe(true);
+      expect(open).toHaveBeenCalledOnce();
+      expect((open.mock.calls[0]![0] as CustomEvent).detail).toMatchObject({
+        name: 'Ship it',
+        repo: '/fixtures',
+        path: '/Ship',
+        branch: 'feature/ship',
+        workspace: activeWorkspace().id,
+      });
+      expect(viewer.operate).not.toHaveBeenCalled();
+      expect(workspace.openPath).not.toHaveBeenCalled();
+      open.mockClear();
+      expect((await runLine('frame-all | task-new X', runtime)).ok).toBe(false);
+      expect(open).not.toHaveBeenCalled();
+      expect(ran).toEqual([]);
+    } finally {
+      window.removeEventListener('viewer:task-request', open);
+    }
+  });
   it('waits for an actual file-operation outcome before starting its next step', async () => {
     const id = crypto.randomUUID();
     const job: OperationJob = {

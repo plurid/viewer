@@ -22,6 +22,30 @@ export function providerAbort(signal: AbortSignal): DOMException {
   );
 }
 
+/** OS credential access may outlive cancellation. Consume its late result without
+ * letting the cancelled caller proceed to a network request. */
+export function waitForProvider<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const clean = () => signal.removeEventListener('abort', cancel);
+    const cancel = () => {
+      clean();
+      reject(providerAbort(signal));
+    };
+    signal.addEventListener('abort', cancel, { once: true });
+    void work.then(
+      (value) => {
+        clean();
+        resolve(value);
+      },
+      (error: unknown) => {
+        clean();
+        reject(error);
+      },
+    );
+    if (signal.aborted) cancel();
+  });
+}
+
 export async function requestProvider(
   request: typeof fetch,
   url: string,

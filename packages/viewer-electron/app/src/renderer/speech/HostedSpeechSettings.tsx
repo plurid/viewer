@@ -120,6 +120,7 @@ export function HostedSpeechSettings({
 }) {
   const [draft, setDraft] = useState<SpeechProvider>();
   const [key, setKey] = useState<{ id: string; value: string }>();
+  const [checking, setChecking] = useState(false);
   const selected = snapshot.providers.find((item) => item.id === selectedID);
   const save = async () => {
     if (!draft) return;
@@ -242,6 +243,40 @@ export function HostedSpeechSettings({
                 </button>
               )}
             </div>
+            <h3>Connection and model</h3>
+            <p
+              className={
+                selected.check && !['available', 'unverified'].includes(selected.check.outcome)
+                  ? 'error'
+                  : 'settings-note'
+              }
+              role="status"
+              aria-live="polite"
+            >
+              {checking
+                ? 'Checking the saved key and model catalog…'
+                : selected.check
+                  ? `${selected.check.detail}${selected.check.httpStatus ? ` (HTTP ${selected.check.httpStatus})` : ''}`
+                  : 'Not checked in this session. Check the saved provider before your first recording.'}
+            </p>
+            <div className="speech-model-actions">
+              <button
+                type="button"
+                disabled={busy || !selected.hasKey}
+                onClick={() => {
+                  setChecking(true);
+                  void request({ kind: 'provider-check', id: selected.id }).finally(() =>
+                    setChecking(false),
+                  );
+                }}
+              >
+                {checking ? 'Checking…' : 'Check connection and model'}
+              </button>
+            </div>
+            <p className="settings-note">
+              This uses your saved key to request provider metadata. It records and sends no audio.
+              Catalog access does not confirm transcription quality or remaining credit.
+            </p>
             <h3>Audio access</h3>
             <p className="settings-note" role="status">
               {selected.allowed

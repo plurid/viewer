@@ -95,13 +95,10 @@ try {
       existing: false,
     },
     {
-      clientID: 'generated-client',
       signal: new AbortController().signal,
       authorize,
       require: async () => {},
-      catalog: () => undefined,
       workspaceState: async () => catalog,
-      own: () => {},
     },
   );
   assert.equal((await tasks.execute(setup, () => {})).stage, 'ready');

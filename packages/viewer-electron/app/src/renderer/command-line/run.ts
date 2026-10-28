@@ -15,6 +15,7 @@ import { sessionKeys } from '../keys/session';
 import { getState } from '../state/store';
 import { verbRuns } from './verbs';
 import { namedLines, promptLineProblem } from '../../domain/command-line/prompt';
+import { taskLineDraft } from '../../domain/command-line/task';
 
 export interface PlannedStep {
   step: Step;
@@ -43,10 +44,19 @@ export function userCommands(): Map<string, string[]> {
 export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[] {
   if (depth > 10) throw new LineError('Commands call each other too deeply.', 0);
   const context = host.context();
-  return parseCommandLine(text).map((step): PlannedStep => {
+  const steps = parseCommandLine(text);
+  return steps.map((step): PlannedStep => {
     const name = resolveName(step.name);
     if (name.kind === 'verb') {
       const bound = bindStep(step, name.verb);
+      if (name.verb.key === 'task-new') {
+        if (depth !== 0 || steps.length !== 1 || step.count !== undefined)
+          throw new LineError(
+            'Task requests must run alone, without a count or a named sequence.',
+            step.at,
+          );
+        taskLineDraft(step.words);
+      }
       const run = verbRuns[name.verb.key];
       if (!run) throw new LineError(`:${verbName(name.verb)} cannot run here.`, step.at);
       return {

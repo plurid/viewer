@@ -10,6 +10,7 @@ import {
 } from '../src/domain/speech/providers';
 import { HostedTranscription, speechWAV } from '../src/desktop/speech/transcription';
 import { SpeechProviders } from '../src/desktop/speech/providers';
+import { SpeechProviderChecks } from '../src/desktop/speech/provider-check';
 import { Credentials } from '../src/desktop/models/providers';
 import { temporaryRoot } from '../tools/temporary';
 import { Speech } from '../src/desktop/speech/service';
@@ -131,7 +132,13 @@ async function fixture(
     changed: vi.fn(),
     invalidated: vi.fn<(id: string) => void>(),
   };
-  const manager = new SpeechProviders(root, credentials, ports, new HostedTranscription(fetcher));
+  const manager = new SpeechProviders(
+    root,
+    credentials,
+    ports,
+    new HostedTranscription(fetcher),
+    new SpeechProviderChecks(fetcher),
+  );
   managers.push(manager);
   const provider = newSpeechProvider('openai', randomUUID());
   await manager.request({ kind: 'provider-save', provider });
@@ -139,6 +146,47 @@ async function fixture(
   const allow = () => manager.request({ kind: 'provider-consent', id: provider.id, allow: true });
   return { root, credentials, encrypt, ports, manager, provider, key, allow };
 }
+it('checks without audio consent, keeps permission independent and forgets checks on credential edits or restart', async () => {
+  const fetcher = vi.fn<typeof fetch>(async () =>
+    Response.json({ data: [{ id: f.provider.model }] }),
+  );
+  const f = await fixture(fetcher);
+  await f.key();
+  await f.manager.check(f.provider.id);
+  expect((await f.manager.status()).providers[0]).toMatchObject({
+    allowed: false,
+    check: { outcome: 'available' },
+  });
+  expect(f.ports.confirm).not.toHaveBeenCalled();
+  await f.allow();
+  expect((await f.manager.status()).providers[0]).toMatchObject({
+    allowed: true,
+    check: { outcome: 'available' },
+  });
+  const restarted = new SpeechProviders(f.root, f.credentials, f.ports);
+  managers.push(restarted);
+  expect((await restarted.status()).providers[0]?.check).toBeUndefined();
+  await f.manager.request({ kind: 'provider-key', id: f.provider.id, key: 'replacement' });
+  expect((await f.manager.status()).providers[0]).toMatchObject({
+    allowed: false,
+    check: undefined,
+  });
+});
+it('cannot send a late check after key revocation while credentials are pending', async () => {
+  const fetcher = vi.fn<typeof fetch>(),
+    f = await fixture(fetcher);
+  await f.key();
+  const key = deferred<string>(),
+    get = vi.spyOn(f.credentials, 'get').mockImplementationOnce(() => key.promise);
+  const check = f.manager.check(f.provider.id).catch((error: Error) => error);
+  await vi.waitFor(() => expect(get).toHaveBeenCalledOnce());
+  await f.manager.request({ kind: 'provider-key', id: f.provider.id, key: '' });
+  expect(await check).toMatchObject({ name: 'AbortError' });
+  key.resolve(secret);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(fetcher).not.toHaveBeenCalled();
+  expect((await f.manager.status()).providers[0]?.check).toBeUndefined();
+});
 describe('hosted speech wire protocols', () => {
   it('persists consent revocation before a failed credential change, including after restart', async () => {
     const f = await fixture();

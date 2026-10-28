@@ -30,6 +30,13 @@ staging.
 3. Create the task. Viewer opens its folder, notes, terminal and Git tools.
 4. Reopen the area from **Tasks…** as you move between jobs.
 
+You can also ask Viewer in words, including reviewed dictated text. Specify the task name and any
+known repository, branch, worktree folder and workspace. Review the proposed `task-new` line, then
+edit its ordinary form fields. Missing details stay blank for you to fill. **Create task…** opens
+desktop confirmation; cancelling keeps your parameters. This route uses the same task engine as the
+[terminal CLI](../reference/cli.md#create-a-task-from-a-branch), without requiring local-agent
+access. Its terminal starts stopped and Git changes load on your request.
+
 ![A branch task with its linked tools](../media/develop.png)
 
 The task retains its tool references when views close. Restoration does not rerun commands.

@@ -7,10 +7,10 @@ insertion into Ask Viewer, notes and chat. Use the [dictation guide](../guides/s
 
 ## Further hosted setup
 
-Consider provider-specific model discovery and a non-recording connection check where the API
-supports them. Keep these separate from the explicit recording test and audio consent. Extend the
-adapter contract for vocabulary hints and streamed results only when supported; chat providers must
-not become speech providers automatically. A retry must never submit a command twice.
+Non-recording connection and catalog checks are available in Speech settings. Further discovery
+could offer provider-specific model selection and language capabilities. Extend the adapter contract
+for vocabulary hints and streamed results only when supported; chat providers must not become speech
+providers automatically. A retry must never submit a command twice.
 
 ## Model-assisted setup
 

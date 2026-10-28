@@ -9,7 +9,7 @@ import type { GitActionKind, GitActionRequest, GitActionReply } from './comparis
 import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
 import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
-import type { AgentTaskBundle } from './agents/task-workflow';
+import type { AgentTaskBundle, TaskWorkflowInput, TaskWorkflowReply } from './agents/task-workflow';
 import type { TransformPlan } from './operations/transforms';
 import type { OptimizationOutcome } from './operations/optimization-target';
 import type { OptimizationRequest, OptimizationReply } from './operations/optimization-review';
@@ -609,6 +609,7 @@ export type DesktopEvent =
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
   speech(request: SpeechRequest): Promise<SpeechReply>;
+  createTask(input: TaskWorkflowInput): Promise<TaskWorkflowReply>;
   optimization(request: OptimizationRequest): Promise<OptimizationReply>;
   notes(request: NoteRequest): Promise<NoteReply>;
   agentSessions(request: SessionRequest): Promise<SessionReply>;

@@ -125,6 +125,8 @@ import { Speech } from './speech/service';
 import { SpeechRuntime } from './speech/runtime';
 import { SpeechProviders } from './speech/providers';
 import { AgentTaskWorkflows } from './agents/task-workflow';
+import { TaskRequests } from './workspaces/task-requests';
+import { taskWorkflowReviewDetail } from '../domain/agents/task-workflow';
 import { speechRuntimeName } from './speech/runtime-manifest';
 import { AgentServiceTools } from './agents/service-tools';
 import type { HotkeyStatus } from './windows/hotkey-window';
@@ -220,6 +222,8 @@ export class Desktop {
   readonly actions: ActionPlanner;
   readonly agents: AgentBroker;
   readonly agentTaskWorkflows: AgentTaskWorkflows;
+  readonly personTaskWorkflows: AgentTaskWorkflows;
+  readonly taskRequests: TaskRequests;
   readonly thumbnails: Thumbnails;
   private appIcons = new AppIcons(nativeAppIcon);
   private diagnosticReports = new Map<number, number[]>();
@@ -850,33 +854,75 @@ export class Desktop {
       },
       speechProviders,
     );
-    this.agentTaskWorkflows = new AgentTaskWorkflows({
-      available: () => !process.mas,
-      authorize: (file) => this.agents.authorize(file),
-      workspaceState: () => this.workspaceCatalog,
-      window: (workspaceID) => {
-        const owner = this.workspaceSessions.owner(workspaceID) ?? this.window?.webContents.id;
-        const record = owner === undefined ? undefined : this.windows.get(owner);
-        return record?.role === 'viewer' && !record.window.isDestroyed()
-          ? { id: record.window.webContents.id, originID: record.originID }
-          : undefined;
+    const taskWorkflows = (authorize: (file: string) => Promise<unknown>, person = false) =>
+      new AgentTaskWorkflows({
+        available: () => !process.mas,
+        requireWorkspaceScope: !person,
+        authorize,
+        workspaceState: (owner) =>
+          person && owner !== undefined
+            ? this.windows.get(owner)?.workspaceCatalog
+            : this.workspaceCatalog,
+        window: (workspaceID, fallbackOwner) => {
+          const owner =
+            this.workspaceSessions.owner(workspaceID) ??
+            fallbackOwner ??
+            this.window?.webContents.id;
+          const record = owner === undefined ? undefined : this.windows.get(owner);
+          return record?.role === 'viewer' && !record.window.isDestroyed()
+            ? { id: record.window.webContents.id, originID: record.originID }
+            : undefined;
+        },
+        note: async (directory) => {
+          const result = await this.notes.request({ kind: 'create', format: 'note', directory });
+          if (result.kind !== 'document') throw new Error('The task note could not be created.');
+          return result.document;
+        },
+        flush: async (owner) => {
+          const window = this.windows.get(owner)?.window;
+          if (!window || window.isDestroyed())
+            throw new Error('The selected workspace window closed.');
+          // Save the person's existing drafts before agent dispatch blocks private-note IPC.
+          await this.flushes.request(owner, 'flush', (token) =>
+            window.webContents.send('viewer:event', { type: 'flush', token }),
+          );
+        },
+        present: (bundle, owner) => this.dispatchAgentEvent(owner, { type: 'agent-task', bundle }),
+        profile: () => this.settings.snapshot().settings.terminals.profileID,
+      });
+    this.agentTaskWorkflows = taskWorkflows((file) => this.agents.authorize(file));
+    const authorizePersonTask = async (file: string) => {
+      await this.fileAccess.require([file]);
+      return file;
+    };
+    this.personTaskWorkflows = taskWorkflows(authorizePersonTask, true);
+    this.taskRequests = new TaskRequests({
+      tasks: this.personTaskWorkflows,
+      authorize: authorizePersonTask,
+      person: (owner) => {
+        const record = this.windows.get(owner);
+        if (
+          !record ||
+          record.role !== 'viewer' ||
+          record.window.isDestroyed() ||
+          !record.workspaceID ||
+          !record.workspaceCatalog ||
+          [...this.agentCommands.values()].some((item) => item.owner === owner)
+        )
+          return;
+        return {
+          originID: record.originID,
+          workspaceID: record.workspaceID,
+          state: record.workspaceCatalog,
+        };
       },
-      note: async (directory) => {
-        const result = await this.notes.request({ kind: 'create', format: 'note', directory });
-        if (result.kind !== 'document') throw new Error('The task note could not be created.');
-        return result.document;
-      },
-      flush: async (owner) => {
-        const window = this.windows.get(owner)?.window;
-        if (!window || window.isDestroyed())
-          throw new Error('The selected workspace window closed.');
-        // Save the person's existing drafts before agent dispatch blocks private-note IPC.
-        await this.flushes.request(owner, 'flush', (token) =>
-          window.webContents.send('viewer:event', { type: 'flush', token }),
-        );
-      },
-      present: (bundle, owner) => this.dispatchAgentEvent(owner, { type: 'agent-task', bundle }),
-      profile: () => this.settings.snapshot().settings.terminals.profileID,
+      confirm: (setup, owner) =>
+        confirmNatively(
+          this.windows.get(owner)?.window,
+          'Create this branch task?',
+          taskWorkflowReviewDetail(setup),
+          'Create task',
+        ),
     });
     this.agentRequests = new AgentRequests(
       dataPath,
@@ -1292,6 +1338,12 @@ export class Desktop {
     });
     window.webContents.on('render-process-gone', () => this.speech.stopOwner(sender));
     window.webContents.on('did-start-navigation', () => this.speech.stopOwner(sender));
+    const stopTaskOwner = () => {
+      this.taskRequests.stopOwner(sender);
+      this.personTaskWorkflows.stopOwner(sender);
+    };
+    window.webContents.on('render-process-gone', stopTaskOwner);
+    window.webContents.on('did-start-navigation', stopTaskOwner);
     window.on('closed', () => {
       this.speech.stopOwner(sender);
       this.backups.stopOwner(sender);
@@ -1305,6 +1357,8 @@ export class Desktop {
       this.gitActions.stopOwner(sender);
       this.worktrees.stopOwner(sender);
       this.agentTaskWorkflows.stopOwner(sender);
+      this.taskRequests.stopOwner(sender);
+      this.personTaskWorkflows.stopOwner(sender);
       this.gitReviews.stopOwner(sender);
       this.terminals.stopOwner(sender);
       this.executions.stopOwner(sender);
@@ -1443,6 +1497,8 @@ export class Desktop {
     this.git.close();
     this.worktrees.close();
     this.agentTaskWorkflows.close();
+    this.taskRequests.close();
+    this.personTaskWorkflows.close();
     this.ready = false;
     this.trash.close();
     if (process.platform === 'darwin') macFiles().dismissFilePanels();
@@ -1599,6 +1655,7 @@ export class Desktop {
   private createHandlers(): ApiHandlers {
     return {
       speech: ([request], owner) => this.speech.request(request, owner),
+      createTask: ([input], owner) => this.taskRequests.create(input, owner),
       ...createGitHandlers({
         reader: this.git,
         worktrees: this.worktrees,
@@ -2007,6 +2064,7 @@ export class Desktop {
             this.gitActions.quiesce(root),
             this.worktrees.quiesce(root),
             this.agentTaskWorkflows.quiesce(),
+            (this.taskRequests.close(), this.personTaskWorkflows.quiesce()),
             this.gitReviews.quiesce(root),
             this.terminals.quiesce(root),
             this.externalTerminals.quiesce(),
@@ -2059,6 +2117,8 @@ export class Desktop {
             await this.gitActions.quiesce(root);
             await this.worktrees.quiesce(root);
             await this.agentTaskWorkflows.quiesce();
+            this.taskRequests.close();
+            await this.personTaskWorkflows.quiesce();
             await this.gitReviews.quiesce(root);
             await this.terminals.quiesce(root);
             await this.externalTerminals.quiesce();

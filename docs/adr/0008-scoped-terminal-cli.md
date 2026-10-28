@@ -42,3 +42,11 @@ Agent checkout materializes bounded raw blobs through one backpressured Git proc
 filters, lazy fetch and network transports disabled. Repositories with executable filters use the
 human dialog because automatic folder status may invoke clean filters. Shells and Git review views
 start on a person's explicit action. Cancellation never removes a checkout or branch.
+
+The person's `task-new` form reuses the task engine with ordinary file access rather than client
+grants. Its desktop-only owner binding fixes the originating window and workspace before
+asynchronous preparation. Native confirmation and a second lease/permission check precede writes.
+Ask Viewer, including reviewed speech, fills this form through typed parameters; it cannot answer
+the native confirmation. Cancellation restores the form and partial failure identifies retained
+output instead of retrying or removing it. Owner closure, renderer navigation and access revocation
+cancel pending person requests as well as running task work.

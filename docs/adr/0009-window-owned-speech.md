@@ -38,3 +38,9 @@ have no intervening await.
 The desktop wraps bounded PCM as a fixed-name WAV and normalizes provider responses. There is one
 request per recording, a deadline and a response-size bound; no automatic retry, redirect or cloud
 fallback. Raw provider errors and credentials never enter transcript errors. No audio is persisted.
+
+Explicit metadata checks have their own bounded adapter and session-only results. They request
+catalog/key metadata without audio consent, never record audio and cannot grant permission. Owner
+closure or provider/key changes cancel pending checks, including OS credential waits; a late key
+result cannot send a request. Public catalogs do not establish key validity, so Deepgram checks
+authentication independently. A listed model is distinct from a successful transcription.

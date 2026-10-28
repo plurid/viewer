@@ -89,6 +89,45 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+it('keeps connection checks separate from recording consent and shows advisory failures', async () => {
+  const provider = {
+    ...newSpeechProvider('meta', crypto.randomUUID()),
+    hasKey: true,
+    allowed: false,
+  };
+  const send = vi.fn<(request: SpeechRequest) => Promise<boolean>>(async () => true);
+  const props = {
+    snapshot: { providers: [provider] },
+    selectedID: provider.id,
+    busy: false,
+    select: vi.fn(),
+    request: send,
+  };
+  const view = render(<HostedSpeechSettings {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Check connection and model' }));
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledExactlyOnceWith({ kind: 'provider-check', id: provider.id }),
+  );
+  expect(screen.getByRole('button', { name: 'Allow recordings…' })).toBeTruthy();
+  view.rerender(
+    <HostedSpeechSettings
+      {...props}
+      snapshot={{
+        providers: [
+          {
+            ...provider,
+            check: {
+              outcome: 'model-unavailable',
+              detail: 'Edit the model ID, then retry.',
+              checkedAt: 1,
+            },
+          },
+        ],
+      }}
+    />,
+  );
+  expect(screen.getByText('Edit the model ID, then retry.')).toBeTruthy();
+});
 it('keeps failed provider setup editable, saves only configuration fields and never reuses a key for another provider', async () => {
   const provider = {
     ...newSpeechProvider('openai', crypto.randomUUID()),

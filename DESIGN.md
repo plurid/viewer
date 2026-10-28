@@ -232,6 +232,12 @@ components:
     textColor: '{colors.ink}'
     rounded: '{rounded.control}'
     padding: '7px 9px'
+  task-request-dialog:
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.ink}'
+    typography: '{typography.body}'
+    rounded: '{rounded.dialog}'
+    width: 'min(580px, calc(100vw - 32px))'
   model-shading-panel:
     backgroundColor: '{colors.surface}'
     textColor: '{colors.ink}'
@@ -431,6 +437,10 @@ credentials. Give Audio access its own status and explicit allow/revoke action f
 endpoint and model, separate from microphone and chat permissions. Keep setup and access actions
 reachable through scrolling.
 
+**The Hosted Speech Check Rule.** Run Check connection and model only on request. Keep its status
+and key/model recovery in the ordinary Settings flow. Distinguish metadata-only catalog availability
+from Audio access, transcription quality and remaining credit. The check records and sends no audio.
+
 **The Dictation State Rule.** Name the captured destination first in the shared Dictate dialog.
 Distinguish preparing, listening, local transcription, hosted transcription, editable review and
 failure. Name the hosted provider, endpoint and model with the audio-transfer disclosure. Keep
@@ -447,10 +457,17 @@ send a message or run a command.
 
 ### Task creation review
 
+**The Task Parameter Form Rule.** Treat suggested task parameters as ordinary editable fields for
+task name, repository, workspace, branch mode, optional local base and new worktree folder. Align
+full-width fields and the workspace choice within the task dialog; bound its height to the viewport
+and scroll fields while the header and footer stay reachable. Show validation inline. Yield the
+modal for native confirmation, preserve cancelled parameters and offer retained-worktree recovery
+after partial failure instead of blind retry.
+
 **The Task Creation Review Rule.** Keep repository, worktree destination, workspace name/identity,
 branch mode and pinned revision readable in wrapping detail. Use Create task for the affirmative
 action in both shared and native review. Keep Reject/Cancel and the affirmative action reachable
-around scrolling scope. Keep terminal startup and loading Git review explicit.
+around scrolling scope. Keep the terminal stopped and show Load Git changes before Git review.
 
 ## Maintaining this document
 

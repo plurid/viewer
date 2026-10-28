@@ -40,6 +40,14 @@ export interface Verb {
 const LRUD = { L: 'switch', R: 'switch', U: 'switch', D: 'switch' } as const;
 export const verbs: readonly Verb[] = [
   {
+    key: 'task-new',
+    names: ['task-new'],
+    usage:
+      '[name] [--repo path] [--branch name] [--path new-folder] [--base local-branch | --existing] [--workspace name-or-id]',
+    args: [0, 50],
+    help: 'Review an editable branch task form; creation needs native confirmation. Run this request alone, without a count.',
+  },
+  {
     key: 'quit',
     names: ['q[uit]', 'kill-pane', 'killp'],
     help: 'Close the plane',

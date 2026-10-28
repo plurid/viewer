@@ -25,6 +25,7 @@ import type { TransformPlan } from '../../domain/operations/transforms';
 import { speechSetupSchema, type SpeechSetup } from '../../domain/speech/models';
 import { validName } from '../files/filesystem';
 import type { AgentTaskSetup, AgentTaskResult } from '../../domain/agents/task-workflow';
+import { taskWorkflowReviewDetail } from '../../domain/agents/task-workflow';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
@@ -271,16 +272,7 @@ export class AgentRequests {
       kind: 'task-workflow',
       taskSetup: structuredClone(setup),
       title: 'Create task from branch',
-      detail: [
-        `Task: ${setup.name}`,
-        `Workspace: ${setup.workspaceName} (${setup.workspaceID})`,
-        `Repository: ${setup.repo}`,
-        `Worktree: ${setup.destination}`,
-        `Branch: ${setup.branch} (${setup.checkout.kind === 'new' ? 'new' : 'existing'})`,
-        `Revision: ${setup.commit}`,
-        'Create a task area with its checkout, note, stopped terminal and Git changes. Start the terminal and load Git review yourself; repository hooks and filters are not run by this request.',
-        'If setup stops partway, Viewer keeps the worktree and reports its location. No files or branches are removed.',
-      ].join('\n'),
+      detail: taskWorkflowReviewDetail(setup),
     });
     return { id: proposal.id, requiresUserReview: true };
   }

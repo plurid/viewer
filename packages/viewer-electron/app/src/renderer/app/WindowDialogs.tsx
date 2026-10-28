@@ -16,6 +16,8 @@ import { PDFToolsDialog } from '../pdf-tools/PDFToolsDialog';
 import type { FileEntry } from '../../domain/contracts';
 import type { ImageExportPreset, PDFExportPreset } from '../../domain/operations/export-presets';
 import type { WorkspaceController } from '../workspace/context';
+import type { TaskWorkflowDraft } from '../../domain/command-line/task';
+import { TaskRequestDialog } from '../tasks/TaskRequestDialog';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { WorkspaceBackgroundDialog } from '../ui/workspace/WorkspaceBackgroundDialog';
 import { ViewsDialog } from '../ui/workspace/ViewsDialog';
@@ -41,6 +43,7 @@ const LazyTasksDialog = lazy(() =>
   import('../tasks/TasksDialog').then((module) => ({ default: module.TasksDialog })),
 );
 export type WindowDialog =
+  | { type: 'task-request'; id: string; draft: TaskWorkflowDraft }
   | { type: 'backup' }
   | { type: 'capabilities'; request: CommandRequest }
   | { type: 'tasks'; target?: CapturedTarget }
@@ -90,6 +93,16 @@ export function WindowDialogs({
   return (
     <>
       <ActionParameters />
+      {dialog?.type === 'task-request' && (
+        <TaskRequestDialog
+          key={dialog.id}
+          initial={dialog.draft}
+          onClose={onClose}
+          openFolder={async (path) => {
+            await controller.openPath(path);
+          }}
+        />
+      )}
       {dialog?.type === 'backup' && (
         <BackupDialog workspace={controller} transition={transitionWorkspace} onClose={onClose} />
       )}

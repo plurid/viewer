@@ -19,7 +19,7 @@ export default function GitChanges({
     return (
       <Empty
         title="Ready for Git review"
-        detail="This task was created from the CLI. Load its changes when you are ready; Git may run this repository’s configured filters."
+        detail="Load this task’s changes when you are ready. Git may run this repository’s configured filters."
       >
         <button type="button" onClick={() => updatePane(paneID, { activation: undefined })}>
           Load Git changes

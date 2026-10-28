@@ -15,18 +15,28 @@ import type { NoteDocument } from '../../domain/editing/notes';
 import type { GitRunner } from '../comparison/git';
 import { GitWorktrees } from '../comparison/worktrees';
 import { addAgentWorktree, assertAgentCheckoutSafe } from '../comparison/agent-worktree';
-import type { AgentServiceContext } from './service-tools';
+
+export interface TaskWorkflowContext {
+  signal: AbortSignal;
+  authorize(file: string): Promise<string>;
+  require(capability: 'propose' | 'navigation'): Promise<void>;
+  workspaceState(): Promise<AgentWorkspaceSnapshot | undefined>;
+  /** Desktop-only owner binding for a person requesting a task. */
+  owner?: number;
+}
 
 interface Ports {
   available(): boolean;
   authorize(file: string): Promise<unknown>;
-  workspaceState(): AgentWorkspaceSnapshot | undefined;
-  window(workspaceID: string): { id: number; originID: string } | undefined;
+  workspaceState(owner?: number): AgentWorkspaceSnapshot | undefined;
+  window(workspaceID: string, fallbackOwner?: number): { id: number; originID: string } | undefined;
   note(directory: string): Promise<NoteDocument>;
   present(bundle: AgentTaskBundle, owner: number): Promise<void>;
   flush?(owner: number): Promise<void>;
   profile(): string;
   run?: GitRunner;
+  /** Client navigation must cover every existing plane; the person already owns the window. */
+  requireWorkspaceScope?: boolean;
 }
 interface Lease {
   setup: AgentTaskSetup;
@@ -51,7 +61,7 @@ export class AgentTaskWorkflows {
         for (const lease of this.leases.values())
           if (
             lease.owner === owner &&
-            ports.window(lease.setup.workspaceID)?.originID === lease.originID
+            ports.window(lease.setup.workspaceID, lease.owner)?.originID === lease.originID
           )
             return lease.originID;
       },
@@ -69,14 +79,14 @@ export class AgentTaskWorkflows {
       create: addAgentWorktree,
     });
   }
-  async prepare(raw: TaskWorkflowInput, context: AgentServiceContext): Promise<AgentTaskSetup> {
+  async prepare(raw: TaskWorkflowInput, context: TaskWorkflowContext): Promise<AgentTaskSetup> {
     if (!this.ports.available())
-      throw new Error('CLI task creation is available in the direct build only.');
+      throw new Error('Branch task creation is available in the direct build only.');
     const input = taskWorkflowInputSchema.parse(raw);
     await context.require('propose');
     await context.require('navigation');
     const workspace = selectAgentWorkspace(await context.workspaceState(), input.workspace);
-    const window = this.ports.window(workspace.id);
+    const window = this.ports.window(workspace.id, context.owner);
     if (!window) throw new Error('Open the selected workspace in Viewer first.');
     await context.authorize(input.repo);
     await context.authorize(path.dirname(input.path));
@@ -152,17 +162,21 @@ export class AgentTaskWorkflows {
       Date.now() - lease.issued > 5 * 60_000
     )
       throw new Error('The reviewed task expired or changed. Request a new task.');
-    const window = this.ports.window(setup.workspaceID);
+    const window = this.ports.window(setup.workspaceID, lease.owner);
     if (window?.id !== lease.owner || window.originID !== lease.originID)
       throw new Error('The selected workspace window closed or changed. Request a new task.');
-    const workspace = selectAgentWorkspace(this.ports.workspaceState(), setup.workspaceID);
+    const workspace = selectAgentWorkspace(
+      this.ports.workspaceState(lease.owner),
+      setup.workspaceID,
+    );
     if ((workspace.tasks?.length ?? 0) >= 50)
       throw new Error('A workspace supports up to 50 task areas.');
-    for (const pane of workspace.panes) {
-      if (pane.type === 'search' && pane.allLocations)
-        throw new Error('This workspace searches outside the client folder scope.');
-      await this.ports.authorize(pane.path);
-    }
+    if (this.ports.requireWorkspaceScope !== false)
+      for (const pane of workspace.panes) {
+        if (pane.type === 'search' && pane.allLocations)
+          throw new Error('This workspace searches outside the client folder scope.');
+        await this.ports.authorize(pane.path);
+      }
     for (const file of [setup.repo, path.dirname(setup.destination), setup.destination])
       await this.authorizePath(file);
   }

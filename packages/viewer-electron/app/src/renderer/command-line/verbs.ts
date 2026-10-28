@@ -36,6 +36,7 @@ import { saveAll, saveUnsaved } from '../editing/unsaved';
 import { activeWorkspace, addPane, addRootFolder, getState, navigate } from '../state/store';
 import { renameWorkspace, setWorkspaceOverride } from '../state/workspaces';
 import { Stopped, type LineHost } from './host';
+import { taskLineDraft } from '../../domain/command-line/task';
 
 export interface VerbInput {
   step: Step;
@@ -181,6 +182,18 @@ async function setSettings(words: Word[], host: LineHost, local: boolean): Promi
 
 /** Each verb's work, by its key in the domain table (domain/command-line/verbs.ts). */
 export const verbRuns: Record<string, VerbRun> = {
+  'task-new': async ({ step }, host) => {
+    const draft = taskLineDraft(step.words, (word) => pathOf(word, host));
+    window.dispatchEvent(
+      new CustomEvent('viewer:task-request', {
+        detail: {
+          ...draft,
+          repo: draft.repo ?? places(host).folder,
+          workspace: draft.workspace ?? activeWorkspace().id,
+        },
+      }),
+    );
+  },
   quit: async ({ bang }, host) => closing(closePlanes(host.workspace, [activeID(host)], bang)),
   qall: async ({ bang }, host) =>
     closing(closePlanes(host.workspace, rootPlanes(host.workspace), bang)),

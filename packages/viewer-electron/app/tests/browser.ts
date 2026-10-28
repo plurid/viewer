@@ -20,6 +20,10 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  createTask: async () => ({
+    kind: 'failed',
+    error: 'Branch task creation is unavailable in the browser fixture.',
+  }),
   speech: async () => {
     throw new Error('Speech needs the desktop app.');
   },

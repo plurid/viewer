@@ -1,4 +1,5 @@
 import { WindowDialogs, type WindowDialog } from './app/WindowDialogs';
+import type { TaskWorkflowDraft } from '../domain/command-line/task';
 import { SpeechControls } from './speech/SpeechControls';
 import { routeFileKeyboard } from './explorer/selection';
 import { AgentReview } from './actions/AgentReview';
@@ -146,6 +147,14 @@ function AppWindow() {
     void recoverBuffers().catch(report);
   }, [ready]);
   const [windowDialog, setWindowDialog] = useState<WindowDialog>();
+  useEffect(() => {
+    const open = (event: Event) => {
+      const draft = (event as CustomEvent<TaskWorkflowDraft>).detail;
+      setWindowDialog({ type: 'task-request', id: crypto.randomUUID(), draft });
+    };
+    window.addEventListener('viewer:task-request', open);
+    return () => window.removeEventListener('viewer:task-request', open);
+  }, []);
   useEffect(() => {
     const run = (event: Event) => {
       const target = (event as CustomEvent<CapturedTarget>).detail;

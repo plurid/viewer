@@ -10,7 +10,10 @@ const local = z
   .string()
   .min(1)
   .max(32768)
-  .refine((value) => !value.includes('\0') && (/^\//.test(value) || /^[A-Za-z]:[\\/]/.test(value)));
+  .refine(
+    (value) => !value.includes('\0') && (/^\//.test(value) || /^[A-Za-z]:[\\/]/.test(value)),
+    'Use an absolute local path.',
+  );
 export const taskWorkflowInputSchema = z
   .object({
     name: z
@@ -77,6 +80,23 @@ export interface AgentTaskResult {
   /** A partial result identifies a retained checkout even if opening the task fails. */
   stage: 'worktree-pending' | 'worktree-created' | 'ready';
   planeIDs?: string[];
+}
+export type TaskWorkflowReply =
+  | { kind: 'created'; result: AgentTaskResult }
+  | { kind: 'cancelled' }
+  | { kind: 'failed'; error: string; result?: AgentTaskResult };
+
+export function taskWorkflowReviewDetail(setup: AgentTaskSetup): string {
+  return [
+    `Task: ${setup.name}`,
+    `Workspace: ${setup.workspaceName} (${setup.workspaceID})`,
+    `Repository: ${setup.repo}`,
+    `Worktree: ${setup.destination}`,
+    `Branch: ${setup.branch} (${setup.checkout.kind === 'new' ? 'new' : 'existing'})`,
+    `Revision: ${setup.commit}`,
+    'Create a task area with its checkout, note, stopped terminal and Git changes. Start the terminal and load Git review yourself; repository hooks and filters are not run by this request.',
+    'If setup stops partway, Viewer keeps the worktree and reports its location. No files or branches are removed.',
+  ].join('\n');
 }
 export interface AgentTaskBundle {
   workspaceID: string;
