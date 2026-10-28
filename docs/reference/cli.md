@@ -145,9 +145,9 @@ viewer review status PROPOSAL_ID
 viewer speech use whisper-tiny --json
 ```
 
-This manages model weights. Microphone capture, the bundled recognition runtime, transcription and
-hosted speech adapters are not implemented; `speech status` reports recognition unavailable. The
-[speech design](../research/speech.md) describes that remaining work.
+The CLI manages weights; microphone capture stays in the person-started app flow. `speech status`
+reports the bundled runtime's availability separately from model installation. The direct macOS app
+supports [local dictation](../guides/speech.md). Hosted transcription remains planned.
 
 Existing verified weights are reused. Downloads have a 20-minute bound and a pinned HTTPS host
 allowlist. Failed, cancelled and interrupted files remain unselected and retained. Interrupted

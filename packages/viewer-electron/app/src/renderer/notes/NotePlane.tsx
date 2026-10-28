@@ -28,6 +28,7 @@ import {
 } from './sessions';
 import { TrashNoteDialog } from './TrashNoteDialog';
 import './notes.css';
+import { DictationButton } from '../speech/DictationButton';
 
 const TextEditor = lazy(() => import('../previews/editor/TextEditor'));
 export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; visible: boolean }) {
@@ -126,6 +127,25 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
         {session.error ? 'Not saved' : changed || session.pending ? 'Saving…' : 'Saved privately'}
       </span>
       <span className="toolbar-spacer" />
+      <DictationButton
+        target={JSON.stringify([pane.id, documentID, session.text])}
+        destination={`Append to ${session.title || 'note'}`}
+        disabled={!visible || noteLocked(session.document.id)}
+        onUse={(text) => {
+          const note = current.current;
+          if (!note) return;
+          const addition = checklist
+            ? text
+                .split(/\n+/)
+                .filter(Boolean)
+                .map((line) => '- [ ] ' + line)
+                .join('\n')
+            : text;
+          changeNote(pane.id, {
+            text: (note.text ? note.text.replace(/\s*$/, '') + '\n\n' : '') + addition,
+          });
+        }}
+      />
       <button onClick={() => void exportNote().catch(report)}>Export…</button>
       <button onClick={() => setTrashing(true)}>Move to Trash…</button>
     </div>

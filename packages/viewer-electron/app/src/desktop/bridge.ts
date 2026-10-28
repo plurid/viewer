@@ -44,6 +44,7 @@ import {
   dialog,
   ipcMain,
   shell,
+  systemPreferences,
   type BrowserWindow,
 } from 'electron';
 import type { AgentProposal } from '../domain/agents/requests';
@@ -120,6 +121,9 @@ import { bindGitTarget, validateGitTarget, type GitTargetWindow } from './compar
 import { WorkspaceSessions } from './windows/workspace-sessions';
 import { ShellCommand } from './windows/shell-command';
 import { SpeechModels } from './speech/models';
+import { Speech } from './speech/service';
+import { SpeechRuntime } from './speech/runtime';
+import { speechRuntimeName } from './speech/runtime-manifest';
 import { AgentServiceTools } from './agents/service-tools';
 import type { HotkeyStatus } from './windows/hotkey-window';
 import type { LaunchRequest } from '../domain/workspaces/launch';
@@ -139,6 +143,7 @@ export class Desktop {
   readonly agentSessions: AgentSessions;
   private shellCommand: ShellCommand;
   readonly speechModels: SpeechModels;
+  readonly speech: Speech;
   readonly workspaceSessions = new WorkspaceSessions();
   readonly git: GitReader;
   readonly worktrees: GitWorktrees;
@@ -275,6 +280,15 @@ export class Desktop {
   }
   workspaceForWindow(window: BrowserWindow): string | undefined {
     return this.windows.get(window.webContents.id)?.workspaceID;
+  }
+  speechMicrophoneAllowed(owner: number): boolean {
+    const window = this.windows.get(owner)?.window;
+    return (
+      !!window &&
+      !window.isDestroyed() &&
+      this.allowedURL(window.webContents.getURL()) &&
+      this.speech.allowsMicrophone(owner)
+    );
   }
   /** A new window starts from general preferences, without another window's profile overlay. */
   createWorkspace(): string {
@@ -754,7 +768,54 @@ export class Desktop {
         return Array.isArray(runs) ? runs : [];
       },
     });
-    this.speechModels = new SpeechModels(dataPath);
+    const speechRuntime = new SpeechRuntime(
+      path.join(
+        app.isPackaged ? process.resourcesPath : path.resolve('assets'),
+        speechRuntimeName(),
+      ),
+    );
+    const speechChanged = () => this.emit({ type: 'speech-changed' });
+    this.speechModels = new SpeechModels(
+      dataPath,
+      undefined,
+      undefined,
+      () => speechRuntime.status(),
+      speechChanged,
+    );
+    this.speech = new Speech(dataPath, this.speechModels, speechRuntime, {
+      settings: (owner) => this.windows.get(owner)?.role === 'settings',
+      human: (owner) =>
+        this.windows.has(owner) &&
+        ![...this.agentCommands.values()].some((item) => item.owner === owner),
+      foreground: (owner) => !!this.windows.get(owner)?.window.isFocused(),
+      microphone: () =>
+        process.platform === 'darwin'
+          ? systemPreferences.getMediaAccessStatus('microphone')
+          : 'unknown',
+      requestMicrophone: async () =>
+        process.platform !== 'darwin' || systemPreferences.askForMediaAccess('microphone'),
+      chooseModel: async (owner) => {
+        const window = this.windows.get(owner)?.window;
+        if (!window) throw new Error('The speech settings window closed.');
+        const result = await dialog.showOpenDialog(window, {
+          title: 'Import a verified Whisper model',
+          properties: ['openFile'],
+          filters: [{ name: 'Whisper model', extensions: ['bin'] }],
+          securityScopedBookmarks: this.fileAccess.scoped,
+        });
+        const file = result.filePaths[0];
+        if (result.canceled || !file) return;
+        await this.fileAccess.allowOnce(file, result.bookmarks?.[0]);
+        await this.fileAccess.require([file]);
+        return file;
+      },
+      event: (owner, event) => {
+        const window = this.windows.get(owner)?.window;
+        if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+          window.webContents.send('viewer:event', { type: 'speech', event });
+      },
+      changed: speechChanged,
+    });
     this.agentRequests = new AgentRequests(
       dataPath,
       this.settings,
@@ -1156,7 +1217,13 @@ export class Desktop {
     window.on('focus', () => {
       if (role === 'viewer') this.selectWindow(sender);
     });
+    window.on('blur', () => {
+      if (this.speech.allowsMicrophone(sender)) this.speech.stopRecording(sender);
+    });
+    window.webContents.on('render-process-gone', () => this.speech.stopOwner(sender));
+    window.webContents.on('did-start-navigation', () => this.speech.stopOwner(sender));
     window.on('closed', () => {
+      this.speech.stopOwner(sender);
       this.backups.stopOwner(sender);
       this.browsers.stopOwner(sender);
       this.mediaDocuments.stopOwner(sender);
@@ -1327,6 +1394,7 @@ export class Desktop {
       this.notes.close(),
       this.modelPermissions.close(),
       this.speechModels.close(),
+      this.speech.close(),
       this.search.close(),
       this.executions.close(),
       this.resources.close(),
@@ -1446,6 +1514,7 @@ export class Desktop {
   /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
   private createHandlers(): ApiHandlers {
     return {
+      speech: ([request], owner) => this.speech.request(request, owner),
       ...createGitHandlers({
         reader: this.git,
         worktrees: this.worktrees,

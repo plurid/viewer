@@ -46,6 +46,7 @@ import { WindowCreationRequests } from './desktop/windows/creation-requests';
 import { isolatedShellHome } from './desktop/windows/test-integration';
 import { isCLIInvocation } from './domain/cli/catalog';
 import { runCLI } from './desktop/cli/run';
+import { speechMediaAllowed } from './desktop/speech/media-policy';
 import {
   frameLocationURLs,
   frameNavigationAllowed,
@@ -711,10 +712,26 @@ app
         return new Response('Application asset is unavailable.', { status: 404 });
       }
     });
-    session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
-      callback(false),
+    session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) =>
+      callback(
+        speechMediaAllowed({
+          permission,
+          mainFrame: details.isMainFrame,
+          trusted: trusted(details.requestingUrl),
+          active: !!desktop?.speechMicrophoneAllowed(contents.id),
+          media: 'mediaTypes' in details ? (details.mediaTypes ?? []) : [],
+        }),
+      ),
     );
-    session.defaultSession.setPermissionCheckHandler(() => false);
+    session.defaultSession.setPermissionCheckHandler((contents, permission, _origin, details) =>
+      speechMediaAllowed({
+        permission,
+        mainFrame: details.isMainFrame,
+        trusted: !!details.requestingUrl && trusted(details.requestingUrl),
+        active: !!contents && !!desktop?.speechMicrophoneAllowed(contents.id),
+        media: details.mediaType ? [details.mediaType] : [],
+      }),
+    );
     session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
       callback({
         responseHeaders: trusted(details.url)

@@ -128,6 +128,17 @@ export function navigationCommands({
       run: () => actions.palette('settings'),
     },
     {
+      id: 'dictate',
+      label: 'Dictate an Ask Viewer request…',
+      group: 'App',
+      icon: 'command',
+      aliases: ['speech', 'voice', 'microphone', 'talk'],
+      when: windowScope,
+      run: () => {
+        window.dispatchEvent(new Event('viewer:dictate'));
+      },
+    },
+    {
       id: 'find-file',
       label: 'Find file…',
       group: 'Navigation',

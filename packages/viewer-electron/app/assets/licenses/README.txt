@@ -33,3 +33,12 @@ Source: https://github.com/allotropia/zetajs
 Pinned package: https://registry.npmjs.org/zetajs/-/zetajs-1.2.0.tgz
 See zetajs-1.2.0.txt. Viewer supplies its own isolated conversion page and
 does not modify the bridge or Office engine.
+
+Viewer local speech dependencies
+
+whisper.cpp 1.9.5 (MIT), source commit d1be6fde11ac6e0407606b4e42fe72d34add8037.
+Source and build instructions: https://github.com/ggml-org/whisper.cpp
+The pinned b5454 xcframework contains the matching prebuilt macOS engine.
+Viewer supplies a separate bounded PCM inference helper. See whisper-cpp.txt.
+Whisper Tiny, Base and Small weights (MIT) are acquired separately after explicit setup:
+https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { SpeechRuntimeStatus } from './recognition';
 
 export interface SpeechModel {
   id: string;
@@ -8,6 +9,23 @@ export interface SpeechModel {
   url: string;
   multilingual: boolean;
   license: string;
+}
+export interface SpeechModelRecord {
+  id: string;
+  model: string;
+  file: string;
+  status: 'downloading' | 'ready' | 'failed' | 'cancelled' | 'interrupted';
+  received: number;
+  identity?: string;
+  modified?: number;
+  error?: string;
+  available: boolean;
+}
+export interface SpeechModelsSnapshot {
+  selected?: string;
+  runtime: SpeechRuntimeStatus;
+  models: (SpeechModel & { installed: boolean; selected: boolean })[];
+  records: SpeechModelRecord[];
 }
 const revision = '5359861c739e955e79d9a303bcbc70fb988958b1';
 /** Immutable upstream model revisions and LFS SHA-256s; model weights are never executables. */

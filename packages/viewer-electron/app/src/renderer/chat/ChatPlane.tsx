@@ -141,6 +141,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
           </div>
         ) : null}
         <Composer
+          target={pane.id + ':' + document.id}
           draft={draft}
           busy={busy}
           running={running}

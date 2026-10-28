@@ -50,6 +50,18 @@ setup review at normal/minimum window sizes. It uses synthetic authority only in
 profile; it does not qualify human consent or download speech models. Supply the candidate binary
 and the preservation variables shown above.
 
+`tests/native/speech.ts` checks the bundled runtime status, unsolicited microphone denial, Settings
+at normal/minimum widths, searchable choices and missing-model recovery. With
+`VIEWER_SPEECH_TEST_WEIGHTS` pointing to the pinned Tiny GGML fixture, it checks verified import and
+selection/language restoration. `VIEWER_SPEECH_TEST_CLIP` adds a 16 kHz mono PCM16 public WAV
+through the real AudioWorklet, IPC, recognizer and editable Ask draft. That scenario uses a
+foreground window and a synthetic stream, never the live microphone; it skips capture unless macOS
+permission has already been granted by the operator. It does not automate consent or qualify human
+accents/noise.
+
+`tests/speech-signing.test.ts` re-signs a generated runtime bundle, checks package verification and
+rejects altered loose resources and tampered sealed files. Every fixture remains retained.
+
 `tests/native/optimization.ts` checks loaded image/PDF comparisons, exact-byte export, source
 preservation and normal/minimum-window layouts. `tests/native/optimization-recipes.ts` checks target
 misses, individual retry, changed-source rejection, relative-folder outputs and recipe restoration

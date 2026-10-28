@@ -71,7 +71,7 @@ function fixture() {
     status: vi.fn(async () => ({
       selected: undefined,
       runtime: {
-        name: 'whisper.cpp',
+        name: 'whisper.cpp' as const,
         recognitionAvailable: false,
         reason: 'No recognition runtime.',
       },

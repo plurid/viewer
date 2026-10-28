@@ -417,6 +417,27 @@ explicit unpinning without substituting another action.
 beside the creation date. Keep workspace names, document counts and inclusion notices readable in
 the existing dialog, with Cancel and the save or restore action reachable around scrolling content.
 
+### Speech and dictation
+
+**The Speech Setup Rule.** Reuse compact Settings controls. Separate local model rows with the
+shared line role; show each model's name, MiB size, installation/selection state, description and
+applicable actions. Language and Microphone use shared searchable choice controls and stack below
+their labels at narrow widths. Keep a missing saved microphone visible as unavailable rather than
+silently selecting another device.
+
+**The Dictation State Rule.** Name the captured destination first in the shared Dictate dialog.
+Distinguish preparing, listening, local transcription, editable review and failure. Keep microphone
+level and elapsed time with capture status, errors and settings recovery in normal flow, and Cancel
+plus the current action reachable around scrolling content.
+
+**The Transcript Field Rule.** Treat the transcript as ordinary interface text: inherit the app
+font, field, ink, line, control radius and accent caret roles. Focus the editable transcript for
+review and keep its vertical resizing and scrolling within the dialog.
+
+**The Captured Dictation Rule.** Cancel capture when the destination identity changes or becomes
+unavailable. Require an explicit insertion action after transcript review; inserting text does not
+send a message or run a command.
+
 ## Maintaining this document
 
 Record durable interface rules here. Put feature instructions in [user guides](docs/README.md),

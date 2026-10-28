@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { chatDraftLimit } from '../../domain/models/chat';
+import { DictationButton } from '../speech/DictationButton';
 
 export function Composer({
   draft,
@@ -8,6 +9,7 @@ export function Composer({
   allowed,
   hint,
   describedBy,
+  target = '',
   onChange,
   onSend,
   onStop,
@@ -18,6 +20,7 @@ export function Composer({
   allowed: boolean;
   hint?: string;
   describedBy?: string;
+  target?: string;
   onChange(text: string): void;
   onSend(): void;
   onStop(): void;
@@ -69,6 +72,13 @@ export function Composer({
             Send
           </button>
         )}
+        <DictationButton
+          target={JSON.stringify([target, draft])}
+          destination="Chat draft · review before sending"
+          maxLength={Math.max(0, chatDraftLimit - draft.length - (draft ? 1 : 0))}
+          disabled={busy || running || draft.length >= chatDraftLimit}
+          onUse={(text) => onChange((draft ? draft + ' ' : '') + text)}
+        />
       </div>
     </form>
   );

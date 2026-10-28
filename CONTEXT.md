@@ -72,7 +72,11 @@ proposals; a **watch rule** can prepare a review, not apply it.
 The terminal **CLI** (`domain/cli`, `desktop/cli`) binds argument parsing and scripting output to
 the existing scoped MCP transport. `desktop/agents/service-tools.ts` adapts shared feature owners;
 it does not own a second execution or approval service. Managed speech weights belong to
-`desktop/speech`; installed weights and recognition availability are separate states.
+`desktop/speech`; installed weights and recognition availability are separate states. Its Speech
+service reserves a window-owned session before consent and allows one capture/inference at a time.
+`renderer/speech` owns bounded audio capture and editable transcript review. The helper receives PCM
+through stdin and exits after inference; audio is never persisted. See
+[window-owned speech](docs/adr/0009-window-owned-speech.md).
 
 Native file permission, provider data permission and local agent authority have separate owners.
 Effective grants and credentials stay outside editable JSONC. Agent terminal read permission does

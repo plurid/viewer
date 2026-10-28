@@ -13,6 +13,7 @@ import { documentTypes } from './tools/document-types';
 import { copyPDFRuntime } from './tools/pdf-runtime';
 import { officeRuntimeName } from './src/desktop/previews/office-runtime-manifest';
 import { prepareNativeRebuild } from './tools/native-build/rebuild';
+import { speechRuntimeName } from './src/desktop/speech/runtime-manifest';
 const require = createRequire(import.meta.url);
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
 const channel = macChannel(process.env.VIEWER_MAC_CHANNEL);
@@ -60,6 +61,7 @@ const config: ForgeConfig = {
             `assets/viewer-processors-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,
             `assets/viewer-optimizers-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,
             `assets/viewer-raw-v3-darwin-${process.env.VIEWER_BUILD_ARCH ?? process.arch}`,
+            `assets/${speechRuntimeName(process.env.VIEWER_BUILD_ARCH ?? process.arch)}`,
           ]
         : []),
       ...(process.platform === 'darwin'
@@ -73,6 +75,8 @@ const config: ForgeConfig = {
     ],
     appBundleId: channel === 'direct' ? 'com.plurid.viewer' : storeConfig.bundleID,
     extendInfo: {
+      NSMicrophoneUsageDescription:
+        'Viewer records audio only when you start dictation. Local transcription keeps your audio on this device.',
       // Local profiles permit configured HTTPS LAN endpoints. macOS 15+ needs
       // this purpose text for its separate local-network authorization.
       NSLocalNetworkUsageDescription:
@@ -92,7 +96,7 @@ const config: ForgeConfig = {
       identity: directIdentity || '-',
       identityValidation: !!directIdentity,
       preAutoEntitlements: false,
-      // Do not inherit the signer's broad camera/microphone/device defaults.
+      // Do not inherit the signer's broad camera/device defaults.
       // The MAS build will need its own sandbox and helper-inheritance entitlements.
       optionsForFile: () => ({
         hardenedRuntime: !!directIdentity,

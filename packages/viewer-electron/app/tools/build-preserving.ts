@@ -13,6 +13,8 @@ import { sourceHash, hashFile } from './qualification/source';
 import { prepareOfficeRuntime, verifyOfficeRuntime } from './office-runtime';
 import { officeRuntimeName } from '../src/desktop/previews/office-runtime-manifest';
 import { documentTypes } from './document-types';
+import { prepareSpeechRuntime, verifySpeechRuntime } from './speech-runtime';
+import { speechRuntimeName } from '../src/desktop/speech/runtime-manifest';
 
 if (process.platform !== 'darwin') throw new Error('This local rebuild requires macOS.');
 const source = path.resolve(process.argv[2] || '');
@@ -104,6 +106,28 @@ if (
 } else {
   await cp(officeRuntime, officeOutput, { recursive: true, force: false, errorOnExist: true });
 }
+// Optional freshly compiled N-API binding. Only the new output is changed;
+const speechRuntime = await prepareSpeechRuntime(process.cwd());
+if (speechRuntime) {
+  const speechOutput = path.join(output, 'Contents/Resources', speechRuntimeName());
+  if (
+    await lstat(speechOutput).then(
+      () => true,
+      () => false,
+    )
+  ) {
+    await verifySpeechRuntime(path.join(source, 'Contents/Resources', speechRuntimeName()));
+  } else {
+    await cp(speechRuntime, speechOutput, { recursive: true, force: false, errorOnExist: true });
+  }
+}
+await promisify(execFile)('/usr/bin/plutil', [
+  '-replace',
+  'NSMicrophoneUsageDescription',
+  '-string',
+  'Viewer uses the microphone only when you start dictation. Local speech stays on this device.',
+  path.join(output, 'Contents/Info.plist'),
+]);
 // Optional freshly compiled N-API binding. Only the new output is changed;
 // the seed and its native binary remain intact for rollback and comparison.
 const nativeBinding = process.argv[4] ? path.resolve(process.argv[4]) : undefined;

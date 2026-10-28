@@ -25,6 +25,7 @@ Look up current behavior, exact syntax and limits. For a walkthrough, use the
 
 - [Command language](command-line.md)
 - [Terminal CLI](cli.md)
+- [Speech input, privacy and limits](speech.md)
 - [Custom actions and sequences](actions.md)
 - [Workflows and watch rules](automation.md)
 - [Models, local agents and session reports](agents.md)

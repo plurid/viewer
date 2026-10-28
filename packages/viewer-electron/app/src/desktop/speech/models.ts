@@ -8,7 +8,9 @@ import {
   speechSetupSchema,
   type SpeechModel,
   type SpeechSetup,
+  type SpeechModelsSnapshot,
 } from '../../domain/speech/models';
+import type { SpeechRuntimeStatus } from '../../domain/speech/recognition';
 import { formatBytes } from '../../domain/files/entries';
 import { DocumentStore } from '../persistence/document-store';
 
@@ -85,6 +87,12 @@ export class SpeechModels {
     private directory: string,
     private catalog: readonly SpeechModel[] = speechModels,
     private fetcher: typeof fetch = fetch,
+    private runtime: () => Promise<SpeechRuntimeStatus> = async () => ({
+      name: 'whisper.cpp',
+      recognitionAvailable: false,
+      reason: weightsOnly,
+    }),
+    private changed: () => void = () => {},
   ) {
     const ids = new Set<string>();
     for (const model of catalog) {
@@ -147,18 +155,14 @@ export class SpeechModels {
       return false;
     }
   }
-  async status() {
+  async status(): Promise<SpeechModelsSnapshot> {
     const state = await this.state();
     const records = await Promise.all(
       state.records.map(async (record) => ({ ...record, available: await this.usable(record) })),
     );
     return {
       selected: state.selected,
-      runtime: {
-        name: 'whisper.cpp',
-        recognitionAvailable: false,
-        reason: weightsOnly,
-      },
+      runtime: await this.runtime(),
       models: this.catalog.map((model) => ({
         ...model,
         installed: records.some((record) => record.model === model.id && record.available),
@@ -174,12 +178,16 @@ export class SpeechModels {
   async describe(input: SpeechSetup): Promise<string> {
     const setup = speechSetupSchema.parse(input),
       model = this.model(setup.model);
+    const runtime = await this.runtime();
+    const notice = runtime.recognitionAvailable
+      ? 'Local transcription runs on this device. Microphone access is requested only when you start recording.'
+      : weightsOnly;
     if (setup.kind === 'use') {
       if (!(await this.status()).models.some((item) => item.id === model.id && item.installed))
         throw new Error('Install and verify this speech model first.');
-      return `Save ${model.name} as the selected local model. ${weightsOnly}`;
+      return `Save ${model.name} as the selected local model. ${notice}`;
     }
-    return `${setup.kind === 'import' ? 'Import' : 'Download'} ${model.name} (${formatBytes(model.bytes)}).\n${setup.kind === 'import' ? 'Source: ' + setup.source : 'Source: ' + model.url}\nDestination: ${path.join(this.directory, 'speech-models')}\nSHA-256: ${model.sha256}\nLicense: ${model.license}\nExisting models and any interrupted files remain in place.\n${weightsOnly}`;
+    return `${setup.kind === 'import' ? 'Import' : 'Download'} ${model.name} (${formatBytes(model.bytes)}).\n${setup.kind === 'import' ? 'Source: ' + setup.source : 'Source: ' + model.url}\nDestination: ${path.join(this.directory, 'speech-models')}\nSHA-256: ${model.sha256}\nLicense: ${model.license}\nExisting models and any interrupted files remain in place.\n${notice}`;
   }
   request(input: SpeechSetup, operation: string): Promise<unknown> {
     if (this.closed) return Promise.reject(new Error('Speech model management has closed.'));
@@ -205,6 +213,7 @@ export class SpeechModels {
       signal.throwIfAborted();
       state.selected = model.id;
       await this.store.save(state);
+      this.changed();
       return this.status();
     }
     if ((await this.status()).models.some((item) => item.id === model.id && item.installed))
@@ -226,6 +235,7 @@ export class SpeechModels {
     };
     state.records.push(record);
     await this.store.save(state);
+    this.changed();
     let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
       handle = await open(
@@ -249,6 +259,7 @@ export class SpeechModels {
         record.received += bytes.length;
         if (record.received - lastSaved >= 1048576) {
           await this.store.save(state);
+          this.changed();
           lastSaved = record.received;
         }
       };
@@ -303,6 +314,7 @@ export class SpeechModels {
       record.modified = info.mtimeMs;
       record.status = 'ready';
       await this.store.save(state);
+      this.changed();
       return this.status();
     } catch (error) {
       record.status = signal.aborted ? 'cancelled' : 'failed';
@@ -311,6 +323,7 @@ export class SpeechModels {
         ? 'Model setup was cancelled.'
         : 'Model setup failed. The unverified file was retained.';
       await this.store.save(state);
+      this.changed();
       throw error;
     } finally {
       await handle?.close();
@@ -318,6 +331,25 @@ export class SpeechModels {
   }
   cancel(id: string): void {
     this.active.get(id)?.abort();
+  }
+  async selectedFile() {
+    const state = await this.state();
+    const record = state.records.find(
+      (item) => item.model === state.selected && item.status === 'ready',
+    );
+    if (!record || !(await this.usable(record)))
+      throw new Error('Choose an installed speech model in Settings → Speech.');
+    const model = this.model(record.model);
+    return {
+      file: path.join(await this.folder(false), record.file),
+      model: model.id,
+      recordID: record.id,
+    };
+  }
+  async validateSelection(recordID: string): Promise<void> {
+    const record = (await this.state()).records.find((item) => item.id === recordID);
+    if (!record || !(await this.usable(record)))
+      throw new Error('The speech model changed during transcription. Verify or import it again.');
   }
   async close(): Promise<void> {
     this.closed = true;

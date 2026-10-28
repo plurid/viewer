@@ -11,6 +11,7 @@ import { useModelPermission } from '../ui/models/ModelDataPermission';
 import type { LineHost } from './host';
 import { planLine, userCommands } from './run';
 import { clearPromptHistory, rememberPrompt } from './prompt-history';
+import { DictationButton } from '../speech/DictationButton';
 
 const examples = [
   'sort by date modified, newest first',
@@ -249,6 +250,23 @@ export function PromptFinder({
         }}
         onEmptyBackspace={onBack}
         label="Ask in words"
+        trailing={
+          <DictationButton
+            target={JSON.stringify([
+              context.workspaceID,
+              context.paneID,
+              context.directory,
+              context.selection.map((item) => item.path),
+              query,
+            ])}
+            destination="Ask Viewer request"
+            disabled={state.kind === 'asking'}
+            onUse={(text) => {
+              setQuery(query ? query + ' ' + text : text);
+              setState({ kind: 'idle' });
+            }}
+          />
+        }
         placeholder="Ask Viewer…"
         leading={
           <>

@@ -103,6 +103,7 @@ assets/viewer-optimizers-*/
 assets/viewer-raw-*/
 assets/viewer-office-v[0-9]*/
 assets/viewer-office-fonts-v[0-9]*/
+assets/viewer-speech-v[0-9]*/
 assets/licenses/dependencies.json
 assets/licenses/third-party-notices.txt
 assets/licenses/electron.txt

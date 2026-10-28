@@ -58,9 +58,13 @@ Use the lockfile for installs. `pnpm plurid:check` checks installed Plurid distr
 registry tarballs. `pnpm plurid:update` prepares a coordinated registry update; `pnpm plurid:sync`
 is a local-development overlay that release qualification rejects.
 
-Build helpers prepare pinned Office, media, PDF and RAW resources. Assets and third-party notices
-travel with the package. Some native processors currently have macOS-only build paths; a shared
-renderer build is not Windows/Linux acceptance.
+Build helpers prepare pinned Office, media, PDF, RAW and local speech resources. Speech uses a
+checksum-pinned whisper.cpp macOS framework and a small owned C++ helper; model weights download
+separately through Speech settings. The helper build retains its compiler intermediates. Signing can
+change Mach-O bytes: loose resources require matching hashes, while signed package changes require a
+valid strict app seal covering both the runtime and manifest. Assets and third-party notices travel
+with the package. Some native processors currently have macOS-only build paths; a shared renderer
+build is not Windows/Linux acceptance.
 
 ## Mac App Store path
 

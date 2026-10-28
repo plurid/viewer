@@ -62,6 +62,7 @@ export const categories = [
   'Permissions',
   'Actions',
   'Models',
+  'Speech',
   'Agents',
   'Shortcuts',
   'Terminals',

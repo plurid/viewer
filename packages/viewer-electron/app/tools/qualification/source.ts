@@ -11,6 +11,7 @@ const sourceAssets = [
   'assets/512x512.png',
   'assets/entitlements.mac.plist',
   'assets/licenses/README.txt',
+  'assets/licenses/whisper-cpp.txt',
   'assets/licenses/opencascade.txt',
   'assets/licenses/occt-import-js.txt',
   'assets/licenses/ssf-0.11.2.txt',

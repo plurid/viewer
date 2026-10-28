@@ -15,6 +15,7 @@ export function CommandResults({
   recent = [],
   headings,
   leading,
+  trailing,
   onEmptyBackspace,
   onKey,
   hint,
@@ -33,6 +34,7 @@ export function CommandResults({
   /** Section headings, by the id of the row each comes before. */
   headings?: ReadonlyMap<string, string>;
   leading?: React.ReactNode;
+  trailing?: React.ReactNode;
   /** Backspace with nothing typed: out of a palette's mode. */
   onEmptyBackspace?(): void;
   /** A key the field handles itself first (the command line's Tab and history); true when it did. */
@@ -141,6 +143,7 @@ export function CommandResults({
             Clear recent
           </button>
         )}
+        {trailing}
       </div>
       <div
         className="command-results"

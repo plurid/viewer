@@ -1,4 +1,5 @@
 import { WindowDialogs, type WindowDialog } from './app/WindowDialogs';
+import { SpeechControls } from './speech/SpeechControls';
 import { routeFileKeyboard } from './explorer/selection';
 import { AgentReview } from './actions/AgentReview';
 import { useAgentCatalog } from './app/useAgentCatalog';
@@ -925,6 +926,7 @@ function AppWindow() {
           workspace={controller}
           transitionWorkspace={transitionWorkspace}
         />
+        <SpeechControls onUse={(text) => openPalette('prompt', text)} />
       </div>
     </WorkspaceContext.Provider>
   );

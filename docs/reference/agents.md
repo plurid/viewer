@@ -54,7 +54,8 @@ schemas; the CLI reference lists the corresponding terminal commands.
 - `ask_in_words` returns a checked command proposal using agent-specific model permission.
 - `speech_models` and `speech_status` inspect managed weights without recording or networking.
   `propose_speech_install`, `propose_speech_import` and `propose_speech_use` prepare native-reviewed
-  pinned model setup; they install no executable and do not enable speech recognition.
+  pinned model setup. They install no executable and grant no microphone access.
+  [Local dictation](speech.md) starts only through the app.
 - `cancel_proposal` stops only the caller's pending or running proposal. It does not remove evidence
   or undo completed file output.
 

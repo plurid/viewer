@@ -1,147 +1,69 @@
-# Speech input and model setup
+# Further speech controls
 
-Talk to Viewer to find files, arrange views, ask questions or dictate text. Speech recognition
-should be a configurable input service, independent of the model that understands a request.
+Local dictation is implemented in the direct macOS build: bundled recognition, verified model setup,
+microphone/language choices, push-to-talk and reviewed insertion into Ask Viewer, notes and chat.
+Use the [dictation guide](../guides/speech.md) and [current limits](../reference/speech.md). The
+directions below are proposals, not shipped features.
 
-This is a proposal for speech recognition. Viewer currently supports typed
-[requests in words](../reference/command-line.md#requests-in-words), model-backed actions and
-conversations. The [terminal CLI](../reference/cli.md#local-speech-model-weights) can now propose
-verified pinned weight downloads, local imports and explicit selection through native review.
-Microphone input, the bundled recognition runtime, hosted speech adapters and the Settings flow
-below are not implemented. Installed weights alone do not enable voice control.
+## Hosted transcription
 
-## Start with push to talk
+Add explicit speech adapters for Meta transcription models, Deepgram and other supported services. A
+chat provider is not automatically a speech provider. Each adapter declares its protocol, endpoint,
+language support, partial-result support, vocabulary hints and recording limits.
 
-Hold a configurable shortcut or click a microphone button. Show listening state, live transcription
-and an obvious Stop action. Releasing the shortcut finishes the utterance; Escape cancels it.
-Keyboard and pointer access must both work, with accessible state announcements.
+Setup should include a connection check without recording, followed by an optional microphone test.
+Credentials belong in private credential storage. Sending audio needs separate consent tied to the
+exact endpoint; changing it revokes that permission. Audio permission must not authorize document
+contents or filename vocabulary hints.
 
-Choose the destination explicitly. In a note or conversation composer, dictation inserts editable
-text. In the command palette, speech prepares a Viewer command. Show the final transcript so a
-person can correct a filename or misunderstood word before submitting it. Partial transcripts never
-run actions.
+Retain a local choice, but never switch processing backends silently. Offline, authentication and
+rate-limit failures should offer Retry, Edit transcript or an explicit backend change. Retries must
+not submit a command twice.
 
-Capture the active workspace, folder and selection when a command begins. If that target changes
-before execution, ask the person to resolve the change. Follow-ups such as “only last month” refer
-to the identified previous result, rather than whichever plane happens to be active later.
+## Model-assisted setup
 
-## Set up local recognition in Settings
+CLI and connected agents can already propose pinned installation, import and selection for review.
+Extend typed Ask Viewer and chat with the same typed setup operations: “Set up offline voice
+commands” or “Use a smaller Whisper model.” Do not introduce a shell installer or unchecked URL.
 
-Add a **Speech** section to **Settings → Models**, with **Run locally** and **Use a provider**
-choices. Keep the speech model separate from **Default for Ask Viewer**: local transcription can
-feed a hosted reasoning model, and hosted transcription can feed a local reasoning model.
+The review should identify runtime, model, source, size, storage destination and any external audio
+processing. Imported configuration and saved execution grants must not authorize microphone capture
+or provider transmission. Verified existing weights should be reused.
 
-The local setup flow should work without an LLM account:
+## More capable input
 
-1. Choose **Set up local speech**. Inspect the platform, supported acceleration, available memory
-   and storage. Explain the proposed runtime and model download before starting.
-2. Offer lightweight, balanced and higher-accuracy Whisper models. Show the actual model identifier,
-   languages, download size and estimated runtime memory. Recommendations must come from qualified
-   model metadata and measured hardware behavior.
-3. Install the packaged whisper.cpp runtime and selected model through a managed installer. Prefer a
-   runtime shipped with Viewer; acquire a separately distributed runtime only from the approved
-   release catalog. Ordinary setup must not require a terminal, compiler or package manager.
-4. Show download, verification and preparation progress, with cancellation and restart recovery.
-   Select the model only after verification and a successful load.
-5. Offer **Try microphone**, display the recognized text and let the person choose the default
-   language, microphone, shortcut and model. Make it clear whether recognition works offline.
+Offer live partial transcripts, vocabulary hints for permitted filenames, punctuation controls and
+explicit translation. Keep partials out of execution and persistence until reviewed. A filename
+misrecognition should be distinguishable from a command-planning mistake.
 
-Support choosing an existing compatible model file through a native picker. Validate its format,
-runtime compatibility and identity; a filename extension alone is insufficient. Explain whether it
-will be copied into managed storage or referenced in its current location. A moved or unavailable
-external model offers Locate or a managed download without losing the saved selection.
+Capture the workspace, folder and selection for contextual requests. If a target changes, resolve
+that change before execution. Follow-ups such as “only last month” should refer to the identified
+previous result. Reuse existing command planning, history and review rather than building a second
+command executor.
 
-Model management shows installed, downloading, available, incompatible and unavailable states.
-Switching models preserves the previous working installation. Provide a measured memory estimate and
-release idle runtime resources; keeping a model warm must fit a bounded resource budget.
+Hands-free listening and wake words need separate opt-in controls, an obvious persistent indicator
+and a bounded idle resource budget. Dictation and ordinary browsing must remain available without
+continuous listening.
 
-## Ask the model to arrange setup
+## Installation and recovery
 
-Allow typed requests such as “Set up offline voice commands” and “Use a smaller Whisper model.”
-Typed setup works before speech is available. Once voice works, the same requests can be spoken.
+Add resumable downloads only when the pinned source and partial-file identity can be reverified.
+Preserve usable installations during upgrades. A moved external model should offer Locate or a
+managed copy without losing the selection. Model and partial-download removal must retain fresh
+exact-scope approval and OS Trash.
 
-The LLM proposes a typed setup operation that the desktop service resolves against the managed
-runtime and model catalog. Settings and model-assisted setup use the same installer, validation,
-progress and recovery. The review identifies the runtime, model, source, size, storage destination
-and any external audio processing before the person starts it.
+Expose measured model memory and latency on qualified hardware. Consider bounded warm models only if
+repeated use justifies their idle cost. Portable backups must exclude audio, credentials and access
+grants; saved preferences must never restart recording.
 
-The LLM cannot install an arbitrary executable, run a package-manager script or supply an unchecked
-download URL. Existing shell grants do not authorize this route. Imported preferences can select a
-model identifier but cannot authorize installation, microphone capture or cloud audio transmission.
-An already verified installation is reused rather than downloaded again.
+## Qualification
 
-## Configure hosted transcription
+Expand beyond public and generated clips to consented human Romanian and English speech, accents,
+background noise, silence, filenames and mixed-language phrases. Measure recognition error,
+command-target accuracy, release-to-transcript latency, peak memory and cancellation separately.
+Keep recordings and run-specific measurements in private qualification evidence.
 
-Provide speech-specific adapters for **Meta Muse Voice Transcribe**, **Deepgram** and other
-explicitly supported transcription services. A chat provider is not automatically a speech provider.
-Custom endpoints require a supported speech protocol and clear endpoint identity.
-
-Setup asks for the provider, transcription model, private credential and supported language options.
-Show whether an adapter supports live partials, push-to-talk completion, automatic speech boundaries
-and vocabulary hints. Missing capabilities have explicit behavior rather than silently ignored
-settings. Offer a connection check without recording, followed by an optional microphone test.
-
-Explain that audio goes to the selected provider. Vocabulary hints containing filenames require
-their own permitted metadata scope; audio permission does not authorize document contents. Keep
-credentials in the existing private credential storage, outside shared configuration and portable
-backups. Changing the endpoint invalidates the corresponding permission.
-
-Retain an optional local choice, but never switch between local and hosted processing silently.
-Offline, rate-limit and authentication failures offer Retry, Edit transcript or an explicit switch
-of backend. A failed attempt never submits the same command twice.
-
-## Share one speech service
-
-Capture audio once and adapt resampling and encoding to the selected backend. Keep credentials,
-network connections and local runtime ownership in the desktop service; use a worker or helper for
-heavy recognition. Microphone access belongs only to the trusted speech flow, not browser planes or
-document previews.
-
-Define shared typed requests for setup, model selection, start, finish and cancel, plus
-session-scoped partial, completed, progress and failure events. Provider adapters normalize their
-own event shapes; confidence scores and word timestamps are optional capabilities, not assumed
-fields.
-
-Bound recording duration, queued audio, downloads, inference concurrency and retained transcripts.
-Ignore late events from cancelled sessions. Cancel stops capture and inference or transmission;
-finish stops capture while allowing pending final text to arrive. Closing the owning window or
-revoking permission stops its session. Restoring a workspace never starts recording or installation.
-
-Completed command text enters the existing planner, captured-target validation and command history.
-Dictation remains editable text until the person submits it. Recognition supplies no additional
-file, terminal or agent authority; file removals retain their exact-scope approval and OS Trash
-review.
-
-## Keep installation recoverable
-
-Use versioned manifests with runtime compatibility, source, license, byte size and cryptographic
-digest. Reject unexpected archives, path traversal and symbolic-link destinations. Preserve the
-previous usable runtime and model until the new installation passes verification and loading.
-
-Interrupted downloads remain identifiable and resumable only when the source identity can be
-verified. Cancellation does not delete partial files. Removing a runtime, model or partial download
-requires a fresh review of its exact files and folder contents and uses OS Trash. A failed Trash
-operation preserves the items and reports the failure.
-
-Keep transient audio in memory by default; recording retention is a separate explicit feature.
-Persist model choices and harmless preferences, while excluding recordings, credentials and access
-grants from portable backups. Retain completed requests through the existing history rules and make
-the destination clear when dictating into a saved conversation.
-
-## Delivery and acceptance
-
-1. Add the shared speech contract, Settings setup and managed local runtime/model installation.
-2. Add hosted adapters, separate audio permissions and connection/microphone tests.
-3. Connect push-to-talk to dictation and the existing command planner, including cancellation and
-   contextual follow-ups. Expose the same setup operations to model-assisted requests.
-4. Qualify accuracy, responsiveness, resource use and recovery before adding hands-free listening.
-
-Exercise fresh installation, reuse, model switching, insufficient storage, corrupt downloads,
-interruption, unavailable model files, denied microphones, revoked credentials and stopped services.
-Check accents, background noise, silence, filenames, commands and mixed-language speech. Qualify
-Romanian and English independently for each offered model rather than assuming language support.
-
-Measure transcription error, command-target accuracy, time from release to final text, memory and
-cancellation latency on named hardware. Distinguish recognition mistakes from planner mistakes. Keep
-measurements and recordings in consented qualification evidence, not this design document. Repeat
-the keyboard and accessibility tasks in the [usability protocol](../development/usability.md).
+Exercise fresh setup, reuse, model switching, insufficient storage, corrupt downloads, interruption,
+unavailable models, denied microphones, revoked credentials and stopped providers. Qualify each
+platform, signed distribution and sandboxed edition independently. Repeat keyboard and accessibility
+tasks from the [usability protocol](../development/usability.md).

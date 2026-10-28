@@ -1,6 +1,7 @@
 import type { ApplicationSettings } from '../services';
 export const defaultShortcuts: Record<string, string> = {
   palette: 'Cmd+K',
+  dictate: 'Ctrl+Shift+Space',
   'find-file': 'Cmd+F',
   'new-root-folder': 'Cmd+N',
   settings: 'Cmd+,',

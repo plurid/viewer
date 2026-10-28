@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { prepareSpeechRuntime } from './speech-runtime';
 import os from 'node:os';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +15,7 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const inventory = await licenseInventory();
 await prepareOfficeRuntime(appRoot);
 if (process.platform === 'darwin') {
+  await prepareSpeechRuntime(appRoot);
   mkdirSync('assets', { recursive: true });
   const cache = path.join(os.tmpdir(), `viewer-swift-cache-${process.getuid?.() || 'build'}`);
   mkdirSync(cache, { recursive: true });

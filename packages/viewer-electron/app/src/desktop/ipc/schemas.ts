@@ -28,6 +28,7 @@ import { mediaRequestSchema } from '../../domain/media/documents';
 import { optimizationRequestSchema } from '../../domain/operations/optimization-review';
 import { worksheetDocumentRequestSchema } from '../../domain/previews/documents/office';
 import { noteRequestSchema } from '../../domain/editing/notes';
+import { speechRequestSchema } from '../../domain/speech/recognition';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
@@ -191,6 +192,7 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export const schemas = {
+  speech: z.tuple([speechRequestSchema]),
   optimization: z.tuple([optimizationRequestSchema]),
   receipts: z.tuple([receiptRequestSchema]),
   notes: z.tuple([noteRequestSchema]),
@@ -811,6 +813,7 @@ export const schemas = {
  * each provider's model data permission. The workspace window receives every event.
  */
 export const settingsEvents: readonly DesktopEvent['type'][] = [
+  'speech-changed',
   'settings',
   'index',
   'service-error',
@@ -822,6 +825,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  speech: 'both',
   optimization: 'viewer',
   gitReview: 'viewer',
   agentSessions: 'viewer',

@@ -27,6 +27,11 @@ export function settingsDiscovery(settings: ApplicationSettings, query: string) 
       terms:
         'allow local agent clients mcp token client authorization folders scope agent configuration',
     },
+    {
+      category: 'Speech',
+      terms:
+        'dictation voice microphone audio whisper language install download transcription push to talk',
+    },
     { category: 'Terminals', terms: 'shell profiles environment tmux iterm external terminal' },
     {
       category: 'Themes',

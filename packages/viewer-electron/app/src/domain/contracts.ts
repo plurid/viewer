@@ -31,6 +31,7 @@ import type { WorkspaceOverrides } from './preferences/overrides';
 import type { Tiling } from './workspaces/tiling';
 import type { TextBuffer, TextBufferSummary, TextOpening, TextVersion } from './editing/documents';
 import type { NoteRequest, NoteReply } from './editing/notes';
+import type { SpeechRequest, SpeechReply, SpeechSessionEvent } from './speech/recognition';
 import type { ReceiptRequest, ReceiptReply } from './automation/receipts';
 import type { TaskArea } from './workspaces/tasks';
 import type { EvidenceNavigation, SourceVersion, InspectionResult } from './files/inspection';
@@ -553,6 +554,8 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'speech-changed' }
+  | { type: 'speech'; event: SpeechSessionEvent }
   | { type: 'prepare-note-trash'; id: string; token: string }
   | { type: 'note-trash-finished'; id: string; trashed: boolean }
   | { type: 'note-changed'; id: string; revision: number }
@@ -601,6 +604,7 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  speech(request: SpeechRequest): Promise<SpeechReply>;
   optimization(request: OptimizationRequest): Promise<OptimizationReply>;
   notes(request: NoteRequest): Promise<NoteReply>;
   agentSessions(request: SessionRequest): Promise<SessionReply>;

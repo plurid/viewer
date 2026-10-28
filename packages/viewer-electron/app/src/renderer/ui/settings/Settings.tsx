@@ -29,6 +29,7 @@ import { ThemeSettings } from './ThemeSettings';
 import type { CustomAction } from '../../../domain/automation/actions';
 import { useTheme, useThemeVariables } from '../theme';
 import { settingsDiscovery } from './discovery';
+import { SpeechSettings } from '../../speech/SpeechSettings';
 
 const noThemes = { themes: [], theme: { dark: '', light: '' } };
 export function SettingsWindow() {
@@ -42,9 +43,11 @@ export function SettingsWindow() {
     const section =
       path === 'settings.providers'
         ? 'Models'
-        : path === 'settings.customActions'
-          ? 'Actions'
-          : undefined;
+        : path === 'settings.speech'
+          ? 'Speech'
+          : path === 'settings.customActions'
+            ? 'Actions'
+            : undefined;
     if (section) {
       setQuery('');
       setCategory(section);
@@ -231,6 +234,7 @@ export function SettingsWindow() {
         {!query && category === 'Models' && (
           <ModelSettings snapshot={snapshot} save={enqueue} error={setError} />
         )}
+        {page === 'Speech' && <SpeechSettings shortcut={settings.shortcuts.dictate} />}
         {!query && category === 'Browsing' && (
           <FolderOverrideSettings snapshot={snapshot} save={patches} />
         )}

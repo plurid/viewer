@@ -19,6 +19,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  speech: (request) => invoke('speech', request),
   optimization: (request) => invoke('optimization', request),
   notes: (request) => invoke('notes', request),
   receipts: (request) => invoke('receipts', request),
