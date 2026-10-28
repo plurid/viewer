@@ -12,4 +12,4 @@ These records explain decisions that still shape the application. Feature usage 
 - [Views, runtimes and typed transformations](0007-spatial-workbench-resources.md)
 - [Scoped terminal CLI](0008-scoped-terminal-cli.md)
 
-- [Window-owned local speech](0009-window-owned-speech.md)
+- [Window-owned speech](0009-window-owned-speech.md)

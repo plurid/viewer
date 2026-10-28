@@ -15,6 +15,7 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import type { AgentTaskSetup } from '../../domain/agents/task-workflow';
 import {
   recipeReadsContent,
   type ActionContext,
@@ -115,6 +116,7 @@ export class AgentBroker {
       agentAccess?: AgentAccess;
       sessions?: AgentSessions;
       services?: AgentServiceTools;
+      authorizeTask?(setup: AgentTaskSetup): Promise<void>;
     },
   ) {
     this.access = extension?.agentAccess ?? new AgentAccess(dataPath, () => this.settings().agents);
@@ -285,6 +287,12 @@ export class AgentBroker {
             : 'propose';
       await this.clients.require(capability);
       if (!(await this.access.state()).enabled) throw new Error('Agent access is disabled.');
+      if (proposal.kind === 'task-workflow') {
+        await this.clients.require('navigation');
+        if (!proposal.taskSetup || !this.extension?.authorizeTask)
+          throw new Error('Task creation is unavailable.');
+        await this.extension.authorizeTask(proposal.taskSetup);
+      }
       if (proposal.kind === 'speech' && proposal.speech?.kind === 'import') {
         await this.clients.require('content');
         await this.authorize(proposal.speech.source);

@@ -3,6 +3,7 @@ import type { SettingsPatch } from '../services';
 import type { Pane, ViewMode, FileEntry, OperationJob } from '../contracts';
 import type { TransformPlan } from '../operations/transforms';
 import type { SpeechSetup } from '../speech/models';
+import type { AgentTaskSetup, AgentTaskResult } from './task-workflow';
 /** Live navigation discovery excludes history, camera/layout and unrelated preferences. */
 export interface AgentPlane {
   id: string;
@@ -37,7 +38,16 @@ export interface CommandDescriptor {
 export interface AgentProposal {
   id: string;
   clientID?: string;
-  kind: 'command' | 'configuration' | 'terminal-write' | 'navigation' | 'transform' | 'speech';
+  kind:
+    | 'command'
+    | 'configuration'
+    | 'terminal-write'
+    | 'navigation'
+    | 'transform'
+    | 'speech'
+    | 'task-workflow';
+  taskSetup?: AgentTaskSetup;
+  taskResult?: AgentTaskResult;
   speech?: SpeechSetup;
   transform?: { plan: TransformPlan; destination: string; name: string };
   title: string;

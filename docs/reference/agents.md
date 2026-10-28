@@ -56,6 +56,11 @@ schemas; the CLI reference lists the corresponding terminal commands.
   `propose_speech_install`, `propose_speech_import` and `propose_speech_use` prepare native-reviewed
   pinned model setup. They install no executable and grant no microphone access.
   [Local dictation](speech.md) starts only through the app.
+- `list_task_areas` optionally selects a workspace by ID or exact unique name. `propose_task_create`
+  accepts a task name, repository, local branch, destination, optional base and workspace. It pins a
+  worktree plan for native review and returns structured progress/recovery metadata. Its terminal
+  remains stopped and Git review starts only on the person's request. See
+  [task creation](cli.md#create-a-task-from-a-branch).
 - `cancel_proposal` stops only the caller's pending or running proposal. It does not remove evidence
   or undo completed file output.
 

@@ -78,6 +78,13 @@ service reserves a window-owned session before consent and allows one capture/in
 through stdin and exits after inference; audio is never persisted. See
 [window-owned speech](docs/adr/0009-window-owned-speech.md).
 
+Hosted speech metadata and endpoint/model-bound audio consent belong to `desktop/speech/providers`;
+encrypted keys use a separate private namespace. `desktop/speech/transcription` owns wire protocols
+and bounded responses. Local and hosted paths share capture and reviewed insertion.
+`desktop/agents/task-workflow` binds parameterized CLI task proposals to workspace ownership and
+worktree leases. Its raw checkout writer cannot run hooks or filters; the renderer task controller
+persists the approved bundle before acknowledging completion.
+
 Native file permission, provider data permission and local agent authority have separate owners.
 Effective grants and credentials stay outside editable JSONC. Agent terminal read permission does
 not grant input or process containment. Every agent removal requires fresh exact-scope approval and

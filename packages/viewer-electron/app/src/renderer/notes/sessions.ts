@@ -1,4 +1,5 @@
 import type { NoteDocument } from '../../domain/editing/notes';
+import { noteSchema } from '../../domain/editing/notes';
 import { errorMessage } from '../../domain/errors';
 
 export interface NoteSession {
@@ -28,6 +29,26 @@ export const subscribeNotes = (listener: () => void) => {
   };
 };
 export const noteSession = (paneID: string) => sessions.get(paneID);
+/** A typed task handoff carries only its new blank note. It never needs a private
+ * read during agent dispatch, and retries cannot overwrite a person's edits. */
+export function initializeTaskNote(paneID: string, input: NoteDocument): void {
+  const document = noteSchema.parse(input);
+  if (document.text || document.revision !== 0 || document.kind !== 'note')
+    throw new Error('A new task can initialize only its blank note.');
+  const current = sessions.get(paneID);
+  if (current) {
+    if (current.document.id !== document.id)
+      throw new Error('This note view already belongs to another document.');
+    return;
+  }
+  sessions.set(paneID, {
+    editorKey: crypto.randomUUID(),
+    document,
+    text: '',
+    title: document.title,
+  });
+  notify();
+}
 export const noteLocked = (id: string) => removalLocks.has(id);
 export async function prepareNoteTrash(id: string): Promise<void> {
   removalLocks.add(id);

@@ -58,7 +58,9 @@ export function DictationDialog({
             : speech.phase === 'listening'
               ? 'Listening…'
               : speech.phase === 'transcribing'
-                ? 'Transcribing on this device…'
+                ? speech.processing?.kind === 'hosted'
+                  ? `Transcribing with ${speech.processing.providerName}…`
+                  : 'Transcribing on this device…'
                 : speech.phase === 'review'
                   ? speech.text
                     ? 'Review your words before inserting.'
@@ -91,8 +93,14 @@ export function DictationDialog({
           </label>
         )}
         <p className="muted">
-          Audio stays in memory on this device. Inserting text does not send a message or run a
-          command.
+          {speech.processing?.kind === 'hosted'
+            ? speech.phase === 'review' || speech.phase === 'transcribing'
+              ? `This recording was sent to ${speech.processing.providerName} at ${speech.processing.endpoint} using ${speech.processing.model} for transcription.`
+              : `Finishing or releasing the shortcut sends this recording to ${speech.processing.providerName} at ${speech.processing.endpoint} using ${speech.processing.model}.`
+            : speech.processing?.kind === 'local'
+              ? 'Audio stays in memory on this device and is transcribed locally.'
+              : 'Your Speech settings determine where this recording is transcribed.'}{' '}
+          Inserting text does not send a message or run a command.
         </p>
         {speech.phase === 'failed' && (
           <button
@@ -112,7 +120,7 @@ export function DictationDialog({
         </button>
         {speech.phase === 'listening' ? (
           <button type="button" className="primary" onClick={() => void speech.finish()}>
-            Finish recording
+            {speech.processing?.kind === 'hosted' ? 'Finish and transcribe' : 'Finish recording'}
           </button>
         ) : (
           !active && (

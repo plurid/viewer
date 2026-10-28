@@ -1,12 +1,34 @@
 import { useEffect, useRef } from 'react';
 import { Empty, Loading } from '../ui/primitives';
 import { useWorkspace } from '../workspace/context';
-import { report } from '../state/store';
+import { report, updatePane } from '../state/store';
 import { useGitReview } from './useGitReview';
 import type { ReviewMode } from '../../domain/comparison/review';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 
-export default function GitChanges({ path, paneID }: { path: string; paneID: string }) {
+export default function GitChanges({
+  path,
+  paneID,
+  manual,
+}: {
+  path: string;
+  paneID: string;
+  manual?: boolean;
+}) {
+  if (manual)
+    return (
+      <Empty
+        title="Ready for Git review"
+        detail="This task was created from the CLI. Load its changes when you are ready; Git may run this repository’s configured filters."
+      >
+        <button type="button" onClick={() => updatePane(paneID, { activation: undefined })}>
+          Load Git changes
+        </button>
+      </Empty>
+    );
+  return <ActiveGitChanges path={path} paneID={paneID} />;
+}
+function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
   const review = useGitReview(path, paneID);
   const workspace = useWorkspace();
   const scroll = useRef<HTMLDivElement>(null);

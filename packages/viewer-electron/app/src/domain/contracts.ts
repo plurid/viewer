@@ -9,6 +9,7 @@ import type { GitActionKind, GitActionRequest, GitActionReply } from './comparis
 import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
 import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
+import type { AgentTaskBundle } from './agents/task-workflow';
 import type { TransformPlan } from './operations/transforms';
 import type { OptimizationOutcome } from './operations/optimization-target';
 import type { OptimizationRequest, OptimizationReply } from './operations/optimization-review';
@@ -221,6 +222,8 @@ export interface GitChangesPane {
   type: 'git-changes';
   path: string;
   review?: ReviewState;
+  /** Agent-created views wait for the person: Git status can execute clean filters. */
+  activation?: 'manual';
 }
 export interface ChatPane {
   id: string;
@@ -572,6 +575,7 @@ export type DesktopEvent =
   | { type: 'settings-focus'; path: string }
   | { type: 'service-error'; service: string; message: string }
   | { type: 'agent-proposal'; proposal: AgentProposal }
+  | { type: 'agent-task'; id: string; bundle: AgentTaskBundle; deadline: number }
   | {
       type: 'agent-command';
       id: string;

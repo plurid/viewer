@@ -1,8 +1,29 @@
 # Dictate into Viewer
 
-Open **Settings → Speech**. Choose **Download and use** beside a local Whisper model, or **Import
-verified weights…** if you already have the matching GGML file. No model account, terminal or
-compiler is needed. The recognizer ships with Viewer; weights download once.
+Open **Settings → Speech** and choose **Local Whisper**. Choose **Download and use** beside a local
+Whisper model, or **Import verified weights…** if you already have the matching GGML file. No model
+account, terminal or compiler is needed. The recognizer ships with Viewer; weights download once.
+
+## Use a hosted speech provider
+
+In **Settings → Speech**, set **Transcribe with** to **Hosted provider**, then choose **Add speech
+provider**. Choose Meta, OpenAI, Deepgram or a compatible endpoint. Check the name, API base URL and
+model ID, then choose **Save provider**. The saved provider and its model appear together in **Use
+provider**. Speech providers are separate from chat and Ask Viewer models.
+
+Enter the provider's API key and choose **Save key**. Choose **Allow recordings…** and review the
+endpoint and model in the system dialog. Microphone access is a separate permission. The key alone
+does not authorize uploading audio.
+
+Choose **Test microphone and transcription**, record, then choose **Finish and transcribe**. Correct
+the editable transcript before inserting it into a draft. Releasing the dictation shortcut also
+sends the completed recording to the selected speech provider. A recording is at most one minute.
+There is no automatic retry or switch to another provider.
+
+**Revoke audio access** stops affected sessions. Editing the endpoint or model requires new audio
+consent; a new endpoint also needs its own key. To work offline, explicitly choose **Local
+Whisper**. Meta's transcription model does not list Romanian support; use another supported model or
+local Whisper for Romanian.
 
 Small is the recommended multilingual choice. Tiny uses less storage and runs faster, but can need
 more corrections, especially outside English. Choose a language if automatic detection misidentifies
@@ -35,6 +56,10 @@ land in another document. Each recording finishes at 60 seconds.
 If access is denied, enable Viewer in **System Settings → Privacy & Security → Microphone** and
 start again. An unavailable selected microphone produces an error; Viewer does not silently switch
 devices. Choose another microphone in Speech settings and retry.
+
+For hosted authentication, rate-limit or connection errors, check the provider, model, key and audio
+access in Speech settings, then start a new recording. Viewer shows a bounded error rather than
+retaining or retrying your audio. Provider retention and billing follow that provider's terms.
 
 Downloads show progress and can be cancelled. Partial files remain retained and cannot be used.
 Restarting Viewer restores the selected model and language, without resuming a download or starting

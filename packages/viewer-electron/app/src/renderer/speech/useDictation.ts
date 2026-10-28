@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorMessage } from '../../domain/errors';
-import type { SpeechTranscript } from '../../domain/speech/recognition';
+import type { SpeechProcessing, SpeechTranscript } from '../../domain/speech/recognition';
 import { captureAudio, type AudioCapture } from './capture';
 
 type Phase = 'idle' | 'preparing' | 'listening' | 'transcribing' | 'review' | 'failed';
@@ -16,6 +16,7 @@ export function useDictation() {
   const [seconds, setSeconds] = useState(0);
   const [level, setLevel] = useState(0);
   const [result, setResult] = useState<SpeechTranscript>();
+  const [processing, setProcessing] = useState<SpeechProcessing>();
   const recording = useRef<Recording | undefined>(undefined);
   const cancel = useCallback(() => {
     const current = recording.current;
@@ -73,11 +74,13 @@ export function useDictation() {
     setSeconds(0);
     setLevel(0);
     setPhase('preparing');
+    setProcessing(undefined);
     try {
       const started = await window.viewer.speech({ kind: 'begin', id: current.id });
       current.controller.signal.throwIfAborted();
       if (!started || !('id' in started) || !('preferences' in started))
         throw new Error('The recording did not start. Try again.');
+      setProcessing(started.processing ?? { kind: 'local' });
       if (!document.hasFocus()) throw new Error('Return to Viewer and start recording again.');
       current.audio = await captureAudio({
         microphone: started.preferences.microphone,
@@ -117,5 +120,5 @@ export function useDictation() {
       cancel();
     };
   }, [cancel, fail]);
-  return { phase, error, text, setText, seconds, level, result, start, finish, cancel };
+  return { phase, error, text, setText, seconds, level, result, processing, start, finish, cancel };
 }

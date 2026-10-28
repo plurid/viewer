@@ -86,7 +86,8 @@ async function waitFor(
         ? String(current.status)
         : undefined;
     if (['failed', 'rejected', 'cancelled'].includes(status ?? ''))
-      throw new CLIServiceError(
+      throw new CLIOperationError(
+        current,
         current && typeof current === 'object' && 'error' in current && current.error
           ? String(current.error)
           : 'The operation was ' + status + '.',
@@ -98,6 +99,14 @@ async function waitFor(
       return current;
     if (!status) throw new CLIServiceError('Viewer returned an operation without a status.');
     await delay(300, undefined, { signal });
+  }
+}
+class CLIOperationError extends CLIServiceError {
+  constructor(
+    readonly result: unknown,
+    message: string,
+  ) {
+    super(message);
   }
 }
 
@@ -213,6 +222,7 @@ export async function runCLI(
           ok: false,
           error: { code, message },
           ...(activeID ? { operationID: activeID } : {}),
+          ...(error instanceof CLIOperationError ? { result: error.result } : {}),
         }) + '\n',
       );
     else

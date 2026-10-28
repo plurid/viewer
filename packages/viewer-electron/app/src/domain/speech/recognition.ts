@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { SpeechModelsSnapshot } from './models';
+import { speechProviderRequestSchema, type SpeechProvidersSnapshot } from './providers';
 
 import { speechMaximumBytes } from './audio-format';
 export { speechSampleRate, speechMaximumSeconds, speechMaximumBytes } from './audio-format';
@@ -30,6 +31,8 @@ export const speechPreferencesSchema = z
   .object({
     language: z.enum(speechLanguages.map(([id]) => id)).default('auto'),
     microphone: z.string().max(500).default(''),
+    backend: z.enum(['local', 'hosted']).optional(),
+    providerID: z.uuid().optional(),
   })
   .strict();
 export type SpeechPreferences = z.infer<typeof speechPreferencesSchema>;
@@ -62,23 +65,20 @@ export interface SpeechStatus {
   preferences: SpeechPreferences;
   microphone: 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
   setup: SpeechSetupTask[];
+  hosted?: SpeechProvidersSnapshot;
 }
+export type SpeechProcessing =
+  | { kind: 'local' }
+  | { kind: 'hosted'; providerID: string; providerName: string; endpoint: string; model: string };
 export interface SpeechCaptureStart {
   id: string;
   preferences: SpeechPreferences;
+  processing?: SpeechProcessing;
 }
 export type SpeechReply =
   SpeechStatus | SpeechTranscript | SpeechCaptureStart | { id: string } | null;
-export type SpeechRequest =
-  | { kind: 'status' }
-  | { kind: 'preferences'; preferences: SpeechPreferences }
-  | { kind: 'setup'; action: 'install' | 'use' | 'import'; model: string }
-  | { kind: 'cancel-setup'; id: string }
-  | { kind: 'begin'; id: string }
-  | { kind: 'transcribe'; id: string; pcm: Uint8Array }
-  | { kind: 'cancel'; id: string };
-
 export const speechRequestSchema = z.discriminatedUnion('kind', [
+  ...speechProviderRequestSchema.options,
   z.object({ kind: z.literal('status') }).strict(),
   z.object({ kind: z.literal('preferences'), preferences: speechPreferencesSchema }).strict(),
   z
@@ -107,6 +107,8 @@ export const speechRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
   z.object({ kind: z.literal('cancel'), id: z.uuid() }).strict(),
 ]);
+
+export type SpeechRequest = z.infer<typeof speechRequestSchema>;
 
 /** PCM is mono signed little-endian 16-bit, keeping the inference boundary format-free. */
 export function pcmEnergy(bytes: Uint8Array): number {

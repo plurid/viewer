@@ -1,4 +1,4 @@
-# Window-owned local speech
+# Window-owned speech
 
 ## Decision
 
@@ -26,3 +26,15 @@ Local use needs no speech provider credential and works offline after model setu
 utterance trades some latency for predictable idle memory and cancellation. Shortcuts, Settings
 tests, notes and chat share one service. Hosted speech needs an explicit adapter and separate audio
 transmission consent.
+
+Hosted adapters share the same capture, owner, cancellation and editable transcript flow. Private
+provider metadata is separate from reasoning-model configuration; credentials use their own
+encrypted namespace. Audio consent binds provider ID, protocol, endpoint and model and can only be
+granted through a desktop-owned system dialog in Settings. A microphone grant and an API key are
+insufficient. Endpoint/model edits, key changes and revocation invalidate capture leases and abort
+uploads before queued writes finish. The final authority check and cancellable upload registration
+have no intervening await.
+
+The desktop wraps bounded PCM as a fixed-name WAV and normalizes provider responses. There is one
+request per recording, a deadline and a response-size bound; no automatic retry, redirect or cloud
+fallback. Raw provider errors and credentials never enter transcript errors. No audio is persisted.

@@ -10,6 +10,7 @@ import {
   effectiveWindowUI,
 } from './state/effective-ui';
 import type { SpatialOverviewHandle } from './workspace/overlays/useSpatialOverview';
+import { errorMessage } from '../domain/errors';
 import { failedFlush } from '../domain/persistence/flush';
 import { prepareNoteTrash, finishNoteTrash } from './notes/sessions';
 import { savePatch } from './state/core';
@@ -21,7 +22,7 @@ import { useWorkspaceController } from './workspace/controller';
 import { executeAgentNavigation } from './workspace/agent-navigation';
 import { programCommands } from './commands/programs';
 import { ExecutionPanel } from './terminals/ExecutionPanel';
-import { trimTerminals, terminalEditing } from './terminals/sessions';
+import { trimTerminals, terminalEditing, deferTerminalStart } from './terminals/sessions';
 import { explorerCommandIDs, keyCommand } from './explorer/input';
 /** Native window chrome stays quiet; commands follow the active file, folder or preview. */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -597,7 +598,33 @@ function AppWindow() {
             },
           )
           .catch(report);
-      else if (event.type === 'agent-command') {
+      else if (event.type === 'agent-task') {
+        void (async () => {
+          if (Date.now() > event.deadline)
+            throw new Error(
+              'The task opening request expired. Inspect the retained worktree before retrying.',
+            );
+          if (dialogOpen())
+            throw new Error('Close the open dialog, then open the retained worktree.');
+          const destination = getState().saved.workspaces.find(
+            (space) => space.id === event.bundle.workspaceID,
+          );
+          if (!destination) throw new Error('The selected workspace is unavailable.');
+          deferTerminalStart(
+            destination.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
+          );
+          if (activeWorkspace().id !== destination.id) await switchTo(destination.id);
+          if (Date.now() > event.deadline) throw new Error('The task opening request expired.');
+          await controller.installTaskArea(event.bundle);
+          await flushState();
+        })()
+          .then(
+            () => window.viewer.agentCommandResult(event.id),
+            (error: unknown) =>
+              window.viewer.agentCommandResult(event.id, errorMessage(error).slice(0, 2000)),
+          )
+          .catch(report);
+      } else if (event.type === 'agent-command') {
         const finish = (error?: string) => {
           void window.viewer.agentCommandResult(event.id, error?.slice(0, 2000)).catch(report);
         };

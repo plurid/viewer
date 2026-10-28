@@ -27,15 +27,17 @@ export async function confirmAgentProposal(
       'Cancel',
       removal
         ? 'Move to Trash'
-        : proposal.kind === 'configuration'
-          ? 'Change'
-          : proposal.kind === 'speech'
-            ? proposal.speech?.kind === 'use'
-              ? 'Choose model'
-              : proposal.speech?.kind === 'import'
-                ? 'Import model'
-                : 'Download model'
-            : 'Run',
+        : proposal.kind === 'task-workflow'
+          ? 'Create task'
+          : proposal.kind === 'configuration'
+            ? 'Change'
+            : proposal.kind === 'speech'
+              ? proposal.speech?.kind === 'use'
+                ? 'Choose model'
+                : proposal.speech?.kind === 'import'
+                  ? 'Import model'
+                  : 'Download model'
+              : 'Run',
     ],
     defaultId: 0,
     cancelId: 0,

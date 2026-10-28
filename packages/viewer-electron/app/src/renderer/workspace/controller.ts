@@ -79,6 +79,35 @@ export function useWorkspaceController({
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
   const serverStarts = useRef(new Map<string, Promise<void>>());
   const serverParents = useRef(new Map<string, { workspaceID: string; parentID: string }>());
+  const waitForPlanes = useCallback(
+    (paneIDs: readonly string[], workspaceID: string) =>
+      new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 5000;
+        const attempt = () => {
+          try {
+            if (activeWorkspace().id !== workspaceID)
+              throw new Error('The workspace changed while opening the task.');
+            const api = engine.current;
+            const mounted = new Set(
+              api && readyRef.current ? flattenTree(api.tree.get()).map(hostID) : [],
+            );
+            if (paneIDs.every((id) => mounted.has(id))) {
+              resolve();
+              return;
+            }
+            if (performance.now() >= deadline)
+              throw new Error(
+                'The task views did not finish opening. Reopen the retained task from Tasks.',
+              );
+            requestAnimationFrame(attempt);
+          } catch (error) {
+            reject(error);
+          }
+        };
+        attempt();
+      }),
+    [engine, readyRef],
+  );
   const registerContent = useCallback(
     (pane: Parameters<typeof addContentPane>[0], parentID?: string) => {
       const api = engine.current;
@@ -123,6 +152,7 @@ export function useWorkspaceController({
       ...taskController({
         controller: () => controller,
         register: registerContent,
+        waitFor: waitForPlanes,
         engine,
         surface,
       }),
@@ -1168,7 +1198,7 @@ export function useWorkspaceController({
         }
       },
     }),
-    [engine, readyRef, surface, registerContent],
+    [engine, readyRef, surface, registerContent, waitForPlanes],
   );
   return controller;
 }

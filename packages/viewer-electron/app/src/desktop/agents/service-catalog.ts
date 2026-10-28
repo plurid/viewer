@@ -25,7 +25,24 @@ export const serviceTools = [
     name: 'list_task_areas',
     description:
       'List task area names and checkout metadata within granted folders. Excludes private documents.',
-    inputSchema: object(),
+    inputSchema: object({ workspace: id }),
+  },
+  {
+    name: 'propose_task_create',
+    description:
+      'Review creating a worktree and task area in a selected workspace. Parameters bind a local branch and revision; the terminal stays stopped. Never removes files or runs shell commands.',
+    inputSchema: object(
+      {
+        name: { type: 'string', minLength: 1, maxLength: 100 },
+        repo: path,
+        path,
+        branch: id,
+        base: id,
+        existing: { type: 'boolean' },
+        workspace: id,
+      },
+      ['name', 'repo', 'path', 'branch'],
+    ),
   },
   {
     name: 'read_workflow',

@@ -92,6 +92,7 @@ const pane = z.discriminatedUnion('type', [
       type: z.literal('git-changes'),
       path: localPath,
       review: reviewStateSchema.optional(),
+      activation: z.literal('manual').optional(),
     })
     .strict(),
   z.object({ id, type: z.literal('media'), path: localPath, draftID: z.uuid() }).strict(),

@@ -71,43 +71,85 @@ creating a Viewer window.
 Run `viewer COMMAND --help` for exact arguments and options. `viewer help workflow` lists a family;
 `viewer tools list --json` returns all service tool schemas.
 
-| Commands                                                                          | Purpose                                                                                           |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `status`                                                                          | Check the authenticated connection.                                                               |
-| `workspace list`, `workspace switch NAME`                                         | Discover or navigate accessible workspaces.                                                       |
-| `workspace create`, `workspace rename`                                            | Review opening the corresponding parameter form.                                                  |
-| `plane list`, `plane open PATH`, `plane focus ID`                                 | Discover and navigate planes; open accepts `--placement current\|root\|linked`.                   |
-| `preview PATH`                                                                    | Open a linked preview through the navigation service.                                             |
-| `layout horizontal`, `layout vertical`, `layout frame`                            | Submit the corresponding contextual layout command.                                               |
-| `command list`, `command explain ID`, `command run ID`                            | Discover, explain or propose a contextual command.                                                |
-| `search QUERY --root DIR [--content] [--offset N]`                                | Search a granted folder; the root defaults to the terminal working folder.                        |
-| `inspect PATH`, `read PATH`                                                       | Read bounded metadata or extracted original content.                                              |
-| `table PATH [--sheet NAME] [--offset N] [--limit N]`                              | Read saved worksheet or delimited-table values; at most 200 rows per request.                     |
-| `relations PATH [--content]`                                                      | Inspect granted relationships, optionally reading local reference syntax.                         |
-| `export PATH… --destination DIR --name NAME --plan JSON`                          | Prepare a typed export for separate review.                                                       |
-| `action list`, `action run RECIPE PATH…`                                          | Discover and prepare configured recipe actions.                                                   |
-| `action status ID`, `action cancel ID`                                            | Inspect or stop your recipe task.                                                                 |
-| `review status ID`, `review cancel ID`                                            | Inspect or cancel your proposal.                                                                  |
-| `git status [DIR]`, `git diff [DIR] [--base REF]`                                 | Read repository status or a bounded tracked-file patch; folder defaults to the current directory. |
-| `task list`, `task create`                                                        | Discover granted task areas or review opening branch-to-task setup.                               |
-| `workflow read FILE`, `workflow run FILE [--bindings JSON]`                       | Validate or start a saved typed workflow.                                                         |
-| `workflow list`, `workflow status ID`, `workflow resume ID`, `workflow cancel ID` | Manage runs owned by this client.                                                                 |
-| `config show`, `config validate JSON`, `config propose JSON`                      | Inspect configuration or validate/propose an array of patches.                                    |
-| `ask PROMPT`                                                                      | Return a checked natural-language command proposal without executing it.                          |
-| `speech models`, `speech status`                                                  | Inspect the pinned local model catalog and verified installations.                                |
-| `speech install MODEL`, `speech import MODEL PATH`, `speech use MODEL`            | Review a pinned model download, verified local import or selection.                               |
-| `tools list`, `tools call NAME [--args JSON]`                                     | Discover and call the same authorized service tools directly.                                     |
-| `completion bash\|zsh\|fish`                                                      | Print completion source without editing a profile.                                                |
+| Commands                                                                            | Purpose                                                                                           |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `status`                                                                            | Check the authenticated connection.                                                               |
+| `workspace list`, `workspace switch NAME`, `workspace switch --id ID`               | Discover or navigate accessible workspaces.                                                       |
+| `workspace create`, `workspace rename`                                              | Review opening the corresponding parameter form.                                                  |
+| `plane list`, `plane open PATH`, `plane focus ID`                                   | Discover and navigate planes; open accepts `--placement current\|root\|linked`.                   |
+| `preview PATH`                                                                      | Open a linked preview through the navigation service.                                             |
+| `layout horizontal`, `layout vertical`, `layout frame`                              | Submit the corresponding contextual layout command.                                               |
+| `command list`, `command explain ID`, `command run ID`                              | Discover, explain or propose a contextual command.                                                |
+| `search QUERY --root DIR [--content] [--offset N]`                                  | Search a granted folder; the root defaults to the terminal working folder.                        |
+| `inspect PATH`, `read PATH`                                                         | Read bounded metadata or extracted original content.                                              |
+| `table PATH [--sheet NAME] [--offset N] [--limit N]`                                | Read saved worksheet or delimited-table values; at most 200 rows per request.                     |
+| `relations PATH [--content]`                                                        | Inspect granted relationships, optionally reading local reference syntax.                         |
+| `export PATH… --destination DIR --name NAME --plan JSON`                            | Prepare a typed export for separate review.                                                       |
+| `action list`, `action run RECIPE PATH…`                                            | Discover and prepare configured recipe actions.                                                   |
+| `action status ID`, `action cancel ID`                                              | Inspect or stop your recipe task.                                                                 |
+| `review status ID`, `review cancel ID`                                              | Inspect or cancel your proposal.                                                                  |
+| `git status [DIR]`, `git diff [DIR] [--base REF]`                                   | Read repository status or a bounded tracked-file patch; folder defaults to the current directory. |
+| `task list [--workspace ID_OR_NAME]`, `task create NAME --branch BRANCH --path DIR` | Discover task areas or review creating a complete branch/worktree task.                           |
+| `workflow read FILE`, `workflow run FILE [--bindings JSON]`                         | Validate or start a saved typed workflow.                                                         |
+| `workflow list`, `workflow status ID`, `workflow resume ID`, `workflow cancel ID`   | Manage runs owned by this client.                                                                 |
+| `config show`, `config validate JSON`, `config propose JSON`                        | Inspect configuration or validate/propose an array of patches.                                    |
+| `ask PROMPT`                                                                        | Return a checked natural-language command proposal without executing it.                          |
+| `speech models`, `speech status`                                                    | Inspect the pinned local model catalog and verified installations.                                |
+| `speech install MODEL`, `speech import MODEL PATH`, `speech use MODEL`              | Review a pinned model download, verified local import or selection.                               |
+| `tools list`, `tools call NAME [--args JSON]`                                       | Discover and call the same authorized service tools directly.                                     |
+| `completion bash\|zsh\|fish`                                                        | Print completion source without editing a profile.                                                |
 
 Git tools authorize the entire checkout before scanning. Diff resolves its base to a commit and
 disables external diff/text conversion, hooks and network helpers. Its patch is limited to 4 MiB and
 excludes untracked-file contents. CLI Git commands do not stage, commit or run arbitrary Git
 programs.
 
-Workspace creation, renaming and branch-to-task creation open the existing forms after review; their
-proposal completing means the form opened, not that the person finished it. Workflow steps are typed
-inspection, comparison, copy, conversion and recipe steps. They do not execute shell scripts or
-approve their own changes. See [workflow definitions](automation.md).
+Workspace creation and renaming open the existing forms after review; their proposal completing
+means the form opened, not that the person finished it. Parameterized task creation completes the
+workflow described below. Workflow steps are typed inspection, comparison, copy, conversion and
+recipe steps. They do not execute shell scripts or approve their own changes. See
+[workflow definitions](automation.md).
+
+## Create a task from a branch
+
+```sh
+viewer workspace list --json
+viewer task create "Improve search" --repo ./viewer --branch feature/search \
+  --path ./worktrees/search --base main --workspace "Development" --json
+viewer review status PROPOSAL_ID --json
+viewer task list --workspace "Development" --json
+```
+
+The destination parent must already exist. The client needs **propose** and **navigation**
+capabilities, with folder grants covering the repository, its Git administration, the destination
+parent and the selected workspace's planes. The task name is required. `--repo` defaults to the
+terminal working directory; `--base` defaults to `HEAD` and also accepts a local branch. No
+arbitrary revision expression is evaluated. `--existing` uses an unattached local branch instead of
+creating one and cannot be combined with `--base`.
+
+`--workspace` accepts an ID or an exact, unique name; omitted means the active workspace. Duplicate
+names require an ID. Viewer must have a workspace window open. The request pins the selected commit
+and verifies repository identity, branch state, window ownership and folder grants again on review.
+The worktree catalog expires after five minutes; an expired proposal needs a new request.
+
+After renderer and native review, Viewer creates the worktree and a task with checkout, private
+note, terminal and Git changes views. The terminal stays stopped. Choose **Load Git changes** to
+begin review. The CLI does not run tests, a shell, hooks, submodule commands or repository filters.
+Repositories configuring executable Git filters require the human worktree dialog. Raw checkout
+keeps LFS pointers as pointers and leaves submodules uninitialized. Checkout is limited to 20,000
+entries, 64 MiB per file and 512 MiB total; outside links and unsafe paths are rejected.
+
+Successful completion returns a proposal with `taskResult`: `workspaceID`, `taskID`, `path`,
+`branch`, `commit`, `terminal: "stopped"`, `stage: "ready"` and `planeIDs`. The initial result is a
+review request, not a claim that the task exists. `--wait` waits for completion without approving
+it.
+
+If creation fails or is cancelled, `taskResult.stage` can be `worktree-pending` or
+`worktree-created`. Inspect the returned location and branch before retrying; a pending result does
+not establish that Git finished. Viewer keeps created files, notes and branches and performs no
+automatic rollback or cleanup. A JSON wait failure includes the last proposal in `result` and its
+`operationID`. Use the retained worktree with the app's ordinary task tools if arranging the task
+failed.
 
 ## Prepare, review and inspect the result
 
@@ -147,7 +189,8 @@ viewer speech use whisper-tiny --json
 
 The CLI manages weights; microphone capture stays in the person-started app flow. `speech status`
 reports the bundled runtime's availability separately from model installation. The direct macOS app
-supports [local dictation](../guides/speech.md). Hosted transcription remains planned.
+supports [local and hosted dictation](../guides/speech.md). Hosted keys and audio consent are
+configured by the person in Settings; the CLI cannot grant either or submit audio.
 
 Existing verified weights are reused. Downloads have a 20-minute bound and a pinned HTTPS host
 allowlist. Failed, cancelled and interrupted files remain unselected and retained. Interrupted

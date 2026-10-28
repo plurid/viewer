@@ -24,6 +24,7 @@ import {
 import type { TransformPlan } from '../../domain/operations/transforms';
 import { speechSetupSchema, type SpeechSetup } from '../../domain/speech/models';
 import { validName } from '../files/filesystem';
+import type { AgentTaskSetup, AgentTaskResult } from '../../domain/agents/task-workflow';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
@@ -49,7 +50,10 @@ async function folderContents(root: string): Promise<{ items: number; bytes: num
 }
 /** Commands and configuration changes can alter files or later execution; navigation cannot. */
 export const needsNativeConfirmation = (proposal: AgentProposal) =>
-  proposal.kind === 'command' || proposal.kind === 'configuration' || proposal.kind === 'speech';
+  proposal.kind === 'command' ||
+  proposal.kind === 'configuration' ||
+  proposal.kind === 'speech' ||
+  proposal.kind === 'task-workflow';
 /** Effective approvals live outside editable configuration and bind to the exact executor. */
 export class AgentRequests {
   private proposals = new Map<string, AgentProposal & { fingerprint?: string }>();
@@ -82,12 +86,17 @@ export class AgentRequests {
       cancelOperation?(id: string): void;
       operation?(id: string): OperationJob | undefined;
       cancelSpeech?(id: string): void;
+      cancelTaskWorkflow?(id: string): void;
     },
     /** A confirmation the desktop process shows itself. A renderer approval alone
      * never runs a command or configuration change (AGENTS.md). */
     private confirm?: (proposal: AgentProposal) => Promise<boolean>,
     private exportTransform?: (proposal: AgentProposal) => Promise<{ operationID: string }>,
     private setupSpeech?: (setup: SpeechSetup, operationID: string) => Promise<unknown>,
+    private setupTask?: (
+      setup: AgentTaskSetup,
+      progress: (result: AgentTaskResult) => void,
+    ) => Promise<AgentTaskResult>,
   ) {
     this.store = new DocumentStore(path.join(directory, 'execution-approvals-v1.json'), (value) =>
       z
@@ -254,6 +263,24 @@ export class AgentRequests {
             ? 'Import local speech model'
             : 'Download local speech model',
       detail,
+    });
+    return { id: proposal.id, requiresUserReview: true };
+  }
+  taskWorkflow(setup: AgentTaskSetup): { id: string; requiresUserReview: true } {
+    const proposal = this.add({
+      kind: 'task-workflow',
+      taskSetup: structuredClone(setup),
+      title: 'Create task from branch',
+      detail: [
+        `Task: ${setup.name}`,
+        `Workspace: ${setup.workspaceName} (${setup.workspaceID})`,
+        `Repository: ${setup.repo}`,
+        `Worktree: ${setup.destination}`,
+        `Branch: ${setup.branch} (${setup.checkout.kind === 'new' ? 'new' : 'existing'})`,
+        `Revision: ${setup.commit}`,
+        'Create a task area with its checkout, note, stopped terminal and Git changes. Start the terminal and load Git review yourself; repository hooks and filters are not run by this request.',
+        'If setup stops partway, Viewer keeps the worktree and reports its location. No files or branches are removed.',
+      ].join('\n'),
     });
     return { id: proposal.id, requiresUserReview: true };
   }
@@ -437,6 +464,7 @@ export class AgentRequests {
     if (!proposal || proposal.status !== 'review')
       throw new Error('Proposal no longer needs review.');
     if (!approve) {
+      if (proposal.taskSetup) this.authority?.cancelTaskWorkflow?.(proposal.taskSetup.id);
       proposal.status = 'rejected';
       this.emit(proposal);
       return;
@@ -466,7 +494,14 @@ export class AgentRequests {
       const execute = async () => {
         if (this.proposals.get(id)?.status !== 'running')
           throw new Error('This agent task was stopped.');
-        if (proposal.kind === 'speech') {
+        if (proposal.kind === 'task-workflow') {
+          if (!proposal.taskSetup || !this.setupTask)
+            throw new Error('Task creation is unavailable.');
+          proposal.taskResult = await this.setupTask(proposal.taskSetup, (result) => {
+            proposal.taskResult = result;
+            this.emit(proposal);
+          });
+        } else if (proposal.kind === 'speech') {
           if (!proposal.speech || !this.setupSpeech)
             throw new Error('Speech model setup is unavailable.');
           await this.setupSpeech(speechSetupSchema.parse(proposal.speech), proposal.id);
@@ -570,6 +605,7 @@ export class AgentRequests {
     if (!['review', 'running'].includes(proposal.status)) return;
     if (proposal.taskID) this.authority?.cancelExecution(proposal.taskID);
     if (proposal.kind === 'speech') this.authority?.cancelSpeech?.(proposal.id);
+    if (proposal.taskSetup) this.authority?.cancelTaskWorkflow?.(proposal.taskSetup.id);
     if (proposal.operationID) this.authority?.cancelOperation?.(proposal.operationID);
     proposal.status = 'cancelled';
     this.emit(proposal);

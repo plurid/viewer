@@ -123,6 +123,8 @@ import { ShellCommand } from './windows/shell-command';
 import { SpeechModels } from './speech/models';
 import { Speech } from './speech/service';
 import { SpeechRuntime } from './speech/runtime';
+import { SpeechProviders } from './speech/providers';
+import { AgentTaskWorkflows } from './agents/task-workflow';
 import { speechRuntimeName } from './speech/runtime-manifest';
 import { AgentServiceTools } from './agents/service-tools';
 import type { HotkeyStatus } from './windows/hotkey-window';
@@ -217,6 +219,7 @@ export class Desktop {
   readonly modelPermissions: ModelPermissions;
   readonly actions: ActionPlanner;
   readonly agents: AgentBroker;
+  readonly agentTaskWorkflows: AgentTaskWorkflows;
   readonly thumbnails: Thumbnails;
   private appIcons = new AppIcons(nativeAppIcon);
   private diagnosticReports = new Map<number, number[]>();
@@ -782,39 +785,98 @@ export class Desktop {
       () => speechRuntime.status(),
       speechChanged,
     );
-    this.speech = new Speech(dataPath, this.speechModels, speechRuntime, {
-      settings: (owner) => this.windows.get(owner)?.role === 'settings',
-      human: (owner) =>
-        this.windows.has(owner) &&
-        ![...this.agentCommands.values()].some((item) => item.owner === owner),
-      foreground: (owner) => !!this.windows.get(owner)?.window.isFocused(),
-      microphone: () =>
-        process.platform === 'darwin'
-          ? systemPreferences.getMediaAccessStatus('microphone')
-          : 'unknown',
-      requestMicrophone: async () =>
-        process.platform !== 'darwin' || systemPreferences.askForMediaAccess('microphone'),
-      chooseModel: async (owner) => {
-        const window = this.windows.get(owner)?.window;
-        if (!window) throw new Error('The speech settings window closed.');
-        const result = await dialog.showOpenDialog(window, {
-          title: 'Import a verified Whisper model',
-          properties: ['openFile'],
-          filters: [{ name: 'Whisper model', extensions: ['bin'] }],
-          securityScopedBookmarks: this.fileAccess.scoped,
-        });
-        const file = result.filePaths[0];
-        if (result.canceled || !file) return;
-        await this.fileAccess.allowOnce(file, result.bookmarks?.[0]);
-        await this.fileAccess.require([file]);
-        return file;
+    const speechProviders = new SpeechProviders(
+      dataPath,
+      new Credentials(
+        path.join(dataPath, 'speech-private'),
+        (value) => safeStorage.encryptStringAsync(value),
+        async (value) => (await safeStorage.decryptStringAsync(value)).result,
+      ),
+      {
+        changed: speechChanged,
+        invalidated: (id) => this.speech?.invalidateProvider(id),
+        confirm: async (provider) => {
+          const window = [...this.windows.values()].find(
+            (item) =>
+              item.role === 'settings' && !item.window.isDestroyed() && item.window.isFocused(),
+          )?.window;
+          if (!window) throw new Error('Review audio access in the focused Settings window.');
+          return confirmNatively(
+            window,
+            `Allow recordings to ${provider.name}?`,
+            `Recordings up to 60 seconds will be sent to ${provider.endpoint} using ${provider.model}, when you finish recording or release the shortcut. No file names or document contents are attached. Audio access is separate from microphone permission. You can revoke it in Settings → Speech.`,
+            'Allow recordings',
+          );
+        },
       },
-      event: (owner, event) => {
-        const window = this.windows.get(owner)?.window;
-        if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
-          window.webContents.send('viewer:event', { type: 'speech', event });
+    );
+    this.speech = new Speech(
+      dataPath,
+      this.speechModels,
+      speechRuntime,
+      {
+        settings: (owner) => this.windows.get(owner)?.role === 'settings',
+        human: (owner) =>
+          this.windows.has(owner) &&
+          ![...this.agentCommands.values()].some((item) => item.owner === owner),
+        foreground: (owner) => !!this.windows.get(owner)?.window.isFocused(),
+        microphone: () =>
+          process.platform === 'darwin'
+            ? systemPreferences.getMediaAccessStatus('microphone')
+            : 'unknown',
+        requestMicrophone: async () =>
+          process.platform !== 'darwin' || systemPreferences.askForMediaAccess('microphone'),
+        chooseModel: async (owner) => {
+          const window = this.windows.get(owner)?.window;
+          if (!window) throw new Error('The speech settings window closed.');
+          const result = await dialog.showOpenDialog(window, {
+            title: 'Import a verified Whisper model',
+            properties: ['openFile'],
+            filters: [{ name: 'Whisper model', extensions: ['bin'] }],
+            securityScopedBookmarks: this.fileAccess.scoped,
+          });
+          const file = result.filePaths[0];
+          if (result.canceled || !file) return;
+          await this.fileAccess.allowOnce(file, result.bookmarks?.[0]);
+          await this.fileAccess.require([file]);
+          return file;
+        },
+        event: (owner, event) => {
+          const window = this.windows.get(owner)?.window;
+          if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+            window.webContents.send('viewer:event', { type: 'speech', event });
+        },
+        changed: speechChanged,
       },
-      changed: speechChanged,
+      speechProviders,
+    );
+    this.agentTaskWorkflows = new AgentTaskWorkflows({
+      available: () => !process.mas,
+      authorize: (file) => this.agents.authorize(file),
+      workspaceState: () => this.workspaceCatalog,
+      window: (workspaceID) => {
+        const owner = this.workspaceSessions.owner(workspaceID) ?? this.window?.webContents.id;
+        const record = owner === undefined ? undefined : this.windows.get(owner);
+        return record?.role === 'viewer' && !record.window.isDestroyed()
+          ? { id: record.window.webContents.id, originID: record.originID }
+          : undefined;
+      },
+      note: async (directory) => {
+        const result = await this.notes.request({ kind: 'create', format: 'note', directory });
+        if (result.kind !== 'document') throw new Error('The task note could not be created.');
+        return result.document;
+      },
+      flush: async (owner) => {
+        const window = this.windows.get(owner)?.window;
+        if (!window || window.isDestroyed())
+          throw new Error('The selected workspace window closed.');
+        // Save the person's existing drafts before agent dispatch blocks private-note IPC.
+        await this.flushes.request(owner, 'flush', (token) =>
+          window.webContents.send('viewer:event', { type: 'flush', token }),
+        );
+      },
+      present: (bundle, owner) => this.dispatchAgentEvent(owner, { type: 'agent-task', bundle }),
+      profile: () => this.settings.snapshot().settings.terminals.profileID,
     });
     this.agentRequests = new AgentRequests(
       dataPath,
@@ -860,11 +922,16 @@ export class Desktop {
         cancelExecution: (id) => this.executions.cancel(id),
         cancelOperation: (id) => this.operations.cancel(id),
         cancelSpeech: (id) => this.speechModels.cancel(id),
+        cancelTaskWorkflow: (id) => this.agentTaskWorkflows.cancel(id),
         operation: (id) => this.operations.all().find((job) => job.id === id),
       },
       (proposal) =>
         confirmAgentProposal(
-          proposal.target ? this.windowForWorkspace(proposal.target.workspaceID) : this.window,
+          proposal.taskSetup
+            ? this.windowForWorkspace(proposal.taskSetup.workspaceID)
+            : proposal.target
+              ? this.windowForWorkspace(proposal.target.workspaceID)
+              : this.window,
           proposal,
         ),
       async (proposal) => ({
@@ -881,6 +948,7 @@ export class Desktop {
         }),
       }),
       (setup, operationID) => this.speechModels.request(setup, operationID),
+      (setup, progress) => this.agentTaskWorkflows.execute(setup, progress),
     );
     this.agentSessions = new AgentSessions(dataPath, (id) => emit({ type: 'agent-session', id }));
     this.agents = new AgentBroker(
@@ -895,6 +963,7 @@ export class Desktop {
         config: this.settings,
         access,
         workspaceState: async () => this.workspaceCatalog,
+        authorizeTask: (setup) => this.agentTaskWorkflows.authorize(setup),
         // nothing is requested while config.jsonc and its last valid copy cannot be read
         agentAccess: new AgentAccess(dataPath, () => {
           const snapshot = this.settings.snapshot();
@@ -908,6 +977,7 @@ export class Desktop {
           workflows: this.workflows,
           speech: this.speechModels,
           proposals: this.agentRequests,
+          tasks: this.agentTaskWorkflows,
           settings: () => this.settings.snapshot().settings,
           generate: (...args) => this.providers.generate(...args),
         }),
@@ -1234,6 +1304,7 @@ export class Desktop {
       this.chats.retain(sender, new Set());
       this.gitActions.stopOwner(sender);
       this.worktrees.stopOwner(sender);
+      this.agentTaskWorkflows.stopOwner(sender);
       this.gitReviews.stopOwner(sender);
       this.terminals.stopOwner(sender);
       this.executions.stopOwner(sender);
@@ -1371,6 +1442,7 @@ export class Desktop {
     await this.gitReviews.close();
     this.git.close();
     this.worktrees.close();
+    this.agentTaskWorkflows.close();
     this.ready = false;
     this.trash.close();
     if (process.platform === 'darwin') macFiles().dismissFilePanels();
@@ -1474,6 +1546,25 @@ export class Desktop {
       throw new Error('The originating window closed. Request a new proposal.');
     if (!window || window.isDestroyed())
       throw new Error('Open the workspace before running this action.');
+    const action = this.settings
+      .snapshot()
+      .settings.customActions.find((item) => 'custom.' + item.id === command);
+    await this.dispatchAgentEvent(window.webContents.id, {
+      type: 'agent-command',
+      command,
+      target,
+      navigation,
+      ...(action ? { executor: action.executor } : {}),
+    });
+  }
+  private async dispatchAgentEvent(
+    owner: number,
+    payload:
+      | Omit<Extract<DesktopEvent, { type: 'agent-command' }>, 'id' | 'deadline'>
+      | Omit<Extract<DesktopEvent, { type: 'agent-task' }>, 'id' | 'deadline'>,
+  ): Promise<void> {
+    const window = this.windows.get(owner)?.window;
+    if (!window || window.isDestroyed()) throw new Error('The workspace window closed.');
     await new Promise<void>((resolve, reject) => {
       const id = randomUUID();
       const timer = setTimeout(() => {
@@ -1488,7 +1579,7 @@ export class Desktop {
       timer.unref();
       this.agentCommands.set(id, {
         owner: window.webContents.id,
-        command,
+        command: payload.type === 'agent-command' ? payload.command : 'task-workflow',
         finish: (error) => {
           clearTimeout(timer);
           this.agentCommands.delete(id);
@@ -1496,18 +1587,11 @@ export class Desktop {
           else resolve();
         },
       });
-      const action = this.settings
-        .snapshot()
-        .settings.customActions.find((item) => 'custom.' + item.id === command);
       window.webContents.send('viewer:event', {
-        type: 'agent-command',
+        ...payload,
         id,
-        command,
-        target,
-        navigation,
         // a second short of the wait below, so the window never starts what was reported failed
         deadline: Date.now() + 24000,
-        ...(action ? { executor: action.executor } : {}),
       });
     });
   }
@@ -1922,6 +2006,7 @@ export class Desktop {
             this.executions.quiesce(root),
             this.gitActions.quiesce(root),
             this.worktrees.quiesce(root),
+            this.agentTaskWorkflows.quiesce(),
             this.gitReviews.quiesce(root),
             this.terminals.quiesce(root),
             this.externalTerminals.quiesce(),
@@ -1973,6 +2058,7 @@ export class Desktop {
             await this.executions.quiesce(root);
             await this.gitActions.quiesce(root);
             await this.worktrees.quiesce(root);
+            await this.agentTaskWorkflows.quiesce();
             await this.gitReviews.quiesce(root);
             await this.terminals.quiesce(root);
             await this.externalTerminals.quiesce();

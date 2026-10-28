@@ -16,6 +16,7 @@ import type { SpeechModels } from './models';
 import type { SpeechRuntime } from './runtime';
 import { DocumentStore } from '../persistence/document-store';
 import { errorMessage } from '../../domain/errors';
+import type { SpeechProviders, SpeechProviderLease } from './providers';
 
 interface Session {
   id: string;
@@ -23,7 +24,10 @@ interface Session {
   state: 'requesting' | 'listening' | 'transcribing';
   controller: AbortController;
   preferences: SpeechPreferences;
-  selected?: Awaited<ReturnType<SpeechModels['selectedFile']>>;
+  hostedProviderID?: string;
+  target?:
+    | { kind: 'local'; selected: Awaited<ReturnType<SpeechModels['selectedFile']>> }
+    | { kind: 'hosted'; lease: SpeechProviderLease };
   timer: ReturnType<typeof setTimeout>;
 }
 interface Ports {
@@ -54,6 +58,7 @@ export class Speech {
     >,
     private runtime: Pick<SpeechRuntime, 'status' | 'transcribe'>,
     private ports: Ports,
+    private hosted?: SpeechProviders,
   ) {
     this.store = new DocumentStore(path.join(directory, 'speech-preferences-v1.json'), (value) =>
       speechPreferencesSchema.parse(value),
@@ -76,6 +81,7 @@ export class Speech {
       models: await this.models.status(),
       preferences: await this.prefs(),
       microphone: this.ports.microphone(),
+      ...(this.hosted ? { hosted: await this.hosted.status() } : {}),
       setup: [...this.setup.values()]
         .filter((item) => item.owner === owner)
         .map((item) => item.task),
@@ -86,6 +92,17 @@ export class Speech {
       throw new Error('Speech input is available only to the person in a trusted Viewer window.');
     const request = speechRequestSchema.parse(raw);
     if (request.kind === 'status') return this.status(owner);
+    if (
+      request.kind === 'provider-save' ||
+      request.kind === 'provider-remove' ||
+      request.kind === 'provider-key' ||
+      request.kind === 'provider-consent'
+    ) {
+      this.settings(owner);
+      if (!this.hosted) throw new Error('Hosted speech is unavailable in this build.');
+      await this.hosted.request(request);
+      return this.status(owner);
+    }
     if (request.kind === 'preferences') {
       this.settings(owner);
       await this.store.save(request.preferences);
@@ -145,6 +162,7 @@ export class Speech {
       return null;
     }
     if (request.kind === 'begin') return this.begin(owner, request.id);
+    if (request.kind !== 'transcribe') throw new Error('Unknown speech request.');
     const session = this.session;
     if (
       !session ||
@@ -159,17 +177,25 @@ export class Speech {
     this.ports.event(owner, { id: session.id, state: 'transcribing' });
     this.work = (async () => {
       try {
-        const selected = session.selected;
-        if (!selected) throw new Error('The speech model is no longer available.');
-        const result = await this.runtime.transcribe(
-          selected.file,
-          selected.model,
-          request.pcm,
-          session.preferences.language,
-          session.controller.signal,
-        );
+        const target = session.target;
+        if (!target) throw new Error('The speech model is no longer available.');
+        const result =
+          target.kind === 'hosted'
+            ? await this.hosted!.transcribe(
+                target.lease,
+                request.pcm,
+                session.preferences.language,
+                session.controller.signal,
+              )
+            : await this.runtime.transcribe(
+                target.selected.file,
+                target.selected.model,
+                request.pcm,
+                session.preferences.language,
+                session.controller.signal,
+              );
         session.controller.signal.throwIfAborted();
-        await this.models.validateSelection(selected.recordID);
+        if (target.kind === 'local') await this.models.validateSelection(target.selected.recordID);
         session.controller.signal.throwIfAborted();
         this.ports.event(owner, { id: session.id, state: 'completed' });
         return result;
@@ -203,11 +229,23 @@ export class Speech {
     };
     this.session = session;
     try {
-      const status = await this.runtime.status();
-      controller.signal.throwIfAborted();
-      if (!status.recognitionAvailable) throw new Error(status.reason);
-      session.selected = await this.models.selectedFile();
       session.preferences = await this.prefs();
+      if (session.preferences.backend === 'hosted') {
+        if (!this.hosted) throw new Error('Hosted speech is unavailable in this build.');
+        session.hostedProviderID = session.preferences.providerID;
+        session.target = {
+          kind: 'hosted',
+          lease: await this.hosted.prepare(
+            session.preferences.providerID,
+            session.preferences.language,
+          ),
+        };
+      } else {
+        const status = await this.runtime.status();
+        controller.signal.throwIfAborted();
+        if (!status.recognitionAvailable) throw new Error(status.reason);
+        session.target = { kind: 'local', selected: await this.models.selectedFile() };
+      }
       controller.signal.throwIfAborted();
       if (this.closed || !this.ports.human(owner))
         throw new Error('Speech capture is no longer available.');
@@ -224,7 +262,21 @@ export class Speech {
         throw new Error('The recording was cancelled.');
       session.state = 'listening';
       this.ports.event(owner, { id, state: 'listening' });
-      return { id, preferences: session.preferences };
+      const target = session.target;
+      return {
+        id,
+        preferences: session.preferences,
+        processing:
+          target.kind === 'hosted'
+            ? {
+                kind: 'hosted',
+                providerID: target.lease.provider.id,
+                providerName: target.lease.provider.name,
+                endpoint: target.lease.provider.endpoint,
+                model: target.lease.provider.model,
+              }
+            : { kind: 'local' },
+      };
     } catch (error) {
       clearTimeout(session.timer);
       if (this.session === session) this.session = undefined;
@@ -241,6 +293,9 @@ export class Speech {
   }
   stopRecording(owner: number): void {
     this.cancelSession(owner);
+  }
+  invalidateProvider(id: string): void {
+    if (this.session?.hostedProviderID === id) this.cancelSession(this.session.owner);
   }
   private cancelSession(owner: number): void {
     const session = this.session;
@@ -266,5 +321,6 @@ export class Speech {
     await Promise.allSettled([...this.setup.values()].map((item) => item.work));
     await this.work?.catch(() => {});
     await this.store.flush();
+    await this.hosted?.close();
   }
 }

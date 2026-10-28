@@ -12,6 +12,11 @@ and private command history.
 The overview shows the observed checkout and branch/commit. Refresh checkout updates that
 observation. An ordinary non-Git folder can also anchor a task.
 
+From a terminal, `viewer task create NAME --branch BRANCH --path DIR` proposes the complete worktree
+and task setup. Choose a workspace with `--workspace ID_OR_NAME`; `--repo` and `--base` select its
+repository and local starting branch. The terminal restores stopped, and the Git view waits for
+**Load Git changes**. See [CLI task parameters and recovery](cli.md#create-a-task-from-a-branch).
+
 Add a checklist, note, conversation, browser or server view, or attach a supported open plane.
 **Arrange open tools** tiles the available views. Closing a tool view keeps its task reference;
 closing a note view keeps its saved document. Removing a saved note/checklist uses its separate Move

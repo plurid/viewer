@@ -425,10 +425,17 @@ applicable actions. Language and Microphone use shared searchable choice control
 their labels at narrow widths. Keep a missing saved microphone visible as unavailable rather than
 silently selecting another device.
 
+**The Hosted Speech Access Rule.** Keep the saved provider, full model ID and wrapping endpoint
+visible with ordinary setup actions. Use shared searchable choices and labeled fields; mask
+credentials. Give Audio access its own status and explicit allow/revoke action for the saved
+endpoint and model, separate from microphone and chat permissions. Keep setup and access actions
+reachable through scrolling.
+
 **The Dictation State Rule.** Name the captured destination first in the shared Dictate dialog.
-Distinguish preparing, listening, local transcription, editable review and failure. Keep microphone
-level and elapsed time with capture status, errors and settings recovery in normal flow, and Cancel
-plus the current action reachable around scrolling content.
+Distinguish preparing, listening, local transcription, hosted transcription, editable review and
+failure. Name the hosted provider, endpoint and model with the audio-transfer disclosure. Keep
+microphone level and elapsed time with capture status, errors and settings recovery in normal flow,
+and Cancel plus the current action reachable around scrolling content.
 
 **The Transcript Field Rule.** Treat the transcript as ordinary interface text: inherit the app
 font, field, ink, line, control radius and accent caret roles. Focus the editable transcript for
@@ -437,6 +444,13 @@ review and keep its vertical resizing and scrolling within the dialog.
 **The Captured Dictation Rule.** Cancel capture when the destination identity changes or becomes
 unavailable. Require an explicit insertion action after transcript review; inserting text does not
 send a message or run a command.
+
+### Task creation review
+
+**The Task Creation Review Rule.** Keep repository, worktree destination, workspace name/identity,
+branch mode and pinned revision readable in wrapping detail. Use Create task for the affirmative
+action in both shared and native review. Keep Reject/Cancel and the affirmative action reachable
+around scrolling scope. Keep terminal startup and loading Git review explicit.
 
 ## Maintaining this document
 

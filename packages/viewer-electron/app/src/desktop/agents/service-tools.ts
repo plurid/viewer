@@ -14,6 +14,8 @@ import type { Workflows } from '../automation/workflows';
 import type { SpeechModels } from '../speech/models';
 import type { AgentRequests } from './agent-requests';
 import { answerPrompt } from '../models/prompts';
+import { taskWorkflowInputSchema, selectAgentWorkspace } from '../../domain/agents/task-workflow';
+import type { AgentTaskWorkflows } from './task-workflow';
 
 export interface AgentServiceContext {
   clientID: string;
@@ -28,7 +30,8 @@ interface Dependencies {
   git: Pick<GitReader, 'root' | 'status' | 'diff'>;
   workflows: Pick<Workflows, 'request'>;
   speech: Pick<SpeechModels, 'status' | 'describe'>;
-  proposals: Pick<AgentRequests, 'speech'>;
+  proposals: Pick<AgentRequests, 'speech'> & Partial<Pick<AgentRequests, 'taskWorkflow'>>;
+  tasks?: Pick<AgentTaskWorkflows, 'prepare' | 'authorize'>;
   settings(): ApplicationSettings;
   generate: Parameters<typeof answerPrompt>[2];
 }
@@ -78,6 +81,22 @@ export class AgentServiceTools {
     context.signal.throwIfAborted();
     if (name === 'git_status' || name === 'git_diff') return this.readGit(name, args, context);
     if (name === 'list_task_areas') return this.taskAreas(args, context);
+    if (name === 'propose_task_create') {
+      if (!this.ports.tasks || !this.ports.proposals.taskWorkflow)
+        throw new Error('Task creation is unavailable.');
+      const setup = await this.ports.tasks.prepare(taskWorkflowInputSchema.parse(args), context);
+      context.signal.throwIfAborted();
+      const result = this.ports.proposals.taskWorkflow(setup);
+      context.own(result.id);
+      return {
+        ...result,
+        workspaceID: setup.workspaceID,
+        taskID: setup.id,
+        path: setup.destination,
+        branch: setup.branch,
+        commit: setup.commit,
+      };
+    }
     if (name === 'speech_models' || name === 'speech_status') return this.speechStatus(args);
     if (['propose_speech_install', 'propose_speech_import', 'propose_speech_use'].includes(name))
       return this.proposeSpeech(name, args, context);
@@ -112,9 +131,16 @@ export class AgentServiceTools {
     return result;
   }
   private async taskAreas(args: Record<string, unknown>, context: AgentServiceContext) {
-    empty.parse(args);
+    const input = z
+      .object({ workspace: z.string().trim().min(1).max(200).optional() })
+      .strict()
+      .parse(args);
+    const state = await context.workspaceState();
+    const workspaces = input.workspace
+      ? [selectAgentWorkspace(state, input.workspace)]
+      : (state?.workspaces ?? []);
     const result = [];
-    for (const workspace of (await context.workspaceState())?.workspaces ?? [])
+    for (const workspace of workspaces)
       for (const task of workspace.tasks ?? []) {
         try {
           await context.authorize(task.path);

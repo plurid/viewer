@@ -114,8 +114,11 @@ export const cliCommands: readonly CLICommand[] = [
   },
   {
     name: ['workspace', 'switch'],
-    description: 'Review switching to an existing workspace by exact name.',
-    arguments: [{ name: 'name', description: 'Exact, unique workspace name.' }],
+    description: 'Review switching to an existing workspace by exact name or --id.',
+    arguments: [{ name: 'name', description: 'Exact, unique workspace name.', optional: true }],
+    options: [
+      { name: 'id', description: 'Stable workspace ID instead of a name.', kind: 'string' },
+    ],
     tool: 'propose_workspace_switch',
     poll: 'get_proposal',
   },
@@ -355,13 +358,52 @@ export const cliCommands: readonly CLICommand[] = [
   {
     name: ['task', 'list'],
     description: 'List task areas within granted checkouts.',
+    options: [
+      { name: 'workspace', description: 'Workspace ID or exact, unique name.', kind: 'string' },
+    ],
     tool: 'list_task_areas',
   },
   {
     name: ['task', 'create'],
-    description: 'Open branch-to-task setup for explicit review and parameters.',
-    tool: 'propose_command',
-    fixed: { commandID: 'new-task-from-branch' },
+    description:
+      'Review creating a branch, worktree and arranged task area. Its terminal stays stopped.',
+    arguments: [{ name: 'name', description: 'Task name, quoted as one shell argument.' }],
+    options: [
+      {
+        name: 'repo',
+        description: 'Repository folder; defaults to the working directory.',
+        kind: 'path',
+        default: '.',
+      },
+      {
+        name: 'branch',
+        description: 'New branch name, or local branch with --existing.',
+        kind: 'string',
+        required: true,
+      },
+      {
+        name: 'path',
+        description: 'New worktree folder in an existing parent.',
+        kind: 'path',
+        required: true,
+      },
+      {
+        name: 'base',
+        description: 'HEAD or an existing local base branch; defaults to HEAD.',
+        kind: 'string',
+      },
+      {
+        name: 'existing',
+        description: 'Use the named local branch instead of creating it.',
+        kind: 'boolean',
+      },
+      {
+        name: 'workspace',
+        description: 'Workspace ID or exact unique name; defaults to active.',
+        kind: 'string',
+      },
+    ],
+    tool: 'propose_task_create',
     poll: 'get_proposal',
   },
   {

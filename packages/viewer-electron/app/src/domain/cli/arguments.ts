@@ -184,6 +184,20 @@ export function parseCLI(
   }
   if (command.name[0] === 'git' && !result.parameters.path)
     result.parameters.path = resolvePath('.');
+  if (
+    command.name.join(' ') === 'task create' &&
+    result.parameters.existing &&
+    result.parameters.base
+  )
+    throw new CLIUsageError('Choose --existing or --base, not both.');
+  if (command.name.join(' ') === 'workspace switch') {
+    const { name, id } = result.parameters;
+    if (!!name === !!id) throw new CLIUsageError('Provide a workspace name or --id, not both.');
+    if (id) {
+      result.parameters.workspaceID = id;
+      delete result.parameters.id;
+    }
+  }
   return result;
 }
 function parseJSONParameter(invocation: CLIInvocation, key: string): void {

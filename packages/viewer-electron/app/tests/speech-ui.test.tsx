@@ -6,6 +6,8 @@ import type { DesktopEvent } from '../src/domain/contracts';
 import { DictationButton } from '../src/renderer/speech/DictationButton';
 import { DictationDialog } from '../src/renderer/speech/DictationDialog';
 import { SpeechSettings } from '../src/renderer/speech/SpeechSettings';
+import { HostedSpeechSettings } from '../src/renderer/speech/HostedSpeechSettings';
+import { newSpeechProvider, speechProviderSchema } from '../src/domain/speech/providers';
 
 const audio = vi.hoisted(() => ({ capture: vi.fn(), finish: vi.fn(), cancel: vi.fn() }));
 vi.mock('../src/renderer/speech/capture', () => ({ captureAudio: audio.capture }));
@@ -86,6 +88,92 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+it('keeps failed provider setup editable, saves only configuration fields and never reuses a key for another provider', async () => {
+  const provider = {
+    ...newSpeechProvider('openai', crypto.randomUUID()),
+    hasKey: true,
+    allowed: true,
+  };
+  const other = {
+    ...newSpeechProvider('deepgram', crypto.randomUUID()),
+    hasKey: false,
+    allowed: false,
+  };
+  const send = vi.fn<(request: SpeechRequest) => Promise<boolean>>(async () => false),
+    select = vi.fn();
+  const props = {
+    snapshot: { providers: [provider, other] },
+    selectedID: provider.id,
+    busy: false,
+    select,
+    request: send,
+  };
+  const view = render(<HostedSpeechSettings {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Edit provider' }));
+  fireEvent.change(screen.getByLabelText('Speech provider model'), {
+    target: { value: 'edited-model' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
+  await waitFor(() => expect(send).toHaveBeenCalledOnce());
+  expect(screen.getByRole('form', { name: 'Speech provider setup' })).toBeTruthy();
+  const first = send.mock.calls[0]!;
+  expect(first[0].kind).toBe('provider-save');
+  if (first[0].kind === 'provider-save')
+    expect(speechProviderSchema.safeParse(first[0].provider).success).toBe(true);
+  send.mockResolvedValue(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
+  await waitFor(() => expect(select).toHaveBeenCalledWith(provider.id));
+  fireEvent.change(screen.getByLabelText('Speech provider API key'), {
+    target: { value: 'GENERATED_SECRET' },
+  });
+  view.rerender(<HostedSpeechSettings {...props} selectedID={other.id} />);
+  expect(screen.getByLabelText('Speech provider API key')).toHaveProperty('value', '');
+  expect(screen.getByRole('button', { name: 'Save key' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Allow recordings…' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+});
+it('names the hosted processor and keeps its transcript editable before insertion', async () => {
+  const use = vi.fn();
+  request.mockImplementation(async (value) =>
+    value.kind === 'begin'
+      ? {
+          id: value.id,
+          preferences: {
+            ...status.preferences,
+            backend: 'hosted',
+            providerID: crypto.randomUUID(),
+          },
+          processing: {
+            kind: 'hosted',
+            providerID: crypto.randomUUID(),
+            providerName: 'Generated speech service',
+            endpoint: 'https://speech.example.test/v1',
+            model: 'test-model',
+          },
+        }
+      : value.kind === 'transcribe'
+        ? {
+            text: 'Generated words',
+            language: 'en',
+            seconds: 1,
+            milliseconds: 10,
+            model: 'test-model',
+          }
+        : null,
+  );
+  render(<DictationDialog destination="Note draft" onClose={() => {}} onUse={use} />);
+  await screen.findByRole('button', { name: 'Finish and transcribe' });
+  expect(screen.getByText(/speech.example.test/).textContent).toContain('test-model');
+  expect(screen.queryByText(/stays on this device/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Finish and transcribe' }));
+  const transcript = await screen.findByRole('textbox', { name: 'Transcript' });
+  expect(use).not.toHaveBeenCalled();
+  fireEvent.change(transcript, { target: { value: 'Edited words' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Insert text' }));
+  expect(use).toHaveBeenCalledWith('Edited words');
 });
 it('reviews editable words and inserts only after the person chooses Insert text', async () => {
   const use = vi.fn(),

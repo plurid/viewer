@@ -12,15 +12,17 @@ import { activeWorkspace, changeWorkspace, getState } from '../state/store';
 import { folderPane } from '../state/panes';
 import { setTiling } from '../state/workspaces';
 import { applyTiling } from '../workspace/tiling';
-import { allowTerminalStart } from '../terminals/sessions';
+import { allowTerminalStart, deferTerminalStart } from '../terminals/sessions';
 import { localServerSessions } from '../local-servers/runtime';
 import type { WorkspaceController } from '../workspace/context';
 import { browserAddress } from '../../domain/previews/browser';
 import { attachTaskPlane, attachTaskReference, changeTaskArea } from './state';
+import { initializeTaskNote } from '../notes/sessions';
 
 type Methods = Pick<
   WorkspaceController,
   | 'newTaskArea'
+  | 'installTaskArea'
   | 'setupTaskArea'
   | 'openTaskArea'
   | 'openTaskMember'
@@ -35,6 +37,7 @@ type TaskContent = Extract<Pane, { type: TaskReference['kind'] | 'task' }>;
 export function taskController(ports: {
   controller(): WorkspaceController;
   register(pane: TaskContent, parentID?: string): void;
+  waitFor(paneIDs: readonly string[], workspaceID: string): Promise<void>;
   engine: RefObject<PluridApplicationHandle | null>;
   surface: RefObject<HTMLDivElement | null>;
 }): Methods {
@@ -81,6 +84,52 @@ export function taskController(ports: {
     return { path: source.path, identity: source.identity, observed: Date.now() };
   };
   const methods: Methods = {
+    async installTaskArea(bundle) {
+      check(bundle.workspaceID);
+      const space = activeWorkspace();
+      const existing = space.taskAreas?.find((area) => area.id === bundle.area.id);
+      if (existing && existing.checkout.identity !== bundle.area.checkout.identity)
+        throw new Error('A different task already uses this ID.');
+      const note = bundle.panes.find((pane) => pane.type === 'note');
+      if (
+        !note ||
+        note.documentID !== bundle.note.id ||
+        bundle.note.directory !== bundle.area.checkout.path
+      )
+        throw new Error('The task note does not match its checkout.');
+      initializeTaskNote(note.id, bundle.note);
+      if (!existing) {
+        if ((space.taskAreas?.length ?? 0) >= 50)
+          throw new Error('A workspace supports up to 50 task areas.');
+        changeWorkspace((space) => ({
+          ...space,
+          taskAreas: [...(space.taskAreas ?? []), bundle.area],
+        }));
+      }
+      // Restored and agent-created terminals never acquire a start capability.
+      deferTerminalStart(
+        bundle.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
+      );
+      const overview = bundle.panes.find((pane) => pane.type === 'task');
+      if (!overview) throw new Error('The task overview is missing.');
+      if (!activeWorkspace().panes.some((pane) => pane.id === overview.id))
+        ports.register(overview);
+      // Root views mount on a later frame. Linking children before that frame
+      // makes the canvas reject a parent that exists in saved state only.
+      await ports.waitFor([overview.id], bundle.workspaceID);
+      check(bundle.workspaceID);
+      for (const pane of bundle.panes.filter((pane) => pane.type !== 'task')) {
+        if (!activeWorkspace().panes.some((existing) => existing.id === pane.id))
+          ports.register(pane, overview.id);
+      }
+      await ports.waitFor(
+        bundle.panes.map((pane) => pane.id),
+        bundle.workspaceID,
+      );
+      check(bundle.workspaceID);
+      methods.arrangeTaskArea(bundle.area.id);
+      methods.openTaskArea(bundle.area.id);
+    },
     async setupTaskArea(id) {
       const owner = activeWorkspace().id;
       // Retry reopens the same durable references rather than creating another

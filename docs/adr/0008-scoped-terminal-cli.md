@@ -28,3 +28,17 @@ cleanup requires its own exact-scope Trash review.
 There is no CLI auto-approval switch or alternate shell route. File removals keep the desktop
 service's fresh exact-scope approval and OS Trash policy. The CLI reports a pending review as a
 pending review, rather than claiming the requested work completed.
+
+Parameterized task creation uses a typed proposal and a private Git catalog lease. The desktop binds
+the workspace window, source identity, commit, branch and destination. It reuses worktree
+validation, creates the note privately, and sends a typed bundle to the workspace controller. The
+controller waits for the overview and linked tools to mount, then persists the task before
+acknowledging it. Completion is distinct from opening a form; partial results identify retained
+output without claiming a successful task. Existing drafts flush before dispatch. The handoff
+initializes only its newly created blank note; it does not open a private-note read route for the
+requesting client or overwrite a person's edits.
+
+Agent checkout materializes bounded raw blobs through one backpressured Git process, with hooks,
+filters, lazy fetch and network transports disabled. Repositories with executable filters use the
+human dialog because automatic folder status may invoke clean filters. Shells and Git review views
+start on a person's explicit action. Cancellation never removes a checkout or branch.

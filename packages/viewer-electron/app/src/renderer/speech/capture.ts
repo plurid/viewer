@@ -3,7 +3,7 @@ import { readMicrophones } from './devices';
 import { pcmEnergy, speechMaximumBytes, speechSampleRate } from '../../domain/speech/recognition';
 
 export interface AudioCapture {
-  finish(): Promise<Uint8Array>;
+  finish(): Promise<Uint8Array<ArrayBuffer>>;
   cancel(): void;
 }
 interface CaptureOptions {

@@ -7,7 +7,7 @@ Start with everyday files. Follow the path as far as your work needs.
 | [Your first five minutes](getting-started.md) | Open a folder, look inside a file and find your way back.      |
 | [Browse and organize](files.md)               | Search, sort, group, rename and move files.                    |
 | [Read and inspect](previews.md)               | Preview documents, images, models and data.                    |
-| [Dictate requests and text](speech.md)        | Set up local speech, speak and review your words.              |
+| [Dictate requests and text](speech.md)        | Choose local or hosted speech, then review your words.         |
 | [Create and edit](create.md)                  | Make quick changes and export a new file.                      |
 | [Build a workspace](workspaces.md)            | Keep related folders and tools together in planes.             |
 | [Develop a project](develop.md)               | Work with branches, tasks, an editor, terminals and a browser. |

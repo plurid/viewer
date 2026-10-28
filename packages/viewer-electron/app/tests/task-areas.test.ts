@@ -24,6 +24,9 @@ import {
 import { addContentPane } from '../src/renderer/state/panes';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { temporaryRoot } from '../tools/temporary';
+import { terminalStartDeferred } from '../src/renderer/terminals/sessions';
+import type { AgentTaskBundle } from '../src/domain/agents/task-workflow';
+import { loadNote, noteSession } from '../src/renderer/notes/sessions';
 afterEach(async () => {
   await flushState(false);
   vi.unstubAllGlobals();
@@ -99,14 +102,128 @@ function fixture() {
     focusPane: focus,
     rootID: () => source.id,
   } as unknown as WorkspaceController;
+  const register = vi.fn((pane: Parameters<typeof addContentPane>[0], _parentID?: string) =>
+    addContentPane(pane),
+  );
+  const waitFor = vi.fn(async (_ids: readonly string[], _workspaceID: string) => {});
   const methods = taskController({
     controller: () => ({ ...controller, ...methods }),
-    register: (pane) => addContentPane(pane),
+    register,
+    waitFor,
     engine: { current: null },
     surface: { current: null },
   });
-  return { api, source, target, methods, documents };
+  return { api, source, target, methods, documents, register, waitFor };
 }
+it('installs an approved CLI task after canvas mounts, without starting a terminal or reading private notes', async () => {
+  const f = fixture(),
+    areaID = randomUUID(),
+    noteID = randomUUID(),
+    terminalID = randomUUID(),
+    folderID = randomUUID(),
+    overviewID = randomUUID(),
+    noteView = randomUUID(),
+    gitID = randomUUID();
+  if (f.source.type !== 'folder') throw new Error('Generated folder missing');
+  const checkout = {
+    path: '/projects/checkout/feature',
+    identity: '1:7',
+    branch: 'feature/cli',
+    commit: 'a'.repeat(40),
+    observed: 1,
+  };
+  const bundle: AgentTaskBundle = {
+    workspaceID: activeWorkspace().id,
+    note: {
+      id: noteID,
+      directory: checkout.path,
+      kind: 'note',
+      title: 'Task note',
+      text: '',
+      revision: 0,
+      updated: 1,
+    },
+    area: {
+      id: areaID,
+      name: 'CLI task',
+      checkout,
+      members: [
+        {
+          id: randomUUID(),
+          title: 'Checkout',
+          reference: { kind: 'folder', path: checkout.path },
+          views: [folderID],
+        },
+        {
+          id: randomUUID(),
+          title: 'Note',
+          reference: { kind: 'note', path: checkout.path, documentID: noteID },
+          views: [noteView],
+        },
+        {
+          id: randomUUID(),
+          title: 'Terminal',
+          reference: {
+            kind: 'terminal',
+            path: checkout.path,
+            profileID: 'default',
+            sessionID: 'session',
+          },
+          views: [terminalID],
+        },
+        {
+          id: randomUUID(),
+          title: 'Git changes',
+          reference: { kind: 'git-changes', path: checkout.path },
+          views: [gitID],
+        },
+      ],
+      created: 1,
+      updated: 1,
+    },
+    panes: [
+      { id: overviewID, type: 'task', path: checkout.path, areaID, title: 'CLI task' },
+      { ...f.source, id: folderID, path: checkout.path },
+      { id: noteView, type: 'note', path: checkout.path, documentID: noteID, title: 'Task note' },
+      {
+        id: terminalID,
+        type: 'terminal',
+        path: checkout.path,
+        profileID: 'default',
+        taskSessionID: 'session',
+      },
+      { id: gitID, type: 'git-changes', path: checkout.path, activation: 'manual' },
+    ],
+  };
+  let overviewMounted = false;
+  f.register.mockImplementation((pane, parentID) => {
+    if (parentID && !overviewMounted) throw new Error('The canvas parent has not mounted');
+    return addContentPane(pane);
+  });
+  f.waitFor.mockImplementation(async () => {
+    await Promise.resolve();
+    overviewMounted = true;
+  });
+  await f.methods.installTaskArea(bundle);
+  await f.methods.installTaskArea(bundle);
+  expect(f.waitFor).toHaveBeenNthCalledWith(1, [overviewID], bundle.workspaceID);
+  expect(f.waitFor).toHaveBeenNthCalledWith(
+    2,
+    bundle.panes.map((pane) => pane.id),
+    bundle.workspaceID,
+  );
+  await loadNote(noteView, noteID);
+  expect(noteSession(noteView)?.text).toBe('');
+  expect(activeWorkspace().taskAreas).toHaveLength(1);
+  expect(
+    activeWorkspace().panes.filter((pane) => bundle.panes.some((item) => item.id === pane.id)),
+  ).toHaveLength(5);
+  expect(terminalStartDeferred(terminalID)).toBe(true);
+  expect(f.api.notes).not.toHaveBeenCalled();
+  expect(f.api.terminalStart).not.toHaveBeenCalled();
+  await flushState();
+  expect(f.api.save).toHaveBeenCalled();
+});
 it('keeps a named area and document reference after closing its views, then reopens a fresh view of the same document', async () => {
   const f = fixture(),
     id = await f.methods.newTaskArea(f.target, 'Implement feature');

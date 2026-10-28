@@ -119,7 +119,12 @@ export class GitWorktrees {
     };
   }
 
-  async request(request: WorktreeRequest, owner: number): Promise<WorktreeReply> {
+  async request(
+    request: WorktreeRequest,
+    owner: number,
+    signal?: AbortSignal,
+  ): Promise<WorktreeReply> {
+    signal?.throwIfAborted();
     const ownerID = this.owner(owner);
     if (request.kind === 'release') {
       if (this.catalogs.get(request.catalogID)?.owner === ownerID)
@@ -137,7 +142,7 @@ export class GitWorktrees {
         }
         return { kind: 'catalog', catalog };
       }
-      if (request.kind === 'create') return await this.create(request, owner, ownerID);
+      if (request.kind === 'create') return await this.create(request, owner, ownerID, signal);
       const { lease, registered, current } = await this.resolve(
         request.catalogID,
         request.worktreeID,
@@ -271,6 +276,7 @@ export class GitWorktrees {
     request: WorktreeCreation,
     owner: number,
     ownerID: string,
+    signal?: AbortSignal,
   ): Promise<WorktreeReply> {
     const lease = this.catalogs.get(request.catalogID);
     if (
@@ -338,6 +344,9 @@ export class GitWorktrees {
       repository: lease.repository,
       done: undefined as Promise<unknown> | undefined,
     };
+    const cancel = () => abort.abort(signal?.reason);
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
     this.writes.set(abort, write);
     const work = (async () => {
       let started = false;
@@ -395,6 +404,7 @@ export class GitWorktrees {
     try {
       return await work;
     } finally {
+      signal?.removeEventListener('abort', cancel);
       this.writes.delete(abort);
     }
   }

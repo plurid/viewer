@@ -13,6 +13,7 @@ import { ChoiceButton } from '../ui/ChoiceMenu';
 import { defaultShortcuts } from '../../domain/preferences/shortcuts';
 import { useMicrophones } from './devices';
 import './speech.css';
+import { HostedSpeechSettings } from './HostedSpeechSettings';
 
 const descriptions: Record<string, string> = {
   'whisper-tiny':
@@ -56,15 +57,20 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
     try {
       await window.viewer.speech(request);
       await refresh();
+      return true;
     } catch (error) {
       setError(errorMessage(error));
+      return false;
     } finally {
       setBusy(false);
     }
   };
   const preference = (change: Partial<SpeechPreferences>) => {
     if (status)
-      void request({ kind: 'preferences', preferences: { ...status.preferences, ...change } });
+      void request({
+        kind: 'preferences',
+        preferences: { ...status.preferences, ...change },
+      }).catch(() => {});
   };
   if (!status)
     return error ? (
@@ -154,10 +160,23 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
   return (
     <>
       <p className="settings-note">
-        Speak into Ask Viewer, notes or chat, then review the transcript. Recognition runs locally
-        with whisper.cpp. Your microphone opens only when you start a recording.
+        Speak into Ask Viewer, notes or chat, then review the transcript. Choose local recognition
+        or a hosted provider. Your microphone opens only when you start a recording.
       </p>
-      {!status.models.runtime.recognitionAvailable && (
+      <div className="settings-row">
+        <span>Transcribe with</span>
+        <ChoiceButton
+          label="Speech processing"
+          value={status.preferences.backend ?? 'local'}
+          disabled={busy}
+          choices={[
+            { value: 'local', label: 'Local Whisper' },
+            { value: 'hosted', label: 'Hosted provider' },
+          ]}
+          onChoose={(value) => preference({ backend: value as 'local' | 'hosted' })}
+        />
+      </div>
+      {status.preferences.backend !== 'hosted' && !status.models.runtime.recognitionAvailable && (
         <p className="error" role="alert">
           {status.models.runtime.reason}
         </p>
@@ -167,12 +186,24 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
           {error}
         </p>
       )}
-      <h2>Local speech model</h2>
-      <p className="settings-note">
-        Download weights once, or import the matching GGML file. Viewer checks the pinned size and
-        checksum. Cancelled downloads are retained and cannot be used.
-      </p>
-      {status.models.models.map(model)}
+      {status.preferences.backend === 'hosted' ? (
+        <HostedSpeechSettings
+          snapshot={status.hosted ?? { providers: [] }}
+          selectedID={status.preferences.providerID}
+          busy={busy}
+          request={request}
+          select={(providerID) => preference({ providerID })}
+        />
+      ) : (
+        <>
+          <h2>Local speech model</h2>
+          <p className="settings-note">
+            Download weights once, or import the matching GGML file. Viewer checks the pinned size
+            and checksum. Cancelled downloads are retained and cannot be used.
+          </p>
+          {status.models.models.map(model)}
+        </>
+      )}
       <h2>Recording</h2>
       <div className="speech-preferences">
         <label className="settings-row">
@@ -233,7 +264,17 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
       <button
         type="button"
         className="settings-reset"
-        disabled={!status.models.selected || !status.models.runtime.recognitionAvailable || busy}
+        disabled={
+          busy ||
+          (status.preferences.backend === 'hosted'
+            ? !status.hosted?.providers.some(
+                (provider) =>
+                  provider.id === status.preferences.providerID &&
+                  provider.hasKey &&
+                  provider.allowed,
+              )
+            : !status.models.selected || !status.models.runtime.recognitionAvailable)
+        }
         onClick={() => setTesting(true)}
       >
         Test microphone and transcription

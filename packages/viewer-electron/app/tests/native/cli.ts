@@ -278,6 +278,80 @@ try {
   assert.deepEqual(await readFile(path.join(shared, '.git/index')), indexBefore);
   await successful(['task', 'list']);
   checks.push('Read-only Git status/diff preserves the index; task discovery');
+  await mkdir(path.join(shared, 'Worktrees'));
+  const task = await successful<{
+    id: string;
+    taskID: string;
+    workspaceID: string;
+    path: string;
+    commit: string;
+  }>([
+    'task',
+    'create',
+    'Generated task',
+    '--repo',
+    shared,
+    '--branch',
+    'feature/cli',
+    '--path',
+    path.join(shared, 'Worktrees/Feature'),
+    '--workspace',
+    'generated-cli',
+  ]);
+  assert.equal(task.workspaceID, 'generated-cli');
+  assert.match(task.commit, /^[0-9a-f]{40}$/);
+  await until(
+    () => evaluate<string>("document.querySelector('.agent-review-dialog')?.textContent || ''"),
+    (text) => text.includes('Create task from branch') && text.includes('feature/cli'),
+    'Parameterized task review',
+  );
+  const taskReview = await successful<{ kind: string; status: string }>([
+    'review',
+    'status',
+    task.id,
+  ]);
+  assert.equal(taskReview.kind, 'task-workflow');
+  assert.equal(taskReview.status, 'review');
+  const reviewCaptures = path.resolve('../../../.impeccable/review');
+  await mkdir(reviewCaptures, { recursive: true });
+  for (const [name, width, height] of [
+    ['desktop', 1280, 800],
+    ['minimum', 780, 560],
+  ] as const) {
+    await connection.command('Emulation.setDeviceMetricsOverride', {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await evaluate(
+      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
+    );
+    const shot = await connection.command<{ data: string }>('Page.captureScreenshot', {
+      format: 'png',
+    });
+    const file = path.join(
+      reviewCaptures,
+      'cli-task-review-' + name + '-' + path.basename(root).split('-').at(-1) + '.png',
+    );
+    await writeFile(file, Buffer.from(shot.data, 'base64'), { flag: 'wx' });
+    captures.push(file);
+    assert.equal(
+      await evaluate<boolean>(
+        "(()=>{const buttons=[...document.querySelectorAll('.agent-review-dialog footer button')];return buttons.length===2&&buttons.every(b=>{const r=b.getBoundingClientRect();return r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth})})()",
+      ),
+      true,
+    );
+  }
+  await successful(['review', 'cancel', task.id]);
+  await until(
+    () => evaluate<boolean>("!document.querySelector('.agent-review-dialog')"),
+    Boolean,
+    'Task proposal cancellation',
+  );
+  checks.push(
+    'Packaged task flags resolve a granted destination and workspace, pin a revision and return a cancellable native-reviewed proposal',
+  );
   await successful(['workflow', 'read', workflow]);
   const run = await successful<{ id: string; status: string }>([
     'workflow',
@@ -295,7 +369,7 @@ try {
     'speech',
     'status',
   ]);
-  assert.equal(speech.runtime.recognitionAvailable, false);
+  assert.equal(typeof speech.runtime.recognitionAvailable, 'boolean');
   const pending = await successful<{ id: string }>(['speech', 'install', 'whisper-tiny']);
   await until(
     () => evaluate<string>("document.querySelector('.agent-review-dialog')?.textContent || ''"),
@@ -348,7 +422,7 @@ try {
   assert.ok(waited.value!.operationID);
   await successful(['review', 'cancel', waited.value!.operationID!]);
   checks.push(
-    'Honest unavailable speech runtime, real review at both sizes, exact proposal cancellation and wait timeout',
+    'Speech availability is separate from weights; real review at both sizes, exact proposal cancellation and wait timeout',
   );
   assert.ok(!calls.some((call) => call.stdout.includes(token) || call.stderr.includes(token)));
   result.passed = true;

@@ -86,19 +86,21 @@ export function AgentReview() {
           <button className="primary" disabled={busy} type="submit">
             {busy
               ? 'Applying…'
-              : proposal.kind === 'speech'
-                ? proposal.speech?.kind === 'use'
-                  ? 'Choose model'
-                  : proposal.speech?.kind === 'import'
-                    ? 'Import model'
-                    : 'Download model'
-                : proposal.kind === 'configuration'
-                  ? 'Apply changes'
-                  : proposal.removal === 'trash'
-                    ? 'Move to Trash'
-                    : proposal.kind === 'navigation'
-                      ? proposal.title
-                      : 'Run action'}
+              : proposal.kind === 'task-workflow'
+                ? 'Create task'
+                : proposal.kind === 'speech'
+                  ? proposal.speech?.kind === 'use'
+                    ? 'Choose model'
+                    : proposal.speech?.kind === 'import'
+                      ? 'Import model'
+                      : 'Download model'
+                  : proposal.kind === 'configuration'
+                    ? 'Apply changes'
+                    : proposal.removal === 'trash'
+                      ? 'Move to Trash'
+                      : proposal.kind === 'navigation'
+                        ? proposal.title
+                        : 'Run action'}
           </button>
         </footer>
       </form>

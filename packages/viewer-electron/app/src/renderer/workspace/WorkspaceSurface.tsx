@@ -234,7 +234,11 @@ function ComparisonContent() {
         {record.type === 'diff' ? (
           <LazyDiffPlane pane={record} />
         ) : (
-          <LazyGitChanges path={record.path} paneID={record.id} />
+          <LazyGitChanges
+            path={record.path}
+            paneID={record.id}
+            manual={record.activation === 'manual'}
+          />
         )}
       </Suspense>
     </PreviewFrame>

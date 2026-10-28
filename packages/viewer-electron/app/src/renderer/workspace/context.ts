@@ -10,7 +10,9 @@ import type { Tiling } from '../../domain/workspaces/tiling';
 import type { JournalFilter } from '../../domain/journal/events';
 import type { WorktreeSelection } from '../../domain/comparison/worktrees';
 import type { NoteKind } from '../../domain/editing/notes';
+import type { AgentTaskBundle } from '../../domain/agents/task-workflow';
 export interface WorkspaceController {
+  installTaskArea(bundle: AgentTaskBundle): Promise<void>;
   newTaskArea(target: CapturedTarget, name: string): Promise<string>;
   setupTaskArea(id: string): Promise<void>;
   openTaskArea(id: string): void;

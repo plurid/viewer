@@ -89,6 +89,42 @@
 .speech-preferences .choice-button {
   width: min(240px, 100%);
 }
+.speech-hosted .settings-row {
+  margin-block: 16px;
+}
+.speech-provider-summary {
+  padding-block: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.speech-provider-summary p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.speech-provider-key {
+  margin-block: 16px 8px;
+}
+.speech-provider-editor {
+  margin-top: 16px;
+}
+.speech-provider-editor fieldset {
+  border: 1px solid var(--line);
+  padding: 14px;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.speech-provider-editor .settings-row {
+  margin: 0;
+}
+.speech-provider-editor .settings-note {
+  margin: 0;
+}
+.speech-provider-editor input,
+.speech-provider-key input {
+  width: 100%;
+  min-width: 0;
+}
 @media (max-width: 820px) {
   .speech-preferences .settings-row {
     grid-template-columns: minmax(0, 1fr);

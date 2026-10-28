@@ -48,6 +48,69 @@ async function invoke(
 }
 
 describe('terminal command contract', () => {
+  it('returns the completed task workflow as JSON and preserves partial failures for recovery', async () => {
+    const parameters = [
+      'task',
+      'create',
+      'Fix search',
+      '--branch',
+      'fix/search',
+      '--path',
+      '../search',
+      '--workspace',
+      'project',
+      '--wait',
+      '--json',
+    ];
+    const taskResult = {
+      workspaceID: 'project',
+      taskID: 'reserved-task',
+      path: '/work/search',
+      branch: 'fix/search',
+      commit: 'a'.repeat(40),
+      terminal: 'stopped',
+      stage: 'ready',
+    };
+    const call = vi.fn<CLICall>(async (_method, params) => {
+      if ((params as { name?: string } | undefined)?.name === 'propose_task_create') {
+        expect((params as { arguments: unknown }).arguments).toEqual({
+          name: 'Fix search',
+          repo: '/work/project',
+          branch: 'fix/search',
+          path: '/work/search',
+          workspace: 'project',
+        });
+        return wrap({ id: 'proposal', requiresUserReview: true });
+      }
+      return wrap({ id: 'proposal', status: 'completed', taskResult });
+    });
+    const completed = await invoke(parameters, { call });
+    expect(completed.code).toBe(0);
+    expect(JSON.parse(completed.stdout)).toMatchObject({
+      ok: true,
+      command: 'task create',
+      result: { status: 'completed', taskResult },
+    });
+    expect(completed.stderr).toBe('');
+    call.mockImplementation(async (_method, params) =>
+      (params as { name?: string } | undefined)?.name === 'propose_task_create'
+        ? wrap({ id: 'proposal' })
+        : wrap({
+            id: 'proposal',
+            status: 'failed',
+            error: 'Workspace closed',
+            taskResult: { ...taskResult, stage: 'worktree-created' },
+          }),
+    );
+    const failed = await invoke(parameters, { call });
+    expect(failed.code).toBe(1);
+    expect(JSON.parse(failed.stdout)).toMatchObject({
+      ok: false,
+      operationID: 'proposal',
+      result: { status: 'failed', taskResult: { path: '/work/search', stage: 'worktree-created' } },
+    });
+    expect(failed.stdout.trim().split('\n')).toHaveLength(1);
+  });
   it('keeps legacy launch paths and explicit literal paths outside automation mode', () => {
     for (const args of [[], ['.'], ['./notes.md'], ['--new-window', '.'], ['--', 'search']])
       expect(isCLIInvocation(args)).toBe(false);

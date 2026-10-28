@@ -1,24 +1,16 @@
 # Further speech controls
 
-Local dictation is implemented in the direct macOS build: bundled recognition, verified model setup,
-microphone/language choices, push-to-talk and reviewed insertion into Ask Viewer, notes and chat.
-Use the [dictation guide](../guides/speech.md) and [current limits](../reference/speech.md). The
-directions below are proposals, not shipped features.
+Local and hosted dictation are implemented in the direct macOS build: bundled recognition, verified
+model setup, provider-specific audio consent, microphone/language choices, push-to-talk and reviewed
+insertion into Ask Viewer, notes and chat. Use the [dictation guide](../guides/speech.md) and
+[current limits](../reference/speech.md). The directions below are proposals, not shipped features.
 
-## Hosted transcription
+## Further hosted setup
 
-Add explicit speech adapters for Meta transcription models, Deepgram and other supported services. A
-chat provider is not automatically a speech provider. Each adapter declares its protocol, endpoint,
-language support, partial-result support, vocabulary hints and recording limits.
-
-Setup should include a connection check without recording, followed by an optional microphone test.
-Credentials belong in private credential storage. Sending audio needs separate consent tied to the
-exact endpoint; changing it revokes that permission. Audio permission must not authorize document
-contents or filename vocabulary hints.
-
-Retain a local choice, but never switch processing backends silently. Offline, authentication and
-rate-limit failures should offer Retry, Edit transcript or an explicit backend change. Retries must
-not submit a command twice.
+Consider provider-specific model discovery and a non-recording connection check where the API
+supports them. Keep these separate from the explicit recording test and audio consent. Extend the
+adapter contract for vocabulary hints and streamed results only when supported; chat providers must
+not become speech providers automatically. A retry must never submit a command twice.
 
 ## Model-assisted setup
 
