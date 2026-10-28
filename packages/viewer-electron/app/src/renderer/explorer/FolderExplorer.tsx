@@ -3,6 +3,7 @@ import { registerFolderHandle } from './folder-handles';
 import { matchesQuery } from '../../domain/search/query';
 import { useFileQuery } from './useFileQuery';
 import { nativeOpening } from './opening';
+import { SearchCoverage } from './SearchCoverage';
 import {
   memo,
   useCallback,
@@ -656,6 +657,14 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           )}
         </div>
       )}
+      {subtree && query.trim() && (
+        <SearchCoverage
+          result={search.indexed}
+          streamed={search.streamed}
+          cancelled={search.cancelled}
+          request={{ query, root: path, showHidden: pane.showHidden, recursive: true }}
+        />
+      )}
       <div className="folder-content">
         <FileTable
           paneID={id}
@@ -685,7 +694,9 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
                 query
                   ? search.running
                     ? 'Searching…'
-                    : 'No matching files'
+                    : subtree && search.partial
+                      ? 'No matches in the available search data'
+                      : 'No matching files'
                   : 'This folder is empty'
               }
               detail={

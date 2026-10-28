@@ -84,3 +84,19 @@ Save useful searches as virtual folder-like planes. They retain their query and 
 actions and Quick Preview, and refresh against the index. Results are paged: the UI shows up to 150
 per page. Short fragments and complex queries have bounded scanning; partial or in-progress indexing
 can affect results.
+
+## Understand search coverage
+
+Recursive folder searches and search planes show a compact coverage summary. Expand it to see the
+location, whether hidden files are included, index progress, unavailable entries and the configured
+excluded names and paths. Indexing in another location does not mark this search incomplete.
+
+**Search finished** means the available filename scope was searched. **Partial coverage** identifies
+paused or unavailable locations, unreadable entries or a bounded scan. A complex indexed query can
+stop after 20,000 candidate rows; narrow the query to finish that search. This differs from ordinary
+pagination, where **Next** visits more known matches. Live folder scans also report their checked
+entry count, errors and limits; stopping one retains its partial results.
+
+Document text always identifies its narrower coverage: supported formats and bounded extracts,
+without OCR. Missing text-index permission is shown separately. An empty partial search says **No
+matches in the available search data**, rather than implying every file was searched.

@@ -334,6 +334,18 @@ structured-tree controls stay usable in a narrow inspector. Keep Office Layout v
 explicit. Worksheet keyboard navigation keeps focus during loading, and the searchable menu uses the
 same sheet selection.
 
+**The Search Coverage Rule.** Keep search scope, progress, exclusions, partial coverage and missing
+document text access in one disclosure. Bound expanded details so empty-result text and search
+controls remain visible in short views.
+
+**The Worksheet Navigation Rule.** Give virtual worksheets one keyboard stop, direct source cell
+addressing and explicit saved formula details. Keyboard sheet changes and page loading retain grid
+focus.
+
+**The Book Reading Rule.** Use authorized local illustrations and safe internal chapter and footnote
+links. Keep book search bounded and cancellable, label partial search, highlight the selected
+passage and preserve chapter and scroll position for Back after a link or result jump.
+
 Show source imagery in creative tools. Tie export, progress, optimization savings and output links
 to real jobs. Label camera previews, RAW renditions and video compatibility copies accurately.
 Failed renders retain retry and alternative-open actions. A stale retained preview identifies its

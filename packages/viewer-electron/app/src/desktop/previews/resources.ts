@@ -8,6 +8,7 @@ import { lookup } from 'mime-types';
 import type { Resource, ResourceRead } from '../../domain/contracts';
 import { absolute, entry } from '../files/filesystem';
 import { imageDimensions, readImageDimensions } from './image-dimensions';
+import { epubImagePath, epubImageLimit } from '../../domain/previews/documents/epub';
 import { Archives } from './archives';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
 import { fileCoordination } from '../files/file-coordination';
@@ -394,7 +395,19 @@ export class Resources {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Nested archives are not supported yet.');
     await this.access([grant.file]);
+    const bookImage = grant.resource.entry.extension === 'epub' && epubImagePath(name);
+    if (bookImage) {
+      const listing = await this.archives.list(grant.file);
+      const image = listing.entries.find((entry) => entry.name === name);
+      if (!image?.previewable || image.size > epubImageLimit)
+        throw new Error('This book illustration exceeds its preview limit.');
+    }
     const data = await this.archives.read(grant.file, name);
+    if (bookImage) {
+      const dimensions = imageDimensions(data);
+      if (!dimensions || dimensions.width * dimensions.height > 64000000)
+        throw new Error('This book illustration has unsupported or oversized dimensions.');
+    }
     this.get(id); // A parent closed while its entry was loading cannot leave an orphan grant.
     return this.dataChild(id, path.basename(name), `${grant.file} → ${name}`, data);
   }

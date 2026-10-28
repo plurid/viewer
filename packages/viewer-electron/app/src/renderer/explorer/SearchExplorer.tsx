@@ -13,6 +13,8 @@ import {
 import { browseSession, useBrowseField } from '../workspace/sessions';
 import { useWorkspace } from '../workspace/context';
 import { useIndexedSearch } from './useIndexedSearch';
+import { SearchCoverage } from './SearchCoverage';
+import { indexedCoverage } from '../../domain/search/coverage';
 import { ListView, type FileViewProps } from './views';
 import { ContextMenu } from '../ui/ContextMenu';
 import { Empty, Loading } from '../ui/primitives';
@@ -251,21 +253,16 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         </label>
         <span>{pane.allLocations ? 'Indexed locations' : pane.path}</span>
       </div>
-      {pane.content &&
-        (search.result?.indexed === false ||
-          !(pane.allLocations
-            ? contentRoots.length
-            : contentRoots.some(
-                (root) =>
-                  pane.path === root || pane.path.startsWith(root.replace(/[/\\]$/, '') + '/'),
-              ))) && (
-          <div className="search-evidence" role="status">
-            <span>Choose which locations Viewer may index for document text.</span>
-            <button onClick={() => void window.viewer.openSettings('search').catch(report)}>
-              Search settings…
-            </button>
-          </div>
-        )}
+      <SearchCoverage
+        result={search.result}
+        request={{
+          query: pane.query,
+          root: pane.allLocations ? undefined : pane.path,
+          content: pane.content,
+          recursive: pane.recursive,
+          showHidden: true,
+        }}
+      />
       <FileTable paneID={id}>
         {search.error ? (
           <Empty title="Search failed" detail={search.error} />
@@ -274,8 +271,16 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         ) : !entries.length ? (
           <Empty
             title={
-              search.result?.status.running ? 'Indexing these locations…' : 'No matching files'
+              !search.result ||
+              indexedCoverage(
+                search.result,
+                { root: pane.allLocations ? undefined : pane.path, content: pane.content },
+                contentRoots,
+              ).state !== 'complete'
+                ? 'No matches in the available search data'
+                : 'No matching files'
             }
+            detail="Expand search coverage above to see locations, exclusions and limits."
           />
         ) : (
           <ListView {...props} />

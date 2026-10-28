@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { moveTableCell, parseCellAddress } from '../../domain/previews/documents/table-navigation';
+import type { TableAddress } from '../../domain/previews/documents/table-navigation';
 import { useVirtualizer, defaultRangeExtractor } from '@tanstack/react-virtual';
 import type { EvidenceAnchor } from '../../domain/files/inspection';
 import type {
@@ -60,6 +62,8 @@ export function DataTable({
   retryFilter,
   state,
   renderControls,
+  target,
+  navigate,
 }: {
   rows: readonly WorkbookRow[];
   headers: readonly string[];
@@ -74,8 +78,14 @@ export function DataTable({
   retryFilter?: () => void;
   state?: PreviewContext['state'];
   renderControls?(controls: TableControls): ReactNode;
+  target?: TableAddress;
+  navigate?(target: TableAddress): void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const [address, setAddress] = useState('');
+  const [addressError, setAddressError] = useState('');
+  const selectedTarget = useRef<TableAddress | undefined>(undefined);
   const [views, setViews] = usePreviewState<Record<string, TableView>>(
     { state },
     'table.views',
@@ -91,6 +101,9 @@ export function DataTable({
 
   const [viewportWidth, setViewportWidth] = useState(840);
   const [selection, setSelection] = useState<{ row: number; cell: WorkbookCell; merge?: string }>();
+  const focusedRow = selection?.row ?? target?.row ?? remembered?.row ?? anchor?.row;
+  const focusedColumn =
+    selection?.cell.column ?? target?.column ?? remembered?.column ?? anchor?.column ?? 1;
   const [filtered, setFiltered] = useState<{
     rows: readonly WorkbookRow[];
     query: string;
@@ -118,7 +131,16 @@ export function DataTable({
   const filtering =
     !!filterRows && !!query && (filtered?.rows !== rows || filtered.query !== query);
   const body = useMemo(() => {
-    if (!query) return rows;
+    if (!query) {
+      if (
+        numbered &&
+        focusedRow &&
+        !rows.some((row) => row.row === focusedRow) &&
+        (target || (focusedRow >= (rows[0]?.row ?? 1) && focusedRow <= (rows.at(-1)?.row ?? 0)))
+      )
+        return [...rows, { row: focusedRow, cells: [] }].sort((a, b) => a.row - b.row);
+      return rows;
+    }
     if (filterRows)
       return filtered?.rows === rows && filtered.indices
         ? Array.from(filtered.indices, (index) => rows[index]!).filter(Boolean)
@@ -131,7 +153,7 @@ export function DataTable({
           (cell.value + ' ' + (cell.formatted ?? '')).toLocaleLowerCase().includes(term),
         ),
     );
-  }, [rows, query, filterRows, filtered]);
+  }, [rows, query, filterRows, filtered, numbered, focusedRow, target]);
   const merged = useMemo(
     () =>
       merges.flatMap((merge) => {
@@ -155,6 +177,7 @@ export function DataTable({
     initialRect: { width: 840, height: 400 },
     rangeExtractor: (range) => {
       const included = new Set(defaultRangeExtractor(range));
+      if (numbered) included.add(focusedColumn - 1);
       for (const { merge } of merged)
         if (merge.fromColumn - 1 <= range.endIndex && merge.toColumn - 1 >= range.startIndex)
           included.add(merge.fromColumn - 1);
@@ -168,6 +191,8 @@ export function DataTable({
     overscan: 8,
     rangeExtractor: (range) => {
       const included = new Set(defaultRangeExtractor(range));
+      const focused = body.findIndex((row) => row.row === focusedRow);
+      if (numbered && focused >= 0) included.add(focused);
       for (const view of merged)
         if (view.first <= range.endIndex && view.last >= range.startIndex) included.add(view.first);
       return [...included].sort((a, b) => a - b);
@@ -214,7 +239,63 @@ export function DataTable({
       cell: rows
         .find((row) => row.row === anchor.row)
         ?.cells.find((cell) => cell.column === anchor.column),
+    }) ||
+    (rows[0] && {
+      row: rows[0].row,
+      cell: rows[0].cells.find((cell) => cell.column === 1) ?? { column: 1, value: '' },
     });
+  const activeRow = current?.row ?? rows[0]?.row ?? 1;
+  const activeColumn = current?.cell?.column ?? remembered?.column ?? 1;
+  const selectCell = useCallback(
+    (requested: TableAddress, focus = true) => {
+      const merge = merges.find(
+        (merge) =>
+          requested.row >= merge.fromRow &&
+          requested.row <= merge.toRow &&
+          requested.column >= merge.fromColumn &&
+          requested.column <= merge.toColumn,
+      );
+      const row = merge?.fromRow ?? requested.row;
+      const column = merge?.fromColumn ?? requested.column;
+      const cell = merge?.anchor ??
+        rows.find((item) => item.row === row)?.cells.find((cell) => cell.column === column) ?? {
+          column,
+          value: '',
+        };
+      setSelection({
+        row,
+        cell,
+        merge: merge
+          ? `${columnName(merge.fromColumn)}${merge.fromRow}:${columnName(merge.toColumn)}${merge.toRow}`
+          : undefined,
+      });
+      setViews((previous) => rememberTableView(previous, label, { row, column }));
+      const index = body.findIndex((item) => item.row >= requested.row);
+      if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });
+      horizontal.scrollToIndex(column - 1, { align: 'auto' });
+      if (focus) ref.current?.focus({ preventScroll: true });
+    },
+    [merges, rows, body, setViews, label, virtual, horizontal],
+  );
+  useEffect(() => {
+    setAddress(columnName(activeColumn) + activeRow);
+  }, [activeRow, activeColumn]);
+  useEffect(() => {
+    if (target && selectedTarget.current !== target) {
+      selectedTarget.current = target;
+      selectCell(target);
+    }
+  }, [target, selectCell]);
+  const go = (destination: TableAddress) => {
+    setAddressError('');
+    if (query) setQuery('');
+    if (
+      navigate &&
+      (destination.row < (rows[0]?.row ?? 1) || destination.row > (rows.at(-1)?.row ?? 0))
+    )
+      navigate(destination);
+    else selectCell(destination);
+  };
   const display = (cell: WorkbookCell) =>
     formatted && cell.formatted !== undefined ? cell.formatted : cell.value;
   return (
@@ -245,24 +326,48 @@ export function DataTable({
           {filtered.error} {retryFilter && <button onClick={retryFilter}>Retry table</button>}
         </p>
       )}
-      {numbered && current?.cell && (
-        <div className="workbook-cell-detail" aria-live="polite">
-          <strong>
-            {columnName(current.cell.column)}
-            {current.row}
-          </strong>
-          <span>
-            {current.cell.formula !== undefined
-              ? `${current.cell.cached ? 'Saved value: ' + current.cell.value : 'No saved value'} · Formula: ${current.cell.formula || '(shared formula)'}`
-              : current.cell.value || 'Empty cell'}
-            {current.cell.formatted !== undefined &&
-              current.cell.formatted !== current.cell.value &&
-              ` · Formatted: ${current.cell.formatted || '(empty)'}`}
-            {current.cell.numberFormat && ` · Format: ${current.cell.numberFormat}`}
-            {current.cell.formatWarning && ` · ${current.cell.formatWarning}`}
-            {'merge' in current && current.merge && ` · Merged ${current.merge}`}
-          </span>
+      {numbered && (
+        <div className="workbook-cell-detail">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const parsed = parseCellAddress(address, columns);
+              if (!parsed) {
+                setAddressError(`Enter a cell from A1 to ${columnName(columns)}1048576.`);
+                return;
+              }
+              go(parsed);
+            }}
+          >
+            <input
+              aria-label="Cell address"
+              value={address}
+              aria-invalid={!!addressError}
+              onChange={(event) => setAddress(event.target.value)}
+            />
+            <button type="submit">Go</button>
+          </form>
+          {current?.cell && (
+            <>
+              <span>
+                {current.cell.formula !== undefined
+                  ? `${current.cell.cached ? 'Saved value: ' + current.cell.value : 'No saved value'} · Formula: ${current.cell.formula || '(shared formula)'}`
+                  : current.cell.value || 'Empty cell'}
+                {current.cell.formatted !== undefined &&
+                  current.cell.formatted !== current.cell.value &&
+                  ` · Formatted: ${current.cell.formatted || '(empty)'}`}
+                {current.cell.numberFormat && ` · Format: ${current.cell.numberFormat}`}
+                {current.cell.formatWarning && ` · ${current.cell.formatWarning}`}
+                {'merge' in current && current.merge && ` · Merged ${current.merge}`}
+              </span>
+            </>
+          )}
         </div>
+      )}
+      {addressError && (
+        <p className="inline-warning" role="alert">
+          {addressError}
+        </p>
       )}
       {anchor &&
         ((!rows.some((row) => row.row === anchor.row) && (numbered || anchor.row !== 1)) ||
@@ -272,7 +377,39 @@ export function DataTable({
       <div
         className="data-scroll"
         ref={ref}
-        role="table"
+        role={numbered ? 'grid' : 'table'}
+        tabIndex={numbered ? 0 : undefined}
+        aria-readonly={numbered ? true : undefined}
+        aria-activedescendant={numbered ? `${id}-${activeRow}-${activeColumn}` : undefined}
+        onKeyDown={
+          numbered
+            ? (event) => {
+                if (event.altKey || event.shiftKey || event.target !== event.currentTarget) return;
+                if (event.ctrlKey && (event.key === 'PageUp' || event.key === 'PageDown')) return;
+                const merge = merges.find(
+                  (merge) => activeRow === merge.fromRow && activeColumn === merge.fromColumn,
+                );
+                const current = {
+                  row: event.key === 'ArrowDown' && merge ? merge.toRow : activeRow,
+                  column: event.key === 'ArrowRight' && merge ? merge.toColumn : activeColumn,
+                };
+                const next = moveTableCell(
+                  current,
+                  event.key,
+                  body.map((row) => row.row),
+                  columns,
+                  Math.max(1, Math.floor((ref.current?.clientHeight || 400) / 32) - 1),
+                  sourceLastRow ?? rows.at(-1)?.row ?? 1,
+                  event.ctrlKey || event.metaKey,
+                );
+                if (next) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  go(next);
+                }
+              }
+            : undefined
+        }
         aria-label={label}
         aria-rowcount={numbered ? (sourceLastRow ?? rows.at(-1)?.row ?? 0) + 1 : rows.length + 1}
         aria-colcount={columns + (numbered ? 1 : 0)}
@@ -385,7 +522,13 @@ export function DataTable({
                   const continuation = merge && sourceRow < row.row;
                   return (
                     <div
-                      role="cell"
+                      role={numbered ? 'gridcell' : 'cell'}
+                      id={numbered ? `${id}-${sourceRow}-${cell.column}` : undefined}
+                      aria-selected={
+                        numbered
+                          ? activeRow === sourceRow && activeColumn === cell.column
+                          : undefined
+                      }
                       aria-colindex={index + (numbered ? 2 : 1)}
                       aria-colspan={
                         merge ? merge.merge.toColumn - merge.merge.fromColumn + 1 : undefined
@@ -416,15 +559,10 @@ export function DataTable({
                       {numbered ? (
                         <button
                           className={`workbook-cell${merge ? ' workbook-merged-cell' : ''}`}
+                          tabIndex={-1}
                           aria-label={`${columnName(cell.column)}${sourceRow}: ${cell.formula !== undefined && !cell.cached ? 'No saved value' : display(cell) || 'Empty'}${mergeLabel ? ' · Merged ' + mergeLabel : ''}`}
                           onClick={() => {
-                            setSelection({ row: sourceRow, cell, merge: mergeLabel });
-                            setViews((previous) =>
-                              rememberTableView(previous, label, {
-                                row: sourceRow,
-                                column: cell.column,
-                              }),
-                            );
+                            selectCell({ row: sourceRow, column: cell.column });
                           }}
                         >
                           {continuation && (

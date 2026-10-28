@@ -36,6 +36,51 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+it('keeps one grid stop and navigates cells, formulas, addresses and page boundaries', () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const navigate = vi.fn();
+  render(
+    <DataTable
+      rows={[
+        {
+          row: 1,
+          cells: [
+            { column: 1, value: 'First' },
+            { column: 2, value: '2', formula: '1+1', cached: true },
+          ],
+        },
+        { row: 2, cells: [{ column: 1, value: 'Second' }] },
+      ]}
+      headers={['A', 'B']}
+      label="Sheet"
+      numbered
+      paged
+      sourceLastRow={1000}
+      navigate={navigate}
+    />,
+  );
+  const grid = screen.getByRole('grid');
+  grid.focus();
+  fireEvent.keyDown(grid, { key: 'ArrowRight' });
+  expect(document.querySelector('.workbook-cell-detail')?.textContent).toContain('Formula: 1+1');
+  expect(document.activeElement).toBe(grid);
+  expect(document.querySelectorAll('.workbook-cell[tabindex="0"]')).toHaveLength(0);
+  const address = screen.getByRole('textbox', { name: 'Cell address' });
+  fireEvent.change(address, { target: { value: 'B0' } });
+  fireEvent.submit(address.closest('form')!);
+  expect(screen.getByRole('alert').textContent).toContain('Enter a cell');
+  fireEvent.change(address, { target: { value: 'B500' } });
+  fireEvent.submit(address.closest('form')!);
+  expect(navigate).toHaveBeenCalledWith({ row: 500, column: 2 });
+  fireEvent.keyDown(grid, { key: 'PageDown' });
+  expect(navigate).toHaveBeenLastCalledWith({ row: 3, column: 2 });
+});
 it('shows formatted values while keeping the stored formula and source coordinate inspectable', () => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -82,7 +127,8 @@ it('shows formatted values while keeping the stored formula and source coordinat
   expect(merge.textContent).toContain('Continued from A3');
   expect(merge.parentElement?.getAttribute('aria-colspan')).toBe('3');
   fireEvent.click(merge);
-  expect(document.querySelector('.workbook-cell-detail')?.textContent).toContain('A3Source range');
+  expect(screen.getByRole('textbox', { name: 'Cell address' })).toHaveProperty('value', 'A3');
+  expect(document.querySelector('.workbook-cell-detail')?.textContent).toContain('Source range');
   fireEvent.click(screen.getByRole('button', { name: 'D104: $1,234.50' }));
   expect(document.querySelector('.workbook-cell-detail')?.textContent).toContain(
     'Saved value: 1234.5 · Formula: SUM(D2)',

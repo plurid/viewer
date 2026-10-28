@@ -1,86 +1,16 @@
-import { createElement, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
 import type { PreviewContext } from '../contracts';
+import type { EPUBReference, EPUBChapter } from '../../../domain/previews/documents/epub';
+import type { BookMatch } from '../epub-content';
+import { readBookChapter, bookNodes, searchBook } from '../epub-content';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { useOfficeDocument } from '../useOfficeDocument';
-const allowed = new Set([
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'p',
-  'div',
-  'span',
-  'strong',
-  'b',
-  'em',
-  'i',
-  'u',
-  's',
-  'blockquote',
-  'ul',
-  'ol',
-  'li',
-  'br',
-  'hr',
-  'sup',
-  'sub',
-  'pre',
-  'code',
-  'table',
-  'thead',
-  'tbody',
-  'tr',
-  'th',
-  'td',
-  'dl',
-  'dt',
-  'dd',
-  'section',
-  'article',
-]);
-const blocked = new Set([
-  'script',
-  'style',
-  'iframe',
-  'object',
-  'embed',
-  'form',
-  'input',
-  'button',
-  'textarea',
-  'select',
-  'svg',
-  'math',
-  'link',
-  'meta',
-  'head',
-]);
-/** Construct React nodes with no source attributes, event handlers, URLs or executable HTML. */
-export function chapterNodes(html: string): ReactNode {
-  const document = new DOMParser().parseFromString(html.slice(0, 400000), 'text/html');
-  let count = 0;
-  const convert = (node: Node, depth = 0): ReactNode => {
-    if (++count > 20000 || depth > 100) return null;
-    if (node.nodeType === 3) return node.textContent;
-    if (node.nodeType !== 1) return null;
-    const element = node as Element;
-    const tag = element.tagName.toLowerCase();
-    if (blocked.has(tag)) return null;
-    if (tag === 'img')
-      return element.getAttribute('alt')
-        ? createElement('p', { key: count, className: 'muted' }, element.getAttribute('alt'))
-        : null;
-    const key = count;
-    const children = Array.from(element.childNodes).map((node) => convert(node, depth + 1));
-    return createElement(allowed.has(tag) ? tag : 'span', { key }, ...children);
-  };
-  return Array.from(document.body.childNodes).map((node) => convert(node));
-}
+export { chapterNodes } from '../epub-content';
+const emptyChapters: EPUBChapter[] = [];
+
 export default function EPUBPreview(context: PreviewContext) {
   const { document, error, retry } = useOfficeDocument(context);
   const [chapter, setChapter] = usePreviewState(context, 'epub.chapter', 0);
@@ -89,20 +19,119 @@ export default function EPUBPreview(context: PreviewContext) {
   }, [context.evidence, setChapter]);
   const [size, setSize] = usePreviewState(context, 'epub.size', context.reading?.fontSize ?? 16);
   const [contents, setContents] = usePreviewState(context, 'epub.contents', true);
-  const chapters = document?.chapters || [];
+  const chapters = document?.chapters || emptyChapters;
   const position = Math.min(chapter, Math.max(0, chapters.length - 1));
   const html = chapters[position]?.html || '';
-  const nodes = useMemo(() => chapterNodes(html), [html]);
+  const content = useMemo(() => readBookChapter(html), [html]);
   const chapterRef = useRef<HTMLElement>(null);
+  const [finding, setFinding] = useState(false);
+  const [query, setQuery] = useState('');
+  const [found, setFound] = useState<{ query: string; matches: BookMatch[]; limited: boolean }>();
+  const [searchError, setSearchError] = useState('');
+  const [match, setMatch] = useState<BookMatch>();
+  const [jump, setJump] = useState<{
+    chapter: number;
+    fragment?: string;
+    match?: BookMatch;
+    top?: number;
+    left?: number;
+  }>();
+  const [back, setBack] = useState<{ chapter: number; top: number; left: number }[]>([]);
+  const [navigationError, setNavigationError] = useState('');
+  const searchField = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (finding) searchField.current?.focus();
+  }, [finding]);
+  useEffect(() => {
+    setSearchError('');
+    if (!query.trim()) return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      void searchBook(chapters, query, abort.signal).then(
+        (result) => {
+          if (!abort.signal.aborted) setFound({ query, ...result });
+        },
+        (error: Error) => {
+          if (!abort.signal.aborted) setSearchError(error.message);
+        },
+      );
+    }, 180);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [chapters, query]);
+  const saveReturn = () =>
+    setBack((previous) =>
+      [
+        ...previous,
+        {
+          chapter: position,
+          top: chapterRef.current?.scrollTop ?? 0,
+          left: chapterRef.current?.scrollLeft ?? 0,
+        },
+      ].slice(-32),
+    );
+  const navigate = (target: EPUBReference) => {
+    const next = chapters.findIndex((chapter) => chapter.path === target.path);
+    if (next < 0) return;
+    saveReturn();
+    setNavigationError('');
+    setMatch(undefined);
+    setChapter(next);
+    setJump({ chapter: next, fragment: target.fragment });
+  };
+  const images = useMemo(
+    () => new Set(document?.epub?.images.map((image) => image.path)),
+    [document?.epub],
+  );
+  const nodes = bookNodes(content, {
+    chapter: chapters[position],
+    chapters,
+    images,
+    context,
+    navigate,
+    match: match?.chapter === position ? match : undefined,
+  });
   usePreviewScroll(context.state, chapterRef, 'epub', {
     ready: !!document,
     section: String(position),
     restore: !context.evidence,
   });
+  useLayoutEffect(() => {
+    const element = chapterRef.current;
+    if (!jump || jump.chapter !== position || !element || !document) return;
+    if (jump.top !== undefined) {
+      element.scrollTop = jump.top;
+      element.scrollLeft = jump.left ?? 0;
+    } else {
+      const destination = jump.match
+        ? element.querySelector<HTMLElement>('[data-epub-match]')
+        : jump.fragment
+          ? Array.from(element.querySelectorAll<HTMLElement>('[data-epub-anchor]')).find(
+              (node) => node.dataset.epubAnchor === jump.fragment,
+            )
+          : undefined;
+      if (destination) {
+        destination.scrollIntoView({ block: 'center' });
+        destination.focus({ preventScroll: true });
+      } else if (jump.fragment)
+        setNavigationError('This link target is outside the available chapter content.');
+      else element.scrollTop = 0;
+    }
+    setJump(undefined);
+  }, [jump, position, document]);
   usePreviewCommands(
     context,
     useMemo(
       () => [
+        {
+          id: 'epub-find',
+          label: 'Find in book',
+          aliases: ['search', 'epub'],
+          available: !!chapters.length,
+          run: () => setFinding(true),
+        },
         {
           id: 'epub-contents',
           label: 'Show / hide contents',
@@ -156,7 +185,24 @@ export default function EPUBPreview(context: PreviewContext) {
           disabled={position >= chapters.length - 1}
           onClick={() => setChapter(position + 1)}
         />
+        {back.length > 0 && (
+          <button
+            aria-label="Back to reading position"
+            onClick={() => {
+              const previous = back.at(-1)!;
+              setBack((items) => items.slice(0, -1));
+              setChapter(previous.chapter);
+              setMatch(undefined);
+              setJump(previous);
+            }}
+          >
+            Back
+          </button>
+        )}
         <span className="toolbar-spacer" />
+        <button aria-pressed={finding} onClick={() => setFinding(!finding)}>
+          Find in book
+        </button>
         <button aria-label="Smaller text" onClick={() => setSize(Math.max(12, size - 1))}>
           A−
         </button>
@@ -164,6 +210,58 @@ export default function EPUBPreview(context: PreviewContext) {
           A+
         </button>
       </PreviewToolbar>
+      {navigationError && (
+        <p className="inline-warning" role="status">
+          {navigationError}
+        </p>
+      )}
+      {finding && (
+        <section className="epub-search" aria-label="Find in book">
+          <div>
+            <input
+              ref={searchField}
+              type="search"
+              aria-label="Search book text"
+              placeholder="Find in book"
+              maxLength={160}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.stopPropagation();
+                  setFinding(false);
+                }
+              }}
+            />
+            <span className="muted" role="status">
+              {searchError ||
+                (query.trim()
+                  ? found?.query === query
+                    ? `${found.matches.length}${found.limited ? '+' : ''} matches${document.truncated || found.limited ? ' · Partial search' : ''}`
+                    : 'Searching…'
+                  : 'Search the available chapters')}
+            </span>
+          </div>
+          {found?.query === query && (
+            <ol>
+              {found.matches.map((item, index) => (
+                <li key={index}>
+                  <button
+                    onClick={() => {
+                      saveReturn();
+                      setChapter(item.chapter);
+                      setMatch(item);
+                      setJump({ chapter: item.chapter, match: item });
+                    }}
+                  >
+                    <strong>{chapters[item.chapter]?.title}</strong> <span>{item.quote}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
       <div className="epub-body">
         {contents && (
           <nav aria-label="EPUB contents">
@@ -185,7 +283,7 @@ export default function EPUBPreview(context: PreviewContext) {
           style={{ fontSize: size }}
         >
           {nodes}
-          {document.truncated && (
+          {(document.truncated || content.limited) && (
             <p className="muted">This preview reached its extraction limit.</p>
           )}
         </article>

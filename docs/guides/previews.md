@@ -5,9 +5,11 @@ keep it open while continuing through the folder.
 
 ## Use the file's own controls
 
-PDFs have page navigation, thumbnails, an outline and text search. Books have chapter navigation.
-Models have orbit, zoom, dimensions and measurement tools. Audio and video have playback controls.
-Available actions follow the file type.
+PDFs have page navigation, thumbnails, an outline and text search. Books have chapters, local
+illustrations, internal links and **Find in book**. Follow a footnote, then use **Back** to return
+to your reading position. Choose a search result to open and highlight its passage. Models have
+orbit, zoom, dimensions and measurement tools. Audio and video have playback controls. Available
+actions follow the file type.
 
 For JSON, YAML and XML, use the tree's search, **Expand all** and **Collapse all**. Narrow previews
 keep expansion and copy controls under **More**. XML shows elements, attributes and ordered text; it
@@ -19,6 +21,10 @@ source uses a 16 px default; editor and terminal typography have separate settin
 Word and PowerPoint open in a local paginated layout. Excel has worksheet navigation; XLSX also
 offers a stored-value grid. DOCX has an additional Reading view. Choose Layout or Print layout when
 page appearance matters.
+
+In an XLSX grid, arrow keys inspect cells and their saved formulas. Enter an address such as **D42**
+beside the cell details to jump there. Control + Page Up/Down switches sheets. See
+[worksheet controls](../reference/office.md#reading-and-saved-cells) for the full keyboard controls.
 
 The bundled engine preserves the layout it supports and substitutes unavailable fonts. It does not
 guarantee identical output to Microsoft Office. See [Office previews](../reference/office.md) for

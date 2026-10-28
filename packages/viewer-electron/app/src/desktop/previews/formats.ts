@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import type { DocumentData } from '../../domain/services';
 import { fileCoordination } from '../files/file-coordination';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
+import { epubReference, epubImagePath, epubImageLimit } from '../../domain/previews/documents/epub';
 const run = promisify(execFile);
 const decode = (value: string) =>
   value
@@ -231,34 +232,57 @@ async function extractCoordinated(
         return [attr.id, attr.href];
       }),
     );
-    const chapters = Array.from(opf.matchAll(/<itemref\b([^>]+)\/?\s*>/g))
-      .slice(0, 300)
-      .flatMap((match) => {
-        const href = items.get(attributes(match[1] ?? '').idref);
-        if (!href) return [];
-        const target = path.posix.normalize(
-          path.posix.join(
-            path.posix.dirname(opfPath),
-            decodeURIComponent(href.replace(/#.*$/s, '')),
-          ),
-        );
-        if (target.startsWith('../') || !archive[target]) return [];
-        const html = strFromU8(archive[target]);
-        const text = plainText(html).slice(0, 30000);
-        const title = plainText(
-          html.match(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i)?.[1] ||
-            html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ||
-            'Chapter ' + (result.evidence.length + 1),
-        );
-        result.evidence.push({ source: 'chapter:' + title, text });
-        return [{ title, html: html.slice(0, 400000) }];
-      });
+    const manifest = new Set(
+      Array.from(items.values()).flatMap((href) => {
+        const target = href && epubReference(opfPath, href);
+        return target ? [target.path] : [];
+      }),
+    );
+    result.epub = {
+      images: listing.entries
+        .filter(
+          (item) =>
+            manifest.has(item.name) &&
+            epubImagePath(item.name) &&
+            item.previewable &&
+            item.size <= epubImageLimit,
+        )
+        .map((item) => ({ path: item.name, size: item.size })),
+    };
+    const spine = Array.from(opf.matchAll(/<itemref\b([^>]+)\/?\s*>/g));
+    const ordered = [
+      ...new Set([
+        ...spine.flatMap((match) => {
+          const href = items.get(attributes(match[1] ?? '').idref);
+          return href
+            ? [epubReference(opfPath, href)?.path].filter((part): part is string => !!part)
+            : [];
+        }),
+        ...[...manifest].filter((part) => /\.(xhtml|html|htm)$/i.test(part)),
+      ]),
+    ];
+    const chapters = ordered.slice(0, 300).flatMap((target) => {
+      if (!target || !archive[target]) return [];
+      const html = strFromU8(archive[target]);
+      const text = plainText(html).slice(0, 30000);
+      const title = plainText(
+        html.match(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i)?.[1] ||
+          html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ||
+          'Chapter ' + (result.evidence.length + 1),
+      );
+      result.evidence.push({ source: 'chapter:' + title, text });
+      if (html.length > 400000) result.truncated = true;
+      return [{ title, path: target, html: html.slice(0, 400000) }];
+    });
     result.chapters = chapters;
     let chapter = 0;
     for (const evidence of result.evidence)
       if (evidence.source.startsWith('chapter:'))
         evidence.anchor = { kind: 'epub', chapter: chapter++ };
-    result.truncated = chapters.length >= 300;
+    result.truncated ||= ordered.length > chapters.length || spine.length > chapters.length;
+    if (result.truncated)
+      result.coverageReason =
+        'Some chapters or chapter content exceed the supported reading limits.';
   } else {
     const data = await documentBytes(file, 4000000);
     if (data.subarray(0, 8192).includes(0)) throw new Error('This format has no text extractor.');

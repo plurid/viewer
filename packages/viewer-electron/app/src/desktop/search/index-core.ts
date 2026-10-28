@@ -176,6 +176,7 @@ export class FileIndex {
               evidence,
               text: '',
               chapters: undefined,
+              epub: undefined,
               office: undefined,
               truncated:
                 original.truncated ||
@@ -354,6 +355,7 @@ export class FileIndex {
         .all(...params, count, from) as { data: string }[];
     let entries: FileEntry[];
     let more: boolean;
+    let scanLimited = false;
     if (exact) {
       const rows = select(limit + 1, offset);
       entries = rows.slice(0, limit).map((row) => JSON.parse(row.data) as FileEntry);
@@ -371,7 +373,8 @@ export class FileIndex {
           if (matchesQuery(check, item, facts)) matched.push(item);
         }
         if (rows.length < 500 || matched.length >= wanted || read >= 20000) {
-          more = matched.length > offset + limit || (rows.length === 500 && read >= 20000);
+          more = matched.length > offset + limit;
+          scanLimited = rows.length === 500 && read >= 20000 && matched.length < wanted;
           break;
         }
       }
@@ -392,6 +395,7 @@ export class FileIndex {
       evidence,
       more,
       indexed,
+      scanLimited,
       status: this.status(),
     };
   }
@@ -408,6 +412,8 @@ export class FileIndex {
       throw new Error(
         'Wait for this location to finish indexing before taking a selection snapshot.',
       );
+    if (result.scanLimited)
+      throw new Error('This query reached its scan limit. Narrow it before selecting all matches.');
     if (result.more)
       throw new Error(
         'This query has more than 10,000 matches. Narrow the query before taking a basket snapshot.',

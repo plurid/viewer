@@ -12,6 +12,7 @@ import type { CustomAction, TerminalProfile } from './automation/actions';
 import type { ProviderKind } from './models/providers';
 import type { ChangePlan } from './operations/change-plan';
 import type { OfficeContent } from './previews/documents/office';
+import type { EPUBChapter, EPUBImage } from './previews/documents/epub';
 import type { OptimizationRecipe } from './operations/optimization';
 export type { ProviderKind } from './models/providers';
 export interface ModelProvider {
@@ -214,6 +215,8 @@ export interface IndexedResult {
   evidence?: SearchEvidence[];
   more: boolean;
   indexed: boolean;
+  /** A complex query stopped before deciding every candidate; distinct from result pagination. */
+  scanLimited?: boolean;
   status: IndexStatus;
 }
 export interface DocumentEvidence {
@@ -226,7 +229,8 @@ export interface DocumentData {
   metadata: Record<string, string>;
   evidence: DocumentEvidence[];
   text: string;
-  chapters?: { title: string; html: string }[];
+  chapters?: EPUBChapter[];
+  epub?: { images: EPUBImage[] };
   office?: OfficeContent;
   coverageReason?: string;
   truncated: boolean;

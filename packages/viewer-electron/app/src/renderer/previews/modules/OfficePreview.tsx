@@ -13,6 +13,7 @@ import { WorksheetNavigation } from '../WorksheetNavigation';
 import { WordBlock } from '../WordBlock';
 import OfficeLayoutPreview from './OfficeLayoutPreview';
 import { WorksheetTabs } from '../WorksheetTabs';
+import type { TableAddress } from '../../../domain/previews/documents/table-navigation';
 
 export default function OfficePreview(context: PreviewContext) {
   const extension = context.resource.entry.extension;
@@ -57,6 +58,8 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
     {},
   );
   const [history, setHistory] = useState<number[]>([]);
+  const [cellTarget, setCellTarget] = useState<TableAddress>();
+  const surface = useRef<HTMLDivElement>(null);
   const [ignoredCitation, setIgnoredCitation] = useState('');
   const suppliedAnchor = context.evidence?.anchor;
   const citationKey =
@@ -123,6 +126,13 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
     setHistory((previous) =>
       direction === 'previous' ? previous.slice(0, -1) : [...previous, page.fromRow].slice(-128),
     );
+  };
+  const chooseSheet = (name: string, focus = false) => {
+    setIgnoredCitation(citationKey);
+    setSheetName(name);
+    setHistory([]);
+    setCellTarget(focus ? { row: positions?.[name] ?? 1, column: 1 } : undefined);
+    if (focus) surface.current?.focus({ preventScroll: true });
   };
   const firstWorksheet = () => {
     setIgnoredCitation(citationKey);
@@ -218,7 +228,31 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
     </PreviewToolbar>
   );
   return (
-    <div className="office-viewer" data-office-preview="worksheet-pages-v1">
+    <div
+      className="office-viewer"
+      data-office-preview="worksheet-pages-v1"
+      ref={surface}
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (
+          !event.ctrlKey ||
+          event.altKey ||
+          event.metaKey ||
+          office.kind !== 'workbook' ||
+          (event.key !== 'PageUp' && event.key !== 'PageDown')
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        const index = office.sheets.findIndex((item) => item.name === sheet?.name);
+        const next = Math.max(
+          0,
+          Math.min(office.sheets.length - 1, index + (event.key === 'PageUp' ? -1 : 1)),
+        );
+        const name = office.sheets[next]?.name;
+        if (name && name !== sheet?.name) chooseSheet(name, true);
+      }}
+    >
       {(office.kind !== 'workbook' || loading || error) && toolbar()}
       {details && (
         <section
@@ -292,6 +326,16 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
           formatted={formatted}
           merges={sheet.merges}
           renderControls={toolbar}
+          target={cellTarget}
+          navigate={
+            page
+              ? (target) => {
+                  surface.current?.focus({ preventScroll: true });
+                  setCellTarget(target);
+                  navigate(target.row, 'jump');
+                }
+              : undefined
+          }
         />
       ) : (
         office.kind === 'word' && (
@@ -326,19 +370,14 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
           sheet={sheet}
           loading={loading}
           previous={history.at(-1) ?? Math.max(1, page.fromRow - 100)}
-          navigate={navigate}
+          navigate={(row, direction) => {
+            setCellTarget(undefined);
+            navigate(row, direction);
+          }}
         />
       )}
       {office.kind === 'workbook' && sheet && (
-        <WorksheetTabs
-          sheets={office.sheets}
-          value={sheet.name}
-          choose={(name) => {
-            setIgnoredCitation(citationKey);
-            setSheetName(name);
-            setHistory([]);
-          }}
-        />
+        <WorksheetTabs sheets={office.sheets} value={sheet.name} choose={chooseSheet} />
       )}
     </div>
   );

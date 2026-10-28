@@ -605,6 +605,20 @@ button.markdown-link {
   border-top: 1px solid var(--line);
   min-height: 34px;
 }
+.workbook-cell-detail form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.workbook-cell-detail input {
+  width: 84px;
+  min-width: 0;
+}
+.data-scroll [aria-selected='true'] {
+  background: var(--selection);
+  color: var(--ink);
+}
 .office-viewer > .data-viewer {
   flex: 1;
   height: auto;

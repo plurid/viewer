@@ -231,6 +231,46 @@
   gap: 12px;
   align-items: baseline;
 }
+.search-coverage {
+  flex: none;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.search-coverage summary {
+  cursor: pointer;
+}
+.search-coverage > div {
+  max-height: min(180px, 22vh);
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.search-coverage p {
+  margin: 6px 0;
+}
+.search-explorer .search-row > input {
+  min-width: 80px;
+  flex: 1 1 160px;
+}
+.search-explorer .search-row > span {
+  min-width: 0;
+  flex: 0 1 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-explorer .empty-state {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  padding: 12px;
+  gap: 6px;
+  overflow: auto;
+}
+.search-explorer:has(.search-coverage[open]) .empty-state > svg {
+  display: none;
+}
 .search-evidence > p {
   flex: 1;
   min-width: 0;

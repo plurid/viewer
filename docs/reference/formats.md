@@ -13,7 +13,7 @@ thumbnail is different from full semantic inspection. See [platform status](plat
 | Extended images  | `.tif`, `.tiff`, `.heic`, `.heif`, `.psd`, `.jp2`, `.exr`, `.tga`, `.icns` | System-rendered bitmap; PSD coverage is its rendered composite.                                                                        |
 | Camera RAW       | `.dng`, `.cr2`, `.cr3`, `.nef`, `.arw`, `.raf`, `.orf`, `.rw2`             | Independent LibRaw camera image or half-size RAW rendition, up to 4096px. Exact camera/encoding coverage still requires qualification. |
 | PDF              | `.pdf`                                                                     | Pages, text-layer search/selection, thumbnails and outline navigation.                                                                 |
-| Books            | `.epub`                                                                    | Chapter navigation and rendered book content.                                                                                          |
+| Books            | `.epub`                                                                    | Chapters, local illustrations, internal links/footnotes and book search.                                                               |
 | DjVu             | `.djvu`, `.djv`                                                            | Page rendering and text-layer search.                                                                                                  |
 | Word             | `.doc`, `.docx`                                                            | Local paginated layout; DOCX also has bounded Reading view.                                                                            |
 | Excel            | `.xls`, `.xlsx`                                                            | Local print layout with worksheet navigation; XLSX also has stored-value cell inspection.                                              |
@@ -34,6 +34,22 @@ listed above; that is an attempt to play the file, rather than a guarantee of de
 
 Detailed coverage: [Office](office.md), [CAD/models](models.md), [DXF](models.md),
 [HTML/local servers](web.md), and [preview modules](../development/previews.md).
+
+## EPUB reading limits
+
+The reader builds a safe document tree, without source scripts, styles, embedded applications or
+network resources. Internal links resolve inside the publication, including supported footnote
+chapters outside the main reading order. A missing target stays in the book with an explanation.
+External links remain text. Supported local PNG, JPEG, GIF and WebP illustrations load through the
+book's authorized resource, at most 8 MiB and 64 million pixels each. Unsupported images retain
+their alternative text.
+
+Extraction is bounded to 32 MB of expanded text files, 300 chapters and 400,000 characters per
+chapter. Each rendered chapter is bounded to 20,000 nodes and 100 levels. Find in book searches the
+available sanitized chapters, including text split by inline formatting. It shows up to 200 matches
+and identifies partial coverage. Loading illustrations releases their resources when the chapter or
+preview closes. Chapter, text size and supported scroll position remain in versioned preview
+history.
 
 ## Current text, code and configuration previews
 

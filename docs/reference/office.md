@@ -55,11 +55,18 @@ raw values; **Formatted values** switches back. Missing cached values are identi
 does not evaluate formulas or follow external data. Calc may recalculate supported formulas in Print
 layout, so the two views can show different values.
 
+Focus the grid and use arrow keys to inspect cells; Tab leaves the grid rather than visiting every
+cell. Page Up/Down moves by the visible page and loads another bounded page when needed. Home/End
+moves to the first/last previewed column; Control/Command + Home/End reaches the sheet's beginning
+or last stored row. **Cell address** accepts A1 notation, including `$B$42`, and Go loads its row.
+Addresses are limited to the previewed columns and worksheet row range. Control + Page Up/Down
+switches worksheets and keeps keyboard focus through loading.
+
 The grid loads one selected worksheet and up to 100 stored rows at a time. Pagination appears only
 when there are other rows to visit. Previous, Next and Row/Go use source row numbers. Sparse sheets
-can skip gaps; page filtering searches loaded values. Cell details appear only after selecting a
-cell. Bounded merged ranges retain their anchor, including a **Continued from…** value when the
-anchor is on an earlier page.
+can skip gaps; page filtering searches loaded values. The compact address/detail row shows the
+selected cell's saved value and formula. Bounded merged ranges retain their anchor, including a
+**Continued from…** value when the anchor is on an earlier page.
 
 ## Evidence, search and limits
 

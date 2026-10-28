@@ -107,6 +107,29 @@ describe('the index', () => {
       await index.close();
     }
   });
+  it('reports a bounded candidate scan without inventing another result page', async () => {
+    const index = new FileIndex(':memory:');
+    try {
+      index.configure({ roots: [root], exclusions: [], contentRoots: [], paused: true });
+      await index.settled();
+      const base = await entry(root);
+      index.ingest(
+        Array.from({ length: 20001 }, (_, number) => ({
+          ...base,
+          name: `Item ${number}`,
+          path: path.join(root, `Item ${number}`),
+        })),
+        root,
+      );
+      const found = index.query({ query: '~^absent', root });
+      expect(found.entries).toEqual([]);
+      expect(found.scanLimited).toBe(true);
+      expect(found.more).toBe(false);
+      expect(() => index.snapshot({ query: '~^absent', root })).toThrow();
+    } finally {
+      await index.close();
+    }
+  });
 });
 
 describe('the search through subfolders', () => {

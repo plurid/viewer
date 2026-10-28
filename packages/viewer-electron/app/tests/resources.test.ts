@@ -4,6 +4,8 @@ import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { Resources } from '../src/desktop/previews/resources';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { readerBookFixture } from './fixtures/reader-book';
+import { extractDocument } from '../src/desktop/previews/formats';
 let root: string, resources: Resources;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-resources-');
@@ -14,6 +16,35 @@ afterEach(async () => {
   await trashTemporary(root);
 });
 describe('scoped preview resources', () => {
+  it('retains EPUB chapter identity, authorizes local illustrations and rejects oversized images', async () => {
+    const file = path.join(root, 'Book.epub');
+    await writeFile(file, readerBookFixture());
+    const data = await extractDocument(file);
+    expect(data.chapters?.map((chapter) => chapter.path)).toEqual([
+      'Book/first.xhtml',
+      'Book/notes.xhtml',
+    ]);
+    expect(data.epub?.images).toEqual([
+      expect.objectContaining({ path: 'Book/images/illustration.png' }),
+    ]);
+    const book = await resources.grant(file);
+    const image = await resources.archiveEntry(book.id, 'Book/images/illustration.png');
+    expect(image.dimensions).toEqual({ width: 64, height: 64 });
+    resources.release(book.id);
+    expect(() => resources.documentSource(image.id)).toThrow('expired');
+    const header = Buffer.alloc(24);
+    Buffer.from('89504e470d0a1a0a', 'hex').copy(header);
+    header.writeUInt32BE(20000, 16);
+    header.writeUInt32BE(20000, 20);
+    const invalid = path.join(root, 'Invalid.epub');
+    await writeFile(
+      invalid,
+      zipSync({ 'huge.png': header, 'large.png': Buffer.alloc(8 * 1024 * 1024 + 1) }),
+    );
+    const source = await resources.grant(invalid);
+    await expect(resources.archiveEntry(source.id, 'huge.png')).rejects.toThrow('dimensions');
+    await expect(resources.archiveEntry(source.id, 'large.png')).rejects.toThrow('preview limit');
+  });
   it('reads BOM-marked UTF-16 XML as text without treating its zero bytes as a binary file', async () => {
     const text = '<Invoice currency="RON">Neamț</Invoice>';
     const little = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
