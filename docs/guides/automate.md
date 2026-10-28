@@ -25,6 +25,19 @@ You can later add aliases, key sequences and macros. See the
 [command language](../reference/command-line.md) rather than learning every form before using the
 application.
 
+## Open Viewer from your terminal
+
+In a direct build, open **Settings → Navigation → Install shell command**. This installs the
+`viewer` launcher at `~/.local/bin/viewer` without replacing another command at that path.
+
+Run `viewer .` to open the current folder. If your shell cannot find it, run `~/.local/bin/viewer .`
+and add `~/.local/bin` to your shell's `PATH` when convenient. Viewer does not edit your shell
+startup files.
+
+See [terminal launch options](../reference/command-line.md#launch-from-a-terminal) for new windows,
+existing workspaces and terminal planes. The launcher is separate from the `:` command language
+inside Viewer.
+
 ## Compose a file workflow
 
 Workflows describe a sequence of inspection, comparison and proposed changes. Watch rules can

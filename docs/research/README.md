@@ -6,6 +6,7 @@ instructions or a list of shipped features. Current behavior is in the [guides](
 
 - [Product priorities](roadmap.md)
 - [Desktop quality and durable workspaces](desktop-quality.md)
+- [Speech input and local or hosted model setup](speech.md)
 - [Professional file ecosystems](formats.md)
 - [Spatial development and review](spatial-development.md)
 - [Composable tools](actions.md)

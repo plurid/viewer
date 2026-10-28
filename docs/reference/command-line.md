@@ -1,4 +1,4 @@
-# The command language
+# Command language and terminal launch
 
 Type `:` in **⌘K**, or choose **Command line…**. You can use ordinary palette commands without
 learning this language; it becomes useful for repeatable keyboard work, settings, aliases and
@@ -80,3 +80,35 @@ requests explain why.
 Manual terminal-input verbs and imported keymaps have their own trust rules. Agents propose
 supported command IDs rather than command-language lines. See [agent authority](agents.md) and
 [search syntax](search.md).
+
+## Launch from a terminal
+
+The direct build provides **Install shell command** in **Settings → Navigation**. It creates an
+executable launcher at `~/.local/bin/viewer` pointing to that Viewer installation. It does not edit
+`PATH` or replace an existing different command. This installer is not a palette command or a
+terminal subcommand named `install viewer`.
+
+```sh
+viewer .
+viewer ./notes.md
+viewer --new-window ~/Documents
+viewer --workspace "Research" ./notes.md
+viewer --terminal .
+viewer -- ./-draft.txt
+```
+
+| Argument or option       | Behavior                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| Paths                    | Open up to 100 paths; resolve relative paths against the invoking terminal's current folder. |
+| `--new-window`           | Open an independent Viewer window.                                                           |
+| `--workspace ID_OR_NAME` | Target one existing workspace by ID or unique name; takes precedence over `--new-window`.    |
+| `--terminal`             | Request a terminal plane for the launch target.                                              |
+| `--`                     | Treat subsequent arguments as literal paths, including names beginning with `-`.             |
+
+Paths understand `~` and `~/`. Quote spaces using your shell's quoting rules. Unknown options fail;
+the launcher does not expose arbitrary in-app command execution. Shell integration is unavailable in
+the sandboxed App Store build.
+
+Moving the application can leave the launcher pointing at its previous location. Review the existing
+launcher before replacing it. **Uninstall shell command…** requires confirmation and moves only the
+identity-checked Viewer launcher to OS Trash; unrelated commands are preserved.
