@@ -2,6 +2,7 @@ import type { CapturedTarget, ExecutionTask } from '../automation/actions';
 import type { SettingsPatch } from '../services';
 import type { Pane, ViewMode, FileEntry, OperationJob } from '../contracts';
 import type { TransformPlan } from '../operations/transforms';
+import type { SpeechSetup } from '../speech/models';
 /** Live navigation discovery excludes history, camera/layout and unrelated preferences. */
 export interface AgentPlane {
   id: string;
@@ -15,6 +16,7 @@ export interface AgentWorkspace {
   name: string;
   panes: AgentPlane[];
   roots: string[];
+  tasks?: { id: string; name: string; path: string; branch?: string; commit?: string }[];
 }
 export interface AgentWorkspaceSnapshot {
   activeWorkspace: string;
@@ -35,7 +37,8 @@ export interface CommandDescriptor {
 export interface AgentProposal {
   id: string;
   clientID?: string;
-  kind: 'command' | 'configuration' | 'terminal-write' | 'navigation' | 'transform';
+  kind: 'command' | 'configuration' | 'terminal-write' | 'navigation' | 'transform' | 'speech';
+  speech?: SpeechSetup;
   transform?: { plan: TransformPlan; destination: string; name: string };
   title: string;
   target?: CapturedTarget;

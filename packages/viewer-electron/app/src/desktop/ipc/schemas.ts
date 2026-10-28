@@ -106,6 +106,21 @@ const workspaceSnapshotSchema = z.object({
         id,
         name: z.string().min(1).max(100),
         roots: z.array(id).max(200),
+        tasks: z
+          .array(
+            z.object({
+              id,
+              name: z.string().min(1).max(100),
+              path: localPath,
+              branch: z.string().max(1024).optional(),
+              commit: z
+                .string()
+                .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/)
+                .optional(),
+            }),
+          )
+          .max(50)
+          .optional(),
         panes: z
           .array(
             z.object({

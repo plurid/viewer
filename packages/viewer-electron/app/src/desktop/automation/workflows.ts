@@ -426,6 +426,7 @@ export class Workflows {
       await this.save(run);
       record.sources = await this.capture(await this.references(run, workflowReferences(step)));
       signal.throwIfAborted();
+      await this.dependencies.authorizeRun?.(run);
       await this.save(run);
       if (step.kind === 'inspect') {
         if (record.sources.length > 100)
@@ -436,6 +437,7 @@ export class Workflows {
           results.push(
             await this.dependencies.files.inspect(source.path, step.content, step.ocr, signal),
           );
+          await this.dependencies.authorizeRun?.(run);
           workflowArtifact({ kind: 'inspection', results });
         }
         record.artifact = workflowArtifact({ kind: 'inspection', results });
@@ -454,6 +456,7 @@ export class Workflows {
         signal.addEventListener('abort', cancel, { once: true });
         try {
           const result = await this.dependencies.comparisons.run(id, first, second, step.hashes);
+          await this.dependencies.authorizeRun?.(run);
           record.artifact = workflowArtifact({ kind: 'comparison', result });
         } finally {
           signal.removeEventListener('abort', cancel);
@@ -468,6 +471,8 @@ export class Workflows {
         if (destination.length !== 1 || !folder || !(await entry(folder)).directory)
           throw new Error('Choose one destination folder for the copy step.');
         await this.validate(record.sources);
+        await this.dependencies.authorizeRun?.(run);
+        signal.throwIfAborted();
         const plan = await this.dependencies.plans.request({
           kind: 'prepare',
           title: run.definition.name + ' · ' + step.id,
@@ -492,6 +497,8 @@ export class Workflows {
       } else {
         await this.validate(record.sources);
         const expectedRecipe = await this.dependencies.recipeForRun?.(run, step.recipeID);
+        await this.dependencies.authorizeRun?.(run);
+        signal.throwIfAborted();
         record.taskID = await this.dependencies.actions.start(
           {
             recipeID: step.recipeID,

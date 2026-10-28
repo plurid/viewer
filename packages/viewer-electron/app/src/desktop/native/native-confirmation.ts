@@ -25,7 +25,17 @@ export async function confirmAgentProposal(
     ).slice(0, 6000),
     buttons: [
       'Cancel',
-      removal ? 'Move to Trash' : proposal.kind === 'configuration' ? 'Change' : 'Run',
+      removal
+        ? 'Move to Trash'
+        : proposal.kind === 'configuration'
+          ? 'Change'
+          : proposal.kind === 'speech'
+            ? proposal.speech?.kind === 'use'
+              ? 'Choose model'
+              : proposal.speech?.kind === 'import'
+                ? 'Import model'
+                : 'Download model'
+            : 'Run',
     ],
     defaultId: 0,
     cancelId: 0,

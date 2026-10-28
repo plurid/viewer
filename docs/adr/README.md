@@ -10,3 +10,4 @@ These records explain decisions that still shape the application. Feature usage 
 - [Framing request ownership](0005-framing-request-ownership.md)
 - [Bounded human Journal](0006-bounded-human-journal.md)
 - [Views, runtimes and typed transformations](0007-spatial-workbench-resources.md)
+- [Scoped terminal CLI](0008-scoped-terminal-cli.md)

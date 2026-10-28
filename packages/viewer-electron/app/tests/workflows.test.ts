@@ -44,7 +44,7 @@ const definition = () =>
       },
     ],
   });
-async function fixture() {
+async function fixture(overrides: Partial<ConstructorParameters<typeof Workflows>[1]> = {}) {
   const root = await temporaryRoot('viewer-workflow-');
   const profile = path.join(root, 'Profile'),
     destination = path.join(root, 'Destination');
@@ -80,6 +80,7 @@ async function fixture() {
     operations,
     actions,
     coordination: { run: async <T>(_intents: unknown, work: () => Promise<T>) => work() },
+    ...overrides,
   };
   let flows = new Workflows(profile, deps);
   return {
@@ -129,6 +130,46 @@ async function fixture() {
   };
 }
 describe('explicit portable workflows', () => {
+  it('rechecks authorization after inspection before publishing evidence or preparing a copy', async () => {
+    let denied = false,
+      inspected = false;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const f = await fixture({
+      authorizeRun: async () => {
+        if (denied) throw new Error('Client access was revoked.');
+      },
+      files: {
+        inspect: async (file, content, ocr, signal) => {
+          const result = await inspectFile(file, { content, ocr: ocr ? 'eng' : undefined, signal });
+          inspected = true;
+          await gate;
+          return result;
+        },
+      },
+    });
+    try {
+      const run = await f.start(await f.create());
+      await expect.poll(() => inspected).toBe(true);
+      denied = true;
+      release();
+      await expect
+        .poll(
+          async () => ((await f.flows.request({ kind: 'get', id: run.id })) as WorkflowRun).status,
+        )
+        .toBe('failed');
+      const failed = (await f.flows.request({ kind: 'get', id: run.id })) as WorkflowRun;
+      expect(failed.steps[0]!.artifact).toBeUndefined();
+      expect(failed.steps[0]!.error).toContain('revoked');
+      expect(failed.steps[1]!.taskID).toBeUndefined();
+      expect(f.operations.all()).toEqual([]);
+    } finally {
+      release();
+      await f.close();
+    }
+  });
   it('rejects cycles, hidden executors, missing inputs and implicit step dependencies', () => {
     const flow = definition();
     expect(workflowDefinitionSchema.safeParse({ ...flow, command: 'rm -rf' }).success).toBe(false);

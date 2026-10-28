@@ -22,6 +22,10 @@ const terminalCommands = new Set([
  * selection, opens a dialog the person completes, or changes the view. Everything
  * else is refused, including commands added later and clipboard-driven paste/move. */
 const agentCommands = new Set([
+  // These commands only open parameter forms; the person completes creation or rename.
+  'new-workspace',
+  'rename-workspace',
+  'new-task-from-branch',
   'trash',
   'duplicate',
   'compress',

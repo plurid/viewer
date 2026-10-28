@@ -8,6 +8,7 @@ interface Transport {
   input: Readable;
   output: Writable;
   token?: string;
+  signal?: AbortSignal;
 }
 /** Headless stdio client; the running UI application owns services and approval. */
 export async function runMCPClient(
@@ -19,6 +20,7 @@ export async function runMCPClient(
   },
 ): Promise<void> {
   const token = transport.token;
+  transport.signal?.throwIfAborted();
   if (!token) throw new Error('Set VIEWER_AGENT_TOKEN to the token shown in Viewer Settings.');
   const connectionFile = path.join(dataPath, 'agent-connection-v1.json');
   let connection: { socket: string };
@@ -32,10 +34,20 @@ export async function runMCPClient(
     throw error;
   }
   const socket = connect(connection.socket);
-  await new Promise<void>((resolve, reject) => {
-    socket.once('connect', resolve);
-    socket.once('error', reject);
-  });
+  const abort = () => socket.destroy();
+  transport.signal?.addEventListener('abort', abort, { once: true });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+      socket.once('close', () => reject(new Error('Viewer disconnected while connecting.')));
+      if (transport.signal?.aborted) socket.destroy();
+    });
+  } catch (error) {
+    transport.signal?.removeEventListener('abort', abort);
+    socket.destroy();
+    throw error;
+  }
   const input = createInterface({ input: transport.input });
   const pending = new Map<string, { id: unknown; timer: ReturnType<typeof setTimeout> }>();
   const decoder = new StringDecoder('utf8');
@@ -120,5 +132,10 @@ export async function runMCPClient(
     ended = true;
     drained();
   });
-  await completed;
+  try {
+    await completed;
+    transport.signal?.throwIfAborted();
+  } finally {
+    transport.signal?.removeEventListener('abort', abort);
+  }
 }

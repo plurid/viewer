@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GitReader, runGit } from '../src/desktop/comparison/git';
@@ -110,6 +110,19 @@ describe('read-only Git status', () => {
       const head = await reader.head(path.join(root, 'notes.txt'));
       expect(head.source).not.toBeNull();
       expect((await reader.blob(head.source!)).toString()).toBe('before\n');
+      expect(await reader.root(root)).toBe(await realpath(root));
+      await gitCommand('config', 'diff.external', hook);
+      const diff = await reader.diff(root, 'HEAD', AbortSignal.timeout(5000));
+      expect(diff).toMatchObject({
+        base: 'HEAD',
+        commit: result.snapshot.commit,
+        includesUntracked: false,
+      });
+      expect(diff.patch).toContain('-before\n+after');
+      expect(diff.patch).not.toContain('untracked');
+      await expect(
+        reader.diff(root, '--output=escaped', AbortSignal.timeout(5000)),
+      ).rejects.toThrow();
       expect(
         createHash('sha256')
           .update(await readFile(index))

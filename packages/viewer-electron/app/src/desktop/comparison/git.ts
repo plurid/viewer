@@ -158,6 +158,19 @@ export class GitReader {
       path.join(await realpath(path.dirname(file)), path.basename(file)),
     );
   }
+  /** Locate before scanning so a scoped caller can authorize the whole checkout first. */
+  async root(file: string): Promise<string> {
+    this.check();
+    const directory = await this.directory(file);
+    await this.version(directory);
+    const root = new TextDecoder('utf-8', { fatal: true })
+      .decode(await this.command(directory, ['rev-parse', '--show-toplevel'], 32768))
+      .replace(/\n$/, '');
+    const actual = await realpath(root);
+    if (directory !== actual && !directory.startsWith(actual + path.sep))
+      throw new Error('Git returned a repository outside the requested folder.');
+    return actual;
+  }
   async status(file: string, refresh = false): Promise<GitResult> {
     if (!this.enabled())
       return { kind: 'disabled', message: 'Enable Git in Settings to show repository status.' };
@@ -225,6 +238,46 @@ export class GitReader {
         message,
       };
     }
+  }
+  /** Fixed read-only diff. Resolve the base to an immutable commit before passing it to Git. */
+  async diff(directory: string, base: string, outerSignal: AbortSignal) {
+    this.check();
+    if (!base || base.length > 300 || /[\0\r\n]/.test(base))
+      throw new Error('Choose a branch or commit as the diff base.');
+    const root = await this.root(directory);
+    await this.access([root]);
+    const signal = AbortSignal.any([outerSignal, this.lifetime.signal, AbortSignal.timeout(30000)]);
+    const commit = new TextDecoder('utf-8', { fatal: true })
+      .decode(
+        await this.run(
+          root,
+          ['rev-parse', '--verify', '--end-of-options', base + '^{commit}'],
+          1024,
+          signal,
+        ),
+      )
+      .trim();
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit))
+      throw new Error('Git returned an invalid base commit.');
+    const patch = new TextDecoder('utf-8', { fatal: true }).decode(
+      await this.run(
+        root,
+        [
+          'diff',
+          '--no-ext-diff',
+          '--no-textconv',
+          '--no-renames',
+          '--ignore-submodules=all',
+          commit,
+          '--',
+        ],
+        4 * 1024 * 1024,
+        signal,
+      ),
+    );
+    await this.access([root]);
+    signal.throwIfAborted();
+    return { root, base, commit, patch, includesUntracked: false, observed: Date.now() };
   }
   async head(file: string): Promise<{ kind: 'head'; source: GitSource | null; root: string }> {
     this.check();

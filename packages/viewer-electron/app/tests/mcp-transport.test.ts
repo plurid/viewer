@@ -88,3 +88,32 @@ it('returns an explicit error for pending calls when the app disconnects', async
     await trashTemporary(root);
   }
 });
+it('aborts a pending transport request and closes its owned socket', async () => {
+  const root = await temporaryRoot('viewer-mcp-abort-');
+  const input = new PassThrough(),
+    output = new PassThrough();
+  try {
+    await writeFile(path.join(root, 'agent-connection-v1.json'), '{"socket":"fixture"}');
+    const controller = new AbortController();
+    const socket = new Duplex({
+      read() {},
+      write(_chunk, _encoding, callback) {
+        callback();
+        queueMicrotask(() => controller.abort(new Error('Generated cancellation.')));
+      },
+    });
+    connect.mockImplementation(() => {
+      queueMicrotask(() => socket.emit('connect'));
+      return socket;
+    });
+    input.end('{"jsonrpc":"2.0","id":5,"method":"tools/list"}\n');
+    await expect(
+      runMCPClient(root, { input, output, token: 'fixture-token', signal: controller.signal }),
+    ).rejects.toThrow('Generated cancellation');
+    expect(socket.destroyed).toBe(true);
+  } finally {
+    input.destroy();
+    output.destroy();
+    await trashTemporary(root);
+  }
+});

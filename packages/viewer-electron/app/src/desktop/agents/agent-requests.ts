@@ -22,6 +22,7 @@ import {
   transformExtension,
 } from '../../domain/operations/transforms';
 import type { TransformPlan } from '../../domain/operations/transforms';
+import { speechSetupSchema, type SpeechSetup } from '../../domain/speech/models';
 import { validName } from '../files/filesystem';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
@@ -48,7 +49,7 @@ async function folderContents(root: string): Promise<{ items: number; bytes: num
 }
 /** Commands and configuration changes can alter files or later execution; navigation cannot. */
 export const needsNativeConfirmation = (proposal: AgentProposal) =>
-  proposal.kind === 'command' || proposal.kind === 'configuration';
+  proposal.kind === 'command' || proposal.kind === 'configuration' || proposal.kind === 'speech';
 /** Effective approvals live outside editable configuration and bind to the exact executor. */
 export class AgentRequests {
   private proposals = new Map<string, AgentProposal & { fingerprint?: string }>();
@@ -80,11 +81,13 @@ export class AgentRequests {
       cancelExecution(id: string): void;
       cancelOperation?(id: string): void;
       operation?(id: string): OperationJob | undefined;
+      cancelSpeech?(id: string): void;
     },
     /** A confirmation the desktop process shows itself. A renderer approval alone
      * never runs a command or configuration change (AGENTS.md). */
     private confirm?: (proposal: AgentProposal) => Promise<boolean>,
     private exportTransform?: (proposal: AgentProposal) => Promise<{ operationID: string }>,
+    private setupSpeech?: (setup: SpeechSetup, operationID: string) => Promise<unknown>,
   ) {
     this.store = new DocumentStore(path.join(directory, 'execution-approvals-v1.json'), (value) =>
       z
@@ -238,6 +241,21 @@ export class AgentRequests {
     this.proposals.set(value.id, value);
     this.emit(value);
     return value;
+  }
+  speech(setup: SpeechSetup, detail: string): { id: string; requiresUserReview: true } {
+    const parsed = speechSetupSchema.parse(setup);
+    const proposal = this.add({
+      kind: 'speech',
+      speech: parsed,
+      title:
+        parsed.kind === 'use'
+          ? 'Choose local speech model'
+          : parsed.kind === 'import'
+            ? 'Import local speech model'
+            : 'Download local speech model',
+      detail,
+    });
+    return { id: proposal.id, requiresUserReview: true };
   }
   async command(
     commandID: string,
@@ -448,7 +466,11 @@ export class AgentRequests {
       const execute = async () => {
         if (this.proposals.get(id)?.status !== 'running')
           throw new Error('This agent task was stopped.');
-        if (proposal.kind === 'configuration') {
+        if (proposal.kind === 'speech') {
+          if (!proposal.speech || !this.setupSpeech)
+            throw new Error('Speech model setup is unavailable.');
+          await this.setupSpeech(speechSetupSchema.parse(proposal.speech), proposal.id);
+        } else if (proposal.kind === 'configuration') {
           for (const patch of proposal.patches!)
             agentConfigurationPath(patch.keys ?? patch.path.split('.'));
           // checked again as it applies: what it names may have gone since it was proposed
@@ -538,10 +560,18 @@ export class AgentRequests {
         !['review', 'running'].includes(proposal.status)
       )
         continue;
-      if (proposal.taskID) this.authority?.cancelExecution(proposal.taskID);
-      if (proposal.operationID) this.authority?.cancelOperation?.(proposal.operationID);
-      proposal.status = 'cancelled';
-      this.emit(proposal);
+      this.cancel(proposal.id, clientID);
     }
+  }
+  cancel(id: string, clientID: string): void {
+    const proposal = this.get(id);
+    if ((proposal.clientID ?? sharedClientID) !== clientID)
+      throw new Error('Proposal belongs to another actor.');
+    if (!['review', 'running'].includes(proposal.status)) return;
+    if (proposal.taskID) this.authority?.cancelExecution(proposal.taskID);
+    if (proposal.kind === 'speech') this.authority?.cancelSpeech?.(proposal.id);
+    if (proposal.operationID) this.authority?.cancelOperation?.(proposal.operationID);
+    proposal.status = 'cancelled';
+    this.emit(proposal);
   }
 }

@@ -36,6 +36,7 @@ export async function answerPrompt(
   generate: Generate,
   signal: AbortSignal,
   userCommands: ReadonlyMap<string, readonly string[]> = new Map(),
+  actor: 'user' | 'agent' = 'user',
 ): Promise<PromptAnswer> {
   const provider = promptProvider(settings);
   if (!provider) throw new Error('Add a model in Settings → Models to ask in words.');
@@ -46,7 +47,7 @@ export async function answerPrompt(
     promptSchema,
     signal,
     'names',
-    'user',
+    actor,
   );
   const parsed = promptAnswerSchema.safeParse(raw);
   if (!parsed.success)

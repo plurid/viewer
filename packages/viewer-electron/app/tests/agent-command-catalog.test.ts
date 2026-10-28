@@ -31,6 +31,7 @@ const commands: CommandDescriptor[] = [
   { id: 'profile.focus', label: 'Profile: Focus', group: 'View', aliases: ['focus'] },
   { id: 'setting.ui.space.grid', label: 'Show grid', group: 'Settings', aliases: [] },
   { id: 'new-workspace', label: 'New workspace…', group: 'Workspaces', aliases: [] },
+  { id: 'install-viewer-cli', label: 'Install Viewer CLI', group: 'Navigation', aliases: [] },
 ];
 
 async function call<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -124,6 +125,7 @@ describe('agent window command discovery', () => {
     expect(catalog.commands.map((command) => command.id)).toEqual([
       'profile.focus',
       'setting.ui.space.grid',
+      'new-workspace',
     ]);
     expect(catalog.reviewByDefault).toBe(true);
     const explanation = await call<{ target: CapturedTarget; reviewByDefault: boolean }>(
@@ -131,7 +133,7 @@ describe('agent window command discovery', () => {
       { commandID: 'profile.focus' },
     );
     expect(explanation).toMatchObject({ target, reviewByDefault: true });
-    for (const commandID of ['profile.focus', 'setting.ui.space.grid']) {
+    for (const commandID of ['profile.focus', 'setting.ui.space.grid', 'new-workspace']) {
       const proposal = await call<{ id: string; requiresUserReview: boolean }>('propose_command', {
         commandID,
       });
@@ -144,7 +146,13 @@ describe('agent window command discovery', () => {
     }
     expect(execute).not.toHaveBeenCalled();
     expect(access).not.toHaveBeenCalled();
-    await expect(call('propose_command', { commandID: 'new-workspace' })).rejects.toThrow(
+    const pending = await call<{ id: string }>('propose_command', { commandID: 'profile.focus' });
+    expect(await call('cancel_proposal', { id: pending.id })).toMatchObject({
+      id: pending.id,
+      status: 'cancelled',
+    });
+    expect(execute).not.toHaveBeenCalled();
+    await expect(call('propose_command', { commandID: 'install-viewer-cli' })).rejects.toThrow(
       'Agents cannot propose',
     );
   });

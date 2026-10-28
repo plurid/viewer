@@ -44,14 +44,26 @@ import { askNatively } from './desktop/native/native-confirmation';
 import { saveBeforeClose, type SaveFailureChoice } from './desktop/windows/save-before-close';
 import { WindowCreationRequests } from './desktop/windows/creation-requests';
 import { isolatedShellHome } from './desktop/windows/test-integration';
+import { isCLIInvocation } from './domain/cli/catalog';
+import { runCLI } from './desktop/cli/run';
 import {
   frameLocationURLs,
   frameNavigationAllowed,
   rendererRequestAllowed,
 } from './desktop/windows/web-content-policy';
-const mcpMode = process.argv.includes('--mcp');
-// Stdio is protocol transport in MCP mode; retain its normal failure behavior.
-if (!mcpMode) protectDiagnosticOutput([process.stdout, process.stderr]);
+const terminalArguments = process.argv.slice(app.isPackaged ? 1 : 2);
+const mcpMode = terminalArguments[0] === '--mcp';
+const cliMode = !mcpMode && isCLIInvocation(terminalArguments);
+const headless = mcpMode || cliMode;
+if (headless) {
+  const fail = (error: unknown) => {
+    process.stderr.write(errorMessage(error) + '\n', () => app.exit(1));
+  };
+  process.on('uncaughtException', fail);
+  process.on('unhandledRejection', fail);
+}
+// Headless stdout carries protocol or CLI results without diagnostic console wrapping.
+if (!headless) protectDiagnosticOutput([process.stdout, process.stderr]);
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'viewer-app',
@@ -99,12 +111,15 @@ const resolved = (directory: string) => {
     return path.resolve(directory);
   }
 };
-const shellCommandHome = isolatedShellHome({
-  requested: process.env.VIEWER_TEST_SHELL_HOME && resolved(process.env.VIEWER_TEST_SHELL_HOME),
-  renderTest,
-  dataDirectory: process.env.VIEWER_DATA_DIRECTORY && resolved(process.env.VIEWER_DATA_DIRECTORY),
-  defaultDataDirectory: resolved(defaultUserData),
-});
+const shellCommandHome = headless
+  ? undefined
+  : isolatedShellHome({
+      requested: process.env.VIEWER_TEST_SHELL_HOME && resolved(process.env.VIEWER_TEST_SHELL_HOME),
+      renderTest,
+      dataDirectory:
+        process.env.VIEWER_DATA_DIRECTORY && resolved(process.env.VIEWER_DATA_DIRECTORY),
+      defaultDataDirectory: resolved(defaultUserData),
+    });
 if (
   !debuggingAllowed({
     packaged: app.isPackaged,
@@ -156,7 +171,7 @@ let settingsWindow: BrowserWindow | null = null;
 let settingsClosing: Promise<void> | undefined;
 let initialLaunch: LaunchRequest | undefined;
 let launchError: string | undefined;
-if (!mcpMode) {
+if (!headless) {
   try {
     initialLaunch = parseLaunch(
       process.argv
@@ -177,7 +192,7 @@ if (!mcpMode) {
   }
 }
 const ownsInstance =
-  mcpMode || app.requestSingleInstanceLock({ request: initialLaunch, error: launchError });
+  headless || app.requestSingleInstanceLock({ request: initialLaunch, error: launchError });
 if (!ownsInstance) app.quit();
 let closing = false;
 let quitting = false;
@@ -551,17 +566,38 @@ app.on('open-file', (event, file) => {
   else pendingPaths.push(file);
   // with every window closed, the file waited for a later Dock click; a window opens
   // for it, as `activate` would open one
-  if (!mcpMode && desktop && !window && !quitPending && !quitting) void createWindow();
+  if (!headless && desktop && !window && !quitPending && !quitting) void createWindow();
 });
 app
   .whenReady()
   .then(async () => {
     if (!ownsInstance || quitPending || quitting) return;
     if (launchError) throw new Error(launchError);
-    if (mcpMode) {
+    if (headless) {
       app.dock?.hide();
       try {
-        await runMCPClient(app.getPath('userData'));
+        if (cliMode) {
+          const interrupt = new AbortController();
+          const cancel = () => interrupt.abort();
+          process.once('SIGINT', cancel);
+          process.once('SIGTERM', cancel);
+          try {
+            process.exitCode = await runCLI(terminalArguments, {
+              dataPath: app.getPath('userData'),
+              version: app.getVersion(),
+              cwd: process.cwd(),
+              home: os.homedir(),
+              token: process.env.VIEWER_AGENT_TOKEN,
+              input: process.stdin,
+              output: process.stdout,
+              error: process.stderr,
+              signal: interrupt.signal,
+            });
+          } finally {
+            process.removeListener('SIGINT', cancel);
+            process.removeListener('SIGTERM', cancel);
+          }
+        } else await runMCPClient(app.getPath('userData'));
       } catch (error) {
         process.stderr.write(errorMessage(error) + '\n');
         process.exitCode = 1;
@@ -729,7 +765,7 @@ app
   });
 app.on('activate', () => {
   void activateApplication({
-    available: () => !mcpMode && !!desktop && !quitPending && !quitting,
+    available: () => !headless && !!desktop && !quitPending && !quitting,
     present: !backgroundTest,
     restoreHotkey: () => hotkey?.restore() ?? false,
     currentWindow: () => {

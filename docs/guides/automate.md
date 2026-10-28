@@ -36,9 +36,22 @@ Run `viewer .` to open the current folder. If your shell cannot find it, run `~/
 and add `~/.local/bin` to your shell's `PATH` when convenient. Viewer does not edit your shell
 startup files.
 
-See [terminal launch options](../reference/command-line.md#launch-from-a-terminal) for new windows,
-existing workspaces and terminal planes. The launcher is separate from the `:` command language
-inside Viewer.
+Try `viewer --help` next. To search and automate, keep Viewer open and create a named client in
+**Settings → Agents** with only the folders and capabilities you need. Set its token in
+`VIEWER_AGENT_TOKEN`, then try:
+
+```sh
+viewer workspace list
+viewer search 'invoice' --root ./Documents
+viewer search 'invoice' --root ./Documents --content
+viewer git status .
+```
+
+Content search requires a content grant. `viewer ask 'select the images'` asks the configured model
+for a command proposal; it does not execute the answer. Exports and workflow file changes prepare
+reviews in Viewer. Read the [CLI reference](../reference/cli.md) for JSON output, cancellation,
+review IDs and the full command list. The terminal CLI is separate from the `:` language inside
+Viewer.
 
 ## Compose a file workflow
 

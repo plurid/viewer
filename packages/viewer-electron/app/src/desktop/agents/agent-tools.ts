@@ -1,9 +1,22 @@
 import { z } from 'zod';
 import { transformPlanSchema } from '../../domain/operations/transforms';
 import { sessionReportSchema } from '../../domain/agents/sessions';
+import { serviceTools } from './service-catalog';
 /** The MCP tools Viewer offers agents. Every call is still authorized per client,
  * capability and folder, and anything that changes files waits for review. */
 export const agentTools = [
+  ...serviceTools,
+  {
+    name: 'cancel_proposal',
+    description:
+      'Cancel a pending or running proposal owned by the authenticated client. Preserves its evidence and any already completed output.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string', minLength: 1, maxLength: 200 } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'report_session',
     description:
@@ -243,6 +256,7 @@ export const agentTools = [
         query: { type: 'string' },
         root: { type: 'string' },
         offset: { type: 'integer' },
+        content: { type: 'boolean' },
       },
       required: ['query', 'root'],
       additionalProperties: false,

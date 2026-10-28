@@ -18,6 +18,7 @@ import { officeFixture } from './office-fixtures';
 import { extractDocument } from '../src/desktop/previews/formats';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 import type * as Coordination from '../src/desktop/files/file-coordination';
+import { entry } from '../src/desktop/files/filesystem';
 
 // These service regressions exercise authorization, real readers and parsers. Native provider
 // coordination has its own acceptance; an OS prompt must not decide the broker's unit results.
@@ -42,6 +43,7 @@ let snapshot: AgentWorkspaceSnapshot;
 let denied: boolean;
 let actionTasks: ActionPlan[];
 let relationshipRows: FileRelation[];
+const queryFiles = vi.fn<FileServices['query']>();
 const startAction = vi.fn(async (request: ActionRequest) => {
   const id = crypto.randomUUID();
   actionTasks.push({
@@ -77,6 +79,7 @@ beforeEach(async () => {
   actionTasks = [];
   relationshipRows = [];
   startAction.mockClear();
+  queryFiles.mockReset();
   root = await temporaryRoot('viewer-agent-navigation-');
   files = path.join(root, 'Shared');
   secret = path.join(root, 'Private');
@@ -167,6 +170,7 @@ beforeEach(async () => {
           }
         : undefined,
     {
+      query: queryFiles,
       extract: vi.fn(async (file: string) => {
         if (file.endsWith('.xlsx')) return extractDocument(file);
         const text = await readFile(file, 'utf8');
@@ -228,6 +232,60 @@ afterEach(async () => {
   await broker.close();
   settings.close();
   await trashTemporary(root);
+});
+
+it('returns content search evidence only for granted paths and rechecks a changed content capability', async () => {
+  const allowedFile = await entry(path.join(files, 'Résumé.txt'));
+  const privateFile = path.join(secret, 'Private.txt');
+  await writeFile(privateFile, 'Unshared contents.');
+  const outsideFile = await entry(privateFile);
+  const reader = await broker.clients.create({
+    name: 'Generated search reader',
+    roots: [files],
+    capabilities: ['metadata', 'content'],
+    budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+  });
+  token = reader.token;
+  const evidence = (file: typeof allowedFile) => ({
+    path: file.path,
+    version: { identity: file.identity, modified: file.modified, size: file.size },
+    anchor: { kind: 'text' as const, line: 1, start: 0, end: 4 },
+    quote: 'Generated content match.',
+    coverage: 'complete' as const,
+  });
+  const result = {
+    entries: [allowedFile, outsideFile],
+    evidence: [evidence(allowedFile), evidence(outsideFile)],
+    more: false,
+    indexed: true,
+    status: { running: false, count: 2, roots: [] },
+  };
+  queryFiles.mockResolvedValue(result);
+  const names = await call<{ evidence?: unknown }>('search_files', {
+    query: 'content',
+    root: files,
+    content: false,
+  });
+  expect(names.evidence).toBeUndefined();
+  const matches = await call<{ entries: { path: string }[]; evidence: { path: string }[] }>(
+    'search_files',
+    { query: 'content', root: files, content: true },
+  );
+  expect(matches.entries.map((file) => file.path)).toEqual([allowedFile.path]);
+  expect(matches.evidence.map((file) => file.path)).toEqual([allowedFile.path]);
+  queryFiles.mockImplementation(async () => {
+    const { name, roots, budgets } = reader.client;
+    await broker.clients.update(reader.client.id, reader.client.revision, {
+      name,
+      roots,
+      budgets,
+      capabilities: ['metadata'],
+    });
+    return result;
+  });
+  await expect(
+    call('search_files', { query: 'content', root: files, content: true }),
+  ).rejects.toThrow('no content');
 });
 
 it('stores only explicitly reported own sessions with granted references and no navigation or execution', async () => {

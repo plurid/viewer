@@ -3,10 +3,12 @@
 Talk to Viewer to find files, arrange views, ask questions or dictate text. Speech recognition
 should be a configurable input service, independent of the model that understands a request.
 
-This is a proposal. Viewer currently supports typed
+This is a proposal for speech recognition. Viewer currently supports typed
 [requests in words](../reference/command-line.md#requests-in-words), model-backed actions and
-conversations. Microphone input, speech-model installation and the settings described below are not
-implemented.
+conversations. The [terminal CLI](../reference/cli.md#local-speech-model-weights) can now propose
+verified pinned weight downloads, local imports and explicit selection through native review.
+Microphone input, the bundled recognition runtime, hosted speech adapters and the Settings flow
+below are not implemented. Installed weights alone do not enable voice control.
 
 ## Start with push to talk
 

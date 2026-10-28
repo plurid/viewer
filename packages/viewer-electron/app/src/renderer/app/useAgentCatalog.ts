@@ -37,6 +37,13 @@ export function useAgentCatalog({
           id: space.id,
           name: space.name,
           roots: space.roots,
+          tasks: space.taskAreas?.map((area) => ({
+            id: area.id,
+            name: area.name,
+            path: area.checkout.path,
+            branch: area.checkout.branch,
+            commit: area.checkout.commit,
+          })),
           panes: space.panes.map((pane) => ({
             id: pane.id,
             type: pane.type,

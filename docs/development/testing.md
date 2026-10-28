@@ -44,6 +44,12 @@ a test pass.
 
 ## Focused native scenarios
 
+`tests/native/cli.ts` checks offline help/completion, exit codes, the authenticated packaged CLI,
+content-search evidence, read-only Git, a real inspection workflow, proposal cancellation and speech
+setup review at normal/minimum window sizes. It uses synthetic authority only inside its generated
+profile; it does not qualify human consent or download speech models. Supply the candidate binary
+and the preservation variables shown above.
+
 `tests/native/optimization.ts` checks loaded image/PDF comparisons, exact-byte export, source
 preservation and normal/minimum-window layouts. `tests/native/optimization-recipes.ts` checks target
 misses, individual retry, changed-source rejection, relative-folder outputs and recipe restoration

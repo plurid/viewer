@@ -134,6 +134,18 @@ describe('answering a prompt', () => {
     });
     expect([level, actor]).toEqual(['names', 'user']);
   });
+  it('preserves agent identity so a CLI request cannot inherit manual provider consent', async () => {
+    const generate = vi.fn(async () => ({ line: 'frame-all', explanation: 'Frame the planes.' }));
+    await answerPrompt(
+      request,
+      settings(),
+      generate,
+      new AbortController().signal,
+      new Map(),
+      'agent',
+    );
+    expect(generate.mock.calls[0]!.slice(-2)).toEqual(['names', 'agent']);
+  });
   it('says what is wrong with a line it may not run, and needs a model', async () => {
     const answer = await answerPrompt(
       request,

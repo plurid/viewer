@@ -39,6 +39,28 @@ agents.
 Wait for review/completion and refresh discovery between steps. A partly visible workspace does not
 imply every destination plane is granted. Trash browsing and Empty Trash are not MCP tools.
 
+## File, development and setup tools
+
+The [terminal CLI](cli.md) uses this same authenticated connection. `tools/list` returns exact
+schemas; the CLI reference lists the corresponding terminal commands.
+
+- `git_status` and `git_diff` read a granted checkout. Patch content requires a named content
+  client.
+- `list_task_areas` returns only names and checkout metadata for granted folders.
+- `read_workflow`, `run_workflow`, `list_workflows`, `get_workflow`, `resume_workflow` and
+  `cancel_workflow` use existing typed workflow services. Runs belong to their client and check
+  current folder/content/proposal authority as they advance. Mutation steps prepare separate
+  reviews.
+- `ask_in_words` returns a checked command proposal using agent-specific model permission.
+- `speech_models` and `speech_status` inspect managed weights without recording or networking.
+  `propose_speech_install`, `propose_speech_import` and `propose_speech_use` prepare native-reviewed
+  pinned model setup; they install no executable and do not enable speech recognition.
+- `cancel_proposal` stops only the caller's pending or running proposal. It does not remove evidence
+  or undo completed file output.
+
+`search_files` accepts explicit `content: false` for filename-only search. `content: true` requires
+a named content client and returns original-match evidence only for granted returned paths.
+
 ## Report a session
 
 Tasks can attach Viewer conversations and explicit reports from an authenticated agent adapter.

@@ -119,6 +119,8 @@ import { GitActions } from './comparison/git-actions';
 import { bindGitTarget, validateGitTarget, type GitTargetWindow } from './comparison/git-target';
 import { WorkspaceSessions } from './windows/workspace-sessions';
 import { ShellCommand } from './windows/shell-command';
+import { SpeechModels } from './speech/models';
+import { AgentServiceTools } from './agents/service-tools';
 import type { HotkeyStatus } from './windows/hotkey-window';
 import type { LaunchRequest } from '../domain/workspaces/launch';
 import { Chats } from './chat/service';
@@ -136,6 +138,7 @@ export class Desktop {
   readonly chats: Chats;
   readonly agentSessions: AgentSessions;
   private shellCommand: ShellCommand;
+  readonly speechModels: SpeechModels;
   readonly workspaceSessions = new WorkspaceSessions();
   readonly git: GitReader;
   readonly worktrees: GitWorktrees;
@@ -727,7 +730,10 @@ export class Desktop {
       plans: this.operationPlans,
       operations: this.operations,
       actions: this.actions,
-      authorizeRun: (run) => this.watchRules.authorize(run),
+      authorizeRun: async (run) => {
+        await this.watchRules.authorize(run);
+        if (run.context.actor === 'agent') await this.agents.authorizeWorkflow(run);
+      },
       recipeForRun: (run, id) => this.watchRules.recipeForRun(run, id),
     });
     this.watchRules = new WatchRules(dataPath, {
@@ -748,6 +754,7 @@ export class Desktop {
         return Array.isArray(runs) ? runs : [];
       },
     });
+    this.speechModels = new SpeechModels(dataPath);
     this.agentRequests = new AgentRequests(
       dataPath,
       this.settings,
@@ -791,6 +798,7 @@ export class Desktop {
             : this.agents.clients.context.run(clientID, work),
         cancelExecution: (id) => this.executions.cancel(id),
         cancelOperation: (id) => this.operations.cancel(id),
+        cancelSpeech: (id) => this.speechModels.cancel(id),
         operation: (id) => this.operations.all().find((job) => job.id === id),
       },
       (proposal) =>
@@ -811,6 +819,7 @@ export class Desktop {
           })),
         }),
       }),
+      (setup, operationID) => this.speechModels.request(setup, operationID),
     );
     this.agentSessions = new AgentSessions(dataPath, (id) => emit({ type: 'agent-session', id }));
     this.agents = new AgentBroker(
@@ -833,6 +842,14 @@ export class Desktop {
             : { ...snapshot.settings.agents, revision: snapshot.revision };
         }),
         sessions: this.agentSessions,
+        services: new AgentServiceTools({
+          git: this.git,
+          workflows: this.workflows,
+          speech: this.speechModels,
+          proposals: this.agentRequests,
+          settings: () => this.settings.snapshot().settings,
+          generate: (...args) => this.providers.generate(...args),
+        }),
         relationships: async (file, content) => {
           const result = await this.relationships.request({ kind: 'read', file, content });
           if (!result || !('relations' in result))
@@ -1309,6 +1326,7 @@ export class Desktop {
       this.buffers.close(),
       this.notes.close(),
       this.modelPermissions.close(),
+      this.speechModels.close(),
       this.search.close(),
       this.executions.close(),
       this.resources.close(),

@@ -40,6 +40,9 @@ import type { RelationshipsResult, FileRelation } from '../../domain/files/relat
 import { drawingGeometryOptionsSchema } from '../../domain/previews/drawings/geometry';
 import { agentCommandID, agentRemovalPolicy } from '../../domain/agents/safety';
 import { isEmptyAgentOrigin } from '../../domain/agents/origin';
+import { serviceToolNames } from './service-catalog';
+import type { AgentServiceTools, AgentServiceContext } from './service-tools';
+import type { WorkflowRun } from '../../domain/automation/workflows';
 import { discardOwnTemporaryFile, removeEmptyDirectory } from '../operations/removal';
 import { nativeTestRemovalsBlocked } from '../native/test-removal-policy';
 import { agentTools } from './agent-tools';
@@ -111,6 +114,7 @@ export class AgentBroker {
       relationships?(file: string, content: boolean): Promise<RelationshipsResult>;
       agentAccess?: AgentAccess;
       sessions?: AgentSessions;
+      services?: AgentServiceTools;
     },
   ) {
     this.access = extension?.agentAccess ?? new AgentAccess(dataPath, () => this.settings().agents);
@@ -167,7 +171,11 @@ export class AgentBroker {
     const socket = path.join(this.socketDirectory, 'v.sock');
     this.server = createServer((stream) => {
       this.streams.add(stream);
-      stream.on('close', () => this.streams.delete(stream));
+      const lifetime = new AbortController();
+      stream.on('close', () => {
+        this.streams.delete(stream);
+        lifetime.abort();
+      });
       const decoder = new StringDecoder('utf8');
       let buffer = '';
       let requests = Promise.resolve();
@@ -190,7 +198,7 @@ export class AgentBroker {
             try {
               const input = JSON.parse(line);
               id = input.id;
-              const value = await this.handle(input.token, input.request);
+              const value = await this.handle(input.token, input.request, lifetime.signal);
               stream.write(JSON.stringify({ id, value }) + '\n');
             } catch (error) {
               stream.write(
@@ -257,6 +265,7 @@ export class AgentBroker {
   }
   async stop(clientID: string): Promise<void> {
     this.extension?.requests.stop(clientID);
+    await this.extension?.services?.stop(clientID);
     for (const [id, owner] of this.owned)
       if (owner === clientID) {
         this.actions.cancel(id);
@@ -276,6 +285,10 @@ export class AgentBroker {
             : 'propose';
       await this.clients.require(capability);
       if (!(await this.access.state()).enabled) throw new Error('Agent access is disabled.');
+      if (proposal.kind === 'speech' && proposal.speech?.kind === 'import') {
+        await this.clients.require('content');
+        await this.authorize(proposal.speech.source);
+      }
       if (proposal.target) await this.authorizeTarget(proposal.target);
       if (proposal.kind === 'transform') {
         await this.clients.require('content');
@@ -420,7 +433,38 @@ export class AgentBroker {
       }
     }
   }
-  async handle(token: unknown, request: unknown): Promise<unknown> {
+  private serviceContext(signal: AbortSignal): AgentServiceContext {
+    return {
+      clientID: this.clients.actor(),
+      signal,
+      authorize: (file) => this.authorize(file),
+      require: async (capability) => {
+        const client = await this.clients.require(capability);
+        if (capability === 'content' && !client)
+          throw new Error('Use a named client with content permission.');
+      },
+      catalog: () => this.extension?.catalog(),
+      workspaceState: async () => this.extension?.workspaceState?.(),
+      own: (id) => this.own(id),
+    };
+  }
+  async authorizeWorkflow(run: WorkflowRun): Promise<void> {
+    if (run.context.actor !== 'agent') return;
+    if (!this.extension?.services || !run.context.clientID)
+      throw new Error('The workflow client is unavailable.');
+    await this.clients.context.run(run.context.clientID, () =>
+      this.extension!.services!.authorizeWorkflow(
+        run,
+        this.serviceContext(AbortSignal.timeout(30000)),
+      ),
+    );
+  }
+  async handle(
+    token: unknown,
+    request: unknown,
+    signal: AbortSignal = AbortSignal.timeout(120000),
+  ): Promise<unknown> {
+    signal.throwIfAborted();
     if (typeof token !== 'string' || token.length !== 64 || !(await this.access.state()).enabled)
       throw new Error('Agent access is disabled or its token is invalid.');
     const shared =
@@ -446,7 +490,7 @@ export class AgentBroker {
               .safeParse(parsed.data.params)
           : undefined;
       try {
-        const result = await this.handleAuthenticated(request);
+        const result = await this.handleAuthenticated(request, signal);
         const latest = await this.clients.get();
         if (
           (client && latest?.revision !== client.revision) ||
@@ -472,7 +516,7 @@ export class AgentBroker {
     const { enabled, roots } = await this.access.state();
     return JSON.stringify({ enabled, roots, allowLayout: this.settings().agents.allowLayout });
   }
-  private async handleAuthenticated(request: unknown): Promise<unknown> {
+  private async handleAuthenticated(request: unknown, signal: AbortSignal): Promise<unknown> {
     const message = z.object({ method: z.string(), params: z.unknown().optional() }).parse(request);
     if (message.method === 'initialize') {
       const params = z.object({ protocolVersion: z.string() }).passthrough().parse(message.params);
@@ -496,6 +540,7 @@ export class AgentBroker {
       'get_task',
       'cancel_task',
       'get_proposal',
+      'cancel_proposal',
     ].includes(call.name)
       ? undefined
       : ['read_terminal'].includes(call.name)
@@ -519,7 +564,19 @@ export class AgentBroker {
     if (capability) await this.clients.require(capability);
     else await this.clients.get();
     let value: unknown;
-    if (call.name === 'report_session') {
+    if (serviceToolNames.has(call.name)) {
+      if (!this.extension?.services)
+        throw new Error('This service is unavailable in the running app.');
+      const context = this.serviceContext(signal),
+        required = new Set<AgentCapability>();
+      const require = context.require;
+      context.require = async (capability) => {
+        required.add(capability);
+        await require(capability);
+      };
+      value = await this.extension.services.call(call.name, args, context);
+      for (const capability of required) await require(capability);
+    } else if (call.name === 'report_session') {
       if (!this.extension?.sessions) throw new Error('Session reporting is unavailable.');
       const client = await this.clients.get();
       value = await this.extension.sessions.report(
@@ -781,12 +838,15 @@ export class AgentBroker {
         value = await terminal.writeTerminal(input.id, input.data);
         this.own((value as { id: string }).id);
       }
-    } else if (call.name === 'get_proposal') {
+    } else if (call.name === 'get_proposal' || call.name === 'cancel_proposal') {
       if (!this.extension) throw new Error('Proposal API is unavailable.');
       const input = z.object({ id: z.string() }).strict().parse(args);
       if (this.owned.get(input.id) !== this.clients.actor())
         throw new Error('Proposal belongs to another actor.');
-      value = this.extension.requests.get(input.id);
+      if (call.name === 'cancel_proposal') {
+        this.extension.requests.cancel(input.id, this.clients.actor());
+        value = { id: input.id, status: this.extension.requests.get(input.id).status };
+      } else value = this.extension.requests.get(input.id);
     } else if (call.name === 'get_relationships') {
       const input = z
         .object({ path: z.string().min(1).max(32768), content: z.boolean().default(false) })
@@ -975,16 +1035,23 @@ export class AgentBroker {
           query: z.string().max(300),
           root: z.string(),
           offset: z.number().int().min(0).optional(),
+          content: z.boolean().optional(),
         })
         .strict()
         .parse(args);
       await this.authorize(input.root);
       const client = await this.clients.get();
+      if (input.content) {
+        await this.clients.require('content');
+        if (!client) throw new Error('Use a named client with content permission.');
+      }
       const result = await this.files.query({
         ...input,
-        content: (client?.capabilities ?? (await this.access.capabilities())).includes('content'),
+        content:
+          input.content ??
+          (client?.capabilities ?? (await this.access.capabilities())).includes('content'),
       } as IndexedQuery);
-      const entries = [];
+      const entries: typeof result.entries = [];
       for (const item of result.entries) {
         try {
           await this.authorize(item.path);
@@ -993,8 +1060,13 @@ export class AgentBroker {
           /* Filter symlinks crossing grants. */
         }
       }
+      if (input.content) await this.clients.require('content');
       value = {
         entries,
+        evidence:
+          input.content && client
+            ? result.evidence?.filter((item) => entries.some((entry) => entry.path === item.path))
+            : undefined,
         more: result.more,
         indexed: result.indexed,
         running: result.status.running,
@@ -1064,6 +1136,14 @@ export class AgentBroker {
       );
     if (capability) await this.clients.require(capability);
     else await this.clients.get();
+    const client = await this.clients.get();
+    if (
+      Buffer.byteLength(JSON.stringify(value) ?? 'null') >
+      (client?.budgets.maxReadBytes ?? 4 * 1024 ** 2)
+    )
+      throw new Error(
+        'The result exceeds this client’s read budget. Narrow the request or review its budget in Settings.',
+      );
     return { content: [{ type: 'text', text: JSON.stringify(value) }] };
   }
   /** Records which client may read a proposal or task; bounded like the requests it tracks. */

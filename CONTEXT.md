@@ -69,6 +69,11 @@ A **command** is a contextual registry action. A **custom action** is a declarat
 **recipe** prepares a reviewed file proposal. A **workflow** composes typed inspection and
 proposals; a **watch rule** can prepare a review, not apply it.
 
+The terminal **CLI** (`domain/cli`, `desktop/cli`) binds argument parsing and scripting output to
+the existing scoped MCP transport. `desktop/agents/service-tools.ts` adapts shared feature owners;
+it does not own a second execution or approval service. Managed speech weights belong to
+`desktop/speech`; installed weights and recognition availability are separate states.
+
 Native file permission, provider data permission and local agent authority have separate owners.
 Effective grants and credentials stay outside editable JSONC. Agent terminal read permission does
 not grant input or process containment. Every agent removal requires fresh exact-scope approval and

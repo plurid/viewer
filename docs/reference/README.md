@@ -23,7 +23,8 @@ Look up current behavior, exact syntax and limits. For a walkthrough, use the
 
 ## Commands and automation
 
-- [Command language and terminal launch](command-line.md)
+- [Command language](command-line.md)
+- [Terminal CLI](cli.md)
 - [Custom actions and sequences](actions.md)
 - [Workflows and watch rules](automation.md)
 - [Models, local agents and session reports](agents.md)
