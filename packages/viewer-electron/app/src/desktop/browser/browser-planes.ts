@@ -3,6 +3,7 @@ import type { WebContents, Event } from 'electron';
 import type { BrowserRequest, BrowserSnapshot } from '../../domain/previews/browser';
 import { browserAddress } from '../../domain/previews/browser';
 import { errorMessage } from '../../domain/errors';
+import { sendEvent } from '../ipc/events';
 
 interface Page {
   owner: number;
@@ -60,7 +61,7 @@ export class BrowserPlanes {
   private publish(page: Page) {
     const owner = this.owner(page.owner);
     if (owner && !owner.isDestroyed() && !owner.webContents.isDestroyed() && this.live(page))
-      owner.webContents.send('viewer:event', { type: 'browser', browser: this.snapshot(page) });
+      sendEvent(owner.webContents, { type: 'browser', browser: this.snapshot(page) });
   }
   private profile() {
     const profile = session.fromPartition('persist:viewer-browser-v1');

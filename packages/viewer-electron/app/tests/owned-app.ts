@@ -172,7 +172,15 @@ export async function ownedApp(
       await launched.stop();
     }
   }
-  return { child, port, connect, close, evidenceDirectory: owned.evidenceDirectory };
+  return {
+    child,
+    port,
+    connect,
+    close,
+    /** The app's recent stdout and stderr, for diagnostics such as VIEWER_PERF reports. */
+    output: () => launched.output(),
+    evidenceDirectory: owned.evidenceDirectory,
+  };
 }
 export async function until<T>(
   read: () => Promise<T>,

@@ -4,6 +4,42 @@ Use a named workload and retain its source, binary, settings, input hashes and r
 small generated file is a useful regression, not a substitute for large documents, network mounts or
 long sessions.
 
+## Responsiveness
+
+`tests/native/responsiveness.ts` measures a packaged build in a hidden window:
+
+- three cold starts;
+- plane clicks;
+- 50 arrow-key selections;
+- typing in the palette;
+- opening and scrolling a 10,000-item folder;
+- grid thumbnails;
+- a 2,000-file copy;
+- camera motion.
+
+Run it from the app directory:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+VIEWER_TEST_BINARY="<packaged-Viewer-executable>" \
+node --import tsx tests/native/responsiveness.ts
+```
+
+For each workload it records:
+
+- React commits;
+- main-process IPC calls and bytes by method and event type;
+- main-thread delay;
+- frame intervals and long tasks.
+
+Startup marks come from both processes: `main:*` and `bootstrap:*` from the main process,
+`viewer:bootstrap` and `viewer:first-rows` from the renderer. The scenario sets `VIEWER_PERF=1`,
+which makes the main process print a `VIEWER_PERF` JSON report four times a second
+(`src/desktop/diagnostics/performance.ts`). Without that variable the meter does nothing.
+
+Results go to `out/perf/<time>/responsiveness.json`. Compare runs of the same scenario on the same
+machine, and don't poll the app over IPC during a workload: the polling becomes part of the result.
+
 ## Reopen and lifetime audit
 
 The mixed-workspace scenario opens 20 views: folders, document/data/model/media previews, browser

@@ -4,6 +4,7 @@ import { matchesQuery } from '../../domain/search/query';
 import { useFileQuery } from './useFileQuery';
 import { nativeOpening } from './opening';
 import { SearchCoverage } from './SearchCoverage';
+import { markStartup } from '../app/startup';
 import {
   memo,
   useCallback,
@@ -121,6 +122,10 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
         )
       : [];
   }, [sources, showHidden, sort, descending, subtree, filterQuery, foldersFirst]);
+  const hasRows = visible.length > 0;
+  useEffect(() => {
+    if (hasRows) markStartup('viewer:first-rows');
+  }, [hasRows]);
   // Results from subfolders are not this folder's items, so a lens cannot group them.
   const groupBy =
     presentation.group === 'lens' && subtree && query.trim() ? 'none' : presentation.group;

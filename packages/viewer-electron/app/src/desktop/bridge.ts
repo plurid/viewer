@@ -3,6 +3,8 @@ import { PersonalBackups } from './persistence/backup';
 import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
 import { createWebHandlers } from './ipc/web-handlers';
+import { sendEvent } from './ipc/events';
+import { performanceMeter } from './diagnostics/performance';
 import { WebPreviews } from './previews/web/service';
 import { BrowserPlanes } from './browser/browser-planes';
 import { Transforms } from './transforms/transforms';
@@ -449,7 +451,7 @@ export class Desktop {
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
       if (target && !target.isDestroyed())
-        target.webContents.send('viewer:event', { type: 'local-servers', servers });
+        sendEvent(target.webContents, { type: 'local-servers', servers });
     });
     this.applications = new Applications(options.applications);
     this.settings = new SettingsService(
@@ -514,7 +516,7 @@ export class Desktop {
         this.activity.terminal(event);
         const window = this.windows.get(owner)?.window;
         if (window && !window.isDestroyed())
-          window.webContents.send('viewer:event', { type: 'terminal', event });
+          sendEvent(window.webContents, { type: 'terminal', event });
       },
       access,
       (profile) => confirmations.requireTerminal(profile),
@@ -549,7 +551,7 @@ export class Desktop {
         else {
           const window = this.windows.get(owner)?.window;
           if (window && !window.isDestroyed())
-            window.webContents.send('viewer:event', { type: 'execution', task });
+            sendEvent(window.webContents, { type: 'execution', task });
         }
         this.agentRequests?.execution(task);
       },
@@ -848,7 +850,7 @@ export class Desktop {
         event: (owner, event) => {
           const window = this.windows.get(owner)?.window;
           if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
-            window.webContents.send('viewer:event', { type: 'speech', event });
+            sendEvent(window.webContents, { type: 'speech', event });
         },
         changed: speechChanged,
       },
@@ -884,7 +886,7 @@ export class Desktop {
             throw new Error('The selected workspace window closed.');
           // Save the person's existing drafts before agent dispatch blocks private-note IPC.
           await this.flushes.request(owner, 'flush', (token) =>
-            window.webContents.send('viewer:event', { type: 'flush', token }),
+            sendEvent(window.webContents, { type: 'flush', token }),
           );
         },
         present: (bundle, owner) => this.dispatchAgentEvent(owner, { type: 'agent-task', bundle }),
@@ -1067,9 +1069,9 @@ export class Desktop {
       },
       changed: (owner, document) => {
         this.activity.chat(document);
-        this.windows
-          .get(owner)
-          ?.window.webContents.send('viewer:event', { type: 'chat', document });
+        const window = this.windows.get(owner)?.window;
+        if (window && !window.isDestroyed())
+          sendEvent(window.webContents, { type: 'chat', document });
       },
       aliases: () =>
         namedLines(this.settings.snapshot().settings.customActions, this.sessionKeys.aliases),
@@ -1090,7 +1092,7 @@ export class Desktop {
             .filter((item) => item.ready && item.role === 'viewer')
             .map(({ window }) =>
               this.flushes.request(window.webContents.id, 'flush', (token) =>
-                window.webContents.send('viewer:event', { type: 'flush', token }),
+                sendEvent(window.webContents, { type: 'flush', token }),
               ),
             ),
         );
@@ -1162,7 +1164,9 @@ export class Desktop {
             throw new Error('Manage credentials in Settings.');
           return {
             ok: true,
-            value: await this.call(name, args, event.sender.id),
+            value: await performanceMeter.measure(name, args, async () =>
+              this.call(name, args, event.sender.id),
+            ),
           };
         } catch (error) {
           return {
@@ -1421,13 +1425,13 @@ export class Desktop {
   openIn(sender: number, paths: string[]): void {
     const record = this.windows.get(sender);
     if (!record || record.role !== 'viewer') return;
-    if (record.ready) record.window.webContents.send('viewer:event', { type: 'open', paths });
+    if (record.ready) sendEvent(record.window.webContents, { type: 'open', paths });
     else record.paths.push(...paths);
   }
   launchIn(sender: number, request: LaunchRequest): void {
     const record = this.windows.get(sender);
     if (!record || record.role !== 'viewer') throw new Error('The target window closed.');
-    if (record.ready) record.window.webContents.send('viewer:event', { type: 'launch', request });
+    if (record.ready) sendEvent(record.window.webContents, { type: 'launch', request });
     else record.launches.push(request);
   }
 
@@ -1439,7 +1443,7 @@ export class Desktop {
     if (event.type === 'job') this.activity.job(event.job);
     for (const { window, role } of this.windows.values())
       if (!window.isDestroyed() && (role === 'viewer' || settingsEvents.includes(event.type)))
-        window.webContents.send('viewer:event', event);
+        sendEvent(window.webContents, event);
   }
   open(paths: string[]): void {
     const normalized = paths.map(absolute);
@@ -1449,7 +1453,7 @@ export class Desktop {
   async flushSettings(window: BrowserWindow): Promise<void> {
     if (window.isDestroyed()) return;
     await this.flushes.request(window.webContents.id, 'flush-settings', (token) => {
-      window.webContents.send('viewer:event', { type: 'flush-settings', token });
+      sendEvent(window.webContents, { type: 'flush-settings', token });
     });
     await this.settings.flush();
   }
@@ -1463,7 +1467,7 @@ export class Desktop {
     await this.chats.stopOwner(owner);
     if (record.ready)
       await this.flushes.request(owner, 'flush', (token) => {
-        window.webContents.send('viewer:event', { type: 'flush', token });
+        sendEvent(window.webContents, { type: 'flush', token });
       });
     await Promise.all([
       this.storage.flush(),
@@ -1654,7 +1658,7 @@ export class Desktop {
           else resolve();
         },
       });
-      window.webContents.send('viewer:event', {
+      sendEvent(window.webContents, {
         ...payload,
         id,
         // a second short of the wait below, so the window never starts what was reported failed
@@ -1693,7 +1697,7 @@ export class Desktop {
               .filter((item) => item.role === 'viewer' && item.ready)
               .map(({ window }) =>
                 this.flushes.request(window.webContents.id, `note-trash:${request.id}`, (token) =>
-                  window.webContents.send('viewer:event', {
+                  sendEvent(window.webContents, {
                     type: 'prepare-note-trash',
                     id: request.id,
                     token,
@@ -1884,7 +1888,7 @@ export class Desktop {
         record.planeOwners = args[3];
         record.ready = true;
         for (const request of record.launches.splice(0))
-          record.window.webContents.send('viewer:event', { type: 'launch', request });
+          sendEvent(record.window.webContents, { type: 'launch', request });
         if (this.window?.webContents.id === sender) this.selectWindow(sender);
         return;
       },
@@ -2362,11 +2366,13 @@ export class Desktop {
         }
       },
       bootstrap: async (_args, sender) => {
+        performanceMeter.mark('bootstrap:start');
         const home = this.home;
         await this.fileAccess.load();
         const early = this.storedEarly;
         this.storedEarly = undefined;
         const stored = await (early ?? this.storage.load());
+        performanceMeter.mark('bootstrap:state');
         await this.settings.load(stored.state || undefined);
         this.settingsPrepared ??= Promise.resolve();
         if (stored.state) {
@@ -2384,6 +2390,7 @@ export class Desktop {
           );
         }
         await this.credentials.load();
+        performanceMeter.mark('bootstrap:settings');
         this.workspaceSessions.seed(stored.state);
         stored.state = this.workspaceSessions.open(
           sender,
@@ -2403,6 +2410,7 @@ export class Desktop {
         await this.watchRules.start();
         this.options.settingsChanged?.();
         await this.configureAgents();
+        performanceMeter.mark('bootstrap:services');
         const record = this.windows.get(sender)!;
         const paths = [...record.paths.splice(0), ...this.openPaths.splice(0)];
         const launches = record.launches.splice(0);
@@ -2410,6 +2418,7 @@ export class Desktop {
         const freshSession =
           !this.bootstrapped && !this.settings.snapshot().settings.browsing.restoreSession;
         this.bootstrapped = true;
+        performanceMeter.mark('bootstrap:done');
         return {
           ...stored,
           launches,

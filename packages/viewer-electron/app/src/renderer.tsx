@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { SettingsWindow } from './renderer/ui/settings/Settings';
 import { App } from './renderer/App';
 import { initialize } from './renderer/state/store';
+import { markStartup } from './renderer/app/startup';
 import { Empty } from './renderer/ui/primitives';
 import './renderer/styles.css';
 // Failures reach the local diagnostic log; each window reports at most 50.
@@ -21,6 +22,7 @@ else
   window.viewer
     .bootstrap()
     .then((bootstrap) => {
+      markStartup('viewer:bootstrap');
       initialize(bootstrap);
       root.render(<App />);
     })

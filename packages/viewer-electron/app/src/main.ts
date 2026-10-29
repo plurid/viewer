@@ -52,6 +52,7 @@ import {
   frameNavigationAllowed,
   rendererRequestAllowed,
 } from './desktop/windows/web-content-policy';
+import { performanceMeter } from './desktop/diagnostics/performance';
 const terminalArguments = process.argv.slice(app.isPackaged ? 1 : 2);
 const mcpMode = terminalArguments[0] === '--mcp';
 const cliMode = !mcpMode && isCLIInvocation(terminalArguments);
@@ -92,6 +93,7 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 app.setName('Viewer');
+performanceMeter.start();
 // Hidden rendering is restricted to QA with an explicitly isolated profile.
 const renderTest = process.env.VIEWER_RENDER_TEST === '1';
 const backgroundTest =
@@ -337,6 +339,7 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
       backgroundThrottling: !renderTest,
     },
   });
+  performanceMeter.mark('main:window');
   const createdWindow = window;
   createdBackdrops.set(createdWindow, backdrop);
   viewerWindows.add(createdWindow);
@@ -415,6 +418,7 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
   menu();
   try {
     await createdWindow.loadURL(devURL || 'viewer-app://app/index.html');
+    performanceMeter.mark('main:loaded');
   } catch (error) {
     if (createdWindow.isDestroyed() || closePending || quitPending || quitting) return;
     throw error;
@@ -572,6 +576,7 @@ app.on('open-file', (event, file) => {
 app
   .whenReady()
   .then(async () => {
+    performanceMeter.mark('main:ready');
     if (!ownsInstance || quitPending || quitting) return;
     if (launchError) throw new Error(launchError);
     if (headless) {
