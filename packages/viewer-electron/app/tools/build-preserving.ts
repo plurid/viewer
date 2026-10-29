@@ -16,11 +16,21 @@ import { documentTypes } from './document-types';
 import { prepareSpeechRuntime, verifySpeechRuntime } from './speech-runtime';
 import { speechRuntimeName } from '../src/desktop/speech/runtime-manifest';
 import { cloneTree } from './clone';
+import { bundledElectronVersion } from './native-build/runtime';
 
 if (process.platform !== 'darwin') throw new Error('This local rebuild requires macOS.');
 const source = path.resolve(process.argv[2] || '');
 if (!process.argv[2] || !source.endsWith('.app') || !(await lstat(source)).isDirectory())
   throw new Error('Provide an existing direct Viewer.app as the seed; it is kept unchanged.');
+// The seed's Electron runs the rebuilt code: it must be the Electron this checkout builds for.
+const seedElectron = await bundledElectronVersion(source);
+const installedElectron = (
+  createRequire(import.meta.url)('electron/package.json') as { version: string }
+).version;
+if (seedElectron !== installedElectron)
+  throw new Error(
+    `The seed app runs Electron ${seedElectron}; this checkout builds for ${installedElectron}. Package a new seed.`,
+  );
 const output = path.resolve(process.argv[3] || 'out/Viewer-darwin-arm64/Viewer.app');
 if (
   await lstat(output).then(

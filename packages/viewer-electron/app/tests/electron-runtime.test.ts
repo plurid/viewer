@@ -13,7 +13,11 @@ import path from 'node:path';
 import { strToU8, zipSync, type Zippable } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import { temporaryRoot } from '../tools/temporary';
-import { electronRuntimeDistribution, ensureElectronRuntime } from '../tools/native-build/runtime';
+import {
+  bundledElectronVersion,
+  electronRuntimeDistribution,
+  ensureElectronRuntime,
+} from '../tools/native-build/runtime';
 
 const version = '44.7.0';
 const name = `electron-v${version}-darwin-arm64.zip`;
@@ -220,4 +224,16 @@ describe('retained Electron runtime bootstrap', () => {
     expect((await lstat(path.join(files.packageRoot, 'dist'))).isDirectory()).toBe(true);
     expect(files.request).toHaveBeenCalledTimes(1);
   });
+});
+
+it.runIf(process.platform === 'darwin')('reads the Electron a packaged app runs', async () => {
+  const app = path.join(await temporaryRoot('viewer-bundled-electron-'), 'Viewer.app');
+  const resources = path.join(app, 'Contents/Frameworks/Electron Framework.framework/Resources');
+  await mkdir(resources, { recursive: true });
+  await writeFile(
+    path.join(resources, 'Info.plist'),
+    '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>' +
+      '<key>CFBundleVersion</key><string>45.1.0</string></dict></plist>\n',
+  );
+  expect(await bundledElectronVersion(app)).toBe('45.1.0');
 });

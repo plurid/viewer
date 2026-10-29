@@ -64,6 +64,33 @@ export default tseslint.config(
     },
   },
   {
+    // A sandboxed preload may require only Electron, and since Electron 45 it has no Buffer or
+    // immediate timers: such an import or global would fail when the window opens, not here.
+    files: ['src/preload.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(?!electron$|electron/(renderer|common)$|\\.)',
+              allowTypeImports: true,
+              message:
+                'A sandboxed preload can require only electron, electron/renderer and electron/common.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        ...['Buffer', 'setImmediate', 'clearImmediate', 'require', 'process'].map((name) => ({
+          name,
+          message: 'Sandboxed preloads have no ' + name + ' since Electron 45.',
+        })),
+      ],
+    },
+  },
+  {
     files: ['src/desktop/operations/removal.ts'],
     rules: { 'no-restricted-syntax': ['error', importType, importsFirst, ...noEmDash] },
   },

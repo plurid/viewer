@@ -4,6 +4,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { hashFile } from '../filesystem/fingerprints';
 import { downloadRetainedArtifact, type ArtifactFetcher } from './download';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 type RuntimePlatform = 'darwin' | 'mas' | 'linux' | 'win32';
 
@@ -205,7 +207,22 @@ async function provision(
   return runtime;
 }
 
-/** Electron 44 downloads lazily; bootstrap before reading its licenses or application metadata. */
+/** The Electron a packaged macOS app runs: its framework's bundle version. */
+export async function bundledElectronVersion(app: string): Promise<string> {
+  const plist = path.join(
+    app,
+    'Contents/Frameworks/Electron Framework.framework/Resources/Info.plist',
+  );
+  const { stdout } = await promisify(execFile)('/usr/libexec/PlistBuddy', [
+    '-c',
+    'Print :CFBundleVersion',
+    plist,
+  ]);
+  return stdout.trim();
+}
+
+/** The electron package downloads its runtime lazily; bootstrap before reading its licenses or
+ * application metadata. */
 export function ensureElectronRuntime(options: ElectronRuntimeOptions): Promise<ElectronRuntime> {
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
