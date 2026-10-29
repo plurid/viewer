@@ -759,8 +759,8 @@ export const schemas = {
   bufferDiscard: z.tuple([z.uuid()]),
 } satisfies Record<ApiMethod, z.ZodType>;
 /**
- * The events Settings receives, for what it shows: settings, search status, service errors and
- * each provider's model data permission. The workspace window receives every event.
+ * The events Settings receives, for what it shows: settings, search status, service errors, each
+ * provider's model data permission and the ⌘Q hint. The workspace window receives every event.
  */
 export const settingsEvents: readonly DesktopEvent['type'][] = [
   'speech-changed',
@@ -769,6 +769,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
   'service-error',
   'model-permission',
   'settings-focus',
+  'quit-hint',
 ];
 /**
  * Which window may call each method. Credentials, agent clients and folder revocation belong

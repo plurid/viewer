@@ -135,6 +135,8 @@ export interface ApplicationSettings {
   prompts: { providerID: string };
   git: { enabled: boolean };
   hotkey: { enabled: boolean; shortcut: string };
+  /** ⌘Q needs a second press; the menu, the Dock and logging out quit at once. */
+  quit: { warnShortcut: boolean };
   /** Colour themes: domain/preferences/themes.ts. */
   themes: Theme[];
   /** The theme for each appearance; empty is the built-in one. */
@@ -443,6 +445,7 @@ export function defaultSettings(home: string): ApplicationSettings {
     prompts: { providerID: '' },
     git: { enabled: false },
     hotkey: { enabled: false, shortcut: 'Alt+Space' },
+    quit: { warnShortcut: true },
     theme: { dark: '', light: '' },
     tour: { dwell: 3000, duration: 900, loop: true },
     search: {

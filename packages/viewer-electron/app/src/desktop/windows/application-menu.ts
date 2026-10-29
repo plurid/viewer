@@ -1,4 +1,5 @@
 import { Menu, app, dialog, shell } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
 import { existsSync } from 'node:fs';
 import type { ApplicationSettings } from '../../domain/services';
 import { defaultShortcuts, accelerator, menuShortcuts } from '../../domain/preferences/shortcuts';
@@ -7,12 +8,21 @@ import { planeAlignments, planeSizePresets } from '../../domain/workspaces/plane
 /** A page of the guides, as published with the source. */
 const guide = (page: string) => `https://github.com/plurid/viewer/blob/master/docs/${page}`;
 
-/** Build native menus from the same command IDs and shortcuts as the renderer. */
+/**
+ * Build native menus from the same command IDs and shortcuts as the renderer. `quit` learns
+ * whether ⌘Q or a click chose Quit: the key asks for a second press (quit-shortcut.ts).
+ */
 export function installApplicationMenu(
   settings: ApplicationSettings | undefined,
   command: (id: string) => () => void,
   diagnosticFile: string,
+  quit: (byShortcut: boolean) => void,
 ): void {
+  const quitItem: MenuItemConstructorOptions = {
+    label: 'Quit Viewer',
+    accelerator: 'CmdOrCtrl+Q',
+    click: (_item, _window, event) => quit(!!event.triggeredByAccelerator),
+  };
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       ...(process.platform === 'darwin'
@@ -34,7 +44,7 @@ export function installApplicationMenu(
                 { role: 'hideOthers' as const },
                 { role: 'unhide' as const },
                 { type: 'separator' as const },
-                { role: 'quit' as const },
+                quitItem,
               ],
             },
           ]

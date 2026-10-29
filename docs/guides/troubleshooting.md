@@ -42,6 +42,17 @@ operation on its own when it restarts.
 Reopen the server's controls from **⌘K** → **Local servers…**, start it if it stopped, then reload
 the browser plane. Servers stay stopped after Viewer restarts until you start them.
 
+## Viewer does not quit
+
+Viewer quits once your work is safe. It first finishes a backup being written, saves every window
+and closes its browser planes.
+
+- With file operations still running, Viewer asks whether to wait for them, cancel them or keep
+  Viewer open.
+- If a step fails, Viewer stays open and says which: choose **Retry**, or **Keep Open** and quit
+  later.
+- **⌘Q** asks for a second press. Choose **Quit Viewer** in the menu to quit at once.
+
 ## Settings stopped changing
 
 Open **Settings → Configuration** to see which line of the settings file is invalid. Viewer keeps

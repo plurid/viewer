@@ -59,8 +59,10 @@ guests and cancellation release their own work. Restoring a task or project neve
 of commands or agent input.
 
 `desktop/windows/quit-sequence.ts` owns Quit's order: ask about running file operations, wait for
-them, save every window, stop browser guests, close the windows, stop the services. `main.ts` keeps
-Electron's events, the question's wording and each window's own close.
+them, finish backup exports, save every window and its placement, stop browser guests, close the
+windows, stop the services. A failed wait or guest stop asks Retry or Keep Open, as a failed save
+does. `desktop/windows/quit-shortcut.ts` asks for a second ⌘Q; every other Quit starts at once.
+`main.ts` keeps Electron's events, the questions' wording and each window's own close.
 
 ## Typed boundaries
 

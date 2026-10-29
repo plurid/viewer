@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences/ui';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { QUIT_AGAIN_MS } from '../src/desktop/windows/quit-shortcut';
 
 const native = vi.hoisted(() => ({
   flush: vi.fn<() => Promise<void>>(),
@@ -23,6 +24,10 @@ const native = vi.hoisted(() => ({
   launchIn: vi.fn(),
   mcp: vi.fn<() => Promise<void>>(),
   cli: vi.fn<() => Promise<number>>(),
+  /** Backup exports being written, which Quit waits for. */
+  exported: vi.fn<() => Promise<void>>(),
+  menu: vi.fn<(template: unknown) => void>(),
+  warnShortcut: true,
 }));
 class NativeEvent {
   prevented = false;
@@ -32,7 +37,9 @@ class NativeEvent {
 }
 class TestWindow extends EventEmitter {
   static windows: TestWindow[] = [];
+  static focused: TestWindow | undefined;
   destroyed = false;
+  visible = false;
   bounds: { x: number; y: number; width: number; height: number };
   maximized = false;
   fullscreen = false;
@@ -40,6 +47,8 @@ class TestWindow extends EventEmitter {
   webContents = Object.assign(new EventEmitter(), {
     id: TestWindow.windows.length + 1,
     setWindowOpenHandler: vi.fn(),
+    send: vi.fn(),
+    isDestroyed: () => this.destroyed,
   });
   constructor(options: { x?: number; y?: number; width: number; height: number }) {
     super();
@@ -52,10 +61,15 @@ class TestWindow extends EventEmitter {
     TestWindow.windows.push(this);
   }
   static getFocusedWindow() {
-    return undefined;
+    return TestWindow.focused;
   }
   async loadURL() {}
-  show() {}
+  show() {
+    this.visible = true;
+  }
+  isVisible() {
+    return this.visible;
+  }
   focus() {}
   getSize() {
     return [900, 640];
@@ -131,7 +145,7 @@ vi.mock('electron', () => ({
     getPrimaryDisplay: () => ({ id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } }),
     getDisplayMatching: () => ({ id: 1, workArea: { x: 0, y: 25, width: 1920, height: 1000 } }),
   },
-  Menu: { buildFromTemplate: (value: unknown) => value, setApplicationMenu: vi.fn() },
+  Menu: { buildFromTemplate: (value: unknown) => value, setApplicationMenu: native.menu },
   dialog: { showMessageBox: native.ask },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
   crashReporter: { start: vi.fn() },
@@ -150,7 +164,7 @@ vi.mock('../src/desktop/bridge', () => ({
   Desktop: class {
     settings = {
       snapshot: () => ({
-        settings: defaultSettings('/fixtures'),
+        settings: { ...defaultSettings('/fixtures'), quit: { warnShortcut: native.warnShortcut } },
         ui: normalizePreferences(),
         look: 'dark',
       }),
@@ -162,6 +176,7 @@ vi.mock('../src/desktop/bridge', () => ({
     createWorkspace = () => 'workspace';
     resources = { response: vi.fn() };
     browsers = { closeAll: native.closeBrowsers };
+    backups = { exported: native.exported };
     workspaceSessions = {
       snapshot: () => undefined,
       create: () => 'workspace',
@@ -204,6 +219,7 @@ beforeEach(async () => {
   vi.stubEnv('VIEWER_RENDER_TEST', '0');
   vi.stubEnv('VIEWER_DATA_DIRECTORY', '');
   TestWindow.windows = [];
+  TestWindow.focused = undefined;
   application.removeAllListeners();
   application.terminated = false;
   native.bridge = true;
@@ -218,6 +234,8 @@ beforeEach(async () => {
   native.ready = Promise.resolve();
   native.mcp.mockReset().mockResolvedValue();
   native.cli.mockReset().mockResolvedValue(0);
+  native.exported.mockReset().mockResolvedValue();
+  native.warnShortcut = true;
   application.exit.mockReset().mockImplementation(() => {
     application.terminated = true;
   });
@@ -234,6 +252,12 @@ async function launch() {
 const idle = () => new Promise((resolve) => setTimeout(resolve, 20));
 /** Keeps an expected failure's log for the test to read. */
 const logged = () => vi.spyOn(console, 'error').mockImplementation(() => {});
+/** The options of the `index`th native question, asked with or without a parent window. */
+const question = (index: number) =>
+  native.ask.mock.calls[index]!.find(
+    (argument): argument is { message: string; buttons: string[] } =>
+      !!argument && typeof argument === 'object' && 'buttons' in argument,
+  );
 afterEach(async () => {
   vi.restoreAllMocks();
   native.pending = 0;
@@ -323,7 +347,7 @@ describe('native window and application shutdown', () => {
     native.dispose.mockReturnValue(disposal.promise);
     application.quit();
     application.quit();
-    expect(native.flush).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(native.flush).toHaveBeenCalledOnce());
     expect(native.bridge).toBe(true);
     expect(native.closeBrowsers).not.toHaveBeenCalled();
     expect(TestWindow.windows.every((window) => !window.destroyed)).toBe(true);
@@ -348,6 +372,7 @@ describe('native window and application shutdown', () => {
     native.flush.mockReturnValueOnce(save.promise);
     native.flush.mockRejectedValueOnce(new Error('Draft storage is full'));
     application.quit();
+    await vi.waitFor(() => expect(native.flush).toHaveBeenCalledOnce());
     const window = TestWindow.windows[0];
     window.close();
     await vi.waitFor(() => expect(native.flush).toHaveBeenCalledTimes(2));
@@ -368,6 +393,7 @@ describe('native window and application shutdown', () => {
       }),
     );
     application.quit();
+    await vi.waitFor(() => expect(native.flush).toHaveBeenCalledOnce());
     const window = TestWindow.windows[0];
     window.close();
     save.resolve();
@@ -389,6 +415,7 @@ describe('native window and application shutdown', () => {
       native.flush.mockReturnValueOnce(save.promise);
       native.flushSettings.mockReturnValueOnce(settingsSave.promise);
       application.quit();
+      await vi.waitFor(() => expect(native.flush).toHaveBeenCalledOnce());
       settings.close();
       expect(native.flushSettings).toHaveBeenCalledOnce();
       const [first, second] = order === 'before' ? [settingsSave, save] : [save, settingsSave];
@@ -421,16 +448,24 @@ describe('native window and application shutdown', () => {
     expect(quitting).toEqual([true]);
     expect(native.options!.quitting()).toBe(true);
   });
-  it('cancels Quit when browser guests fail to stop, and a later Quit succeeds', async () => {
+  it('asks when browser guests fail to stop: Keep Open stays, and a later Quit succeeds', async () => {
     const log = logged();
     native.closeBrowsers.mockRejectedValueOnce(new Error('A guest did not stop'));
+    native.ask.mockResolvedValueOnce({ response: 1 });
     application.quit();
-    await vi.waitFor(() => expect(log).toHaveBeenCalledOnce());
-    expect(log).toHaveBeenCalledWith('Viewer could not finish quitting', expect.any(Error));
+    await vi.waitFor(() => expect(native.ask).toHaveBeenCalledOnce());
+    expect(question(0)).toMatchObject({
+      message: 'Viewer could not close its browser planes',
+      buttons: ['Retry', 'Keep Open'],
+    });
+    expect(log).toHaveBeenCalledWith(
+      'Viewer could not close its browser planes',
+      expect.any(Error),
+    );
+    await idle();
     expect(application.terminated).toBe(false);
     expect(TestWindow.windows[0].destroyed).toBe(false);
     expect(native.dispose).not.toHaveBeenCalled();
-    expect(native.ask).not.toHaveBeenCalled();
     expect(native.options!.quitting()).toBe(false);
     await native.options!.openSettings();
     expect(TestWindow.windows).toHaveLength(2);
@@ -438,6 +473,43 @@ describe('native window and application shutdown', () => {
     await vi.waitFor(() => expect(application.terminated).toBe(true));
     expect(native.flush).toHaveBeenCalledTimes(2);
     expect(native.closeBrowsers).toHaveBeenCalledTimes(2);
+  });
+  it('stops browser guests again on Retry, then quits', async () => {
+    logged();
+    native.closeBrowsers.mockRejectedValueOnce(new Error('A guest did not stop'));
+    native.ask.mockResolvedValueOnce({ response: 0 });
+    application.quit();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(native.closeBrowsers).toHaveBeenCalledTimes(2);
+    expect(native.flush).toHaveBeenCalledOnce();
+    expect(native.ask).toHaveBeenCalledOnce();
+  });
+  it('saves only once the backup exports being written have finished', async () => {
+    const exports = gate();
+    native.exported.mockReturnValueOnce(exports.promise);
+    application.quit();
+    await idle();
+    expect(native.exported).toHaveBeenCalledOnce();
+    expect(native.flush).not.toHaveBeenCalled();
+    expect(TestWindow.windows[0].destroyed).toBe(false);
+    exports.resolve();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(native.flush).toHaveBeenCalledOnce();
+  });
+  it('saves the Settings window’s placement as part of Quit, before the services stop', async () => {
+    const { readFile } = await import('node:fs/promises');
+    await native.options!.openSettings();
+    const frame = { x: 240, y: 160, width: 920, height: 660 };
+    TestWindow.windows[1].setBounds(frame);
+    let placement: { bounds: typeof frame } | undefined;
+    native.dispose.mockImplementation(async () => {
+      placement = await readFile(path.join(native.profile, 'settings-window-v1.json'), 'utf8')
+        .then((text) => JSON.parse(text))
+        .catch(() => undefined);
+    });
+    application.quit();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(placement?.bounds).toEqual(frame);
   });
   it('terminates when Desktop fails to stop its services', async () => {
     const log = logged();
@@ -522,20 +594,52 @@ describe('native window and application shutdown', () => {
       await vi.waitFor(() => expect(application.terminated).toBe(true));
       expect(native.flush).toHaveBeenCalledOnce();
     });
-    it('keeps Viewer open when waiting for them fails, and a later Quit asks again', async () => {
-      const log = logged();
-      native.pending = 1;
+    /** A drain that fails until a test replaces it. */
+    const stoppedQueue = () => {
       const stopped = Promise.reject(new Error('The operation queue stopped'));
       stopped.catch(() => {});
-      native.drained = stopped;
+      return stopped;
+    };
+    it('asks when waiting for them fails: Keep Open stays, and a later Quit asks again', async () => {
+      const log = logged();
+      native.pending = 1;
+      native.drained = stoppedQueue();
       native.ask.mockResolvedValueOnce({ response: 0 });
+      native.ask.mockResolvedValueOnce({ response: 1 });
       application.quit();
-      await vi.waitFor(() => expect(log).toHaveBeenCalledOnce());
-      expect(log).toHaveBeenCalledWith('Quit confirmation failed', expect.any(Error));
+      await vi.waitFor(() => expect(native.ask).toHaveBeenCalledTimes(2));
+      expect(question(1)).toMatchObject({
+        message: 'Viewer could not finish the file operations',
+        buttons: ['Retry', 'Keep Open'],
+      });
+      expect(log).toHaveBeenCalledWith(
+        'Viewer could not finish the file operations',
+        expect.any(Error),
+      );
+      await idle();
       expect(native.flush).not.toHaveBeenCalled();
       expect(application.terminated).toBe(false);
       expect(TestWindow.windows.every((window) => !window.destroyed)).toBe(true);
       native.ask.mockResolvedValueOnce({ response: 1 });
+      application.quit();
+      await vi.waitFor(() => expect(application.terminated).toBe(true));
+      expect(native.ask).toHaveBeenCalledTimes(3);
+      expect(question(2)!.buttons).toEqual([
+        'Wait for them',
+        'Cancel them and quit',
+        'Keep Viewer open',
+      ]);
+      expect(native.flush).toHaveBeenCalledOnce();
+    });
+    it('waits for them again on Retry, then quits', async () => {
+      logged();
+      native.pending = 1;
+      native.drained = stoppedQueue();
+      native.ask.mockResolvedValueOnce({ response: 0 });
+      native.ask.mockImplementationOnce(async () => {
+        native.drained = Promise.resolve();
+        return { response: 0 };
+      });
       application.quit();
       await vi.waitFor(() => expect(application.terminated).toBe(true));
       expect(native.ask).toHaveBeenCalledTimes(2);
@@ -628,6 +732,107 @@ describe('native window and application shutdown', () => {
     retried.resolve();
     await vi.waitFor(() => expect(window.destroyed).toBe(true));
   });
+});
+// the app menu, and with it Quit Viewer, is macOS's
+describe.runIf(process.platform === 'darwin')('⌘Q twice to quit', () => {
+  beforeEach(launch);
+  /** Chooses Quit Viewer in the app menu, by its key equivalent or a click. */
+  const choose = (byShortcut: boolean) => {
+    const template = native.menu.mock.calls.at(-1)![0] as {
+      submenu?: { label?: string; click?(item: unknown, window: unknown, event: object): void }[];
+    }[];
+    const item = template[0]!.submenu!.find((entry) => entry.label === 'Quit Viewer')!;
+    item.click!(undefined, undefined, { triggeredByAccelerator: byShortcut });
+  };
+  const hints = (window: TestWindow) =>
+    window.webContents.send.mock.calls.filter(
+      ([, event]) => (event as { type: string }).type === 'quit-hint',
+    );
+  it('shows the hint on the first press, and a second within the moment quits', async () => {
+    const window = TestWindow.windows[0];
+    choose(true);
+    expect(hints(window)).toEqual([
+      ['viewer:event', { type: 'quit-hint', duration: QUIT_AGAIN_MS }],
+    ]);
+    await idle();
+    expect(native.flush).not.toHaveBeenCalled();
+    expect(application.terminated).toBe(false);
+    choose(true);
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(hints(window)).toHaveLength(1);
+  });
+  it('shows the hint again once the moment has passed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    try {
+      choose(true);
+      vi.advanceTimersByTime(QUIT_AGAIN_MS);
+      choose(true);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(hints(TestWindow.windows[0])).toHaveLength(2);
+    await idle();
+    expect(application.terminated).toBe(false);
+  });
+  it('shows the hint in the focused Settings window', async () => {
+    await native.options!.openSettings();
+    const [workspace, settings] = TestWindow.windows;
+    TestWindow.focused = settings;
+    choose(true);
+    expect(hints(settings!)).toHaveLength(1);
+    expect(hints(workspace!)).toEqual([]);
+  });
+  it('shows the hint in the focused window though Electron calls it covered', async () => {
+    const window = TestWindow.windows[0]!;
+    TestWindow.focused = window;
+    window.visible = false;
+    choose(true);
+    expect(hints(window)).toHaveLength(1);
+    await idle();
+    expect(application.terminated).toBe(false);
+  });
+  it('shows the hint in the covered workspace window behind a focused page window', async () => {
+    const [workspace] = TestWindow.windows;
+    TestWindow.focused = new TestWindow({ width: 1000, height: 740 });
+    workspace!.visible = false;
+    choose(true);
+    expect(hints(workspace!)).toHaveLength(1);
+    await idle();
+    expect(application.terminated).toBe(false);
+  });
+  it('quits on the first ⌘Q with no window focused and the workspace window hidden', async () => {
+    const [workspace] = TestWindow.windows;
+    TestWindow.focused = undefined;
+    workspace!.visible = false;
+    choose(true);
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(hints(workspace!)).toEqual([]);
+  });
+  it('quits at once when Quit Viewer is clicked', async () => {
+    choose(false);
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(hints(TestWindow.windows[0])).toEqual([]);
+  });
+  it('quits on the first ⌘Q with the warning off', async () => {
+    native.warnShortcut = false;
+    choose(true);
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(hints(TestWindow.windows[0])).toEqual([]);
+  });
+  it.each(['minimized', 'closed'] as const)(
+    'quits on the first ⌘Q with the only window %s',
+    async (state) => {
+      const window = TestWindow.windows[0];
+      if (state === 'minimized') window.minimized = true;
+      else {
+        window.close();
+        await vi.waitFor(() => expect(window.destroyed).toBe(true));
+      }
+      choose(true);
+      await vi.waitFor(() => expect(application.terminated).toBe(true));
+      expect(hints(window)).toEqual([]);
+    },
+  );
 });
 describe('Quit before Desktop exists', () => {
   it('terminates without opening a window or stopping services', async () => {

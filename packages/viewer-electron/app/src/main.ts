@@ -44,7 +44,9 @@ import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/w
 import { askNatively } from './desktop/native/native-confirmation';
 import { saveBeforeClose, type SaveFailureChoice } from './desktop/windows/save-before-close';
 import { QuitSequence } from './desktop/windows/quit-sequence';
-import type { QuitChoice } from './desktop/windows/quit-sequence';
+import type { QuitChoice, QuitRetryStep } from './desktop/windows/quit-sequence';
+import { QuitShortcut } from './desktop/windows/quit-shortcut';
+import { sendEvent } from './desktop/ipc/events';
 import { WindowCreationRequests } from './desktop/windows/creation-requests';
 import { isolatedShellHome } from './desktop/windows/test-integration';
 import { isCLIInvocation } from './domain/cli/catalog';
@@ -218,14 +220,23 @@ const quit = new QuitSequence({
   pendingOperations: () => desktop?.pendingOperations() ?? 0,
   confirm: confirmQuit,
   drained: drainOperations,
+  exports: async () => {
+    await desktop?.backups.exported();
+  },
   save: saveBeforeQuit,
   stopGuests: async () => {
     await desktop?.browsers.closeAll();
   },
+  failed: quitStepFailure,
   dispose: () => desktop?.dispose(),
   closeHotkey: () => hotkey?.close(),
   quit: () => app.quit(),
   report: (context, error) => console.error(context, error),
+});
+const quitShortcut = new QuitShortcut({
+  warns: () => !!desktop?.settings.snapshot().settings.quit.warnShortcut,
+  hint: showQuitHint,
+  quit: () => app.quit(),
 });
 const pendingPaths: string[] = [];
 
@@ -238,14 +249,62 @@ async function saveFailure(
   desktop?.emit({ type: 'service-error', service: 'persistence', message: errorMessage(error) });
   // once Quit has begun, its own save asks for every window
   if (backgroundTest || (!quit.accepting() && !applicationQuit)) return 'keep-open';
+  return askRetry(
+    parent,
+    'Viewer could not save your changes',
+    `${errorMessage(error)}\n\nYour window will stay open. Retry saving, or keep working and try again later.`,
+  );
+}
+/** A Quit step's failure asks as a failed save does: Retry runs the step again. */
+const quitStepFailures: Record<QuitRetryStep, { message: string; retry: string }> = {
+  draining: { message: 'Viewer could not finish the file operations', retry: 'Retry waiting' },
+  'stopping-guests': {
+    message: 'Viewer could not close its browser planes',
+    retry: 'Retry closing them',
+  },
+};
+async function quitStepFailure(step: QuitRetryStep, error: unknown): Promise<SaveFailureChoice> {
+  const { message, retry } = quitStepFailures[step];
+  console.error(message, error);
+  desktop?.emit({ type: 'service-error', service: 'quit', message: errorMessage(error) });
+  if (backgroundTest) return 'keep-open';
+  return askRetry(
+    window ?? undefined,
+    message,
+    `${errorMessage(error)}\n\nViewer will stay open. ${retry}, or keep working and quit later.`,
+  );
+}
+async function askRetry(
+  parent: BrowserWindow | undefined,
+  message: string,
+  detail: string,
+): Promise<SaveFailureChoice> {
   const choice = await askNatively(parent, {
-    message: 'Viewer could not save your changes',
-    detail: `${errorMessage(error)}\n\nYour window will stay open. Retry saving, or keep working and try again later.`,
+    message,
+    detail,
     buttons: ['Retry', 'Keep Open'],
     defaultId: 1,
     cancelId: 1,
   });
   return choice === 0 ? 'retry' : 'keep-open';
+}
+/** "Press ⌘Q again to quit" where the person is looking; false with no Viewer window to show it. */
+function showQuitHint(duration: number): boolean {
+  const focused = BrowserWindow.getFocusedWindow();
+  const viewer = (candidate: BrowserWindow | null): candidate is BrowserWindow =>
+    !!candidate &&
+    !candidate.isDestroyed() &&
+    (viewerWindows.has(candidate) || candidate === settingsWindow);
+  // Electron calls a covered window not visible. A focused one is in front all the same, and with
+  // a page window in front the hint goes to the workspace behind it: one press must not quit.
+  const target = viewer(focused)
+    ? focused
+    : viewer(window) && !window.isMinimized() && (!!focused || window.isVisible())
+      ? window
+      : undefined;
+  if (!target) return false;
+  sendEvent(target.webContents, { type: 'quit-hint', duration });
+  return true;
 }
 const devURL = MAIN_WINDOW_VITE_DEV_SERVER_URL;
 const rendererRoot = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
@@ -277,7 +336,9 @@ function menu(): void {
       workspaceCommand: (id) => desktop?.emit({ type: 'command', command: id }),
     }).catch(reportApplicationCommandFailure);
   };
-  installApplicationMenu(settings, command, diagnostics.file);
+  installApplicationMenu(settings, command, diagnostics.file, (byShortcut) =>
+    quitShortcut.request(byShortcut),
+  );
 }
 
 function reportApplicationCommandFailure(error: unknown): void {
@@ -522,6 +583,8 @@ async function openSettingsWindow(focus?: string): Promise<void> {
   created.on('move', placed);
   created.on('closed', () => {
     settingsWindow = null;
+    // Quit saved the placement already: a write now could race the services stopping
+    if (quit.closingWindows()) return;
     void settingsWindowState
       ?.flush()
       .catch((error) => console.error('Settings window placement save failed', error));
@@ -827,6 +890,7 @@ function saveBeforeQuit(): Promise<boolean> {
       await Promise.all([
         desktop?.flush(),
         windowState?.flush(),
+        settingsWindowState?.flush(),
         ...[...windowFrames.values()].map((frame) => frame.flush()),
       ]);
     },

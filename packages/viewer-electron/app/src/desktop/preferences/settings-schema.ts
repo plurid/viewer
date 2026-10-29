@@ -235,6 +235,10 @@ export const settingsSchema = z
       })
       .strict()
       .default({ enabled: false, shortcut: 'Alt+Space' }),
+    quit: z
+      .object({ warnShortcut: z.boolean().default(true) })
+      .strict()
+      .default({ warnShortcut: true }),
     themes: z
       .array(themeSchema)
       .max(30)

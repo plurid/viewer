@@ -163,6 +163,7 @@ export class PersonalBackups {
   private prepared = new Map<string, Prepared>();
   private busy = new Set<number>();
   private closed = new Set<number>();
+  private exports = new Set<Promise<void>>();
   constructor(
     private root: string,
     private host: BackupHost,
@@ -175,6 +176,10 @@ export class PersonalBackups {
   private requireOwner(owner: number) {
     if (this.closed.has(owner))
       throw new Error('The backup window closed. Existing work was preserved.');
+  }
+  /** Resolves once no export is being written, including one that starts meanwhile. */
+  async exported(): Promise<void> {
+    while (this.exports.size) await Promise.allSettled([...this.exports]);
   }
 
   private async readDocuments(): Promise<Backup['documents']> {
@@ -266,6 +271,17 @@ export class PersonalBackups {
     }
   }
 
+  private async write(file: string, backup: Backup): Promise<void> {
+    // Exclusive creation: a native dialog’s replace choice cannot silently destroy an old backup.
+    const handle = await open(file, 'wx', 0o600);
+    try {
+      await handle.writeFile(JSON.stringify(backup, null, 2));
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  }
+
   private async perform(
     request: Exclude<BackupRequest, { kind: 'release' }>,
     owner: number,
@@ -339,13 +355,12 @@ export class PersonalBackups {
       const file = await this.host.choose(owner, 'export');
       if (!file) return { kind: 'cancelled' };
       this.requireOwner(owner);
-      // Exclusive creation: a native dialog’s replace choice cannot silently destroy an old backup.
-      const handle = await open(file, 'wx', 0o600);
+      const writing = this.write(file, item.backup);
+      this.exports.add(writing);
       try {
-        await handle.writeFile(JSON.stringify(item.backup, null, 2));
-        await handle.sync();
+        await writing;
       } finally {
-        await handle.close();
+        this.exports.delete(writing);
       }
       this.prepared.delete(request.id);
       return { kind: 'written', name: path.basename(file) };

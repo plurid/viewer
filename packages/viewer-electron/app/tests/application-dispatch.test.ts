@@ -67,6 +67,7 @@ describe('native application menu dispatch', () => {
         undefined,
         (id) => () => dispatchApplicationCommand(id, host),
         '/generated/diagnostics.log',
+        vi.fn(),
       );
       const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];
       const items = template.find((item) => item.label === 'File')!
@@ -89,6 +90,26 @@ describe('native application menu dispatch', () => {
       expect(host.workspaceCommand).not.toHaveBeenCalled();
     },
   );
+
+  it('tells Quit whether ⌘Q or a click chose it', () => {
+    const quit = vi.fn();
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' });
+    try {
+      installApplicationMenu(undefined, () => () => {}, '/generated/diagnostics.log', quit);
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
+    const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];
+    const items = template[0]!.submenu as MenuItemConstructorOptions[];
+    const item = items.find((entry) => entry.label === 'Quit Viewer')!;
+    expect(item).toMatchObject({ accelerator: 'CmdOrCtrl+Q' });
+    expect(items.some((entry) => entry.role === 'quit')).toBe(false);
+    const click = item.click as (item: unknown, window: unknown, event: object) => void;
+    click(undefined, undefined, { triggeredByAccelerator: true });
+    click(undefined, undefined, {});
+    expect(quit.mock.calls).toEqual([[true], [false]]);
+  });
 
   it('does not mistake two null window references for a focused Settings window', async () => {
     const host = menuHost();

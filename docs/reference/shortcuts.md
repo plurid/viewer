@@ -64,8 +64,13 @@ Every command is also in **⌘K**, with its key beside it.
 | ----------------------------- | ---------------- |
 | Commands                      | **⌘K**           |
 | Settings                      | **⌘,**           |
+| Quit Viewer                   | **⌘Q** twice     |
 | Dictate an Ask Viewer request | Hold **⌃⇧Space** |
 | Key prefix                    | **⌃B**           |
+
+The first **⌘Q** shows "Press ⌘Q again to quit"; press it again within 2.5 seconds, or hold it.
+**Quit Viewer** in the menu, the Dock and logging out quit at once. To quit on the first press, turn
+off **Settings → Browsing → Warn before quitting with ⌘Q**.
 
 After the prefix, **?** shows what each key does and **:** opens the command line. Arrow keys and
 range selection follow the active view. A terminal or text editor keeps its own keys.

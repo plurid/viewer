@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { initialize } from './renderer/state/store';
 import { markStartup } from './renderer/app/startup';
 import { Empty } from './renderer/ui/primitives';
+import { QuitHint } from './renderer/app/QuitHint';
 import './renderer/styles.css';
 // Failures reach the local diagnostic log; each window reports at most 50.
 let reports = 0;
@@ -16,10 +17,18 @@ window.addEventListener('unhandledrejection', (event) => diagnose(event.reason))
 const root = createRoot(document.getElementById('viewer')!);
 const failed = (error: Error) =>
   root.render(<Empty icon="warning" title="Viewer could not start" detail={error.message} />);
-// Each window loads only its own interface: Settings and the workspace share little code.
+// Each window loads only its own interface: Settings and the workspace share little code. Both
+// show the first ⌘Q's reminder.
 if (new URLSearchParams(location.search).get('window') === 'settings')
   import('./renderer/ui/settings/Settings')
-    .then(({ SettingsWindow }) => root.render(<SettingsWindow />))
+    .then(({ SettingsWindow }) =>
+      root.render(
+        <>
+          <SettingsWindow />
+          <QuitHint />
+        </>,
+      ),
+    )
     .catch(failed);
 else
   // the interface's code loads while the desktop prepares the saved state
@@ -27,6 +36,11 @@ else
     .then(([bootstrap, { App }]) => {
       markStartup('viewer:bootstrap');
       initialize(bootstrap);
-      root.render(<App />);
+      root.render(
+        <>
+          <App />
+          <QuitHint />
+        </>,
+      );
     })
     .catch(failed);

@@ -1,8 +1,12 @@
+import { saveBeforeClose } from './save-before-close';
+import type { SaveFailureChoice } from './save-before-close';
+
 /** In order. Until Electron closes the windows, a declined or failed step returns to running. */
 export type QuitPhase =
   | 'running'
   | 'confirming'
   | 'draining'
+  | 'finishing-exports'
   | 'saving'
   | 'stopping-guests'
   | 'closing-windows'
@@ -12,21 +16,28 @@ export type QuitPhase =
 /** The answer to Quit's question about file operations still in progress. */
 export type QuitChoice = 'wait' | 'cancel-operations' | 'keep-open';
 
+/** The steps whose failure asks Retry or Keep Open, as a failed save does. */
+export type QuitRetryStep = 'draining' | 'stopping-guests';
+
 /** What Quit uses of Electron's before-quit and will-quit events. */
 export interface QuitEvent {
   preventDefault(): void;
 }
 
-/** The main process's part: Electron, the windows and the question's wording stay there. */
+/** The main process's part: Electron, the windows and the questions' wording stay there. */
 export interface QuitHost {
   /** The file operations Quit would cancel. */
   pendingOperations(): number;
   confirm(pending: number): Promise<QuitChoice>;
   /** Resolves once no file operation is left; their questions are answered in a window. */
   drained(): Promise<void>;
+  /** Resolves once no backup export is being written. */
+  exports(): Promise<void>;
   /** Saves every window and store; false when the person keeps Viewer open. */
   save(): Promise<boolean>;
   stopGuests(): Promise<void>;
+  /** Asks whether to run a failed step again; keep-open ends Quit. */
+  failed(step: QuitRetryStep, error: unknown): Promise<SaveFailureChoice>;
   /** Stops Desktop's services; undefined before Desktop exists. */
   dispose(): Promise<void> | undefined;
   closeHotkey(): void;
@@ -75,7 +86,7 @@ export class QuitSequence {
     // done. With some in progress it asks first.
     const pending = this.host.pendingOperations();
     if (pending) void this.confirm(pending);
-    else void this.save();
+    else void this.finish();
   }
 
   willQuit(event: QuitEvent): void {
@@ -121,19 +132,25 @@ export class QuitSequence {
       }
       if (choice === 'wait') {
         this.move(['confirming'], 'draining');
-        await this.host.drained();
+        if (!(await this.retried('draining', () => this.host.drained()))) {
+          this.move(['draining'], 'running');
+          return;
+        }
       }
     } catch (error) {
       this.host.report('Quit confirmation failed', error);
       this.move(['confirming', 'draining'], 'running');
       return;
     }
-    await this.save();
+    await this.finish();
   }
 
-  private async save(): Promise<void> {
-    this.move(['running', 'confirming', 'draining'], 'saving');
+  private async finish(): Promise<void> {
+    this.move(['running', 'confirming', 'draining'], 'finishing-exports');
     try {
+      // a backup cut short by the process ending would look complete
+      await this.host.exports();
+      this.move(['finishing-exports'], 'saving');
       if (!(await this.host.save())) {
         this.move(['saving'], 'running');
         return;
@@ -142,13 +159,22 @@ export class QuitSequence {
       // Offscreen guests must stop while their owning renderer is still alive.
       // Letting Electron close them with the app windows can leave Chromium's
       // shutdown waiting even after will-quit and service disposal finish.
-      await this.host.stopGuests();
+      if (!(await this.retried('stopping-guests', () => this.host.stopGuests()))) {
+        this.move(['stopping-guests'], 'running');
+        return;
+      }
       this.move(['stopping-guests'], 'closing-windows');
       this.host.quit();
     } catch (error) {
       this.host.report('Viewer could not finish quitting', error);
-      if (!this.closingWindows()) this.move(['saving', 'stopping-guests'], 'running');
+      if (!this.closingWindows())
+        this.move(['finishing-exports', 'saving', 'stopping-guests'], 'running');
     }
+  }
+
+  /** The failed save's loop: each Retry runs the step again. */
+  private retried(step: QuitRetryStep, run: () => Promise<void>): Promise<boolean> {
+    return saveBeforeClose(run, (error) => this.host.failed(step, error));
   }
 
   /** Quit's order is fixed: a transition from any other phase is a defect. */

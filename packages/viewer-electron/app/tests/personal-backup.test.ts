@@ -330,3 +330,37 @@ it('discards a pending review when its window closes', async () => {
   release();
   await rejected;
 });
+
+it('lets Quit wait for an export being written, not for its file dialog', async () => {
+  const root = await temporaryRoot('viewer-backup-quit-');
+  const file = path.join(root, 'backup.json');
+  let choose!: (file: string) => void;
+  const backups = new PersonalBackups(root, {
+    flush: async () => {},
+    state: async () => saved(root),
+    settings: () => snapshot(root),
+    apply: async () => snapshot(root),
+    choose: () =>
+      new Promise<string>((resolve) => {
+        choose = resolve;
+      }),
+  });
+  const prepared = review(await backups.request({ kind: 'prepare-export' }, 1));
+  const written = backups.request({ kind: 'write', id: prepared.id }, 1);
+  await vi.waitFor(() => expect(choose).toBeDefined());
+  await expect(backups.exported()).resolves.toBeUndefined();
+  const write = Reflect.get(backups, 'write') as (...args: unknown[]) => Promise<void>;
+  let started!: () => void;
+  const writing = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  Reflect.set(backups, 'write', (...args: unknown[]) => {
+    started();
+    return write.apply(backups, args);
+  });
+  choose(file);
+  await writing;
+  await backups.exported();
+  expect(backupSchema.parse(JSON.parse(await readFile(file, 'utf8'))).privateRoot).toBe(root);
+  await expect(written).resolves.toMatchObject({ kind: 'written' });
+});

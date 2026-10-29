@@ -624,6 +624,8 @@ export type DesktopEvent =
   | { type: 'watch-rule'; rule: WatchRule }
   /** Settings shows this setting: a command for a setting the workspace does not change itself. */
   | { type: 'settings-focus'; path: string }
+  /** ⌘Q was pressed once: a second press within `duration` milliseconds quits. */
+  | { type: 'quit-hint'; duration: number }
   | { type: 'service-error'; service: string; message: string }
   | { type: 'agent-proposal'; proposal: AgentProposal }
   | { type: 'agent-task'; id: string; bundle: AgentTaskBundle; deadline: number }

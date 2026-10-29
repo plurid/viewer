@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { QuitSequence } from '../src/desktop/windows/quit-sequence';
-import type { QuitChoice, QuitHost, QuitPhase } from '../src/desktop/windows/quit-sequence';
+import type {
+  QuitChoice,
+  QuitHost,
+  QuitPhase,
+  QuitRetryStep,
+} from '../src/desktop/windows/quit-sequence';
+import type { SaveFailureChoice } from '../src/desktop/windows/save-before-close';
 
 type QuitInput = 'before-quit' | 'will-quit' | 'exit-headless';
 
@@ -26,6 +32,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 function fixture(pending: number) {
   const answer = deferred<QuitChoice>();
   const drained = deferred<void>();
+  const exported = deferred<void>();
   const saved = deferred<boolean>();
   const stopped = deferred<void>();
   const disposed = deferred<void>();
@@ -33,15 +40,19 @@ function fixture(pending: number) {
     pendingOperations: vi.fn(() => pending),
     confirm: vi.fn((_pending: number) => answer.promise),
     drained: vi.fn(() => drained.promise),
+    exports: vi.fn(() => exported.promise),
     save: vi.fn(() => saved.promise),
     stopGuests: vi.fn(() => stopped.promise),
+    failed: vi.fn(
+      async (_step: QuitRetryStep, _error: unknown): Promise<SaveFailureChoice> => 'keep-open',
+    ),
     dispose: vi.fn<() => Promise<void> | undefined>(() => disposed.promise),
     closeHotkey: vi.fn(),
     quit: vi.fn(),
     report: vi.fn(),
   } satisfies QuitHost;
   const sequence = new QuitSequence(host);
-  return { host, sequence, answer, drained, saved, stopped, disposed };
+  return { host, sequence, answer, drained, exported, saved, stopped, disposed };
 }
 
 /** A sequence brought to `phase` through its ports, as Electron and the person would. */
@@ -55,6 +66,7 @@ async function at(phase: QuitPhase) {
       ]
     : [
         ['running', () => quit.sequence.beforeQuit(new TestEvent())],
+        ['finishing-exports', () => quit.exported.resolve()],
         ['saving', () => quit.saved.resolve(true)],
         ['stopping-guests', () => quit.stopped.resolve()],
         ['closing-windows', () => quit.sequence.willQuit(new TestEvent())],
@@ -78,7 +90,7 @@ function send(sequence: QuitSequence, input: QuitInput, event: TestEvent): void 
 describe('Quit sequence', () => {
   // phase, input, next phase or a thrown defect, whether Electron's event was held back
   it.each<[QuitPhase, QuitInput, QuitPhase | 'throws', boolean]>([
-    ['running', 'before-quit', 'saving', true],
+    ['running', 'before-quit', 'finishing-exports', true],
     ['running', 'will-quit', 'disposing', true],
     ['running', 'exit-headless', 'closing-windows', false],
     ['confirming', 'before-quit', 'confirming', true],
@@ -87,6 +99,9 @@ describe('Quit sequence', () => {
     ['draining', 'before-quit', 'draining', true],
     ['draining', 'will-quit', 'disposing', true],
     ['draining', 'exit-headless', 'throws', false],
+    ['finishing-exports', 'before-quit', 'finishing-exports', true],
+    ['finishing-exports', 'will-quit', 'disposing', true],
+    ['finishing-exports', 'exit-headless', 'throws', false],
     ['saving', 'before-quit', 'saving', true],
     ['saving', 'will-quit', 'disposing', true],
     ['saving', 'exit-headless', 'throws', false],
@@ -116,6 +131,7 @@ describe('Quit sequence', () => {
     ['running', true, false],
     ['confirming', true, false],
     ['draining', true, false],
+    ['finishing-exports', false, false],
     ['saving', false, false],
     ['stopping-guests', false, false],
     ['closing-windows', false, true],
@@ -137,7 +153,7 @@ describe('Quit sequence', () => {
 
   it.each<[QuitChoice, QuitPhase]>([
     ['keep-open', 'running'],
-    ['cancel-operations', 'saving'],
+    ['cancel-operations', 'finishing-exports'],
     ['wait', 'draining'],
   ])('answering %s moves to %s', async (choice, next) => {
     const quit = await at('confirming');
@@ -156,27 +172,74 @@ describe('Quit sequence', () => {
     expect(quit.host.confirm).toHaveBeenCalledTimes(2);
   });
 
-  it('saves once file operations finish', async () => {
+  it('finishes backup exports once file operations finish, and saves after them', async () => {
     const quit = await at('draining');
-    expect(quit.host.save).not.toHaveBeenCalled();
     quit.drained.resolve();
+    await settle();
+    expect(quit.sequence.phase()).toBe('finishing-exports');
+    expect(quit.host.exports).toHaveBeenCalledOnce();
+    expect(quit.host.save).not.toHaveBeenCalled();
+    quit.exported.resolve();
     await settle();
     expect(quit.sequence.phase()).toBe('saving');
     expect(quit.host.save).toHaveBeenCalledOnce();
   });
 
-  it.each<[string, QuitPhase]>([
-    ['the question fails', 'confirming'],
-    ['waiting for file operations fails', 'draining'],
-  ])('returns to running when %s', async (_failure, phase) => {
-    const quit = await at(phase);
+  it('returns to running when the question fails', async () => {
+    const quit = await at('confirming');
     const error = new Error('Unavailable');
-    if (phase === 'confirming') quit.answer.reject(error);
-    else quit.drained.reject(error);
+    quit.answer.reject(error);
     await settle();
     expect(quit.sequence.phase()).toBe('running');
     expect(quit.host.report).toHaveBeenCalledExactlyOnceWith('Quit confirmation failed', error);
     expect(quit.host.save).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, QuitRetryStep]>([
+    ['waiting for file operations', 'draining'],
+    ['stopping browser guests', 'stopping-guests'],
+  ])('asks when %s fails, and Keep Open returns to running', async (_step, step) => {
+    const quit = await at(step);
+    const error = new Error('Unavailable');
+    if (step === 'draining') quit.drained.reject(error);
+    else quit.stopped.reject(error);
+    await settle();
+    expect(quit.host.failed).toHaveBeenCalledExactlyOnceWith(step, error);
+    expect(quit.sequence.phase()).toBe('running');
+    expect(quit.host.report).not.toHaveBeenCalled();
+    expect(quit.host.quit).not.toHaveBeenCalled();
+    quit.sequence.beforeQuit(new TestEvent());
+    expect(quit.sequence.phase()).not.toBe('running');
+  });
+
+  it.each<[string, QuitRetryStep]>([
+    ['waiting for file operations', 'draining'],
+    ['stopping browser guests', 'stopping-guests'],
+  ])('runs %s again on Retry, then goes on', async (_step, step) => {
+    const quit = await at(step);
+    const port = step === 'draining' ? quit.host.drained : quit.host.stopGuests;
+    port.mockResolvedValueOnce(undefined);
+    quit.host.failed.mockResolvedValueOnce('retry');
+    if (step === 'draining') quit.drained.reject(new Error('Unavailable'));
+    else quit.stopped.reject(new Error('Unavailable'));
+    await settle();
+    expect(port).toHaveBeenCalledTimes(2);
+    expect(quit.sequence.phase()).toBe(
+      step === 'draining' ? 'finishing-exports' : 'closing-windows',
+    );
+  });
+
+  it('returns to running and reports when the retry question itself fails', async () => {
+    const quit = await at('stopping-guests');
+    const error = new Error('No dialog');
+    quit.host.failed.mockRejectedValueOnce(error);
+    quit.stopped.reject(new Error('Unavailable'));
+    await settle();
+    expect(quit.sequence.phase()).toBe('running');
+    expect(quit.host.report).toHaveBeenCalledExactlyOnceWith(
+      'Viewer could not finish quitting',
+      error,
+    );
   });
 
   it('returns to running when the person keeps Viewer open after a failed save', async () => {
@@ -188,14 +251,10 @@ describe('Quit sequence', () => {
     expect(quit.host.report).not.toHaveBeenCalled();
   });
 
-  it.each<[string, QuitPhase]>([
-    ['saving', 'saving'],
-    ['stopping browser guests', 'stopping-guests'],
-  ])('returns to running and reports when %s fails', async (_failure, phase) => {
-    const quit = await at(phase);
+  it('returns to running and reports when saving fails', async () => {
+    const quit = await at('saving');
     const error = new Error('Unavailable');
-    if (phase === 'saving') quit.saved.reject(error);
-    else quit.stopped.reject(error);
+    quit.saved.reject(error);
     await settle();
     expect(quit.sequence.phase()).toBe('running');
     expect(quit.host.report).toHaveBeenCalledExactlyOnceWith(

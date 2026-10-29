@@ -227,6 +227,14 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'boolean',
   },
   {
+    path: 'settings.quit.warnShortcut',
+    category: 'Browsing',
+    label: 'Warn before quitting with ⌘Q',
+    detail:
+      'The first ⌘Q shows a reminder; press it again to quit. Quit in the menu or the Dock quits at once.',
+    kind: 'boolean',
+  },
+  {
     path: 'settings.browsing.suggestions',
     category: 'Browsing',
     section: 'Suggestions',
