@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, X509Certificate } from 'node:crypto';
-import { cp, lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -13,6 +13,7 @@ import {
   type ProfileSummary,
   type StoreChannel,
 } from './mas-configuration';
+import { cloneTree } from './clone';
 
 const directory = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const command = process.argv[2] ?? 'preflight';
@@ -180,12 +181,7 @@ print(json.dumps(dict(
     console.log('Kept the previous build at ' + previous);
   }
   await mkdir(output, { recursive: true });
-  await cp(source, app, {
-    recursive: true,
-    verbatimSymlinks: true,
-    errorOnExist: true,
-    force: false,
-  });
+  await cloneTree(source, app);
   run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
   if (installer) {
     const filename = 'Viewer-' + inputs.build + '-macOS-' + arch + '.pkg';

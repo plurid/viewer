@@ -1,6 +1,7 @@
 /**
  * A file's first bytes name what it is when its name does not: real heads from the playground's
- * samples, and generated ones for formats it has no sample of.
+ * samples, and generated ones for formats it has no sample of. The pinned camera RAW and Apache POI
+ * references are read where the playground holds them.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -8,9 +9,25 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { strToU8, zipSync } from 'fflate';
-import { identifyBytes, identifyProbe } from '../src/domain/files/signatures';
+import type { FileIdentity } from '../src/domain/files/signatures';
+import {
+  compoundKind,
+  directoryProbe,
+  identifyBytes,
+  identifyProbe,
+} from '../src/domain/files/signatures';
 import { Resources } from '../src/desktop/previews/resources';
+import { cameraRawSamples } from '../tools/playground/camera-raw';
+import { officeLayoutSamples } from '../tools/playground/office-layout';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import type { DirectoryEntry } from './support/compound-file';
+import {
+  compoundFile,
+  excelDirectory,
+  powerPointDirectory,
+  wordDirectory,
+} from './support/compound-file';
+import { holds, pinned } from './support/real-corpus';
 
 const assets = fileURLToPath(new URL('../tools/playground/assets/', import.meta.url));
 const head = async (name: string) =>
@@ -207,30 +224,192 @@ describe('generated heads', () => {
     expect(label(bytes('\0asm\x01\0\0\0\x01'))).toBe('WebAssembly module');
     expect(label(bytes('dex\n035\0'))).toBe('Android Dalvik executable');
   });
-  it('names an OLE compound file by the streams its directory shows', () => {
-    const compound = (...streams: string[]) => {
-      const data = new Uint8Array(2048);
-      data.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
-      streams.forEach((stream, index) =>
-        data.set(
-          [...stream].flatMap((character) => [character.charCodeAt(0), 0]),
-          512 + index * 128,
-        ),
-      );
-      return data;
-    };
-    expect(identifyBytes(compound('Root Entry', 'WordDocument'))).toEqual({
-      label: 'Word 97-2003 document',
-      extension: 'doc',
+  it('names camera RAW files by their maker’s magic number or brand', () => {
+    expect(identifyBytes(bytes('FUJIFILMCCD-RAW 0201FF159505X-T4'))).toEqual({
+      label: 'Fujifilm RAW image',
+      extension: 'raf',
     });
-    expect(identifyBytes(compound('Root Entry', 'Workbook'))?.extension).toBe('xls');
-    expect(label(compound('Root Entry', 'PowerPoint Document'))).toBe(
-      'PowerPoint 97-2003 presentation',
-    );
-    expect(label(compound('Root Entry', '__substg1.0_0037001F'))).toBe('Outlook message');
-    expect(label(compound('Root Entry'))).toBe('Office 97-2003 or Outlook file');
-    expect(label(compound('Root Entry'), 'Reply.msg')).toBe('Outlook message');
+    expect(identifyBytes(bytes('IIRO', word(8, true)))).toEqual({
+      label: 'Olympus RAW image',
+      extension: 'orf',
+    });
+    expect(label(bytes('IIRS', word(8, true)))).toBe('Olympus RAW image');
+    expect(label(bytes('MMOR', word(8)))).toBe('Olympus RAW image');
+    expect(identifyBytes(bytes('IIU\0', word(0x18, true)))).toEqual({
+      label: 'Panasonic RAW image',
+      extension: 'rw2',
+    });
+    expect(identifyBytes(bytes(word(0x18), 'ftypcrx ', word(1), 'crx isom'))).toEqual({
+      label: 'Canon RAW image',
+      extension: 'cr3',
+    });
   });
+});
+
+/** The directory sector a compound file's head lacks, as `directoryProbe` asks for it. */
+const directoryOf = (file: Uint8Array) => {
+  const probe = directoryProbe(file.subarray(0, identifyProbe), file.length);
+  return probe && file.subarray(probe.at, probe.at + probe.length);
+};
+/** The first directory sector wherever it lies: a 512-byte head never holds it. */
+const firstDirectory = (file: Uint8Array) => {
+  const probe = directoryProbe(file.subarray(0, 512), file.length)!;
+  return file.subarray(probe.at, probe.at + probe.length);
+};
+const word97 = { label: 'Word 97-2003 document', extension: 'doc' };
+const excel97 = { label: 'Excel 97-2003 workbook', extension: 'xls' };
+
+describe('OLE compound files', () => {
+  it('reads the directory past the head to name a Word document', () => {
+    const file = compoundFile(wordDirectory, { directory: 10 });
+    const head = file.subarray(0, identifyProbe);
+    expect(directoryProbe(head, file.length)).toEqual({ at: 11 * 512, length: 512 });
+    expect(identifyBytes(head)).toEqual({ label: 'Office 97-2003 or Outlook file' });
+    expect(identifyBytes(head, '', directoryOf(file))).toEqual(word97);
+    expect(compoundKind(head.subarray(0, 512), directoryOf(file)!)).toEqual(word97);
+    // a version 4 file's 4096-byte directory always lies past the head
+    const four = compoundFile(wordDirectory, { directory: 0, shift: 12 });
+    expect(directoryProbe(four.subarray(0, identifyProbe), four.length)).toEqual({
+      at: 4096,
+      length: 4096,
+    });
+    expect(identifyBytes(four.subarray(0, identifyProbe), '', directoryOf(four))).toEqual(word97);
+  });
+  it('names each kind from a directory the head holds', () => {
+    for (const file of [compoundFile(excelDirectory), compoundFile(powerPointDirectory)])
+      expect(directoryProbe(file, file.length)).toBeUndefined();
+    expect(identifyBytes(compoundFile(excelDirectory))).toEqual(excel97);
+    expect(identifyBytes(compoundFile(powerPointDirectory))).toEqual({
+      label: 'PowerPoint 97-2003 presentation',
+      extension: 'ppt',
+    });
+    const root = { name: 'Root Entry', type: 'root', child: 1 } as const;
+    const streams = (...names: string[]) =>
+      compoundFile([
+        root,
+        // each the right sibling of the one before
+        ...names.map((name, index) => ({
+          name,
+          type: 'stream' as const,
+          right: index + 1 < names.length ? index + 2 : undefined,
+        })),
+      ]);
+    expect(identifyBytes(streams('Book'))).toEqual({
+      label: 'Excel 5.0/95 workbook',
+      extension: 'xls',
+    });
+    // a workbook that keeps an Excel 5.0/95 copy beside its own
+    expect(identifyBytes(streams('Book', 'Workbook'))).toEqual(excel97);
+    expect(identifyBytes(streams('__substg1.0_0037001F'))).toEqual({ label: 'Outlook message' });
+    expect(identifyBytes(streams('Contents'))).toEqual({ label: 'Office 97-2003 or Outlook file' });
+    expect(label(streams('Contents'), 'Reply.msg')).toBe('Outlook message');
+    expect(label(streams('Contents'), 'Setup.msi')).toBe('Windows Installer package');
+  });
+  it('never names a file by a stream inside a storage', () => {
+    // a workbook whose first sector shows a document embedded in it, and not its root's links
+    const embedded = compoundFile([
+      { name: 'Root Entry', type: 'root', child: 9 },
+      { name: 'Workbook', type: 'stream' },
+      { name: 'MBD0001A2B3', type: 'storage', child: 3 },
+      { name: 'WordDocument', type: 'stream' },
+    ]);
+    expect(identifyBytes(embedded)).toEqual(excel97);
+    // the root's own stream comes before one this sector does not place
+    const placed = compoundFile([
+      { name: 'Root Entry', type: 'root', child: 1 },
+      { name: 'Workbook', type: 'stream' },
+      { name: 'WordDocument', type: 'stream' },
+    ]);
+    expect(identifyBytes(placed)).toEqual(excel97);
+    const only = compoundFile([
+      { name: 'Root Entry', type: 'root', child: 1 },
+      { name: 'ObjectPool', type: 'storage', child: 2 },
+      { name: 'Workbook', type: 'stream' },
+    ]);
+    expect(identifyBytes(only)).toEqual({ label: 'Office 97-2003 or Outlook file' });
+  });
+  it('refuses a malformed header or directory', () => {
+    const file = compoundFile(wordDirectory, { directory: 10 });
+    const header = file.subarray(0, 512),
+      directory = firstDirectory(file);
+    const altered = (at: number, ...values: number[]) => {
+      const copy = file.slice();
+      copy.set(values, at);
+      return copy;
+    };
+    expect(compoundKind(header, directory)).toEqual(word97);
+    // a sector of 1024 bytes, and a header in the other byte order
+    for (const malformed of [altered(0x1e, 10, 0), altered(0x1c, 0xff, 0xfe)]) {
+      expect(
+        directoryProbe(malformed.subarray(0, identifyProbe), malformed.length),
+      ).toBeUndefined();
+      expect(compoundKind(malformed.subarray(0, 512), directory)).toBeUndefined();
+    }
+    expect(compoundKind(header.subarray(0, 511), directory)).toBeUndefined();
+    // a directory past the end of the file, or not one sector long
+    expect(directoryProbe(file.subarray(0, identifyProbe), file.length - 1)).toBeUndefined();
+    expect(compoundKind(header, directory.subarray(0, 384))).toBeUndefined();
+    expect(compoundKind(header, file.subarray(file.length - 1024))).toBeUndefined();
+    // WordDocument's name length, longer than its entry
+    expect(compoundKind(header, firstDirectory(altered(11 * 512 + 2 * 128 + 0x40, 66)))).toBe(
+      undefined,
+    );
+    const kind = (...entries: DirectoryEntry[]) => {
+      const generated = compoundFile(entries);
+      return compoundKind(generated.subarray(0, 512), firstDirectory(generated));
+    };
+    const root = { name: 'Root Entry', type: 'root', child: 1 } as const;
+    const workbook = { name: 'Workbook', type: 'stream' } as const;
+    expect(kind(root, workbook)).toEqual(excel97);
+    expect(kind(workbook, root)).toBeUndefined();
+    // links that loop, reach the root, or share an entry
+    expect(kind(root, { ...workbook, left: 1 })).toBeUndefined();
+    expect(kind(root, { ...workbook, right: 0 })).toBeUndefined();
+    expect(
+      kind(root, { ...workbook, right: 2 }, { name: 'ObjectPool', type: 'storage', child: 1 }),
+    ).toBeUndefined();
+  });
+  /** Unmodified Apache POI references, where the playground or a retained corpus holds them. */
+  for (const sample of officeLayoutSamples.filter((item) =>
+    ['doc', 'xls', 'ppt'].includes(item.formats[0]!),
+  )) {
+    const extension = sample.formats[0];
+    it.skipIf(!holds(sample))(`names ${path.basename(sample.path)} by its directory`, async () => {
+      const file = new Uint8Array(await pinned(sample));
+      const head = file.subarray(0, identifyProbe);
+      expect(compoundKind(head.subarray(0, 512), firstDirectory(file))?.extension).toBe(extension);
+      expect(identifyBytes(head, '', directoryOf(file))?.extension).toBe(extension);
+      if (extension === 'doc') {
+        // Word wrote its directory near the end of the file
+        expect(directoryProbe(head, file.length)).toEqual({ at: 332288, length: 512 });
+        expect(identifyBytes(head)).toEqual({ label: 'Office 97-2003 or Outlook file' });
+      } else expect(identifyBytes(head)?.extension).toBe(extension);
+    });
+  }
+});
+
+/** The playground's pinned camera RAW samples; DNG, NEF and ARW files are TIFF images too. */
+describe('camera RAW samples', () => {
+  const identities: Record<string, FileIdentity> = {
+    cr2: { label: 'Canon RAW image', extension: 'cr2' },
+    cr3: { label: 'Canon RAW image', extension: 'cr3' },
+    raf: { label: 'Fujifilm RAW image', extension: 'raf' },
+    orf: { label: 'Olympus RAW image', extension: 'orf' },
+    rw2: { label: 'Panasonic RAW image', extension: 'rw2' },
+    dng: { label: 'TIFF image', extension: 'tiff' },
+    nef: { label: 'TIFF image', extension: 'tiff' },
+    arw: { label: 'TIFF image', extension: 'tiff' },
+  };
+  for (const sample of cameraRawSamples) {
+    const identity = identities[sample.formats[0]!]!;
+    it.skipIf(!holds(sample))(
+      `${path.basename(sample.path)} reads as ${identity.label}`,
+      async () => {
+        const head = (await pinned(sample)).subarray(0, identifyProbe);
+        expect(identifyBytes(head, 'unnamed')).toEqual(identity);
+      },
+    );
+  }
 });
 
 describe('what is not identified', () => {

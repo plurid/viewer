@@ -32,6 +32,7 @@ import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqli
 import {
   confirmedFormats,
   confirms,
+  directoryProbe,
   identifyBytes,
   identifyProbe,
 } from '../../domain/files/signatures';
@@ -56,6 +57,11 @@ const MAX_READ = 4 * 1024 * 1024;
 const grantExtension = (grant: Grant) => grant.format?.extension ?? grant.resource.entry.extension;
 const fileVersion = (info: Stats) =>
   JSON.stringify([info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs]);
+/** At most `length` bytes of an open file, from `at`. */
+const readAt = async (file: FileHandle, at: number, length: number) => {
+  const bytes = Buffer.alloc(length);
+  return bytes.subarray(0, (await file.read(bytes, 0, length, at)).bytesRead);
+};
 /** The bundled FFmpeg reads the container; the decoder still probes what it holds. */
 const hasDemuxer = (extension: string) => {
   try {
@@ -371,8 +377,9 @@ export class Resources {
     throw new Error('This file changed after Viewer read its format. Reopen its preview.');
   }
   /**
-   * Reads a granted file as `extension` from now on, once its own first bytes say it is one. Show
-   * as asks this for a file whose name does not say its format; the renderer's word is not taken.
+   * Reads a granted file as `extension` from now on, once its own first bytes say it is one, with a
+   * compound file's directory. Show as asks this for a file whose name does not say its format; the
+   * renderer's word is not taken.
    */
   confirmFormat(id: string, extension: string): Promise<Resource> {
     return this.work.track(this.paths(id), () =>
@@ -390,16 +397,17 @@ export class Resources {
       fileCoordination.path(grant.file),
       constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
     );
-    let head: Buffer, info: Stats;
+    let head: Buffer, directory: Buffer | undefined, info: Stats;
     try {
       info = await file.stat();
       if (!info.isFile()) throw new Error('This preview file is no longer a regular file.');
-      head = Buffer.alloc(Math.min(info.size, identifyProbe));
-      head = head.subarray(0, (await file.read(head, 0, head.length, 0)).bytesRead);
+      head = await readAt(file, 0, Math.min(info.size, identifyProbe));
+      const probe = directoryProbe(head, info.size);
+      if (probe) directory = await readAt(file, probe.at, probe.length);
     } finally {
       await file.close();
     }
-    if (!confirms(identifyBytes(head, grant.resource.entry.name), extension))
+    if (!confirms(identifyBytes(head, grant.resource.entry.name, directory), extension))
       throw new Error(`The contents of this file do not match .${extension}.`);
     await this.access([grant.file]);
     if (this.get(id) !== grant) throw new Error('This preview resource has expired.');

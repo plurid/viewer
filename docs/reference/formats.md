@@ -100,8 +100,9 @@ is shown as written. Photos show only when they are embedded image data.
 
 When no preview reads a file, Viewer reads its first 4 KB and names the format from a table of
 signatures: databases, archives and compressed files, documents, images, audio and video, fonts,
-executables and libraries, and installer packages. Text is shown as text and is never named this
-way.
+executables and libraries, and installer packages. For a Word, Excel or PowerPoint 97 to 2003 file
+it also reads the directory that names the file's streams. Text is shown as text and is never named
+this way.
 
 These formats show in place with **Show as**, whatever the file is called: SQLite; ZIP, JAR, APK,
 tar and compressed tar archives; PDF and DjVu; PNG, JPEG, GIF, WebP, BMP, ICO, AVIF, HEIC, TIFF,
@@ -113,15 +114,19 @@ TrueType, OpenType, WOFF and WOFF2 fonts; binary property lists.
 - A PDF shown this way cannot be printed until it is renamed to end in `.pdf`.
 - A gzip file shows as an archive only when its name says `.tar`.
 
-EPUB books; Word, Excel and PowerPoint (docx, xlsx, pptx); OpenDocument (odt, ods, odp, odg); and
+EPUB books; Word, Excel and PowerPoint (docx, xlsx, pptx, and their macro and template files); Word,
+Excel and PowerPoint 97 to 2003 (doc, xls, ppt); OpenDocument (odt, ods, odp, odg); camera raw
+photos from Canon (CR2, CR3), Fujifilm (RAF), Olympus and OM System (ORF) and Panasonic (RW2); and
 the video and audio Viewer plays through a copy (MKV, MKA, AVI, FLV, WMV, WMA, ASF, MPG, VOB, 3GP,
 3G2, AIFF, CAF) also show with **Show as**. Viewer's desktop service reads the file's own first
-bytes again before it reads the file as that format. When they disagree it says "The contents of
-this file do not match", and when the file changes afterwards it asks you to reopen the preview.
+bytes again, with a 97 to 2003 file's directory, before it reads the file as that format. When they
+disagree it says "The contents of this file do not match", and when the file changes afterwards it
+asks you to reopen the preview.
 
-Camera raw photos, Word 97 to 2003, Excel 97 to 2003 and PowerPoint 97 to 2003 files, and macro or
-template Office files are named but not shown. The message names the extension that makes them
-preview.
+- A macro or template Office file shows its layout; its Reading view needs the file's own extension.
+- A DNG, NEF or ARW photo is also a TIFF image and shows as one. Rename it to its own extension for
+  the camera preview and **Render RAW**.
+- Ogg video is named but not shown. The message names the extension that makes it preview.
 
 **Ask** sends the prompt model the file's name, its size and its first 64 bytes, as hexadecimal and
 as printable characters, with the name of any signature Viewer matched. It needs the excerpts

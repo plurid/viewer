@@ -15,6 +15,7 @@ import { officeRuntimeName } from '../src/desktop/previews/office-runtime-manife
 import { documentTypes } from './document-types';
 import { prepareSpeechRuntime, verifySpeechRuntime } from './speech-runtime';
 import { speechRuntimeName } from '../src/desktop/speech/runtime-manifest';
+import { cloneTree } from './clone';
 
 if (process.platform !== 'darwin') throw new Error('This local rebuild requires macOS.');
 const source = path.resolve(process.argv[2] || '');
@@ -83,12 +84,7 @@ const unpacked = path.join(work, 'source');
 asar.extractAll(path.join(source, 'Contents/Resources/app.asar'), unpacked);
 await cp(path.resolve('.vite'), path.join(unpacked, '.vite'), { recursive: true });
 await mkdir(path.dirname(output), { recursive: true });
-await cp(source, output, {
-  recursive: true,
-  force: false,
-  errorOnExist: true,
-  verbatimSymlinks: true,
-});
+await cloneTree(source, output);
 // Current committed notices supplement inherited runtime notices in this new
 // output only. Neither the seed nor source license files are modified.
 await cp(path.resolve('assets/licenses'), path.join(output, 'Contents/Resources/licenses'), {
@@ -104,7 +100,7 @@ if (
 ) {
   await verifyOfficeRuntime(officeOutput);
 } else {
-  await cp(officeRuntime, officeOutput, { recursive: true, force: false, errorOnExist: true });
+  await cloneTree(officeRuntime, officeOutput);
 }
 // Optional freshly compiled N-API binding. Only the new output is changed;
 const speechRuntime = await prepareSpeechRuntime(process.cwd());
@@ -118,7 +114,7 @@ if (speechRuntime) {
   ) {
     await verifySpeechRuntime(path.join(source, 'Contents/Resources', speechRuntimeName()));
   } else {
-    await cp(speechRuntime, speechOutput, { recursive: true, force: false, errorOnExist: true });
+    await cloneTree(speechRuntime, speechOutput);
   }
 }
 await promisify(execFile)('/usr/bin/plutil', [

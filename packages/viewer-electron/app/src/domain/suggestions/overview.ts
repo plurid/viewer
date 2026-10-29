@@ -1,4 +1,6 @@
 import type { FileEntry } from '../contracts';
+import { archiveStem } from './insights';
+import { archive } from './rules';
 
 /**
  * OVERVIEW: what may need a look across the person's files, as searches of the filename index.
@@ -18,6 +20,9 @@ export interface OverviewQuery {
   place: OverviewPlace;
   /** Which matches a card shows first: the largest, or the latest. */
   order?: 'size' | 'modified';
+  /** Matches the index cannot decide alone: archives with their extracted folder beside them,
+   * which the card checks one by one. */
+  check?: 'extracted';
 }
 
 export const overviewQueries: readonly OverviewQuery[] = [
@@ -27,6 +32,14 @@ export const overviewQueries: readonly OverviewQuery[] = [
     detail: 'Disk images and packages in Downloads, older than a week',
     query: 'ext:dmg,pkg modified>7d',
     place: 'downloads',
+  },
+  {
+    id: 'archives.extracted',
+    title: 'Archives already extracted',
+    detail: 'The folder Extract here made is beside them',
+    query: 'ext:zip,tar,tgz,gz',
+    place: 'everywhere',
+    check: 'extracted',
   },
   {
     id: 'files.large',
@@ -79,6 +92,18 @@ export const overviewQueries: readonly OverviewQuery[] = [
     order: 'modified',
   },
 ];
+
+/** The folder Extract here makes beside an archive; undefined for a file that is not one. */
+export function extractedFolder(entry: FileEntry): string | undefined {
+  if (entry.directory || !archive(entry)) return undefined;
+  const stem = archiveStem(entry.name);
+  if (!stem) return undefined;
+  const separator = entry.parent.includes('\\') && !entry.parent.includes('/') ? '\\' : '/';
+  return entry.parent.replace(/[\\/]+$/, '') + separator + stem;
+}
+
+/** How many archives a card checks for their folder: one look each. */
+export const extractedChecks = 200;
 
 /** The folder a place searches; undefined for every indexed location. */
 export function overviewRoot(place: OverviewPlace, home: string): string | undefined {

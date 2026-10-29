@@ -2,7 +2,18 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFile, lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  open as openFile,
+  readdir,
+  readFile,
+  realpath,
+  stat,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -267,9 +278,15 @@ async function palette(connection: Connection, label: string) {
     'document.querySelector(".command-result[aria-selected=true]").click()',
   );
 }
-async function open(name: string, folder: string, mode?: 'columns', model?: ModelProvider) {
+async function open(
+  name: string,
+  folder: string,
+  mode?: 'columns',
+  model?: ModelProvider,
+  home?: string,
+) {
   const directory = await profile(name, folder, mode, model),
-    app = await ownedApp(binary, directory);
+    app = await ownedApp(binary, directory, home ? { environment: { HOME: home } } : {});
   const connection = await app.connect();
   await connection.command('Emulation.setDeviceMetricsOverride', {
     width: 1280,
@@ -610,6 +627,75 @@ try {
   await model.close();
 }
 
+// Overview: a sample Home, indexed, with what its cards look for. Large files are sparse, so a
+// 2.4 GB video takes no space on the disk.
+const home = path.join(root, 'Home');
+const place = (...parts: string[]) => path.join(home, ...parts);
+for (const folder of ['Downloads', 'Desktop', 'Documents', 'Pictures'])
+  await mkdir(place(folder), { recursive: true });
+const day = 24 * 60 * 60 * 1000;
+async function sized(file: string, bytes: number, daysOld = 1) {
+  const handle = await openFile(file, 'wx');
+  await handle.truncate(Math.round(bytes));
+  await handle.close();
+  const at = new Date(Date.now() - daysOld * day);
+  await utimes(file, at, at);
+}
+await sized(place('Downloads', 'Viewer 0.9.dmg'), 182 * 1024 ** 2, 21);
+await sized(place('Downloads', 'Fonts installer.pkg'), 14 * 1024 ** 2, 12);
+await sized(place('Downloads', 'Old invoice.pdf'), 220 * 1024, 140);
+// an archive Extract here already unpacked beside itself
+await copyFile(path.join(examples, 'Field trip.zip'), place('Downloads', 'Field trip.zip'));
+await mkdir(place('Downloads', 'Field trip'));
+await writeFile(
+  place('Downloads', 'Field trip', 'notes.txt'),
+  'A short walk, a few photographs.\n',
+);
+await sized(place('Documents', 'Field trip film.mov'), 2.4 * 1024 ** 3, 9);
+await sized(place('Documents', 'Survey scans.pdf'), 18 * 1024 ** 2, 9);
+await copyFile(path.join(examples, 'Materials.xlsx'), place('Documents', 'Materials copy.xlsx'));
+await copyFile(path.join(examples, 'Field notes.pdf'), place('Documents', 'Field notes (1).pdf'));
+for (const name of ['IMG_2041.HEIC', 'IMG_2042.HEIC', 'IMG_2043.HEIC'])
+  await copyFile(path.join(appRoot, 'tools/playground/assets/study.heic'), place('Pictures', name));
+for (const minute of [12, 14, 15, 21, 26, 31])
+  await copyFile(sourceImage, place('Desktop', `Screenshot 2026-10-21 at 10.${minute}.08.png`));
+// the sample Home dates from the screenshots' day, over a week ago: Changed this week stays empty
+// and every card fits the capture
+for (const folder of ['Downloads', 'Desktop', 'Documents', 'Pictures'])
+  for (const name of await readdir(place(folder))) {
+    const file = place(folder, name);
+    if ((await stat(file)).mtimeMs > Date.now() - 8 * day)
+      await utimes(file, new Date(Date.now() - 8 * day), new Date(Date.now() - 8 * day));
+  }
+current = await open('Overview', home, undefined, undefined, home);
+try {
+  const { connection } = current;
+  // the index has read the sample Home
+  await until(
+    () =>
+      connection.evaluate<boolean>(
+        'window.viewer.indexStatus().then((s) => !s.running && s.roots.length > 0 && s.roots.every((r) => r.status === "ready"))',
+      ),
+    Boolean,
+    'Indexed sample Home',
+    60000,
+  );
+  await palette(connection, 'Overview');
+  await until(
+    () =>
+      connection.evaluate<number>(
+        'document.querySelectorAll(".overview-card:not([aria-busy=true]) .overview-files li").length',
+      ),
+    (count) => count >= 8,
+    'Overview cards',
+    30000,
+  );
+  await delay(1200);
+  await screenshot(connection, path.join(output, 'overview.png'));
+} finally {
+  await current.app.close(current.connection);
+}
+
 const assets = [
   'hero.png',
   'files.png',
@@ -621,6 +707,7 @@ const assets = [
   'suggested.png',
   'insights.png',
   'explore.png',
+  'overview.png',
 ];
 const publicFiles: Record<string, string> = Object.fromEntries(
   assets.map((name) => [name, path.join(output, name)]),

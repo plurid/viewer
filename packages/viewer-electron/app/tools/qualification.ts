@@ -1,12 +1,13 @@
 /** Reproducible release evidence. A passing automated run is not Store approval. */
 import { spawn, execFile } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
-import { cp, lstat, mkdir, open, readdir, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { hashFile, sourceHash, treeHash } from './qualification/source';
+import { cloneTree } from './clone';
 
 export { treeHash } from './qualification/source';
 
@@ -161,13 +162,7 @@ async function main() {
   async function freeze(channel: string, origin: string) {
     const bundle = path.join(directory, 'candidates', channel, 'Viewer.app');
     await mkdir(path.dirname(bundle), { recursive: true });
-    await cp(origin, bundle, {
-      recursive: true,
-      force: false,
-      errorOnExist: true,
-      dereference: false,
-      verbatimSymlinks: true,
-    });
+    await cloneTree(origin, bundle);
     await exec('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle]);
     const minimumOS = (
       await exec('/usr/bin/plutil', [

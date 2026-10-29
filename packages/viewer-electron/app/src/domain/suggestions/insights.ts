@@ -65,7 +65,7 @@ export const insightLimit = 3;
 const megabytes = 1024 * 1024;
 const screenshot = /^(?:Screenshot|Screen Shot|Screen Recording|CleanShot)/i;
 /** "Photos" for Photos.zip and backup for backup.tar.gz: the folder Extract here makes. */
-const archiveStem = (name: string) => name.replace(/\.(?:zip|tar|tar\.gz|tgz)$/i, '');
+export const archiveStem = (name: string) => name.replace(/\.(?:zip|tar|tar\.gz|tgz)$/i, '');
 const extension = (entry: FileEntry) => entry.extension.toLowerCase();
 const total = (files: readonly FileEntry[]) => files.reduce((sum, file) => sum + file.size, 0);
 /** "1 PDF", "3 PDFs" */

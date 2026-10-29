@@ -2,11 +2,12 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { cp, lstat, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { temporaryRoot } from './temporary';
+import { cloneTree } from './clone';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   exec = promisify(execFile);
 
@@ -29,12 +30,7 @@ export async function stapleApplicationRetained(
     throw new Error('Stapling requires an ordinary application bundle directory.');
   const directory = await temporaryRoot('viewer-staple-');
   const copy = path.join(directory, path.basename(app));
-  await cp(app, copy, {
-    recursive: true,
-    force: false,
-    errorOnExist: true,
-    verbatimSymlinks: true,
-  });
+  await cloneTree(app, copy);
   const ticket = await lstat(path.join(copy, 'Contents', 'CodeResources')).catch((error) => {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     return undefined;
@@ -160,11 +156,7 @@ async function main() {
   const stage = await mkdtemp(path.join(directory, 'stage-')),
     dmg = path.join(directory, `Viewer-${version}-arm64.dmg`);
   try {
-    await cp(stapled, path.join(stage, 'Viewer.app'), {
-      recursive: true,
-      dereference: false,
-      verbatimSymlinks: true,
-    });
+    await cloneTree(stapled, path.join(stage, 'Viewer.app'));
     await symlink('/Applications', path.join(stage, 'Applications'));
     await writeFile(
       path.join(stage, 'Install Viewer.txt'),

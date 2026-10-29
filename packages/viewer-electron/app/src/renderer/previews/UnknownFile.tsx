@@ -4,7 +4,12 @@ import type { FileEntry, Resource } from '../../domain/contracts';
 import type { FileGuess } from '../../domain/files/file-guess';
 import type { FileIdentity } from '../../domain/files/signatures';
 import type { PreviewContext, PreviewModule } from './contracts';
-import { confirmedFormats, identifyBytes, identifyProbe } from '../../domain/files/signatures';
+import {
+  confirmedFormats,
+  directoryProbe,
+  identifyBytes,
+  identifyProbe,
+} from '../../domain/files/signatures';
 import { errorMessage } from '../../domain/errors';
 import { Empty, ErrorBoundary } from '../ui/primitives';
 import { getState, report, useViewer } from '../state/store';
@@ -26,9 +31,9 @@ const playable: Record<string, string> = {
 };
 /**
  * Formats whose preview reads a misnamed file from its bytes, each opened that way. The desktop
- * service goes by extension for Office layout and content, document extraction and media
- * compatibility copies: for those, Show as first has it confirm the format from the file's own
- * bytes (`confirmedFormats`). Others, camera RAW and Office 97-2003 among them, are named, not
+ * service goes by extension for Office layout and content, document extraction, camera RAW
+ * renditions and media compatibility copies: for those, Show as first has it confirm the format
+ * from the file's own bytes (`confirmedFormats`). Others, Ogg video among them, are named, not
  * shown.
  */
 const showable = new Set([
@@ -121,19 +126,26 @@ export function UnknownFile(context: PreviewContext) {
   );
   useEffect(() => {
     let live = true;
-    void fetch(resource.url, { headers: { Range: `bytes=0-${identifyProbe - 1}` }, signal })
-      .then((response) => {
-        if (!response.ok) throw new Error('The file could not be read.');
-        return response.arrayBuffer();
-      })
-      .then((bytes) => {
-        if (live) setIdentity(identifyBytes(new Uint8Array(bytes), resource.entry.name));
+    const read = async (at: number, length: number) => {
+      const response = await fetch(resource.url, {
+        headers: { Range: `bytes=${at}-${at + length - 1}` },
+        signal,
+      });
+      if (!response.ok) throw new Error('The file could not be read.');
+      return new Uint8Array(await response.arrayBuffer());
+    };
+    void read(0, identifyProbe)
+      .then(async (head) => {
+        // a compound file names its kind in a directory often past the head
+        const probe = directoryProbe(head, resource.entry.size);
+        const directory = probe && (await read(probe.at, probe.length).catch(() => undefined));
+        if (live) setIdentity(identifyBytes(head, resource.entry.name, directory));
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [resource.url, resource.entry.name, signal]);
+  }, [resource.url, resource.entry.name, resource.entry.size, signal]);
   const show = (target: Shown) => {
     const ready = loadedPreviewModule(target.module);
     if (ready && !target.confirmed) {

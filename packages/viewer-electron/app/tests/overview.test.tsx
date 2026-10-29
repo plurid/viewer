@@ -10,6 +10,7 @@ import type { FileEntry, OverviewPane, ViewerAPI } from '../src/domain/contracts
 import type { IndexedQuery, IndexStatus } from '../src/domain/services';
 import { matchesQuery, parseFileQuery } from '../src/domain/search/query';
 import {
+  extractedFolder,
   overviewQueries,
   overviewRoot,
   summarize,
@@ -81,6 +82,15 @@ describe('overview searches', () => {
     ).toBe(false);
   });
 
+  it('name the folder Extract here makes beside an archive', () => {
+    expect(extractedFolder(entry('/u/Downloads/Photos.zip'))).toBe('/u/Downloads/Photos');
+    expect(extractedFolder(entry('/u/backup.tar.gz'))).toBe('/u/backup');
+    expect(extractedFolder(entry('/u/notes.txt.gz'))).toBeUndefined();
+    expect(extractedFolder(entry('/u/Photos', { kind: 'directory', directory: true }))).toBe(
+      undefined,
+    );
+  });
+
   it('look in Downloads, the Desktop or every indexed location', () => {
     expect(overviewRoot('downloads', '/Users/a')).toBe('/Users/a/Downloads');
     expect(overviewRoot('desktop', '/Users/a/')).toBe('/Users/a/Desktop');
@@ -106,6 +116,7 @@ describe('the Overview plane', () => {
   let pane: OverviewPane;
   const newSearch = vi.fn();
   const openPath = vi.fn(async () => {});
+  const openCollection = vi.fn();
   const status: IndexStatus = {
     roots: [{ path: '/fixture', status: 'ready', count: 5000, errors: 0 }],
     count: 5000,
@@ -115,8 +126,20 @@ describe('the Overview plane', () => {
   beforeEach(() => {
     newSearch.mockClear();
     openPath.mockClear();
+    openCollection.mockClear();
     indexedQuery.mockReset();
     indexedQuery.mockImplementation(async (request: IndexedQuery) => {
+      if (request.query === query('archives.extracted').query)
+        return {
+          entries: [
+            entry('/fixture/Downloads/Trip.zip', { size: 5000 }),
+            entry('/fixture/Downloads/Kept.zip', { size: 7000 }),
+            entry('/fixture/notes.txt.gz'),
+          ],
+          more: false,
+          indexed: true,
+          status,
+        };
       const found =
         request.query === query('files.large').query
           ? [
@@ -136,6 +159,12 @@ describe('the Overview plane', () => {
       viewer: {
         save: vi.fn(async () => {}),
         indexStatus: vi.fn(async () => status),
+        // only Trip.zip was extracted beside itself
+        stat: vi.fn(async (file: string) => {
+          if (file === '/fixture/Downloads/Trip')
+            return entry(file, { kind: 'directory', directory: true });
+          throw new Error('ENOENT');
+        }),
         indexedQuery,
         openSettings: vi.fn(async () => {}),
       },
@@ -152,7 +181,7 @@ describe('the Overview plane', () => {
     render(
       createElement(
         WorkspaceContext.Provider,
-        { value: { newSearch, openPath } as unknown as WorkspaceController },
+        { value: { newSearch, openPath, openCollection } as unknown as WorkspaceController },
         createElement(OverviewPlane, { pane }),
       ),
     );
@@ -190,6 +219,25 @@ describe('the Overview plane', () => {
       '/fixture/Downloads',
       true,
     );
+  });
+
+  it('pairs archives with their extracted folder and shows exactly those as a collection', async () => {
+    mount();
+    await act(async () => {});
+    const card = screen.getByText('Archives already extracted').closest('article')!;
+    expect(card.textContent).toContain('1 · 4.9 KB');
+    expect(within(card).getByRole('button', { name: 'Trip.zip' })).toBeTruthy();
+    expect(within(card).queryByRole('button', { name: 'Kept.zip' })).toBeNull();
+    fireEvent.click(within(card).getByRole('button', { name: 'Show all' }));
+    const collection = getState()
+      .saved.workspaces.flatMap((space) => space.collections ?? [])
+      .find((item) => item.name === 'Archives already extracted');
+    expect(collection).toMatchObject({
+      kind: 'explicit',
+      sources: ['/fixture/Downloads/Trip.zip'],
+    });
+    expect(openCollection).toHaveBeenCalledWith(collection!.id);
+    expect(newSearch).not.toHaveBeenCalled();
   });
 
   it('asks for index locations when there are none', async () => {

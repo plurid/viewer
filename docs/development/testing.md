@@ -25,6 +25,32 @@ throughout source, tests and tools. Source CI runs the complete regression suite
 verified native helpers and audits the full dependency graph, including Electron; see
 [runtime dependencies](dependencies.md).
 
+## Kept test folders
+
+Tests and tools never delete what they create (see [AGENTS.md](../../AGENTS.md)). With
+`VIEWER_TEST_PRESERVE=1` everything they made is kept and listed in
+`$TMPDIR/viewer-kept-test-folders.log`, one line per kept folder, with its time.
+
+- A `pnpm test` run makes its folders inside one run folder, `$TMPDIR/viewer-run-<random>`, and
+  lists only that folder. A full run keeps about 900 folders and 200 MB there; move the run folder
+  to the Trash when you no longer need it. Without preservation, each test moves its own folder to
+  the Trash and the empty run folder follows.
+- Native scenarios and tools such as `tests/native/*.ts`, `tools/office-engine-smoke.ts` and
+  `tools/docs/capture.ts` list their own folders.
+- Release and acceptance tools copy the app with `tools/clone.ts`, an APFS clone that shares the
+  original's disk blocks: a kept copy of the 900 MB app takes a few megabytes. DMG and zip archives
+  are new data and take their full size.
+- Each `pnpm package` moves the previous `out/Viewer-<platform>-<arch>` build, about 900 MB, to the
+  Trash. Empty the Trash now and then.
+
+To move a list of kept folders to the Trash, give `trash` the list on its input:
+
+```sh
+xargs trash < list.txt
+```
+
+Paths with spaces need one `trash` call each.
+
 ## Browser and packaged checks
 
 `pnpm test:browser` serves the renderer with isolated filesystem fixtures. Its

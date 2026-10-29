@@ -4,6 +4,9 @@
  * identity and location checks; any doubt keeps the folder and reports it.
  * VIEWER_TEST_PRESERVE=1 keeps everything, so removal can wait for the owner's
  * approval, and lists each kept path in `keptManifest`.
+ *
+ * A test run makes its folders inside one run folder (`VIEWER_TEST_RUN_ROOT`, made by
+ * tests/support/run-root.ts): a kept run is one path to review, not hundreds.
  */
 import { execFile } from 'node:child_process';
 import {
@@ -23,12 +26,31 @@ export const keptManifest = path.join(os.tmpdir(), 'viewer-kept-test-folders.log
 const owned = new Map<string, { dev: number; ino: number }>();
 const preserve = () =>
   process.env.VIEWER_TEST_PRESERVE === '1' || process.env.VIEWER_TEST_NO_REMOVAL === '1';
+/** This run's folder: one directly inside a system temporary folder, named as a run. */
+function runRoot(): string | undefined {
+  const root = process.env.VIEWER_TEST_RUN_ROOT;
+  if (!root) return undefined;
+  try {
+    const actual = realpathSync.native(root);
+    return path.basename(actual).startsWith('viewer-run-') &&
+      systemParents().includes(path.dirname(actual))
+      ? actual
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+/** Inside this run's folder, which is listed once for the whole run. */
+const inRun = (file: string) => {
+  const root = runRoot();
+  return !!root && canonical(file).startsWith(root + path.sep);
+};
 
 /** Resolve the parent only, so a symbolic link at `file` itself is never followed. */
 function canonical(file: string): string {
   return path.join(realpathSync.native(path.dirname(path.resolve(file))), path.basename(file));
 }
-function temporaryParents(): string[] {
+function systemParents(): string[] {
   const parents = new Set<string>();
   for (const parent of [os.tmpdir(), '/private/tmp'])
     try {
@@ -37,6 +59,10 @@ function temporaryParents(): string[] {
       // An unavailable parent cannot contain an owned folder.
     }
   return [...parents];
+}
+function temporaryParents(): string[] {
+  const root = runRoot();
+  return [...systemParents(), ...(root ? [root] : [])];
 }
 function missing(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === 'ENOENT';
@@ -50,6 +76,8 @@ function gone(file: string): boolean {
   }
 }
 function keep(file: string, reason: string): void {
+  // a run's own folder is listed once, when the run starts
+  if (reason === 'VIEWER_TEST_PRESERVE=1' && inRun(file)) return;
   console.warn(`Kept ${file} (${reason}). Move it to Trash yourself when it is no longer needed.`);
   try {
     appendFileSync(keptManifest, `${new Date().toISOString()}\t${file}\t${reason}\n`);
@@ -67,8 +95,12 @@ function trashCommand(file: string): Promise<void> {
   );
 }
 
-/** Create a uniquely named folder owned by this process. */
-export async function temporaryRoot(prefix: string, parent = os.tmpdir()): Promise<string> {
+/** Create a uniquely named folder owned by this process: in this test run's folder, when
+ * there is one, or in the system temporary folder. */
+export async function temporaryRoot(
+  prefix: string,
+  parent = runRoot() ?? os.tmpdir(),
+): Promise<string> {
   if (!/^viewer-[\w.-]*-$/.test(prefix))
     throw new Error('Temporary folders use a "viewer-<name>-" prefix.');
   const root = mkdtempSync(path.join(parent, prefix));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,8 +48,9 @@ describe('temporary test folders', () => {
     const previous = process.env.VIEWER_TEST_PRESERVE;
     process.env.VIEWER_TEST_PRESERVE = '1';
     try {
-      const forgotten = await temporaryRoot('viewer-temporary-');
-      const cleaned = await temporaryRoot('viewer-temporary-');
+      // a native tool's folder, outside a test run's folder
+      const forgotten = await temporaryRoot('viewer-temporary-', os.tmpdir());
+      const cleaned = await temporaryRoot('viewer-temporary-', os.tmpdir());
       await trashTemporary(cleaned);
       const lines = readFileSync(keptManifest, 'utf8').split('\n');
       expect(lines.filter((line) => line.includes('\t' + forgotten + '\t'))).toHaveLength(1);
@@ -58,5 +59,21 @@ describe('temporary test folders', () => {
       if (previous === undefined) delete process.env.VIEWER_TEST_PRESERVE;
       else process.env.VIEWER_TEST_PRESERVE = previous;
     }
+  });
+
+  it('makes a test run’s folders inside the run’s folder, which is listed once for them all', async () => {
+    const run = process.env.VIEWER_TEST_RUN_ROOT;
+    expect(run && path.basename(run)).toMatch(/^viewer-run-/);
+    const folder = await temporaryRoot('viewer-temporary-');
+    expect(path.dirname(folder)).toBe(realpathSync.native(run!));
+    const lines = readFileSync(keptManifest, 'utf8').split('\n');
+    expect(lines.some((line) => line.includes('\t' + folder + '\t'))).toBe(false);
+    if (process.env.VIEWER_TEST_PRESERVE === '1')
+      expect(lines.filter((line) => line.includes('\t' + run + '\t'))).toHaveLength(1);
+    // cleanup treats the run's folder as a temporary parent: kept or moved, never refused
+    await trashTemporary(folder);
+    expect(
+      readFileSync(keptManifest, 'utf8').includes(folder + '\toutside the system temporary folder'),
+    ).toBe(false);
   });
 });

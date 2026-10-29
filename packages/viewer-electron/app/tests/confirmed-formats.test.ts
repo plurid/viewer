@@ -1,7 +1,8 @@
 /**
  * Show as for a format the desktop service reads by extension: a misnamed file is read as one only
  * once its own first bytes say so, and every reader that chooses by extension then follows.
- * Real samples from the playground, copied under a wrong or missing name.
+ * Real samples from the playground, copied under a wrong or missing name; Office 97 to 2003 files
+ * and camera RAW heads are generated, and the pinned originals read where the playground has them.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
@@ -9,18 +10,34 @@ import { appendFile, copyFile, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resources } from '../src/desktop/previews/resources';
-import { DerivedPreviews } from '../src/desktop/previews/derived';
+import { DerivedPreviews, rawDecoder } from '../src/desktop/previews/derived';
 import type { Decoder } from '../src/desktop/previews/derived';
 import { DocumentCache } from '../src/desktop/previews/document-cache';
 import type { extractDocument } from '../src/desktop/previews/formats';
+import { createOfficeJob, officeFileName } from '../src/desktop/previews/office-job';
 import { videoDecoder } from '../src/desktop/previews/video-rendition';
 import { createResourceHandlers } from '../src/desktop/ipc/resource-handlers';
 import { methodWindows, schemas } from '../src/desktop/ipc/schemas';
 import type { FileServices } from '../src/desktop/files/file-services';
-import { confirms, identifyBytes } from '../src/domain/files/signatures';
+import {
+  confirmedFormats,
+  confirms,
+  directoryProbe,
+  identifyBytes,
+  identifyProbe,
+} from '../src/domain/files/signatures';
+import { cameraRawSamples } from '../tools/playground/camera-raw';
+import { officeLayoutSamples } from '../tools/playground/office-layout';
 import { documentSamples, office } from '../tools/playground/samples/documents';
 import { openDocument, presentation } from '../tools/playground/samples/office';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import {
+  compoundFile,
+  excelDirectory,
+  powerPointDirectory,
+  wordDirectory,
+} from './support/compound-file';
+import { holds, pinned } from './support/real-corpus';
 
 const assets = fileURLToPath(new URL('../tools/playground/assets/', import.meta.url));
 const processors = fileURLToPath(
@@ -39,6 +56,26 @@ const officeSamples: Record<string, () => Uint8Array> = {
   ods: () => openDocument('spreadsheet'),
   odp: () => openDocument('presentation'),
   odg: () => openDocument('drawing'),
+  // Word writes its directory near the end, past the head the service reads first
+  doc: () => compoundFile(wordDirectory, { directory: 10 }),
+  xls: () => compoundFile(excelDirectory),
+  ppt: () => compoundFile(powerPointDirectory),
+};
+/** What a file's bytes say it is, read as the desktop service reads them. */
+const named = (data: Uint8Array) => {
+  const head = data.subarray(0, identifyProbe);
+  const probe = directoryProbe(head, data.length);
+  return identifyBytes(head, '', probe && data.subarray(probe.at, probe.at + probe.length));
+};
+/** A binary header's first bytes, then zeros. */
+const header = (text: string) => Buffer.concat([Buffer.from(text, 'latin1'), Buffer.alloc(64)]);
+/** Each camera RAW kind Show as confirms, by the first bytes its maker writes. */
+const rawHeads: Record<string, Buffer> = {
+  cr2: header('II*\0\x10\0\0\0CR\x02\0'),
+  cr3: header('\0\0\0\x18ftypcrx \0\0\0\x01crx isom'),
+  raf: header('FUJIFILMCCD-RAW 0201FF159505X-T4'),
+  orf: header('IIRO\x08\0\0\0'),
+  rw2: header('IIU\0\x18\0\0\0'),
 };
 /** Playground media, each asked for as its own kind or a name its container also takes. */
 const media: [sample: string, extension: string][] = [
@@ -68,17 +105,28 @@ const videoCopy = vi.fn<Decoder>(async () => ({
   kind: 'video',
   decoder: 'fixture',
 }));
+/** The RAW helper's reply: a camera preview, or a RAW rendition. */
+const rawRendition = vi.fn<Decoder>(async (_source, mode) => ({
+  data: Buffer.from('fixture rendition'),
+  extension: 'jpg',
+  kind: mode,
+  decoder: 'fixture',
+}));
 
 let root: string, resources: Resources;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-show-as-');
   officePDF.mockClear();
   videoCopy.mockClear();
+  rawRendition.mockClear();
   resources = new Resources(
     async () => {},
     undefined,
     12000,
-    new DerivedPreviews(async () => {}, videoCopy),
+    new DerivedPreviews(
+      async () => {},
+      (source, mode, signal) => (mode === 'video' ? videoCopy : rawRendition)(source, mode, signal),
+    ),
     undefined,
     new DerivedPreviews(async () => {}, officePDF),
   );
@@ -123,6 +171,27 @@ describe('the agreement between a file’s bytes and a format', () => {
     expect(confirms({ label: 'Office Open XML document' }, 'docx')).toBe(false);
     expect(confirms(undefined, 'epub')).toBe(false);
   });
+  it('takes an Office 97 to 2003 template or show for its document, and one RAW for itself', () => {
+    const identity = (extension: string) => ({ label: extension, extension });
+    for (const [extension, also] of [
+      ['doc', ['dot']],
+      ['xls', ['xlt']],
+      ['ppt', ['pps', 'pot']],
+    ] as const)
+      for (const format of [extension, ...also])
+        expect(confirms(identity(extension), format)).toBe(true);
+    expect(confirms(identity('doc'), 'xls')).toBe(false);
+    expect(confirms(identity('ppt'), 'pptx')).toBe(false);
+    expect(confirms({ label: 'Office 97-2003 or Outlook file' }, 'doc')).toBe(false);
+    for (const raw of ['cr2', 'cr3', 'raf', 'orf', 'rw2'])
+      expect(confirms(identity(raw), raw)).toBe(true);
+    expect(confirms(identity('cr3'), 'cr2')).toBe(false);
+    // a DNG, NEF or ARW file reads as the TIFF image it also is, which shows without confirming
+    for (const tiff of ['dng', 'nef', 'arw']) {
+      expect(confirms(identity('tiff'), tiff)).toBe(false);
+      expect(confirmedFormats.has(tiff)).toBe(false);
+    }
+  });
   it('takes a short lowercase extension at the IPC boundary, from the workspace window', () => {
     expect(methodWindows.resourceFormat).toBe('viewer');
     expect(schemas.resourceFormat.safeParse(['resource', 'epub']).success).toBe(true);
@@ -152,6 +221,29 @@ describe('confirming a format from the file’s own bytes', () => {
     await expect(resources.confirmFormat(notes.id, 'epub')).rejects.toThrow('do not match .epub');
     const motion = await grant('motion', await readFile(path.join(assets, 'motion.mkv')));
     await expect(resources.confirmFormat(motion.id, 'avi')).rejects.toThrow('do not match .avi');
+  });
+  it('reads a compound file’s directory past its head before it confirms the kind', async () => {
+    const word = compoundFile(wordDirectory, { directory: 10 });
+    const report = await grant('Report', word);
+    await expect(resources.confirmFormat(report.id, 'xls')).rejects.toThrow(
+      'The contents of this file do not match .xls.',
+    );
+    expect((await resources.confirmFormat(report.id, 'doc')).entry).toMatchObject({
+      name: 'Report',
+      extension: 'doc',
+      mime: 'application/msword',
+    });
+    // the same head without the directory it names, and a directory that names no Office kind
+    const cut = await grant('Cut', word.subarray(0, word.length - 1));
+    await expect(resources.confirmFormat(cut.id, 'doc')).rejects.toThrow('do not match .doc');
+    const contents = await grant(
+      'Contents',
+      compoundFile([
+        { name: 'Root Entry', type: 'root', child: 1 },
+        { name: 'Contents', type: 'stream' },
+      ]),
+    );
+    await expect(resources.confirmFormat(contents.id, 'doc')).rejects.toThrow('do not match .doc');
   });
   it('does not confirm bytes held in memory, which no reader chooses by extension', async () => {
     const held = await resources.grantBytes(root, 'Field notes.bin', Buffer.from(await book()));
@@ -198,16 +290,51 @@ describe('readers that choose by extension follow the confirmed format', () => {
   it('lays out each misnamed Office and OpenDocument file as its format', async () => {
     for (const [extension, bytes] of Object.entries(officeSamples)) {
       const source = await grant(`Field notes ${extension}`, bytes());
-      expect(identifyBytes(bytes().subarray(0, 4096))?.extension).toBe(extension);
+      expect(named(bytes())?.extension).toBe(extension);
       await expect(resources.officeLayout(source.id, { requestID: 'before' })).rejects.toThrow(
         'Choose a Word, Excel or PowerPoint file',
       );
       await resources.confirmFormat(source.id, extension);
       const layout = await resources.officeLayout(source.id, { requestID: extension });
       expect(layout.derivation?.kind).toBe('office');
-      expect(officePDF.mock.lastCall![0].format).toBe(extension);
+      const [read] = officePDF.mock.lastCall!;
+      expect(read.format).toBe(extension);
+      // the engine is given the file under a name in the confirmed extension, which it accepts
+      const job = createOfficeJob(extension, {
+        name: officeFileName(path.basename(read.file), extension),
+      });
+      expect(job.inputPath).toBe(`/tmp/viewer-input/Field notes ${extension}.${extension}`);
     }
     expect(officePDF).toHaveBeenCalledTimes(Object.keys(officeSamples).length);
+  });
+  it('renders misnamed camera RAW through the RAW helper as its format', async () => {
+    for (const [extension, head] of Object.entries(rawHeads)) {
+      const source = await grant(`Field notes ${extension}`, head);
+      expect(named(head)?.extension).toBe(extension);
+      await expect(
+        resources.rendition(source.id, { requestID: 'before', mode: 'raw' }),
+      ).rejects.toThrow('RAW rendering requires a camera RAW file.');
+      await resources.confirmFormat(source.id, extension);
+      const preview = await resources.rendition(source.id, {
+        requestID: extension,
+        mode: 'camera',
+      });
+      expect(preview.derivation?.kind).toBe('camera');
+      expect(rawRendition.mock.lastCall!.slice(0, 2)).toEqual([
+        expect.objectContaining({ format: extension }),
+        'camera',
+      ]);
+      await resources.rendition(source.id, { requestID: `${extension} RAW`, mode: 'raw' });
+      expect(rawRendition.mock.lastCall![1]).toBe('raw');
+    }
+    // a DNG, NEF or ARW file's head is a TIFF image's; one maker's RAW is not another's
+    const tiff = await grant('Field notes nef', header('II*\0\x08\0\0\0'));
+    for (const extension of ['nef', 'dng', 'arw'])
+      await expect(resources.confirmFormat(tiff.id, extension)).rejects.toThrow(
+        `Show as cannot read a file as .${extension}.`,
+      );
+    const canon = await grant('Field notes', rawHeads.cr3!);
+    await expect(resources.confirmFormat(canon.id, 'cr2')).rejects.toThrow('do not match .cr2');
   });
   it('makes a compatibility copy of misnamed media as its format', async () => {
     for (const [sample, extension] of media) {
@@ -272,6 +399,85 @@ it.skipIf(!ready)(
       }
     } finally {
       await converting.close();
+    }
+  },
+);
+
+/** The Apache POI references, where the playground or a retained corpus holds them. */
+const references = officeLayoutSamples.filter((sample) =>
+  ['doc', 'xls', 'ppt'].includes(sample.formats[0]!),
+);
+/** The kinds a binary Office reference also confirms: its template or show. */
+const variants: Record<string, readonly string[]> = {
+  doc: ['dot'],
+  xls: ['xlt'],
+  ppt: ['pps', 'pot'],
+};
+it.skipIf(!references.every(holds))(
+  'lays out misnamed Office 97 to 2003 references once their own directories confirm them',
+  async () => {
+    for (const sample of references) {
+      const extension = sample.formats[0]!;
+      const name = path.basename(sample.path, '.' + extension);
+      const source = await grant(name, await pinned(sample));
+      await expect(
+        resources.confirmFormat(source.id, extension === 'doc' ? 'xls' : 'doc'),
+      ).rejects.toThrow('do not match');
+      await resources.confirmFormat(source.id, extension);
+      const layout = await resources.officeLayout(source.id, { requestID: name });
+      expect(layout.derivation?.kind, name).toBe('office');
+      const [read] = officePDF.mock.lastCall!;
+      expect(read.format, name).toBe(extension);
+      expect(officeFileName(path.basename(read.file), extension)).toBe(`${name}.${extension}`);
+      for (const variant of variants[extension]!)
+        expect((await resources.confirmFormat(source.id, variant)).entry.extension).toBe(variant);
+    }
+  },
+);
+
+const rawHelper = fileURLToPath(
+  new URL(`../assets/viewer-raw-v3-darwin-${process.arch}/viewer-raw`, import.meta.url),
+);
+/** The camera RAW originals of the kinds Show as confirms. */
+const rawSamples = cameraRawSamples.filter((sample) => confirmedFormats.has(sample.formats[0]!));
+const rawReady = process.platform === 'darwin' && existsSync(rawHelper) && rawSamples.every(holds);
+it.skipIf(!rawReady)(
+  'renders misnamed camera RAW with the bundled RAW helper once the bytes confirm it',
+  { timeout: 300000 },
+  async () => {
+    const rendering = new Resources(
+      async () => {},
+      undefined,
+      12000,
+      new DerivedPreviews(async () => {}, rawDecoder(rawHelper)),
+    );
+    try {
+      for (const [index, sample] of rawSamples.entries()) {
+        const extension = sample.formats[0]!;
+        const name = path.basename(sample.path).replace('.', ' ');
+        await writeFile(path.join(root, name), await pinned(sample));
+        const source = await rendering.grant(path.join(root, name));
+        await expect(
+          rendering.rendition(source.id, { requestID: 'before', mode: 'raw' }),
+        ).rejects.toThrow('RAW rendering requires a camera RAW file.');
+        await rendering.confirmFormat(source.id, extension);
+        const preview = await rendering.rendition(source.id, { requestID: name, mode: 'camera' });
+        expect(preview.derivation, name).toEqual({ kind: 'camera', decoder: 'LibRaw 0.22.2' });
+        expect(preview.entry.extension, name).toBe('jpg');
+        expect(preview.dimensions?.width, name).toBeGreaterThan(100);
+        // one full RAW rendition: the camera preview is the embedded JPEG
+        if (index === 0) {
+          const raw = await rendering.rendition(source.id, {
+            requestID: `${name} RAW`,
+            mode: 'raw',
+          });
+          expect(raw.derivation?.kind, name).toBe('raw');
+          expect(raw.dimensions?.width, name).toBeGreaterThan(100);
+        }
+        rendering.release(source.id);
+      }
+    } finally {
+      await rendering.close();
     }
   },
 );

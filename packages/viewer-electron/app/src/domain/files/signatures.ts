@@ -1,8 +1,8 @@
 /**
  * FILE SIGNATURES: what a file holds, read from its first bytes, for a file whose name does not
  * say or says wrongly. A preview reads the head through its resource; the desktop service reads it
- * from the file, and confirms from it a format it reads by extension. Text is not identified here:
- * its preview already shows it.
+ * from the file, and confirms from it a format it reads by extension. An OLE compound file may take
+ * a second read, of its directory. Text is not identified here: its preview already shows it.
  */
 
 /** The bytes read from the start of a file to identify it. */
@@ -18,7 +18,7 @@ export interface FileIdentity {
 /** A magic number as text, one byte per character, or as byte values. */
 type Magic = string | readonly number[];
 /** A further reading of the bytes: a container's kind, a version field. Undefined reads on. */
-type Reading = (head: Uint8Array, name: string) => FileIdentity | undefined;
+type Reading = (head: Uint8Array, name: string, directory?: Uint8Array) => FileIdentity | undefined;
 interface Signature {
   magic: Magic;
   /** Where the magic number starts; 0 when absent. */
@@ -192,10 +192,12 @@ const icon: Reading = (head) => {
     ? { label: 'Windows icon', extension: 'ico' }
     : undefined;
 };
+/** A DNG, NEF or ARW file says so only in its TIFF tags: it reads as the TIFF image it also is. */
 const tiff: Reading = (head) =>
   has(head, 'CR', 8)
     ? { label: 'Canon RAW image', extension: 'cr2' }
     : { label: 'TIFF image', extension: 'tiff' };
+const olympus: FileIdentity = { label: 'Olympus RAW image', extension: 'orf' };
 /** A font's table count, and the search range derived from it. */
 const font =
   (identity: FileIdentity): Reading =>
@@ -255,21 +257,119 @@ const portable: Reading = (head) => {
     ? { label: 'Windows library (DLL)' }
     : { label: 'Windows executable' };
 };
-const utf16 = (value: string) => [...value].flatMap((character) => [character.charCodeAt(0), 0]);
-const holds = (head: Uint8Array, value: string) => {
-  const expected = utf16(value);
-  for (let at = 512; at + expected.length <= head.length; at += 2)
-    if (has(head, expected, at)) return true;
-  return false;
-};
-/** An OLE compound file names its streams in a directory the head may hold. */
-const compound: Reading = (head, name) => {
-  if (holds(head, 'WordDocument')) return { label: 'Word 97-2003 document', extension: 'doc' };
-  if (holds(head, 'Workbook') || holds(head, 'Book'))
-    return { label: 'Excel 97-2003 workbook', extension: 'xls' };
-  if (holds(head, 'PowerPoint Document'))
-    return { label: 'PowerPoint 97-2003 presentation', extension: 'ppt' };
-  if (holds(head, '__substg1.0_') || /\.msg$/i.test(name)) return { label: 'Outlook message' };
+const compoundMagic = '\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1';
+/** A compound file's sector size by its header's sector shift: 512 bytes in version 3, 4096 in 4. */
+const compoundSectors: Readonly<Record<number, number>> = { 9: 512, 12: 4096 };
+/** The sector size an OLE compound file's 512-byte header gives, and where its first directory
+ * sector starts: the header takes the place of sector -1. */
+function compoundHeader(header: Uint8Array) {
+  if (header.length < 512 || !has(header, compoundMagic)) return undefined;
+  const sector = compoundSectors[number(header, 0x1e, 2, true)];
+  if (!sector || number(header, 0x1c, 2, true) !== 0xfffe) return undefined;
+  return { sector, at: (number(header, 0x30, 4, true) + 1) * sector };
+}
+/** Directory entry types; 0 is an unused entry. */
+const storage = 1,
+  stream = 2,
+  root = 5;
+interface CompoundEntry {
+  name: string;
+  type: number;
+  /** The entries it links: its siblings either side, and a storage's first child. */
+  left: number;
+  right: number;
+  child: number;
+}
+/** A 128-byte directory entry; undefined when its name overruns its 64 bytes. */
+function compoundEntry(directory: Uint8Array, at: number): CompoundEntry | undefined {
+  const length = number(directory, at + 0x40, 2, true);
+  if (length > 64 || length % 2) return undefined;
+  let name = '';
+  // UTF-16, ending in a NUL the length counts
+  for (let index = 0; index + 2 < length; index += 2)
+    name += String.fromCharCode(number(directory, at + index, 2, true));
+  return {
+    name,
+    type: directory[at + 0x42] ?? 0,
+    left: number(directory, at + 0x44, 4, true),
+    right: number(directory, at + 0x48, 4, true),
+    child: number(directory, at + 0x4c, 4, true),
+  };
+}
+/** The main stream of each Office 97 to 2003 kind, in the order they are looked for: a workbook
+ * that keeps an Excel 5.0/95 copy beside its own is an Excel 97-2003 workbook. */
+const officeStreams: readonly (readonly [stream: string, identity: FileIdentity])[] = [
+  ['WordDocument', { label: 'Word 97-2003 document', extension: 'doc' }],
+  ['Workbook', { label: 'Excel 97-2003 workbook', extension: 'xls' }],
+  ['Book', { label: 'Excel 5.0/95 workbook', extension: 'xls' }],
+  ['PowerPoint Document', { label: 'PowerPoint 97-2003 presentation', extension: 'ppt' }],
+];
+/**
+ * What an OLE compound file holds, by the streams its first directory sector names: a Word, Excel
+ * or PowerPoint 97 to 2003 file, or an Outlook message. `header` holds the file's first 512 bytes
+ * and `directory` that sector. Undefined for streams it does not know, and for a malformed header or
+ * directory: a sector size other than 512 or 4096, a directory of another length, a first entry
+ * that is not the root, a name longer than its entry, or a link that loops or shares an entry.
+ */
+export function compoundKind(header: Uint8Array, directory: Uint8Array): FileIdentity | undefined {
+  const sector = compoundHeader(header)?.sector;
+  if (!sector || directory.length !== sector) return undefined;
+  const entries: CompoundEntry[] = [];
+  for (let at = 0; at < sector; at += 128) {
+    const entry = compoundEntry(directory, at);
+    if (!entry) return undefined;
+    entries.push(entry);
+  }
+  if (entries[0]!.type !== root) return undefined;
+  // The storage each entry lies in, where this sector shows it. A link past the sector is not
+  // followed, and an entry linked twice ends the reading: each is linked once.
+  const parents = new Map<number, number>();
+  for (const [id, { type, child }] of entries.entries()) {
+    if (type !== storage && type !== root) continue;
+    const linked = [child];
+    while (linked.length) {
+      const next = linked.pop()!;
+      if (next >= entries.length) continue;
+      if (next === 0 || parents.has(next)) return undefined;
+      parents.set(next, id);
+      linked.push(entries[next]!.left, entries[next]!.right);
+    }
+  }
+  // The root's own streams first, then those the sector does not place; never a stream inside a
+  // storage, as an embedded workbook or document is not the file's kind.
+  for (const placed of [true, false]) {
+    const names = entries.flatMap((entry, id) =>
+      entry.type === stream && (placed ? parents.get(id) === 0 : !parents.has(id))
+        ? [entry.name]
+        : [],
+    );
+    const office = officeStreams.find(([name]) => names.includes(name));
+    if (office) return office[1];
+    if (names.some((name) => name.startsWith('__substg1.0_'))) return { label: 'Outlook message' };
+  }
+  return undefined;
+}
+/**
+ * The second read that names an OLE compound file whose head does not hold its directory: the
+ * first directory sector, which Word writes near the end. Undefined for any other head, and for a
+ * directory outside a file of `size` bytes.
+ */
+export function directoryProbe(
+  head: Uint8Array,
+  size: number,
+): { at: number; length: number } | undefined {
+  const header = compoundHeader(head);
+  if (!header || header.at + header.sector > size || header.at + header.sector <= head.length)
+    return undefined;
+  return { at: header.at, length: header.sector };
+}
+/** An OLE compound file names its streams in a directory the head may hold, or `directory` brings. */
+const compound: Reading = (head, name, directory) => {
+  const header = compoundHeader(head);
+  const sector = directory ?? (header && head.subarray(header.at, header.at + header.sector));
+  const kind = sector && compoundKind(head, sector);
+  if (kind) return kind;
+  if (/\.msg$/i.test(name)) return { label: 'Outlook message' };
   if (/\.msi$/i.test(name)) return { label: 'Windows Installer package' };
   return { label: 'Office 97-2003 or Outlook file' };
 };
@@ -283,7 +383,7 @@ const signatures: readonly Signature[] = [
   { magic: 'PK\x05\x06', identity: { label: 'ZIP archive', extension: 'zip' } },
   { magic: '%PDF-', identity: { label: 'PDF document', extension: 'pdf' } },
   { magic: 'AT&TFORM', identity: { label: 'DjVu document', extension: 'djvu' } },
-  { magic: '\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1', identity: compound },
+  { magic: compoundMagic, identity: compound },
   { magic: 'bplist00', identity: { label: 'Binary property list', extension: 'plist' } },
   { magic: 'PAR1', identity: { label: 'Parquet data' } },
   { magic: '\x89HDF\r\n\x1a\n', identity: { label: 'HDF5 data' } },
@@ -297,6 +397,12 @@ const signatures: readonly Signature[] = [
   { magic: 'BM', identity: bitmap },
   { magic: 'II*\0', identity: tiff },
   { magic: 'MM\0*', identity: { label: 'TIFF image', extension: 'tiff' } },
+  // camera RAW files whose header carries the maker's own number
+  { magic: 'IIRO', identity: olympus },
+  { magic: 'IIRS', identity: olympus },
+  { magic: 'MMOR', identity: olympus },
+  { magic: 'IIU\0', identity: { label: 'Panasonic RAW image', extension: 'rw2' } },
+  { magic: 'FUJIFILMCCD-RAW ', identity: { label: 'Fujifilm RAW image', extension: 'raf' } },
   { magic: '\0\0\x01\0', identity: icon },
   { magic: '8BPS', identity: { label: 'Photoshop document', extension: 'psd' } },
   { magic: '\0\0\0\x0cjP  \r\n\x87\n', identity: { label: 'JPEG 2000 image', extension: 'jp2' } },
@@ -365,14 +471,19 @@ const signatures: readonly Signature[] = [
 /**
  * What the head of a file says it is, or undefined for text and for bytes no signature names.
  * `name`, the file's own, refines a few: a gzip whose name says TAR, an Outlook message.
+ * `directory`, the sector `directoryProbe` asks for, names a compound file whose head lacks it.
  */
-export function identifyBytes(head: Uint8Array, name = ''): FileIdentity | undefined {
+export function identifyBytes(
+  head: Uint8Array,
+  name = '',
+  directory?: Uint8Array,
+): FileIdentity | undefined {
   if (readsAsText(head)) return undefined;
   for (const signature of signatures) {
     if (!has(head, signature.magic, signature.at)) continue;
     const identity =
       typeof signature.identity === 'function'
-        ? signature.identity(head, name)
+        ? signature.identity(head, name, directory)
         : signature.identity;
     if (identity) return identity;
   }
@@ -381,8 +492,9 @@ export function identifyBytes(head: Uint8Array, name = ''): FileIdentity | undef
 
 /**
  * The formats the desktop service reads by their extension (Office layout and content, document
- * extraction, media compatibility copies), by the identity that confirms each. A container names
- * several: Matroska holds video or sound alone, and Windows Media is a WMV, WMA or ASF file.
+ * extraction, camera RAW renditions, media compatibility copies), by the identity that confirms
+ * each. A container names several: Matroska holds video or sound alone, Windows Media is a WMV,
+ * WMA or ASF file, and an Office 97 to 2003 template or show is the compound file of its document.
  */
 const confirmations: Readonly<Record<string, readonly string[]>> = {
   epub: ['epub'],
@@ -393,6 +505,14 @@ const confirmations: Readonly<Record<string, readonly string[]>> = {
   ods: ['ods'],
   odp: ['odp'],
   odg: ['odg'],
+  doc: ['doc', 'dot'],
+  xls: ['xls', 'xlt'],
+  ppt: ['ppt', 'pps', 'pot'],
+  cr2: ['cr2'],
+  cr3: ['cr3'],
+  raf: ['raf'],
+  orf: ['orf'],
+  rw2: ['rw2'],
   mkv: ['mkv', 'mka'],
   avi: ['avi'],
   flv: ['flv'],

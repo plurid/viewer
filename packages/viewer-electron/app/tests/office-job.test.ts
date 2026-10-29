@@ -54,6 +54,11 @@ it('names a file shown as a confirmed format with that format, so the engine acc
     '/tmp/viewer-input/Report.docx',
   );
   expect(officeFileName('notes.txt', 'odt')).toBe('notes.txt.odt');
+  // an Office 97 to 2003 file, its template or show, whose directory confirmed the kind
+  for (const extension of ['doc', 'dot', 'xls', 'xlt', 'ppt', 'pps', 'pot'])
+    expect(
+      createOfficeJob(extension, { name: officeFileName('Report', extension) }).inputPath,
+    ).toBe(`/tmp/viewer-input/Report.${extension}`);
   // a name that already says it is kept as written
   expect(officeFileName('Plan.ODT', 'odt')).toBe('Plan.ODT');
 });

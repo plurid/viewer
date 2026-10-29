@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
- * A file no preview reads: Viewer names it from its first bytes, shows it in place with the
- * preview that reads such bytes, and asks the prompt model only when the person asks.
+ * A file no preview reads: Viewer names it from its first bytes, and a compound file's directory,
+ * shows it in place with the preview that reads such bytes, and asks the prompt model only when
+ * the person asks.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -11,18 +12,29 @@ import { fileURLToPath } from 'node:url';
 import type { FileEntry, Resource } from '../src/domain/contracts';
 import type { FileGuess } from '../src/domain/files/file-guess';
 import type { SQLiteReply, SQLiteRequest } from '../src/domain/previews/data/sqlite';
+import type { OfficeLayoutRequest } from '../src/domain/previews/documents/layout';
+import type { ImageRenditionRequest } from '../src/domain/previews/images/rendered';
 import type { FileServices } from '../src/desktop/files/file-services';
+import type { Decoder } from '../src/desktop/previews/derived';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
 import TextPreview from '../src/renderer/previews/modules/TextPreview';
 import { getState, initialize, receiveSettings } from '../src/renderer/state/store';
 import { newModelProvider } from '../src/domain/models/providers';
 import { Resources } from '../src/desktop/previews/resources';
+import { DerivedPreviews } from '../src/desktop/previews/derived';
 import { DocumentCache } from '../src/desktop/previews/document-cache';
 import { createResourceHandlers } from '../src/desktop/ipc/resource-handlers';
 import { schemas } from '../src/desktop/ipc/schemas';
 import { documentSamples, office } from '../tools/playground/samples/documents';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { compoundFile, wordDirectory } from './support/compound-file';
 import { mockElementBox } from './support/layout';
+
+// jsdom's URL is not Node's: the path is built from the module's own
+const assets = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../tools/playground/assets',
+);
 
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: () => [],
@@ -39,6 +51,10 @@ vi.mock('@tanstack/react-virtual', () => ({
         size: estimateSize(),
       })),
   }),
+}));
+// an Office layout is a PDF, which the PDF module paints
+vi.mock('../src/renderer/previews/modules/PDFPreview', () => ({
+  default: ({ resource }: PreviewContext) => <div>Rendered {resource.id}</div>,
 }));
 
 const viewer = {
@@ -68,7 +84,11 @@ const database: SQLiteReply = {
 };
 let sqliteHead: Uint8Array<ArrayBuffer>;
 let served: Uint8Array<ArrayBuffer>;
-const fetched = vi.fn(async (_url: string, _init?: RequestInit) => new Response(served));
+/** Serves the range asked for of `served`. */
+const fetched = vi.fn(async (_url: string, init?: RequestInit) => {
+  const range = /^bytes=(\d+)-(\d+)$/.exec(new Headers(init?.headers).get('range') ?? '');
+  return new Response(range ? served.slice(Number(range[1]), Number(range[2]) + 1) : served);
+});
 
 beforeAll(async () => {
   // the text view reads the editor's font settings
@@ -76,11 +96,7 @@ beforeAll(async () => {
   HTMLElement.prototype.getBoundingClientRect = () =>
     ({ width: 800, height: 800, top: 0, left: 0, right: 800, bottom: 800, x: 0, y: 0 }) as DOMRect;
   mockElementBox(800, 800);
-  // jsdom's URL is not Node's: the path is built from the module's own
-  const library = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '../tools/playground/assets/library.sqlite',
-  );
+  const library = path.join(assets, 'library.sqlite');
   sqliteHead = new Uint8Array((await readFile(library)).subarray(0, 4096));
 });
 beforeEach(() => {
@@ -161,12 +177,24 @@ describe('a file no preview reads', () => {
   });
 
   it('names a format whose preview needs its name, without offering to show it', async () => {
-    // a TIFF header whose bytes 8 and 9 say Canon RAW
-    served = new Uint8Array([0x49, 0x49, 0x2a, 0, 0x10, 0, 0, 0, 0x43, 0x52, 2, 0, ...Array(52)]);
+    // an Ogg page whose one segment holds a Theora header
+    const page = 'OggS\0\x02' + '\0'.repeat(20) + '\x01\x2a\x80theora\x03\x02\x01';
+    served = new Uint8Array(Buffer.from(page + '\0'.repeat(32), 'latin1'));
     const { view } = preview();
-    expect(await view.findByText('Looks like a Canon RAW image')).toBeTruthy();
-    expect(view.getByText('Viewer previews it when its name ends in .cr2.')).toBeTruthy();
+    expect(await view.findByText('Looks like Ogg video')).toBeTruthy();
+    expect(view.getByText('Viewer previews it when its name ends in .ogv.')).toBeTruthy();
     expect(view.queryByRole('button', { name: /^Show as/ })).toBeNull();
+  });
+
+  it('reads the directory a compound file’s head lacks before it names the file', async () => {
+    served = compoundFile(wordDirectory, { directory: 10 });
+    const { view } = preview('Report');
+    expect(await view.findByText('Looks like a Word 97-2003 document')).toBeTruthy();
+    expect(fetched).toHaveBeenLastCalledWith(
+      'viewer-resource://resource/asset/Report',
+      expect.objectContaining({ headers: { Range: `bytes=${11 * 512}-${12 * 512 - 1}` } }),
+    );
+    expect(view.getByRole('button', { name: 'Show as Word 97-2003 document' })).toBeTruthy();
   });
 
   it('keeps Preview unavailable for bytes it cannot name, and asks no model unless one is set up', async () => {
@@ -221,13 +249,38 @@ describe('asking the prompt model', () => {
   });
 });
 
+/** The Office engine's layout and the RAW helper's camera preview, as their decoders reply. */
+const officePDF = vi.fn<Decoder>(async () => ({
+  data: Buffer.from('%PDF-1.7\nfixture'),
+  extension: 'pdf',
+  kind: 'office',
+  decoder: 'fixture',
+  office: { sheets: [], limited: false },
+}));
+const cameraPreview = vi.fn<Decoder>(async () => ({
+  data: await readFile(path.join(assets, 'study.jpg')),
+  extension: 'jpg',
+  kind: 'camera',
+  decoder: 'fixture',
+}));
+
 /** The desktop service reads these formats by extension: Show as has it confirm the format from
- * the file's own bytes, here a real preview resource and the handlers that read it. */
+ * the file's own bytes, here a real preview resource, read through its URL, and the handlers that
+ * read it. */
 describe('a format the desktop service reads by its extension', () => {
   let root: string, resources: Resources;
   beforeEach(async () => {
     root = await temporaryRoot('viewer-show-as-preview-');
-    resources = new Resources();
+    officePDF.mockClear();
+    cameraPreview.mockClear();
+    resources = new Resources(
+      async () => {},
+      undefined,
+      12000,
+      new DerivedPreviews(async () => {}, cameraPreview),
+      undefined,
+      new DerivedPreviews(async () => {}, officePDF),
+    );
     viewer.resourceFormat.mockImplementation((id, extension) =>
       resources.confirmFormat(id, extension),
     );
@@ -241,11 +294,16 @@ describe('a format the desktop service reads by its extension', () => {
     await resources.close();
     await trashTemporary(root);
   });
-  /** `head`: the bytes the preview reads to name the file, the file's own unless given. */
-  async function preview(name: string, bytes: Uint8Array, head = bytes) {
+  /** `head`: the bytes the preview reads to name the file, the file's own through its resource
+   * URL unless given. */
+  async function preview(name: string, bytes: Uint8Array, head?: Uint8Array) {
     await writeFile(path.join(root, name), bytes);
     const resource = await resources.grant(path.join(root, name));
-    served = new Uint8Array(head.subarray(0, 4096));
+    const read = vi.fn((url: string, init?: RequestInit) =>
+      resources.response(new Request(url, init)),
+    );
+    if (head) served = new Uint8Array(head.subarray(0, 4096));
+    else vi.stubGlobal('fetch', read);
     const documents = new DocumentCache();
     const extract: FileServices['extract'] = (file, signal, _chapters, worksheet, format) =>
       documents.read(file, undefined, signal, worksheet, format);
@@ -276,10 +334,14 @@ describe('a format the desktop service reads by its extension', () => {
         cancelDocument: async (id: string, requestID: string) =>
           resources.cancelDocument(id, requestID),
         archiveEntry: (id: string, entry: string) => resources.archiveEntry(id, entry),
+        officeLayout: (id: string, request: OfficeLayoutRequest) =>
+          resources.officeLayout(id, request),
+        rendition: (id: string, request?: ImageRenditionRequest) =>
+          resources.rendition(id, request),
         release: async (id: string) => resources.release(id),
       },
     } as unknown as PreviewContext;
-    return { view: render(<TextPreview {...context} />), resource };
+    return { view: render(<TextPreview {...context} />), resource, read };
   }
   const book = async () =>
     documentSamples(new Uint8Array()).find((sample) => sample.path.endsWith('.epub'))!
@@ -295,8 +357,41 @@ describe('a format the desktop service reads by its extension', () => {
   it('shows a misnamed Word document in its reading view', async () => {
     const { view, resource } = await preview('Materials', office('docx'));
     fireEvent.click(await view.findByRole('button', { name: 'Show as Word document' }));
+    // it opens in its layout, as a Word document does
+    fireEvent.click(await view.findByRole('button', { name: 'Reading' }));
     expect(await view.findByText('Field notes: a spatial workbench')).toBeTruthy();
     expect(viewer.resourceFormat).toHaveBeenCalledWith(resource.id, 'docx');
+  });
+
+  it('lays out a misnamed Word 97-2003 document, its directory read past the head', async () => {
+    const { view, resource, read } = await preview(
+      'Report',
+      compoundFile(wordDirectory, { directory: 10 }),
+    );
+    fireEvent.click(await view.findByRole('button', { name: 'Show as Word 97-2003 document' }));
+    expect(await view.findByText(/^Rendered /)).toBeTruthy();
+    expect(read).toHaveBeenCalledWith(
+      resource.url,
+      expect.objectContaining({ headers: { Range: `bytes=${11 * 512}-${12 * 512 - 1}` } }),
+    );
+    expect(viewer.resourceFormat).toHaveBeenCalledWith(resource.id, 'doc');
+    expect(officePDF.mock.lastCall![0]).toMatchObject({ format: 'doc' });
+  });
+
+  it('shows a misnamed Canon RAW photo through the RAW helper', async () => {
+    const head = Buffer.concat([
+      Buffer.from('II*\0\x10\0\0\0CR\x02\0', 'latin1'),
+      Buffer.alloc(64),
+    ]);
+    const { view, resource } = await preview('IMG_0001', head);
+    fireEvent.click(await view.findByRole('button', { name: 'Show as Canon RAW image' }));
+    expect(await view.findByText('Camera preview')).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Render RAW' })).toBeTruthy();
+    expect(viewer.resourceFormat).toHaveBeenCalledWith(resource.id, 'cr2');
+    expect(cameraPreview.mock.lastCall!.slice(0, 2)).toEqual([
+      expect.objectContaining({ format: 'cr2' }),
+      'camera',
+    ]);
   });
 
   it('refuses a format the file’s own bytes do not say, whatever head the renderer saw', async () => {
