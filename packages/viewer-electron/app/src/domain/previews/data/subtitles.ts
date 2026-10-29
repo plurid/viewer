@@ -432,12 +432,32 @@ function cuePayload(text: string): string {
     .replace(/-->/g, '--&gt;');
 }
 
+export interface SubtitleTrack {
+  vtt: string;
+  cues: number;
+  /** Cues beyond the limit were left out. */
+  truncated: boolean;
+}
+
 /** WebVTT for a sidecar track. WebVTT input is returned as written, line breaks normalized. */
 export function subtitlesToVTT(text: string, format: SubtitleFormat): string {
+  return subtitleTrack(text, format).vtt;
+}
+
+/** WebVTT for a media player's track, and the cues it holds within the limit. */
+export function subtitleTrack(
+  text: string,
+  format: SubtitleFormat,
+  limits = subtitleLimits,
+): SubtitleTrack {
   const normalized = lines(text).join('\n');
-  if (format === 'vtt' && /^WEBVTT(?:[ \t\n]|$)/.test(normalized))
-    return normalized.endsWith('\n') ? normalized : normalized + '\n';
-  const written = writtenCues(text, format, subtitleLimits.cues);
+  const written = writtenCues(text, format, limits.cues);
+  if (format === 'vtt' && !written.truncated && /^WEBVTT(?:[ \t\n]|$)/.test(normalized))
+    return {
+      vtt: normalized.endsWith('\n') ? normalized : normalized + '\n',
+      cues: written.cues.length,
+      truncated: false,
+    };
   const output = ['WEBVTT'];
   for (const cue of written.cues) {
     const rendering = render(cue, format);
@@ -452,5 +472,9 @@ export function subtitlesToVTT(text: string, format: SubtitleFormat): string {
         .join('\n'),
     );
   }
-  return output.join('\n\n') + '\n';
+  return {
+    vtt: output.join('\n\n') + '\n',
+    cues: output.length - 1,
+    truncated: written.truncated,
+  };
 }

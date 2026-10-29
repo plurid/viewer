@@ -124,6 +124,22 @@ export function structuredTextSamples(): Sample[] {
       ),
     ),
     sample(
+      'previews/video/Motion study.en.srt',
+      ['srt'],
+      'Subtitle cues, and a track each Motion study video offers',
+      'Two English cues within the two-second clips; its name gives the track its language.',
+      [
+        '1',
+        '00:00:00,200 --> 00:00:01,000',
+        'Shapes in motion.',
+        '',
+        '2',
+        '00:00:01,000 --> 00:00:01,900',
+        '<i>A second pass.</i>',
+        '',
+      ].join('\n'),
+    ),
+    sample(
       'previews/video/Motion study.ssa',
       ['ssa'],
       'Subtitle cues',

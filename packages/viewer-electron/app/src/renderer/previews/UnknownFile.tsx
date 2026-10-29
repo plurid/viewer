@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
-import type { FileEntry } from '../../domain/contracts';
+import type { FileEntry, Resource } from '../../domain/contracts';
 import type { FileGuess } from '../../domain/files/file-guess';
 import type { FileIdentity } from '../../domain/files/signatures';
 import type { PreviewContext, PreviewModule } from './contracts';
-import { identifyBytes, identifyProbe } from '../../domain/files/signatures';
+import { confirmedFormats, identifyBytes, identifyProbe } from '../../domain/files/signatures';
 import { errorMessage } from '../../domain/errors';
 import { Empty, ErrorBoundary } from '../ui/primitives';
 import { getState, report, useViewer } from '../state/store';
@@ -26,8 +26,10 @@ const playable: Record<string, string> = {
 };
 /**
  * Formats whose preview reads a misnamed file from its bytes, each opened that way. The desktop
- * service goes by the file's own extension for Office layout, document extraction (EPUB, DOCX,
- * XLSX), camera RAW and media compatibility copies, so those formats are named, not shown.
+ * service goes by extension for Office layout and content, document extraction and media
+ * compatibility copies: for those, Show as first has it confirm the format from the file's own
+ * bytes (`confirmedFormats`). Others, camera RAW and Office 97-2003 among them, are named, not
+ * shown.
  */
 const showable = new Set([
   'sqlite',
@@ -66,14 +68,23 @@ const rendered = () => previewModules.find((module) => module.id === 'rendered-i
 interface Shown {
   entry: FileEntry;
   module: PreviewModule;
+  /** The desktop service reads this format by extension, once the file's bytes confirm it. */
+  confirmed: boolean;
 }
-/** The preview of a file as `extension`, when its module reads the bytes of a misnamed file. */
+/** The preview of a file as `extension`, when its module reads the bytes of a misnamed file or the
+ * desktop service confirms the format from them. */
 function showAs(entry: FileEntry, extension?: string | null): Shown | undefined {
-  if (!extension || extension === entry.extension || !showable.has(extension)) return undefined;
+  if (!extension || extension === entry.extension) return undefined;
+  const confirmed = confirmedFormats.has(extension);
+  if (!confirmed && !showable.has(extension)) return undefined;
   const shown = { ...entry, extension, mime: playable[extension] ?? entry.mime };
   const module = choosePreview(shown);
   if (module.id === 'fallback') return undefined;
-  return { entry: shown, module: module.id === 'image' ? (rendered() ?? module) : module };
+  return {
+    entry: shown,
+    module: module.id === 'image' ? (rendered() ?? module) : module,
+    confirmed,
+  };
 }
 /** "a SQLite database", "an EPUB book", "MP3 audio". */
 const withArticle = (label: string) =>
@@ -95,7 +106,11 @@ type GuessState =
 export function UnknownFile(context: PreviewContext) {
   const { resource, signal } = context;
   const [identity, setIdentity] = useState<FileIdentity>();
-  const [shown, setShown] = useState<Shown & { Preview: ComponentType<PreviewContext> }>();
+  const [shown, setShown] = useState<{
+    resource: Resource;
+    Preview: ComponentType<PreviewContext>;
+  }>();
+  const [refusal, setRefusal] = useState('');
   const [guess, setGuess] = useState<GuessState>({ kind: 'idle' });
   const settings = useViewer((state) => state.settings.settings);
   const provider = useMemo(
@@ -121,13 +136,24 @@ export function UnknownFile(context: PreviewContext) {
   }, [resource.url, resource.entry.name, signal]);
   const show = (target: Shown) => {
     const ready = loadedPreviewModule(target.module);
-    if (ready) setShown({ ...target, Preview: ready });
-    else
-      void preloadPreviewModule(target.module)
-        .then((Preview) => {
-          if (!signal.aborted) setShown({ ...target, Preview });
-        })
-        .catch(report);
+    if (ready && !target.confirmed) {
+      setShown({ resource: { ...resource, entry: target.entry }, Preview: ready });
+      return;
+    }
+    setRefusal('');
+    void Promise.all([
+      target.confirmed
+        ? window.viewer.resourceFormat(resource.id, target.entry.extension)
+        : { ...resource, entry: target.entry },
+      ready ?? preloadPreviewModule(target.module),
+    ]).then(
+      ([confirmed, Preview]) => {
+        if (!signal.aborted) setShown({ resource: confirmed, Preview });
+      },
+      (error: unknown) => {
+        if (!signal.aborted) setRefusal(errorMessage(error));
+      },
+    );
   };
   const ask = () => {
     setGuess({ kind: 'asking' });
@@ -147,10 +173,10 @@ export function UnknownFile(context: PreviewContext) {
     );
   };
   if (shown) {
-    const { Preview, entry } = shown;
+    const { Preview } = shown;
     return (
       <ErrorBoundary>
-        <Preview {...context} resource={{ ...resource, entry }} />
+        <Preview {...context} resource={shown.resource} />
       </ErrorBoundary>
     );
   }
@@ -191,6 +217,7 @@ export function UnknownFile(context: PreviewContext) {
           </button>
         )}
       </div>
+      {refusal && <p role="alert">{refusal}</p>}
       {guess.kind === 'answered' && (
         <>
           <p role="status">

@@ -291,6 +291,7 @@ export function backupRoots(
           'search',
           'collection',
           'journal',
+          'overview',
         ].includes(pane.type)
           ? pane.path
           : path.dirname(pane.path),

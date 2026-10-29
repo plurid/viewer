@@ -12,6 +12,7 @@ import type {
   ChatPane,
   ServerPane,
   JournalPane,
+  OverviewPane,
   BrowserPane,
   MediaPane,
   NotePane,
@@ -237,6 +238,7 @@ export function addContentPane(
     | GitChangesPane
     | ChatPane
     | JournalPane
+    | OverviewPane
     | ServerPane
     | BrowserPane
     | MediaPane

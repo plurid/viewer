@@ -516,13 +516,17 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'document':
       if (args[1]) {
         const { requestID, ...worksheet } = schemas.document.parse(args)[1]!;
-        return resources.documentRead(args[0] as string, requestID, (file, signal) =>
-          extractDocument(file, { signal, worksheet }),
+        return resources.documentRead(args[0] as string, requestID, (file, signal, format) =>
+          extractDocument(file, { signal, worksheet, format }),
         );
       }
-      return extractDocument(resources.documentSource(args[0] as string));
+      return extractDocument(resources.documentSource(args[0] as string), {
+        format: await resources.documentFormat(args[0] as string),
+      });
     case 'cancelDocument':
       return resources.cancelDocument(args[0] as string, args[1] as string);
+    case 'resourceFormat':
+      return resourceURL(await resources.confirmFormat(...schemas.resourceFormat.parse(args)));
     case 'thumbnail':
       return '';
     case 'contextPublish':

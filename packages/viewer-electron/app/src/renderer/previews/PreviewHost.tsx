@@ -74,6 +74,8 @@ const services: PreviewContext['services'] = {
   videoRendition: (id, requestID) => window.viewer.videoRendition(id, requestID),
   officeLayout: (id, request) => window.viewer.officeLayout(id, request),
   officeImage: (id, part, requestID) => window.viewer.officeImage(id, part, requestID),
+  list: (folder) => window.viewer.list(folder),
+  resource: (file) => window.viewer.resource(file),
   release: (id) => window.viewer.release(id),
 };
 export const PreviewHost = memo(function PreviewHost({

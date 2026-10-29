@@ -124,6 +124,7 @@ const LazyServerPlane = lazy(() => import('../local-servers/ServerPlane'));
 const LazyBrowserPlane = lazy(() => import('../browser/BrowserPlane'));
 const LazyMediaPlane = lazy(() => import('../media/MediaPlane'));
 const LazyJournalPlane = lazy(() => import('../journal/JournalPlane'));
+const LazyOverviewPlane = lazy(() => import('../overview/OverviewPlane'));
 const LazyTaskPlane = lazy(() => import('../tasks/TaskPlane'));
 const LazyReceiptPlane = lazy(() => import('../tasks/ReceiptPlane'));
 
@@ -158,6 +159,21 @@ function JournalContent() {
     <PreviewFrame activate={() => setActivePane(pane.id)}>
       <Suspense fallback={<Empty title="Opening Journal…" />}>
         <LazyJournalPlane pane={pane} active={planeIsActive(plane)} />
+      </Suspense>
+    </PreviewFrame>
+  );
+}
+
+function OverviewContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'overview') return <Empty title="Overview unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening Overview…" />}>
+        <LazyOverviewPlane pane={pane} />
       </Suspense>
     </PreviewFrame>
   );
@@ -309,6 +325,7 @@ const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/browsers/:id', component: marked(BrowserContent) },
   { route: '/media/:id', component: marked(MediaContent) },
   { route: '/journals/:id', component: marked(JournalContent) },
+  { route: '/overviews/:id', component: marked(OverviewContent) },
   { route: '/chats/:id', component: marked(ChatContent) },
   { route: '/diffs/:id', component: marked(ComparisonContent) },
   { route: '/git-changes/:id', component: marked(ComparisonContent) },

@@ -17,6 +17,7 @@ import type {
   ChatPane,
   ServerPane,
   JournalPane,
+  OverviewPane,
   BrowserPane,
   MediaPane,
   TaskPane,
@@ -172,7 +173,8 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
       pane.type === 'media' ||
       pane.type === 'task' ||
       pane.type === 'receipt' ||
-      pane.type === 'journal'
+      pane.type === 'journal' ||
+      pane.type === 'overview'
     )
       continue;
     bind(pane.path, pane.type === 'folder' || pane.type === 'git-changes');
@@ -207,6 +209,7 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       | MediaPane
       | TaskPane
       | ReceiptPane
+      | OverviewPane
     > =>
       pane.type !== 'scratch' &&
       pane.type !== 'note' &&
@@ -216,7 +219,8 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       pane.type !== 'media' &&
       pane.type !== 'task' &&
       pane.type !== 'receipt' &&
-      pane.type !== 'journal',
+      pane.type !== 'journal' &&
+      pane.type !== 'overview',
   );
   const source = (value: DiffSource): PortableDiffSource => {
     if (value.kind === 'empty') return value;

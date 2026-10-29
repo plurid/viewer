@@ -4,12 +4,29 @@ import { crc32, createInflateRaw, gunzip, inflateRaw } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import type { ArchiveEntry, ArchiveListing } from '../../domain/contracts';
+import type { GzipLimits } from '../../domain/files/containers';
+import { formatBytes } from '../../domain/files/entries';
 import { fileCoordination } from '../files/file-coordination';
+import { imageDimensions } from './image-dimensions';
 
 const ENTRY_LIMIT = 32 * 1024 * 1024;
 const INDEX_LIMIT = 20000;
 const unzip = promisify(inflateRaw),
-  untar = promisify(gunzip);
+  ungzip = promisify(gunzip);
+/** A header, empty deflate data and the trailer: the smallest gzip stream. */
+const GZIP_MINIMUM = 18;
+const isGzip = (bytes: Buffer) => bytes[0] === 0x1f && bytes[1] === 0x8b && bytes[2] === 8;
+const PNG_SIGNATURE = '89504e470d0a1a0a';
+async function readWhole(handle: Awaited<ReturnType<typeof openArchive>>, size: number) {
+  const bytes = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const read = await handle.read(bytes, offset, bytes.length - offset, offset);
+    if (!read.bytesRead) throw new Error('The file changed or is truncated.');
+    offset += read.bytesRead;
+  }
+  return bytes;
+}
 async function openArchive(file: string) {
   const handle = await open(
     fileCoordination.path(file),
@@ -175,6 +192,86 @@ export class Archives {
     if ((await archiveFingerprint(file)) !== before)
       throw new Error('The archive changed while reading. Retry with the current file.');
     return data;
+  }
+  /** A small picture an archive carries, such as an OpenDocument thumbnail: its listed size, PNG
+   * signature and dimensions are checked before Chromium decodes it. */
+  async readPNG(
+    file: string,
+    name: string,
+    limits: { bytes: number; side: number },
+  ): Promise<Buffer> {
+    const listed = (await this.list(file)).entries.find((entry) => entry.name === name);
+    if (!listed?.previewable || listed.size > limits.bytes)
+      throw new Error('This picture is missing or exceeds its preview limit.');
+    const data = await this.read(file, name);
+    const dimensions = imageDimensions(data);
+    if (
+      data.subarray(0, 8).toString('hex') !== PNG_SIGNATURE ||
+      !dimensions ||
+      Math.max(dimensions.width, dimensions.height) > limits.side
+    )
+      throw new Error('This picture is not a PNG within its preview limit.');
+    return data;
+  }
+  /** The one file a gzip stream holds, under the caller's name, and the size its trailer records.
+   * The format keeps that size modulo 4 GiB, and only for the last of several joined streams. */
+  async gzip(file: string, name: string, limits: GzipLimits): Promise<ArchiveListing> {
+    return this.coordinated(file, async () => {
+      const handle = await openArchive(file);
+      try {
+        const { size } = await handle.stat();
+        const header = Buffer.alloc(3);
+        const trailer = Buffer.alloc(4);
+        await handle.read(header, 0, header.length, 0);
+        if (size < GZIP_MINIMUM || !isGzip(header))
+          throw new Error('This file is not gzip-compressed.');
+        await handle.read(trailer, 0, trailer.length, size - trailer.length);
+        const expanded = trailer.readUInt32LE(0);
+        const entry: ArchiveEntry = {
+          name,
+          size: expanded,
+          directory: false,
+          previewable: size <= limits.compressed && expanded <= limits.expanded,
+        };
+        return { entries: [entry], truncated: false };
+      } finally {
+        await handle.close();
+      }
+    });
+  }
+  /** Expands a gzip file within its limits. The output limit stops a stream that expands past it,
+   * whatever its trailer records, so a small file cannot fill memory. */
+  async gunzip(file: string, limits: GzipLimits): Promise<Buffer> {
+    const limit = formatBytes(limits.expanded);
+    return this.coordinated(file, async () => {
+      const before = await archiveFingerprint(file);
+      const handle = await openArchive(file);
+      let compressed: Buffer;
+      try {
+        const { size } = await handle.stat();
+        if (size > limits.compressed)
+          throw new Error(`This file expands beyond the ${limit} preview limit.`);
+        compressed = await readWhole(handle, size);
+      } finally {
+        await handle.close();
+      }
+      if (compressed.length < GZIP_MINIMUM || !isGzip(compressed))
+        throw new Error('This file is not gzip-compressed.');
+      // The trailer's size is not trusted: a truncated file ends in compressed bytes. Native zlib
+      // runs in the worker pool; one decompression at a time bounds memory.
+      const data = await this.background(() =>
+        ungzip(compressed, { maxOutputLength: limits.expanded }),
+      ).catch((error: NodeJS.ErrnoException) => {
+        throw new Error(
+          error.code === 'ERR_BUFFER_TOO_LARGE'
+            ? `This file expands beyond the ${limit} preview limit.`
+            : 'This gzip file is damaged or incomplete.',
+        );
+      });
+      if ((await archiveFingerprint(file)) !== before)
+        throw new Error('The file changed while reading. Retry with the current file.');
+      return data;
+    });
   }
   /** Internal bounded ZIP reader for streaming document parsers. Successful
    * completion verifies every expanded byte and the CRC, including omitted data. */
@@ -397,7 +494,7 @@ export class Archives {
             if (!read.bytesRead) throw new Error('Compressed TAR changed or is truncated.');
             offset += read.bytesRead;
           }
-          return untar(compressed, { maxOutputLength: 128 * 1024 * 1024 });
+          return ungzip(compressed, { maxOutputLength: 128 * 1024 * 1024 });
         });
       }
       const total = data?.length ?? info.size;

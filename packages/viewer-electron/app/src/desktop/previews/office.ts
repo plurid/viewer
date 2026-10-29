@@ -38,9 +38,9 @@ export async function extractOffice(
   file: string,
   signal?: AbortSignal,
   requested?: WorksheetWindow,
+  format = path.extname(file).slice(1).toLowerCase(),
 ): Promise<DocumentData> {
   const window = requested ? worksheetPageSchema.parse(requested) : undefined;
-  const format = path.extname(file).slice(1).toLowerCase();
   if (!readsOfficeContent(format)) throw new Error('This Office format has no readable package.');
   const word = officeFamily(format) === 'word';
   if (window && word) throw new Error('Worksheet pages are available for Excel workbooks only.');

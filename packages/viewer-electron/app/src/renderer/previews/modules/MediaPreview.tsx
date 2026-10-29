@@ -7,6 +7,12 @@ import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
 import { usePreviewState } from '../state';
 import type { Resource } from '../../../domain/contracts';
 import { Loading } from '../../ui/primitives';
+import { ChoiceButton } from '../../ui/ChoiceMenu';
+import {
+  useSubtitleSidecars,
+  type SubtitleTrackSource,
+  type VideoSubtitles,
+} from '../useSubtitleSidecars';
 
 export default function MediaPreview(context: PreviewContext) {
   const [requested, setRequested] = useState(false),
@@ -22,6 +28,8 @@ export default function MediaPreview(context: PreviewContext) {
     setRequested(true);
   }, []);
   const { resource, services } = context;
+  // found beside the original, so a compatibility copy shows them too
+  const subtitles = useSubtitleSidecars(context);
   useEffect(() => {
     if (!requested || cancelled) return;
     let live = true,
@@ -98,6 +106,26 @@ export default function MediaPreview(context: PreviewContext) {
       }
       onFallback={!derived && typeof services.videoRendition === 'function' ? fallback : undefined}
       compatible={!!derived}
+      subtitles={subtitles}
+    />
+  );
+}
+
+/** A video selects its `default` track once, as it loads: a track added later is shown here. */
+function SubtitleTrack({ source }: { source: SubtitleTrackSource }) {
+  const ref = useRef<HTMLTrackElement>(null);
+  useEffect(() => {
+    const track = ref.current?.track;
+    if (track) track.mode = 'showing';
+  }, []);
+  return (
+    <track
+      ref={ref}
+      kind="subtitles"
+      src={source.url}
+      srcLang={source.language}
+      label={source.name}
+      default
     />
   );
 }
@@ -107,6 +135,7 @@ function MediaPlayer(
     onFallback?(audioAvailable?: boolean): void;
     compatible?: boolean;
     audioOnly?: boolean;
+    subtitles?: VideoSubtitles;
   },
 ) {
   const { resource, active } = context;
@@ -272,6 +301,7 @@ function MediaPlayer(
         ? onFallback()
         : setError('Open this file in its default app or choose another player.'),
   };
+  const subtitles = !audio && !pictureUnavailable ? context.subtitles : undefined;
   const media =
     audio || pictureUnavailable ? (
       <div className="audio-viewer">
@@ -281,14 +311,27 @@ function MediaPlayer(
       </div>
     ) : (
       <div className="video-viewer">
-        <video ref={ref as React.RefObject<HTMLVideoElement>} {...props} />
+        <video ref={ref as React.RefObject<HTMLVideoElement>} {...props}>
+          {subtitles?.track && <SubtitleTrack key={subtitles.track.url} source={subtitles.track} />}
+        </video>
       </div>
     );
   return (
     <div className="media-preview">
-      {(context.editMedia || context.compatible) && (
+      {(context.editMedia || context.compatible || !!subtitles?.files.length) && (
         <PreviewToolbar context={context}>
           {context.compatible && <span className="muted">Compatibility copy · up to 720p</span>}
+          {!!subtitles?.files.length && (
+            <ChoiceButton
+              label="Subtitles"
+              value={subtitles.chosen}
+              choices={[
+                { value: '', label: 'Subtitles off' },
+                ...subtitles.files.map((file) => ({ value: file.name, label: file.name })),
+              ]}
+              onChoose={subtitles.choose}
+            />
+          )}
           {context.editMedia && <button onClick={context.editMedia}>Edit media…</button>}
         </PreviewToolbar>
       )}
@@ -296,6 +339,17 @@ function MediaPlayer(
       {ready && pictureUnavailable && (
         <p className="inline-warning" role="status">
           No video picture is available. Audio can still play.
+        </p>
+      )}
+      {subtitles?.problem && (
+        <p className="inline-warning" role="status">
+          {subtitles.problem}
+        </p>
+      )}
+      {subtitles?.track?.truncated && (
+        <p className="inline-warning" role="status">
+          Showing the first {subtitles.track.cues.toLocaleString()} subtitles of{' '}
+          {subtitles.track.name}.
         </p>
       )}
       {!ready && (

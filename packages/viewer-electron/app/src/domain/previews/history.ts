@@ -44,6 +44,7 @@ const recalledKeys = new Set([
   'image.zoom',
   'image.pan',
   'media.position',
+  'media.subtitles',
   'model.camera',
   'model.appearance',
   'model.wire',

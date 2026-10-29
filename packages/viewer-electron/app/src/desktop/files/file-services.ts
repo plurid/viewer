@@ -256,17 +256,23 @@ export class FileServices {
     await this.options.access?.([file]);
     await this.index.call('update', [file, removed]);
   }
+  /** `format`, the extension a preview reads the file as; its name otherwise. */
   async extract(
     file: string,
     signal?: AbortSignal,
     chapters = false,
     worksheet?: WorksheetWindow,
+    format?: string,
   ): Promise<DocumentData> {
     await this.options.access?.([file]);
     const revision = this.accessRevision;
     const result = await this.previews.call(
       'extract',
-      worksheet ? [file, undefined, chapters, worksheet] : [file, undefined, chapters],
+      format
+        ? [file, undefined, chapters, worksheet, format]
+        : worksheet
+          ? [file, undefined, chapters, worksheet]
+          : [file, undefined, chapters],
       signal,
     );
     if (revision !== this.accessRevision)

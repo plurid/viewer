@@ -1,3 +1,4 @@
+import { crc32, deflateSync } from 'node:zlib';
 import type { Sample } from '../types';
 import { strFromU8, strToU8, unzipSync } from 'fflate';
 import { office as officeOpenXML, sample, zip } from './documents';
@@ -72,7 +73,64 @@ const content = (kind: Kind) =>
 </office:document-content>
 `;
 
-/** A packaged OpenDocument: its MIME type first and stored, then the manifest and content. */
+type Mark = [left: number, top: number, width: number, height: number];
+const outline = ([left, top, width, height]: Mark): Mark[] => [
+  [left, top, width, 1],
+  [left, top + height - 1, width, 1],
+  [left, top, 1, height],
+  [left + width - 1, top, 1, height],
+];
+/** Each kind's first page, as its editor pictures it: the page's shape and its content's marks. */
+const pictures: Record<Kind, { width: number; height: number; marks: Mark[] }> = {
+  text: {
+    width: 181,
+    height: 256,
+    marks: [
+      [20, 22, 72, 8],
+      [20, 40, 140, 3],
+      [20, 48, 128, 3],
+    ],
+  },
+  spreadsheet: {
+    width: 181,
+    height: 256,
+    marks: [...outline([20, 20, 70, 22]), [20, 30, 70, 1], [55, 20, 1, 22]],
+  },
+  presentation: { width: 256, height: 144, marks: [[18, 22, 150, 9]] },
+  drawing: { width: 181, height: 256, marks: outline([17, 17, 69, 43]) },
+};
+/** The PNG an OpenDocument editor stores in `Thumbnails/thumbnail.png`. */
+function pagePicture(kind: Kind): Uint8Array {
+  const { width, height, marks } = pictures[kind];
+  const stride = width * 3 + 1;
+  const pixels = Buffer.alloc(stride * height, 0xff);
+  for (let y = 0; y < height; y++) pixels[y * stride] = 0;
+  for (const [left, top, across, down] of marks)
+    for (let y = top; y < top + down; y++)
+      pixels.fill(0x58, y * stride + 1 + left * 3, y * stride + 1 + (left + across) * 3);
+  const chunk = (type: string, data: Buffer) => {
+    const length = Buffer.alloc(4);
+    const checksum = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    checksum.writeUInt32BE(crc32(Buffer.concat([Buffer.from(type), data])));
+    return Buffer.concat([length, Buffer.from(type), data, checksum]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width);
+  header.writeUInt32BE(height, 4);
+  // eight bits a channel, RGB
+  header[8] = 8;
+  header[9] = 2;
+  return Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(pixels)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** A packaged OpenDocument: its MIME type first and stored, then the manifest, content and the
+ * picture of its first page. */
 export function openDocument(kind: Kind): Uint8Array {
   return zip({
     mimetype: kinds[kind].mime,
@@ -80,9 +138,11 @@ export function openDocument(kind: Kind): Uint8Array {
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">
   <manifest:file-entry manifest:full-path="/" manifest:media-type="${kinds[kind].mime}"/>
   <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="Thumbnails/thumbnail.png" manifest:media-type="image/png"/>
 </manifest:manifest>
 `,
     'content.xml': content(kind),
+    'Thumbnails/thumbnail.png': pagePicture(kind),
   });
 }
 

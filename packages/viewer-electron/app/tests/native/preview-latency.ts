@@ -170,11 +170,19 @@ function armPreviewTiming(scope: string): void {
 
 /** Counts the frames in which the Columns preview has no content, while the test moves through. */
 function watchColumns(): void {
-  const probe = { frames: 0, empty: 0, running: true };
+  // `emptyIn`: which selected file each empty frame belonged to
+  const probe = { frames: 0, empty: 0, emptyIn: {} as Record<string, number>, running: true };
   (window as unknown as { __columns: typeof probe }).__columns = probe;
+  // progress counts where it can be seen: a stand-in above it, such as an OpenDocument's picture
+  // of its first page while the layout loads beneath, covers it
+  const seen = (element: Element) => {
+    const box = element.getBoundingClientRect();
+    const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return !!top && element.contains(top);
+  };
   const shows = () => {
     const host = document.querySelector('.column-preview .preview-host');
-    if (!host || host.querySelector('.loading')) return false;
+    if (!host || [...host.querySelectorAll('.loading')].some(seen)) return false;
     if ([...host.querySelectorAll('canvas')].some((canvas) => canvas.width > 0)) return true;
     if ([...host.querySelectorAll('img')].some((image) => image.complete && image.naturalWidth > 0))
       return true;
@@ -183,18 +191,26 @@ function watchColumns(): void {
   const tick = () => {
     if (!probe.running) return;
     probe.frames++;
-    if (!shows()) probe.empty++;
+    if (!shows()) {
+      probe.empty++;
+      const name =
+        document
+          .querySelector('.file-row[aria-selected="true"][data-file-path]')
+          ?.getAttribute('data-file-path')
+          ?.split('/')
+          .at(-1) ?? '';
+      probe.emptyIn[name] = (probe.emptyIn[name] ?? 0) + 1;
+    }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 }
 
-function stopColumns(): { frames: number; empty: number } {
-  const probe = (
-    window as unknown as { __columns: { frames: number; empty: number; running: boolean } }
-  ).__columns;
+type ColumnProbe = { frames: number; empty: number; emptyIn: Record<string, number> };
+function stopColumns(): ColumnProbe {
+  const probe = (window as unknown as { __columns: ColumnProbe & { running: boolean } }).__columns;
   probe.running = false;
-  return { frames: probe.frames, empty: probe.empty };
+  return { frames: probe.frames, empty: probe.empty, emptyIn: probe.emptyIn };
 }
 
 type Connection = Awaited<ReturnType<Awaited<ReturnType<typeof ownedApp>>['connect']>>;
@@ -289,7 +305,7 @@ async function quickPreviews(
   return observations;
 }
 
-async function columns(): Promise<{ frames: number; empty: number; steps: number }> {
+async function columns(): Promise<ColumnProbe & { steps: number }> {
   const launched = await ownedApp(binary!, await profileFor('Columns', false, 'columns'));
   const connection = await launched.connect();
   try {
@@ -322,9 +338,7 @@ async function columns(): Promise<{ frames: number; empty: number; steps: number
       await key(connection, 'ArrowDown', 'ArrowDown', 40);
       await delay(500);
     }
-    const probe = await connection.evaluate<{ frames: number; empty: number }>(
-      pageCall(stopColumns),
-    );
+    const probe = await connection.evaluate<ColumnProbe>(pageCall(stopColumns));
     return { ...probe, steps: names.length - 1 };
   } finally {
     await launched.close(connection);

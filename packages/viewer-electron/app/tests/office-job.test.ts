@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { createOfficeJob } from '../src/desktop/previews/office-job';
+import { createOfficeJob, officeFileName } from '../src/desktop/previews/office-job';
 
 it('preserves a basename without interpreting URL punctuation, Unicode or script text', () => {
   for (const name of [
@@ -45,4 +45,15 @@ it('keeps worksheet selection separate from the RAM filename and bounds it', () 
   for (const sheet of ['', 'A'.repeat(201), 'Sheet\0'])
     expect(() => createOfficeJob('xlsx', { sheet })).toThrow('worksheet');
   expect(createOfficeJob('ppt').inputPath).toBe('/tmp/viewer-input/input.ppt');
+});
+
+it('names a file shown as a confirmed format with that format, so the engine accepts it', () => {
+  // Show as: "Report" whose bytes confirmed a Word document
+  expect(officeFileName('Report', 'docx')).toBe('Report.docx');
+  expect(createOfficeJob('docx', { name: officeFileName('Report', 'docx') }).inputPath).toBe(
+    '/tmp/viewer-input/Report.docx',
+  );
+  expect(officeFileName('notes.txt', 'odt')).toBe('notes.txt.odt');
+  // a name that already says it is kept as written
+  expect(officeFileName('Plan.ODT', 'odt')).toBe('Plan.ODT');
 });

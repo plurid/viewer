@@ -342,9 +342,11 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
                   ? 'Terminal actions'
                   : pane?.type === 'journal'
                     ? 'Journal actions'
-                    : pane?.type === 'server'
-                      ? 'Server actions'
-                      : 'Preview actions'
+                    : pane?.type === 'overview'
+                      ? 'Overview actions'
+                      : pane?.type === 'server'
+                        ? 'Server actions'
+                        : 'Preview actions'
           }
           aria-haspopup="dialog"
           aria-expanded={menu?.kind === 'actions'}

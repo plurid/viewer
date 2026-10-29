@@ -1,5 +1,6 @@
 import { constants, type Stats } from 'node:fs';
 import { open, realpath, lstat, type FileHandle } from 'node:fs/promises';
+import path from 'node:path';
 import { fileCoordination } from '../files/file-coordination';
 import { previewContains } from './preview-work';
 import { runProcessor } from '../transforms/process';
@@ -24,6 +25,8 @@ export interface Source {
   file: string;
   handle: FileHandle;
   info: Stats;
+  /** The extension the file is read as when its bytes, not its name, confirmed it. */
+  format?: string;
 }
 export type Decoder = (
   source: Source,
@@ -107,6 +110,7 @@ export class DerivedPreviews {
     signal: AbortSignal,
     size = 4096,
     variant = '',
+    format?: string,
   ): Promise<DerivedLease> {
     signal.throwIfAborted();
     if (variant.length > 200 || variant.includes('\0')) throw new Error('Invalid preview variant.');
@@ -130,6 +134,7 @@ export class DerivedPreviews {
       mode,
       size,
       variant,
+      format ?? path.extname(actual).slice(1).toLowerCase(),
     ]);
     let entry = this.cached.get(key);
     if (entry) entry.pins++;
@@ -156,7 +161,7 @@ export class DerivedPreviews {
                   if (!same(before, await handle.stat()))
                     throw new Error('The source changed before decoding. Reopen its preview.');
                   const result = await this.decode(
-                    { file: actual, handle, info: before },
+                    { file: actual, handle, info: before, format },
                     mode,
                     abort.signal,
                     size,

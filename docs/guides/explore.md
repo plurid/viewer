@@ -23,6 +23,31 @@ command as the file menu. **Move to Trash…** asks first, unless you turned off
 moving to Trash**. Choose **×** on a card to hide it in that folder; **⌘K** → **Show hidden
 insights** brings them back. Turn insights off in **Settings → Browsing → Suggestions**.
 
+## See all your files at a glance
+
+Press **⌘K** and choose **Overview**. An Overview plane searches the filename index for what may
+need a look:
+
+| Card                       | Looks for                                         |
+| -------------------------- | ------------------------------------------------- |
+| Old installers             | dmg and pkg files in Downloads older than a week  |
+| Files over 1 GB            | The largest files in every indexed location       |
+| Screenshots on the Desktop | Names starting "Screenshot" or "Screen Recording" |
+| Old downloads              | Files in Downloads unchanged for three months     |
+| PDFs over 10 MB            | PDFs that Optimize can often shrink               |
+| Files named as copies      | Names ending " copy" or "(1)"                     |
+| HEIC photos                | Photos that open in fewer apps than JPEG          |
+| Changed this week          | Where your work has been                          |
+
+Each card shows how many files match, their total size and the largest few (the latest, for Changed
+this week); choose a name to open it. **Show all** opens the matches as a search, where you select
+them and use any action, such as **Move to Trash** or **Optimize…**. Searches with no matches are
+listed in one line at the bottom. **Refresh** searches again.
+
+Overview reads only the index. When Downloads or the Desktop is not indexed, its card offers
+**Search it now**, which searches the folder directly, and **Add to the index**, which opens
+**Settings → Search**.
+
 ## Let the model pick suggestions
 
 Right-click a file to see **Suggested** actions, as [Browse and organize](files.md) shows. With a
@@ -58,7 +83,8 @@ When no preview reads a file, Viewer reads its first bytes and says what it look
 **Looks like a SQLite database**.
 
 1. When Viewer reads that kind of file, choose **Show as SQLite database** to see it in place.
-   Otherwise the message names the extension that makes it preview.
+   Books, Office and OpenDocument files and videos open this way too. Otherwise the message names
+   the extension that makes it preview.
 2. To ask the model, choose **Ask** followed by its name. It receives the file's name, size and
    first 64 bytes, so it needs the excerpts permission; **Review in Settings** opens **Settings →
    Models** when it does not have it.

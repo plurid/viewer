@@ -29,6 +29,8 @@ export interface WorkspaceController {
   runTaskCommand(areaID: string): Promise<void>;
   openReceipt(id: string, directory?: string): void;
   openJournal(filter: JournalFilter): void;
+  /** The workspace's Overview plane, opened or brought forward. */
+  openOverview(): void;
   /** With `send`, the draft goes to the model at once when its permission already allows it. */
   newChat(paths: string[], draft?: string, send?: boolean): Promise<void>;
   openChat(id: string): Promise<void>;

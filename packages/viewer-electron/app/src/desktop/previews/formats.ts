@@ -52,9 +52,16 @@ export async function documentBytes(file: string, limit: number): Promise<Uint8A
     await handle.close();
   }
 }
+/** `format`, the extension a file is read as when its bytes, not its name, confirmed it. */
 export async function extractDocument(
   file: string,
-  options: { ocr?: string; pages?: number; signal?: AbortSignal; worksheet?: WorksheetWindow } = {},
+  options: {
+    ocr?: string;
+    pages?: number;
+    signal?: AbortSignal;
+    worksheet?: WorksheetWindow;
+    format?: string;
+  } = {},
 ): Promise<DocumentData> {
   return fileCoordination.run(
     [{ path: file, mode: 'read' }],
@@ -69,9 +76,15 @@ export async function extractDocument(
 }
 async function extractCoordinated(
   file: string,
-  options: { ocr?: string; pages?: number; signal?: AbortSignal; worksheet?: WorksheetWindow },
+  options: {
+    ocr?: string;
+    pages?: number;
+    signal?: AbortSignal;
+    worksheet?: WorksheetWindow;
+    format?: string;
+  },
 ): Promise<DocumentData> {
-  const extension = path.extname(file).toLowerCase();
+  const extension = options.format ? '.' + options.format : path.extname(file).toLowerCase();
   if (options.worksheet && extension !== '.xlsx')
     throw new Error('Worksheet pages are available for XLSX files only.');
   const result: DocumentData = {
@@ -83,7 +96,7 @@ async function extractCoordinated(
   };
   if (readsOfficeContent(extension.slice(1))) {
     const { extractOffice } = await import('./office');
-    return extractOffice(file, options.signal, options.worksheet);
+    return extractOffice(file, options.signal, options.worksheet, extension.slice(1));
   } else if (extension === '.pdf') {
     const [pdf, worker] = await Promise.all([
       import('pdfjs-dist/legacy/build/pdf.mjs'),

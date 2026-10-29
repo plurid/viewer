@@ -15,6 +15,12 @@ interface OfficeRenderJob {
   whole?: true;
 }
 
+/** The name a file has in the engine: its own, given the extension of the format its bytes
+ * confirmed when its name does not end in it, so the engine reads it as that format. */
+export function officeFileName(name: string, extension: string): string {
+  return name.toLowerCase().endsWith('.' + extension) ? name : `${name}.${extension}`;
+}
+
 /** Preserve filename fields without passing host directories into the engine.
  * The filesystem path and its encoded file URL must identify the same RAM file. */
 export function createOfficeJob(

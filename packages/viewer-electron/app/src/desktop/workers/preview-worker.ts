@@ -15,8 +15,15 @@ import { workerPort } from './worker-port';
 export type PreviewMethods = {
   /** Answers once the worker runs: `warmPreviews` starts it while the window is idle. */
   ready: { args: []; reply: true };
+  /** `format`, the extension the file is read as when its bytes confirmed it. */
   extract: {
-    args: [file: string, pages: number | undefined, chapters: boolean, worksheet?: WorksheetWindow];
+    args: [
+      file: string,
+      pages: number | undefined,
+      chapters: boolean,
+      worksheet?: WorksheetWindow,
+      format?: string,
+    ];
     reply: DocumentData;
   };
   /** SQLite reads synchronously, here rather than in the process that draws windows. */
@@ -40,6 +47,7 @@ port.on('message', async (event) => {
           request.args[1],
           abort.signal,
           request.args[3],
+          request.args[4],
         );
         value = request.args[2] ? document : { ...document, chapters: undefined };
       } finally {

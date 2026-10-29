@@ -44,6 +44,21 @@ export function officeFamily(extension: string): OfficeFamily | undefined {
 }
 
 /**
+ * The picture of its first page an OpenDocument package carries: a PNG, at most 256 pixels a side
+ * by the format's convention. Flat XML documents carry none.
+ */
+export const openDocumentThumbnail = {
+  name: 'Thumbnails/thumbnail.png',
+  bytes: 512 * 1024,
+  side: 1024,
+} as const;
+const openDocumentPackages: readonly OfficeFormat[] = ['odt', 'ods', 'odp', 'odg'];
+export function carriesThumbnail(extension: string): boolean {
+  const format = extension.toLowerCase();
+  return isOfficeFormat(format) && openDocumentPackages.includes(format);
+}
+
+/**
  * The Word and Excel packages Viewer reads itself, for the Reading and Sheet views and search, with
  * the content type each declares for its main part. Macro and template variants are the same
  * packages: their macros are never read.

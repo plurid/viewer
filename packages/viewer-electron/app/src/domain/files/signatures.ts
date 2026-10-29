@@ -1,7 +1,8 @@
 /**
  * FILE SIGNATURES: what a file holds, read from its first bytes, for a file whose name does not
  * say or says wrongly. A preview reads the head through its resource; the desktop service reads it
- * from the file. Text is not identified here: its preview already shows it.
+ * from the file, and confirms from it a format it reads by extension. Text is not identified here:
+ * its preview already shows it.
  */
 
 /** The bytes read from the start of a file to identify it. */
@@ -376,4 +377,38 @@ export function identifyBytes(head: Uint8Array, name = ''): FileIdentity | undef
     if (identity) return identity;
   }
   return undefined;
+}
+
+/**
+ * The formats the desktop service reads by their extension (Office layout and content, document
+ * extraction, media compatibility copies), by the identity that confirms each. A container names
+ * several: Matroska holds video or sound alone, and Windows Media is a WMV, WMA or ASF file.
+ */
+const confirmations: Readonly<Record<string, readonly string[]>> = {
+  epub: ['epub'],
+  docx: ['docx'],
+  xlsx: ['xlsx'],
+  pptx: ['pptx'],
+  odt: ['odt'],
+  ods: ['ods'],
+  odp: ['odp'],
+  odg: ['odg'],
+  mkv: ['mkv', 'mka'],
+  avi: ['avi'],
+  flv: ['flv'],
+  asf: ['asf', 'wmv', 'wma'],
+  mpg: ['mpg', 'mpeg', 'vob'],
+  '3gp': ['3gp'],
+  '3g2': ['3g2'],
+  aiff: ['aiff', 'aif'],
+  caf: ['caf'],
+};
+/** The extensions a misnamed file is read as once its own bytes confirm them. */
+export const confirmedFormats: ReadonlySet<string> = new Set(Object.values(confirmations).flat());
+/** Whether the identity of a file's head says it is an `extension` file. */
+export function confirms(identity: FileIdentity | undefined, extension: string): boolean {
+  const named = identity?.extension;
+  return (
+    !!named && Object.hasOwn(confirmations, named) && confirmations[named]!.includes(extension)
+  );
 }

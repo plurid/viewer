@@ -92,6 +92,14 @@ it('recalls Quick Preview positions through a fresh transient view and a changed
   expect(previewState('quick-four', { ...file, modified: 102 }).get('media.position')).toBe(2);
 });
 
+it('recalls a video subtitle choice through a fresh view, turned off included', () => {
+  const video = { ...file, path: '/fixtures/Motion study.mp4', name: 'Motion study.mp4' };
+  previewState('subtitles-one', video).set('media.subtitles', '');
+  expect(previewState('subtitles-two', video).get('media.subtitles')).toBe('');
+  previewState('subtitles-two', video).set('media.subtitles', 'Motion study.en.srt');
+  expect(previewState('subtitles-three', video).get('media.subtitles')).toBe('Motion study.en.srt');
+});
+
 it('hydrates transient recall when file metadata arrives after its loading placeholder', () => {
   previewState('already-read', file).set('scroll.markdown', { section: '', top: 500, left: 0 });
   previewState('loading-placeholder');

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { WorkbookSheet, WorksheetPage } from '../../domain/previews/documents/office';
 
 export function WorksheetNavigation({
@@ -14,12 +14,14 @@ export function WorksheetNavigation({
   previous: number;
   navigate(row: number, direction: 'previous' | 'next' | 'jump'): void;
 }) {
-  const [row, setRow] = useState(String(page.fromRow));
-  const [error, setError] = useState('');
-  useEffect(() => {
-    setRow(String(page.fromRow));
-    setError('');
-  }, [page.sheet, page.fromRow]);
+  const at = page.sheet + ':' + page.fromRow;
+  const [draft, setDraft] = useState({ at, row: String(page.fromRow), error: '' });
+  // A new page brings its own row in the same render. Reset in an effect, it landed after a row
+  // the person had already typed, and replaced it.
+  if (draft.at !== at) setDraft({ at, row: String(page.fromRow), error: '' });
+  const { row, error } = draft.at === at ? draft : { row: String(page.fromRow), error: '' };
+  const setRow = (value: string) => setDraft((current) => ({ ...current, row: value }));
+  const setError = (value: string) => setDraft((current) => ({ ...current, error: value }));
   return (
     <>
       <nav className="worksheet-navigation" aria-label="Worksheet rows">

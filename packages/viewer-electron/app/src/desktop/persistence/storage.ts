@@ -53,6 +53,7 @@ const pane = z.discriminatedUnion('type', [
       title: z.string().max(255),
     })
     .strict(),
+  z.object({ id, type: z.literal('overview'), path: localPath }).strict(),
   z
     .object({
       id,

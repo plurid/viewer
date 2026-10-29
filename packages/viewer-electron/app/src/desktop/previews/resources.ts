@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { open, realpath, stat } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
+import { open, realpath, stat, lstat } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -19,9 +20,21 @@ import {
   type ImageRenditionRequest,
 } from '../../domain/previews/images/rendered';
 import type { DerivedPreviews, DerivedMode } from './derived';
-import { isOfficeFormat, type OfficeLayoutRequest } from '../../domain/previews/documents/layout';
+import {
+  carriesThumbnail,
+  isOfficeFormat,
+  openDocumentThumbnail,
+  type OfficeLayoutRequest,
+} from '../../domain/previews/documents/layout';
+import { gzipLimits, gzipMember } from '../../domain/files/containers';
 import { xmlEncoding } from '../../domain/previews/data/xml';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
+import {
+  confirmedFormats,
+  confirms,
+  identifyBytes,
+  identifyProbe,
+} from '../../domain/files/signatures';
 import { byteRange, WebPreviewError } from './web/policy';
 import { readSQLite } from './sqlite';
 
@@ -34,8 +47,15 @@ interface Grant {
   data?: Buffer;
   archiveChildren: Set<string>;
   assets?: Set<string>;
+  /** A format the file's own bytes confirmed, for a file whose name does not say it, and the
+   * version of the file they were read from. */
+  format?: { extension: string; version: string };
 }
 const MAX_READ = 4 * 1024 * 1024;
+/** The extension a granted file is read as: the format its bytes confirmed, or its own. */
+const grantExtension = (grant: Grant) => grant.format?.extension ?? grant.resource.entry.extension;
+const fileVersion = (info: Stats) =>
+  JSON.stringify([info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs]);
 /** The bundled FFmpeg reads the container; the decoder still probes what it holds. */
 const hasDemuxer = (extension: string) => {
   try {
@@ -304,9 +324,10 @@ export class Resources {
   documentRead<T>(
     id: string,
     requestID: string,
-    read: (file: string, signal: AbortSignal) => Promise<T>,
+    read: (file: string, signal: AbortSignal, format: string) => Promise<T>,
   ): Promise<T> {
     const file = this.documentSource(id);
+    const grant = this.get(id);
     if (this.documentRequests.has(requestID))
       throw new Error('This document request is already running.');
     if (this.documentRequests.size >= 32)
@@ -320,7 +341,8 @@ export class Resources {
         async (scope) => {
           const signal = AbortSignal.any([scope.signal, sourceSignal, request.abort.signal]);
           signal.throwIfAborted();
-          const value = await read(file, signal);
+          if (grant.format) await this.unchanged(grant);
+          const value = await read(file, signal, grantExtension(grant));
           signal.throwIfAborted();
           this.documentSource(id);
           scope.check();
@@ -332,6 +354,61 @@ export class Resources {
         if (this.documentRequests.get(requestID) === request)
           this.documentRequests.delete(requestID);
       });
+  }
+  /** The extension a document is read as, for a read outside `documentRead`. */
+  async documentFormat(id: string): Promise<string> {
+    const grant = this.get(id);
+    if (grant.format) await this.unchanged(grant);
+    return grantExtension(grant);
+  }
+  /** A confirmed format holds for the version of the file its bytes were read from. */
+  private async unchanged(grant: Grant): Promise<void> {
+    const format = grant.format;
+    await this.access([grant.file!]);
+    const info = await lstat(grant.file!).catch(() => undefined);
+    if (info && fileVersion(info) === format?.version) return;
+    if (grant.format === format) grant.format = undefined;
+    throw new Error('This file changed after Viewer read its format. Reopen its preview.');
+  }
+  /**
+   * Reads a granted file as `extension` from now on, once its own first bytes say it is one. Show
+   * as asks this for a file whose name does not say its format; the renderer's word is not taken.
+   */
+  confirmFormat(id: string, extension: string): Promise<Resource> {
+    return this.work.track(this.paths(id), () =>
+      this.coordinated(id, () => this.readFormat(id, extension)),
+    );
+  }
+  private async readFormat(id: string, extension: string): Promise<Resource> {
+    const grant = this.get(id);
+    if (!grant.file || grant.data)
+      throw new Error('Only a file on disk can be shown as another format.');
+    if (!confirmedFormats.has(extension))
+      throw new Error(`Show as cannot read a file as .${extension}.`);
+    await this.access([grant.file]);
+    const file = await open(
+      fileCoordination.path(grant.file),
+      constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
+    );
+    let head: Buffer, info: Stats;
+    try {
+      info = await file.stat();
+      if (!info.isFile()) throw new Error('This preview file is no longer a regular file.');
+      head = Buffer.alloc(Math.min(info.size, identifyProbe));
+      head = head.subarray(0, (await file.read(head, 0, head.length, 0)).bytesRead);
+    } finally {
+      await file.close();
+    }
+    if (!confirms(identifyBytes(head, grant.resource.entry.name), extension))
+      throw new Error(`The contents of this file do not match .${extension}.`);
+    await this.access([grant.file]);
+    if (this.get(id) !== grant) throw new Error('This preview resource has expired.');
+    grant.format = { extension, version: fileVersion(info) };
+    const { entry } = grant.resource;
+    return {
+      ...grant.resource,
+      entry: { ...entry, extension, mime: lookup(extension) || entry.mime },
+    };
   }
   cancelDocument(id: string, requestID: string): void {
     const request = this.documentRequests.get(requestID);
@@ -409,7 +486,10 @@ export class Resources {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Nested archives are not supported yet.');
     await this.access([grant.file]);
-    const entries = await this.archives.list(grant.file);
+    const member = gzipMember(grant.resource.entry.name);
+    const entries = member
+      ? await this.archives.gzip(grant.file, member, gzipLimits)
+      : await this.archives.list(grant.file);
     this.get(id);
     return entries;
   }
@@ -445,14 +525,20 @@ export class Resources {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Nested archives are not supported yet.');
     await this.access([grant.file]);
-    const bookImage = grant.resource.entry.extension === 'epub' && epubImagePath(name);
+    const bookImage = grantExtension(grant) === 'epub' && epubImagePath(name);
     if (bookImage) {
       const listing = await this.archives.list(grant.file);
       const image = listing.entries.find((entry) => entry.name === name);
       if (!image?.previewable || image.size > epubImageLimit)
         throw new Error('This book illustration exceeds its preview limit.');
     }
-    const data = await this.archives.read(grant.file, name);
+    const member = gzipMember(grant.resource.entry.name);
+    if (member && name !== member) throw new Error(`This gzip file holds only ${member}.`);
+    let data: Buffer;
+    if (member) data = await this.archives.gunzip(grant.file, gzipLimits);
+    else if (name === openDocumentThumbnail.name && carriesThumbnail(grantExtension(grant)))
+      data = await this.archives.readPNG(grant.file, name, openDocumentThumbnail);
+    else data = await this.archives.read(grant.file, name);
     if (bookImage) {
       const dimensions = imageDimensions(data);
       if (!dimensions || dimensions.width * dimensions.height > 64000000)
@@ -464,7 +550,7 @@ export class Resources {
   /** A preview of a file Chromium cannot decode, produced by a private decoder. */
   rendition(id: string, request?: ImageRenditionRequest): Promise<Resource> {
     const grant = this.get(id);
-    if (cameraRawFormats.includes(grant.resource.entry.extension))
+    if (cameraRawFormats.includes(grantExtension(grant)))
       return this.derivedRendition(
         id,
         request?.mode ?? 'camera',
@@ -479,14 +565,14 @@ export class Resources {
   }
   videoRendition(id: string, requestID: string): Promise<Resource> {
     const grant = this.get(id);
-    if (!hasDemuxer(grant.resource.entry.extension))
+    if (!hasDemuxer(grantExtension(grant)))
       return Promise.reject(
         new Error('Choose a supported audio or video file for a compatibility preview.'),
       );
     return this.derivedRendition(id, 'video', requestID);
   }
   officeLayout(id: string, request: OfficeLayoutRequest): Promise<Resource> {
-    if (!isOfficeFormat(this.get(id).resource.entry.extension))
+    if (!isOfficeFormat(grantExtension(this.get(id))))
       return Promise.reject(
         new Error('Choose a Word, Excel or PowerPoint file for Office layout preview.'),
       );
@@ -501,8 +587,8 @@ export class Resources {
     const grant = this.get(id);
     const decoder = mode === 'office' ? this.office : mode === 'image' ? this.images : this.derived;
     if (!decoder) return Promise.reject(new Error('The local preview decoder is unavailable.'));
-    return this.documentRead(id, requestID, async (file, signal) => {
-      const lease = await decoder.read(file, mode, signal, 4096, variant);
+    return this.documentRead(id, requestID, async (file, signal, format) => {
+      const lease = await decoder.read(file, mode, signal, 4096, variant, format);
       try {
         signal.throwIfAborted();
         this.get(id);

@@ -2,6 +2,7 @@
 import type { PropsWithChildren } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { createRoot } from 'react-dom/client';
 import PDFPreview from '../src/renderer/previews/modules/PDFPreview';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
 
@@ -146,4 +147,83 @@ it.each([
   expect(pdf.textLayer).toHaveBeenCalledTimes(1);
   view.unmount();
   expect(values.get('scroll.pdf')).toEqual({ section: '3:2', top: 400, left: 0 });
+});
+
+it('keeps a scroll made as soon as the page has its size', async () => {
+  // as in the app: no test act() around pdf.js answers, so React commits in its own tasks
+  const environment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const before = environment.IS_REACT_ACT_ENVIRONMENT;
+  environment.IS_REACT_ACT_ENVIRONMENT = false;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(element: Element) {
+        if (element.classList.contains('pdf-scroll'))
+          queueMicrotask(() =>
+            this.callback(
+              [{ contentRect: { width: 800, height: 600 } } as ResizeObserverEntry],
+              this as unknown as ResizeObserver,
+            ),
+          );
+      }
+      disconnect() {}
+    },
+  );
+  const sheet = {
+    getViewport: ({ scale }: { scale: number }) => ({
+      width: 600 * scale,
+      height: 800 * scale,
+      scale,
+    }),
+    render: () => ({ promise: Promise.resolve(), cancel() {} }),
+    getTextContent: async () => ({ items: [] }),
+  };
+  pdf.getDocument.mockReturnValue({
+    promise: Promise.resolve({ numPages: 3, getPage: async () => sheet }),
+    async destroy() {},
+  });
+  const values = new Map<string, unknown>();
+  const context = {
+    resource: {
+      id: 'pdf',
+      url: 'https://fixture.invalid/Book.pdf',
+      entry: { path: '/fixtures/Book.pdf', name: 'Book.pdf', extension: 'pdf' },
+    },
+    active: true,
+    interactive: true,
+    look: 'dark',
+    signal: new AbortController().signal,
+    state: {
+      get: (key: string) => values.get(key),
+      set: (key: string, value: unknown) => values.set(key, value),
+    },
+    services: {},
+  } as unknown as PreviewContext;
+  const host = document.body.appendChild(document.createElement('div'));
+  const root = createRoot(host);
+  try {
+    // the reader scrolls in the first moment the page shows at its size
+    const scrolled = new Promise<HTMLDivElement>((resolve) => {
+      const observer = new MutationObserver(() => {
+        const canvas = host.querySelector('canvas');
+        if (!(parseFloat(canvas?.style.height || '0') > 0)) return;
+        observer.disconnect();
+        const scroll = host.querySelector<HTMLDivElement>('.pdf-scroll')!;
+        fireEvent.wheel(scroll);
+        scroll.scrollTop = 400;
+        fireEvent.scroll(scroll);
+        resolve(scroll);
+      });
+      observer.observe(host, { subtree: true, attributes: true, childList: true });
+    });
+    root.render(<PDFPreview {...context} />);
+    const scroll = await scrolled;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(scroll.scrollTop).toBe(400);
+  } finally {
+    root.unmount();
+    host.remove();
+    environment.IS_REACT_ACT_ENVIRONMENT = before;
+  }
 });

@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { entry } from '../files/filesystem';
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
 import { extractDocument } from './formats';
@@ -27,12 +28,19 @@ export class DocumentCache {
     pages?: number,
     signal?: AbortSignal,
     requested?: WorksheetWindow,
+    format = path.extname(file).slice(1).toLowerCase(),
   ): Promise<DocumentData> {
     signal?.throwIfAborted();
     const worksheet = requested ? worksheetPageSchema.parse(requested) : undefined;
     const info = await this.inspect(file);
     signal?.throwIfAborted();
-    const key = JSON.stringify([file, sourceVersion(info), pages ?? null, worksheet ?? null]);
+    const key = JSON.stringify([
+      file,
+      sourceVersion(info),
+      pages ?? null,
+      worksheet ?? null,
+      format,
+    ]);
     const cached = this.saved.get(key);
     if (cached) {
       this.saved.delete(key);
@@ -54,7 +62,12 @@ export class DocumentCache {
       item.work = Promise.resolve()
         .then(async () => {
           abort.signal.throwIfAborted();
-          const value = await this.decode(file, { pages, worksheet, signal: abort.signal });
+          const value = await this.decode(file, {
+            pages,
+            worksheet,
+            signal: abort.signal,
+            format,
+          });
           if (!sameSourceVersion(sourceVersion(info), sourceVersion(await this.inspect(file))))
             throw new Error('The document changed while being read. Open it again.');
           abort.signal.throwIfAborted();

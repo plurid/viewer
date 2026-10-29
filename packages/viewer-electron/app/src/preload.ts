@@ -141,6 +141,7 @@ const api: ViewerAPI = {
   diagnosticReport: (detail) => invoke('diagnosticReport', detail),
   document: (id, request) => (request ? invoke('document', id, request) : invoke('document', id)),
   cancelDocument: (id, requestID) => invoke('cancelDocument', id, requestID),
+  resourceFormat: (id, extension) => invoke('resourceFormat', id, extension),
   bootstrap: () => invoke('bootstrap'),
   list: (file) => invoke('list', file),
   stat: (file) => invoke('stat', file),

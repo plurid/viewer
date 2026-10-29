@@ -268,6 +268,12 @@ export interface JournalPane {
   filter: JournalFilter;
   savedFilters?: { id: string; name: string; filter: JournalFilter }[];
 }
+/** What needs a look across the indexed locations: one per workspace. */
+export interface OverviewPane {
+  id: string;
+  type: 'overview';
+  path: string;
+}
 export interface TaskPane {
   id: string;
   type: 'task';
@@ -297,7 +303,8 @@ export type Pane =
   | ServerPane
   | BrowserPane
   | MediaPane
-  | JournalPane;
+  | JournalPane
+  | OverviewPane;
 /** Runtime kind catalog stays exhaustive as new plane records are added. */
 export const paneTypes = {
   task: 'task',
@@ -316,6 +323,7 @@ export const paneTypes = {
   browser: 'browser',
   media: 'media',
   journal: 'journal',
+  overview: 'overview',
 } as const satisfies { [Kind in Pane['type']]: Kind };
 export interface Workspace {
   id: string;
@@ -790,6 +798,9 @@ export interface ViewerAPI {
   diagnosticReport(detail: string): Promise<void>;
   document(id: string, request?: WorksheetDocumentRequest): Promise<DocumentData>;
   cancelDocument(id: string, requestID: string): Promise<void>;
+  /** Reads a previewed file as `extension` once its own first bytes say it is one: Show as, for a
+   * file whose name does not say its format. */
+  resourceFormat(id: string, extension: string): Promise<Resource>;
   list(path: string): Promise<FolderListing>;
   stat(path: string): Promise<FileEntry>;
   fileInformation(path: string): Promise<FileInformation>;

@@ -1,4 +1,3 @@
-import path from 'node:path';
 import type { Resource } from '../../domain/contracts';
 import { officeImageParts } from '../../domain/previews/documents/office';
 import type { ApiHandlers } from './schemas';
@@ -25,6 +24,7 @@ type ResourceHandlers = Pick<
   | 'thumbnail'
   | 'document'
   | 'cancelDocument'
+  | 'resourceFormat'
   | 'officeImage'
 >;
 interface ResourcePorts {
@@ -42,8 +42,10 @@ interface ResourcePorts {
     | 'printableFile'
     | 'documentRead'
     | 'documentSource'
+    | 'documentFormat'
     | 'signal'
     | 'cancelDocument'
+    | 'confirmFormat'
   >;
   thumbnails: Pick<Thumbnails, 'get'>;
   webPreviews: Pick<WebPreviews, 'releaseResource'>;
@@ -85,24 +87,31 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
     document: async ([id, request]) => {
       if (request) {
         const { requestID, ...worksheet } = request;
-        return ports.resources.documentRead(id, requestID, (file, signal) =>
-          ports.files.extract(file, signal, true, worksheet),
+        return ports.resources.documentRead(id, requestID, (file, signal, format) =>
+          ports.files.extract(file, signal, true, worksheet, format),
         );
       }
       const file = ports.resources.documentSource(id);
-      const document = await ports.files.extract(file, ports.resources.signal(id), true);
+      const format = await ports.resources.documentFormat(id);
+      const document = await ports.files.extract(
+        file,
+        ports.resources.signal(id),
+        true,
+        undefined,
+        format,
+      );
       // the preview may have been released while it was read
       ports.resources.documentSource(id);
       return document;
     },
     cancelDocument: async ([id, requestID]) => ports.resources.cancelDocument(id, requestID),
+    resourceFormat: ([id, extension]) => ports.resources.confirmFormat(id, extension),
     officeImage: async ([id, part, requestID]) => {
       let child: Resource | undefined;
       try {
-        return await ports.resources.documentRead(id, requestID, async (file, signal) => {
-          if (path.extname(file).toLowerCase() !== '.docx')
-            throw new Error('Embedded document images require a DOCX file.');
-          const document = await ports.files.extract(file, signal, true);
+        return await ports.resources.documentRead(id, requestID, async (file, signal, format) => {
+          if (format !== 'docx') throw new Error('Embedded document images require a DOCX file.');
+          const document = await ports.files.extract(file, signal, true, undefined, format);
           if (!officeImageParts(document.office).includes(part))
             throw new Error('This image is not a supported embedded document relationship.');
           const resource = await ports.resources.archiveEntry(id, part);

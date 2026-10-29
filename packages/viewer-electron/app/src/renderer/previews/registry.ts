@@ -4,7 +4,7 @@ import { officeFormats } from '../../domain/previews/documents/layout';
 import { modelFormats } from '../../domain/previews/models/formats';
 import { renderedImageFormats } from '../../domain/previews/images/rendered';
 import { fontFormats } from '../../domain/previews/fonts/formats';
-import { zipContainers } from '../../domain/files/containers';
+import { gzipMember, zipContainers } from '../../domain/files/containers';
 import { languageExtensions, languageFor } from '../../domain/editing/languages';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
@@ -168,6 +168,14 @@ export const previewModules: PreviewModule[] = [
         ? 100
         : 0,
     load: () => import('./modules/ArchivePreview'),
+  },
+  {
+    id: 'compressed',
+    label: 'Compressed file',
+    formats: ['gz'],
+    // one gzip-compressed file; a .tar.gz is the archive's
+    detect: (entry) => (gzipMember(entry.name) ? 100 : 0),
+    load: () => import('./modules/CompressedPreview'),
   },
   {
     id: 'font',

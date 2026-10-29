@@ -33,9 +33,11 @@ export function catalogCommands({
             ? 'Command receipt'
             : pane.type === 'journal'
               ? 'Journal'
-              : pane.type === 'scratch' || pane.type === 'note'
-                ? (pane.title ?? 'Untitled')
-                : baseName(pane.path),
+              : pane.type === 'overview'
+                ? 'Overview'
+                : pane.type === 'scratch' || pane.type === 'note'
+                  ? (pane.title ?? 'Untitled')
+                  : baseName(pane.path),
       group: 'Open planes',
       detail:
         pane.type === 'note' ? 'Saved note' : pane.type === 'scratch' ? 'Unsaved text' : pane.path,

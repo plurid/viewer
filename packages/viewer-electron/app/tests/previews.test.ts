@@ -70,6 +70,23 @@ describe('preview extension contract', () => {
     for (const [name, module] of Object.entries(routes))
       expect([name, choosePreview(file(name)).id]).toEqual([name, module]);
   });
+  it('expands a single gzip file and lists a compressed TAR as an archive', () => {
+    const routes = {
+      'notes.txt.gz': 'compressed',
+      'data.json.gz': 'compressed',
+      'access.log.gz': 'compressed',
+      'report.csv.gz': 'compressed',
+      'access.log.2.gz': 'compressed',
+      'Field notes.tar.gz': 'archive',
+      'BACKUP.TAR.GZ': 'archive',
+      'Field notes.tgz': 'archive',
+    };
+    for (const [name, module] of Object.entries(routes))
+      expect([name, choosePreview({ ...file(name), mime: 'application/gzip' }).id]).toEqual([
+        name,
+        module,
+      ]);
+  });
   it('routes DXF drawings ahead of ambiguous text or image MIME and gives them a drawing icon', () => {
     for (const mime of ['application/octet-stream', 'image/vnd.dxf', 'text/plain']) {
       const drawing = { ...file('cut.dxf'), mime };

@@ -18,10 +18,11 @@ beside its folder while you go on browsing.
 | Subtitles                                 | Search the cues and see their times                                        |
 | Font                                      | Type your own sample text and change its size                              |
 | 3D models and drawings                    | Orbit, zoom, show dimensions and measure                                   |
-| Audio and video                           | Play, pause and seek                                                       |
+| Audio and video                           | Play, pause and seek; **Subtitles** shows a subtitle file named like it    |
 
 Video and audio Chromium cannot play, such as WMV, AVI or WMA, play from a copy Viewer makes on your
-Mac; the original is only read.
+Mac; the original is only read. A compressed text file such as `notes.txt.gz` shows the text inside
+it.
 
 [Supported formats](../reference/formats.md) lists every format and what its preview shows.
 
@@ -49,9 +50,9 @@ from Microsoft Office.
 
 ## Pick up where you left off
 
-Viewer remembers the page, scroll position, playback time and model camera for each file. Reopen the
-file and you are back where you were. If the file has changed since, it opens at the start; book
-bookmarks stay.
+Viewer remembers the page, scroll position, playback time, subtitle choice and model camera for each
+file. Reopen the file and you are back where you were. If the file has changed since, it opens at
+the start; book bookmarks stay.
 
 ## When a file moves or disappears
 

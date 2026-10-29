@@ -79,6 +79,18 @@ describe('read-only file-services shutdown', () => {
     await rejected;
     await files.close();
   });
+  it('passes the format a preview reads a misnamed file as to the shared reader', async () => {
+    const files = services();
+    const pending = files.extract('/Field notes.bin', undefined, true, undefined, 'epub');
+    await vi.advanceTimersByTimeAsync(0);
+    const request = worker.postMessage.mock.calls.find(
+      ([request]) => request.method === 'extract',
+    )![0];
+    expect(request.args).toEqual(['/Field notes.bin', undefined, true, undefined, 'epub']);
+    worker.emit('message', { id: request.id, value: { text: 'read as a book' } });
+    await expect(pending).resolves.toEqual({ text: 'read as a book' });
+    await files.close();
+  });
   it('keeps an explicit inspection valid when only search indexing is reconfigured', async () => {
     const files = services();
     await files.configure(defaultSettings('/fixtures').search);

@@ -12,7 +12,7 @@ import {
 } from '../../domain/previews/documents/layout';
 import { verifyOfficeRuntime } from './office-assets';
 import { officeInput } from './office-input';
-import { createOfficeJob, type OfficeRenderOptions } from './office-job';
+import { createOfficeJob, officeFileName, type OfficeRenderOptions } from './office-job';
 import { officeCSP, officeMain, officePage, officeThread } from './office-page';
 import {
   officeInputLimit,
@@ -335,16 +335,21 @@ export function officeDecoder(directory: string): Decoder {
     });
     await verified;
     signal.throwIfAborted();
-    const result = await renderOffice(
-      directory,
-      await officeInput(source, signal),
-      path.extname(source.file).slice(1).toLowerCase(),
-      signal,
-      { name: path.basename(source.file), sheet: sheet || undefined },
-    );
-    // people read several documents in a row: the next one finds its engine started
-    warmOffice(directory);
-    return { ...result, extension: 'pdf', kind: 'office', decoder: officeRuntimeVersion };
+    const extension = source.format ?? path.extname(source.file).slice(1).toLowerCase();
+    try {
+      const result = await renderOffice(
+        directory,
+        await officeInput(source, signal),
+        extension,
+        signal,
+        { name: officeFileName(path.basename(source.file), extension), sheet: sheet || undefined },
+      );
+      return { ...result, extension: 'pdf', kind: 'office', decoder: officeRuntimeVersion };
+    } finally {
+      // people read several documents in a row and pass some on the way: whether this one
+      // finished or was left, the next one finds its engine started
+      warmOffice(directory);
+    }
   };
 }
 

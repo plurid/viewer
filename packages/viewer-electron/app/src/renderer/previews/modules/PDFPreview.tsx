@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import {
   getDocument,
   GlobalWorkerOptions,
@@ -21,8 +22,11 @@ import { PDFOutline, PDFThumbnails } from '../pdf/PDFSidebar';
 type PDFSidebar = 'none' | 'pages' | 'outline';
 
 GlobalWorkerOptions.workerSrc = workerURL;
-export default function PDFPreview(context: PreviewContext) {
+/** `onPaint` follows each painted page: the Office layout holds a picture of its first page until
+ * then, so nothing blank shows between them. */
+export default function PDFPreview(context: PreviewContext & { onPaint?(): void }) {
   const { resource, signal, active } = context;
+  const painted = useEffectEvent(() => context.onPaint?.());
   const [pdf, setPDF] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = usePreviewState(context, 'pdf.page', 1);
   const pageText = useRef(new WeakMap<object, Map<number, string>>());
@@ -147,11 +151,13 @@ export default function PDFPreview(context: PreviewContext) {
         container.style.setProperty('--scale-factor', String(viewport.scale));
         container.style.setProperty('--total-scale-factor', String(viewport.scale));
         // Scroll restoration needs page geometry. Waiting for the text layer
-        // can reset a scroll the reader already made while the page appeared.
-        setLaidOut(`${page}:${zoom}`);
+        // can reset a scroll the reader already made while the page appeared;
+        // so can restoring in a later task than the one that sized the page.
+        flushSync(() => setLaidOut(`${page}:${zoom}`));
         render = sheet.render({ canvas: target, viewport, transform: [ratio, 0, 0, ratio, 0, 0] });
         await render.promise;
         if (cancelled) return;
+        painted();
         const textContentSource = await sheet.getTextContent();
         if (cancelled) return;
         layer = new TextLayer({

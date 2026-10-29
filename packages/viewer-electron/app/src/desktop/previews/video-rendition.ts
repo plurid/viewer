@@ -15,7 +15,7 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
       timer = setTimeout(() => deadline.abort(), 120000);
     const combined = AbortSignal.any([signal, deadline.signal]);
     try {
-      const extension = path.extname(source.file).slice(1).toLowerCase(),
+      const extension = source.format ?? path.extname(source.file).slice(1).toLowerCase(),
         demuxer = mediaDemuxer(extension);
       const probe = await execute(
         path.join(root, 'ffprobe'),

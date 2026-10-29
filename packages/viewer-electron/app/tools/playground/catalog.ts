@@ -8,6 +8,7 @@ import { modelSamples } from './samples/models';
 import { packageSamples } from './samples/packages';
 import { projectSamples } from './samples/project';
 import { structuredTextSamples } from './samples/structured-text';
+import { compressedSamples } from './samples/compressed';
 import { textSamples } from './samples/text';
 import type { RemoteSample, Sample } from './types';
 import { officeLayoutSamples } from './office-layout';
@@ -67,6 +68,7 @@ export async function localSamples(): Promise<Sample[]> {
     ...projectSamples(),
     ...packageSamples(),
     ...structuredTextSamples(),
+    ...compressedSamples(await assetBytes('study-small.png')),
   ];
   const imageSpecs = [
     ['png', 'png'],

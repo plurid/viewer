@@ -25,6 +25,7 @@ const routeKinds: Record<Pane['type'], string> = {
   browser: 'browsers',
   media: 'media',
   journal: 'journals',
+  overview: 'overviews',
 };
 /** The engine route that renders a host pane; `hostID` maps a plane back to its pane. */
 export function paneRoute(type: Pane['type'], id: string): string {

@@ -1,0 +1,127 @@
+.overview-plane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.923rem;
+}
+
+.overview-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: none;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.overview-space {
+  flex: 1;
+}
+
+.overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+
+.overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--field);
+}
+
+.overview-card[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.overview-card > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.overview-card strong {
+  font-weight: 600;
+}
+
+.overview-count {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.overview-card p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.overview-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overview-files li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.overview-files button {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-files button:hover {
+  color: var(--accent);
+}
+
+.overview-files li > span {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-card > footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.overview-card > footer button {
+  padding: 4px 8px;
+  border-color: var(--line);
+  font-size: 12px;
+}
+
+.overview-clear {
+  margin: 0;
+  padding: 0 12px 12px;
+  font-size: 12px;
+}

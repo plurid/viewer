@@ -4,6 +4,7 @@ import type { ComponentType } from 'react';
 import type {
   ArchiveListing,
   FileEntry,
+  FolderListing,
   Resource,
   ResourceRead,
   Look,
@@ -65,6 +66,10 @@ export interface PreviewContext {
     videoRendition(id: string, requestID: string): Promise<Resource>;
     officeLayout?(id: string, request: OfficeLayoutRequest): Promise<Resource>;
     officeImage(id: string, part: string, requestID: string): Promise<Resource>;
+    /** Files beside the previewed one, such as a video's subtitles: each is listed and read
+     * through its own authorized resource. Test hosts and galleries may omit them. */
+    list?(folder: string): Promise<FolderListing>;
+    resource?(path: string): Promise<Resource>;
     release(id: string): Promise<void>;
   };
 }

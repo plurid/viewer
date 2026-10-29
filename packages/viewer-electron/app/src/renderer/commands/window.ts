@@ -2,6 +2,7 @@ import { pairCommands } from './window-commands/pair';
 import { comparisonCommands } from './window-commands/comparison';
 import { gitCommands } from '../git/commands';
 import { journalCommands } from '../journal/commands';
+import { overviewCommands } from '../overview/commands';
 import { actionCommands } from '../actions/commands';
 import type { CommandDefinition } from './registry';
 import { toolsCommands } from './window-commands/tools';
@@ -30,6 +31,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
   const scopes = windowScopes(actions);
   return [
     ...journalCommands(scopes),
+    ...overviewCommands(scopes),
     ...toolsCommands(scopes),
     ...navigationCommands(scopes),
     ...workspacesCommands(scopes),

@@ -281,7 +281,8 @@
   background: white;
   box-shadow: 0 2px 12px var(--soft-shadow-color);
 }
-.pdf-sheet canvas {
+.pdf-sheet canvas,
+.pdf-sheet img {
   display: block;
 }
 .page-number {
@@ -524,9 +525,23 @@ button.markdown-link {
   min-width: 0;
 }
 .office-viewer > .office-viewer,
-.office-viewer > .pdf-viewer {
+.office-viewer > .pdf-viewer,
+.office-viewer > .office-layout-stage,
+.office-layout-stage > .pdf-viewer {
   flex: 1;
   min-height: 0;
+}
+/* the layout renders beneath the document's picture of its first page, which covers it until the
+   page has painted in the same place */
+.office-layout-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.office-first-page {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 .worksheet-tabs {
   flex: none;

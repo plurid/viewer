@@ -14,6 +14,7 @@ type ContentPlaneActions = Pick<
   | 'openBrowser'
   | 'openServer'
   | 'openJournal'
+  | 'openOverview'
   | 'newChat'
   | 'openAgentSession'
   | 'openChat'
@@ -129,6 +130,12 @@ export function contentPlaneActions({
       const id = existing?.id ?? crypto.randomUUID();
       if (!existing)
         addContentPane({ id, type: 'journal', path: getState().bootstrap.home, filter });
+      controller().focusPane(id, { activate: true });
+    },
+    openOverview() {
+      const existing = activeWorkspace().panes.find((pane) => pane.type === 'overview');
+      const id = existing?.id ?? crypto.randomUUID();
+      if (!existing) addContentPane({ id, type: 'overview', path: getState().bootstrap.home });
       controller().focusPane(id, { activate: true });
     },
     async newChat(paths, draft, send) {
