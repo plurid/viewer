@@ -1,58 +1,62 @@
 # Your first five minutes
 
-Viewer starts as a file explorer. You can use it that way for as long as you like.
+Viewer opens as a file explorer on your Home folder. These five steps cover what you need on day
+one. If Viewer is not running yet, follow [Build and run Viewer](../development/builds.md).
 
-If you have not launched it yet, follow [Get Viewer running](../development/builds.md). The current
-developer build is qualified on Apple Silicon macOS; see
-[platform status](../reference/platforms.md) for other targets.
+## 1. Open a folder
 
-## Open a folder
+1. Press **⌘⇧O**, or choose **File → Open Folder…**, and pick a folder. The sidebar also opens Home,
+   Desktop, Documents, Downloads and Pictures.
+2. Double-click a folder to enter it. **⌘↑** goes to the parent folder; **⌘[** and **⌘]** go back
+   and forward.
+3. Change the view with **⌘1** List, **⌘2** Grid, **⌘3** Columns, **⌘4** Gallery or **⌘5** Map, or
+   use the view menu in the folder's header. Each folder keeps the view you chose for it.
 
-Choose **Open folder…**, or press **⌘⇧O**, and select a folder you know. The sidebar also opens
-familiar places such as Documents, Downloads and Pictures.
+## 2. Look inside a file
 
-Use the view menu in the folder header to choose List, Grid, Columns, Gallery or Map. Double-click a
-folder to enter it. Back returns to the previous location; **⌘↑** opens the parent folder.
+1. Select a file and press **Space**. Try a photograph, a PDF, a Word document or a video.
+2. Press **Escape** to close the preview.
 
-## Look inside a file
+In Columns view, the selected file's preview sits beside the folder trail, so you can browse and
+read at the same time.
 
-Select a file and press **Space**. Try a photograph, PDF, Office document or video. Press **Escape**
-to close the quick preview.
+![Columns view with a PDF preview beside the folder trail](../media/columns.png)
 
-In Columns view, selecting a file also shows its preview beside the folder trail. Supported formats
-and their limits are listed in the [preview reference](../reference/formats.md).
+[Supported formats](../reference/formats.md) lists what each preview can show.
 
-![A folder search in Viewer with a document open in Quick Preview](../media/files.png)
+## 3. Find something
 
-## Find something
+1. Press **⌘F** and type part of a filename.
+2. Turn on **Subfolders** to search everything below the folder.
+3. Narrow the results with a filter: `ext:pdf` shows PDFs, `kind:folder` shows folders, `size>10mb`
+   shows large files.
+4. To find words inside documents, choose **Search contents**. The first time, choose which
+   locations to index in **Settings → Search**.
 
-Press **⌘F** and type part of a filename. Use **Subfolders** when you want to look deeper. For words
-inside a document, choose **Search contents**. Content search uses the locations you enable in
-**Settings → Search**.
+[Search](../reference/search.md) lists every filter.
 
-Try `ext:pdf` to show PDFs. The [search guide](../reference/search.md) introduces other filters when
-you need them.
+## 4. Keep a file open beside its folder
 
-## Keep a preview beside the folder
+1. In the preview, choose **Open linked plane**. The file opens in its own plane, linked to the
+   folder it came from.
+2. Press **⌘0** to bring every plane into view.
+3. Press **⌘Return**, or choose **Dock plane** in a plane's header, to give one plane the whole
+   window. Press it again to see all of them.
+4. Close a plane with **×** in its header, or **⌥⌘W**. Closing a plane never touches the file.
 
-Choose **Open linked plane** in Quick Preview. A _plane_ is simply an open view: a folder, file or
-tool that you can keep beside another view.
+## 5. Find any action
 
-Use the plane's Dock control to focus on it. **⌘Return** switches between focused and spatial views.
-Closing a linked child returns you to its parent.
+Press **⌘K** and type what you want to do: _rename_, _convert_, _optimize_, _note_, _terminal_. The
+list offers what fits the current folder and selection, with each shortcut beside it.
 
-You do not need to arrange a 3D workspace to browse files or use quick tools.
-[Workspaces](workspaces.md) explains the extra room when you want it.
+![The command palette offering image actions for a selected photograph](../media/palette.png)
 
-## Find an action
+Right-click a file for the same actions. **Help → What Can I Do Here?** lists everything available
+for the selection, and lets you pin the ones you use most to the plane's header.
 
-Right-click a file for its available actions, or press **⌘K** and type what you want to do: Rename,
-Image tools, Optimize, New note or Open terminal plane. Commands use your current folder and
-selection.
+## Next
 
-Choose **Help → What Can I Do Here?**, or the information button in a plane header, to explore
-actions and their shortcuts. Search with ordinary words; approximate spellings suggest actions for
-you to choose. Pin useful actions to that kind of plane without changing how they run.
-
-Keep going with [everyday file work](files.md), [quick creative tools](create.md), or
-[a project workspace](develop.md).
+- [Browse and organize](files.md): select, rename, move, and recover from the Trash.
+- [Make a quick change](create.md): convert images, trim video, shrink and rearrange PDFs.
+- [Keep your work together](workspaces.md): several planes and workspaces, saved and restored.
+- [All shortcuts](../reference/shortcuts.md)

@@ -7,7 +7,7 @@ run. Output, elapsed time, actual status, Copy and Stop appear without opening a
 terminal.
 
 Closing output leaves a running window-owned command alive. Receipts retain bounded command/output
-history independently of that view. Restarting Viewer never replays a receipt. **Save as action**
+history independently of that view. Restarting Viewer never replays a receipt. **Save as action…**
 transfers a draft to Settings for review.
 
 ## Open an interactive terminal

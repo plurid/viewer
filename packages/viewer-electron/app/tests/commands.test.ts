@@ -5,6 +5,7 @@ import {
   rankCommands,
   type CommandContext,
   type CommandDefinition,
+  type ResolvedCommand,
 } from '../src/renderer/commands/registry';
 import { folderCommands, type FolderActions } from '../src/renderer/commands/folder';
 import { contextMenuSections, type MenuSection } from '../src/renderer/commands/menu';
@@ -212,6 +213,22 @@ describe('contextual commands', () => {
     expect(rankCommands(rows, 'nf', [])[0].id).toBe('new-folder');
     expect(rankCommands(rows, 're', [])[0].id).toBe('rename');
     expect(rankCommands(rows, 'zz', [])).toEqual([]);
+  });
+  it('drops commands that only scatter the letters of a word another command contains', () => {
+    const row = (id: string, label: string, aliases: string[] = []) =>
+      ({ id, label, aliases, group: 'Files' }) as unknown as ResolvedCommand;
+    const rows = [
+      row('convert', 'Convert images…'),
+      row('invert', 'Invert selection'),
+      row('chat', 'Chat about files', ['conversation']),
+    ];
+    expect(rankCommands(rows, 'convert', []).map((item) => item.id)).toEqual(['convert']);
+    // with no command containing the word, approximate matches still help
+    expect(rankCommands(rows, 'convrt', []).map((item) => item.id)).toContain('convert');
+    // and several words still match across a label
+    expect(
+      rankCommands([row('copy-path', 'Copy full path')], 'copy path', []).map((item) => item.id),
+    ).toEqual(['copy-path']);
   });
   it('places the last two applicable actions first without duplicates', () => {
     const rows = registry.list({ paneID: context.paneID });

@@ -55,7 +55,7 @@ raw values; **Formatted values** switches back. Missing cached values are identi
 does not evaluate formulas or follow external data. Calc may recalculate supported formulas in Print
 layout, so the two views can show different values.
 
-Focus the grid and use arrow keys to inspect cells; Tab leaves the grid rather than visiting every
+Focus the grid and use arrow keys to inspect cells; Tab leaves the grid instead of visiting every
 cell. Page Up/Down moves by the visible page and loads another bounded page when needed. Home/End
 moves to the first/last previewed column; Control/Command + Home/End reaches the sheet's beginning
 or last stored row. **Cell address** accepts A1 notation, including `$B$42`, and Go loads its row.

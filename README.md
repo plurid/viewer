@@ -1,90 +1,96 @@
 # Viewer
 
-**Start with a folder. Keep everything you need beside it.**
+Viewer is a file explorer that opens any file beside its folder, and keeps the tools you use on
+those files in the same window.
 
-Viewer is a file explorer with room to do more. Browse your files, look inside them, make a quick
-edit, or keep a whole project open in one workspace. A folder, a photograph, a browser and a
-terminal can live beside each other as linked views.
+![Quick Preview of a PDF over its folder in Viewer](docs/media/files.png)
 
-![Reading a document in Viewer without leaving its folder](docs/media/files.png)
+Developer preview for macOS on Apple Silicon. Windows and Linux are in progress; see
+[platform status](docs/reference/platforms.md).
 
-[Start here](docs/guides/getting-started.md) · [Explore the guides](docs/README.md) ·
-[Build Viewer](docs/development/builds.md)
+## Run it
 
-Developer preview for macOS, currently qualified on Apple Silicon. Windows and Linux work is in
-progress; see [platform status](docs/reference/platforms.md).
+You need macOS with the Xcode command-line tools, Node 22.13 or later, and pnpm 11.
 
-## Open a folder. Get to work.
+```sh
+git clone https://github.com/plurid/viewer.git
+cd viewer
+pnpm install
+pnpm start
+```
 
-Use familiar lists, thumbnails and columns. Press Space to preview a file. Search by name, add a
-filter, or find a passage inside a document. Keep a useful preview open beside its folder while you
-continue browsing.
+Viewer opens your Home folder. No account or model is needed to browse, preview or use the built-in
+tools. [Build and run Viewer](docs/development/builds.md) covers local app bundles.
 
-Viewer reads documents, spreadsheets, images, audio, video, code, archives and 3D models. Each
-format gets controls suited to its contents: worksheet tabs, PDF pages, a structured-data tree or an
-interactive model. The [format reference](docs/reference/formats.md) explains the coverage.
+## The first keys
+
+| Key         | What it does                                              |
+| ----------- | --------------------------------------------------------- |
+| **⌘⇧O**     | Open a folder                                             |
+| **Space**   | Look inside the selected file; **Escape** closes the look |
+| **⌘F**      | Find files by name; type `ext:pdf` to show only PDFs      |
+| **⌘K**      | Find any command by typing what you want to do            |
+| **⌘1–⌘5**   | List, Grid, Columns, Gallery or Map view                  |
+| **⌘Return** | Switch between one plane and all of them                  |
+
+A **plane** is one open view: a folder, a file, a terminal, a browser or a tool. Planes sit side by
+side, and a plane opened from another stays linked to it.
+[All shortcuts](docs/reference/shortcuts.md)
+
+## Three things to try
+
+**Read a file without leaving its folder.** Select a PDF and press **Space**. Choose **Open linked
+plane** to keep it open while you go on browsing. Press **⌘0** to bring every plane into view.
 
 <details>
 <summary>Watch: find a file and look inside</summary>
 
 ![Finding and previewing a document in Viewer](docs/media/files.gif)
 
-[Watch or download the short recording](docs/media/files.mp4).
+[Watch or download the recording](docs/media/files.mp4).
 
 </details>
 
-## Make a quick change
-
-Convert a photograph to WebP, crop or resize a batch of images, trim a video, extract audio,
-rearrange PDF pages or make a file smaller. Built-in tools process files locally and create new
-outputs for you to inspect.
-
-Optimize shows the actual size savings. Media drafts let you adjust segments and audio before
-exporting. Notes and checklists give you somewhere to keep the thoughts that belong with the files.
+**Convert a photograph.** Select an image, press **⌘K** and choose **Images for web…**. Check the
+format, size and filename, then choose **Export image**. The original stays as it was.
 
 <details>
 <summary>Watch: convert an image and inspect the result</summary>
 
 ![Converting an image with Viewer's image tools](docs/media/create.gif)
 
-[Watch or download the short recording](docs/media/create.mp4).
+[Watch or download the recording](docs/media/create.mp4).
 
 </details>
 
-## Keep a project together
-
-Open a browser beside your source, run a terminal in the project folder, and review Git changes
-without losing the surrounding work. Create a task from a branch to bring its worktree, notes,
-terminal and Git tools together.
-
-Dock a view when you want to focus. Spread views out when their relationships help you think. Saved
-workspaces bring you back to the files and tools you left open.
+**Start work on a branch.** In a Git repository, press **⌘K** and choose **New task from branch…**.
+Name the task and branch, then choose **Create task**. Viewer opens the new worktree with a note, a
+terminal and its Git changes.
 
 <details>
-<summary>Watch: turn a branch into a task workspace</summary>
+<summary>Watch: turn a branch into a task</summary>
 
 ![Creating a branch task and opening its linked tools](docs/media/develop.gif)
 
-[Watch or download the short recording](docs/media/develop.mp4).
+[Watch or download the recording](docs/media/develop.mp4).
 
 </details>
 
-## Go as deep as you like
+## Learn more
 
-| You want to…                          | Start with…                                 |
-| ------------------------------------- | ------------------------------------------- |
-| Find and organize your files          | [Everyday file work](docs/guides/files.md)  |
-| Edit, convert or reduce a file        | [Creative tools](docs/guides/create.md)     |
-| Keep several things open together     | [Workspaces](docs/guides/workspaces.md)     |
-| Work on a code project                | [Development tools](docs/guides/develop.md) |
-| Build your own commands and workflows | [Automation](docs/guides/automate.md)       |
+| To                                           | Read                                                      |
+| -------------------------------------------- | --------------------------------------------------------- |
+| Get comfortable in five minutes              | [Your first five minutes](docs/guides/getting-started.md) |
+| Search, sort, rename and move files          | [Browse and organize](docs/guides/files.md)               |
+| Convert, trim, shrink or rearrange files     | [Make a quick change](docs/guides/create.md)              |
+| Keep a folder, a document and tools together | [Keep your work together](docs/guides/workspaces.md)      |
+| Edit, run and review a code project          | [Work on a project](docs/guides/develop.md)               |
+| Turn repeated work into a command            | [Make repeated work a command](docs/guides/automate.md)   |
 
-Models and agents are optional. Connect them when you want help with naming, organization, summaries
-or a task, and choose what data they may access. You can browse, preview and use the built-in tools
-without configuring a model.
+Models and agents are optional. Add one in **Settings → Models** when you want help naming,
+organizing or summarizing, and choose exactly what it may read.
 
-To try the developer build, follow [the build guide](docs/development/builds.md). The
-[sample playground](docs/development/playground.md) provides files and projects to explore. To work
-on Viewer itself, start with [contributing](CONTRIBUTING.md).
+To work on Viewer itself, start with [contributing](CONTRIBUTING.md). The
+[sample playground](docs/development/playground.md) has files and projects to explore.
 
 Part of [Plurid](https://plurid.com). Licensed under [DEL](LICENSE).

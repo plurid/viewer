@@ -1,7 +1,7 @@
 # Viewer
 
 Viewer helps people work with files without constantly losing their place between applications. It
-starts with familiar folder browsing and grows into a workspace for previews, creative tools,
+starts as an ordinary file explorer and grows into a workspace for previews, creative tools,
 development and automation.
 
 ## Who it serves
@@ -16,11 +16,11 @@ deeper guides.
 
 ## Product principles
 
-- **Start with the file.** Keep ordinary folders and file identities useful. A workspace references
-  files rather than importing them into a closed library.
+- **Start with the file.** Files stay in ordinary folders with their own identity. A workspace
+  points at files; it never imports them into a closed library.
 - **Make the next action clear.** Show relevant commands for the active folder, selection or
   preview. Put quick inspection and common actions within reach.
-- **Give each format useful controls.** A worksheet needs sheet navigation; a model needs a camera;
+- **Give each format its own controls.** A worksheet needs sheet navigation; a model needs a camera;
   a PDF needs pages. Explain partial coverage honestly.
 - **Use space for context.** Linked views express relationships. Docking and tiling support focused
   work. Spatial navigation is optional for basic use.
@@ -49,7 +49,7 @@ proposal is not an implemented feature.
 
 ## Writing about Viewer
 
-Demonstrate useful work in the real application. Use ordinary language, readable screenshots and
-short recordings. Teach a small action before introducing its larger system. Link to the canonical
-reference instead of duplicating its limits or appending implementation history. See
-[contributing](CONTRIBUTING.md).
+Show real work in the real application. Use ordinary language, the app's exact labels and keys,
+readable screenshots and short recordings. Teach a small action before introducing its larger
+system. Link to the canonical reference instead of duplicating its limits or appending
+implementation history. See [contributing](CONTRIBUTING.md).

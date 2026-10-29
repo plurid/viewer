@@ -68,8 +68,8 @@ Settings edits shared values.
 ```
 
 Built-ins include **Focus**, **Present** and **Full**. Leaving a profile reveals the retained
-underlying choices. A missing definition keeps its reference and offers recovery rather than
-overwriting the shared configuration. Profiles cannot hold credentials, provider permissions, agent
+underlying choices. A missing definition keeps its reference and offers recovery; it never
+overwrites the shared configuration. Profiles cannot hold credentials, provider permissions, agent
 scopes or process authority.
 
 ## Actions, keys and themes

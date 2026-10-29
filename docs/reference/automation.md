@@ -24,7 +24,7 @@ needs a non-empty selection.
 ```
 
 This is a step to include in a valid workflow definition, with an `exports` input. It prepares WebP
-copies rather than accepting arbitrary processor arguments.
+copies and accepts no arbitrary processor arguments.
 
 ## Run, review and resume
 

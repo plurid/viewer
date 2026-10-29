@@ -1,89 +1,72 @@
 # Make repeated work a command
 
-Start by using **⌘K** to find an existing action. You can organize and compose commands without
-adopting a model or connecting an agent.
+When you do the same thing twice, make it a command. None of this needs a model or an agent.
 
-## Save a useful action
+## Save a shell line as an action
 
-**Run command…** captures the current folder and shows the shell line before it runs. **Save as
-action** transfers a draft to Settings for review.
+1. Press **⌘K** → **Run command…** in the folder you work in, type the line and run it.
+2. When it does what you want, choose **Save as action…**.
+3. In **Settings → Actions**, give it a name, choose when it applies, and add parameters for the
+   parts that change between runs, such as a test name.
 
-In **Settings → Actions**, give an action a clear name, choose its executor and set when it applies.
-Group actions into palette folders, pin common ones and add parameters for information that changes
-between runs.
+The action now appears in **⌘K** whenever it applies. To chain steps, make a sequence: a _Test_ step
+followed by a _Build_ step runs in order and stops at the first failure. Use literal arguments when
+a step needs no shell features; it is safer with unusual filenames.
 
-For example, a Test action can accept a test name as an input. A Test → Build sequence runs the
-steps in order and stops after a failed step. Literal arguments and shell scripts are different
-choices; use literal arguments when shell syntax is unnecessary.
+## Type commands
 
-## Learn the command language gradually
+Type `:` in the command palette to switch to the command line. Try:
 
-Type `:` in the palette. Try `:help`, then `:set grid!` to toggle the grid. Completion explains
-available verbs. Typo suggestions help you correct a line; they do not execute it.
+| Line         | What it does                     |
+| ------------ | -------------------------------- |
+| `:help`      | Lists every verb                 |
+| `:set grid!` | Turns the space's grid on or off |
+| `:vs`        | Opens a tile to the right        |
+| `:pwd`       | Shows the current plane's folder |
 
-You can later add aliases, key sequences and macros. See the
-[command language](../reference/command-line.md) rather than learning every form before using the
-application.
+Completion shows what each verb takes. A misspelled verb gets a suggestion; nothing runs until you
+correct it. Aliases, key bindings, modes and macros are in
+[the command language](../reference/command-line.md).
 
 ## Open Viewer from your terminal
 
-In a direct build, press **⌘K** and choose **Install Viewer CLI**, or open **Settings → Navigation →
-Install shell command**. Both install the `viewer` launcher at `~/.local/bin/viewer` without
-replacing another command at that path. A message confirms when the launcher is ready or explains
-the problem.
+1. Press **⌘K** → **Install Viewer CLI**. It installs `viewer` at `~/.local/bin/viewer` and never
+   replaces another file there.
+2. In a terminal, run `viewer .` to open the current folder.
+3. If your shell cannot find `viewer`, add `~/.local/bin` to your `PATH`.
 
-Run `viewer .` to open the current folder. If your shell cannot find it, run `~/.local/bin/viewer .`
-and add `~/.local/bin` to your shell's `PATH` when convenient. Viewer does not edit your shell
-startup files.
-
-Try `viewer --help` next. To search and automate, keep Viewer open and create a named client in
-**Settings → Agents** with only the folders and capabilities you need. Set its token in
-`VIEWER_AGENT_TOKEN`, then try:
+To search and script from the terminal, keep Viewer open, create a client in **Settings → Agents**
+with only the folders it needs, and put its token in `VIEWER_AGENT_TOKEN`:
 
 ```sh
 viewer workspace list
 viewer search 'invoice' --root ./Documents
-viewer search 'invoice' --root ./Documents --content
 viewer git status .
 ```
 
-Content search requires a content grant. `viewer ask 'select the images'` asks the configured model
-for a command proposal; it does not execute the answer. Exports and workflow file changes prepare
-reviews in Viewer. Read the [CLI reference](../reference/cli.md) for JSON output, cancellation,
-review IDs and the full command list. The terminal CLI is separate from the `:` language inside
-Viewer.
+Anything that changes files opens a review in Viewer first. [The terminal CLI](../reference/cli.md)
+lists every command.
 
-## Compose a file workflow
+## Prepare reviews automatically
 
-Workflows describe a sequence of inspection, comparison and proposed changes. Watch rules can
-prepare a review when new files arrive. Applying a file-change proposal remains a separate review
-step.
+A workflow chains inspection, comparison and proposed changes. A watch rule starts one when new
+files arrive in a folder, for example to propose names for new scans. Applying the changes always
+waits for your review. [Workflows and watch rules](../reference/automation.md) shows how to write
+them.
 
-[Workflow reference](../reference/automation.md) covers definitions, bindings and what runs
-automatically.
+## Add a model
 
-## Add a model when it helps
+1. Open **Settings → Models**, choose **Add model**, then **Set up model**.
+2. Enter the API key and model ID, or choose **Connect and load models** to pick from the provider's
+   list.
+3. Open **Data access** and choose what the model may read: names only, excerpts, or full text.
 
-Open **Settings → Models → Add model**, choose the provider and select **Set up model**. Enter its
-API key and model ID; **Connect and load models** lists IDs offered by compatible providers. Local
-servers can use **Provider address** to change the endpoint. The list shows each saved model's full
-name and ID, whether its connection has been checked, and which is the **Default for Ask Viewer**.
-Use that selector, or **Use for Ask Viewer**, to change the default.
-
-Open **Data access** for the model's current sharing permission. Allowing agent-started actions to
-send the same data is a separate choice. Model-assisted naming, organization, summaries and requests
-in words use these explicit permissions. Previewing files and using built-in tools do not require a
-model.
-
-Start with a small selection, inspect the evidence and review the proposed changes. A structured
-answer is still a proposal.
+The model you mark **Use for Ask Viewer** answers requests in words. Every answer comes back as a
+proposal that you review; nothing runs on its own. Start with a small selection.
 
 ## Connect an agent
 
-Local agents have their own consent, identity and folder grants. Configuration cannot turn those
-grants on. Agents can navigate, inspect authorized data and submit supported reviewed proposals.
-Terminal read access is separate from input; opaque agent shell execution remains unavailable.
-
-See [agents and permissions](../reference/agents.md) before connecting a client. Use
-[Journal](../reference/journal.md) to inspect activity and command receipts to inspect an actual
-process result.
+A local agent gets its own identity, folders and permissions in **Settings → Agents**. It can look
+around, read what you allow and propose changes for review. It can never run shell commands or type
+into a terminal. Read [agents and permissions](../reference/agents.md) before connecting one, and
+use [Journal](../reference/journal.md) to see what it did.

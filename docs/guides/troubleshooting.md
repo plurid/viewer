@@ -1,51 +1,58 @@
 # Get back to your work
 
+## Viewer will not start from source
+
+- Check the versions: Node 22.13 or later and pnpm 11. Run `node --version` and `pnpm --version`.
+- Install the Xcode command-line tools with `xcode-select --install`, then run `pnpm install` again.
+- Read the first error `pnpm start` prints; [Build and run Viewer](../development/builds.md) lists
+  the requirements.
+
+## A folder shows nothing, or the Trash is empty
+
+- In a sandboxed build, choose **Allow folder access…** and pick the folder.
+- To browse the Trash, give Viewer Full Disk Access in **System Settings → Privacy & Security → Full
+  Disk Access**. This is a separate permission from folder access.
+
 ## A file or folder is unavailable
 
-Reconnect its disk or mounted share, then use **Check again**. A preview can keep its last loaded
-content while clearly marking that the source is unavailable. Use **Locate file** for a moved
-source, or **Find renamed file** for a uniquely identified sibling. An unsaved editor draft stays
-attached to its original file.
-
-In a sandboxed build, use **Allow folder access…** when the application needs native folder
-authorization. macOS Full Disk Access is a different permission; it can be required for the system
-Trash.
+Reconnect its disk or share, then choose **Check again**. Choose **Locate file** if it moved, or
+**Find renamed file** if it was renamed in the same folder. Your unsaved edits stay attached to the
+original file.
 
 ## A preview is slow or fails
 
-Use its retry action. For Office files, try Reading or Sheet view when available. Large, encrypted,
-damaged or unsupported files can exceed a preview's limits. **Open in…** remains useful for
-specialized formats.
+- Choose the preview's retry button.
+- For an Office file, try the **Reading** or sheet view.
+- Very large, encrypted, damaged or unsupported files can be beyond a preview's limits. Choose
+  **Open With…** to use another app.
 
-Check the [format reference](../reference/formats.md) before expecting a different extension or
-codec to work. A thumbnail is not proof of full preview support.
+A thumbnail does not mean the full preview is supported;
+[Supported formats](../reference/formats.md) lists what is.
 
-## A local webpage stopped loading
+## A copy or move failed
 
-Check its server. **Local servers…** reopens the controls of a running listener; the browser's retry
-action reloads the page. A saved server is stopped after an application restart until you explicitly
-start it.
+Open the **File operations** button in the title bar, read the error, and use the recovery it
+offers. Keep partly copied files until you have looked at them. Viewer never repeats an interrupted
+operation on its own when it restarts.
 
-## A file operation failed
+**Undo** can be unavailable when a file it would restore has changed since.
 
-Open **Operations**, read the source/destination and error, then use the offered recovery. Keep
-partial outputs until you inspect them. An interrupted operation does not replay itself at launch.
+## A local web page stopped loading
 
-If a destination already exists, choose the collision behavior deliberately. Undo can be unavailable
-when an output changed outside Viewer.
+Reopen the server's controls from **⌘K** → **Local servers…**, start it if it stopped, then reload
+the browser plane. Servers stay stopped after Viewer restarts until you start them.
 
-## Settings stopped updating
+## Settings stopped changing
 
-Open **Settings → Configuration** for validation diagnostics. An invalid external edit stays
-available for correction while Viewer keeps its last valid settings. Do not paste API keys into
-shared configuration; use the model credential controls.
+Open **Settings → Configuration** to see which line of the settings file is invalid. Viewer keeps
+using the last valid settings until you fix it. Keep API keys in the model settings, never in the
+settings file.
 
 ## Report a problem
 
-Open an [issue](https://github.com/plurid/viewer/issues) with the application version, operating
-system, steps, expected result and actual result. A small non-private sample is more useful than a
-whole personal folder. Remove personal paths, credentials and unrelated content from screenshots and
-logs.
-
-The [development testing guide](../development/testing.md) explains reproducible checks for
-contributors.
+1. Choose **Help → Show Diagnostic Log** to find Viewer's local error log. It is never sent
+   anywhere.
+2. Choose **Help → Report an Issue…** and describe the Viewer version, macOS version, the steps,
+   what you expected and what happened.
+3. Attach a small sample file if you can, and the log if it helps. Remove personal paths, keys and
+   anything private from screenshots and logs first.

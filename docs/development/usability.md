@@ -33,4 +33,4 @@ separate result table, with unperformed sessions marked **not observed**.
 
 | Participant  | Experience | Task | Completed | Time | Interventions | Findings |
 | ------------ | ---------- | ---- | --------- | ---- | ------------- | -------- |
-| Not observed | —          | —    | —         | —    | —             | —        |
+| Not observed |            |      |           |      |               |          |

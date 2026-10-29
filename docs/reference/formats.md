@@ -30,7 +30,7 @@ thumbnail is different from full semantic inspection. See [platform status](plat
 | Audio            | `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.opus`                   | Playback through Chromium's media decoder, subject to codec compatibility.                                                             |
 
 Media detection also accepts other audio/video MIME types. These may reach the player without being
-listed above; that is an attempt to play the file, rather than a guarantee of decoding support.
+listed above; Viewer tries to play the file, with no guarantee that it decodes.
 
 Detailed coverage: [Office](office.md), [CAD/models](models.md), [DXF](models.md),
 [HTML/local servers](web.md), and [preview modules](../development/previews.md).
@@ -58,10 +58,10 @@ chapter paths can fill it sooner. The sidebar supports opening, renaming and rem
 
 Bookmarks survive preview closure, reopen, app restart and changed source revisions. Transient
 reader coordinates still reset after a source change. A marker whose chapter path is unavailable
-stays visible and disabled with **Chapter unavailable**, rather than opening a guessed chapter.
-Saved coordinates are positions, not text anchors, so edited chapter content can move the passage.
-Adding or removing bookmarks does not change the original EPUB. See
-[saving a book position](../guides/previews.md#save-a-book-position) for the controls.
+stays visible and disabled with **Chapter unavailable**; Viewer never opens a guessed chapter. Saved
+coordinates are positions, not text anchors, so edited chapter content can move the passage. Adding
+or removing bookmarks does not change the original EPUB. See
+[saving a book position](../guides/previews.md#bookmark-a-place-in-a-book) for the controls.
 
 ## Current text, code and configuration previews
 

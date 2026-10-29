@@ -1,8 +1,7 @@
 # Command language
 
 Type `:` in **⌘K**, or choose **Command line…**. You can use ordinary palette commands without
-learning this language; it becomes useful for repeatable keyboard work, settings, aliases and
-macros.
+learning this language. Learn it for repeatable keyboard work, settings, aliases and macros.
 
 ## Start small
 
@@ -96,7 +95,7 @@ The terminal stays stopped and Git review loads explicitly. The external CLI use
 task schema and engine, with its own client grants and proposal review.
 
 Manual terminal-input verbs and imported keymaps have their own trust rules. Agents propose
-supported command IDs rather than command-language lines. See [agent authority](agents.md) and
+supported command IDs, never command-language lines. See [agent authority](agents.md) and
 [search syntax](search.md).
 
 ## Launch from a terminal

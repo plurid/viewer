@@ -1,67 +1,60 @@
 # Read and inspect files
 
-Select a file and press **Space** for Quick Preview. Choose **Open linked plane** when you want to
-keep it open while continuing through the folder.
+Select a file and press **Space** to look inside it. Choose **Open linked plane** to keep it open
+beside its folder while you go on browsing.
 
-## Use the file's own controls
+## Each kind of file has its own controls
 
-PDFs have page navigation, thumbnails, an outline and text search. Books have chapters, local
-illustrations, internal links and **Find in book**. Follow a footnote, then use **Back** to return
-to your reading position. Choose a search result to open and highlight its passage. Models have
-orbit, zoom, dimensions and measurement tools. Audio and video have playback controls. Available
-actions follow the file type.
+| File                   | What you can do                                                            |
+| ---------------------- | -------------------------------------------------------------------------- |
+| PDF                    | Move through pages, show thumbnails and the outline, search the text       |
+| EPUB                   | Move through chapters, **Find in book**, follow footnotes and go **Back**  |
+| Word and PowerPoint    | Read the paginated layout; Word also has a **Reading** view                |
+| Excel                  | Switch sheets; XLSX also has a grid of saved cell values                   |
+| JSON, YAML, XML        | Search the tree, **Expand all**, **Collapse all**, or switch to **Source** |
+| 3D models and drawings | Orbit, zoom, show dimensions and measure                                   |
+| Audio and video        | Play, pause and seek                                                       |
 
-For JSON, YAML and XML, use the tree's search, **Expand all** and **Collapse all**. Narrow previews
-keep expansion and copy controls under **More**. XML shows elements, attributes and ordered text; it
-does not turn an invoice into a rendered bill. Switch to **Source** for the original text. Read-only
-source uses a 16 px default; editor and terminal typography have separate settings.
+[Supported formats](../reference/formats.md) lists every format and what its preview shows.
 
-## Save a book position
+## Bookmark a place in a book
 
-In an EPUB, choose **Bookmarks**, enter a name and choose **Add bookmark**. Leave the name blank to
-use the current chapter's title. Choose a saved name to return to that chapter and reading position.
-Use **Rename** and **Save name** to change its label, or **Remove** to discard the bookmark.
+1. In an EPUB, choose **Bookmarks**.
+2. Type a name, or leave it empty to use the chapter title, and choose **Add bookmark**.
+3. Choose the bookmark later to return to that place.
 
-Bookmarks stay with the file's preview state in the workspace when you close the preview, reopen
-Viewer or the book changes. If its chapter is no longer available, the bookmark remains visible with
-**Chapter unavailable**. Bookmarks do not change the EPUB file.
+Bookmarks are kept with the workspace, not written into the book.
 
-## Office documents
+## Read a spreadsheet
 
-Word and PowerPoint open in a local paginated layout. Excel has worksheet navigation; XLSX also
-offers a stored-value grid. DOCX has an additional Reading view. Choose Layout or Print layout when
-page appearance matters.
+In an XLSX grid:
 
-In an XLSX grid, arrow keys inspect cells and their saved formulas. Enter an address such as **D42**
-beside the cell details to jump there. Drag across cells, Shift-click or use Shift + arrow keys to
-select a range. Choose **Copy** beside the selected range, or press Control/Command + C while the
-grid has focus, to copy tab-separated values. **More → Stored values** copies raw saved values;
-**Formatted values** uses the supported number/date formats. Escape reduces a multi-cell range to
-its active cell. Control + Page Up/Down switches sheets. See
-[worksheet controls](../reference/office.md#reading-and-saved-cells) for the full keyboard controls.
+- Arrow keys move between cells and show each cell's saved formula.
+- Type an address such as **D42** beside the cell details to jump to it.
+- Drag, **Shift**-click or **Shift**-arrow to select a range, then press **⌘C** to copy it as
+  tab-separated text. **More → Stored values** copies the raw values instead.
+- **⌃Page Up** and **⌃Page Down** switch sheets.
 
-The bundled engine preserves the layout it supports and substitutes unavailable fonts. It does not
-guarantee identical output to Microsoft Office. See [Office previews](../reference/office.md) for
-the distinction between rendered layout and the saved cell/text reader.
+[Worksheet controls](../reference/office.md#reading-and-saved-cells) lists the rest. Office layout
+comes from a bundled engine; fonts you do not have are substituted, so pages can differ slightly
+from Microsoft Office.
 
-## Return to your place
+## Pick up where you left off
 
-Viewer remembers supported page, scroll, playback and model-camera state against the file's version.
-EPUB retains chapter, text size and contents visibility. XLSX retains the worksheet, loaded row
-position, filter and selected range. Returning to a recently read book or worksheet can reuse its
-completed data while still checking file access. Changed files reset transient reading coordinates;
-named EPUB bookmarks remain saved. Closing a preview does not change its source file or remove its
-bookmarks.
+Viewer remembers the page, scroll position, playback time and model camera for each file. Reopen the
+file and you are back where you were. If the file has changed since, it opens at the start; book
+bookmarks stay.
 
-If a source disappears, the retained preview identifies its last loaded version and offers **Check
-again**, **Locate file** or **Find renamed file**. Unsaved editor text remains attached to its
-draft; locating another file opens it separately.
+## When a file moves or disappears
 
-## Edit or open elsewhere
+The preview keeps showing what it last loaded and offers three ways back:
 
-Text files offer **Edit** in a plane, then Save or Save As. Quick Preview remains a reading surface.
-**Open in…** uses another installed application when a format needs more specialized work.
+- **Check again** after you reconnect a disk or share.
+- **Locate file** to point Viewer at the file's new place.
+- **Find renamed file** when it was renamed in the same folder.
 
-[Supported formats](../reference/formats.md) distinguishes a full interactive preview, a rendered
-image and partial inspection. [Create and edit](create.md) covers changes you can make directly in
-Viewer.
+## Edit it or open it elsewhere
+
+Press **⌘E** to edit a text file in a plane; **⌘S** saves. For anything Viewer does not edit, choose
+**Open With…** and pick another app. [Make a quick change](create.md) covers the edits Viewer can
+make itself.

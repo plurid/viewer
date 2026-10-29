@@ -1,64 +1,64 @@
 # Work on a project
 
-Open your project folder. The same folder context follows its editor, terminal, Git changes and
-local server.
+Open the project folder. The editor, terminal, Git review and local server all start from that
+folder.
 
-## Edit and run
+## Edit and save
 
-Open a source file as a linked plane and choose **Edit**. Use ordinary Save and Save As. Unsaved
-buffers survive closing the application; external changes have conflict recovery rather than
-silently replacing your draft.
+1. Select a source file and press **⌘E** to edit it in a plane.
+2. Press **⌘S** to save, or **⇧⌘S** to save a copy elsewhere.
 
-Choose **Run command…** to run a shell line in the captured folder with output and Stop controls.
-Choose **Open terminal plane** for an interactive shell. External terminal and tmux actions are
-available when those programs are installed.
+Unsaved changes survive quitting Viewer. If another app changes the file while you edit, Viewer
+keeps your draft and asks what to do with it.
 
-## Review a branch
+## Run commands
 
-Enable Git status if you want background badges. Open **Git changes** for the current checkout,
-choose a comparison base and inspect a changed file. Stage or unstage individual supported hunks.
-Git actions operate on the real checkout and use its normal hooks and configuration.
+- **⌘K** → **Run command…** runs one shell line in the current folder and shows its output, with a
+  **Stop** button. Choose **Save as action…** to keep it for next time.
+- **⌘K** → **Open terminal plane** opens an interactive shell in the folder. **File → New Terminal
+  Plane** opens one from the menu.
 
-To work on two branches at once, use **Open worktree…** or **Create worktree…**. Each checkout has
-its own working files and staging index. Multiple views of one checkout share those files and
-staging.
+## Review changes with Git
+
+1. Turn on **Settings → Browsing → Git → Show Git status** to see change badges on files.
+2. In the repository folder, press **⌘K** and choose **Git changes**.
+3. Choose **Unstaged**, **Staged** or a branch to compare with, then select a changed file.
+4. Choose **Stage** or **Unstage** beside a change, or **Stage selection** for lines you selected.
+
+Git runs on the real checkout with its own hooks and configuration.
 
 ## Start a task from a branch
 
-1. In the repository folder, choose **New task from branch…**.
-2. Choose the base, name the branch and task, and review the worktree destination.
-3. Create the task. Viewer opens its folder, notes, terminal and Git tools.
-4. Reopen the area from **Tasks…** as you move between jobs.
+A task gives one piece of work its own checkout and tools.
 
-You can also ask Viewer in words, including reviewed dictated text. Specify the task name and any
-known repository, branch, worktree folder and workspace. Review the proposed `task-new` line, then
-edit its ordinary form fields. Missing details stay blank for you to fill. **Create task…** opens
-desktop confirmation; cancelling keeps your parameters. This route uses the same task engine as the
-[terminal CLI](../reference/cli.md#create-a-task-from-a-branch), without requiring local-agent
-access. Its terminal starts stopped and Git changes load on your request.
+1. In the repository folder, press **⌘K** and choose **New task from branch…**.
+2. Name the task and the new branch, pick the base, and check the folder for the new worktree.
+3. Choose **Create task**. Viewer creates the worktree and opens it with a note, a terminal and its
+   Git changes.
+4. Come back to it later from **⌘K** → **Tasks…**.
 
-![A branch task with its linked tools](../media/develop.png)
+![A branch task with its folder, note, terminal and Git changes](../media/develop.png)
 
-The task retains its tool references when views close. Restoration does not rerun commands.
-[Tasks and Git](../reference/tasks-and-git.md) covers review position, command receipts and checkout
-identity.
+The terminal starts stopped, and Git changes load when you choose **Load Git changes**. Closing a
+tool's plane keeps it in the task. **Open worktree…** opens an existing worktree without making a
+task. [Tasks and Git](../reference/tasks-and-git.md) covers the details.
 
 ## Look at a local site
 
-Use the local-server command for a static folder, then open its address in a browser plane. You get
-basic navigation and the server's request log beside the source. **Local servers…** reopens controls
-after their plane closes.
+1. Choose **File → Start Local Server** in the folder that holds the site.
+2. Choose **Open server in browser** to open it in a browser plane beside the source, with the
+   server's request log.
+3. Reopen the server's controls later from **⌘K** → **Local servers…**.
 
-The built-in static server does not build frameworks or provide their hot reload. Run the project's
-own development command when needed, then open that address in a browser plane.
-[Browser reference](../reference/web.md) explains the distinction between a browser plane and a
-sandboxed HTML file preview.
+The built-in server serves files as they are. For a framework with its own build and hot reload, run
+its development command in a terminal plane, then choose **⌘K** → **Open web page…** and enter its
+address. [Browser planes](../reference/web.md) explains the difference between a browser plane and
+an HTML preview.
 
-## Attach a conversation
+## Keep a conversation with the task
 
-Attach a Viewer conversation or an explicit external-agent session report to a task. File and diff
-references open as linked views. External statuses are labeled **Reported**, with their timestamp;
-Viewer does not infer progress from terminal text. [Agent integration](../reference/agents.md)
-explains the adapter boundary.
+Attach a Viewer conversation, or a session report from a connected agent, to the task. Its file and
+diff links open as linked planes. A reported status shows as **Reported** with its time.
+[Agents](../reference/agents.md) explains how an agent reports.
 
-For repeatable test/build sequences, continue with [custom commands](automate.md).
+To run the same test or build steps every time, see [Make repeated work a command](automate.md).

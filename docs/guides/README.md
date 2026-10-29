@@ -1,19 +1,19 @@
-# Use Viewer
+# Guides
 
-Start with everyday files. Follow the path as far as your work needs.
+Each guide is a set of steps to follow with Viewer open. Start with the first five minutes.
 
-| Start here                                    | What you will do                                               |
-| --------------------------------------------- | -------------------------------------------------------------- |
-| [Your first five minutes](getting-started.md) | Open a folder, look inside a file and find your way back.      |
-| [Browse and organize](files.md)               | Search, sort, group, rename and move files.                    |
-| [Read and inspect](previews.md)               | Preview documents, images, models and data.                    |
-| [Dictate requests and text](speech.md)        | Choose local or hosted speech, then review your words.         |
-| [Create and edit](create.md)                  | Make quick changes and export a new file.                      |
-| [Build a workspace](workspaces.md)            | Keep related folders and tools together in planes.             |
-| [Develop a project](develop.md)               | Work with branches, tasks, an editor, terminals and a browser. |
-| [Automate repeated work](automate.md)         | Compose commands, actions and reviewed workflows.              |
+| Guide                                         | You will                                                      |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| [Your first five minutes](getting-started.md) | Open a folder, look inside a file, find things and actions    |
+| [Browse and organize](files.md)               | Select, copy, rename, find, measure and restore files         |
+| [Read and inspect files](previews.md)         | Use each file type's controls and pick up where you left off  |
+| [Make a quick change](create.md)              | Convert images, shrink files, trim video, rearrange PDFs      |
+| [Keep your work together](workspaces.md)      | Arrange planes, save views, use workspaces, back up your work |
+| [Work on a project](develop.md)               | Edit, run, review Git, start branch tasks, serve a site       |
+| [Make repeated work a command](automate.md)   | Save actions, type commands, use the CLI, add a model         |
+| [Dictate into Viewer](speech.md)              | Set up local or hosted speech and dictate requests and notes  |
+| [Get back to your work](troubleshooting.md)   | Fix common problems and report one                            |
 
-If something goes wrong, start with [troubleshooting](troubleshooting.md). For exact commands,
-settings and limits, use the [reference](../reference/README.md).
+For exact commands, settings and limits, use the [reference](../reference/README.md).
 
 [All documentation](../README.md)

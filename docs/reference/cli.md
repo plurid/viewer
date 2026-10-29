@@ -59,8 +59,8 @@ reports whether results are indexed and whether indexing is still running. Its s
 operators are in [search syntax](search.md).
 
 The captured Viewer folder and selection supply context for commands, actions and workflows. Focus
-the intended granted folder before using them. A stale target fails validation rather than silently
-using a different selection. A custom app data profile must be selected with the same
+the intended granted folder before using them. A stale target fails validation; it never silently
+uses a different selection. A custom app data profile must be selected with the same
 `VIEWER_DATA_DIRECTORY` for the running app and the CLI.
 
 Help, version and completion work without credentials or a running app. Service commands run without

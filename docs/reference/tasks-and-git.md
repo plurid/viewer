@@ -19,9 +19,9 @@ repository and local starting branch. The terminal restores stopped, and the Git
 
 Ask Viewer and the in-app `task-new` command can prefill a form using those same task parameters.
 The person edits the fields and confirms creation in a desktop dialog. This person-owned route uses
-ordinary folder access rather than MCP grants; it shares the bounded worktree writer, private lease
-and durable task handoff with the CLI. It does not run hooks or filters. Failed setup retains output
-and reports the worktree location; it does not remove files or retry creation automatically.
+ordinary folder access, not MCP grants; it shares the bounded worktree writer, private lease and
+durable task handoff with the CLI. It does not run hooks or filters. Failed setup retains output and
+reports the worktree location; it does not remove files or retry creation automatically.
 
 Add a checklist, note, conversation, browser or server view, or attach a supported open plane.
 **Arrange open tools** tiles the available views. Closing a tool view keeps its task reference;
@@ -35,7 +35,7 @@ or **Another view beside**. Different worktrees have separate working files and 
 one checkout share both.
 
 **Create worktree…** supports a new branch at a pinned local base or an unused existing branch.
-Review the destination. An occupied branch offers its existing checkout rather than forcing a second
+Review the destination. An occupied branch offers its existing checkout instead of forcing a second
 checkout. Source changes and staging remain in place. Creation does not switch, stash, reset, prune
 or remove another checkout.
 

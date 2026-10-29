@@ -1,4 +1,4 @@
-# Viewer privacy policy — owner review draft
+# Viewer privacy policy: owner review draft
 
 Prepared October 13, 2026. This document is ready for the publisher's factual review; it has not
 been published. Confirm the legal publisher, support address, effective date and public URL before
@@ -86,7 +86,7 @@ information you do not want to share. Viewer does not automatically send these r
 
 Apple handles Mac App Store downloads, transactions and any diagnostics you choose to share with
 Apple under Apple's own terms. A direct download may be notarized by Apple as part of distribution;
-notarization concerns the application bundle rather than your working files.
+notarization concerns the application bundle, not your working files.
 
 ## Contact and changes
 

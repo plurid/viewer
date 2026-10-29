@@ -6,6 +6,10 @@ generated profiles are separate from the user's files.
 | Asset                         | Demonstration                                         |
 | ----------------------------- | ----------------------------------------------------- |
 | `hero.png`                    | A folder and linked document preview                  |
+| `files.png`                   | Quick Preview of a PDF over its folder                |
+| `columns.png`                 | Columns view with a PDF preview beside the trail      |
+| `palette.png`                 | The command palette offering convert actions          |
+| `optimize.png`                | Optimize results for a PDF and a photograph           |
 | `files.mp4` / `files.gif`     | Search a folder and open Quick Preview                |
 | `create.mp4` / `create.gif`   | Export a WebP through Image tools and open the result |
 | `develop.mp4` / `develop.gif` | Create a branch task and write its project note       |

@@ -1,8 +1,8 @@
 # File operations and recovery
 
-Copy, move, rename, create, duplicate and Trash actions use desktop operation services.
-**Operations** shows real progress, collision decisions, completed outputs, errors and eligible
-Undo.
+Copy, move, rename, create, duplicate and Trash actions use desktop operation services. The **File
+operations** button in the title bar shows real progress, collision decisions, completed outputs,
+errors and eligible Undo.
 
 ## Transfers and collisions
 
@@ -12,7 +12,7 @@ views offer explicit transfers to their other panel.
 
 Existing names require a collision decision. Keep both uses the actual published destination name.
 Replace/merge behavior is limited by the operation and current filesystem identities. Changed
-targets or unsafe links fail rather than silently applying a stale plan.
+targets or unsafe links fail; a stale plan is never applied.
 
 ## Save and Undo
 

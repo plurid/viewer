@@ -4,7 +4,7 @@
 searches configured roots. **Search contents** opens a results plane with an editable query and a
 **Document text** toggle.
 
-## Useful queries
+## Example queries
 
 | Find                                    | Query                            |
 | --------------------------------------- | -------------------------------- |
@@ -80,7 +80,7 @@ exact, prefix and subsequence matches. For example, `git iint` can help discover
 Suggestions do not rewrite or execute input. Literal filters and indexed content retain the query
 language above.
 
-Save useful searches as virtual folder-like planes. They retain their query and scope, offer file
+Save a search you repeat as a folder-like plane. They retain their query and scope, offer file
 actions and Quick Preview, and refresh against the index. Results are paged: the UI shows up to 150
 per page. Short fragments and complex queries have bounded scanning; partial or in-progress indexing
 can affect results.
@@ -99,4 +99,4 @@ entry count, errors and limits; stopping one retains its partial results.
 
 Document text always identifies its narrower coverage: supported formats and bounded extracts,
 without OCR. Missing text-index permission is shown separately. An empty partial search says **No
-matches in the available search data**, rather than implying every file was searched.
+matches in the available search data**, so it never implies that every file was searched.

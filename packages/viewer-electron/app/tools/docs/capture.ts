@@ -140,13 +140,15 @@ await git('init', '--initial-branch=main', '--template=' + templates);
 await git('add', '--', 'README.md', 'index.html');
 await git('commit', '--no-verify', '--no-gpg-sign', '-m', 'Start a small website');
 
-async function profile(name: string, folder: string) {
+async function profile(name: string, folder: string, mode?: 'columns') {
   const directory = path.join(root, name);
   await mkdir(directory);
   const ui = normalizePreferences(),
     settings = defaultSettings(root);
   settings.hotkey.enabled = false;
   settings.providers = [];
+  // a folder's view is kept by its path
+  if (mode) settings.folders = { [folder]: { mode } };
   settings.search.roots = [folder];
   settings.search.contentRoots = [];
   settings.git.enabled = name === 'Develop';
@@ -242,8 +244,8 @@ async function palette(connection: Connection, label: string) {
     'document.querySelector(".command-result[aria-selected=true]").click()',
   );
 }
-async function open(name: string, folder: string) {
-  const directory = await profile(name, folder),
+async function open(name: string, folder: string, mode?: 'columns') {
+  const directory = await profile(name, folder, mode),
     app = await ownedApp(binary, directory);
   const connection = await app.connect();
   await connection.command('Emulation.setDeviceMetricsOverride', {
@@ -408,7 +410,88 @@ try {
   await current.app.close(current.connection);
 }
 
-const assets = ['hero.png', 'files.png', 'create.png', 'develop.png'];
+// Stills for the guides: Columns with a preview, the palette for a photograph, Optimize results.
+current = await open('Stills', examples, 'columns');
+try {
+  const { connection } = current;
+  const row = (name: string) =>
+    '[data-file-path=' + JSON.stringify(path.join(examples, name)) + ']';
+  await connection.evaluate(
+    `document.querySelector(${JSON.stringify(row('Field notes.pdf'))}).click()`,
+  );
+  await until(
+    () =>
+      connection.evaluate<boolean>(
+        '!!document.querySelector(".column-preview canvas, .column-preview img")',
+      ),
+    Boolean,
+    'Column preview',
+  );
+  await delay(2000);
+  await screenshot(connection, path.join(output, 'columns.png'));
+
+  await connection.evaluate(`document.querySelector(${JSON.stringify(row('Forest.jpg'))}).click()`);
+  await delay(600);
+  await connection.evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+  await field(connection, 'Search commands', 'convert');
+  await until(
+    () => connection.evaluate<number>('document.querySelectorAll(".command-result").length'),
+    (count) => count > 1,
+    'Image commands',
+  );
+  await delay(900);
+  await screenshot(connection, path.join(output, 'palette.png'));
+  await connection.command('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Escape',
+    code: 'Escape',
+  });
+  await connection.command('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key: 'Escape',
+    code: 'Escape',
+  });
+  await delay(600);
+
+  // the PDF and the photograph together
+  await connection.evaluate(
+    `document.querySelector(${JSON.stringify(row('Field notes.pdf'))}).click()`,
+  );
+  await connection.evaluate(
+    `document.querySelector(${JSON.stringify(row('Forest.jpg'))}).dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }))`,
+  );
+  await delay(600);
+  await palette(connection, 'Optimize');
+  await until(
+    () => connection.evaluate<boolean>('!!document.querySelector(".optimize-dialog")'),
+    Boolean,
+    'Optimize dialog',
+  );
+  await button(connection, 'Prepare candidates', 'document.querySelector(".optimize-dialog")');
+  await until(
+    () =>
+      connection.evaluate<number>(
+        'document.querySelectorAll(".optimize-results .optimize-savings, .optimize-results .error").length',
+      ),
+    (count) => count >= 2,
+    'Optimize results',
+    60000,
+  );
+  await delay(1200);
+  await screenshot(connection, path.join(output, 'optimize.png'));
+} finally {
+  await current.app.close(current.connection);
+}
+
+const assets = [
+  'hero.png',
+  'files.png',
+  'create.png',
+  'develop.png',
+  'columns.png',
+  'palette.png',
+  'optimize.png',
+];
 const publicFiles: Record<string, string> = Object.fromEntries(
   assets.map((name) => [name, path.join(output, name)]),
 );

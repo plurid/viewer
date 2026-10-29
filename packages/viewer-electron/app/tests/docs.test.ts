@@ -46,6 +46,23 @@ describe('documentation links', () => {
       check('[Bad](../../outside.md)\n\n' + personal).map((problem) => problem.message),
     ).toEqual(['Contains a private machine path.', 'A link escapes the repository.']);
   });
+  it('refuses em dashes anywhere and filler on the pages people read', () => {
+    const messages = (file: string, text: string) =>
+      checkDocuments(new Map([[file, text]]), new Set([file]), new Set()).map(
+        (problem) => problem.message,
+      );
+    expect(messages('docs/guides/a.md', '# A\n\nOpen it \u2014 then look.')).toEqual([
+      'Line 3: use a full stop, comma or colon instead of an em dash.',
+    ]);
+    expect(messages('README.md', '# A\n\nA simply useful view.')).toEqual([
+      'Line 3: cut “simply”; say what it means.',
+    ]);
+    // research keeps its own register, and code quotes output as it is
+    expect(messages('docs/research/a.md', '# A\n\nA useful idea.')).toEqual([]);
+    expect(
+      messages('docs/guides/a.md', '# A\n\n`a \u2014 b`\n\n```\nuseful \u2014 output\n```\n'),
+    ).toEqual([]);
+  });
   it('keeps the docs root clear and requires pages to use known sections', () => {
     const documents = new Map([
       ['docs/README.md', '# Documentation'],

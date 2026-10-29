@@ -16,14 +16,14 @@ values and scroll position are not copied. Page windows are bounded to eight and
 automatically after quitting. **Open in default browser** remains available for other site needs.
 
 A failed navigation has retry controls. For an associated stopped local server, the plane offers
-**Start server** and **Server details**. Restarting at the same address navigates again rather than
-keeping an old error.
+**Start server** and **Server details**. Restarting at the same address navigates again and clears
+the old error.
 
 ## Preview an HTML file
 
 An HTML file preview provides **Preview**, **Source** and Reload. Its rendered document uses a
-restricted sandbox; it is for inspection rather than a full authenticated browsing session. Editable
-source uses the ordinary file editor.
+restricted sandbox; it is for inspection, not a full authenticated browsing session. Editable source
+uses the ordinary file editor.
 
 Use a browser plane or a local server for interactive project behavior that the file preview
 intentionally does not run.

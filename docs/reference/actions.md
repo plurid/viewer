@@ -7,7 +7,7 @@ profile, literal executable arguments, explicit shell script or supported ordere
 
 Give the action a name and optional aliases. Choose a palette folder, pin it or set its order.
 Context conditions restrict it to appropriate folders, target kinds, extensions and selection
-counts. Matching uses the captured target rather than a later selection.
+counts. Matching uses the captured target, not a later selection.
 
 Actions appear in the contextual menu and **⌘K** when applicable. Manual recent commands can be
 cleared. Saving a Run command draft opens Settings for explicit review; it does not immediately

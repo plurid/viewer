@@ -8,7 +8,7 @@ Resolve every release gate before using these drafts publicly.
 | App name                         | Viewer                                                                                                  |
 | Subtitle                         | Files in a spatial workspace                                                                            |
 | Bundle identifier                | `com.pluridviewer.app`                                                                                  |
-| Team                             | Propal Invest SRL — `49W9L8Z9J5`                                                                        |
+| Team                             | Propal Invest SRL, `49W9L8Z9J5`                                                                         |
 | Version                          | `0.1.0`; final Store build number must be unique                                                        |
 | Primary category                 | Utilities                                                                                               |
 | Initial platform                 | macOS, Apple Silicon, minimum macOS 13                                                                  |
@@ -24,7 +24,7 @@ Resolve every release gate before using these drafts publicly.
 
 Explore your files in a workspace that grows with your work.
 
-Viewer combines familiar folder browsing with spatial planes for folders, previews and terminals.
+Viewer combines ordinary folder browsing with spatial planes for folders, previews and terminals.
 Keep related files side by side, switch workspaces from Command-K, and give each folder its own
 view.
 
@@ -59,8 +59,8 @@ private review files. Configuration edits and agent requests cannot grant model-
 changing the endpoint or clearing the key invalidates consent.
 
 File mutations show progress and conflict choices. Action proposals open for review before applying.
-Undo is offered only when receipts and output identity make it eligible. Interrupted work is
-retained for inspection rather than replayed automatically.
+Undo is offered only when receipts and output identity make it eligible. Interrupted work is kept
+for inspection and never replayed automatically.
 
 Embedded terminals and user commands are intentional product capabilities. External terminal
 handoffs use application discovery and a command-file/official CLI adapter; the app does not request
@@ -75,7 +75,7 @@ Capture the final signed submission candidate using only generated files, in the
 accepted by the current App Store Connect form. Validate those sizes there before producing final
 upload assets.
 
-1. Familiar folder browsing and a related preview in spatial planes.
+1. Folder browsing and a related preview in spatial planes.
 2. The same workspace with a DXF drawing and visible measurement.
 3. A supported STEP/STL/3MF model with readable neutral lighting.
 4. Context search and grouped actions, with a legible long filename.
@@ -83,8 +83,8 @@ upload assets.
 6. A configured terminal plane and commented configuration; disclose optional setup without showing
    secrets.
 
-Screenshots must show shipped behavior rather than mockups. Inspect text at upload scale. Exclude
-private paths, tokens, paid-provider credentials and unrelated applications.
+Screenshots must show shipped behavior, not mockups. Inspect text at upload scale. Exclude private
+paths, tokens, paid-provider credentials and unrelated applications.
 
 ## App Privacy review worksheet
 

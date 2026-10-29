@@ -1,4 +1,4 @@
-# Viewer support — publication draft
+# Viewer support: publication draft
 
 Prepared October 13, 2026. Publish at a stable support URL after owner review. Contact:
 **source@plurid.com**. The initial release targets Apple Silicon Macs running macOS 13 or later;
@@ -36,8 +36,8 @@ Operations to see progress, errors, interrupted work and eligible Undo.
 
 Undo refuses removal when a copied or created output changed after the operation. Viewer Trash Undo
 uses a private receipt for the generated Trash item; it does not authorize general browsing of the
-Trash. Interrupted operations retain recovery details rather than automatically replaying mutations.
-Keep any reported partial output until you inspect it.
+Trash. Interrupted operations keep recovery details and never replay changes automatically. Keep any
+reported partial output until you inspect it.
 
 ZIP creation and ZIP/TAR/TAR.GZ extraction have visible size and entry limits. Unsupported links,
 special files, unsafe paths and conflicting archive names are rejected. Archive viewing and archive

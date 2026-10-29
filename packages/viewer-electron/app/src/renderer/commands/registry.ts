@@ -338,9 +338,14 @@ export function rankCommands(
       ...(mode === 'palette' ? rest.filter((item) => item.primary).slice(0, 10) : rest),
     ];
   }
-  return commands
+  const scored = commands
     .map((command, index) => ({ command, score: commandScore(command, needle), index }))
-    .filter((item) => item.score > 0)
+    .filter((item) => item.score > 0);
+  // A word some command contains outright makes commands that only scatter its letters, or
+  // nearly spell it, noise: "Invert selection" for "convert". Below 100 is such a match.
+  const contained = !/\s/.test(needle) && scored.some((item) => item.score >= 400);
+  return scored
+    .filter((item) => !contained || item.score >= 100)
     .sort(
       (a, b) =>
         b.score - a.score || recency(a.command.id) - recency(b.command.id) || a.index - b.index,

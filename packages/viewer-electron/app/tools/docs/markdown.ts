@@ -39,6 +39,18 @@ export const documentationSections = [
 const sections = new Set<string>(documentationSections);
 const privatePath =
   /\/(?:Users|home)\/[^\s/<>]+|\/(?:private\/)?var\/folders\/|\/private\/tmp\/viewer-/;
+/** Pages people read to use Viewer, as opposed to decisions, research and development notes. */
+const readerPage =
+  /^(?:README\.md|PRODUCT\.md|docs\/README\.md|docs\/(?:guides|reference|release)\/|packages\/[^/]+\/README\.md)/;
+/** Words that pad a sentence without telling the reader anything. */
+const filler =
+  /\b(?:simply|useful|familiar|rather than|seamless(?:ly)?|effortless(?:ly)?|leverage|delve|unlock|empower|worth noting|in order to|feel free)\b/i;
+/** The prose of a page: fenced code and inline code quote output, so they are left out. */
+const proseLines = (text: string) =>
+  text
+    .replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, (block) => block.replace(/[^\n]/g, ''))
+    .replace(/`[^`\n]*`/g, '')
+    .split('\n');
 const textOf = (node: MarkdownNode): string =>
   node.value ?? node.children?.map(textOf).join('') ?? '';
 
@@ -118,6 +130,12 @@ export function checkDocuments(
         report(file, 'Put this page in a documented section; docs/ contains only its README.');
     }
     if (privatePath.test(text)) report(file, 'Contains a private machine path.');
+    for (const [index, line] of proseLines(text).entries()) {
+      if (line.includes('\u2014'))
+        report(file, `Line ${index + 1}: use a full stop, comma or colon instead of an em dash.`);
+      const padding = readerPage.test(file) ? filler.exec(line) : null;
+      if (padding) report(file, `Line ${index + 1}: cut “${padding[0]}”; say what it means.`);
+    }
     const parsed = facts.get(file)!;
     for (const link of parsed.links) {
       if (link.image && link.alt === '') report(file, 'An image needs useful alt text.');

@@ -17,13 +17,16 @@ feature owner to a parallel service or registry.
 Use top-level `import type` declarations. Inline type imports are rejected in source, tests and
 tools; React test fixtures are included in type checking.
 
-## Keep documentation useful
+## Write documentation people can follow
 
 - Put user instructions in a guide and exact syntax/limits in one reference.
 - Keep `docs/` to its index and seven sections: `guides`, `reference`, `development`, `adr`,
   `research`, `release` and `media`. Each section has an index; add new pages there rather than
   creating top-level duplicates or forwarding pages.
-- Lead with a useful action. Teach familiar work before introducing abstractions.
+- Lead with the action: numbered steps, exact labels in bold, keys beside them. Teach everyday work
+  before introducing abstractions.
+- Write short sentences. No em dashes anywhere, and on reader pages no filler such as "simply",
+  "useful", "familiar" or "rather than"; `pnpm docs:check` refuses both.
 - Match current command names, settings and behavior. Label proposals as research.
 - Update the relevant guide when behavior changes; the README is an introduction.
 - Keep routine test counts, candidate paths and execution diaries in generated evidence, rather than
