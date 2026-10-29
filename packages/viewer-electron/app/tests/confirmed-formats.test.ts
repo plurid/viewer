@@ -37,7 +37,7 @@ import {
   powerPointDirectory,
   wordDirectory,
 } from './support/compound-file';
-import { holds, pinned } from './support/real-corpus';
+import { holds, placePinned } from './support/real-corpus';
 
 const assets = fileURLToPath(new URL('../tools/playground/assets/', import.meta.url));
 const processors = fileURLToPath(
@@ -419,7 +419,8 @@ it.skipIf(!references.every(holds))(
     for (const sample of references) {
       const extension = sample.formats[0]!;
       const name = path.basename(sample.path, '.' + extension);
-      const source = await grant(name, await pinned(sample));
+      await placePinned(sample, path.join(root, name));
+      const source = await resources.grant(path.join(root, name));
       await expect(
         resources.confirmFormat(source.id, extension === 'doc' ? 'xls' : 'doc'),
       ).rejects.toThrow('do not match');
@@ -455,7 +456,7 @@ it.skipIf(!rawReady)(
       for (const [index, sample] of rawSamples.entries()) {
         const extension = sample.formats[0]!;
         const name = path.basename(sample.path).replace('.', ' ');
-        await writeFile(path.join(root, name), await pinned(sample));
+        await placePinned(sample, path.join(root, name));
         const source = await rendering.grant(path.join(root, name));
         await expect(
           rendering.rendition(source.id, { requestID: 'before', mode: 'raw' }),

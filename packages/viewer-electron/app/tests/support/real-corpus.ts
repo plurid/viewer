@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { RemoteSample } from '../../tools/playground/types';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
 import { sha256 } from '../../tools/playground/files';
+import { cloneTree } from '../../tools/clone';
 
 /** The playground, or a retained corpus with its relative sample paths. */
 const corpus = path.resolve(process.env.VIEWER_TEST_REAL_CORPUS ?? defaultPlaygroundDirectory);
@@ -15,4 +16,10 @@ export async function pinned(sample: RemoteSample): Promise<Buffer> {
   if (bytes.length !== sample.size || sha256(bytes) !== sample.sha256)
     throw new Error(`${sample.path} is not the pinned sample.`);
   return bytes;
+}
+/** A pinned sample at `target`, checked against its pins, then cloned: a test's copy of a camera
+ * RAW or an Office reference costs no disk. */
+export async function placePinned(sample: RemoteSample, target: string): Promise<void> {
+  await pinned(sample);
+  await cloneTree(path.join(corpus, sample.path), target);
 }

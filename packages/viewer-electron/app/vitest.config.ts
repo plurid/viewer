@@ -6,6 +6,8 @@ export default defineConfig({
     include: ['tests/**/*.test.{ts,tsx}'],
     environment: 'node',
     testTimeout: 15000,
+    // each test starts with no recorded mock calls, as Vitest 5 does by default
+    clearMocks: true,
     // a run's folders in one folder (tools/temporary.ts)
     globalSetup: ['tests/support/run-root.ts'],
     // DOM tests render app components with @testing-library/react; both must share one React.
