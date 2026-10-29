@@ -325,6 +325,9 @@ const descriptions: Record<string, string[]> = {
   'ui.recentCommands': [
     'App-managed recent command IDs for ranking. Clearing this resets the recent-action list.',
   ],
+  'ui.suggestionHistory': [
+    'App-managed: the commands chosen for each kind of file, which rise in Suggested. Clearing it forgets them.',
+  ],
 };
 
 /** Reworded guidance: a documented file has its earlier line replaced in place, not repeated. */

@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import type { CSSProperties } from 'react';
 import { contextMenuSections, type MenuEntry, type MenuSection } from '../commands/menu';
 import { rankCommands, type ResolvedCommand } from '../commands/registry';
+import type { Suggestion } from '../commands/suggestions';
 import { Icon } from './Icon';
 
 const entries = (sections: MenuSection[]) => sections.flatMap((section) => section.entries);
@@ -11,6 +12,7 @@ export function ContextMenuResults({
   commands,
   recent,
   focused,
+  suggested,
   onSelect,
   onClose,
   searchLabel = 'actions',
@@ -19,6 +21,8 @@ export function ContextMenuResults({
   commands: readonly ResolvedCommand[];
   recent: readonly string[];
   focused: boolean;
+  /** Actions that fit the selection, shown after Recent. */
+  suggested?: readonly Suggestion[];
   onSelect(command: ResolvedCommand): void;
   onClose(): void;
   /** What the search finds, in its label: “Search actions”, or a choice's name. */
@@ -35,8 +39,8 @@ export function ContextMenuResults({
   const id = useId();
   const searching = !!query.trim();
   const sections = useMemo(
-    () => contextMenuSections(commands, recent, focused),
-    [commands, recent, focused],
+    () => contextMenuSections(commands, recent, focused, suggested),
+    [commands, recent, focused, suggested],
   );
   const levels = [sections];
   for (const branchID of opened) {
@@ -361,7 +365,11 @@ function MenuList({
                 )}
                 <span className="command-result-text">
                   <span>{name}</span>
-                  {searching && <small>{command?.detail ?? command?.group}</small>}
+                  {searching ? (
+                    <small>{command?.detail ?? command?.group}</small>
+                  ) : (
+                    entry.kind === 'command' && entry.note && <small>{entry.note}</small>
+                  )}
                 </span>
                 {command?.shortcut && <kbd>{command.shortcut}</kbd>}
                 {entry.kind === 'submenu' && <Icon name="right" size={12} />}

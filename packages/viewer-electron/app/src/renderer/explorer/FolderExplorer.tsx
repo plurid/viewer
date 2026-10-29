@@ -237,7 +237,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   useScrollRestore(surface, session, pane?.mode, !listing.loading && !listing.unavailable);
   const opening = useViewer((state) => state.settings.settings.fileOpening);
   const open = useCallback(
-    (entry: FileEntry, linked = false, another = false) => {
+    (entry: FileEntry, linked = false, another = false, edit = false) => {
       // an application starts rather than opening as a folder (nativeOpening)
       if (nativeOpening(entry, opening, linked)) {
         void window.viewer.openExternal(entry.path).catch(report);
@@ -250,7 +250,11 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
               activeWorkspace().id === origin &&
               activeWorkspace().panes.some((pane) => pane.id === id && pane.path === path)
             )
-              workspace.open(entry, id, { another, link });
+              workspace.open(entry, id, {
+                another,
+                link,
+                ...(edit ? { activate: true, edit: true } : {}),
+              });
           })
           .catch(report);
       }
@@ -297,6 +301,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             for (const entry of entries) open(entry, linked, another);
           },
           contents: (entry) => navigate(id, entry.path),
+          edit: (entry) => open(entry, true, false, true),
           ...fileDialogs.actions,
           search: (context) => {
             const target = folderCommandPath(context) || path;

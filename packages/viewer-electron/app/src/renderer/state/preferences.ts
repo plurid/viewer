@@ -1,10 +1,11 @@
 // Two-way sync of settings and interface preferences with the desktop configuration.
-import type { UIPreferences, Look } from '../../domain/contracts';
+import type { FileEntry, UIPreferences, Look } from '../../domain/contracts';
 import type { SettingsSnapshot } from '../../domain/services';
 import { panePresentation } from '../../domain/preferences/folder-presentation';
 import { getState, report, savePatch, update } from './core';
 import { scopedPresentation } from './folder-presentation';
 import { sameJSON } from '../../domain/json';
+import { rememberSuggestion, selectionKind } from '../../domain/suggestions/rules';
 
 let preferenceTimer: ReturnType<typeof setTimeout> | undefined;
 export const pendingPreferences = new Map<string, unknown>();
@@ -111,12 +112,17 @@ export function changePreferences(transform: (ui: UIPreferences) => UIPreference
     }
   if (old.recentCommands !== ui.recentCommands)
     queuePreference('ui.recentCommands', ui.recentCommands);
+  if (old.suggestionHistory !== ui.suggestionHistory)
+    queuePreference('ui.suggestionHistory', ui.suggestionHistory ?? {});
   schedulePreferences();
 }
-export function rememberCommand(id: string): void {
+/** A command the person ran: first in Recent, and, for a file selection, in its kind's history. */
+export function rememberCommand(id: string, selection: readonly FileEntry[] = []): void {
+  const kind = selectionKind(selection);
   changePreferences((ui) => ({
     ...ui,
     recentCommands: [id, ...ui.recentCommands.filter((item) => item !== id)].slice(0, 20),
+    ...(kind ? { suggestionHistory: rememberSuggestion(ui.suggestionHistory, kind, id) } : {}),
   }));
 }
 /** A line run from the command line, first in its history. */

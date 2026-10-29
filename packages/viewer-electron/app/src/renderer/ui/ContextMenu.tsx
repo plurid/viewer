@@ -5,6 +5,7 @@ import { ContextMenuResults } from './ContextMenuResults';
 import { type CommandRequest, type ResolvedCommand } from '../commands/registry';
 import { report, useViewer } from '../state/store';
 import { dialogOpen } from './modal';
+import { suggestionsFor } from '../commands/suggestions';
 
 /** Outside transformed planes, with a fixed target and keyboard-first search. */
 export function ContextMenu({
@@ -59,6 +60,8 @@ export function ContextMenu({
     });
   };
   const available = registry.list(request);
+  // a view or column picker is already scoped; a file menu offers what fits its selection
+  const suggested = request.ids ? [] : suggestionsFor(available, request.context?.selection ?? []);
   return createPortal(
     <div
       className="context-menu-layer"
@@ -80,6 +83,7 @@ export function ContextMenu({
         onClose={onClose}
         recent={recent}
         focused={!!request.ids}
+        suggested={suggested}
       />
     </div>,
     document.body,

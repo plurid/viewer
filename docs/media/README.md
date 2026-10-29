@@ -10,6 +10,7 @@ generated profiles are separate from the user's files.
 | `columns.png`                 | Columns view with a PDF preview beside the trail      |
 | `palette.png`                 | The command palette offering convert actions          |
 | `optimize.png`                | Optimize results for a PDF and a photograph           |
+| `suggested.png`               | A file menu suggesting Extract here for an archive    |
 | `files.mp4` / `files.gif`     | Search a folder and open Quick Preview                |
 | `create.mp4` / `create.gif`   | Export a WebP through Image tools and open the result |
 | `develop.mp4` / `develop.gif` | Create a branch task and write its project note       |

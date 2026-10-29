@@ -30,6 +30,12 @@ changes made by other applications are not Viewer file-operation Undo.
 
 ## Archives and comparisons
 
+**Extract here** writes into a new folder named after the archive, beside it; from search results,
+each archive extracts beside itself. An archive whose entries all sit in one top-level folder
+extracts that folder's contents, so `Photos.zip` holding `Photos/` gives `Photos/`, not
+`Photos/Photos/`. The `__MACOSX` folder of resource-fork copies that macOS adds is left out. An
+existing name asks before replacing, as any transfer does.
+
 Archive browsing is read-only inspection. ZIP creation and supported ZIP/TAR extraction are explicit
 jobs with entry/size bounds. Unsafe paths, links, special files and conflicting entries are refused.
 Previewing an archive does not execute its contents.

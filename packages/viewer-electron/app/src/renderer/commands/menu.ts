@@ -1,4 +1,5 @@
 import type { ResolvedCommand } from './registry';
+import type { Suggestion } from './suggestions';
 import type { IconName } from '../ui/Icon';
 
 export interface MenuSection {
@@ -6,13 +7,14 @@ export interface MenuSection {
   entries: MenuEntry[];
 }
 export type MenuEntry =
-  | { kind: 'command'; id: string; command: ResolvedCommand }
+  /** `note`: why a suggested row is offered, shown beside it. */
+  | { kind: 'command'; id: string; command: ResolvedCommand; note?: string }
   | { kind: 'submenu'; id: string; label: string; icon: IconName; sections: MenuSection[] };
 
 // Contextual presentation is separate from search ranking and command execution.
 const direct = [
   // a package's contents next to Open, as Finder's menu has it (shown only for a package)
-  ['open-selection', 'show-package-contents', 'quick-preview', 'open-with'],
+  ['open-selection', 'show-package-contents', 'quick-preview', 'open-with', 'extract'],
   ['rename', 'copy', 'copy-path', 'paste', 'new-folder', 'select-all'],
   ['info', 'trash'],
 ];
@@ -158,6 +160,7 @@ export function contextMenuSections(
   commands: readonly ResolvedCommand[],
   recent: readonly string[],
   focused = false,
+  suggested: readonly Suggestion[] = [],
 ): MenuSection[] {
   const remaining = new Map(commands.map((item) => [item.id, item]));
   const take = (ids: readonly string[]) => {
@@ -178,6 +181,19 @@ export function contextMenuSections(
       // A recent shortcut is an additional placement of the same captured command.
       // Distinct row IDs keep keyboard focus separate from its normal menu placement.
       entries: applicableRecent.map((id) => ({ ...leaf(remaining.get(id)!), id: 'recent.' + id })),
+    });
+  // Like Recent, another placement of commands that keep their own place below.
+  const fitting = suggested.filter(
+    (item) => remaining.has(item.command.id) && !applicableRecent.includes(item.command.id),
+  );
+  if (fitting.length && !focused)
+    sections.push({
+      label: 'Suggested',
+      entries: fitting.map((item) => ({
+        ...leaf(remaining.get(item.command.id)!),
+        id: 'suggested.' + item.command.id,
+        note: item.reason,
+      })),
     });
   const pinned = commands.filter((item) => item.id.startsWith('custom.') && item.primary);
   if (pinned.length) sections.push(section(take(pinned.map((item) => item.id)), 'Pinned'));

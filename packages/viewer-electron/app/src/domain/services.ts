@@ -54,6 +54,10 @@ export interface ApplicationSettings {
     showHidden: boolean;
     restoreSession: boolean;
     confirmTrash: boolean;
+    /** A Suggested section in file menus, from rules and what the person chooses. */
+    suggestions: boolean;
+    /** Suggestion rules turned off by id (`domain/suggestions/rules.ts`). */
+    suggestionRulesOff: string[];
     newPlaneLocation:
       | 'current'
       | 'home'
@@ -373,6 +377,8 @@ export function defaultSettings(home: string): ApplicationSettings {
       showHidden: false,
       restoreSession: true,
       confirmTrash: true,
+      suggestions: true,
+      suggestionRulesOff: [],
       newPlaneLocation: 'current',
       newPlanePath: '',
       emptyWorkspaceLocation: 'home',

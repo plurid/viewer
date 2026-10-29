@@ -24,6 +24,9 @@ export const browsingSchema = z
     showHidden: z.boolean(),
     restoreSession: z.boolean(),
     confirmTrash: z.boolean().default(true),
+    suggestions: z.boolean().default(true),
+    // rule ids from domain/suggestions/rules.ts
+    suggestionRulesOff: z.array(z.string().min(1).max(80)).max(100).default([]),
     newPlaneLocation: z
       .enum([
         'current',

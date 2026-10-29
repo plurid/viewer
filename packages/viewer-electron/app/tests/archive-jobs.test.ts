@@ -5,6 +5,7 @@ import { strToU8, zipSync, type Zippable } from 'fflate';
 import {
   createArchive,
   extractArchive,
+  unwrapped,
   type ArchiveWork,
 } from '../src/desktop/operations/archive-jobs';
 import { Archives } from '../src/desktop/previews/archives';
@@ -35,9 +36,29 @@ it('streams folders and Unicode files into ZIP and safely extracts them', async 
     'Résumé/notes.txt',
   ]);
   await extractArchive(archive, destination, work());
-  expect(await readFile(path.join(destination, 'Résumé', 'notes.txt'), 'utf8')).toBe(
+  // one folder holding everything: its contents are the output, never a folder inside a folder
+  expect(await readFile(path.join(destination, 'notes.txt'), 'utf8')).toBe(
     await readFile(file, 'utf8'),
   );
+});
+it('keeps several top-level items and a lone file, and leaves out macOS resource forks', () => {
+  const entry = (name: string, directory = false) => ({ name, directory });
+  const names = (entries: { name: string }[]) => entries.map((item) => item.name);
+  expect(
+    names(unwrapped([entry('Photos', true), entry('Photos/a.jpg'), entry('Photos/b.jpg')])),
+  ).toEqual(['a.jpg', 'b.jpg']);
+  // implied by its entries alone, as many ZIP tools write it
+  expect(names(unwrapped([entry('Photos/a.jpg'), entry('Photos/sub/b.jpg')]))).toEqual([
+    'a.jpg',
+    'sub/b.jpg',
+  ]);
+  expect(names(unwrapped([entry('a.txt'), entry('b.txt')]))).toEqual(['a.txt', 'b.txt']);
+  expect(names(unwrapped([entry('report.pdf')]))).toEqual(['report.pdf']);
+  expect(
+    names(
+      unwrapped([entry('Photos/a.jpg'), entry('__MACOSX', true), entry('__MACOSX/Photos/._a.jpg')]),
+    ),
+  ).toEqual(['a.jpg']);
 });
 it('rejects traversal before creating any extraction output', async () => {
   const archive = path.join(root, 'unsafe.zip'),

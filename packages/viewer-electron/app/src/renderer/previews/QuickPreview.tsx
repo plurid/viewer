@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect } from 'react';
-import type { Resource } from '../../domain/contracts';
+import { memo, useCallback, useContext, useEffect } from 'react';
+import type { FileEntry, Resource } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files/entries';
 import { getState, quickPreview, report, stepQuickPreview } from '../state/store';
 import { editable } from '../commands/editing';
@@ -10,6 +10,8 @@ import { HeldPreview } from './HeldPreview';
 import type { PreviewModule } from './contracts';
 import { baseName } from '../../domain/workspaces/planes';
 import { MAX_TEXT_BYTES } from '../../domain/editing/documents';
+import { CommandsContext } from '../commands/context';
+import { suggestionsFor } from '../commands/suggestions';
 
 /** Quick Preview's Edit while it shows a text file: ⌘E reaches it through the window's commands. */
 let editShown: (() => void) | undefined;
@@ -18,6 +20,52 @@ export function quickPreviewEdit(): boolean {
   if (!editShown) return false;
   editShown();
   return true;
+}
+
+/** The one action that fits the file best, such as Extract here for an archive; Edit has its own
+ * button. Run from the plane the preview came from, as its menu would. */
+function SuggestedAction({
+  entry,
+  paneID,
+  workspaceID,
+}: {
+  entry: FileEntry;
+  paneID?: string;
+  workspaceID: string;
+}) {
+  // a preview shown outside a window's commands, as in a test, has none to suggest
+  const registry = useContext(CommandsContext);
+  const applicable =
+    registry?.list({
+      paneID,
+      scope: 'files',
+      context: {
+        scope: 'files',
+        workspaceID,
+        paneID,
+        directory: entry.parent,
+        selection: [entry],
+        jobs: getState().jobs,
+        clipboard: getState().clipboard,
+      },
+    }) ?? [];
+  const [suggestion] = suggestionsFor(
+    applicable.filter((command) => command.id !== 'edit-selected'),
+    [entry],
+    1,
+  );
+  if (!registry || !suggestion) return null;
+  return (
+    <button
+      title={suggestion.reason}
+      onClick={() => {
+        quickPreview(null);
+        requestAnimationFrame(() => void registry.run(suggestion.command).catch(report));
+      }}
+    >
+      {suggestion.command.label}
+    </button>
+  );
 }
 
 export const QuickPreview = memo(function QuickPreview({
@@ -96,6 +144,11 @@ export const QuickPreview = memo(function QuickPreview({
               </div>
             )}
             <OpenDefaultButton path={resource.entry.path} />
+            <SuggestedAction
+              entry={resource.entry}
+              paneID={session.paneID}
+              workspaceID={session.workspaceID}
+            />
             {editable && (
               <button title="Edit (⌘E)" onClick={() => open(resource.entry.path, true)}>
                 Edit

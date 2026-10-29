@@ -31,10 +31,12 @@ import {
   paletteRows,
   paletteSuggestions,
   settingRows,
+  withSuggested,
 } from './palette-sections';
 import { palettePrefixes, type PaletteMode } from './palette-modes';
 import { clearRecentCommands } from './history';
 import { commandFolders } from './folders';
+import { suggestionsFor } from './suggestions';
 
 export function CommandPalette({
   mode,
@@ -180,7 +182,13 @@ function CommandFinder({
       }
     : settings
       ? settingRows(commands, query)
-      : paletteRows(commands, query, recent);
+      : !query.trim()
+        ? withSuggested(
+            paletteRows(commands, query, recent),
+            suggestionsFor(commands, context.selection),
+            recent,
+          )
+        : paletteRows(commands, query, recent);
   const folderView = commandFolders(
     commands,
     paletteSuggestions(view.rows, smart, query),

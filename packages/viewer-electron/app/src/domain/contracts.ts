@@ -421,6 +421,9 @@ export interface UIPreferences {
     order?: ListColumn[];
   };
   recentCommands: string[];
+  /** Commands chosen for each kind of selection (`renderer/commands/suggestions.ts`), most
+   * recent first: what a person keeps choosing for PDFs is suggested for PDFs. */
+  suggestionHistory?: Record<string, string[]>;
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {

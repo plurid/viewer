@@ -80,7 +80,7 @@ beforeEach(() => {
     clipboard: null,
     jobs: [],
   };
-  registry = new CommandRegistry(rememberCommand);
+  registry = new CommandRegistry((id, chosen) => rememberCommand(id, chosen.selection));
   registry.register(`folder:${pane.id}`, {
     context: () => context,
     definitions: () => folderCommands(actions),
@@ -107,7 +107,11 @@ describe('contextual commands', () => {
     expect(run).toHaveBeenCalledOnce();
     expect(chosen).not.toHaveBeenCalled();
     await own.invoke('probe', {});
-    expect(chosen).toHaveBeenCalledWith('probe');
+    // with its context, so the selection's kind learns what was chosen for it
+    expect(chosen).toHaveBeenCalledWith(
+      'probe',
+      expect.objectContaining({ directory: '/fixtures' }),
+    );
   });
   it('offers native actions through captured selection and hides them on other platforms', async () => {
     const definitions = folderCommands(actions);

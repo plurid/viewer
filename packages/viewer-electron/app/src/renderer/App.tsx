@@ -107,8 +107,8 @@ export function App() {
   const registry = useMemo(
     () =>
       new CommandRegistry(
-        (id) => {
-          rememberCommand(id);
+        (id, context) => {
+          rememberCommand(id, context.selection);
           // Record macro (keys/macro.ts) collects what the person runs
           recordCommand(id);
         },

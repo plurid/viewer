@@ -15,6 +15,7 @@ import { ownedApp, until } from '../../tests/owned-app';
 import { record, screenshot, type Connection } from './record';
 import { temporaryRoot } from '../temporary';
 import { fieldNotesPDF } from './sample';
+import { strToU8, zipSync } from 'fflate';
 
 assert.equal(
   process.platform,
@@ -410,7 +411,13 @@ try {
   await current.app.close(current.connection);
 }
 
-// Stills for the guides: Columns with a preview, the palette for a photograph, Optimize results.
+// Stills for the guides: Columns with a preview, the palette for a photograph, Optimize results,
+// and a file menu's suggestions for an archive, which only this session's folder holds.
+await writeFile(
+  path.join(examples, 'Field trip.zip'),
+  zipSync({ 'Field trip/notes.txt': strToU8('A short walk, a few photographs.\n') }),
+  { flag: 'wx' },
+);
 current = await open('Stills', examples, 'columns');
 try {
   const { connection } = current;
@@ -479,6 +486,26 @@ try {
   );
   await delay(1200);
   await screenshot(connection, path.join(output, 'optimize.png'));
+  await connection.evaluate(
+    `document.querySelector('.optimize-dialog [aria-label="Close"]')?.click()`,
+  );
+  await delay(600);
+
+  await connection.evaluate(`(() => {
+    const row = document.querySelector(${JSON.stringify(row('Field trip.zip'))});
+    row.click();
+    const box = row.getBoundingClientRect();
+    row.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true, cancelable: true, clientX: box.left + 60, clientY: box.top + box.height / 2,
+    }));
+  })()`);
+  await until(
+    () => connection.evaluate<string>('document.querySelector(".context-menu")?.textContent || ""'),
+    (text) => text.includes('Suggested'),
+    'Suggested actions',
+  );
+  await delay(700);
+  await screenshot(connection, path.join(output, 'suggested.png'));
 } finally {
   await current.app.close(current.connection);
 }
@@ -491,6 +518,7 @@ const assets = [
   'columns.png',
   'palette.png',
   'optimize.png',
+  'suggested.png',
 ];
 const publicFiles: Record<string, string> = Object.fromEntries(
   assets.map((name) => [name, path.join(output, name)]),

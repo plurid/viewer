@@ -19,12 +19,15 @@ import {
   writeFileClipboard,
 } from '../state/store';
 import type { CommandContext, CommandDefinition } from './registry';
+import { choosePreview } from '../previews/registry';
 export { parentPath } from '../../domain/workspaces/planes';
 
 export interface FolderActions {
   open(entries: readonly FileEntry[], linked: boolean, another?: boolean): void;
   /** Browses into an application or other bundle, where the plane can (Show Package Contents). */
   contents?(entry: FileEntry): void;
+  /** Opens a text file editing, in a plane linked to its folder. */
+  edit?(entry: FileEntry): void;
   dialog(kind: 'rename' | 'mkdir' | 'mkfile' | 'group' | 'go-to', context: CommandContext): void;
   trash(context: CommandContext): void | Promise<void>;
   info(context: CommandContext): void;
@@ -180,22 +183,38 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       },
     },
     {
+      id: 'edit-selected',
+      label: 'Edit text',
+      group: 'Files',
+      icon: 'rename',
+      aliases: ['edit', 'modify', 'open in editor'],
+      when: (context) =>
+        !!actions.edit &&
+        context.selection.length === 1 &&
+        !context.selection[0]!.directory &&
+        choosePreview(context.selection[0]!).editing === 'text',
+      run: (context) => actions.edit?.(context.selection[0]!),
+    },
+    {
       id: 'extract',
-      label: 'Extract archive',
+      label: 'Extract here',
       group: 'Files',
       icon: 'archive',
-      aliases: ['unzip', 'untar', 'extract'],
+      aliases: ['unzip', 'untar', 'extract', 'extract archive', 'decompress'],
       when: (context) =>
         selected(context) &&
         context.selection.every(
           (entry) => !entry.directory && /\.(?:zip|tar|tar\.gz|tgz)$/i.test(entry.name),
         ),
       run: async (context) => {
-        await window.viewer.operate({
-          kind: 'extract',
-          sources: paths(context),
-          destination: context.directory,
-        });
+        // beside each archive: search results come from many folders and have no folder of their own
+        const byFolder = new Map<string, string[]>();
+        for (const entry of context.selection) {
+          const folder = context.directory ?? entry.parent;
+          byFolder.set(folder, [...(byFolder.get(folder) ?? []), entry.path]);
+        }
+        for (const [destination, sources] of byFolder)
+          await window.viewer.operate({ kind: 'extract', sources, destination });
       },
     },
     {

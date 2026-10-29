@@ -40,6 +40,34 @@ When a name already exists at the destination, Viewer asks whether to skip, keep
 The **File operations** button in the title bar shows progress and failures. Completed operations
 offer **Undo**, which first checks that the files are still as the operation left them.
 
+## Let Viewer suggest
+
+Right-click a file. Under **Suggested**, Viewer offers the actions that fit it, each with its
+reason:
+
+![A file menu suggesting Extract here for a zip archive](../media/suggested.png)
+
+| Selection                             | Suggested                                     |
+| ------------------------------------- | --------------------------------------------- |
+| A zip or tar archive                  | **Extract here**                              |
+| A PDF over 10 MB                      | **Optimize…**                                 |
+| A photo over 3 MB                     | **Images for web…**                           |
+| A HEIC photo                          | **Convert copy to JPEG**                      |
+| Several images                        | **Create PDF from images**, **Batch rename…** |
+| A video or recording                  | **Edit media…**                               |
+| A text or code file                   | **Edit text**                                 |
+| A name ending in " copy" or "(2)"     | **Find duplicates…**                          |
+| An installer in Downloads, a week old | **Move to Trash**                             |
+
+What you choose for a kind of file rises for that kind next time: if you always rename PDFs, PDFs
+suggest it. The same suggestions appear in **⌘K** before you type, and the best one appears as a
+button in Quick Preview. Turn them off in **Settings → Browsing → Suggestions**; **⌘K** → **Forget
+learned suggestions** clears what Viewer learned.
+
+**Extract here** puts an archive's contents in a folder named after it, beside the archive. When the
+archive holds one folder with everything inside, that folder's contents are the result, so you never
+get a folder inside a folder of the same name.
+
 ## Rename many files at once
 
 1. Select the files, press **⌘K** and choose **Batch rename**.

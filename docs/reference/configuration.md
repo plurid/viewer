@@ -48,6 +48,32 @@ The schema and Settings UI define valid fields and ranges. Unknown fields, dupli
 values and conflicting shortcuts are rejected. Missing references have diagnostics and cannot
 silently choose another executor.
 
+## Suggested actions
+
+`settings.browsing.suggestions` turns the Suggested section of file menus on or off.
+`settings.browsing.suggestionRulesOff` lists rules to leave out, by id:
+
+| Rule id               | Suggests                                             |
+| --------------------- | ---------------------------------------------------- |
+| `archive.extract`     | Extract here, for zip and tar archives               |
+| `pdf.large.optimize`  | Optimize, for PDFs over 10 MB                        |
+| `heic.jpeg`           | Convert copy to JPEG, for HEIC photos                |
+| `photo.large.web`     | Images for web, for JPEG and PNG over 3 MB           |
+| `downloads.installer` | Move to Trash, for week-old dmg and pkg in Downloads |
+| `names.copy`          | Find duplicates, for names ending " copy" or "(2)"   |
+| `images.pdf`          | Create PDF from images, for several images           |
+| `media.edit`          | Edit media, for video and audio                      |
+| `text.edit`           | Edit text, for a text or code file                   |
+| `images.rename`       | Batch rename, for three or more images               |
+| `books.rename`        | Rename as book, for PDFs and EPUBs, with a model     |
+| `folder.git`          | Git changes, for a repository folder                 |
+| `video.audio`         | Extract audio, for a video                           |
+| `folder.size`         | Calculate Size, for a folder                         |
+| `items.compress`      | Compress to ZIP, for several items                   |
+
+`ui.suggestionHistory` is app-managed: the commands chosen for each kind of file, which rise in
+Suggested. **⌘K** → **Forget learned suggestions** clears it.
+
 ## Profiles and workspace choices
 
 Profiles are named presentation overlays, not separate data profiles or access grants. A window

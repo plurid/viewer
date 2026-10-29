@@ -86,5 +86,9 @@ export const preferencesSchema = z
       })
       .strict(),
     recentCommands: z.array(z.string().max(200)).max(30),
+    suggestionHistory: z
+      .record(z.string().max(60), z.array(z.string().max(200)).max(8))
+      .refine((kinds) => Object.keys(kinds).length <= 40)
+      .optional(),
   })
   .strict();

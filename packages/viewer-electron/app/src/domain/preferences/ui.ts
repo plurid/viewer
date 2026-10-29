@@ -176,6 +176,11 @@ export function normalizePreferences(value?: unknown): UIPreferences {
         : {}),
     },
     recentCommands: strings(ui.recentCommands, 20, 300),
+    suggestionHistory: Object.fromEntries(
+      Object.entries(object(ui.suggestionHistory))
+        .slice(0, 40)
+        .map(([kind, ids]) => [kind.slice(0, 60), strings(ids, 8, 200)]),
+    ),
   };
 }
 

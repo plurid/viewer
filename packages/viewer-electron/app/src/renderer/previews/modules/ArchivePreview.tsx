@@ -63,7 +63,10 @@ export default function ArchivePreview({ resource, services, signal, active }: P
   return (
     <div className="archive-viewer">
       <div className="preview-toolbar">
-        <span className="muted">{listing.entries.length.toLocaleString()} entries</span>
+        <span className="muted">
+          {listing.entries.length.toLocaleString()}{' '}
+          {listing.entries.length === 1 ? 'entry' : 'entries'}
+        </span>
         <span className="toolbar-spacer" />
         <input
           aria-label="Filter archive entries"

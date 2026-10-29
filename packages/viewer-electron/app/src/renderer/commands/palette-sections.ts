@@ -1,5 +1,6 @@
 import { categories } from '../../domain/preferences/catalog';
 import { commandScore, normalize, rankCommands, type ResolvedCommand } from './registry';
+import type { Suggestion } from './suggestions';
 
 /**
  * Settings apart in the palette. Every setting is a command (window-commands/
@@ -27,6 +28,34 @@ export function paletteSuggestions(
   const exact = commands.filter((command) => named(command.label) === needle);
   const ids = new Set(exact.map((command) => command.id));
   return [...exact, ...suggestions, ...commands.filter((command) => !ids.has(command.id))];
+}
+/**
+ * With nothing typed, the actions that fit the selection follow Recent under their own heading,
+ * each with its reason; they leave their usual place, so no row shows twice.
+ */
+export function withSuggested(
+  view: PaletteView,
+  suggested: readonly Suggestion[],
+  recent: readonly string[],
+): PaletteView {
+  const leading = view.rows.findIndex((row) => !recent.includes(row.id));
+  const recentRows = leading < 0 ? view.rows : view.rows.slice(0, leading);
+  const shown = new Set(recentRows.map((row) => row.id));
+  const rows = suggested
+    .filter((item) => !shown.has(item.command.id))
+    .map((item) => ({ ...item.command, detail: item.reason }));
+  if (!rows.length) return view;
+  const moved = new Set(rows.map((row) => row.id));
+  const headings = new Map(view.headings);
+  headings.set(rows[0]!.id, 'Suggested');
+  return {
+    rows: [
+      ...recentRows,
+      ...rows,
+      ...view.rows.slice(recentRows.length).filter((row) => !moved.has(row.id)),
+    ],
+    headings,
+  };
 }
 /** The row that searches every matching setting. */
 export const moreSettingsID = 'palette:more-settings';

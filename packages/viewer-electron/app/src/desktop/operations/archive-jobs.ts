@@ -174,6 +174,30 @@ export async function extractArchive(
     work.signal,
   );
 }
+/** The macOS archiver's copies of resource forks: nothing a person extracts on purpose. */
+const resourceForks = '__MACOSX';
+
+/**
+ * What an extraction writes, with names relative to the output folder. Most archives hold one
+ * folder with everything inside, often named like the archive: its contents become the output,
+ * so "Photos.zip" gives "Photos/…" and never "Photos/Photos/…".
+ */
+export function unwrapped<Entry extends { name: string; directory: boolean }>(
+  entries: readonly Entry[],
+): Entry[] {
+  const kept = entries.filter(
+    (entry) => entry.name !== resourceForks && !entry.name.startsWith(resourceForks + '/'),
+  );
+  const tops = new Set(kept.filter((entry) => entry.name).map((entry) => entry.name.split('/')[0]));
+  const [single] = tops;
+  if (tops.size !== 1 || !single) return kept;
+  const folder = kept.every((entry) => entry.name !== single || entry.directory);
+  const inside = kept.some((entry) => entry.name.startsWith(single + '/'));
+  if (!folder || !inside) return kept;
+  return kept
+    .filter((entry) => entry.name !== single)
+    .map((entry) => ({ ...entry, name: entry.name.slice(single.length + 1) }));
+}
 async function extractCoordinated(
   source: string,
   target: string,
@@ -205,9 +229,10 @@ async function extractCoordinated(
       }
     }
     await mkdir(target, { mode: 0o700 });
-    const total = safe.reduce((sum, entry) => sum + entry.size, 0);
+    const extracted = unwrapped(safe);
+    const total = extracted.reduce((sum, entry) => sum + entry.size, 0);
     let done = 0;
-    for (const entry of safe) {
+    for (const entry of extracted) {
       work.signal.throwIfAborted();
       await work.access([source]);
       if (!entry.name) continue;

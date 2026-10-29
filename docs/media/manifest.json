@@ -4,16 +4,16 @@
   "source": "Big Buck Bunny © 2008 Blender Foundation · CC BY 3.0",
   "captures": {
     "files": {
-      "frames": 59,
-      "seconds": 6.897450417000001
+      "frames": 39,
+      "seconds": 6.565090832999999
     },
     "create": {
-      "frames": 76,
-      "seconds": 6.731253208000002
+      "frames": 69,
+      "seconds": 6.706320541999999
     },
     "develop": {
       "frames": 96,
-      "seconds": 9.220626082999999
+      "seconds": 9.311509416999998
     }
   },
   "assets": {
@@ -30,48 +30,52 @@
       "sha256": "c10cf2ac8296f2ab6117a11fe6122e15857e9ab7adea2a9e89684949d2ca4246"
     },
     "develop.png": {
-      "bytes": 146436,
-      "sha256": "dbe4ad5ded1fd2e5e711f9f2a9d12ed73a50c915d91fd3cc77615ec7ab925f14"
+      "bytes": 148309,
+      "sha256": "a0833775f85e9ec933b774938e9a3e78b683e86b8b91ac27c5de5b63e012a39c"
     },
     "columns.png": {
-      "bytes": 201676,
-      "sha256": "0ba6db4d2b5feaf311e5f1ec9bd62dfb6018d96248e668e60ca75cf86f8f88a5"
+      "bytes": 203669,
+      "sha256": "7913f20f222f8bf43cea5b41a2a637949b30c1c7feaf12b1ec8e0ce4f58945f7"
     },
     "palette.png": {
-      "bytes": 252649,
-      "sha256": "8d9cfce5c8109d3605a358c3c25381b68e475ae7711e4354a6790cebc1cb721c"
+      "bytes": 253693,
+      "sha256": "946ecdd43de816f75e830ee533190be1c38fe9818f071c4ca6c2b1e2b67bc6bf"
     },
     "optimize.png": {
-      "bytes": 86351,
-      "sha256": "8351fc60b4f071ba01f5227d80cc4d6573c5fd1d9682ed407678298144ee6ba5"
+      "bytes": 86710,
+      "sha256": "67dceeee8cf336344c4ff0e4249eea3812886bffe7ef3957d7e6e13668bbdf1f"
+    },
+    "suggested.png": {
+      "bytes": 85456,
+      "sha256": "42eb2b5fb725756ab0ed78260cb9699e2a4aa6cc65909e0264cb473d819b5069"
     },
     "source.jpg": {
       "bytes": 55888,
       "sha256": "5f496dabe35a1537cb908c8b841bdde521361959a64468641b026ab51cb8f0af"
     },
     "files.mp4": {
-      "bytes": 600484,
-      "sha256": "5061f8cd77d1dfc15dcdac83542ac77b78fe9e8eec1ab84b715d4b856d24fb7b"
+      "bytes": 531633,
+      "sha256": "fb6b80e569d92764ecd95079b983c45dc4ab2d8b7e9b6f7a74914ff755131f5d"
     },
     "files.gif": {
-      "bytes": 680429,
-      "sha256": "136e8d8d0a01cd4083a763680084344f05ecc9860529d3e29086c3d3d365cff6"
+      "bytes": 687256,
+      "sha256": "34d5b3ab40a8ba623d939fbbf0f008fd9b31cb7535b25e3df239865184f0da83"
     },
     "create.mp4": {
-      "bytes": 1190379,
-      "sha256": "90ee23d456eae2bc46b1d9319db0aecbcb128b77e4103405476827bc9a62388c"
+      "bytes": 1181503,
+      "sha256": "5fa26c838f5dbb7bae25a9d4454a8514ee26887c2226a4dd1ab4a91600de7386"
     },
     "create.gif": {
-      "bytes": 1985878,
-      "sha256": "77ee4a0f922b99d791d04bf68e95d53663da7f309a122a883fb4e8b8812a0fef"
+      "bytes": 1929390,
+      "sha256": "08fa56200656b788705275f648a26a4ed70237587d6b1cf62c2e467aa7e84fee"
     },
     "develop.mp4": {
-      "bytes": 1265339,
-      "sha256": "14ad15534785c1ef805061869fb95cfaec3ef35677280760ec1d9f23904887d0"
+      "bytes": 1267261,
+      "sha256": "37759a7d211c29c8eee05e2170ce078fd7271b2ab1f8d1e4d451b512ad8f67c0"
     },
     "develop.gif": {
-      "bytes": 1657238,
-      "sha256": "f9cf35ae05ab651ea8fb5779b8120a6f6b897bd5991ef8fc55fb1d7d228b0fd4"
+      "bytes": 2031378,
+      "sha256": "12905ebec62ecbf08e986daf4adb48d82b5af3e853d967e6c64c45af13f2f5bf"
     }
   }
 }

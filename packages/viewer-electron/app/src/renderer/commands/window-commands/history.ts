@@ -3,6 +3,7 @@ import { redoableTime, undoableTime } from '../../state/jobs';
 import { lastLensRedo, lastLensUndo, redoLens, undoLens } from '../../state/lenses';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
+import { forgetSuggestions } from '../history';
 
 /** Undo and Redo pick the most recent action, whether a file operation or a lens edit. */
 function latest(direction: 'undo' | 'redo') {
@@ -18,6 +19,16 @@ function latest(direction: 'undo' | 'redo') {
 /** File operation history: recent jobs, Undo and Redo. */
 export function historyCommands({ windowScope }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [
+    {
+      id: 'forget-suggestions',
+      label: 'Forget learned suggestions',
+      group: 'Window',
+      icon: 'close',
+      aliases: ['clear suggestions', 'reset suggestions', 'suggested'],
+      when: (context) =>
+        windowScope(context) && Object.keys(getState().saved.ui.suggestionHistory ?? {}).length > 0,
+      run: () => forgetSuggestions(),
+    },
     {
       id: 'recent-operations',
       label: 'Recent file operations',

@@ -226,6 +226,15 @@ export const settingCatalog: SettingDefinition[] = [
     detail: 'When off, files go straight to the system Trash. Undo remains available.',
     kind: 'boolean',
   },
+  {
+    path: 'settings.browsing.suggestions',
+    category: 'Browsing',
+    section: 'Suggestions',
+    label: 'Suggest actions in file menus',
+    detail:
+      'Shows a few actions that fit the selection, such as Extract here for an archive, and learns from what you choose.',
+    kind: 'boolean',
+  },
   ...listColumns
     .filter((column) => column.id !== 'name' && column.id !== 'git')
     .map((column) => ({

@@ -112,7 +112,7 @@ export class CommandRegistry {
     return items;
   }
   constructor(
-    private chosen: (id: string) => void = () => {},
+    private chosen: (id: string, context: CommandContext) => void = () => {},
     private shortcut: (id: string) => string | undefined = () => undefined,
   ) {}
   subscribe = (listener: () => void) => {
@@ -251,7 +251,7 @@ export class CommandRegistry {
     };
     if (!definition?.when(context)) return false;
     await definition.run(context);
-    if (remember && definition.remember !== false) this.chosen(definition.id);
+    if (remember && definition.remember !== false) this.chosen(definition.id, context);
     this.touch(command.source);
     return true;
   }
