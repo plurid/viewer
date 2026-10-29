@@ -19,6 +19,7 @@ type ResourceHandlers = Pick<
   | 'imageRendition'
   | 'videoRendition'
   | 'officeLayout'
+  | 'officeWarm'
   | 'printPDF'
   | 'thumbnail'
   | 'document'
@@ -47,6 +48,7 @@ interface ResourcePorts {
   files: Pick<FileServices, 'extract'>;
   fileAccess: Pick<FileAccess, 'require'>;
   forgetGitResource(id: string): void;
+  warmOffice(): void;
 }
 
 /** Previews are read through the resource leases that authorized them; a nested image is a
@@ -65,6 +67,7 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
     imageRendition: ([id, request]) => ports.resources.rendition(id, request),
     videoRendition: ([id, requestID]) => ports.resources.videoRendition(id, requestID),
     officeLayout: ([id, request]) => ports.resources.officeLayout(id, request),
+    officeWarm: async () => ports.warmOffice(),
     printPDF: async ([id, password]) => {
       if (process.platform !== 'darwin') throw new Error('Printing PDFs requires macOS.');
       const file = await ports.resources.printableFile(id);

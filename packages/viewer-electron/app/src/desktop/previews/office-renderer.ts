@@ -1,7 +1,7 @@
 import { BrowserWindow, session, type Session } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { Decoder } from './derived';
 import {
@@ -46,72 +46,139 @@ function isolatedOfficeSession(): Session {
   return isolated;
 }
 
-/** Each cache miss owns one sandbox and one nonce-protected loopback server.
- * Closing/cancelling destroys the entire engine, its RAM files and its workers.
- * No host filesystem mount, Node/preload, app IPC, downloads or remote requests. */
-export async function renderOffice(
-  directory: string,
-  input: Buffer,
-  extension: string,
-  outer: AbortSignal,
-  options: OfficeRenderOptions = {},
-): Promise<{ data: Buffer; office: OfficeLayoutMetadata }> {
-  if (!isOfficeFormat(extension) || input.length > officeInputLimit)
-    throw new Error(
-      'Choose a Word, Excel or PowerPoint file smaller than 64 MB for layout preview.',
+interface OfficeTask {
+  input: Buffer;
+  extension: string;
+  job: ReturnType<typeof createOfficeJob>;
+}
+
+/**
+ * One engine for one document: a sandboxed window and a nonce-protected loopback server. Closing
+ * or cancelling destroys the engine, its RAM files and its workers. No host filesystem mount,
+ * Node/preload, app IPC, downloads or remote requests.
+ *
+ * Loading the engine takes seconds, so it can start before its document is chosen: the server
+ * holds the engine's request for its input until a document is assigned. An engine is still
+ * destroyed after its one document.
+ */
+class OfficeEngine {
+  private task?: OfficeTask;
+  private held: (() => void)[] = [];
+  private metadata?: OfficeLayoutMetadata;
+  private finish!: (bytes: Buffer) => void;
+  private fail!: (error: Error) => void;
+  private readonly result: Promise<Buffer>;
+  private readonly nonce = randomBytes(24).toString('hex');
+  private readonly server: Server;
+  private window?: BrowserWindow;
+  private origin = '';
+  failed = false;
+  constructor(private directory: string) {
+    this.result = new Promise<Buffer>((resolve, reject) => {
+      this.finish = resolve;
+      this.fail = (error) => {
+        this.failed = true;
+        reject(error);
+      };
+    });
+    // Install a handler before setup: cancellation can arrive during listen/load.
+    void this.result.catch(() => {});
+    this.server = createServer((request, response) => this.serve(request, response));
+    this.server.maxConnections = 24;
+    this.server.requestTimeout = 45000;
+  }
+  async start(): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      this.server.once('error', reject);
+      this.server.listen(0, '127.0.0.1', resolve);
+    });
+    const address = this.server.address();
+    if (!address || typeof address === 'string')
+      throw new Error('Office renderer could not start.');
+    this.origin = `http://127.0.0.1:${address.port}`;
+    activeOrigins.add(this.origin);
+    const window = new BrowserWindow({
+      show: false,
+      width: 1024,
+      height: 768,
+      webPreferences: {
+        ...isolatedContent,
+        session: isolatedOfficeSession(),
+        backgroundThrottling: false,
+      },
+    });
+    this.window = window;
+    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    window.webContents.on('will-navigate', (event, url) => {
+      if (url !== `${this.origin}/${this.nonce}/`) event.preventDefault();
+    });
+    window.webContents.once('render-process-gone', () =>
+      this.fail(new Error('The Office renderer stopped. Retry the layout preview.')),
     );
-  const job = createOfficeJob(extension, options);
-  const signal = AbortSignal.any([outer, AbortSignal.timeout(45000)]);
-  signal.throwIfAborted();
-  const nonce = randomBytes(24).toString('hex');
-  let window: BrowserWindow | undefined;
-  let metadata: OfficeLayoutMetadata | undefined;
-  let finish!: (bytes: Buffer) => void;
-  let fail!: (error: Error) => void;
-  const result = new Promise<Buffer>((resolve, reject) => {
-    finish = resolve;
-    fail = reject;
-  });
-  // Install a handler before setup: cancellation can arrive during listen/load.
-  void result.catch(() => {});
-  const cancel = () =>
-    fail(
-      new Error(
-        outer.aborted
-          ? 'Office layout preview cancelled.'
-          : 'Office layout exceeded 45 seconds. Try Reading or Sheet view, or retry the layout.',
-      ),
+    window.once('closed', () =>
+      this.fail(new Error('The Office renderer closed. Retry the layout preview.')),
     );
-  signal.addEventListener('abort', cancel, { once: true });
-  const files = new Set<string>(officeRuntimeFiles.map(([name]) => name));
-  const scripts = new Map([
-    ['', ['text/html', officePage]],
-    ['office-main.js', ['application/javascript', officeMain]],
-    ['office-thread.js', ['application/javascript', officeThread]],
-  ]);
-  let origin = '';
-  const server = createServer((request, response) => {
+    void window
+      .loadURL(`${this.origin}/${this.nonce}/`)
+      .catch(() => this.fail(new Error('The bundled Office renderer could not be opened.')));
+  }
+  /** Gives the engine its one document and waits for the PDF. */
+  async run(
+    task: OfficeTask,
+    signal: AbortSignal,
+    outer: AbortSignal,
+  ): Promise<{ data: Buffer; office: OfficeLayoutMetadata }> {
+    const cancel = () =>
+      this.fail(
+        new Error(
+          outer.aborted
+            ? 'Office layout preview cancelled.'
+            : 'Office layout exceeded 45 seconds. Try Reading or Sheet view, or retry the layout.',
+        ),
+      );
+    signal.addEventListener('abort', cancel, { once: true });
+    try {
+      this.task = task;
+      for (const release of this.held.splice(0)) release();
+      return { data: await this.result, office: this.metadata! };
+    } finally {
+      signal.removeEventListener('abort', cancel);
+    }
+  }
+  async destroy(): Promise<void> {
+    if (this.window && !this.window.isDestroyed()) this.window.destroy();
+    activeOrigins.delete(this.origin);
+    this.server.closeAllConnections();
+    await new Promise<void>((resolve) => this.server.close(() => resolve()));
+  }
+  private serve(request: IncomingMessage, response: ServerResponse): void {
     response.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
     response.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
     response.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     response.setHeader('Content-Security-Policy', officeCSP);
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
-    const prefix = `/${nonce}/`;
+    const prefix = `/${this.nonce}/`;
     const name = request.url?.startsWith(prefix) ? request.url.slice(prefix.length) : undefined;
-    if (name === undefined || (request.headers.origin && request.headers.origin !== origin)) {
+    if (name === undefined || (request.headers.origin && request.headers.origin !== this.origin)) {
       response.writeHead(404).end();
       return;
     }
-    if (request.method === 'GET' && name === 'input') {
-      response.setHeader('X-Office-Format', extension);
-      response.setHeader('Content-Type', 'application/octet-stream');
-      response.end(input);
-      return;
-    }
-    if (request.method === 'GET' && name === 'job') {
-      response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify(job));
+    if (request.method === 'GET' && (name === 'input' || name === 'job')) {
+      // the engine has loaded and waits here until it is given its document
+      const task = this.task;
+      if (!task) {
+        this.held.push(() => this.serve(request, response));
+        return;
+      }
+      if (name === 'input') {
+        response.setHeader('X-Office-Format', task.extension);
+        response.setHeader('Content-Type', 'application/octet-stream');
+        response.end(task.input);
+      } else {
+        response.setHeader('Content-Type', 'application/json');
+        response.end(JSON.stringify(task.job));
+      }
       return;
     }
     if (
@@ -123,7 +190,7 @@ export async function renderOffice(
       request.on('data', (chunk: Buffer) => {
         size += chunk.length;
         if (size > (name === 'result' ? officeOutputLimit : 256 * 1024)) {
-          fail(new Error('The Office layout exceeds its 32 MB output limit.'));
+          this.fail(new Error('The Office layout exceeds its 32 MB output limit.'));
           request.destroy();
         } else chunks.push(chunk);
       });
@@ -132,14 +199,18 @@ export async function renderOffice(
         const bytes = Buffer.concat(chunks);
         if (name === 'metadata') {
           try {
-            metadata = officeLayoutMetadataSchema.parse(JSON.parse(bytes.toString()));
+            this.metadata = officeLayoutMetadataSchema.parse(JSON.parse(bytes.toString()));
           } catch {
-            fail(new Error('The Office renderer returned invalid worksheet metadata.'));
+            this.fail(new Error('The Office renderer returned invalid worksheet metadata.'));
           }
-        } else if (name === 'result' && metadata && bytes.subarray(0, 5).toString() === '%PDF-')
-          finish(bytes);
+        } else if (
+          name === 'result' &&
+          this.metadata &&
+          bytes.subarray(0, 5).toString() === '%PDF-'
+        )
+          this.finish(bytes);
         else
-          fail(
+          this.fail(
             new Error(
               'This document could not be rendered. It may be protected or damaged. Try the available Reading or Sheet view.',
             ),
@@ -157,7 +228,7 @@ export async function renderOffice(
       response.end(script[1]);
       return;
     }
-    if (!files.has(name)) {
+    if (!runtimeFiles.has(name)) {
       response.writeHead(404).end();
       return;
     }
@@ -169,57 +240,82 @@ export async function renderOffice(
           ? 'application/javascript'
           : 'application/octet-stream',
     );
-    createReadStream(path.join(directory, name))
+    createReadStream(path.join(this.directory, name))
       .on('error', () => {
         response.destroy();
-        fail(new Error('A bundled Office asset could not be read.'));
+        this.fail(new Error('A bundled Office asset could not be read.'));
       })
       .pipe(response);
-  });
-  server.maxConnections = 24;
-  server.requestTimeout = 45000;
+  }
+}
+
+const runtimeFiles = new Set<string>(officeRuntimeFiles.map(([name]) => name));
+const scripts = new Map([
+  ['', ['text/html', officePage]],
+  ['office-main.js', ['application/javascript', officeMain]],
+  ['office-thread.js', ['application/javascript', officeThread]],
+]);
+
+/** How long a started engine waits for a document before it is closed. */
+const spareLifetime = 60_000;
+let spare:
+  | { directory: string; engine: OfficeEngine; started: Promise<void>; expiry: NodeJS.Timeout }
+  | undefined;
+
+function discardSpare(): void {
+  if (!spare) return;
+  const { engine, started, expiry } = spare;
+  spare = undefined;
+  clearTimeout(expiry);
+  void started.finally(() => engine.destroy()).catch(() => {});
+}
+
+/** Starts an engine for the next Office document, so its layout does not wait for the engine to
+ * load. Unused, it closes after a minute. */
+export function warmOffice(directory: string): void {
+  if (spare?.directory === directory && !spare.engine.failed) {
+    clearTimeout(spare.expiry);
+    spare.expiry = setTimeout(discardSpare, spareLifetime);
+    return;
+  }
+  discardSpare();
+  const engine = new OfficeEngine(directory);
+  const started = engine.start();
+  started.catch(() => {});
+  spare = { directory, engine, started, expiry: setTimeout(discardSpare, spareLifetime) };
+}
+
+export async function renderOffice(
+  directory: string,
+  input: Buffer,
+  extension: string,
+  outer: AbortSignal,
+  options: OfficeRenderOptions = {},
+): Promise<{ data: Buffer; office: OfficeLayoutMetadata }> {
+  if (!isOfficeFormat(extension) || input.length > officeInputLimit)
+    throw new Error(
+      'Choose a Word, Excel or PowerPoint file smaller than 64 MB for layout preview.',
+    );
+  const job = createOfficeJob(extension, options);
+  const signal = AbortSignal.any([outer, AbortSignal.timeout(45000)]);
+  signal.throwIfAborted();
+  // a started engine of this runtime takes the document; otherwise one starts now
+  let engine: OfficeEngine | undefined;
+  let started: Promise<void> | undefined;
+  if (spare?.directory === directory && !spare.engine.failed) {
+    ({ engine, started } = spare);
+    clearTimeout(spare.expiry);
+    spare = undefined;
+  } else {
+    engine = new OfficeEngine(directory);
+    started = engine.start();
+  }
   try {
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', resolve);
-    });
-    const address = server.address();
-    if (!address || typeof address === 'string')
-      throw new Error('Office renderer could not start.');
-    origin = `http://127.0.0.1:${address.port}`;
+    await started;
     signal.throwIfAborted();
-    activeOrigins.add(origin);
-    const isolated = isolatedOfficeSession();
-    window = new BrowserWindow({
-      show: false,
-      width: 1024,
-      height: 768,
-      webPreferences: {
-        ...isolatedContent,
-        session: isolated,
-        backgroundThrottling: false,
-      },
-    });
-    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    window.webContents.on('will-navigate', (event, url) => {
-      if (url !== `${origin}/${nonce}/`) event.preventDefault();
-    });
-    window.webContents.once('render-process-gone', () =>
-      fail(new Error('The Office renderer stopped. Retry the layout preview.')),
-    );
-    window.once('closed', () =>
-      fail(new Error('The Office renderer closed. Retry the layout preview.')),
-    );
-    void window
-      .loadURL(`${origin}/${nonce}/`)
-      .catch(() => fail(new Error('The bundled Office renderer could not be opened.')));
-    return { data: await result, office: metadata! };
+    return await engine.run({ input, extension, job }, signal, outer);
   } finally {
-    signal.removeEventListener('abort', cancel);
-    if (window && !window.isDestroyed()) window.destroy();
-    activeOrigins.delete(origin);
-    server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await engine.destroy();
   }
 }
 
@@ -245,6 +341,8 @@ export function officeDecoder(directory: string): Decoder {
       signal,
       { name: path.basename(source.file), sheet: sheet || undefined },
     );
+    // people read several documents in a row: the next one finds its engine started
+    warmOffice(directory);
     return { ...result, extension: 'pdf', kind: 'office', decoder: officeRuntimeVersion };
   };
 }

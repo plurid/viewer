@@ -102,7 +102,7 @@ import { GitReviews } from './comparison/review';
 import { AgentSessions } from './agents/sessions';
 import { Resources } from './previews/resources';
 import { DerivedPreviews, rawDecoder } from './previews/derived';
-import { officeDecoder } from './previews/office-renderer';
+import { officeDecoder, warmOffice } from './previews/office-renderer';
 import { officeRuntimeName } from './previews/office-runtime-manifest';
 import { videoDecoder } from './previews/video-rendition';
 import { Search } from './search/search';
@@ -1739,6 +1739,8 @@ export class Desktop {
     this.assignWorkspace(sender, stored.state.activeWorkspace);
     stored.state = this.withPreferences(stored.state);
     void this.reconfigureIndex();
+    // the preview worker starts now, so the first preview finds it running
+    void this.files.warmPreviews().catch(() => {});
     await this.actions.load();
     await this.watchRules.start();
     this.options.settingsChanged?.();
@@ -1895,6 +1897,7 @@ export class Desktop {
         forgetGitResource: (id) => {
           this.gitResources.delete(id);
         },
+        warmOffice: () => warmOffice(assetPath(officeRuntimeName)),
       }),
       ...createMediaHandlers({
         browsers: this.browsers,

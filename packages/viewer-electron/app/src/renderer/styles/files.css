@@ -512,6 +512,16 @@
   justify-content: center;
   gap: 10px;
   color: var(--muted);
+  /* work that finishes quickly shows no progress at all, instead of a flash of it */
+  animation: loading-appears 0s linear 150ms both;
+}
+@keyframes loading-appears {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
+  }
 }
 .spinner {
   width: 14px;

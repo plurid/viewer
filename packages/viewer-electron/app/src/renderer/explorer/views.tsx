@@ -23,7 +23,7 @@ import {
   sortEntries,
 } from '../../domain/files/entries';
 import { Icon, type IconName } from '../ui/Icon';
-import { PreviewHost } from '../previews/PreviewHost';
+import { HeldPreview } from '../previews/HeldPreview';
 import { useFolder } from './useFolder';
 import { Empty, Loading } from '../ui/primitives';
 import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
@@ -771,7 +771,7 @@ export function ColumnsView({
           aria-label="File preview"
           data-preview-path={selected.path}
         >
-          <PreviewHost key={selected.path} path={selected.path} {...activity} />
+          <HeldPreview path={selected.path} {...activity} />
         </div>
       )}
     </div>
@@ -858,7 +858,7 @@ export function GalleryView(props: FileViewProps) {
     <div className="gallery-view">
       <div className="gallery-preview" ref={keepPreviewKeys}>
         {selected && !selected.directory ? (
-          <PreviewHost path={selected.path} {...activity} />
+          <HeldPreview path={selected.path} {...activity} />
         ) : selected && hasBundleIcon(selected) ? (
           // an application or bundle shows its own icon, as Finder's preview does
           <div className="gallery-bundle">

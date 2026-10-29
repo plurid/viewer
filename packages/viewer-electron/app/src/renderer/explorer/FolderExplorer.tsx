@@ -68,6 +68,7 @@ import { useLensDialogs } from './LensDialogs';
 import { MapView, type MapControls } from './map/MapView';
 import { activeLens } from '../state/lenses';
 import { resolveLens } from '../../domain/files/lenses';
+import { preloadPreviewFor, preloadPreviewModulesWhenIdle } from '../previews/module-loading';
 
 export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string }) {
   const storedPane = useViewer((state) =>
@@ -124,7 +125,9 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   }, [sources, showHidden, sort, descending, subtree, filterQuery, foldersFirst]);
   const hasRows = visible.length > 0;
   useEffect(() => {
-    if (hasRows) markStartup('viewer:first-rows');
+    if (!hasRows) return;
+    markStartup('viewer:first-rows');
+    preloadPreviewModulesWhenIdle();
   }, [hasRows]);
   // Results from subfolders are not this folder's items, so a lens cannot group them.
   const groupBy =
@@ -206,6 +209,9 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     [sourceIndex, selection, selectionCache],
   );
   const selectionSet = useMemo(() => new Set(selection), [selection]);
+  // the selected file's preview code loads now, so Space or a Columns preview never waits for it
+  const single = selected.length === 1 ? selected[0] : undefined;
+  useEffect(() => preloadPreviewFor(single), [single]);
   const columns = useColumnNavigation(
     id,
     path,

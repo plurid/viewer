@@ -696,6 +696,7 @@ export const schemas = {
   ]),
   videoRendition: z.tuple([id, id]),
   officeLayout: z.tuple([id, officeLayoutRequestSchema]),
+  officeWarm: z.tuple([]),
   officeImage: z.tuple([
     id,
     z
@@ -910,6 +911,7 @@ export const methodWindows = {
   imageRendition: 'viewer',
   videoRendition: 'viewer',
   officeLayout: 'viewer',
+  officeWarm: 'viewer',
   officeImage: 'viewer',
   printPDF: 'viewer',
   save: 'viewer',

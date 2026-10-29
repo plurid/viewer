@@ -6,7 +6,7 @@ import { editable } from '../commands/editing';
 import { useWorkspace } from '../workspace/context';
 import { Dialog, IconButton } from '../ui/primitives';
 import { OpenDefaultButton } from '../ui/navigation/OpenDefaultButton';
-import { PreviewHost } from './PreviewHost';
+import { HeldPreview } from './HeldPreview';
 import type { PreviewModule } from './contracts';
 import { baseName } from '../../domain/workspaces/planes';
 import { MAX_TEXT_BYTES } from '../../domain/editing/documents';
@@ -124,7 +124,7 @@ export const QuickPreview = memo(function QuickPreview({
       onClose={() => quickPreview(null)}
     >
       <div className="quick-preview">
-        <PreviewHost path={path} renderFooter={footer} />
+        <HeldPreview path={path} renderFooter={footer} />
       </div>
     </Dialog>
   );

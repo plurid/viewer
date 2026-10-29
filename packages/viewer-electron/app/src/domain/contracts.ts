@@ -815,6 +815,8 @@ export interface ViewerAPI {
   imageRendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
   videoRendition(id: string, requestID: string): Promise<Resource>;
   officeLayout(id: string, request: OfficeLayoutRequest): Promise<Resource>;
+  /** Starts the Office engine for a document about to be previewed; its layout then waits less. */
+  officeWarm(): Promise<void>;
   officeImage(id: string, part: string, requestID: string): Promise<Resource>;
   /** Opens the system print sheet for a previewed PDF stored as a file. */
   printPDF(id: string, password?: string): Promise<void>;

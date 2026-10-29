@@ -1,5 +1,23 @@
 /* Preview host, images, audio, video and 3D models. */
 .preview-plane,
+/* The shown preview and, while it loads out of sight, the next one: HeldPreview.tsx. */
+.held-preview {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+.held-preview-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.held-preview-waiting {
+  visibility: hidden;
+  pointer-events: none;
+}
 .preview-host {
   height: 100%;
   display: flex;

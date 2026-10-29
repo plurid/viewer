@@ -101,6 +101,32 @@ application-wide latency or network-volume guarantees. All fixtures and the resu
 crawling and content extraction. Keep those costs separate from mounted-provider latency and
 first-open parsing.
 
+`tests/native/preview-latency.ts` times Quick Preview from the Space key to the first frame with
+content, in the page itself, for a small EPUB, DOCX, XLSX, PDF, JPEG and Markdown file. It runs once
+with the index idle and once while it crawls 30,000 files, and it counts empty preview frames while
+the selection moves through Columns. From the app directory, run:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 VIEWER_TEST_BINARY=<Viewer executable> \
+node --import tsx tests/native/preview-latency.ts
+```
+
+Results go to `out/perf/<time>/preview-latency.json`. What keeps it fast:
+
+- **Preview documents are read in their own worker** (`desktop/workers/preview-worker.ts`). In the
+  index's worker, a book waited for the index to open and for each step of a crawl.
+- **The index counts by root.** It purges excluded rows when the exclusions change, so its status
+  needs no per-path filter. On 2.5 million rows that filter took a second per crawl flush. Purges
+  run only when the folders, text permission or exclusions changed (`meta` table).
+- **Module code loads ahead.** Preview module code loads while the window is idle, and for the
+  selected file (`renderer/previews/module-loading.ts`). A module that suspends is held back by
+  React until 300 ms after its fallback appeared.
+- **The shown preview stays until the next has content** (`renderer/previews/HeldPreview.tsx`), and
+  progress appears only after 150 ms.
+- **An Office engine starts ahead of its document.** Selecting a Word or PowerPoint file, or
+  finishing a layout, starts the engine for the next one. It is still destroyed after its one
+  document, and closes after a minute unused (`desktop/previews/office-renderer.ts`).
+
 Preview qualification should record cold-to-usable-content time and warm cache read time separately.
 A derived-resource read excludes PDF parsing and painting. Large CSV/mesh parsing, image decode,
 Office conversion and folder-size scans have separate worker/queue limits; cancellation must release

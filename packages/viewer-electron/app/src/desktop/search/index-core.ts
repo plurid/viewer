@@ -38,6 +38,9 @@ export class FileIndex {
   private roots: IndexStatus['roots'] = [];
   private generation = 0;
   private count?: number;
+  /** Rows changed since the count: a crawl recounts at most every two seconds (`status`). */
+  private countStale = false;
+  private countedAt = 0;
   private config?: ApplicationSettings['search'];
   private excluded: (file: string) => boolean;
   /** The configuration the last `configure` applied (not the initial scope), to tell a repeat. */
@@ -72,6 +75,7 @@ export class FileIndex {
       this.db.exec(
         'CREATE TABLE IF NOT EXISTS source_documents(path TEXT PRIMARY KEY, version TEXT NOT NULL, document TEXT NOT NULL)',
       );
+      this.db.exec('CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)');
       const version = Number(
         (this.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
       );
@@ -208,7 +212,7 @@ export class FileIndex {
         }
       }
       this.db.exec('COMMIT');
-      this.count = undefined;
+      this.countStale = true;
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
@@ -253,15 +257,31 @@ export class FileIndex {
     return { where, params };
   }
   status(): IndexStatus {
-    if (this.count === undefined) {
-      const { where, params } = this.scope();
+    const crawling = this.roots.some((root) => root.status === 'indexing');
+    if (
+      this.count === undefined ||
+      (this.countStale && (!crawling || Date.now() - this.countedAt >= 2000))
+    ) {
+      // Excluded rows are purged when the exclusions change (`configure`), so the roots alone
+      // decide what counts. Filtering every path by the exclusions took a second on 2.5 million
+      // rows, and a crawl recounted after every flush: previews waited behind it.
+      const roots = this.config?.roots;
+      const where = roots?.length
+        ? `root IN (${roots.map(() => '?').join(',')})`
+        : roots
+          ? '0=1'
+          : '1=1';
       this.count = Number(
         (
           this.db
-            .prepare('SELECT count(*) AS n FROM files WHERE ' + where.join(' AND '))
-            .get(...params) as { n: number }
+            .prepare('SELECT count(*) AS n FROM files WHERE ' + where)
+            .get(...(roots ?? [])) as {
+            n: number;
+          }
         ).n,
       );
+      this.countStale = false;
+      this.countedAt = Date.now();
     }
     return {
       roots: this.roots.map((root) => ({ ...root })),
@@ -465,31 +485,17 @@ export class FileIndex {
     this.rebuilding = rebuild;
     this.config = config;
     this.excluded = searchExclusions(config.exclusions);
-    // Revoked folder authority must remove names and metadata as well as body text.
-    const deniedPaths: string[] = [],
-      deniedArgs: (string | number)[] = [];
-    for (const root of config.roots) {
-      const prefix = root.replace(/\/$/, '') + '/';
-      deniedPaths.push('NOT (path=? OR substr(path,1,?)=?)');
-      deniedArgs.push(root, prefix.length, prefix);
+    // Each purge reads every row, which takes seconds in a large index, and every launch configured
+    // anew: they run only when the folders, their text permission or the exclusions changed.
+    const purge = JSON.stringify([
+      config.roots,
+      config.contentRoots,
+      [...config.exclusions].sort(),
+    ]);
+    if (rebuild || this.meta('purged') !== purge) {
+      this.purge(config);
+      this.setMeta('purged', purge);
     }
-    const where = deniedPaths.length ? deniedPaths.join(' AND ') : '1';
-    this.db
-      .prepare('DELETE FROM names WHERE path IN (SELECT path FROM files WHERE ' + where + ')')
-      .run(...deniedArgs);
-    this.db.prepare('DELETE FROM files WHERE ' + where).run(...deniedArgs);
-    // Revoking text-index permission removes stored body text, even while paused.
-    const denied = ["content<>''"],
-      args: (string | number)[] = [];
-    for (const root of config.contentRoots) {
-      const prefix = root.replace(/\/$/, '') + '/';
-      denied.push('NOT (path=? OR substr(path,1,?)=?)');
-      args.push(root, prefix.length, prefix);
-    }
-    this.db.prepare("UPDATE names SET content='' WHERE " + denied.join(' AND ')).run(...args);
-    this.db.exec(
-      "DELETE FROM source_documents WHERE path NOT IN (SELECT path FROM files) OR path IN (SELECT path FROM names WHERE content='')",
-    );
     this.count = undefined;
     this.generation++;
     const generation = this.generation;
@@ -509,6 +515,70 @@ export class FileIndex {
         // the rebuild is done: a later crawl of a changed folder keeps what it extracted
         if (generation === this.generation) this.rebuilding = false;
       });
+  }
+  /**
+   * Removes what the configuration no longer allows: rows outside the folders, body text outside
+   * the text-permitted folders, and rows the exclusions now name. Every row left is searchable,
+   * so `status` counts by root alone.
+   */
+  private purge(config: ApplicationSettings['search']): void {
+    // Revoked folder authority must remove names and metadata as well as body text.
+    const deniedPaths: string[] = [],
+      deniedArgs: (string | number)[] = [];
+    for (const root of config.roots) {
+      const prefix = root.replace(/\/$/, '') + '/';
+      deniedPaths.push('NOT (path=? OR substr(path,1,?)=?)');
+      deniedArgs.push(root, prefix.length, prefix);
+    }
+    const where = deniedPaths.length ? deniedPaths.join(' AND ') : '1';
+    this.db
+      .prepare('DELETE FROM names WHERE rowid IN (SELECT rowid FROM files WHERE ' + where + ')')
+      .run(...deniedArgs);
+    this.db.prepare('DELETE FROM files WHERE ' + where).run(...deniedArgs);
+    // Excluded folders and names, which a crawl skips but an earlier configuration indexed.
+    const rules = searchExclusionRules(config.exclusions);
+    const excluded: string[] = [],
+      excludedArgs: (string | number)[] = [];
+    for (const rule of rules.paths) {
+      const prefix = rule.endsWith(path.sep) ? rule : rule + path.sep;
+      excluded.push('(path=? OR substr(path,1,?)=?)');
+      excludedArgs.push(rule, prefix.length, prefix);
+    }
+    for (const rule of rules.names) {
+      excluded.push('instr(?||path||?,?)>0');
+      excludedArgs.push(path.sep, path.sep, path.sep + rule + path.sep);
+    }
+    if (excluded.length) {
+      const named = excluded.join(' OR ');
+      this.db
+        .prepare('DELETE FROM names WHERE rowid IN (SELECT rowid FROM files WHERE ' + named + ')')
+        .run(...excludedArgs);
+      this.db.prepare('DELETE FROM files WHERE ' + named).run(...excludedArgs);
+    }
+    // Revoking text-index permission removes stored body text, even while paused.
+    const denied = ["content<>''"],
+      args: (string | number)[] = [];
+    for (const root of config.contentRoots) {
+      const prefix = root.replace(/\/$/, '') + '/';
+      denied.push('NOT (path=? OR substr(path,1,?)=?)');
+      args.push(root, prefix.length, prefix);
+    }
+    this.db.prepare("UPDATE names SET content='' WHERE " + denied.join(' AND ')).run(...args);
+    this.db.exec(
+      "DELETE FROM source_documents WHERE path NOT IN (SELECT path FROM files) OR path IN (SELECT path FROM names WHERE content='')",
+    );
+  }
+  private meta(key: string): string | undefined {
+    const row = this.db.prepare('SELECT value FROM meta WHERE key=?').get(key) as
+      { value: string } | undefined;
+    return row?.value;
+  }
+  private setMeta(key: string, value: string): void {
+    this.db
+      .prepare(
+        'INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+      )
+      .run(key, value);
   }
   /** Crawls again, in the current configuration, the roots that could not be read. */
   private retryOffline(): void {
@@ -628,13 +698,26 @@ export class FileIndex {
             root.path.replace(/\/$/, '').length + 1,
             root.path.replace(/\/$/, '') + '/',
           ) as { path: string }[]);
-    for (const file of stale) {
-      this.db
-        .prepare('DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)')
-        .run(file.path);
-      this.db.prepare('DELETE FROM files WHERE path=?').run(file.path);
-      // its extracted text too, as `remove` does: it stayed until the next configuration
-      this.db.prepare('DELETE FROM source_documents WHERE path=?').run(file.path);
+    // in transactions of 500, yielding between them: one commit per row took seconds after a
+    // large folder moved, and kept previews waiting in this worker
+    for (let start = 0; start < stale.length; start += 500) {
+      if (generation !== this.generation) return;
+      this.db.exec('BEGIN');
+      try {
+        for (const file of stale.slice(start, start + 500)) {
+          this.db
+            .prepare('DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)')
+            .run(file.path);
+          this.db.prepare('DELETE FROM files WHERE path=?').run(file.path);
+          // its extracted text too, as `remove` does: it stayed until the next configuration
+          this.db.prepare('DELETE FROM source_documents WHERE path=?').run(file.path);
+        }
+        this.db.exec('COMMIT');
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        throw error;
+      }
+      await new Promise((resolve) => setImmediate(resolve));
     }
     this.count = undefined;
     root.status = 'ready';

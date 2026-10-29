@@ -4,6 +4,7 @@ import path from 'node:path';
 import { UtilityClient } from '../workers/utility-client';
 import type { IndexMethods } from '../workers/index-protocol';
 import type { FolderSizeMethods } from './folder-size-worker';
+import type { PreviewMethods } from '../workers/preview-worker';
 import { entry } from './filesystem';
 import { spotlightTagged } from '../search/spotlight';
 import { parseFileQuery } from '../../domain/search/query';
@@ -52,6 +53,8 @@ export function coalescedIndexStatus(
 export class FileServices {
   private index: UtilityClient<IndexMethods>;
   private measurement: UtilityClient<FolderSizeMethods>;
+  /** Preview documents, apart from the index: its crawl kept a small book waiting for seconds. */
+  private previews: UtilityClient<PreviewMethods>;
   private configuration?: ApplicationSettings['search'];
   private configurations: Promise<void> = Promise.resolve();
   private unavailable: string[] = [];
@@ -62,6 +65,7 @@ export class FileServices {
   private accessRevision = 0;
   private createIndex: () => UtilityClient<IndexMethods>;
   private createMeasurement: () => UtilityClient<FolderSizeMethods>;
+  private createPreviews: () => UtilityClient<PreviewMethods>;
   constructor(
     private dataPath: string,
     worker: string,
@@ -113,6 +117,16 @@ export class FileServices {
         },
       );
     this.measurement = this.createMeasurement();
+    this.createPreviews = () =>
+      new UtilityClient<PreviewMethods>(path.join(path.dirname(worker), 'preview-worker.cjs'), {
+        name: 'Viewer previews',
+        backend: options.backend,
+      });
+    this.previews = this.createPreviews();
+  }
+  /** Starts the preview worker while the window is idle, so the first preview finds it ready. */
+  warmPreviews(): Promise<void> {
+    return this.previews.call('ready').then(() => {});
   }
   /** `rebuild`: crawl every root and extract every document again, whatever is stored. */
   configure(value: ApplicationSettings['search'], rebuild = false): Promise<void> {
@@ -249,7 +263,7 @@ export class FileServices {
   ): Promise<DocumentData> {
     await this.options.access?.([file]);
     const revision = this.accessRevision;
-    const result = await this.index.call(
+    const result = await this.previews.call(
       'extract',
       worksheet ? [file, undefined, chapters, worksheet] : [file, undefined, chapters],
       signal,
@@ -286,10 +300,11 @@ export class FileServices {
       .then(async () => {
         if (this.closing) throw new Error('File services have closed.');
         await this.configurations.catch(() => {});
-        await Promise.all([this.index.close(), this.measurement.close()]);
+        await Promise.all([this.index.close(), this.measurement.close(), this.previews.close()]);
         this.configuration = undefined;
         this.index = this.createIndex();
         this.measurement = this.createMeasurement();
+        this.previews = this.createPreviews();
       });
     this.lifecycle = work;
     return work;
@@ -297,7 +312,9 @@ export class FileServices {
   close(): Promise<void> {
     return (this.closing ??= this.lifecycle
       .catch(() => {})
-      .then(() => Promise.allSettled([this.index.close(), this.measurement.close()]))
+      .then(() =>
+        Promise.allSettled([this.index.close(), this.measurement.close(), this.previews.close()]),
+      )
       .then((results) => {
         const errors = results.flatMap((result) =>
           result.status === 'rejected' ? [result.reason] : [],

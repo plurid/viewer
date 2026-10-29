@@ -39,12 +39,23 @@ import { editingPlane } from '../editing/planes';
 import { useResource } from './useResource';
 import { PreviewRecovery } from './PreviewRecovery';
 import { documentServices } from './document-cache';
+import { loadedPreviewModule, preloadPreviewModule } from './module-loading';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
+/** One stable component per module. Once its code has loaded, the loader settles in the same call,
+ * so React renders it without suspending (`module-loading.ts` says why that matters). */
 function componentFor(module: PreviewModule) {
   let component = components.get(module.id);
   if (!component) {
-    component = lazy(module.load);
+    component = lazy(() => {
+      const ready = loadedPreviewModule(module);
+      if (!ready) return preloadPreviewModule(module).then((value) => ({ default: value }));
+      const settled = {
+        then: (resolve: (value: { default: React.ComponentType<PreviewContext> }) => void) =>
+          resolve({ default: ready }),
+      };
+      return settled as unknown as Promise<{ default: React.ComponentType<PreviewContext> }>;
+    });
     components.set(module.id, component);
   }
   return component;
