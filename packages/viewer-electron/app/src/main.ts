@@ -43,6 +43,8 @@ import { macFiles } from './desktop/native/macos-files';
 import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/workspaces/launch';
 import { askNatively } from './desktop/native/native-confirmation';
 import { saveBeforeClose, type SaveFailureChoice } from './desktop/windows/save-before-close';
+import { QuitSequence } from './desktop/windows/quit-sequence';
+import type { QuitChoice } from './desktop/windows/quit-sequence';
 import { WindowCreationRequests } from './desktop/windows/creation-requests';
 import { isolatedShellHome } from './desktop/windows/test-integration';
 import { isCLIInvocation } from './domain/cli/catalog';
@@ -212,11 +214,19 @@ if (!headless) {
 const ownsInstance =
   headless || app.requestSingleInstanceLock({ request: initialLaunch, error: launchError });
 if (!ownsInstance) app.quit();
-let closing = false;
-let quitting = false;
-let quitPending = false;
-let disposalPending = false;
-let disposed = false;
+const quit = new QuitSequence({
+  pendingOperations: () => desktop?.pendingOperations() ?? 0,
+  confirm: confirmQuit,
+  drained: drainOperations,
+  save: saveBeforeQuit,
+  stopGuests: async () => {
+    await desktop?.browsers.closeAll();
+  },
+  dispose: () => desktop?.dispose(),
+  closeHotkey: () => hotkey?.close(),
+  quit: () => app.quit(),
+  report: (context, error) => console.error(context, error),
+});
 const pendingPaths: string[] = [];
 
 async function saveFailure(
@@ -226,7 +236,8 @@ async function saveFailure(
 ): Promise<SaveFailureChoice> {
   console.error('Viewer could not finish saving', error);
   desktop?.emit({ type: 'service-error', service: 'persistence', message: errorMessage(error) });
-  if (backgroundTest || (quitPending && !applicationQuit)) return 'keep-open';
+  // once Quit has begun, its own save asks for every window
+  if (backgroundTest || (!quit.accepting() && !applicationQuit)) return 'keep-open';
   const choice = await askNatively(parent, {
     message: 'Viewer could not save your changes',
     detail: `${errorMessage(error)}\n\nYour window will stay open. Retry saving, or keep working and try again later.`,
@@ -303,7 +314,7 @@ async function createIndependentViewerWindow(): Promise<BrowserWindow | undefine
   const services = desktop;
   if (!services) return;
   return createIndependentWindow({
-    available: () => desktop === services && !quitPending && !quitting,
+    available: () => desktop === services && quit.accepting(),
     prepare: () => services.prepareSettings(),
     createWorkspace: () => services.createWorkspace(),
     create: createWindow,
@@ -311,7 +322,7 @@ async function createIndependentViewerWindow(): Promise<BrowserWindow | undefine
 }
 
 async function createWindow(workspaceID?: string): Promise<BrowserWindow | undefined> {
-  if ((window && !workspaceID) || quitPending || quitting) return window ?? undefined;
+  if ((window && !workspaceID) || !quit.accepting()) return window ?? undefined;
   await desktop?.prepareSettings();
   const desired = workspaceID ?? desktop?.workspaceSessions.snapshot()?.activeWorkspace;
   const existing = desired ? desktop?.windowForWorkspace(desired) : undefined;
@@ -319,7 +330,7 @@ async function createWindow(workspaceID?: string): Promise<BrowserWindow | undef
   return windowCreations.create(desired ?? 'initial', () => createViewerWindow(desired));
 }
 async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow | undefined> {
-  if ((window && !workspaceID) || quitPending || quitting) return window ?? undefined;
+  if ((window && !workspaceID) || !quit.accepting()) return window ?? undefined;
   const desiredWorkspace = workspaceID ?? desktop?.workspaceSessions.snapshot()?.activeWorkspace;
   const preferences = desktop?.windowPreferences(desiredWorkspace);
   const frame = workspaceFrame(desiredWorkspace);
@@ -394,7 +405,7 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
     if (!allowed) event.preventDefault();
   });
   createdWindow.on('close', (event) => {
-    if (allowedClose || closing || quitting) return;
+    if (allowedClose || quit.closingWindows()) return;
     event.preventDefault();
     if (closePending) return;
     closePending = true;
@@ -423,10 +434,10 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
     await createdWindow.loadURL(devURL || 'viewer-app://app/index.html');
     performanceMeter.mark('main:loaded');
   } catch (error) {
-    if (createdWindow.isDestroyed() || closePending || quitPending || quitting) return;
+    if (createdWindow.isDestroyed() || closePending || !quit.accepting()) return;
     throw error;
   }
-  if (!backgroundTest && !createdWindow.isDestroyed() && !closePending && !quitPending) {
+  if (!backgroundTest && !createdWindow.isDestroyed() && !closePending && quit.accepting()) {
     if (restored.maximized) createdWindow.maximize();
     createdWindow.show();
     if (restored.fullscreen) {
@@ -444,7 +455,7 @@ function rememberWindow(created: BrowserWindow): void {
 }
 async function openSettingsWindow(focus?: string): Promise<void> {
   await settingsClosing;
-  if (!desktop || quitPending || quitting) return;
+  if (!desktop || !quit.accepting()) return;
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     if (!backgroundTest) {
       settingsWindow.show();
@@ -478,7 +489,7 @@ async function openSettingsWindow(focus?: string): Promise<void> {
   let closePending = false,
     allowedClose = false;
   created.on('close', (event) => {
-    if (allowedClose || quitting) return;
+    if (allowedClose || quit.closingWindows()) return;
     event.preventDefault();
     if (closePending) return;
     closePending = true;
@@ -522,13 +533,13 @@ async function openSettingsWindow(focus?: string): Promise<void> {
   try {
     await created.loadURL(url.toString());
   } catch (error) {
-    if (created.isDestroyed() || closePending || quitPending || quitting) return;
+    if (created.isDestroyed() || closePending || !quit.accepting()) return;
     throw error;
   }
   if (!backgroundTest) created.show();
 }
 async function launch(request: LaunchRequest): Promise<void> {
-  if (!desktop || quitPending || quitting) return;
+  if (!desktop || !quit.accepting()) return;
   let target = window ?? undefined;
   if (request.workspace) {
     const spaces = desktop.workspaceSessions.snapshot()?.workspaces ?? [];
@@ -551,7 +562,7 @@ async function launch(request: LaunchRequest): Promise<void> {
 }
 
 app.on('second-instance', (_event, _argv, _cwd, additionalData) => {
-  if (quitPending || quitting) return;
+  if (!quit.accepting()) return;
   const request = launchRequestSchema.safeParse((additionalData as { request?: unknown })?.request);
   if (!request.success) return;
   void launch(request.data).catch((error) =>
@@ -564,13 +575,13 @@ app.on('open-file', (event, file) => {
   else pendingPaths.push(file);
   // with every window closed, the file waited for a later Dock click; a window opens
   // for it, as `activate` would open one
-  if (!headless && desktop && !window && !quitPending && !quitting) void createWindow();
+  if (!headless && desktop && !window && quit.accepting()) void createWindow();
 });
 app
   .whenReady()
   .then(async () => {
     performanceMeter.mark('main:ready');
-    if (!ownsInstance || quitPending || quitting) return;
+    if (!ownsInstance || !quit.accepting()) return;
     if (launchError) throw new Error(launchError);
     if (headless) {
       app.dock?.hide();
@@ -601,7 +612,7 @@ app
         process.stderr.write(errorMessage(error) + '\n');
         process.exitCode = 1;
       }
-      quitting = true;
+      quit.exitHeadless();
       // app.quit() ends with 0 whatever process.exitCode says, so an agent's client saw a failed
       // start as success: flush what was written, then exit with the failure
       if (process.exitCode) {
@@ -621,7 +632,7 @@ app
       path.join(app.getPath('userData'), 'settings-window-v1.json'),
     );
     await settingsWindowState.load();
-    if (quitPending || quitting) return;
+    if (!quit.accepting()) return;
     desktop = new Desktop(app.getPath('userData'), trusted, {
       shellCommandHome,
       openSettings: openSettingsWindow,
@@ -640,7 +651,7 @@ app
           ?.flush()
           .catch((error) => diagnostics.record('main-rejection', failure(error)));
       },
-      quitting: () => quitting,
+      quitting: () => quit.closingWindows(),
       hotkeyStatus: () => hotkey?.snapshot() ?? { registered: false, shortcut: 'Alt+Space' },
       restoreWindow: () => hotkey?.restore(),
       settingsCategory: (category) => {
@@ -776,7 +787,7 @@ app
   });
 app.on('activate', () => {
   void activateApplication({
-    available: () => !headless && !!desktop && !quitPending && !quitting,
+    available: () => !headless && !!desktop && quit.accepting(),
     present: !backgroundTest,
     restoreHotkey: () => hotkey?.restore() ?? false,
     currentWindow: () => {
@@ -787,54 +798,9 @@ app.on('activate', () => {
     createWindow: () => createWindow(),
   }).catch(reportApplicationCommandFailure);
 });
-/** Asking whether to quit with file operations in progress, or waiting for them to finish. */
-let quitAsking = false;
-function beginQuit(): void {
-  quitPending = true;
-  // Keep the bridge and services alive until every renderer has saved and
-  // Electron has closed its windows. Cleanup belongs to will-quit.
-  for (const created of viewerWindows) rememberWindow(created);
-  void saveBeforeClose(
-    async () => {
-      await Promise.all([
-        desktop?.flush(),
-        windowState?.flush(),
-        ...[...windowFrames.values()].map((frame) => frame.flush()),
-      ]);
-    },
-    (error) => saveFailure(error, window ?? undefined, true),
-  )
-    .then(async (saved) => {
-      if (!saved) {
-        quitPending = false;
-        return;
-      }
-      // Offscreen guests must stop while their owning renderer is still alive.
-      // Letting Electron close them with the app windows can leave Chromium's
-      // shutdown waiting even after will-quit and service disposal finish.
-      await desktop?.browsers.closeAll();
-      quitting = true;
-      closing = true;
-      app.quit();
-    })
-    .catch((error) => {
-      quitPending = false;
-      console.error('Viewer could not finish quitting', error);
-    });
-}
-app.on('before-quit', (event) => {
-  if (quitting) return;
-  event.preventDefault();
-  if (quitPending || quitAsking) return;
-  // Quit cancelled queued and running file operations without a word, so queued work was never
-  // done. With some in progress it asks first.
-  const pending = desktop?.pendingOperations() ?? 0;
-  if (!pending) {
-    beginQuit();
-    return;
-  }
-  quitAsking = true;
-  void askNatively(window ?? undefined, {
+/** Quit's question while file operations are in progress. */
+async function confirmQuit(pending: number): Promise<QuitChoice> {
+  const choice = await askNatively(window ?? undefined, {
     message:
       pending === 1
         ? 'A file operation is still in progress.'
@@ -844,35 +810,31 @@ app.on('before-quit', (event) => {
     buttons: ['Wait for them', 'Cancel them and quit', 'Keep Viewer open'],
     defaultId: 0,
     cancelId: 2,
-  })
-    .then(async (choice) => {
-      if (choice === 2) return;
-      if (choice === 0) {
-        // their questions are answered in the workspace window
-        if (!window) await createWindow();
-        await desktop?.operationsDrained();
-      }
-      beginQuit();
-    })
-    .catch((error) => console.error('Quit confirmation failed', error))
-    .finally(() => {
-      quitAsking = false;
-    });
-});
-app.on('will-quit', (event) => {
-  hotkey?.close();
-  if (disposed || !desktop) return;
-  event.preventDefault();
-  if (disposalPending) return;
-  disposalPending = true;
-  void desktop
-    .dispose()
-    .catch((error) => console.error('Desktop shutdown failed', error))
-    .finally(() => {
-      disposed = true;
-      app.quit();
-    });
-});
+  });
+  if (choice === 0) return 'wait';
+  if (choice === 2) return 'keep-open';
+  return 'cancel-operations';
+}
+async function drainOperations(): Promise<void> {
+  // their questions are answered in the workspace window
+  if (!window) await createWindow();
+  await desktop?.operationsDrained();
+}
+function saveBeforeQuit(): Promise<boolean> {
+  for (const created of viewerWindows) rememberWindow(created);
+  return saveBeforeClose(
+    async () => {
+      await Promise.all([
+        desktop?.flush(),
+        windowState?.flush(),
+        ...[...windowFrames.values()].map((frame) => frame.flush()),
+      ]);
+    },
+    (error) => saveFailure(error, window ?? undefined, true),
+  );
+}
+app.on('before-quit', (event) => quit.beforeQuit(event));
+app.on('will-quit', (event) => quit.willQuit(event));
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });

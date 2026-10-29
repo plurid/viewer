@@ -58,6 +58,10 @@ Terminals and window-owned servers have different close behavior. Preview leases
 guests and cancellation release their own work. Restoring a task or project never authorizes replay
 of commands or agent input.
 
+`desktop/windows/quit-sequence.ts` owns Quit's order: ask about running file operations, wait for
+them, save every window, stop browser guests, close the windows, stop the services. `main.ts` keeps
+Electron's events, the question's wording and each window's own close.
+
 ## Typed boundaries
 
 Each boundary has one typed definition that both sides use.

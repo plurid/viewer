@@ -11,12 +11,18 @@ const native = vi.hoisted(() => ({
   closeBrowsers: vi.fn<() => Promise<void>>(),
   flushSettings: vi.fn<() => Promise<void>>(),
   bridge: true,
-  options: undefined as { openSettings(): Promise<void> } | undefined,
+  options: undefined as { openSettings(): Promise<void>; quitting(): boolean } | undefined,
   profile: '',
   /** File operations Quit would cancel, and when they finish. */
   pending: 0,
   drained: Promise.resolve(),
   ask: vi.fn<(...args: unknown[]) => Promise<{ response: number }>>(),
+  /** Electron's readiness; Desktop exists only after it. */
+  ready: Promise.resolve(),
+  open: vi.fn(),
+  launchIn: vi.fn(),
+  mcp: vi.fn<() => Promise<void>>(),
+  cli: vi.fn<() => Promise<number>>(),
 }));
 class NativeEvent {
   prevented = false;
@@ -97,8 +103,10 @@ const application = Object.assign(new EventEmitter(), {
   requestSingleInstanceLock: () => true,
   getPath: () => native.profile,
   getAppPath: () => process.cwd(),
-  whenReady: () => Promise.resolve(),
+  getVersion: () => '0.0.0',
+  whenReady: () => native.ready,
   terminated: false,
+  exit: vi.fn<(code: number) => void>(),
   quit(): void {
     const before = new NativeEvent();
     application.emit('before-quit', before);
@@ -136,7 +144,8 @@ vi.mock('electron', () => ({
     },
   },
 }));
-vi.mock('../src/desktop/agents/mcp-client', () => ({ runMCPClient: vi.fn() }));
+vi.mock('../src/desktop/agents/mcp-client', () => ({ runMCPClient: native.mcp }));
+vi.mock('../src/desktop/cli/run', () => ({ runCLI: native.cli }));
 vi.mock('../src/desktop/bridge', () => ({
   Desktop: class {
     settings = {
@@ -159,9 +168,9 @@ vi.mock('../src/desktop/bridge', () => ({
       owner: () => undefined,
     };
     attach = vi.fn();
-    open = vi.fn();
+    open = native.open;
     openIn = vi.fn();
-    launchIn = vi.fn();
+    launchIn = native.launchIn;
     windowForWorkspace = vi.fn();
     emit = vi.fn();
     flush = native.flush;
@@ -205,11 +214,28 @@ beforeEach(async () => {
   native.pending = 0;
   native.drained = Promise.resolve();
   native.ask.mockReset().mockResolvedValue({ response: 2 });
+  native.options = undefined;
+  native.ready = Promise.resolve();
+  native.mcp.mockReset().mockResolvedValue();
+  native.cli.mockReset().mockResolvedValue(0);
+  application.exit.mockReset().mockImplementation(() => {
+    application.terminated = true;
+  });
   native.profile = await temporaryRoot('viewer-lifecycle-');
+});
+/** Starts Viewer with its first workspace window open and its own launch request delivered. */
+async function launch() {
   await import('../src/main');
   await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(1));
-});
+  await vi.waitFor(() => expect(native.launchIn).toHaveBeenCalledOnce());
+  native.launchIn.mockClear();
+}
+/** Waits for the work already started to run. */
+const idle = () => new Promise((resolve) => setTimeout(resolve, 20));
+/** Keeps an expected failure's log for the test to read. */
+const logged = () => vi.spyOn(console, 'error').mockImplementation(() => {});
 afterEach(async () => {
+  vi.restoreAllMocks();
   native.pending = 0;
   application.quit();
   await vi.waitFor(() => expect(application.terminated).toBe(true));
@@ -225,6 +251,7 @@ afterEach(async () => {
   await trashTemporary(native.profile);
 });
 describe('native window and application shutdown', () => {
+  beforeEach(launch);
   it('treats a load cancellation after closing a starting workspace as an expected close', async () => {
     TestWindow.windows[0].close();
     await vi.waitFor(() => expect(TestWindow.windows[0].destroyed).toBe(true));
@@ -316,6 +343,149 @@ describe('native window and application shutdown', () => {
     disposal.resolve();
     await vi.waitFor(() => expect(application.terminated).toBe(true));
   });
+  it('does not ask about a window’s own failed save while Quit saves, and Quit completes', async () => {
+    const save = gate();
+    native.flush.mockReturnValueOnce(save.promise);
+    native.flush.mockRejectedValueOnce(new Error('Draft storage is full'));
+    application.quit();
+    const window = TestWindow.windows[0];
+    window.close();
+    await vi.waitFor(() => expect(native.flush).toHaveBeenCalledTimes(2));
+    await idle();
+    expect(window.destroyed).toBe(false);
+    save.resolve();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(native.ask).not.toHaveBeenCalled();
+    expect(native.dispose).toHaveBeenCalledOnce();
+  });
+  it('does not ask about a window’s own save that fails after Quit closed the window', async () => {
+    const save = gate();
+    let fail!: (error: Error) => void;
+    native.flush.mockReturnValueOnce(save.promise);
+    native.flush.mockReturnValueOnce(
+      new Promise<void>((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+    application.quit();
+    const window = TestWindow.windows[0];
+    window.close();
+    save.resolve();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(window.destroyed).toBe(true);
+    fail(new Error('The window closed before its changes were saved.'));
+    await idle();
+    expect(native.ask).not.toHaveBeenCalled();
+  });
+  it.each(['before', 'after'] as const)(
+    'closes Settings once when its own save finishes %s the Quit save',
+    async (order) => {
+      await native.options!.openSettings();
+      const settings = TestWindow.windows[1];
+      const closed = vi.fn();
+      settings.on('closed', closed);
+      const save = gate();
+      const settingsSave = gate();
+      native.flush.mockReturnValueOnce(save.promise);
+      native.flushSettings.mockReturnValueOnce(settingsSave.promise);
+      application.quit();
+      settings.close();
+      expect(native.flushSettings).toHaveBeenCalledOnce();
+      const [first, second] = order === 'before' ? [settingsSave, save] : [save, settingsSave];
+      first.resolve();
+      await vi.waitFor(() => expect(closed).toHaveBeenCalledOnce());
+      second.resolve();
+      await vi.waitFor(() => expect(application.terminated).toBe(true));
+      await idle();
+      expect(closed).toHaveBeenCalledOnce();
+      expect(native.flushSettings).toHaveBeenCalledOnce();
+      expect(native.flush).toHaveBeenCalledOnce();
+      expect(native.dispose).toHaveBeenCalledOnce();
+    },
+  );
+  it('tells Desktop it is quitting only once Quit closes the windows', async () => {
+    const save = gate();
+    const guests = gate();
+    native.flush.mockReturnValueOnce(save.promise);
+    native.closeBrowsers.mockReturnValueOnce(guests.promise);
+    const quitting: boolean[] = [];
+    TestWindow.windows[0].on('closed', () => quitting.push(native.options!.quitting()));
+    expect(native.options!.quitting()).toBe(false);
+    application.quit();
+    expect(native.options!.quitting()).toBe(false);
+    save.resolve();
+    await vi.waitFor(() => expect(native.closeBrowsers).toHaveBeenCalledOnce());
+    expect(native.options!.quitting()).toBe(false);
+    guests.resolve();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(quitting).toEqual([true]);
+    expect(native.options!.quitting()).toBe(true);
+  });
+  it('cancels Quit when browser guests fail to stop, and a later Quit succeeds', async () => {
+    const log = logged();
+    native.closeBrowsers.mockRejectedValueOnce(new Error('A guest did not stop'));
+    application.quit();
+    await vi.waitFor(() => expect(log).toHaveBeenCalledOnce());
+    expect(log).toHaveBeenCalledWith('Viewer could not finish quitting', expect.any(Error));
+    expect(application.terminated).toBe(false);
+    expect(TestWindow.windows[0].destroyed).toBe(false);
+    expect(native.dispose).not.toHaveBeenCalled();
+    expect(native.ask).not.toHaveBeenCalled();
+    expect(native.options!.quitting()).toBe(false);
+    await native.options!.openSettings();
+    expect(TestWindow.windows).toHaveLength(2);
+    application.quit();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(native.flush).toHaveBeenCalledTimes(2);
+    expect(native.closeBrowsers).toHaveBeenCalledTimes(2);
+  });
+  it('terminates when Desktop fails to stop its services', async () => {
+    const log = logged();
+    native.dispose.mockRejectedValueOnce(new Error('Desktop services failed to stop.'));
+    application.quit();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    expect(native.dispose).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith('Desktop shutdown failed', expect.any(Error));
+  });
+  it('opens no window for activate, open-file, second-instance or Settings while Quit saves', async () => {
+    const workspace = TestWindow.windows[0];
+    workspace.close();
+    await vi.waitFor(() => expect(workspace.destroyed).toBe(true));
+    const save = gate();
+    native.flush.mockReturnValueOnce(save.promise);
+    application.quit();
+    application.emit('activate');
+    application.emit('open-file', new NativeEvent(), '/fixtures/report.pdf');
+    application.emit('second-instance', new NativeEvent(), [], '/fixtures', {
+      request: { paths: ['/fixtures/notes.txt'], newWindow: false, terminal: false },
+    });
+    await native.options!.openSettings();
+    await idle();
+    expect(TestWindow.windows).toHaveLength(1);
+    expect(native.open).toHaveBeenCalledExactlyOnceWith(['/fixtures/report.pdf']);
+    expect(native.launchIn).not.toHaveBeenCalled();
+    save.resolve();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+  });
+  it.each([
+    ['darwin', false],
+    ['linux', true],
+  ] as const)('on %s, closing the last window quits: %s', async (platform, quits) => {
+    const window = TestWindow.windows[0];
+    window.close();
+    await vi.waitFor(() => expect(window.destroyed).toBe(true));
+    const original = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { ...original, value: platform });
+    try {
+      application.emit('window-all-closed');
+    } finally {
+      Object.defineProperty(process, 'platform', original);
+    }
+    if (quits) await vi.waitFor(() => expect(application.terminated).toBe(true));
+    else await idle();
+    expect(application.terminated).toBe(quits);
+    expect(native.dispose).toHaveBeenCalledTimes(quits ? 1 : 0);
+  });
   describe('Quit while file operations are in progress (2026-10-21)', () => {
     // Quit cancelled them without a word: queued work was never done.
     const buttons = () => (native.ask.mock.calls[0]?.[1] as { buttons: string[] }).buttons;
@@ -351,6 +521,55 @@ describe('native window and application shutdown', () => {
       finished.resolve();
       await vi.waitFor(() => expect(application.terminated).toBe(true));
       expect(native.flush).toHaveBeenCalledOnce();
+    });
+    it('keeps Viewer open when waiting for them fails, and a later Quit asks again', async () => {
+      const log = logged();
+      native.pending = 1;
+      const stopped = Promise.reject(new Error('The operation queue stopped'));
+      stopped.catch(() => {});
+      native.drained = stopped;
+      native.ask.mockResolvedValueOnce({ response: 0 });
+      application.quit();
+      await vi.waitFor(() => expect(log).toHaveBeenCalledOnce());
+      expect(log).toHaveBeenCalledWith('Quit confirmation failed', expect.any(Error));
+      expect(native.flush).not.toHaveBeenCalled();
+      expect(application.terminated).toBe(false);
+      expect(TestWindow.windows.every((window) => !window.destroyed)).toBe(true);
+      native.ask.mockResolvedValueOnce({ response: 1 });
+      application.quit();
+      await vi.waitFor(() => expect(application.terminated).toBe(true));
+      expect(native.ask).toHaveBeenCalledTimes(2);
+      expect(native.flush).toHaveBeenCalledOnce();
+    });
+    it('opens a window for activate, open-file and second-instance while it asks', async () => {
+      const closeWindows = async () => {
+        for (const window of TestWindow.windows) window.close();
+        await vi.waitFor(() =>
+          expect(TestWindow.windows.every((window) => window.destroyed)).toBe(true),
+        );
+      };
+      await closeWindows();
+      native.pending = 1;
+      const answer = gate();
+      native.ask.mockReturnValueOnce(answer.promise.then(() => ({ response: 2 })));
+      application.quit();
+      await vi.waitFor(() => expect(native.ask).toHaveBeenCalledOnce());
+      application.emit('activate');
+      await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(2));
+      await closeWindows();
+      application.emit('open-file', new NativeEvent(), '/fixtures/report.pdf');
+      expect(native.open).toHaveBeenCalledExactlyOnceWith(['/fixtures/report.pdf']);
+      await vi.waitFor(() => expect(TestWindow.windows).toHaveLength(3));
+      await closeWindows();
+      application.emit('second-instance', new NativeEvent(), [], '/fixtures', {
+        request: { paths: ['/fixtures/notes.txt'], newWindow: false, terminal: false },
+      });
+      await vi.waitFor(() => expect(native.launchIn).toHaveBeenCalledOnce());
+      expect(TestWindow.windows).toHaveLength(4);
+      answer.resolve();
+      await idle();
+      expect(application.terminated).toBe(false);
+      expect(TestWindow.windows[3].destroyed).toBe(false);
     });
   });
   it('a native window close saves once and preserves services for macOS reopening', async () => {
@@ -408,5 +627,72 @@ describe('native window and application shutdown', () => {
     expect(window.destroyed).toBe(false);
     retried.resolve();
     await vi.waitFor(() => expect(window.destroyed).toBe(true));
+  });
+});
+describe('Quit before Desktop exists', () => {
+  it('terminates without opening a window or stopping services', async () => {
+    const ready = gate();
+    native.ready = ready.promise;
+    await import('../src/main');
+    application.quit();
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+    ready.resolve();
+    await idle();
+    expect(TestWindow.windows).toHaveLength(0);
+    expect(native.options).toBeUndefined();
+    expect(native.dispose).not.toHaveBeenCalled();
+    expect(application.exit).not.toHaveBeenCalled();
+  });
+});
+describe('headless exit', () => {
+  const argv = process.argv;
+  const exitCode = process.exitCode;
+  let written: string[];
+  beforeEach(() => {
+    written = [];
+    const record = (name: string) =>
+      ((chunk: string, done?: () => void) => {
+        written.push(`${name} ${chunk}`);
+        done?.();
+        return true;
+      }) as typeof process.stdout.write;
+    vi.spyOn(process.stdout, 'write').mockImplementation(record('stdout'));
+    vi.spyOn(process.stderr, 'write').mockImplementation(record('stderr'));
+    application.exit.mockImplementation((code) => {
+      written.push(`exit ${code}`);
+      application.terminated = true;
+    });
+  });
+  afterEach(() => {
+    process.argv = argv;
+    process.exitCode = exitCode;
+  });
+  /** Starts Viewer as `viewer <args>` from a terminal. */
+  async function run(...args: string[]) {
+    process.argv = [argv[0]!, argv[1]!, ...args];
+    await import('../src/main');
+    await vi.waitFor(() => expect(application.terminated).toBe(true));
+  }
+  it('reports a failed agent server, flushes both streams, then exits with 1', async () => {
+    native.mcp.mockRejectedValue(new Error('The agent server is unavailable'));
+    await run('--mcp');
+    expect(written).toEqual([
+      'stderr The agent server is unavailable\n',
+      'stdout ',
+      'stderr ',
+      'exit 1',
+    ]);
+  });
+  it('exits with a failed command’s code after flushing both streams', async () => {
+    native.cli.mockResolvedValue(3);
+    await run('--version');
+    expect(written).toEqual(['stdout ', 'stderr ', 'exit 3']);
+  });
+  it('quits normally after a successful command', async () => {
+    await run('--version');
+    expect(native.cli).toHaveBeenCalledOnce();
+    expect(application.exit).not.toHaveBeenCalled();
+    expect(written).toEqual([]);
+    expect(native.options).toBeUndefined();
   });
 });
