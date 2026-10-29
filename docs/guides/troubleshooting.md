@@ -2,7 +2,7 @@
 
 ## Viewer will not start from source
 
-- Check the versions: Node 22.13 or later and pnpm 11. Run `node --version` and `pnpm --version`.
+- Check the versions: Node 22.22 or later and pnpm 11. Run `node --version` and `pnpm --version`.
 - Install the Xcode command-line tools with `xcode-select --install`, then run `pnpm install` again.
 - Read the first error `pnpm start` prints; [Build and run Viewer](../development/builds.md) lists
   the requirements.

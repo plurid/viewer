@@ -10,7 +10,7 @@ Developer preview for macOS on Apple Silicon. Windows and Linux are in progress;
 
 ## Run it
 
-You need macOS with the Xcode command-line tools, Node 22.13 or later, and pnpm 11.
+You need macOS with the Xcode command-line tools, Node 22.22 or later, and pnpm 11.
 
 ```sh
 git clone https://github.com/plurid/viewer.git

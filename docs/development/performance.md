@@ -102,11 +102,11 @@ crawling and content extraction. Keep those costs separate from mounted-provider
 first-open parsing.
 
 `tests/native/preview-latency.ts` times Quick Preview from the Space key to the first frame with
-content, in the page itself, for a small EPUB, DOCX, XLSX, PDF, JPEG and Markdown file, and one file
-for each later reader: ODT, notebook, calendar, subtitles, JAR, Scala, SQLite and a WMV that needs a
-compatibility copy. A preview whose text says it could not open fails the run. It runs once with the
-index idle and once while it crawls 30,000 files, and it counts empty preview frames while the
-selection moves through Columns. From the app directory, run:
+content, in the page itself, for a small EPUB, DOCX, XLSX, PDF, DjVu, JPEG and Markdown file, and
+one file for each later reader: ODT, notebook, calendar, subtitles, JAR, Scala, SQLite and a WMV
+that needs a compatibility copy. A preview whose text says it could not open fails the run. It runs
+once with the index idle and once while it crawls 30,000 files, and it counts empty preview frames
+while the selection moves through Columns. From the app directory, run:
 
 ```sh
 VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 VIEWER_TEST_BINARY=<Viewer executable> \

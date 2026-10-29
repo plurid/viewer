@@ -16,8 +16,11 @@ export function watchDirectory(
     ignored?(file: string): boolean;
     changed(file: string): void;
     failed(error: Error): void;
+    /** The platform whose backend to use: a test takes Linux's path on any system. */
+    platform?: NodeJS.Platform;
   },
 ): DirectoryWatch {
+  const platform = options.platform ?? process.platform;
   let native: FSWatcher | undefined;
   let fallback: RecursiveWatcher | undefined;
   let closing: Promise<void> | undefined;
@@ -42,7 +45,7 @@ export function watchDirectory(
     options.changed(file);
   };
   try {
-    if (!options.recursive || process.platform === 'darwin' || process.platform === 'win32') {
+    if (!options.recursive || platform === 'darwin' || platform === 'win32') {
       native = watch(folder, { recursive: options.recursive ?? false }, (_event, filename) => {
         // Missing filenames are a request to reconcile the directory, never to
         // ignore a change. Index updates infer additions/removals from disk.
@@ -51,6 +54,8 @@ export function watchDirectory(
       native.on('error', failed);
     } else {
       fallback = chokidar.watch(folder, {
+        // a watch per directory: what chokidar picks on Linux, and on any system in a test
+        backend: 'native',
         ignoreInitial: true,
         followSymlinks: false,
         ignored: options.ignored,

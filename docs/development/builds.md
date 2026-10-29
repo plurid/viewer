@@ -1,6 +1,6 @@
 # Build and run Viewer
 
-The current development setup is macOS with Xcode command-line tools, Node **22.13 or later** and
+The current development setup is macOS with Xcode command-line tools, Node **22.22 or later** and
 pnpm **11**. `package.json` records the exact package-manager pin. Native helpers and bundled
 processors make the first setup larger than a renderer-only web project.
 
@@ -57,6 +57,13 @@ merely by rebuilding JavaScript.
 Use the lockfile for installs. `pnpm plurid:check` checks installed Plurid distributions against
 registry tarballs. `pnpm plurid:update` prepares a coordinated registry update; `pnpm plurid:sync`
 is a local-development overlay that release qualification rejects.
+
+Two TypeScript versions are installed. `pnpm check` compiles with TypeScript 7 (`tsc`, from
+`@typescript/native`). TypeScript 7 has no compiler API yet, so the `typescript` package is the
+TypeScript 6 shim (`@typescript/typescript6`, command `tsc6`): typescript-eslint, the architecture
+test and the hotkey-window native check use it. Editors use the workspace's `typescript`, that is 6,
+unless the TypeScript 7 editor extension is enabled. Move to one version when typescript-eslint
+supports the TypeScript 7 API.
 
 Build helpers prepare pinned Office, media, PDF, RAW and local speech resources. Speech uses a
 checksum-pinned whisper.cpp macOS framework and a small owned C++ helper; model weights download

@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { ensureElectronRuntime } from './native-build/runtime';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+/** A file a package keeps its license or notices in: LICENSE, COPYING, NOTICE, and the notices of
+ * what a build links in, such as djvu-rs's THIRD_PARTY_NOTICES for the crates in its WebAssembly. */
+export const noticeFile = (name: string) =>
+  /^(?:third[-_]party[-_])?(?:licen[cs]es?|copying|notices?)(?:[.-].*)?$/i.test(name);
 const exec = promisify(execFile);
 type Package = {
   name: string;
@@ -63,9 +67,7 @@ export async function licenseInventory() {
       if ((await stat(parent).catch(() => undefined))?.isDirectory()) directories.push(parent);
     }
     for (const directory of [...new Set(directories)]) {
-      const files = (await readdir(directory))
-        .filter((name) => /^(license|licence|copying|notice)(?:[.-].*)?$/i.test(name))
-        .sort();
+      const files = (await readdir(directory)).filter(noticeFile).sort();
       for (const file of files) {
         const content = await readFile(path.join(directory, file), 'utf8').catch(() => undefined);
         if (content === undefined) continue;

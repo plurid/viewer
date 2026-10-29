@@ -41,7 +41,7 @@ await Promise.all([mkdir(files), mkdir(crawl)]);
 // Fixtures: one small file per format, and a tree large enough to keep the index crawling
 
 const jpeg = await readFile(path.join(app, '../../../docs/media/source.jpg'));
-const wanted = ['.epub', '.docx', '.xlsx'];
+const wanted = ['.epub', '.docx', '.xlsx', '.djvu'];
 const fixtures: { name: string; bytes: Uint8Array | string }[] = [
   ...documentSamples(jpeg)
     .filter((sample) => wanted.includes(path.extname(sample.path)))
@@ -71,7 +71,7 @@ const docx = fixtures.find((fixture) => fixture.name.endsWith('.docx'))!;
 const nextDocument = { name: 'Report.docx', bytes: docx.bytes };
 for (const fixture of [...fixtures, nextDocument])
   await writeFile(path.join(files, fixture.name), fixture.bytes, { flag: 'wx' });
-assert.equal(fixtures.length, 14, 'Every format has a fixture.');
+assert.equal(fixtures.length, 15, 'Every format has a fixture.');
 for (let folder = 0; folder < 300; folder++) {
   const directory = path.join(crawl, `Folder ${folder}`);
   await mkdir(directory);
