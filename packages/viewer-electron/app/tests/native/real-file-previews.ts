@@ -32,7 +32,9 @@ const root = await temporaryRoot('viewer-native-real-files-'),
   profile = path.join(root, 'Profile');
 await Promise.all([mkdir(files), mkdir(profile)]);
 const corpus = [
-  ...qualificationSamples.filter((sample) => sample.formats.length),
+  ...qualificationSamples.filter(
+    (sample) => sample.formats.length && !sample.formats.includes('epub'),
+  ),
   ...remoteSamples.filter((sample) =>
     sample.formats.some((extension) => ['dng', 'nef', 'ogv'].includes(extension)),
   ),

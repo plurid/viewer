@@ -91,6 +91,21 @@ content, and test cancellation and a cold restart.
 `VIEWER_TEST_REAL_CORPUS` to a separate retained corpus with the same relative sample paths to
 qualify files without changing the playground. Every input still requires its pinned size and hash.
 
+`tests/native/reader-qualification.ts` checks the published EPUBs pinned in
+`tools/playground/reader-samples.ts`: long chapter lists, supported illustrations, internal notes,
+Unicode links/search, query replacement, warm reopening and cold restart. Obtain these references
+with `pnpm playground:qualify`; set `VIEWER_TEST_READER_CORPUS` to an alternative corpus root with
+the same `qualification/readers/` paths. An optional filename argument selects one book. Source
+hashes remain checked before and after every run.
+
+`tests/native/document-recovery.ts` uses mutable copies of the public note-linked EPUB and large
+workbook. It checks retained reading/selection state through a rename and a temporarily parked
+folder, then changes document bytes to check cache invalidation. Pinned originals and before-edit
+copies remain intact. An interrupted external save must show an error and recover after valid bytes
+return; the owned app must still quit cleanly. It uses the same reader-corpus override; the workbook
+comes from the stable playground. `tests/native/worksheet-pages.ts` separately covers deep public
+worksheet pages, sparse rows, empty/malformed sheets, source citations and worksheet switching.
+
 ### Independent Office references
 
 `tests/native/office-layout.ts` opens pinned public DOC/DOCX, XLS/XLSX and PPT/PPTX samples in the

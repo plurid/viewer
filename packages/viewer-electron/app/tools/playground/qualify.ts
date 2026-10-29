@@ -49,7 +49,7 @@ export async function qualifyPlayground(options: PlaygroundOptions, progress = c
   results.push(
     await files.put(
       'qualification/README-v2.md',
-      '# Preview qualification references\n\nOriginal public PDFs and application-authored Office regression documents, with pinned source URLs, sizes, SHA256 and licenses in manifest-v2.json. They complement the original camera RAW photographs and 33-second Big Buck Bunny trailer already in the playground. Office previews expose semantic content and stored cell values; charts, formatting and document layout are partial. References are never executed, macros never run, and these files do not assert universal format support.\n\nExisting files and the main playground manifest remain untouched. Modified references are reported and preserved. Generated reports are immutable.\n',
+      '# Preview qualification references\n\nOriginal public PDFs, published EPUBs and application-authored Office regression documents, with pinned source URLs, sizes, SHA256 and licenses in manifest-v2.json. They complement the camera RAW photographs and Big Buck Bunny trailer in the playground. Office layout uses its local renderer; bounded Reading and Sheet views expose semantic text and saved cell values separately. EPUB references exercise chapters, illustrations, internal notes, Unicode links, search and reading restoration. Coverage remains format-specific. Reference scripts and macros never run.\n\nExisting files and the main playground manifest remain untouched. Modified references are reported and preserved. Generated reports are immutable.\n',
     ),
   );
   const report = { version: 1, directory: files.root, files: results },
@@ -61,7 +61,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const options = parseArguments(process.argv.slice(2));
   if (options === 'help')
     console.log(
-      'Usage: pnpm playground:qualify [--directory /absolute/path] [--offline]\nAdds pinned PDF/Office qualification references and a separate manifest without overwriting existing files.',
+      'Usage: pnpm playground:qualify [--directory /absolute/path] [--offline]\nAdds pinned PDF, Office and EPUB qualification references and a separate manifest without overwriting existing files.',
     );
   else
     qualifyPlayground(options)

@@ -1514,6 +1514,11 @@ export class Desktop {
     this.comparisons.close();
     this.duplicates.close();
     await this.watchRules.close();
+    // Agent cancellation lists workflows and proposals. Keep their owners available
+    // until the transport and any queued configuration change have stopped.
+    const agentShutdown = await Promise.allSettled([
+      this.agentsConfiguration.catch(() => {}).then(() => this.agents.close()),
+    ]);
     await this.workflows.close();
     // Cancel the read-only worker before waiting for planners that may be
     // awaiting extraction. File mutations still drain through their journal.
@@ -1522,7 +1527,6 @@ export class Desktop {
       this.externalTerminals.close(),
       this.files.close(),
       this.actions.close(),
-      this.agentsConfiguration.catch(() => {}).then(() => this.agents.close()),
       this.watchers.close(),
       this.operations.close(),
       this.buffers.close(),
@@ -1553,7 +1557,7 @@ export class Desktop {
     for (const request of this.agentCommands.values())
       request.finish('The application closed before completing the action.');
     ipcMain.removeHandler('viewer:request');
-    const errors = results.flatMap((result) =>
+    const errors = [...agentShutdown, ...results].flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : [],
     );
     if (errors.length) throw new AggregateError(errors, 'Desktop services failed to stop.');

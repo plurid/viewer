@@ -1,6 +1,42 @@
+import type { WorkbookCell, WorkbookRow, WorkbookMerge } from './office';
+import { columnName } from './office';
+
 export interface TableAddress {
   row: number;
   column: number;
+}
+export interface TableCellSelection {
+  row: number;
+  cell: WorkbookCell;
+  merge?: string;
+}
+
+/** A saved address can name an unstored blank or a merge anchored outside this page. */
+export function resolveTableCell(
+  address: TableAddress,
+  rows: readonly WorkbookRow[],
+  merges: readonly WorkbookMerge[],
+): TableCellSelection {
+  const merge = merges.find(
+    (merge) =>
+      address.row >= merge.fromRow &&
+      address.row <= merge.toRow &&
+      address.column >= merge.fromColumn &&
+      address.column <= merge.toColumn,
+  );
+  const row = merge?.fromRow ?? address.row;
+  const column = merge?.fromColumn ?? address.column;
+  return {
+    row,
+    cell: merge?.anchor ??
+      rows.find((item) => item.row === row)?.cells.find((cell) => cell.column === column) ?? {
+        column,
+        value: '',
+      },
+    merge: merge
+      ? `${columnName(merge.fromColumn)}${merge.fromRow}:${columnName(merge.toColumn)}${merge.toRow}`
+      : undefined,
+  };
 }
 
 export function parseCellAddress(value: string, columns: number): TableAddress | undefined {

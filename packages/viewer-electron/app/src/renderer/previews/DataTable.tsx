@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { moveTableCell, parseCellAddress } from '../../domain/previews/documents/table-navigation';
-import type { TableAddress } from '../../domain/previews/documents/table-navigation';
+import {
+  moveTableCell,
+  parseCellAddress,
+  resolveTableCell,
+} from '../../domain/previews/documents/table-navigation';
+import type {
+  TableAddress,
+  TableCellSelection,
+} from '../../domain/previews/documents/table-navigation';
 import { useVirtualizer, defaultRangeExtractor } from '@tanstack/react-virtual';
 import type { EvidenceAnchor } from '../../domain/files/inspection';
 import type {
@@ -100,7 +107,7 @@ export function DataTable({
   );
 
   const [viewportWidth, setViewportWidth] = useState(840);
-  const [selection, setSelection] = useState<{ row: number; cell: WorkbookCell; merge?: string }>();
+  const [selection, setSelection] = useState<TableCellSelection>();
   const focusedRow = selection?.row ?? target?.row ?? remembered?.row ?? anchor?.row;
   const focusedColumn =
     selection?.cell.column ?? target?.column ?? remembered?.column ?? anchor?.column ?? 1;
@@ -225,50 +232,20 @@ export function DataTable({
         (anchor.column - 1) * columnWidth - ref.current.clientWidth / 2 + columnWidth / 2,
       );
   }, [anchor, query, body, virtual, columnWidth]);
+  const addressToInspect =
+    remembered?.row && remembered.column
+      ? { row: remembered.row, column: remembered.column }
+      : (anchor ?? (rows[0] ? { row: rows[0].row, column: 1 } : undefined));
   const current =
-    selection ||
-    (remembered?.row &&
-      remembered.column && {
-        row: remembered.row,
-        cell: rows
-          .find((row) => row.row === remembered.row)
-          ?.cells.find((cell) => cell.column === remembered.column),
-      }) ||
-    (anchor && {
-      row: anchor.row,
-      cell: rows
-        .find((row) => row.row === anchor.row)
-        ?.cells.find((cell) => cell.column === anchor.column),
-    }) ||
-    (rows[0] && {
-      row: rows[0].row,
-      cell: rows[0].cells.find((cell) => cell.column === 1) ?? { column: 1, value: '' },
-    });
+    selection || (addressToInspect && resolveTableCell(addressToInspect, rows, merges));
   const activeRow = current?.row ?? rows[0]?.row ?? 1;
   const activeColumn = current?.cell?.column ?? remembered?.column ?? 1;
   const selectCell = useCallback(
     (requested: TableAddress, focus = true) => {
-      const merge = merges.find(
-        (merge) =>
-          requested.row >= merge.fromRow &&
-          requested.row <= merge.toRow &&
-          requested.column >= merge.fromColumn &&
-          requested.column <= merge.toColumn,
-      );
-      const row = merge?.fromRow ?? requested.row;
-      const column = merge?.fromColumn ?? requested.column;
-      const cell = merge?.anchor ??
-        rows.find((item) => item.row === row)?.cells.find((cell) => cell.column === column) ?? {
-          column,
-          value: '',
-        };
-      setSelection({
-        row,
-        cell,
-        merge: merge
-          ? `${columnName(merge.fromColumn)}${merge.fromRow}:${columnName(merge.toColumn)}${merge.toRow}`
-          : undefined,
-      });
+      const selected = resolveTableCell(requested, rows, merges);
+      const row = selected.row,
+        column = selected.cell.column;
+      setSelection(selected);
       setViews((previous) => rememberTableView(previous, label, { row, column }));
       const index = body.findIndex((item) => item.row >= requested.row);
       if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });

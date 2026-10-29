@@ -36,6 +36,57 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+it('restores inspection for a selected blank cell and a merge whose anchor is on another page', () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const restored = {
+    get: (key: string) => (key === 'table.views' ? { Sheet: { row: 104, column: 2 } } : undefined),
+    set: vi.fn(),
+  };
+  const view = render(
+    <DataTable
+      state={restored}
+      rows={[{ row: 104, cells: [{ column: 4, value: 'Visible value' }] }]}
+      headers={['A', 'B', 'C', 'D']}
+      label="Sheet"
+      numbered
+    />,
+  );
+  expect(screen.getByRole('textbox', { name: 'Cell address' })).toHaveProperty('value', 'B104');
+  expect(document.querySelector('.workbook-cell-detail')?.textContent).toContain('Empty cell');
+  view.unmount();
+  const merged = {
+    get: (key: string) => (key === 'table.views' ? { Sheet: { row: 3, column: 1 } } : undefined),
+    set: vi.fn(),
+  };
+  render(
+    <DataTable
+      state={merged}
+      rows={[{ row: 104, cells: [{ column: 4, value: 'Visible value' }] }]}
+      merges={[
+        {
+          fromRow: 3,
+          toRow: 104,
+          fromColumn: 1,
+          toColumn: 3,
+          anchor: { column: 1, value: 'Merged source value' },
+        },
+      ]}
+      headers={['A', 'B', 'C', 'D']}
+      label="Sheet"
+      numbered
+    />,
+  );
+  expect(document.querySelector('.workbook-cell-detail')?.textContent).toContain(
+    'Merged source value',
+  );
+  expect(document.querySelector('.workbook-cell-detail')?.textContent).toContain('Merged A3:C104');
+});
 it('keeps one grid stop and navigates cells, formulas, addresses and page boundaries', () => {
   vi.stubGlobal(
     'ResizeObserver',

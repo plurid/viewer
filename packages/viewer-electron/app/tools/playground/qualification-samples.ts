@@ -1,4 +1,5 @@
 import type { RemoteSample } from './types';
+import { readerSamples } from './reader-samples';
 const poi =
   'https://raw.githubusercontent.com/apache/poi/5c44755a2a7569a5884dc8f1f680ca3a86fa245f/';
 const records = [
@@ -39,6 +40,7 @@ const records = [
   ],
 ] as const;
 export const qualificationSamples: RemoteSample[] = [
+  ...readerSamples,
   {
     path: 'qualification/files/poi-large-workbook.xlsx',
     formats: ['xlsx'],
