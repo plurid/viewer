@@ -13,6 +13,7 @@ import { report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { PDFPagePreview } from './PDFPagePreview';
 import './pdf-tools.css';
+import { isActiveJob } from '../../domain/operations/jobs';
 
 export function PDFToolsDialog({
   files,
@@ -105,8 +106,7 @@ export function PDFToolsDialog({
     included = pages.filter((page) => page.included);
   const exports = jobs.filter((job) => ids.includes(job.id)),
     outputs = exports.flatMap((job) => job.completed).filter((item) => item.destination);
-  const working =
-    busy || exports.some((job) => ['queued', 'running', 'collision'].includes(job.status));
+  const working = busy || exports.some((job) => isActiveJob(job));
   const update = (id: string, change: Partial<PDFDraftPage>) =>
     setPages((pages) => pages.map((page) => (page.id === id ? { ...page, ...change } : page)));
   const move = (delta: number) => {

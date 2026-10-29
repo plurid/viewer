@@ -53,7 +53,7 @@ import {
   rendererRequestAllowed,
 } from './desktop/windows/web-content-policy';
 import { performanceMeter } from './desktop/diagnostics/performance';
-import { assetPath } from './desktop/native/assets';
+import { assetPath, setAssetRoot } from './desktop/native/assets';
 const terminalArguments = process.argv.slice(app.isPackaged ? 1 : 2);
 const mcpMode = terminalArguments[0] === '--mcp';
 const cliMode = !mcpMode && isCLIInvocation(terminalArguments);
@@ -94,6 +94,7 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 app.setName('Viewer');
+setAssetRoot(app.isPackaged, app.getAppPath());
 performanceMeter.start();
 // Hidden rendering is restricted to QA with an explicitly isolated profile.
 const renderTest = process.env.VIEWER_RENDER_TEST === '1';

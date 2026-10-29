@@ -6,6 +6,7 @@ import { runProcessor } from '../transforms/process';
 import { imageDimensions } from './image-dimensions';
 import { PreviewDerivation, type PreviewDerivationKind } from '../../domain/previews/derivations';
 import type { OfficeLayoutMetadata } from '../../domain/previews/documents/layout';
+import { Slots } from './slots';
 
 export type DerivedMode = PreviewDerivationKind;
 export interface DerivedRendition {
@@ -52,12 +53,16 @@ export class DerivedPreviews {
   private cached = new Map<string, Cached>();
   private pending = new Map<string, Pending>();
   private bytes = 0;
-  private tail: Promise<unknown> = Promise.resolve();
+  private readonly slots: Slots;
+  /** `decoders` run at once: one for RAW and video, a few for small image renditions. */
   constructor(
     private access: (files: readonly string[]) => Promise<void>,
     private decode: Decoder,
     private budget = 128 * 1024 * 1024,
-  ) {}
+    decoders = 1,
+  ) {
+    this.slots = new Slots(decoders);
+  }
   private unpin(entry: Cached): void {
     entry.pins--;
     if (!entry.pins && entry.retired) this.bytes -= entry.value.data.length;
@@ -135,10 +140,9 @@ export class DerivedPreviews {
         if (this.pending.size >= 8)
           throw new Error('Too many local previews are opening. Close a preview and try again.');
         const abort = new AbortController();
-        // One active expensive decoder. A cancelled queued job never starts.
-        const work = this.tail
-          .catch(() => {})
-          .then(async () => {
+        // A bounded number of active decoders. A cancelled queued job never starts.
+        const work = this.slots
+          .run(async () => {
             abort.signal.throwIfAborted();
             const value = await fileCoordination.run(
               [{ path: actual, mode: 'read' }],
@@ -195,7 +199,6 @@ export class DerivedPreviews {
             if (this.pending.get(key) === item) this.pending.delete(key);
           });
         const item: Pending = { file: actual, abort, users: 0, work };
-        this.tail = item.work;
         this.pending.set(key, item);
         pending = item;
       }

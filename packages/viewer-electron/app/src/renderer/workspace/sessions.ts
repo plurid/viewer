@@ -66,8 +66,9 @@ export function useBrowseField<K extends keyof BrowseSession>(
   key: K,
 ): [BrowseSession[K], Dispatch<SetStateAction<BrowseSession[K]>>] {
   const initial = browseSession(id, path);
-  const value = useSyncExternalStore(
-    (listener) => {
+  // a stable subscription: a new function each render made React subscribe again each time
+  const subscribe = useCallback(
+    (listener: () => void) => {
       const set = listeners.get(id) ?? new Set();
       listeners.set(id, set);
       set.add(listener);
@@ -75,8 +76,9 @@ export function useBrowseField<K extends keyof BrowseSession>(
         set.delete(listener);
       };
     },
-    () => (sessions.get(id) ?? initial)[key],
+    [id],
   );
+  const value = useSyncExternalStore(subscribe, () => (sessions.get(id) ?? initial)[key]);
   const set = useCallback(
     (next: SetStateAction<BrowseSession[K]>) => {
       const state = sessions.get(id);

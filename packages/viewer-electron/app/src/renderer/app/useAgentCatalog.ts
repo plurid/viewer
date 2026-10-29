@@ -5,7 +5,7 @@ import { parentPath } from '../../domain/workspaces/planes';
 import { agentCatalog } from '../commands/agent-catalog';
 import { captureTarget } from '../commands/programs';
 import type { CommandContext, CommandRegistry } from '../commands/registry';
-import { activeWorkspace, getState, report } from '../state/core';
+import { activeWorkspace, getState, report, subscribe, type ViewerState } from '../state/core';
 import type { WorkspaceController } from '../workspace/context';
 
 const publicationDelay = 80;
@@ -14,15 +14,24 @@ const selectionLimit = 2000;
 interface AgentCatalogOptions {
   registry: CommandRegistry;
   controller: Pick<WorkspaceController, 'rootID'>;
-  activePane: string;
   context(): CommandContext;
+}
+
+/**
+ * The command list and the selection are for agents and Chat. Without either, publishing them
+ * cost every click, key and selection change a few hundred commands and up to 2000 file entries.
+ */
+function commandsWanted(state: ViewerState): boolean {
+  return (
+    state.settings.settings.agents.enabled ||
+    state.saved.workspaces.some((space) => space.panes.some((pane) => pane.type === 'chat'))
+  );
 }
 
 /** Publish the same registry used by people, with window actions available in every context. */
 export function useAgentCatalog({
   registry,
   controller,
-  activePane,
   context: windowContext,
 }: AgentCatalogOptions): void {
   useEffect(() => {
@@ -73,8 +82,10 @@ export function useAgentCatalog({
       const catalogContext = hasDirectory
         ? context
         : { ...context, directory: undefined, folder: undefined, selection: [] };
+      const wanted = commandsWanted(state);
+      if (!wanted) target.selection = [];
       const commands: CommandDescriptor[] =
-        target.selection.length > selectionLimit
+        !wanted || target.selection.length > selectionLimit
           ? []
           : agentCatalog(registry, catalogContext).map(
               ({ id, label, group, aliases, shortcut }) => ({
@@ -100,12 +111,20 @@ export function useAgentCatalog({
       timer = setTimeout(publish, publicationDelay);
     };
     const unsubscribe = registry.subscribe(schedule);
+    // the published target follows the active plane, which no longer changes the registry
+    let activePane = getState().activePane;
+    const unfollow = subscribe(() => {
+      if (getState().activePane === activePane) return;
+      activePane = getState().activePane;
+      schedule();
+    });
     // Human commands can run as soon as the registry is ready. Their desktop
     // ownership and Chat context must exist before the first debounced update.
     publish();
     return () => {
       unsubscribe();
+      unfollow();
       clearTimeout(timer);
     };
-  }, [registry, controller, activePane, windowContext]);
+  }, [registry, controller, windowContext]);
 }

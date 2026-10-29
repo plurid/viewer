@@ -92,7 +92,8 @@ export function splitTile(
 export function tilingCommands({ actions, state, windowScope }: WindowScopes): CommandDefinition[] {
   const space = activeWorkspace();
   const tiling = space.tiling;
-  const active = state.activePane;
+  // read when a command is asked: the list is built once per change of saved state
+  const active = () => getState().activePane;
   const settings = effectiveWindowSettings(state).tiling;
   const tiled = (context: Parameters<CommandDefinition['when']>[0]) =>
     windowScope(context) && actions.ready && !!tiling;
@@ -106,7 +107,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
   const swap = (delta: number) => () => {
     if (!tiling) return;
     const panes = [...tiling.panes];
-    const index = panes.indexOf(active);
+    const index = panes.indexOf(active());
     if (index < 0) return;
     const other = (index + delta + panes.length) % panes.length;
     [panes[index], panes[other]] = [panes[other]!, panes[index]!];
@@ -128,9 +129,9 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
       group: 'Space',
       icon: 'frame' as const,
       aliases: ['resize', 'tile'],
-      when: (context: CommandContext) => tiled(context) && !!tiling?.panes.includes(active),
+      when: (context: CommandContext) => tiled(context) && !!tiling?.panes.includes(active()),
       run: () => {
-        if (tiling) apply(resizeTile(tiling, active, direction));
+        if (tiling) apply(resizeTile(tiling, active(), direction));
       },
     })),
     command({
@@ -189,7 +190,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
       label: 'Swap with the next tile',
       icon: 'right',
       aliases: ['swap', 'tmux'],
-      when: (context) => tiled(context) && !!tiling?.panes.includes(active),
+      when: (context) => tiled(context) && !!tiling?.panes.includes(active()),
       run: swap(1),
     }),
     command({
@@ -197,7 +198,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
       label: 'Swap with the previous tile',
       icon: 'left',
       aliases: ['swap', 'tmux'],
-      when: (context) => tiled(context) && !!tiling?.panes.includes(active),
+      when: (context) => tiled(context) && !!tiling?.panes.includes(active()),
       run: swap(-1),
     }),
     command({
@@ -205,12 +206,12 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
       label: 'Make this the main tile',
       icon: 'star',
       aliases: ['main', 'promote', 'tmux'],
-      when: (context) => tiled(context) && !!tiling?.panes.includes(active),
+      when: (context) => tiled(context) && !!tiling?.panes.includes(active()),
       run: () =>
         tiling &&
         apply({
           ...tiling,
-          panes: [active, ...tiling.panes.filter((id) => id !== active)],
+          panes: [active(), ...tiling.panes.filter((id) => id !== active())],
           tree: undefined,
         }),
     }),

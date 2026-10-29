@@ -18,6 +18,7 @@ import {
   type OperationPlanRequest,
   type OperationPlanReply,
 } from '../../domain/operations/operation-plan';
+import { isActiveJob } from '../../domain/operations/jobs';
 const planSchema = z
   .object({
     version: z.literal(1),
@@ -191,12 +192,7 @@ export class OperationPlans {
               row.jobID ? [jobs.find((job) => job.id === row.jobID)] : [],
             );
             if (assigned.some((job) => !job)) plan.status = 'recovery';
-            else if (
-              assigned.length &&
-              assigned.every(
-                (job) => job && !['queued', 'running', 'collision'].includes(job.status),
-              )
-            ) {
+            else if (assigned.length && assigned.every((job) => job && !isActiveJob(job))) {
               plan.status = assigned.every((job) => job?.status === 'completed')
                 ? 'completed'
                 : 'partial';

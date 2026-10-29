@@ -37,6 +37,36 @@ export function parentPaneID(tree: readonly TreePlane[], id: string): string | u
     if (parent) return parent;
   }
 }
+const linkKey = (type: 'folder' | 'preview', path: string) => type + '\0' + path;
+const linkIndexes = new WeakMap<
+  TreePlane[],
+  { panes: Workspace['panes']; platform: string; links: Map<string, Map<string, string>> }
+>();
+
+/**
+ * For each plane, its linked children by kind and path. Every file row asks for its link on
+ * each render; the index is built once per change of the tree or the panes.
+ */
+function linkIndex(tree: TreePlane[], space: Workspace, platform: string) {
+  const cached = linkIndexes.get(tree);
+  if (cached?.panes === space.panes && cached.platform === platform) return cached.links;
+  const links = new Map<string, Map<string, string>>();
+  for (const node of flattenTree(tree)) {
+    const id = hostID(node);
+    if (links.has(id)) continue;
+    const children = new Set((node.children ?? []).map(hostID));
+    const byPath = new Map<string, string>();
+    // the first matching pane, in the workspace's order
+    for (const pane of space.panes)
+      if (children.has(pane.id) && (pane.type === 'folder' || pane.type === 'preview')) {
+        const key = linkKey(pane.type, normalizedPanePath(pane.path, platform));
+        if (!byPath.has(key)) byPath.set(key, pane.id);
+      }
+    links.set(id, byPath);
+  }
+  linkIndexes.set(tree, { panes: space.panes, platform, links });
+  return links;
+}
 export function linkedPaneID(
   tree: TreePlane[],
   space: Workspace,
@@ -44,13 +74,9 @@ export function linkedPaneID(
   entry: Pick<FileEntry, 'path' | 'directory'>,
   platform: string,
 ): string | undefined {
-  const parent = flattenTree(tree).find((node) => hostID(node) === parentID);
-  const children = new Set((parent?.children ?? []).map(hostID));
-  const path = normalizedPanePath(entry.path, platform);
-  return space.panes.find(
-    (pane) =>
-      children.has(pane.id) &&
-      pane.type === (entry.directory ? 'folder' : 'preview') &&
-      normalizedPanePath(pane.path, platform) === path,
-  )?.id;
+  const key = linkKey(
+    entry.directory ? 'folder' : 'preview',
+    normalizedPanePath(entry.path, platform),
+  );
+  return linkIndex(tree, space, platform).get(parentID)?.get(key);
 }

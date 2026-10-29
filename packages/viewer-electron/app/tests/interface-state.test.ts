@@ -595,7 +595,12 @@ describe('conditional operations', () => {
   });
   it('shows only pending work or unacknowledged failures and keeps history reachable', () => {
     expect(needsOperations()).toBe(false);
-    const job = { id: 'job', status: 'running' } as OperationJob;
+    const job = {
+      id: 'job',
+      status: 'running',
+      sources: [],
+      completed: [],
+    } as unknown as OperationJob;
     receiveJob(job);
     expect(needsOperations()).toBe(true);
     setOperationsOpen(true);

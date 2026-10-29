@@ -123,7 +123,7 @@ import { GitReader } from './comparison/git';
 import { GitWorktrees } from './comparison/worktrees';
 import { GitActions } from './comparison/git-actions';
 import { bindGitTarget, validateGitTarget, type GitTargetWindow } from './comparison/git-target';
-import { WorkspaceSessions } from './windows/workspace-sessions';
+import { mergeChanged, WorkspaceSessions } from './windows/workspace-sessions';
 import { ShellCommand } from './windows/shell-command';
 import { SpeechModels } from './speech/models';
 import { Speech } from './speech/service';
@@ -439,6 +439,8 @@ export class Desktop {
           ),
       ),
       64 * 1024 * 1024,
+      // thumbnails and small renditions: a few helper processes at once
+      3,
     );
     this.thumbnails = new Thumbnails(derived, images);
     const office = new DerivedPreviews(access, officeDecoder(assetPath(officeRuntimeName)));
@@ -1471,10 +1473,15 @@ export class Desktop {
     const owner = this.workspaceSessions.owner(id);
     return owner === undefined ? undefined : this.windows.get(owner)?.window;
   }
-  emit(event: DesktopEvent): void {
+  /** Sends an event to every window that takes it, except the window `except`. */
+  emit(event: DesktopEvent, except?: number): void {
     if (event.type === 'job') this.activity.job(event.job);
-    for (const { window, role } of this.windows.values())
-      if (!window.isDestroyed() && (role === 'viewer' || settingsEvents.includes(event.type)))
+    for (const [id, { window, role }] of this.windows)
+      if (
+        id !== except &&
+        !window.isDestroyed() &&
+        (role === 'viewer' || settingsEvents.includes(event.type))
+      )
         sendEvent(window.webContents, event);
   }
   open(paths: string[]): void {
@@ -2606,7 +2613,8 @@ export class Desktop {
               ),
             ),
         );
-        this.emit({ type: 'workspaces', state });
+        // the saving window already holds what it sent; it hears back only what the merge changed
+        this.emit({ type: 'workspaces', state }, mergeChanged(args[0], state) ? undefined : sender);
         this.assignWorkspace(sender, args[0].activeWorkspace);
         this.options.settingsChanged?.();
       },

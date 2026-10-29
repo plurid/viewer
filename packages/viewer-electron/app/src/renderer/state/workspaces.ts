@@ -145,6 +145,16 @@ export function receiveWorkspaces(saved: SavedState): void {
   const active = activeWorkspace();
   const workspaces = saved.workspaces.map((space) => (space.id === active.id ? active : space));
   if (!workspaces.some((space) => space.id === active.id)) workspaces.push(active);
+  // An unchanged state would still replace `saved` and re-render everything that reads it.
+  const unchanged =
+    JSON.stringify([workspaces, saved.favorites, saved.recents, saved.lineHistory]) ===
+    JSON.stringify([
+      current.saved.workspaces,
+      current.saved.favorites,
+      current.saved.recents,
+      current.saved.lineHistory,
+    ]);
+  if (unchanged) return;
   for (const space of workspaces) {
     if (space.id !== active.id) adapters.set(space.id, new Map(Object.entries(space.arrangement)));
   }

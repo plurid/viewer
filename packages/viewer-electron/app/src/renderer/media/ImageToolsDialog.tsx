@@ -14,6 +14,7 @@ import { measureLocalPoint, type Point } from '../ui/projectedResize';
 import { report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import './image-tools.css';
+import { isActiveJob } from '../../domain/operations/jobs';
 
 export function ImageToolsDialog({
   files,
@@ -49,7 +50,7 @@ export function ImageToolsDialog({
     | undefined
   >(undefined);
   const job = useViewer((state) => state.jobs.find((job) => job.id === jobID));
-  const working = busy || (!!job && ['queued', 'running', 'collision'].includes(job.status));
+  const working = busy || (!!job && isActiveJob(job));
   useEffect(() => {
     let live = true,
       resource: string | undefined;
@@ -512,7 +513,7 @@ export function ImageToolsDialog({
           </button>
         )}
         <button onClick={onClose}>Close</button>
-        {job && ['queued', 'running', 'collision'].includes(job.status) && (
+        {job && isActiveJob(job) && (
           <button onClick={() => void window.viewer.cancelJob(job.id).catch(report)}>
             Cancel export
           </button>

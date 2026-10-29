@@ -6,7 +6,8 @@ import type { FileEntry, DesktopEvent } from '../src/domain/contracts';
 import { useFolder } from '../src/renderer/explorer/useFolder';
 import { useContextPublish } from '../src/renderer/explorer/context-publish';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
-import { initialize, receiveJob, setOperationsOpen } from '../src/renderer/state/store';
+import { getState, initialize, receiveJob, setOperationsOpen } from '../src/renderer/state/store';
+import { replaceState } from '../src/renderer/state/core';
 import type { OperationJob } from '../src/domain/contracts';
 import { OperationsPanel } from '../src/renderer/operations/OperationsPanel';
 import { DuplicateControls } from '../src/renderer/ui/comparison/Duplicates';
@@ -114,21 +115,58 @@ describe('published selection context', () => {
   const workspace = { rootID: () => 'root' } as unknown as WorkspaceController;
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(WorkspaceContext.Provider, { value: workspace }, children);
-  it('describes no sources rather than a partial list for very large selections', async () => {
+  // only agents read the published context
+  const withAgents = () => {
     initialize({ home: '/', platform: 'darwin', locations: [], state: null, openPaths: [] });
+    const state = getState();
+    replaceState({
+      ...state,
+      settings: {
+        ...state.settings,
+        settings: {
+          ...state.settings.settings,
+          agents: { ...state.settings.settings.agents, enabled: true },
+        },
+      },
+    });
+  };
+  it('describes no sources rather than a partial list for very large selections', async () => {
+    withAgents();
     const small = [{ path: '/a' }, { path: '/b' }];
     const { rerender } = renderHook(({ selected }) => useContextPublish('pane', true, selected), {
       wrapper,
       initialProps: { selected: small },
     });
+    act(() => void vi.advanceTimersByTime(100));
     expect(viewer.contextPublish).toHaveBeenLastCalledWith(
       expect.objectContaining({ sources: ['/a', '/b'] }),
     );
     const large = Array.from({ length: 2500 }, (_, index) => ({ path: `/f${index}` }));
     rerender({ selected: large });
+    act(() => void vi.advanceTimersByTime(100));
     expect(viewer.contextPublish).toHaveBeenLastCalledWith(
       expect.objectContaining({ sources: [] }),
     );
+  });
+
+  it('publishes once a held arrow key settles, and nothing while agents are off', () => {
+    withAgents();
+    viewer.contextPublish.mockClear();
+    const { rerender } = renderHook(({ selected }) => useContextPublish('pane', true, selected), {
+      wrapper,
+      initialProps: { selected: [{ path: '/a' }] },
+    });
+    for (let index = 0; index < 20; index++) rerender({ selected: [{ path: `/f${index}` }] });
+    act(() => void vi.advanceTimersByTime(100));
+    expect(viewer.contextPublish).toHaveBeenCalledTimes(1);
+    expect(viewer.contextPublish).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sources: ['/f19'] }),
+    );
+    initialize({ home: '/', platform: 'darwin', locations: [], state: null, openPaths: [] });
+    viewer.contextPublish.mockClear();
+    renderHook(() => useContextPublish('pane', true, [{ path: '/b' }]), { wrapper });
+    act(() => void vi.advanceTimersByTime(500));
+    expect(viewer.contextPublish).not.toHaveBeenCalled();
   });
 });
 

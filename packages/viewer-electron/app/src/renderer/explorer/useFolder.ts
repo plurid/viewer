@@ -1,6 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { needsFolderAccess } from '../../domain/files/access';
+import { refreshConcerns } from '../state/refresh';
 interface Dataset {
   entries: FileEntry[];
   loading: boolean;
@@ -165,13 +166,16 @@ export function useFolder(path: string) {
           () => {},
         );
         value.refresh = refresh;
-        window.addEventListener('viewer:refresh', refresh);
+        const requested = (event: Event) => {
+          if (refreshConcerns(event, path)) refresh();
+        };
+        window.addEventListener('viewer:refresh', requested);
         value.stop = () => {
           stopped = true;
           value.refresh = undefined;
           off();
           clearTimeout(timer);
-          window.removeEventListener('viewer:refresh', refresh);
+          window.removeEventListener('viewer:refresh', requested);
           void window.viewer.unwatch(subscriber);
         };
         load(path);

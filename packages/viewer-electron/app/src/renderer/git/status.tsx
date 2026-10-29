@@ -15,11 +15,35 @@ interface Subscription {
   signature: string;
   listeners: Set<() => void>;
   loading: boolean;
-  timer?: ReturnType<typeof setInterval>;
-  onFocus?: () => void;
 }
 
 const folders = new Map<string, Subscription>();
+
+/** How often shown folders' Git status is read again, while the window is visible. */
+const pollInterval = 5000;
+let ticker: ReturnType<typeof setInterval> | undefined;
+
+/**
+ * Every shown folder is read at once: folders of one repository then share a single scan
+ * in the desktop, which an independent timer for each folder never did.
+ */
+function refreshShown(): void {
+  for (const [path, subscription] of folders)
+    if (subscription.listeners.size) void refresh(path, subscription).catch(() => {});
+}
+function follow(): void {
+  if (ticker) return;
+  ticker = setInterval(() => {
+    if (!document.hidden) refreshShown();
+  }, pollInterval);
+  window.addEventListener('focus', refreshShown);
+}
+function unfollowWhenUnused(): void {
+  if ([...folders.values()].some((subscription) => subscription.listeners.size)) return;
+  clearInterval(ticker);
+  ticker = undefined;
+  window.removeEventListener('focus', refreshShown);
+}
 
 function folder(path: string): Subscription {
   let subscription = folders.get(path);
@@ -88,22 +112,15 @@ export function useGitStatus(path: string | undefined): GitView | null {
         if (!enabled || !path) return () => {};
         const subscription = folder(path);
         subscription.listeners.add(listener);
-        const update = () => void refresh(path, subscription).catch(() => {});
         if (subscription.listeners.size === 1) {
-          update();
-          subscription.timer = setInterval(() => {
-            if (!document.hidden) update();
-          }, 5000);
-          subscription.onFocus = update;
-          window.addEventListener('focus', update);
+          void refresh(path, subscription).catch(() => {});
+          follow();
         }
         return () => {
           subscription.listeners.delete(listener);
-          if (!subscription.listeners.size) {
-            clearInterval(subscription.timer);
-            if (subscription.onFocus) window.removeEventListener('focus', subscription.onFocus);
-            if (folders.size > 64) folders.delete(path);
-          }
+          if (subscription.listeners.size) return;
+          if (folders.size > 64) folders.delete(path);
+          unfollowWhenUnused();
         };
       },
       [enabled, path],

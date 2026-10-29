@@ -45,13 +45,16 @@ export function readSidebarDrag(data: string): SidebarDrag | null {
   }
 }
 export function Sidebar({ paneID }: { paneID?: string }) {
-  const saved = useViewer((state) => state.saved);
+  // what this sidebar shows, rather than all saved state: each folder plane has one
+  const favorites = useViewer((state) => state.saved.favorites);
+  const recents = useViewer((state) => state.saved.recents);
   const bootstrap = useViewer((state) => state.bootstrap);
-  const space = useViewer(activeWorkspace);
-  const active = useViewer((state) => state.activePane);
+  const workspaceID = useViewer((state) => activeWorkspace(state).id);
+  const owner = useViewer((state) =>
+    activeWorkspace(state).panes.find((pane) => pane.id === (paneID || state.activePane)),
+  );
   const workspace = useWorkspace();
   const sidebar = useViewer(effectiveWindowUI).sidebar;
-  const owner = space.panes.find((pane) => pane.id === (paneID || active));
   const layout = paneID
     ? owner?.type === 'folder'
       ? (owner.sidebar ?? { visible: true, width: 210 })
@@ -67,11 +70,11 @@ export function Sidebar({ paneID }: { paneID?: string }) {
     localX: (point: Point) => number | undefined;
   } | null>(null);
   const current = owner?.path;
-  const target = { paneID, workspaceID: space.id };
+  const target = { paneID, workspaceID };
   function resize(width: number) {
     width = Math.max(160, Math.min(360, Math.round(width)));
     if (paneID) {
-      if (activeWorkspace().id === space.id)
+      if (activeWorkspace().id === workspaceID)
         updatePane(paneID, { sidebar: { visible: layout.visible, width } });
     } else changePreferences((ui) => ({ ...ui, sidebar: { ...ui.sidebar, width } }));
   }
@@ -82,8 +85,8 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   ].filter((item) => !sidebar.hidden.includes(item.path));
   const groups = {
     locations,
-    favorites: saved.favorites,
-    recents: saved.recents.slice(0, 8).map((path) => ({ path, name: baseName(path) })),
+    favorites,
+    recents: recents.slice(0, 8).map((path) => ({ path, name: baseName(path) })),
   };
   function context(
     section: SidebarSection,
@@ -285,7 +288,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                     <span>{sidebar.labels[item.path] || item.name}</span>
                   </button>
                 ))}
-                {section === 'favorites' && !saved.favorites.length && (
+                {section === 'favorites' && !favorites.length && (
                   <p className="sidebar-hint">Drag a folder here.</p>
                 )}
               </div>

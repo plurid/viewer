@@ -1,16 +1,19 @@
 import path from 'node:path';
-import { app } from 'electron';
+
+let root: string | undefined;
+
+/** Set once by the main process at startup, as only it knows whether the app is packaged. */
+export function setAssetRoot(packaged: boolean, appPath: string): void {
+  root = packaged ? process.resourcesPath : path.join(appPath, 'assets');
+}
 
 /**
  * Where Viewer's bundled helpers and processors live: the app's Resources folder when packaged,
- * the source tree's `assets` folder in development. Never the working directory, which a launch
- * from a terminal or the `viewer` command can set anywhere.
+ * the source tree's `assets` folder in development. A utility process has only its Resources
+ * folder; a script run with plain Node, such as a unit test, runs from the source tree.
  */
 export function assetPath(...parts: string[]): string {
-  // Utility processes have no `app`; like the packaged app, they run from Resources.
-  const root =
-    !app || app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'assets');
-  return path.join(root, ...parts);
+  return path.join(root ?? process.resourcesPath ?? path.resolve('assets'), ...parts);
 }
 
 /** This platform's bundled media and PDF processors, as a folder under `assetPath()`. */

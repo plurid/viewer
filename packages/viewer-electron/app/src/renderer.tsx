@@ -1,7 +1,5 @@
 import './renderer/native-api';
 import { createRoot } from 'react-dom/client';
-import { SettingsWindow } from './renderer/ui/settings/Settings';
-import { App } from './renderer/App';
 import { initialize } from './renderer/state/store';
 import { markStartup } from './renderer/app/startup';
 import { Empty } from './renderer/ui/primitives';
@@ -16,16 +14,19 @@ const diagnose = (value: unknown) => {
 window.addEventListener('error', (event) => diagnose(event.error ?? event.message));
 window.addEventListener('unhandledrejection', (event) => diagnose(event.reason));
 const root = createRoot(document.getElementById('viewer')!);
+const failed = (error: Error) =>
+  root.render(<Empty icon="warning" title="Viewer could not start" detail={error.message} />);
+// Each window loads only its own interface: Settings and the workspace share little code.
 if (new URLSearchParams(location.search).get('window') === 'settings')
-  root.render(<SettingsWindow />);
+  import('./renderer/ui/settings/Settings')
+    .then(({ SettingsWindow }) => root.render(<SettingsWindow />))
+    .catch(failed);
 else
-  window.viewer
-    .bootstrap()
-    .then((bootstrap) => {
+  // the interface's code loads while the desktop prepares the saved state
+  Promise.all([window.viewer.bootstrap(), import('./renderer/App')])
+    .then(([bootstrap, { App }]) => {
       markStartup('viewer:bootstrap');
       initialize(bootstrap);
       root.render(<App />);
     })
-    .catch((error) =>
-      root.render(<Empty icon="warning" title="Viewer could not start" detail={error.message} />),
-    );
+    .catch(failed);

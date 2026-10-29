@@ -3,8 +3,11 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { FileEntry } from '../src/domain/contracts';
 import type { FolderSizeTask } from '../src/domain/files/metadata';
 
+// the hooks are read outside a component: each returns what one render would
 vi.mock('react', async (original) => ({
   ...(await original<typeof ReactModule>()),
+  useCallback: <T>(callback: T) => callback,
+  useMemo: <T>(factory: () => T) => factory(),
   useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 vi.mock('../src/renderer/state/store', () => ({

@@ -48,6 +48,7 @@ import {
   report,
   restoreWorkspace,
   setJobs,
+  undoSignature,
   setOperationsOpen,
   switchWorkspace,
   refreshClipboard,
@@ -98,6 +99,9 @@ import { openWorkspacePath } from './workspace/open-path';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 import { commandShortcutID } from '../domain/preferences/shortcuts';
 import { dialogOpen, overlayOpen } from './ui/modal';
+import { savedDefinitionsKey } from './state/saved-keys';
+import { isActiveJob } from '../domain/operations/jobs';
+import { invalidateThumbnails } from './explorer/thumbnail-cache';
 
 export function App() {
   const registry = useMemo(
@@ -191,11 +195,18 @@ function AppWindow() {
   }, [terminalConfig.application]);
   const [showWorkspaceUndo, setShowWorkspaceUndo] = useState(false);
   const initialOpenHandled = useRef(false);
-  const saved = useViewer((state) => state.saved);
+  // command definitions read saved state, but not the active plane or the arrangement
+  const savedKey = useViewer(savedDefinitionsKey);
+  // the terminal planes still open in any workspace, as one comparable string
+  const terminalPanes = useViewer((state) =>
+    state.saved.workspaces
+      .flatMap((space) => space.panes.filter((pane) => pane.type === 'terminal'))
+      .map((pane) => pane.id)
+      .join(' '),
+  );
   // ⌥⌘T hides the title bar; it comes back at the window's top edge (ui/titlebar.ts)
   const windowUI = useViewer(effectiveWindowUI);
   const titlebar = useTitlebar(windowUI.titlebar.visible);
-  const activePane = useViewer((state) => state.activePane);
   const space = useViewer(activeWorkspace);
   const look = useViewer(effectiveWindowLook);
   const settings = useViewer(effectiveWindowSettings);
@@ -213,14 +224,10 @@ function AppWindow() {
   }, [notice, noticeKind]);
   const quick = useViewer((state) => state.quickPreview);
   const density = settings.browsing.density;
-  const jobs = useViewer((state) => state.jobs);
-  const jobsSignature =
-    jobs.length +
-    ':' +
-    jobs
-      .filter((job) => job.undoable || job.redoable)
-      .map((job) => job.id + (job.undoable ? 'u' : '') + (job.redoable ? 'r' : ''))
-      .join(',');
+  // Progress replaces `jobs` many times a second; this window shows only what Undo can reach
+  // and how many are in progress, so it subscribes to those.
+  const jobsSignature = useViewer(undoSignature);
+  const inProgress = useViewer((state) => state.jobs.filter(isActiveJob).length);
   const operationsOpen = useViewer((state) => state.operationsOpen);
   const showOperations = useViewer(needsOperations);
   const deleted = useViewer((state) => state.deletedWorkspace);
@@ -365,9 +372,9 @@ function AppWindow() {
     },
     // Progress ticks replace `jobs` many times a second; commands only care whether
     // jobs exist and which can be undone, and read those from the live context.
-    [saved, ready, tool, jobsSignature, terminalName, overview],
+    [savedKey, ready, tool, jobsSignature, terminalName, overview],
   );
-  useAgentCatalog({ registry, controller, activePane, context: windowContext });
+  useAgentCatalog({ registry, controller, context: windowContext });
   // a plane that starts or stops editing changes which text commands apply
   useEffect(() => subscribeEditingPlanes(() => registry.touch()), [registry]);
   useEffect(() => {
@@ -385,14 +392,8 @@ function AppWindow() {
     });
   }, [ready, registry, controller, space.id, space.epoch]);
   useEffect(() => {
-    trimTerminals(
-      new Set(
-        getState().saved.workspaces.flatMap((space) =>
-          space.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
-        ),
-      ),
-    );
-  }, [saved.workspaces]);
+    trimTerminals(new Set(terminalPanes ? terminalPanes.split(' ') : []));
+  }, [terminalPanes]);
   /** Runs a command where it belongs; false when nothing ran (a line stops there). */
   const invoke = async (id: string, remember = true): Promise<boolean> => {
     // Edit menu Undo, Redo and Select All reach a CodeMirror editor, which `webContents` does not
@@ -542,6 +543,7 @@ function AppWindow() {
       else if (event.type === 'folder-changed') invalidateFolderSizes(event.path);
       else if (event.type === 'file-access') {
         previewDocuments.invalidate(event.path);
+        invalidateThumbnails(event.path);
         invalidateFolderSizes(event.path);
         window.dispatchEvent(new Event('viewer:refresh'));
       } else if (event.type === 'settings') receiveSettings(event.snapshot);
@@ -780,9 +782,6 @@ function AppWindow() {
     return () => window.removeEventListener('keydown', keydown, true);
   }, [tool, registry, spatialTool, windowContext]);
 
-  const inProgress = jobs.filter((job) =>
-    ['queued', 'running', 'collision'].includes(job.status),
-  ).length;
   return (
     <WorkspaceContext.Provider value={controller}>
       <ProjectControls />

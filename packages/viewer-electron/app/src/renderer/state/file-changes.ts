@@ -4,6 +4,7 @@ import { pathMapper, type FileChange } from '../../domain/files/changes';
 import { getState, replaceState, update } from './core';
 import { pendingPreferences, schedulePreferences } from './preferences';
 import type { DiffSource } from '../../domain/comparison/diff';
+import { requestRefresh } from './refresh';
 
 export function receiveFileChanges(changes: FileChange[]): void {
   const map = pathMapper(changes);
@@ -103,5 +104,5 @@ export function receiveFileChanges(changes: FileChange[]): void {
     }
   }
   remapSessions(changes);
-  window.dispatchEvent(new Event('viewer:refresh'));
+  requestRefresh(changes.flatMap((change) => [change.source, change.destination]));
 }

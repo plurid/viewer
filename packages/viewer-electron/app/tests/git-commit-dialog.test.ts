@@ -68,7 +68,8 @@ describe('staged Git commit message dialog', () => {
       });
     }
     render(createElement(Host));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Commit message' }), {
+    // the window's dialogs load their code as they first open
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Commit message' }), {
       target: { value: 'First request only' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Commit staged changes' }));
@@ -112,7 +113,7 @@ describe('staged Git commit message dialog', () => {
         transitionWorkspace: (change) => change(),
       });
     const view = render(prompt('first', '/fixture'));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Commit message' }), {
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Commit message' }), {
       target: { value: 'Belongs to the first request' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Commit staged changes' }));

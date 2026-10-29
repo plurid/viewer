@@ -9,6 +9,7 @@ import { fileCoordination } from '../files/file-coordination';
 import { operationRoots, type Operations } from './operations';
 import type { CheckpointEstimate, CheckpointRecord } from '../../domain/operations/change-plan';
 import { assertTestRemovalAllowed, removePrivateData } from './removal';
+import { isActiveJob } from '../../domain/operations/jobs';
 const recordSchema = z
   .object({
     id: z.uuid(),
@@ -372,9 +373,7 @@ export class Checkpoints {
     const prefix = path.join(this.directory, record.id) + path.sep;
     if (
       this.jobs().some(
-        (job) =>
-          ['queued', 'running', 'collision'].includes(job.status) &&
-          job.sources.some((file) => file.startsWith(prefix)),
+        (job) => isActiveJob(job) && job.sources.some((file) => file.startsWith(prefix)),
       )
     )
       throw new Error('Wait for the checkpoint restore to finish before removing it.');

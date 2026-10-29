@@ -1,4 +1,4 @@
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import type { PluridPlaneChromeContext, TreePlane } from '@plurid/plurid-data';
 import {
   activeWorkspace,
@@ -87,7 +87,9 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
   const dragging = useViewer((state) => state.saved.ui.space.dragging);
   const controls = useViewer((state) => state.saved.ui.space.headerControls);
   const registry = useCommands();
-  useCommandRevision(id);
+  const revision = useCommandRevision(id);
+  // some commands' availability depends on which plane is active
+  const active = useViewer((state) => state.activePane === id);
   const [menu, setMenu] = useState<{
     kind: 'view' | 'actions' | 'lens' | 'layout';
     anchor: HTMLButtonElement;
@@ -99,17 +101,26 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     (element: HTMLDivElement | null) => setPreviewControlsSlot(id, element),
     [id],
   );
-  const request: CommandRequest = {
-    paneID: id,
-    scope:
-      pane?.type === 'folder'
-        ? 'folder'
-        : pane?.type === 'search' || pane?.type === 'collection'
-          ? 'files'
-          : 'preview',
-    context: { paneID: id, selection: [], path: pane?.path },
-  };
-  const available = registry.list(request);
+  const request = useMemo(
+    (): CommandRequest => ({
+      paneID: id,
+      scope:
+        pane?.type === 'folder'
+          ? 'folder'
+          : pane?.type === 'search' || pane?.type === 'collection'
+            ? 'files'
+            : 'preview',
+      context: { paneID: id, selection: [], path: pane?.path },
+    }),
+    [id, pane?.type, pane?.path],
+  );
+  // listing evaluates every command; once per change of this plane's commands, not per render
+  const available = useMemo(
+    () => registry.list(request),
+    // `revision`, `pane` and `active` are the inputs the listed commands read
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [registry, request, revision, pane, active],
+  );
   const run = (command: string) => {
     setActivePane(id);
     void registry

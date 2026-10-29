@@ -57,5 +57,6 @@ policy. See [AGENTS.md](../../AGENTS.md).
 ## Interrupted work
 
 Restart does not blindly replay an operation. Inspect its receipt, completed outputs and any partial
-output before retrying. Reconnect unavailable locations and use offered recovery controls.
-[Troubleshooting](../guides/troubleshooting.md) lists common next steps.
+output before retrying. After a power failure, the last items of a copy can show as interrupted even
+though their copies are complete; the copies are kept. Reconnect unavailable locations and use
+offered recovery controls. [Troubleshooting](../guides/troubleshooting.md) lists common next steps.

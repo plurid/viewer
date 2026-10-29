@@ -13,6 +13,10 @@ import { AppIcons } from '../src/desktop/native/app-icons';
 import { nativeAppIcon } from '../src/desktop/native/native-app-icon';
 import { hasBundleIcon } from '../src/renderer/explorer/app-icon';
 import { isPackage } from '../src/domain/files/entries';
+import { setAssetRoot } from '../src/desktop/native/assets';
+
+// as main.ts does at startup, for a development build
+setAssetRoot(false, '/viewer');
 
 describe('application icons', () => {
   it('cancels the active helper and never starts queued icon decoders during shutdown', async () => {

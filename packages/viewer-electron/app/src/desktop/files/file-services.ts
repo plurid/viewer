@@ -23,6 +23,38 @@ import type {
   IndexStatus,
 } from '../../domain/services';
 
+/** How often windows hear of indexing progress; a start or finish is sent at once. */
+const indexStatusInterval = 250;
+
+/**
+ * Index status changes with every file the index reads: copying 2,000 files sent 828 status
+ * events. Windows show progress, so they get the latest status a few times a second.
+ */
+export function coalescedIndexStatus(
+  emit: (status: IndexStatus) => void,
+  interval = indexStatusInterval,
+): (status: IndexStatus) => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let latest: IndexStatus | undefined;
+  let running: boolean | undefined;
+  return (status) => {
+    if (status.running !== running) {
+      running = status.running;
+      clearTimeout(timer);
+      timer = undefined;
+      latest = undefined;
+      emit(status);
+      return;
+    }
+    latest = status;
+    timer ??= setTimeout(() => {
+      timer = undefined;
+      if (latest) emit(latest);
+      latest = undefined;
+    }, interval);
+  };
+}
+
 export class FileServices {
   private index: UtilityClient;
   private measurement: UtilityClient;
@@ -47,6 +79,7 @@ export class FileServices {
       access?(paths: readonly string[]): Promise<void>;
     } = {},
   ) {
+    const status = coalescedIndexStatus(emit);
     this.createIndex = () =>
       new UtilityClient(worker, {
         name: 'Viewer file services',
@@ -56,7 +89,7 @@ export class FileServices {
           if (this.configuration) await client.post('configure', [this.configuration]);
         },
         event: (reply) => {
-          if (reply.event === 'index') emit(this.withUnavailable(reply.value as IndexStatus));
+          if (reply.event === 'index') status(this.withUnavailable(reply.value as IndexStatus));
         },
       });
     this.index = this.createIndex();

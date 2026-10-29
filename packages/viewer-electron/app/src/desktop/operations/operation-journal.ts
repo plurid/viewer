@@ -9,6 +9,7 @@ import { transformPlanSchema } from '../../domain/operations/transforms';
 import { DocumentStore } from '../persistence/document-store';
 import { discardOwnTemporaryFile, removePrivateData } from './removal';
 import { sourceVersionSchema } from '../../domain/files/inspection';
+import { jobStatuses } from '../../domain/operations/jobs';
 
 const file = z
   .string()
@@ -51,7 +52,7 @@ const job = z
     id: z.uuid(),
     revision: count,
     kind,
-    status: z.enum(['queued', 'running', 'collision', 'completed', 'cancelled', 'failed']),
+    status: z.enum(jobStatuses),
     sources: z.array(file).max(10000),
     destination: file.optional(),
     current: file.optional(),
@@ -373,7 +374,11 @@ export class OperationLog {
     return path.join(this.directory, `${id}.jsonl`);
   }
   /** Appends what changed since the job's last record, then syncs it. */
-  record(receipt: OperationReceipt): Promise<void> {
+  /**
+   * Appends what changed. `durable` syncs it, as an intent must be before the change it covers;
+   * a record of what is already done may wait for the next sync, which carries it too.
+   */
+  record(receipt: OperationReceipt, durable = true): Promise<void> {
     return this.serial(async () => {
       const written = this.written.get(receipt.job.id);
       if (!written) {
@@ -402,7 +407,7 @@ export class OperationLog {
         events.push({ t: 'intent', intent: receipt.intent ?? null });
       if (!events.length) return;
       const text = events.map((item) => JSON.stringify(event.parse(item))).join('\n') + '\n';
-      await this.append(written.file, text);
+      await this.append(written.file, text, durable);
       Object.assign(written, this.counts(receipt));
     });
   }
@@ -436,11 +441,11 @@ export class OperationLog {
     });
   }
   /** The one place log bytes reach disk; tests replace it to simulate failures. */
-  protected async append(file: string, text: string): Promise<void> {
+  protected async append(file: string, text: string, durable = true): Promise<void> {
     const handle = await open(file, 'a', 0o600);
     try {
       await handle.writeFile(text);
-      await handle.sync();
+      if (durable) await handle.sync();
     } finally {
       await handle.close();
     }

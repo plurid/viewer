@@ -100,7 +100,9 @@ retires agent work; per-client withdrawal retires that client's work. Model data
 tracks the request's user/agent origin. Agent Git inspection uses a contained process on macOS and
 never falls back to an uncontained status or diff.
 
-An **operation receipt** records mutation intent and guarded Undo. **Journal** is a bounded
+An **operation receipt** records mutation intent and guarded Undo. An intent is synced to disk
+before the change it covers; a finished item's record waits for the next sync, so after a power
+failure that item reads as interrupted and recovery changes nothing. **Journal** is a bounded
 human-readable projection; it cannot authorize or replay an event. An external session's
 **Reported** state comes from its authenticated adapter, not terminal output or elapsed time.
 

@@ -91,7 +91,6 @@ function mountPublication() {
     useAgentCatalog({
       registry,
       controller: workspace,
-      activePane: getState().activePane,
       context,
     }),
   );
@@ -112,6 +111,18 @@ beforeEach(() => {
     viewer: { save: vi.fn(async () => {}), commandsPublish: publish },
   });
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
+  // the command list is published for agents (and Chat), which this suite stands in for
+  const state = getState();
+  replaceState({
+    ...state,
+    settings: {
+      ...state.settings,
+      settings: {
+        ...state.settings.settings,
+        agents: { ...state.settings.settings.agents, enabled: true },
+      },
+    },
+  });
   registry = new CommandRegistry();
   registry.register('window', {
     context,
@@ -153,6 +164,32 @@ describe('agent catalog publication and invocation', () => {
     );
     expect(workspaces!.workspaces[0]!.panes).toEqual([]);
     expect(new Set(commands.map((command) => command.id)).size).toBe(commands.length);
+  });
+
+  it('publishes no commands or selection while neither agents nor Chat could read them', async () => {
+    const state = getState();
+    replaceState({
+      ...state,
+      settings: {
+        ...state.settings,
+        settings: {
+          ...state.settings.settings,
+          agents: { ...state.settings.settings.agents, enabled: false },
+        },
+      },
+    });
+    selection = [file];
+    registry.register(`folder:${getState().activePane}`, {
+      context: () => ({ ...context(), scope: 'folder' }),
+      definitions: () => folderCommands(folderActions),
+    });
+    mountPublication();
+    const [target, commands, workspaces, owners] = await publishPending();
+    expect(commands).toEqual([]);
+    expect(target.selection).toEqual([]);
+    // ownership and the workspace shape still serve people's own commands
+    expect(workspaces!.workspaces.length).toBeGreaterThan(0);
+    expect(owners).toBeDefined();
   });
 
   it('keeps real folder actions and window scopes together for a file selection', async () => {

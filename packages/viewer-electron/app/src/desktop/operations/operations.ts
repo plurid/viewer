@@ -53,6 +53,7 @@ import {
   type CopyFingerprint,
   type TransferJob,
 } from './file-transfer';
+import { isActiveJob } from '../../domain/operations/jobs';
 
 interface UndoStep {
   from: string;
@@ -168,7 +169,7 @@ export class Operations {
       // job's was recognised, and a cancelled job offered its interrupted Undo again).
       const interruptedUndo =
         !!receipt.intent && ['completed', 'failed', 'cancelled'].includes(job.status);
-      if (receipt.intent || ['queued', 'running', 'collision'].includes(job.status)) {
+      if (receipt.intent || isActiveJob(job)) {
         job.status = 'failed';
         job.collision = undefined;
         job.current = undefined;
@@ -200,7 +201,12 @@ export class Operations {
   }
   /** Records `task` and every job that changed since the last checkpoint, so a job is
    * journaled however many others are queued. Each appends only what changed. */
-  private checkpoint(task?: Task): Promise<void> {
+  /**
+   * Records changed jobs. An intent is synced before the change it covers. After an item, only
+   * what is done is recorded, unsynced: the next intent's sync carries it, and if power fails
+   * first the item reads as interrupted, which recovery reports without touching any file.
+   */
+  private checkpoint(task?: Task, durable = true): Promise<void> {
     const journal = this.journal;
     if (task) this.dirty.add(task);
     const changed = [...this.dirty];
@@ -208,7 +214,7 @@ export class Operations {
     if (!journal) return Promise.resolve();
     return Promise.all(
       changed.map(({ job, request, undo, intent }) =>
-        journal.record({ job, request, undo, intent }),
+        journal.record({ job, request, undo, intent }, durable),
       ),
     )
       .then(() => {})
@@ -284,8 +290,7 @@ export class Operations {
       reviewed,
     );
     const task = this.tasks.get(id)!;
-    while (['queued', 'running', 'collision'].includes(task.job.status))
-      await new Promise<void>((resolve) => this.settled.push(resolve));
+    while (isActiveJob(task.job)) await new Promise<void>((resolve) => this.settled.push(resolve));
     if (task.job.status !== 'completed')
       throw new Error(task.job.errors[0]?.message || 'The shell command was preserved.');
   }
@@ -1366,7 +1371,10 @@ export class Operations {
                 await this.checkPins(task, source);
                 await this.access([destination]);
                 task.intent = { source, destination };
-                await this.checkpoint(task);
+                // A copy's first change is its private staging folder, and transfer() syncs the
+                // intent naming that folder before anything is copied; this one need not wait.
+                const copying = !move && ['copy', 'duplicate', 'transfer'].includes(request.kind);
+                await this.checkpoint(task, !copying);
                 if (request.kind === 'mkdir')
                   await fileCoordination.run(
                     [{ path: destination, mode: 'write' }],
@@ -1576,7 +1584,7 @@ export class Operations {
             job.itemsDone++;
           }
           this.progress(task);
-          await this.checkpoint(task);
+          await this.checkpoint(task, false);
         }
         job.status = task.abort.signal.aborted
           ? 'cancelled'
@@ -1598,7 +1606,7 @@ export class Operations {
       }
     } catch (error) {
       for (const task of this.tasks.values())
-        if (task === currentTask || ['queued', 'running', 'collision'].includes(task.job.status)) {
+        if (task === currentTask || isActiveJob(task.job)) {
           task.job.status = 'failed';
           task.job.errors.push({
             path: task.job.current || task.job.destination || task.job.sources[0] || '',

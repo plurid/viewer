@@ -97,6 +97,9 @@ export function navigationCommands({
       group: 'App',
       icon: 'command',
       shortcut: '⌘K',
+      // opening the palette is not a command worth recalling, and recording it saved
+      // preferences on every ⌘K
+      remember: false,
       when: windowScope,
       run: () => actions.palette('commands'),
     },
@@ -106,6 +109,7 @@ export function navigationCommands({
       group: 'App',
       icon: 'command',
       aliases: [':', 'ex', 'vim', 'command prompt'],
+      remember: false,
       when: windowScope,
       run: () => actions.palette('line'),
     },
@@ -115,6 +119,7 @@ export function navigationCommands({
       group: 'App',
       icon: 'command',
       aliases: ['>', 'prompt', 'ai', 'model', 'natural language'],
+      remember: false,
       when: windowScope,
       run: () => actions.palette('prompt'),
     },
@@ -124,6 +129,7 @@ export function navigationCommands({
       group: 'App',
       icon: 'settings',
       aliases: ['settings', 'preferences', 'options', 'configure'],
+      remember: false,
       when: windowScope,
       run: () => actions.palette('settings'),
     },
@@ -263,15 +269,19 @@ export function navigationCommands({
       windowScope(context) && actions.ready && state.bootstrap.platform === 'darwin',
     run: actions.findTagged,
   });
-  if (!space.panes.some((pane) => pane.id === state.activePane && pane.type === 'folder'))
-    commands.push({
-      id: 'go-to',
-      label: 'Go to folder…',
-      group: 'Navigation',
-      icon: 'folder',
-      shortcut: '⌘L',
-      when: windowScope,
-      run: actions.goTo,
-    });
+  // a folder plane offers its own Go to folder…
+  const activeFolder = () =>
+    activeWorkspace().panes.some(
+      (pane) => pane.id === getState().activePane && pane.type === 'folder',
+    );
+  commands.push({
+    id: 'go-to',
+    label: 'Go to folder…',
+    group: 'Navigation',
+    icon: 'folder',
+    shortcut: '⌘L',
+    when: (context) => windowScope(context) && !activeFolder(),
+    run: actions.goTo,
+  });
   return commands;
 }

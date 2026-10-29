@@ -6,9 +6,10 @@ export function useCommands(): CommandRegistry {
   if (!registry) throw new Error('Command registry is missing.');
   return registry;
 }
-export function useCommandRevision(paneID?: string): void {
+/** Re-renders when the commands for `paneID` (or any, without it) change; returns their revision. */
+export function useCommandRevision(paneID?: string): number {
   const registry = useCommands();
-  useSyncExternalStore(
+  return useSyncExternalStore(
     registry.subscribe,
     paneID ? () => registry.scopedSnapshot(paneID) : registry.snapshot,
   );

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import type { FolderSizeTask } from '../../domain/files/metadata';
 import { formatBytes } from '../../domain/files/entries';
@@ -123,10 +123,9 @@ export function cancelFolderSize(paths: readonly string[]): Promise<void> {
 }
 export function useFolderSize(paths: readonly string[]) {
   const key = keyFor(paths);
-  return useSyncExternalStore(
-    (listener) => subscribe(key, listener),
-    () => measurements.get(key),
-  );
+  // stable, so React subscribes once per folder rather than once per render
+  const subscribeKey = useCallback((listener: () => void) => subscribe(key, listener), [key]);
+  return useSyncExternalStore(subscribeKey, () => measurements.get(key));
 }
 function measuredSize(measurement: Measurement) {
   const task = measurement.task;
@@ -235,15 +234,21 @@ export function SelectionSize({
   entries: readonly FileEntry[];
   fallback?: string;
 }) {
-  const paths = entries.map((entry) => entry.path);
-  const keys = [...new Set([keyFor(paths), ...paths.map((path) => keyFor([path]))])];
-  useSyncExternalStore(
-    (listener) => {
+  // Built once per selection: Select All in a large folder made thousands of keys and
+  // subscriptions on every render. Subscribing per key keeps those sizes from eviction.
+  const keys = useMemo(() => {
+    const paths = entries.map((entry) => entry.path);
+    return [...new Set([keyFor(paths), ...paths.map((path) => keyFor([path]))])];
+  }, [entries]);
+  const subscribeKeys = useCallback(
+    (listener: () => void) => {
       const off = keys.map((key) => subscribe(key, listener));
       return () => off.forEach((remove) => remove());
     },
-    () => keys.map((key) => revisions.get(key) || 0).join(','),
+    [keys],
   );
+  const revision = useCallback(() => keys.map((key) => revisions.get(key) || 0).join(','), [keys]);
+  useSyncExternalStore(subscribeKeys, revision);
   const { label, task } = selectionSize(entries, fallback);
   return (
     <span

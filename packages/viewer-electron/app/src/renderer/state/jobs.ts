@@ -1,6 +1,8 @@
 // File operation jobs as reported by the desktop service.
 import type { OperationJob, OperationProgress } from '../../domain/contracts';
-import { getState, subscribe, update } from './core';
+import { getState, subscribe, update, type ViewerState } from './core';
+import { isActiveJob } from '../../domain/operations/jobs';
+import { requestRefresh } from './refresh';
 
 /** Resolves once the job reaches a final status, as reported to this window. */
 export function settledJob(id: string): Promise<OperationJob> {
@@ -36,8 +38,18 @@ export function setOperationsOpen(open: boolean, history = false): void {
 export function needsOperations(state = getState()): boolean {
   return state.jobs.some(
     (job) =>
-      ['queued', 'running', 'collision'].includes(job.status) ||
-      (job.status === 'failed' && !state.acknowledgedJobs.includes(job.id)),
+      isActiveJob(job) || (job.status === 'failed' && !state.acknowledgedJobs.includes(job.id)),
+  );
+}
+/** The jobs Undo and Redo can reach, as a string: unchanged while a job only makes progress. */
+export function undoSignature(state: ViewerState): string {
+  return (
+    state.jobs.length +
+    ':' +
+    state.jobs
+      .filter((job) => job.undoable || job.redoable)
+      .map((job) => job.id + (job.undoable ? 'u' : '') + (job.redoable ? 'r' : ''))
+      .join(',')
   );
 }
 export function setJobs(jobs: OperationJob[]): void {
@@ -81,14 +93,18 @@ export function receiveJob(job: OperationJob): void {
       needsDecision ||
       (getState().operationsOpen &&
         (getState().operationsHistory ||
-          jobs.some((job) => ['queued', 'running', 'collision', 'failed'].includes(job.status)))),
+          jobs.some((job) => isActiveJob(job) || job.status === 'failed'))),
     acknowledgedJobs:
       getState().operationsOpen && job.status === 'failed'
         ? [...new Set([...getState().acknowledgedJobs, job.id])]
         : getState().acknowledgedJobs,
   });
-  if (old && old.status !== job.status && ['completed', 'failed', 'cancelled'].includes(job.status))
-    window.dispatchEvent(new CustomEvent('viewer:refresh'));
+  if (old && old.status !== job.status && !isActiveJob(job))
+    requestRefresh([
+      ...job.sources,
+      ...(job.destination ? [job.destination] : []),
+      ...job.completed.flatMap((item) => [item.source, item.destination ?? '']).filter(Boolean),
+    ]);
 }
 /** False asks the caller for an authoritative snapshot after an unknown/missed revision. */
 export function receiveProgress(progress: OperationProgress): boolean {

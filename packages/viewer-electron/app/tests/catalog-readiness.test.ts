@@ -13,7 +13,7 @@ import type { GitActionReply, GitActionRequest } from '../src/domain/comparison/
 import { useAgentCatalog } from '../src/renderer/app/useAgentCatalog';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
 import { captureTarget } from '../src/renderer/commands/target';
-import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
+import { activeWorkspace, initialize } from '../src/renderer/state/store';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const roots: string[] = [];
@@ -125,7 +125,6 @@ describe('cold human command origin publication', () => {
       useAgentCatalog({
         registry: f.registry,
         controller: f.controller,
-        activePane: getState().activePane,
         context: f.context,
       }),
     );
@@ -154,7 +153,6 @@ describe('cold human command origin publication', () => {
         useAgentCatalog({
           registry: f.registry,
           controller: f.controller,
-          activePane: getState().activePane,
           context,
         }),
       { initialProps: { context: f.context } },

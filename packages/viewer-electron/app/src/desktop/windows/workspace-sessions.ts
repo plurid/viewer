@@ -9,6 +9,18 @@ interface Session {
 
 const equal = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
+/** The parts of a saved state shared between windows: what a merge can change for the sender. */
+const shared = (state: SavedState) => ({
+  workspaces: state.workspaces,
+  favorites: state.favorites,
+  recents: state.recents,
+  lineHistory: state.lineHistory,
+});
+/** Whether the merged state holds anything the saving window did not send. */
+export function mergeChanged(sent: SavedState, merged: SavedState): boolean {
+  return !equal(shared(sent), shared(merged));
+}
+
 /** Native windows own workspaces; a stale whole-window snapshot never replaces another owner. */
 export class WorkspaceSessions {
   private current?: SavedState;

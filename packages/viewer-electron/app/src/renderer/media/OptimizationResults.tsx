@@ -3,6 +3,7 @@ import type { OperationJob } from '../../domain/contracts';
 import type { OptimizationOptions } from '../../domain/operations/optimization';
 import { formatOptimizationSize } from '../../domain/operations/optimization';
 import type { OptimizationSession } from './useOptimizationSession';
+import { isActiveJob } from '../../domain/operations/jobs';
 
 /** Paginated results keep the full batch available without retaining a thousand table rows. */
 export function OptimizationResults({
@@ -70,7 +71,7 @@ export function OptimizationResults({
                       <span className="error">{failure}</span>
                     ) : row.preparing ? (
                       'Preparing…'
-                    ) : job && ['queued', 'running', 'collision'].includes(job.status) ? (
+                    ) : job && isActiveJob(job) ? (
                       `${job.status === 'running' ? 'Saving' : job.status}…`
                     ) : item?.optimized ? (
                       'Saved'

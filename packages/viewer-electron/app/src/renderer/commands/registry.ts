@@ -157,8 +157,8 @@ export class CommandRegistry {
   /** A command's label in a context, available there or not: which-key names every binding. */
   label(id: string, context: CommandContext): string | undefined {
     let fallback: string | undefined;
-    for (const source of this.sources.values())
-      for (const definition of source.definitions())
+    for (const [sourceID, source] of this.sources)
+      for (const definition of this.catalog(sourceID, source))
         if (definition.id === id) {
           if (definition.when(context)) return commandLabel(definition, context, true);
           fallback ??= commandLabel(definition, context, false);
@@ -182,21 +182,20 @@ export class CommandRegistry {
   private resolve(request: CommandRequest, includeUnavailable: boolean): DiscoverableCommand[] {
     const commands: DiscoverableCommand[] = [];
     const indices = new Map<string, number>();
+    const wanted = request.ids && new Set(request.ids);
     for (const [id, source] of this.sources) {
-      if (
-        request.sources
-          ? !request.sources.includes(id)
-          : id !== 'window' && source.context().paneID !== request.paneID
-      )
-        continue;
+      if (request.sources && !request.sources.includes(id)) continue;
       if (id === 'window' && request.global === false) continue;
+      // a source's context can hold its whole selection: read it once
+      const live = source.context();
+      if (!request.sources && id !== 'window' && live.paneID !== request.paneID) continue;
       const context = {
-        ...source.context(),
+        ...live,
         ...request.context,
         ...(request.scope ? { scope: request.scope } : {}),
       };
       for (const definition of this.catalog(id, source)) {
-        if (request.ids && !request.ids.includes(definition.id)) continue;
+        if (wanted && !wanted.has(definition.id)) continue;
         const previous = indices.get(definition.id);
         if (previous !== undefined && commands[previous]?.available) continue;
         const available = definition.when(context);
@@ -257,7 +256,9 @@ export class CommandRegistry {
     return true;
   }
   async invoke(id: string, request: CommandRequest): Promise<boolean> {
-    const command = this.list(request).find((item) => item.id === id);
+    if (request.ids && !request.ids.includes(id)) return false;
+    // evaluate only this command: a shortcut runs on every key press
+    const command = this.list({ ...request, ids: [id] }).find((item) => item.id === id);
     return command ? this.run(command, request.remember !== false) : false;
   }
 }

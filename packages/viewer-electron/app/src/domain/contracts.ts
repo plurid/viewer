@@ -97,6 +97,7 @@ import type {
   LocalServerAction,
   LocalServerDetail,
 } from './previews/web';
+import type { JobStatus } from './operations/jobs';
 /** Serializable contracts shared by main, preload and renderer. */
 export type FileKind = 'directory' | 'file' | 'symlink' | 'other';
 export interface FileEntry {
@@ -505,7 +506,7 @@ export interface OperationJob {
   id: string;
   revision: number;
   kind: OperationKind;
-  status: 'queued' | 'running' | 'collision' | 'completed' | 'cancelled' | 'failed';
+  status: JobStatus;
   sources: string[];
   destination?: string;
   current?: string;

@@ -12,6 +12,7 @@ import { mediaDraft, mediaSession } from './drafts';
 import { SourceStrip } from './SourceStrip';
 import { Timecode } from './Timecode';
 import './media.css';
+import { isActiveJob } from '../../domain/operations/jobs';
 
 export default function MediaPlane({ pane, active }: { pane: Pane; active: boolean }) {
   const workspace = useWorkspace();
@@ -59,9 +60,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
   const destinations = outputJobs.flatMap((job) =>
     job.completed.flatMap((item) => (item.destination ? [item.destination] : [])),
   );
-  const runningExport = outputJobs.find((job) =>
-    ['queued', 'running', 'collision'].includes(job.status),
-  );
+  const runningExport = outputJobs.find((job) => isActiveJob(job));
   const exportFailure = outputJobs.find((job) => job.status === 'failed');
   const exportNotice = !jobs.length
     ? ''
@@ -824,15 +823,15 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             ),
           )}
           {outputJobs
-            .filter((job) =>
-              ['queued', 'running', 'collision', 'failed', 'cancelled'].includes(job.status),
+            .filter(
+              (job) => isActiveJob(job) || job.status === 'failed' || job.status === 'cancelled',
             )
             .map((job) => (
               <div className="media-export-progress" key={job.id}>
                 <span role="status">
                   {job.status} · {job.detail || `${job.itemsDone} / ${job.itemsTotal} files`}
                 </span>
-                {['queued', 'running', 'collision'].includes(job.status) && (
+                {isActiveJob(job) && (
                   <>
                     <progress max={1} value={job.progress} />
                     <button onClick={() => void window.viewer.cancelJob(job.id).catch(report)}>

@@ -6,11 +6,14 @@ import { PreviewWork, previewContains, type PreviewScope } from './preview-work'
 import path from 'node:path';
 import { cameraRawFormats } from '../../domain/previews/images/rendered';
 import type { DerivedPreviews } from './derived';
+import { Slots } from './slots';
 /** Cache bounded, resized PNGs, never original decoded images. */
 export class Thumbnails {
   private cache = new Map<string, { file: string; source: string; value: string }>();
+  private bytes = 0;
   private pending = new Map<string, Promise<string>>();
-  private queue: Promise<unknown> = Promise.resolve();
+  // as many as the image decoder runs at once (bridge.ts)
+  private slots = new Slots(3);
   private work = new PreviewWork();
   private closed = false;
   constructor(
@@ -28,12 +31,16 @@ export class Thumbnails {
     scope.add(actual);
     const key = actual + ':' + item.identity + ':' + item.modified + ':' + size;
     const existing = this.cache.get(key);
-    if (existing !== undefined) return existing.value;
+    if (existing !== undefined) {
+      // most recently used last, so eviction takes the oldest
+      this.cache.delete(key);
+      this.cache.set(key, existing);
+      return existing.value;
+    }
     const pending = this.pending.get(key);
     if (pending) return pending;
-    const work = this.queue
-      .catch(() => {})
-      .then(async () => {
+    const work = this.slots
+      .run(async () => {
         if (this.closed) return '';
         scope.check();
         const camera = [file, actual].some((source) =>
@@ -45,17 +52,10 @@ export class Thumbnails {
         if (this.closed) return '';
         scope.check();
         if (value.length > 1000000) return '';
-        this.cache.set(key, { file: actual, source: file, value });
-        let bytes = [...this.cache.values()].reduce((n, cached) => n + cached.value.length, 0);
-        for (const [old, value] of this.cache) {
-          if (this.cache.size <= 128 && bytes <= 16000000) break;
-          this.cache.delete(old);
-          bytes -= value.value.length;
-        }
+        this.remember(key, { file: actual, source: file, value });
         return value;
       })
       .catch(() => '');
-    this.queue = work;
     this.pending.set(key, work);
     try {
       return await work;
@@ -95,10 +95,26 @@ export class Thumbnails {
       lease.release();
     }
   }
+  /** Keeps at most 128 thumbnails and 16 MB, dropping the least recently used. */
+  private remember(key: string, cached: { file: string; source: string; value: string }): void {
+    this.forget(key);
+    this.cache.set(key, cached);
+    this.bytes += cached.value.length;
+    for (const old of this.cache.keys()) {
+      if (this.cache.size <= 128 && this.bytes <= 16_000_000) break;
+      this.forget(old);
+    }
+  }
+  private forget(key: string): void {
+    const cached = this.cache.get(key);
+    if (!cached) return;
+    this.cache.delete(key);
+    this.bytes -= cached.value.length;
+  }
   private clearKnown(root?: string): void {
     for (const [key, cached] of this.cache)
       if (!root || previewContains(root, cached.file) || previewContains(root, cached.source))
-        this.cache.delete(key);
+        this.forget(key);
   }
   clear(root?: string): Promise<void> {
     const canonical = this.work.invalidate(root);

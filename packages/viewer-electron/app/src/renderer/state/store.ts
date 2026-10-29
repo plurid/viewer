@@ -51,6 +51,7 @@ export {
   setJobs,
   setOperationsOpen,
   settledJob,
+  undoSignature,
 } from './jobs';
 export { quickPreview, refreshClipboard, stepQuickPreview, writeFileClipboard } from './ui';
 export { addFavorite, favorite, remember, removeFavorite, renameShortcut } from './places';

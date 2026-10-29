@@ -51,6 +51,7 @@ import {
 } from './sections';
 import { useLensGrouping } from './folder-sections';
 import { GitBadge, GitColumn } from '../git/status';
+import { cachedThumbnail, thumbnail } from './thumbnail-cache';
 
 export interface FileViewProps {
   paneID?: string;
@@ -406,25 +407,34 @@ const thumbnailFormats = new Set<string>([
   ...renderedImageFormats,
 ]);
 export function Thumbnail({ entry }: { entry: FileEntry }) {
-  const [url, setURL] = useState('');
+  const supported = thumbnailFormats.has(entry.extension) && entry.size <= thumbnailByteLimit;
+  const size = supported ? getState().settings.settings.previews.thumbnailSize : 0;
+  const [url, setURL] = useState(() => (supported && cachedThumbnail(entry, size)) || '');
   const [error, setError] = useState(false);
   useEffect(() => {
-    setURL('');
     setError(false);
-    if (!thumbnailFormats.has(entry.extension) || entry.size > thumbnailByteLimit) return;
+    if (!supported) {
+      setURL('');
+      return;
+    }
+    const cached = cachedThumbnail(entry, size);
+    setURL(cached ?? '');
+    if (cached !== undefined) return;
     let live = true;
-    void window.viewer
-      .thumbnail(entry.path, getState().settings.settings.previews.thumbnailSize)
-      .then((url) => {
+    thumbnail(entry, size).then(
+      (url) => {
         if (live) setURL(url);
-      })
-      .catch(() => {
+      },
+      () => {
         if (live) setError(true);
-      });
+      },
+    );
     return () => {
       live = false;
     };
-  }, [entry.path, entry.modified, entry.extension, entry.size]);
+    // a file's version is its path, identity, modification time and size
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry.path, entry.identity, entry.modified, entry.size, supported, size]);
   return url && !error ? (
     <span className="git-thumbnail">
       <img src={url} alt="" loading="lazy" draggable={false} onError={() => setError(true)} />
@@ -434,7 +444,50 @@ export function Thumbnail({ entry }: { entry: FileEntry }) {
     <FileIcon entry={entry} size={44} />
   );
 }
+/**
+ * A Grid tile. Memoized with stable actions, as list rows are: a folder's every render once
+ * re-rendered every visible tile, its thumbnail and its link marker.
+ */
+const FileTile = memo(function FileTile({
+  entry,
+  selected,
+  actions,
+}: {
+  entry: FileEntry;
+  selected: boolean;
+  actions: Pick<FileViewProps, 'select' | 'open' | 'context' | 'drag' | 'paneID'>;
+}) {
+  return (
+    <div
+      role="option"
+      aria-selected={selected}
+      className={`file-tile ${selected ? 'is-selected' : ''}`}
+      title={entry.path}
+      data-file-path={entry.path}
+      data-directory-path={browsable(entry) ? entry.path : undefined}
+      onClick={(event) => actions.select(entry, event)}
+      onDoubleClick={(event) => actions.open(entry, event.altKey || event.metaKey || event.ctrlKey)}
+      onContextMenu={(event) => actions.context(entry, event)}
+      draggable
+      onDragStart={(event) => actions.drag(entry, event)}
+    >
+      <div className="tile-preview">
+        <Thumbnail entry={entry} />
+      </div>
+      <span className="file-linked-label">
+        <span>{entry.name}</span>
+        <LinkedPlaneButton paneID={actions.paneID} entry={entry} />
+      </span>
+      <small>{entry.directory ? kindLabel(entry) : formatBytes(entry.size)}</small>
+    </div>
+  );
+});
 export function GridView(props: FileViewProps) {
+  const actions = useRowActions(props);
+  const tileActions = useMemo(
+    () => ({ ...actions, paneID: props.paneID }),
+    [actions, props.paneID],
+  );
   const scroll = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -532,31 +585,12 @@ export function GridView(props: FileViewProps) {
               }}
             >
               {props.entries.slice(row.start, row.end).map((entry) => (
-                <div
-                  role="option"
-                  aria-selected={props.selectionSet.has(entry.path)}
-                  className={`file-tile ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
+                <FileTile
                   key={entry.path}
-                  title={entry.path}
-                  data-file-path={entry.path}
-                  data-directory-path={browsable(entry) ? entry.path : undefined}
-                  onClick={(event) => props.select(entry, event)}
-                  onDoubleClick={(event) =>
-                    props.open(entry, event.altKey || event.metaKey || event.ctrlKey)
-                  }
-                  onContextMenu={(event) => props.context(entry, event)}
-                  draggable
-                  onDragStart={(event) => props.drag(entry, event)}
-                >
-                  <div className="tile-preview">
-                    <Thumbnail entry={entry} />
-                  </div>
-                  <span className="file-linked-label">
-                    <span>{entry.name}</span>
-                    <LinkedPlaneButton paneID={props.paneID} entry={entry} />
-                  </span>
-                  <small>{entry.directory ? kindLabel(entry) : formatBytes(entry.size)}</small>
-                </div>
+                  entry={entry}
+                  selected={props.selectionSet.has(entry.path)}
+                  actions={tileActions}
+                />
               ))}
             </div>
           );
@@ -749,7 +783,56 @@ export function ColumnsView({
     </div>
   );
 }
+/** A Gallery strip item, memoized with stable actions like Grid tiles and list rows. */
+const GalleryItem = memo(function GalleryItem({
+  entry,
+  left,
+  selected,
+  section,
+  actions,
+}: {
+  entry: FileEntry;
+  left: number;
+  selected: boolean;
+  section?: string;
+  actions: Pick<FileViewProps, 'select' | 'open' | 'context' | 'drag' | 'paneID'>;
+}) {
+  return (
+    <div className="gallery-item-container" style={{ position: 'absolute', left, height: '100%' }}>
+      <button
+        className={`gallery-item ${selected ? 'is-selected' : ''}`}
+        style={{ height: '100%' }}
+        data-file-path={entry.path}
+        data-directory-path={browsable(entry) ? entry.path : undefined}
+        aria-selected={selected}
+        role="option"
+        onClick={(event) => actions.select(entry, event)}
+        onDoubleClick={(event) =>
+          actions.open(entry, event.altKey || event.metaKey || event.ctrlKey)
+        }
+        onContextMenu={(event) => actions.context(entry, event)}
+        draggable
+        onDragStart={(event) => actions.drag(entry, event)}
+        title={entry.name}
+      >
+        <Thumbnail entry={entry} />
+        <span>{entry.name}</span>
+      </button>
+      {section && (
+        <span className="gallery-section" title={section}>
+          {section}
+        </span>
+      )}
+      <LinkedPlaneButton paneID={actions.paneID} entry={entry} />
+    </div>
+  );
+});
 export function GalleryView(props: FileViewProps) {
+  const actions = useRowActions(props);
+  const itemActions = useMemo(
+    () => ({ ...actions, paneID: props.paneID }),
+    [actions, props.paneID],
+  );
   const activity = useContext(PreviewActivity);
   const selected = props.entries.find((entry) => entry.path === props.cursor);
   const starts = useMemo(() => {
@@ -806,37 +889,14 @@ export function GalleryView(props: FileViewProps) {
             const entry = props.entries[item.index];
             if (!entry) return null;
             return (
-              <div
-                className="gallery-item-container"
+              <GalleryItem
                 key={entry.path}
-                style={{ position: 'absolute', left: item.start, height: '100%' }}
-              >
-                <button
-                  className={`gallery-item ${props.selectionSet.has(entry.path) ? 'is-selected' : ''}`}
-                  style={{ height: '100%' }}
-                  data-file-path={entry.path}
-                  data-directory-path={browsable(entry) ? entry.path : undefined}
-                  aria-selected={props.selectionSet.has(entry.path)}
-                  role="option"
-                  onClick={(event) => props.select(entry, event)}
-                  onDoubleClick={(event) =>
-                    props.open(entry, event.altKey || event.metaKey || event.ctrlKey)
-                  }
-                  onContextMenu={(event) => props.context(entry, event)}
-                  draggable
-                  onDragStart={(event) => props.drag(entry, event)}
-                  title={entry.name}
-                >
-                  <Thumbnail entry={entry} />
-                  <span>{entry.name}</span>
-                </button>
-                {starts.has(item.index) && (
-                  <span className="gallery-section" title={starts.get(item.index)!.label}>
-                    {starts.get(item.index)!.label}
-                  </span>
-                )}
-                <LinkedPlaneButton paneID={props.paneID} entry={entry} />
-              </div>
+                entry={entry}
+                left={item.start}
+                selected={props.selectionSet.has(entry.path)}
+                section={starts.get(item.index)?.label}
+                actions={itemActions}
+              />
             );
           })}
         </div>

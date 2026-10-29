@@ -6,6 +6,7 @@ import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { baseName } from '../../domain/workspaces/planes';
 import { dialogOpen } from '../ui/modal';
+import { isActiveJob } from '../../domain/operations/jobs';
 
 const operationLabels: Record<OperationKind, string> = {
   copy: 'Copy',
@@ -28,9 +29,7 @@ export function OperationsPanel() {
   const open = useViewer((state) => state.operationsOpen);
   const history = useViewer((state) => state.operationsHistory);
   const visibleJobs = (
-    history
-      ? jobs
-      : jobs.filter((job) => ['queued', 'running', 'collision', 'failed'].includes(job.status))
+    history ? jobs : jobs.filter((job) => isActiveJob(job) || job.status === 'failed')
   ).toSorted((a, b) => Number(b.status === 'collision') - Number(a.status === 'collision'));
   const [all, setAll] = useState<Record<string, boolean>>({});
   const [replace, setReplace] = useState<{ id: string; path: string; applyAll: boolean } | null>(
@@ -97,7 +96,7 @@ export function OperationsPanel() {
             />
             <strong>{operationLabels[job.kind]}</strong>
             <span className="muted">{job.status}</span>
-            {['queued', 'running', 'collision'].includes(job.status) && (
+            {isActiveJob(job) && (
               <IconButton
                 icon="close"
                 label="Cancel operation"

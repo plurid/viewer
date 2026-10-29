@@ -18,6 +18,7 @@ import { OptimizationResults } from './OptimizationResults';
 import { OptimizationNumberField } from './OptimizationNumberField';
 import './optimization.css';
 import { pathContains } from '../../domain/files/paths';
+import { isActiveJob } from '../../domain/operations/jobs';
 
 const presets = [
   { value: 'balanced', label: 'Balanced · high quality' },
@@ -68,7 +69,7 @@ export function OptimizeDialog({
     const job = allJobs.find((value) => value.id === id);
     return job ? [job] : [];
   });
-  const running = jobs.some((job) => ['queued', 'running', 'collision'].includes(job.status));
+  const running = jobs.some((job) => isActiveJob(job));
   const working = session.busy || running;
   const validation = optimizationOptionsSchema.safeParse(options);
   const selected = session.rows.filter((row) => row.selected && !row.exported);

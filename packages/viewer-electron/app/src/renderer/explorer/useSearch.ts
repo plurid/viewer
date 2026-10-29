@@ -3,7 +3,10 @@ import type { FileEntry } from '../../domain/contracts';
 import { useIndexedSearch } from './useIndexedSearch';
 import { report } from '../state/store';
 import type { SearchBatch } from '../../domain/contracts';
+import { pathContains } from '../../domain/files/paths';
 const emptyEntries: FileEntry[] = [];
+/** How often streamed results reach the view while a search runs. */
+const resultInterval = 100;
 
 /** Search lifetime belongs to a folder plane, independently of its view mode. */
 export function useSearch(path: string, query: string, enabled: boolean, showHidden: boolean) {
@@ -27,15 +30,30 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
     const id = crypto.randomUUID();
     search.current = id;
     setRunning(true);
-    const remove = window.viewer.onEvent((event) => {
-      if (event.type !== 'search' || event.batch.id !== id) return;
-      const { batch } = event;
-      setEntries((value) => [...value, ...batch.entries]);
+    // Each batch re-filtered and re-sorted every result so far: show them a few times a
+    // second instead, and the last batch at once.
+    const found: FileEntry[] = [];
+    let latest: SearchBatch | undefined;
+    let shown: ReturnType<typeof setTimeout> | undefined;
+    const show = () => {
+      shown = undefined;
+      const batch = latest;
+      if (!batch) return;
+      setEntries(found.slice());
       setRunning(!batch.done);
       setCoverage(batch);
       setSummary(
         `${batch.visited.toLocaleString()} checked${batch.errors ? ` · ${batch.errors} unavailable` : ''}${batch.truncated ? ' · result limit reached' : ''}`,
       );
+    };
+    const remove = window.viewer.onEvent((event) => {
+      if (event.type !== 'search' || event.batch.id !== id) return;
+      found.push(...event.batch.entries);
+      latest = event.batch;
+      if (event.batch.done) {
+        clearTimeout(shown);
+        show();
+      } else shown ??= setTimeout(show, resultInterval);
     });
     const timer = setTimeout(() => {
       void window.viewer
@@ -48,6 +66,7 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
     }, 250);
     return () => {
       clearTimeout(timer);
+      clearTimeout(shown);
       remove();
       if (search.current === id) search.current = '';
       void window.viewer.cancelSearch(id).catch(report);
@@ -65,9 +84,7 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
       ? cancelled || !!coverage?.errors || !!coverage?.truncated
       : !!indexed.result?.scanLimited ||
         indexed.result?.status.roots.some(
-          (root) =>
-            (path === root.path || path.startsWith(root.path.replace(/[/\\]$/, '') + '/')) &&
-            (root.status !== 'ready' || root.errors > 0),
+          (root) => pathContains(root.path, path) && (root.status !== 'ready' || root.errors > 0),
         ),
     summary:
       !enabled || !query.trim()

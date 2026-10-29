@@ -72,8 +72,7 @@ export interface TrashReceipt {
 export type ReceiptAccess = <T>(receipt: TrashReceipt, work: () => Promise<T>) => Promise<T>;
 export function macFiles(): MacFiles {
   if (process.platform !== 'darwin') throw new Error('This file service requires macOS.');
-  // Unit tests load the addon in plain Node, from the source tree they run in.
-  const assets = process.versions.electron ? assetPath() : path.resolve('assets');
+  const assets = assetPath();
   // The production main bundle is CommonJS, where import.meta.url is absent.
   // The addon path is absolute; resolution needs only a stable absolute base.
   const require = createRequire(path.join(assets, 'viewer-native.cjs'));

@@ -1,6 +1,6 @@
 import { matchesQuery, topWords, withoutTopWords } from '../../domain/search/query';
 import { useFileQuery } from '../explorer/useFileQuery';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { CommandResults } from './CommandResults';
 import { useCommands, useCommandRevision, useCommandSource } from './context';
 import {
@@ -154,10 +154,19 @@ function CommandFinder({
   const nested = workspaces || settings;
   const onCommands = () => onMode('commands');
   const smart = useSmartRows(nested ? '' : query, context, directory);
-  // the smart rows' own source shares the plane: listed once, above
-  const commands = registry
-    .list({ paneID: active, scope: 'window', context })
-    .filter((command) => !command.id.startsWith('smart:'));
+  // Listing evaluates every command. The window's and this plane's commands change with their
+  // revision; the palette's own rows, re-registered on every keystroke, do not count.
+  const scoped = useSyncExternalStore(registry.subscribe, () => registry.scopedSnapshot(active));
+  const commands = useMemo(
+    () =>
+      registry
+        .list({ paneID: active, scope: 'window', context })
+        // the smart rows' own source shares the plane: listed once, above
+        .filter((command) => !command.id.startsWith('smart:')),
+    // `context` is a new object each render, read afresh whenever the revision changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [registry, active, scoped],
+  );
   // settings apart (palette-sections.ts): their own section, or `,` for them alone
   const view = workspaces
     ? {
