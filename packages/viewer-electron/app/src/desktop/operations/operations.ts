@@ -1,4 +1,5 @@
 import type { FileChange } from '../../domain/files/changes';
+import { isOfficeFormat } from '../../domain/previews/documents/layout';
 import type { TrashOrigin } from '../../domain/files/trash';
 import type { ObservedOperationLink } from '../../domain/files/relationships';
 import { createHash, randomUUID } from 'node:crypto';
@@ -378,7 +379,12 @@ export class Operations {
           throw new Error('Choose a destination folder and output name.');
       } else {
         if (!request.conversion) throw new Error('Choose an image quick action.');
-        if (
+        if (request.conversion === 'office-pdf') {
+          if (roots.some((file) => !isOfficeFormat(path.extname(file).slice(1).toLowerCase())))
+            throw new Error(
+              'PDF copies are made from Word, Excel, PowerPoint and OpenDocument files.',
+            );
+        } else if (
           roots.some(
             (file) => !convertibleExtensions.has(path.extname(file).slice(1).toLowerCase()),
           )

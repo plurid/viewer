@@ -15,6 +15,8 @@ import { downloadSample } from './playground/camera-raw';
 import { officeLayoutSamples } from './playground/office-layout';
 import { qualificationSamples } from './playground/qualification-samples';
 import { officeFontFixture } from '../tests/fixtures/office-fonts';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { officeSamples } from './playground/samples/office';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -29,7 +31,7 @@ const samples = [
     /poi-(various-pictures.docx|conditional-formatting.xlsx)$/.test(sample.path),
   ),
 ];
-const inputs = [];
+const inputs: { name: string; sha256: string }[] = [];
 for (const sample of samples) {
   const name = path.basename(sample.path);
   await writeFile(path.join(root, name), await downloadSample(sample), { flag: 'wx' });
@@ -44,6 +46,47 @@ await writeFile(path.join(root, fieldName), await readFile(path.join(root, filen
   flag: 'wx',
 });
 inputs.push({ name: fieldName, sha256: filenameSource.sha256 });
+// OpenDocument (packaged and flat), Rich Text and the OOXML variants, generated
+for (const sample of officeSamples()) {
+  const name = path.basename(sample.path);
+  const bytes = typeof sample.bytes === 'string' ? Buffer.from(sample.bytes) : sample.bytes;
+  await writeFile(path.join(root, name), bytes, { flag: 'wx' });
+  inputs.push({ name, sha256: createHash('sha256').update(bytes).digest('hex') });
+}
+// Macro and template packages declare their own main content type; macros are never read.
+const variants = {
+  'poi-various-pictures.docx': {
+    docm: 'application/vnd.ms-word.document.macroEnabled.main+xml',
+    dotx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml',
+    dotm: 'application/vnd.ms-word.template.macroEnabledTemplate.main+xml',
+  },
+  'poi-conditional-formatting.xlsx': {
+    xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.main+xml',
+    xltx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml',
+    xltm: 'application/vnd.ms-excel.template.macroEnabled.main+xml',
+  },
+  'ArtisticEffectSample.pptx': {
+    pptm: 'application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml',
+    ppsx: 'application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml',
+    potx: 'application/vnd.openxmlformats-officedocument.presentationml.template.main+xml',
+  },
+} as const;
+const mainType =
+  /ContentType="(application\/vnd\.openxmlformats-officedocument\.[a-z]+ml\.(?:document|sheet|presentation)\.main\+xml)"/;
+for (const [source, types] of Object.entries(variants)) {
+  const files = unzipSync(await readFile(path.join(root, source)));
+  const declared = strFromU8(files['[Content_Types].xml']!);
+  const main = mainType.exec(declared)![1]!;
+  for (const [extension, type] of Object.entries(types)) {
+    const bytes = zipSync({
+      ...files,
+      '[Content_Types].xml': strToU8(declared.replace(main, type)),
+    });
+    const name = source.replace(/\.[^.]+$/, '.' + extension);
+    await writeFile(path.join(root, name), bytes, { flag: 'wx' });
+    inputs.push({ name, sha256: createHash('sha256').update(bytes).digest('hex') });
+  }
+}
 const fontName = 'Regional serif and sans.docx';
 const fontFixture = officeFontFixture();
 await writeFile(path.join(root, fontName), fontFixture, { flag: 'wx' });
@@ -74,6 +117,14 @@ await promisify(execFile)(electron, [path.join(output, 'main.mjs'), root], {
 });
 const result = JSON.parse(await readFile(path.join(root, 'result.json'), 'utf8'));
 assert.equal(result.passed, true);
+async function pageCount(file: string): Promise<number> {
+  const task = getDocument({ data: new Uint8Array(await readFile(file)) });
+  try {
+    return (await task.promise).numPages;
+  } finally {
+    await task.destroy();
+  }
+}
 async function pageText(file: string, number = 1): Promise<string> {
   const task = getDocument({ data: new Uint8Array(await readFile(file)) });
   try {
@@ -115,12 +166,20 @@ for (const item of result.cases) {
       'Legacy DOC layout includes readable Japanese glyphs.',
     );
   }
-  if (item.office?.sheets.length > 1)
+  if (item.office?.sheets.length > 1) {
     assert.notEqual(
       await pageText(path.join(root, item.name + '.pdf')),
       await pageText(path.join(root, item.name + '.second-sheet.pdf')),
       'Worksheet selection changes rendered content: ' + item.name,
     );
+    const sheets = await Promise.all(
+      ['.pdf', '.second-sheet.pdf'].map((suffix) => pageCount(path.join(root, item.name + suffix))),
+    );
+    assert.ok(
+      (await pageCount(path.join(root, item.name + '.whole.pdf'))) >= sheets[0]! + sheets[1]!,
+      'A PDF copy holds every sheet: ' + item.name,
+    );
+  }
 }
 console.log(
   JSON.stringify(

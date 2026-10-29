@@ -32,6 +32,7 @@ export const documentTypes: DocumentType[] = [
     CFBundleTypeExtensions: officeFormats,
   },
   type('Archive', ['public.zip-archive', 'public.tar-archive', 'org.gnu.gnu-zip-tar-archive']),
+  type('Font', ['public.font']),
   {
     // Drawings and 3D models have no system content types, so they match by extension.
     CFBundleTypeName: 'Drawing or 3D model',

@@ -1,5 +1,6 @@
 import type { FileEntry } from '../contracts';
 import { fileFamily, formatBytes } from '../files/entries';
+import { isOfficeFormat } from '../previews/documents/layout';
 import { parentPath } from '../workspaces/planes';
 
 /** What a rule reads: the selection, the time, and a few facts about the person's setup. */
@@ -136,6 +137,15 @@ export const suggestionRules: readonly SuggestionRule[] = [
     weight: 55,
     reason: (input) =>
       input.selection.length === 1 && everyFile(input, input.editable) ? 'Text file' : undefined,
+  },
+  {
+    id: 'office.pdf',
+    commands: ['save-pdf-copy'],
+    weight: 50,
+    reason: (input) =>
+      everyFile(input, (entry) => isOfficeFormat((entry.extension ?? '').toLowerCase()))
+        ? 'A PDF opens anywhere'
+        : undefined,
   },
   {
     id: 'images.rename',

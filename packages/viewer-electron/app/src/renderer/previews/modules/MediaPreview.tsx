@@ -96,13 +96,7 @@ export default function MediaPreview(context: PreviewContext) {
       resource={
         derived ? { ...derived, entry: { ...derived.entry, name: resource.entry.name } } : resource
       }
-      onFallback={
-        !derived &&
-        !resource.entry.mime.startsWith('audio/') &&
-        typeof services.videoRendition === 'function'
-          ? fallback
-          : undefined
-      }
+      onFallback={!derived && typeof services.videoRendition === 'function' ? fallback : undefined}
       compatible={!!derived}
     />
   );

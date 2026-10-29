@@ -32,6 +32,7 @@ import { transformPlanSchema } from '../../domain/operations/transforms';
 import { mediaRequestSchema } from '../../domain/media/documents';
 import { optimizationRequestSchema } from '../../domain/operations/optimization-review';
 import { worksheetDocumentRequestSchema } from '../../domain/previews/documents/office';
+import { sqliteRequestSchema } from '../../domain/previews/data/sqlite';
 import { noteRequestSchema } from '../../domain/editing/notes';
 import { speechRequestSchema } from '../../domain/speech/recognition';
 import { taskWorkflowInputSchema } from '../../domain/agents/task-workflow';
@@ -687,6 +688,7 @@ export const schemas = {
   release: z.tuple([id]),
   archive: z.tuple([id]),
   archiveEntry: z.tuple([id, z.string().max(65536)]),
+  sqlite: z.tuple([id, sqliteRequestSchema]),
   imageRendition: z.tuple([
     id,
     z
@@ -908,6 +910,7 @@ export const methodWindows = {
   release: 'viewer',
   archive: 'viewer',
   archiveEntry: 'viewer',
+  sqlite: 'viewer',
   imageRendition: 'viewer',
   videoRendition: 'viewer',
   officeLayout: 'viewer',

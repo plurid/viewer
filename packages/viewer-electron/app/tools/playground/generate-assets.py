@@ -43,6 +43,23 @@ for name, kind in [
 ]:
     create(name, lambda target, kind=kind: image.save(target, format=kind))
 create("study.icns", lambda target: image.resize((1024, 1024)).save(target, format="ICNS"))
+# Uncompressed formats use a small copy, which keeps the committed files small
+small = image.resize((160, 120))
+create("study-small.png", lambda target: small.save(target, format="PNG"))
+# Netpbm: bitmap, greymap and pixmap
+create("study.pbm", lambda target: small.convert("1").save(target, format="PPM"))
+create("study.pgm", lambda target: small.convert("L").save(target, format="PPM"))
+create("study.ppm", lambda target: small.save(target, format="PPM"))
+
+
+def animated(target):
+    # APNG: the study, then the same frame with the sun lowered
+    second = image.copy()
+    ImageDraw.Draw(second).ellipse((292, 266, 348, 322), fill="#d7a56b")
+    image.save(target, format="PNG", save_all=True, append_images=[second], duration=500, loop=0)
+
+
+create("study.apng", animated)
 
 
 def psd(target):
@@ -71,9 +88,14 @@ create("study.avif", lambda target: ffmpeg([
 create("study.exr", lambda target: ffmpeg([
     "-i", str(ASSETS / "study.png"), "-frames:v", "1", "-c:v", "exr", "-compression", "zip1",
 ], target))
-create("study.heic", lambda target: subprocess.run([
-    "/usr/bin/sips", "-s", "format", "heic", str(ASSETS / "study.png"), "--out", str(target),
-], check=True, timeout=60, stdout=subprocess.DEVNULL))
+for name, kind, source in [
+    ("study.heic", "heic", "study.png"),
+    ("study.ktx", "ktx", "study-small.png"),
+    ("study.astc", "astc", "study-small.png"),
+]:
+    create(name, lambda target, kind=kind, source=source: subprocess.run([
+        "/usr/bin/sips", "-s", "format", kind, str(ASSETS / source), "--out", str(target),
+    ], check=True, timeout=60, stdout=subprocess.DEVNULL))
 
 
 def tone(target):
@@ -113,3 +135,56 @@ for name, container in [("motion.mov", "mov"), ("motion.m4v", "ipod")]:
 
 # OGV uses the separately pinned, attributed Blender trailer. The installed
 # Homebrew FFmpeg has a Theora decoder but no encoder.
+
+# Containers Chromium cannot play, which Viewer shows through a compatibility copy
+for name, arguments in [
+    ("motion.avi", ["-c:v", "mpeg4", "-b:v", "80k"]),
+    ("motion.mkv", ["-c:v", "libx264", "-pix_fmt", "yuv420p"]),
+    ("motion.mpg", ["-c:v", "mpeg2video", "-b:v", "80k", "-f", "mpeg"]),
+    ("motion.m2ts", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-f", "mpegts", "-mpegts_m2ts_mode", "1"]),
+    ("motion.wmv", ["-c:v", "wmv2", "-b:v", "80k", "-f", "asf"]),
+    ("motion.flv", ["-c:v", "flv", "-b:v", "80k"]),
+    ("motion.3gp", ["-c:v", "mpeg4", "-b:v", "80k", "-f", "3gp"]),
+    ("motion.3g2", ["-c:v", "mpeg4", "-b:v", "80k", "-f", "3g2"]),
+    ("motion.vob", ["-c:v", "mpeg2video", "-b:v", "80k", "-f", "vob"]),
+    ("motion.mxf", ["-c:v", "mpeg2video", "-b:v", "80k", "-r", "25", "-f", "mxf"]),
+]:
+    create(name, lambda target, arguments=arguments: ffmpeg([
+        "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=12", "-t", "2", "-threads", "2",
+        "-maxrate", "100k", "-bufsize", "200k",
+        *arguments,
+    ], target))
+for name, arguments in [
+    ("tone.aiff", ["-c:a", "pcm_s16be"]),
+    ("tone.caf", ["-c:a", "pcm_s16le"]),
+    ("tone.wma", ["-c:a", "wmav2"]),
+    ("tone.mka", ["-c:a", "flac"]),
+    ("tone.ac3", ["-c:a", "ac3", "-ar", "48000"]),
+    ("tone.wv", ["-c:a", "wavpack"]),
+]:
+    create(name, lambda target, arguments=arguments: ffmpeg([
+        "-i", str(ASSETS / "tone.wav"), *arguments,
+    ], target))
+
+
+def library(target):
+    # A small read-only SQLite example: two tables, an index and a view
+    import sqlite3
+
+    connection = sqlite3.connect(target)
+    connection.executescript("""
+        CREATE TABLE materials (id INTEGER PRIMARY KEY, name TEXT NOT NULL, quantity INTEGER);
+        CREATE TABLE notes (id INTEGER PRIMARY KEY, material INTEGER REFERENCES materials(id),
+            note TEXT, photo BLOB);
+        CREATE INDEX notes_material ON notes(material);
+        CREATE VIEW stocked AS SELECT name, quantity FROM materials WHERE quantity > 0;
+        INSERT INTO materials (name, quantity) VALUES
+            ('Aluminum panel', 12), ('Nylon cord', 24), ('Brass hinge', 0);
+        INSERT INTO notes (material, note, photo) VALUES
+            (1, 'Cut to 200 x 100 mm.', x'89504e47'), (2, 'Keep dry.', NULL);
+    """)
+    connection.commit()
+    connection.close()
+
+
+create("library.sqlite", library)

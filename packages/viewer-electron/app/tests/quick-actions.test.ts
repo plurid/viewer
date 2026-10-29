@@ -119,6 +119,29 @@ describe('image quick actions', () => {
   });
 });
 
+describe('Save PDF copy', () => {
+  it('writes one PDF beside each Office document and refuses other files', async () => {
+    const report = path.join(root, 'Report.docx'),
+      budget = path.join(root, 'Budget.ods');
+    await writeFile(report, 'document');
+    await writeFile(budget, 'workbook');
+    const job = await run({ kind: 'convert', conversion: 'office-pdf', sources: [report, budget] });
+    expect(job.status).toBe('completed');
+    expect(JSON.parse(await readFile(path.join(root, 'Report.pdf'), 'utf8'))).toEqual({
+      conversion: 'office-pdf',
+      sources: [report],
+    });
+    expect(JSON.parse(await readFile(path.join(root, 'Budget.pdf'), 'utf8')).sources).toEqual([
+      budget,
+    ]);
+    const photo = path.join(root, 'Photo.jpg');
+    await writeFile(photo, 'pixels');
+    expect(() =>
+      operations.start({ kind: 'convert', conversion: 'office-pdf', sources: [photo] }),
+    ).toThrow('PDF copies are made from');
+  });
+});
+
 describe('quick action building blocks', () => {
   it('names outputs beside their source', () => {
     expect(conversionOutput('/a/Photo.JPG', 'rotate-right')).toBe('/a/Photo rotated.JPG');

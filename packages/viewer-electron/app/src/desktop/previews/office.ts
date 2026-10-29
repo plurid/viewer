@@ -16,6 +16,11 @@ import { worksheetPageSchema, columnName } from '../../domain/previews/documents
 
 import { typeIs, partTarget, relationships } from './office-package';
 import { wordContent } from './office-word';
+import {
+  officeContentTypes,
+  officeFamily,
+  readsOfficeContent,
+} from '../../domain/previews/documents/layout';
 
 function richText(node: XMLNode): string {
   return children(node)
@@ -35,8 +40,10 @@ export async function extractOffice(
   requested?: WorksheetWindow,
 ): Promise<DocumentData> {
   const window = requested ? worksheetPageSchema.parse(requested) : undefined;
-  if (window && path.extname(file).toLowerCase() !== '.xlsx')
-    throw new Error('Worksheet pages are available for XLSX files only.');
+  const format = path.extname(file).slice(1).toLowerCase();
+  if (!readsOfficeContent(format)) throw new Error('This Office format has no readable package.');
+  const word = officeFamily(format) === 'word';
+  if (window && word) throw new Error('Worksheet pages are available for Excel workbooks only.');
   const before = await lstat(fileCoordination.path(file));
   if (!before.isFile() || before.isSymbolicLink() || before.size > 64000000)
     throw new Error('Office file must be a regular file within 64 MB.');
@@ -77,18 +84,10 @@ export async function extractOffice(
       throw new Error('Office package has no local main document.');
     const mainPath = partTarget('', mainRelation.target);
     const types = await read('[Content_Types].xml');
-    const expected =
-      path.extname(file).toLowerCase() === '.docx'
-        ? 'wordprocessingml.document.main+xml'
-        : 'spreadsheetml.sheet.main+xml';
     const contentType = children(types, 'Override').find(
       (node) => partTarget('', attribute(node, 'PartName') || '') === mainPath,
     );
-    if (
-      !contentType ||
-      attribute(contentType, 'ContentType') !==
-        'application/vnd.openxmlformats-officedocument.' + expected
-    )
+    if (!contentType || attribute(contentType, 'ContentType') !== officeContentTypes[format])
       throw new Error('Office package type does not match this document.');
     const core = rootRelations.find(
       (item) =>
@@ -107,7 +106,7 @@ export async function extractOffice(
       }
     }
     const main = await read(mainPath);
-    if (path.extname(file).toLowerCase() === '.docx') {
+    if (word) {
       const relPath = path.posix.join(
         path.posix.dirname(mainPath),
         '_rels',

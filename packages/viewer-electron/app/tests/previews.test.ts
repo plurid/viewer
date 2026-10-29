@@ -27,7 +27,7 @@ describe('preview extension contract', () => {
       expect(choosePreview(file(`page.${extension}`)).id).toBe('html');
     },
   );
-  it('offers layout previews for current and legacy Word, Excel and PowerPoint formats', () => {
+  it('offers layout previews for Office, its macro and template variants, OpenDocument and RTF', () => {
     for (const name of [
       'Report.docx',
       'Budget.xlsx',
@@ -35,10 +35,40 @@ describe('preview extension contract', () => {
       'Old.xls',
       'Slides.ppt',
       'Slides.pptx',
+      'Report.docm',
+      'Budget.xltx',
+      'Show.ppsx',
+      'Notes.odt',
+      'Sheet.fods',
+      'Plan.odg',
+      'Letter.rtf',
     ])
       expect(choosePreview(file(name)).id).toBe('office');
-    for (const name of ['Budget.xlsb', 'Report.docm', 'Slides.key'])
+    // binary workbooks and Keynote have no engine filter
+    for (const name of ['Budget.xlsb', 'Slides.key'])
       expect(choosePreview(file(name)).id).toBe('fallback');
+  });
+  it('routes the formats added beside Office to their own modules', () => {
+    const routes = {
+      'Field notes.ipynb': 'notebook',
+      'Trip.ics': 'cards',
+      'Friends.vcf': 'cards',
+      'Episode.srt': 'subtitles',
+      'Episode.vtt': 'subtitles',
+      'Library.sqlite': 'sqlite',
+      'cache.db': 'sqlite',
+      'Source Sans.woff2': 'font',
+      'Mod.jar': 'archive',
+      'Comic.cbz': 'archive',
+      'Scan.pbm': 'rendered-image',
+      'Scan.jfif': 'image',
+      'Clip.wmv': 'media',
+      'Voice.wma': 'media',
+      'Main.scala': 'text',
+      'Places.geojson': 'text',
+    };
+    for (const [name, module] of Object.entries(routes))
+      expect([name, choosePreview(file(name)).id]).toEqual([name, module]);
   });
   it('routes DXF drawings ahead of ambiguous text or image MIME and gives them a drawing icon', () => {
     for (const mime of ['application/octet-stream', 'image/vnd.dxf', 'text/plain']) {

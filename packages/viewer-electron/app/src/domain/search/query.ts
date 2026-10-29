@@ -1,6 +1,7 @@
 import type { FileEntry } from '../contracts';
 import { searchPattern, type SearchPattern } from './pattern';
 import { errorMessage } from '../errors';
+import { officeFormats } from '../previews/documents/layout';
 
 /**
  * The file query language: one parser for the folder filter, the search through
@@ -376,7 +377,8 @@ export interface QueryFacts {
   /** Words matched elsewhere (an index's document text): not checked against names here. */
   skipWords?: boolean;
 }
-const documents = new Set([
+const documents = new Set<string>([
+  ...officeFormats,
   'pdf',
   'doc',
   'docx',

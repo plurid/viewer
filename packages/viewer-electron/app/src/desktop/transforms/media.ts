@@ -25,6 +25,20 @@ export const mediaDemuxer = (extension: string): string => {
     mpeg: 'mpeg',
     ts: 'mpegts',
     m2ts: 'mpegts',
+    mts: 'mpegts',
+    wmv: 'asf',
+    wma: 'asf',
+    asf: 'asf',
+    flv: 'flv',
+    '3gp': 'mov',
+    '3g2': 'mov',
+    vob: 'mpeg',
+    mxf: 'mxf',
+    mka: 'matroska',
+    ac3: 'ac3',
+    amr: 'amr',
+    ape: 'ape',
+    wv: 'wv',
   };
   const format = formats[extension.toLowerCase()];
   if (!format) throw new Error('Choose a supported audio or video file.');

@@ -1,7 +1,9 @@
 import { errorMessage } from '../../domain/errors';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
+import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { DocumentData } from '../../domain/services';
 import { DocumentCache } from '../previews/document-cache';
+import { readSQLite } from '../previews/sqlite';
 import type { ClientMethods, WorkerRequest } from './utility-client';
 import { workerPort } from './worker-port';
 
@@ -17,6 +19,8 @@ export type PreviewMethods = {
     args: [file: string, pages: number | undefined, chapters: boolean, worksheet?: WorksheetWindow];
     reply: DocumentData;
   };
+  /** SQLite reads synchronously, here rather than in the process that draws windows. */
+  sqlite: { args: [file: string, request: SQLiteRequest]; reply: SQLiteReply };
 };
 
 const documents = new DocumentCache();
@@ -38,6 +42,14 @@ port.on('message', async (event) => {
           request.args[3],
         );
         value = request.args[2] ? document : { ...document, chapters: undefined };
+      } finally {
+        controllers.delete(request.id);
+      }
+    } else if (request.method === 'sqlite') {
+      const abort = new AbortController();
+      controllers.set(request.id, abort);
+      try {
+        value = await readSQLite(request.args[0], request.args[1], { signal: abort.signal });
       } finally {
         controllers.delete(request.id);
       }

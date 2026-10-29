@@ -21,11 +21,11 @@ helper.start(() => {
       if (event.data.cmd === 'ready') {
         const response = await fetch('./input');
         if (!response.ok) throw Error('Input unavailable');
-        const {extension, sheet, inputPath, inputURL} = await (await fetch('./job')).json();
+        const {extension, sheet, whole, inputPath, inputURL} = await (await fetch('./job')).json();
         if (!Object.hasOwn(${JSON.stringify(officeFamilies)},extension)) throw Error('Invalid format');
         helper.FS.mkdir('/tmp/viewer-input');
         helper.FS.writeFile(inputPath, new Uint8Array(await response.arrayBuffer()));
-        helper.thrPort.postMessage({cmd:'convert', extension, sheet, inputURL});
+        helper.thrPort.postMessage({cmd:'convert', extension, sheet, whole: whole === true, inputURL});
       } else if (event.data.cmd === 'converted') {
         const bytes = helper.FS.readFile('/tmp/output.pdf');
         await fetch('./metadata', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(event.data.office)});
@@ -58,14 +58,16 @@ helper.thrPort.onmessage = event => {
       const book = model.getSheets(), names = Array.from(book.getElementNames());
       office.sheets = names.slice(0,256).map(name => ({name,hidden:!book.getByName(name).getPropertyValue('IsVisible')}));
       office.limited = names.length > 256;
-      const name = event.data.sheet || office.sheets.find(sheet => !sheet.hidden)?.name || names[0];
-      if (!names.includes(name)) throw Error('Worksheet unavailable');
-      office.selectedSheet = name;
-      selectedSheet = book.getByName(name);
-      selectedSheet.setPropertyValue('IsVisible', true);
-      model.getCurrentController().setActiveSheet(selectedSheet);
+      if (!event.data.whole) {
+        const name = event.data.sheet || office.sheets.find(sheet => !sheet.hidden)?.name || names[0];
+        if (!names.includes(name)) throw Error('Worksheet unavailable');
+        office.selectedSheet = name;
+        selectedSheet = book.getByName(name);
+        selectedSheet.setPropertyValue('IsVisible', true);
+        model.getCurrentController().setActiveSheet(selectedSheet);
+      }
     }
-    const filter = {word:'writer_pdf_Export', workbook:'calc_pdf_Export', presentation:'impress_pdf_Export'}[family];
+    const filter = {word:'writer_pdf_Export', workbook:'calc_pdf_Export', presentation:'impress_pdf_Export', drawing:'draw_pdf_Export'}[family];
     const options = [property('FilterName', filter)];
     if (selectedSheet) {
       // Hiding other tabs does not constrain Calc's PDF export. Supply the UNO

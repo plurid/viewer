@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib';
 import { beforeEach, expect, it, vi } from 'vitest';
 const processor = vi.hoisted(() => vi.fn());
 vi.mock('../src/desktop/transforms/process', () => ({ runProcessor: processor }));
@@ -99,5 +100,29 @@ it('routes bounded SVG bytes to the private vector worker without passing a sour
       128,
     ),
   ).rejects.toThrow('could not be decoded');
+  expect(svg).toHaveBeenCalledTimes(1);
+});
+it('expands a compressed SVG before the vector worker, within the same limit', async () => {
+  const xml = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const compressed = (bytes: Buffer, name: string) =>
+    ({
+      file: '/fixture/' + name,
+      info: { size: bytes.length },
+      handle: {
+        read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+          const chunk = bytes.subarray(position, position + length);
+          chunk.copy(buffer, offset);
+          return { bytesRead: chunk.length };
+        }),
+      },
+    }) as unknown as Source;
+  const svg = vi.fn(async () => png());
+  const signal = new AbortController().signal;
+  const decode = imageDecoder('/helper', undefined, svg);
+  await decode(compressed(gzipSync(xml), 'drawing.svgz'), 'image', signal, 128);
+  expect(svg).toHaveBeenCalledWith(xml, 128, signal);
+  // a small file that expands past the limit is refused, not expanded
+  const bomb = gzipSync(Buffer.alloc(9 * 1024 * 1024, 32));
+  await expect(decode(compressed(bomb, 'bomb.svgz'), 'image', signal, 128)).rejects.toThrow();
   expect(svg).toHaveBeenCalledTimes(1);
 });

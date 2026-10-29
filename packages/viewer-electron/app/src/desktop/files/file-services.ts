@@ -1,4 +1,5 @@
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
+import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { DrawingGeometryOptions } from '../../domain/previews/drawings/geometry';
 import path from 'node:path';
 import { UtilityClient } from '../workers/utility-client';
@@ -272,6 +273,15 @@ export class FileServices {
       throw new Error('File access changed. Read the document again.');
     await this.options.access?.([file]);
     return result;
+  }
+  async sqlite(file: string, request: SQLiteRequest, signal?: AbortSignal): Promise<SQLiteReply> {
+    await this.options.access?.([file]);
+    const revision = this.accessRevision;
+    const reply = await this.previews.call('sqlite', [file, request], signal);
+    if (revision !== this.accessRevision)
+      throw new Error('File access changed. Read the database again.');
+    await this.options.access?.([file]);
+    return reply;
   }
   async inspect(file: string, content = false, ocr = false, signal?: AbortSignal) {
     await this.options.access?.([file]);

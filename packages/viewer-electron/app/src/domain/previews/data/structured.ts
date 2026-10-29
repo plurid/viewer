@@ -1,10 +1,23 @@
 import JSON5 from 'json5';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import { parseAllDocuments } from 'yaml';
+import { xmlPlistValue } from './plist';
 import { parseXML, type XMLNode } from './xml';
 import { errorMessage } from '../../errors';
 
-export const structuredFormats = ['json', 'jsonc', 'json5', 'yaml', 'yml', 'xml'] as const;
+/** Map data is JSON (GeoJSON, TopoJSON) or XML (GPX tracks, KML places). */
+const xmlFormats = ['xml', 'gpx', 'kml'];
+export const structuredFormats = [
+  'json',
+  'jsonc',
+  'json5',
+  'geojson',
+  'topojson',
+  'yaml',
+  'yml',
+  'plist',
+  ...xmlFormats,
+] as const;
 export const isStructured = (extension: string) =>
   (structuredFormats as readonly string[]).includes(extension);
 export interface DataNode {
@@ -39,7 +52,7 @@ export function inspectStructured(
   try {
     if (text.length > 1_000_000)
       throw new Error('Tree inspection is limited to 1 MB. Use Source to read this file.');
-    if (extension === 'xml') return inspectXMLTree(text, maximum);
+    if (xmlFormats.includes(extension)) return inspectXMLTree(text, maximum);
     let values: unknown[];
     if (extension === 'yaml' || extension === 'yml') {
       const documents = parseAllDocuments(text, {
@@ -54,6 +67,7 @@ export function inspectStructured(
         return document.toJS({ maxAliasCount: 100 });
       });
     } else if (extension === 'json5') values = [JSON5.parse(text) as unknown];
+    else if (extension === 'plist') values = [xmlPlistValue(text)];
     else if (extension === 'jsonc') {
       const errors: ParseError[] = [];
       const value: unknown = parse(text, errors, { allowTrailingComma: true });

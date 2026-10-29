@@ -78,6 +78,7 @@ describe('suggestion rules', () => {
     [[file('clip.mp4')], 'media.edit'],
     [[file('voice.mp3')], 'media.edit'],
     [[file('notes.md')], 'text.edit'],
+    [[file('Budget.xlsx'), file('Plan.odt')], 'office.pdf'],
     [[folder('Project')], 'folder.size'],
     [[file('a.pdf'), folder('b')], 'items.compress'],
   ])('%j suggests %s', (selection, rule) => {

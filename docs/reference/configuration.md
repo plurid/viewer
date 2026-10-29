@@ -64,6 +64,7 @@ silently choose another executor.
 | `images.pdf`          | Create PDF from images, for several images           |
 | `media.edit`          | Edit media, for video and audio                      |
 | `text.edit`           | Edit text, for a text or code file                   |
+| `office.pdf`          | Save PDF copy, for Office and OpenDocument files     |
 | `images.rename`       | Batch rename, for three or more images               |
 | `books.rename`        | Rename as book, for PDFs and EPUBs, with a model     |
 | `folder.git`          | Git changes, for a repository folder                 |

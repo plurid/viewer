@@ -17,6 +17,10 @@ import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contrac
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { documentSamples } from '../../tools/playground/samples/documents';
+import { officeSamples } from '../../tools/playground/samples/office';
+import { packageSamples } from '../../tools/playground/samples/packages';
+import { structuredTextSamples } from '../../tools/playground/samples/structured-text';
+import { textSamples } from '../../tools/playground/samples/text';
 import { fieldNotesPDF } from '../../tools/docs/sample';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
@@ -45,13 +49,29 @@ const fixtures: { name: string; bytes: Uint8Array | string }[] = [
   { name: 'Field notes.pdf', bytes: fieldNotesPDF(jpeg) },
   { name: 'Forest.jpg', bytes: jpeg },
   { name: 'Notes.md', bytes: '# Field notes\n\nA short walk, a few photographs.\n' },
+  // one file for each reader added beside the original formats
+  ...[...officeSamples(), ...structuredTextSamples(), ...packageSamples(), ...textSamples()]
+    .filter((sample) =>
+      /\/(Field notes\.(odt|ipynb|jar)|Trip\.ics|Motion study\.srt|Example\.scala)$/.test(
+        sample.path,
+      ),
+    )
+    .map((sample) => ({ name: path.basename(sample.path), bytes: sample.bytes })),
+  {
+    name: 'Library.sqlite',
+    bytes: await readFile(path.join(app, 'tools/playground/assets/library.sqlite')),
+  },
+  {
+    name: 'Motion study.wmv',
+    bytes: await readFile(path.join(app, 'tools/playground/assets/motion.wmv')),
+  },
 ];
 // another document, opened after the others: its engine should already have started
 const docx = fixtures.find((fixture) => fixture.name.endsWith('.docx'))!;
 const nextDocument = { name: 'Report.docx', bytes: docx.bytes };
 for (const fixture of [...fixtures, nextDocument])
   await writeFile(path.join(files, fixture.name), fixture.bytes, { flag: 'wx' });
-assert.equal(fixtures.length, 6, 'Every format has a fixture.');
+assert.equal(fixtures.length, 14, 'Every format has a fixture.');
 for (let folder = 0; folder < 300; folder++) {
   const directory = path.join(crawl, `Folder ${folder}`);
   await mkdir(directory);
@@ -241,12 +261,18 @@ async function quickPreviews(
         fixture.name + ' shows its content',
         30_000,
       );
+      // what the preview shows, so a failure message cannot pass for content
+      const shown = await connection.evaluate<string>(
+        `(document.querySelector('.quick-preview')?.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 80)`,
+      );
+      assert.doesNotMatch(shown, /could not|unavailable|failed/i, fixture.name + ': ' + shown);
       const observation = {
         run,
         file: fixture.name,
         trial,
         crawling,
         milliseconds: Math.round(timing.shown! - timing.start!),
+        shown,
       };
       observations.push(observation);
       console.log(JSON.stringify(observation));

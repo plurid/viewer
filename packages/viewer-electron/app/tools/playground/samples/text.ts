@@ -115,9 +115,62 @@ SELECT name, quantity FROM materials ORDER BY name;
   r: 'materials <- data.frame(\n  name = c("Aluminum", "Nylon"),\n  quantity = c(12, 24)\n)\n\nprint(materials)\n',
   perl: 'use strict;\nuse warnings;\n\nmy %panel = (width => 200, height => 100);\nprint $panel{width} * $panel{height}, "\\n";\n',
   makefile: '.PHONY: hello\n\nhello:\n\t@printf "%s\\n" "Hello from the Viewer playground"\n',
+  scala:
+    'case class Panel(width: Double, height: Double):\n  def area: Double = width * height\n\n@main def run(): Unit =\n  println(Panel(200, 100).area)\n',
+  dart: 'class Panel {\n  final double width, height;\n  Panel(this.width, this.height);\n  double get area => width * height;\n}\n\nvoid main() => print(Panel(200, 100).area);\n',
+  elixir:
+    'defmodule Panel do\n  defstruct width: 200, height: 100\n\n  def area(%Panel{width: w, height: h}), do: w * h\nend\n\nIO.puts(Panel.area(%Panel{}))\n',
+  erlang: '-module(panel).\n-export([area/2]).\n\narea(Width, Height) -> Width * Height.\n',
+  haskell:
+    'data Panel = Panel { width :: Double, height :: Double }\n\narea :: Panel -> Double\narea p = width p * height p\n\nmain :: IO ()\nmain = print (area (Panel 200 100))\n',
+  clojure:
+    '(defn area [{:keys [width height]}]\n  (* width height))\n\n(println (area {:width 200 :height 100}))\n',
+  elm: 'module Panel exposing (area)\n\n\narea : { width : Float, height : Float } -> Float\narea panel =\n    panel.width * panel.height\n',
+  zig: 'const std = @import("std");\n\nconst Panel = struct { width: f64, height: f64 };\n\npub fn main() void {\n    const panel = Panel{ .width = 200, .height = 100 };\n    std.debug.print("{d}\\n", .{panel.width * panel.height});\n}\n',
+  julia:
+    'struct Panel\n    width::Float64\n    height::Float64\nend\n\narea(p::Panel) = p.width * p.height\nprintln(area(Panel(200, 100)))\n',
+  ocaml:
+    'type panel = { width : float; height : float }\n\nlet area p = p.width *. p.height\nlet () = Printf.printf "%f\\n" (area { width = 200.; height = 100. })\n',
+  fsharp:
+    'type Panel = { Width: float; Height: float }\n\nlet area panel = panel.Width * panel.Height\nprintfn "%f" (area { Width = 200.0; Height = 100.0 })\n',
+  vbnet:
+    'Module Panel\n    Function Area(width As Double, height As Double) As Double\n        Return width * height\n    End Function\n\n    Sub Main()\n        Console.WriteLine(Area(200, 100))\n    End Sub\nEnd Module\n',
+  powershell:
+    '$panel = @{ Width = 200; Height = 100 }\nWrite-Output ($panel.Width * $panel.Height)\n',
+  batch: '@echo off\nset /a area=200*100\necho Panel area: %area%\n',
+  cmake:
+    'cmake_minimum_required(VERSION 3.20)\nproject(FieldNotes LANGUAGES C)\nadd_executable(panel main.c)\n',
+  groovy:
+    'class Panel {\n    double width, height\n    double area() { width * height }\n}\n\nprintln new Panel(width: 200, height: 100).area()\n',
+  nix: '{ pkgs ? import <nixpkgs> { } }:\npkgs.mkShell {\n  name = "field-notes";\n  packages = [ pkgs.jq ];\n}\n',
+  hcl: 'variable "panel_width" {\n  type    = number\n  default = 200\n}\n\noutput "panel_area" {\n  value = var.panel_width * 100\n}\n',
+  protobuf:
+    'syntax = "proto3";\n\nmessage Material {\n  string name = 1;\n  int32 quantity = 2;\n}\n',
+  solidity:
+    '// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract Panel {\n    function area(uint256 width, uint256 height) external pure returns (uint256) {\n        return width * height;\n    }\n}\n',
+  objectivec:
+    '#import <Foundation/Foundation.h>\n\nint main(void) {\n    @autoreleasepool {\n        NSLog(@"Panel area: %d", 200 * 100);\n    }\n    return 0;\n}\n',
+  nasm: 'section .text\nglobal _start\n\n_start:\n    mov eax, 200\n    imul eax, 100\n    ret\n',
+  properties: '# Field notes\nproject.name=Field notes\npanel.width=200\npanel.height=100\n',
+  rest: 'Field notes\n===========\n\nA short walk, a few photographs and *time* to look around.\n\n- Aluminum, 12\n- Nylon, 24\n',
+  asciidoc:
+    '= Field notes\n\nA short walk, a few photographs and _time_ to look around.\n\n* Aluminum, 12\n* Nylon, 24\n',
+  nginx:
+    'server {\n    listen 8080;\n    root /srv/field-notes;\n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n',
+  latex:
+    '\\documentclass{article}\n\\begin{document}\n\\section{Field notes}\nA panel of $200 \\times 100$ millimetres.\n\\end{document}\n',
 };
 
 const variants: Record<string, string> = {
+  geojson:
+    '{\n  "type": "FeatureCollection",\n  "features": [\n    {\n      "type": "Feature",\n      "properties": {\n        "name": "Picnic spot"\n      },\n      "geometry": {\n        "type": "Point",\n        "coordinates": [\n          2.3522,\n          48.8566\n        ]\n      }\n    }\n  ]\n}\n',
+  topojson:
+    '{\n  "type": "Topology",\n  "objects": {\n    "places": {\n      "type": "GeometryCollection",\n      "geometries": [\n        {\n          "type": "Point",\n          "coordinates": [\n            0,\n            0\n          ],\n          "properties": {\n            "name": "Picnic spot"\n          }\n        }\n      ]\n    }\n  },\n  "arcs": []\n}\n',
+  gpx: '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Viewer playground" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk>\n    <name>Morning walk</name>\n    <trkseg>\n      <trkpt lat="48.8566" lon="2.3522"><ele>35</ele></trkpt>\n      <trkpt lat="48.8584" lon="2.2945"><ele>33</ele></trkpt>\n    </trkseg>\n  </trk>\n</gpx>\n',
+  kml: '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Placemark>\n    <name>Picnic spot</name>\n    <Point><coordinates>2.3522,48.8566,0</coordinates></Point>\n  </Placemark>\n</kml>\n',
+  xsd: '<?xml version="1.0"?>\n<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  <xs:element name="material">\n    <xs:complexType>\n      <xs:attribute name="name" type="xs:string" />\n      <xs:attribute name="quantity" type="xs:integer" />\n    </xs:complexType>\n  </xs:element>\n</xs:schema>\n',
+  org: '* Field notes\n** TODO Pack a camera\n** DONE Check the weather\n',
+  bib: '@book{fieldnotes,\n  title     = {Field Notes},\n  author    = {Viewer Playground},\n  year      = {2026},\n  publisher = {Local}\n}\n',
   cjs: 'module.exports = { name: "Field notes", reviewed: false };\n',
   cts: 'const project: string = "Field notes";\nexport = project;\n',
   jsonc: '// Comments are shown as source.\n{\n  "name": "Field notes",\n  "reviewed": false\n}\n',
@@ -189,11 +242,6 @@ export function textSamples(): Sample[] {
       'Events.jsonl',
       ['jsonl'],
       '{"event":"open","plane":"folder"}\n{"event":"preview","format":"pdf"}\n',
-    ],
-    [
-      'Example.tex',
-      ['tex'],
-      '\\documentclass{article}\n\\begin{document}\n\\section{Field notes}\nSource preview does not run TeX.\n\\end{document}\n',
     ],
     [
       '.env',

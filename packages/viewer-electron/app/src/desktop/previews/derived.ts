@@ -11,7 +11,7 @@ import { Slots } from './slots';
 export type DerivedMode = PreviewDerivationKind;
 export interface DerivedRendition {
   data: Buffer;
-  extension: 'jpg' | 'mp4' | 'png' | 'pdf';
+  extension: 'jpg' | 'mp4' | 'm4a' | 'png' | 'pdf';
   kind: DerivedMode;
   decoder: string;
   office?: OfficeLayoutMetadata;

@@ -1,4 +1,4 @@
-/* Drawings, PDF, text, code, JSON, Markdown, tables, Office, archives and media. */
+/* Drawings, PDF, text, code, JSON, Markdown, tables, Office, archives, fonts and media. */
 .preview-overlay {
   position: absolute;
   inset: 0;
@@ -799,6 +799,101 @@ button.markdown-link {
 }
 .archive-row > .muted {
   font-size: 11px;
+}
+.font-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.font-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.font-sample-field {
+  flex: none;
+  width: 100%;
+  max-width: 560px;
+}
+.font-specimen {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.font-specimen p {
+  margin: 0;
+}
+.font-facts {
+  display: grid;
+  margin: 0;
+  font-size: 12px;
+}
+.font-facts > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(0, 3fr);
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.font-facts dt {
+  color: var(--muted);
+}
+.font-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.font-characters h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.font-characters h3 .muted {
+  font-weight: 400;
+}
+.font-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.font-glyph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+}
+.font-glyph > span {
+  font-size: 24px;
+  line-height: 32px;
+}
+.font-glyph small {
+  color: var(--subtle);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+/* the character is drawn in the interface face, so a fallback glyph never passes as the font's */
+.font-glyph.is-missing {
+  border-style: dashed;
+  background: transparent;
+}
+.font-glyph.is-missing > span {
+  color: var(--subtle);
 }
 @media (prefers-reduced-motion: reduce) {
   *,

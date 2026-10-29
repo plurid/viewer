@@ -1,6 +1,7 @@
 import { BrowserWindow, session, type Session } from 'electron';
 import { randomBytes } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { constants, createReadStream } from 'node:fs';
+import { open, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { Decoder } from './derived';
@@ -344,5 +345,30 @@ export function officeDecoder(directory: string): Decoder {
     // people read several documents in a row: the next one finds its engine started
     warmOffice(directory);
     return { ...result, extension: 'pdf', kind: 'office', decoder: officeRuntimeVersion };
+  };
+}
+
+/** Saves an Office document as the PDF its layout preview shows, with every sheet of a workbook.
+ * The source is only read; the PDF is written to the operation's new output. */
+export function officePDFCopy(directory: string) {
+  return async (source: string, output: string, signal: AbortSignal): Promise<void> => {
+    await verifyOfficeRuntime(directory).catch(() => {
+      throw new Error('The bundled Office renderer is missing or damaged.');
+    });
+    const handle = await open(source, constants.O_RDONLY | constants.O_NOFOLLOW);
+    let input: Buffer;
+    try {
+      input = await officeInput({ file: source, handle, info: await handle.stat() }, signal);
+    } finally {
+      await handle.close();
+    }
+    const { data } = await renderOffice(
+      directory,
+      input,
+      path.extname(source).slice(1).toLowerCase(),
+      signal,
+      { name: path.basename(source), whole: true },
+    );
+    await writeFile(output, data, { flag: 'wx', mode: 0o644 });
   };
 }

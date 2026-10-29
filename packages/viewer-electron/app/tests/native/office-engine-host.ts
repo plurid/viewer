@@ -77,6 +77,16 @@ async function run() {
         await writeFile(path.join(root, input.name + '.second-sheet.pdf'), second.data, {
           flag: 'wx',
         });
+        // Save PDF copy keeps every sheet
+        const whole = await renderOffice(
+          job.runtime,
+          bytes,
+          path.extname(input.name).slice(1),
+          new AbortController().signal,
+          { name: input.name, whole: true },
+        );
+        assert.equal(whole.office.selectedSheet, undefined);
+        await writeFile(path.join(root, input.name + '.whole.pdf'), whole.data, { flag: 'wx' });
       }
     }
     await writeFile(

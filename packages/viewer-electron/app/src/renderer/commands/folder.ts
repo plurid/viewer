@@ -20,6 +20,7 @@ import {
 } from '../state/store';
 import type { CommandContext, CommandDefinition } from './registry';
 import { choosePreview } from '../previews/registry';
+import { isOfficeFormat } from '../../domain/previews/documents/layout';
 export { parentPath } from '../../domain/workspaces/planes';
 
 export interface FolderActions {
@@ -164,6 +165,23 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
         await window.viewer.operate({ kind: 'convert', conversion, sources: paths(context) });
       },
     })),
+    {
+      id: 'save-pdf-copy',
+      label: 'Save PDF copy',
+      group: 'Quick actions',
+      icon: 'pdf',
+      aliases: ['pdf', 'export pdf', 'convert to pdf'],
+      when: (context) =>
+        selected(context) &&
+        context.selection.every((entry) => !entry.directory && isOfficeFormat(entry.extension)),
+      run: async (context) => {
+        await window.viewer.operate({
+          kind: 'convert',
+          conversion: 'office-pdf',
+          sources: paths(context),
+        });
+      },
+    },
     {
       id: 'images-to-pdf',
       label: 'Create PDF from images',

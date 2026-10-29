@@ -141,20 +141,29 @@ describe('stable Viewer playground', () => {
     const directory = path.join(parent, 'playground');
     const first = await generatePlayground({ directory, downloadSamples: false });
     expect(first.report.git.state).toBe('created');
+    // offline, only the downloaded references are missing
     expect(first.report.coverage.missing.sort()).toEqual([
       'arw',
       'cr2',
       'cr3',
       'dng',
       'doc',
+      'dot',
       'nef',
       'ogv',
       'orf',
+      'otf',
+      'pot',
+      'pps',
       'ppt',
       'pptx',
       'raf',
       'rw2',
+      'ttf',
+      'woff',
+      'woff2',
       'xls',
+      'xlt',
     ]);
     const main = path.join(directory, 'git/main');
     const feature = path.join(directory, 'git/feature-worktree');

@@ -1,3 +1,4 @@
+import { gunzipSync } from 'node:zlib';
 import { runProcessor } from '../transforms/process';
 import { imageDimensions } from '../previews/image-dimensions';
 import type { Decoder } from '../previews/derived';
@@ -18,7 +19,8 @@ export function imageDecoder(
     const signature = Buffer.alloc(4);
     await source.handle.read(signature, 0, 4, 0);
     const exr = signature.toString('hex') === '762f3101';
-    const vector = source.file.toLowerCase().endsWith('.svg');
+    const compressed = source.file.toLowerCase().endsWith('.svgz');
+    const vector = compressed || source.file.toLowerCase().endsWith('.svg');
     if (vector && !svg) throw new Error('The private SVG decoder is unavailable.');
     if (exr && !ffmpeg) throw new Error('The private OpenEXR decoder is unavailable.');
     const args = exr
@@ -78,7 +80,11 @@ export function imageDecoder(
         length += bytesRead;
       }
       if (length !== source.info.size) throw new Error('The SVG changed while opening.');
-      return svg!(input.subarray(0, length), size, signal);
+      // a compressed SVG is gzip around the same XML, held to the same limit once expanded
+      const xml = compressed
+        ? gunzipSync(input.subarray(0, length), { maxOutputLength: limit })
+        : input.subarray(0, length);
+      return svg!(xml, size, signal);
     };
     const data = await render().catch((error: Error) => {
       if (signal.aborted) throw signal.reason ?? new Error('Image preview cancelled.');

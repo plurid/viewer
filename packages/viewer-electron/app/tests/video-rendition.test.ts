@@ -92,3 +92,50 @@ it('refuses a source too long for the complete-copy budget before encoding', asy
   ).rejects.toThrow('64 MB');
   expect(execute).toHaveBeenCalledTimes(1);
 });
+it('copies sound without a picture to AAC and checks it through its last frame', async () => {
+  const sound = path.join(root, 'voice.wma');
+  await writeFile(sound, 'generated source');
+  const source = await open(sound);
+  try {
+    const facts = {
+      format: { duration: '3' },
+      streams: [{ codec_type: 'audio', codec_name: 'wmav2', sample_rate: '44100', channels: 1 }],
+    };
+    // 3 s at 48 kHz is 140.625 AAC frames; the copy is checked within a quarter second
+    const copy = (frames: number) => ({
+      streams: [
+        {
+          codec_type: 'audio',
+          codec_name: 'aac',
+          sample_rate: '48000',
+          nb_read_frames: String(frames),
+        },
+      ],
+    });
+    const run = (frames: number) => {
+      let count = 0;
+      return vi.fn<typeof runProcessor>(async () =>
+        Buffer.from(JSON.stringify(++count === 1 ? facts : count === 2 ? 'encoded' : copy(frames))),
+      );
+    };
+    const execute = run(141);
+    const result = await videoDecoder('/bundled', execute)(
+      { file: sound, handle: source, info: await source.stat() },
+      'video',
+      new AbortController().signal,
+    );
+    expect(result.extension).toBe('m4a');
+    const command = execute.mock.calls[1]![1];
+    expect(command).toEqual(expect.arrayContaining(['-f', 'asf', '-map', '0:a:0', '-vn', 'aac']));
+    expect(command).toContain('fd,pipe');
+    await expect(
+      videoDecoder('/bundled', run(40))(
+        { file: sound, handle: source, info: await source.stat() },
+        'video',
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('could not be verified');
+  } finally {
+    await source.close();
+  }
+});

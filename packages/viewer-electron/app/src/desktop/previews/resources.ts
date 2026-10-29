@@ -5,6 +5,7 @@ import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { lookup } from 'mime-types';
+import { mediaDemuxer } from '../transforms/media';
 import type { Resource, ResourceRead } from '../../domain/contracts';
 import { absolute, entry } from '../files/filesystem';
 import { imageDimensions, readImageDimensions } from './image-dimensions';
@@ -20,7 +21,9 @@ import {
 import type { DerivedPreviews, DerivedMode } from './derived';
 import { isOfficeFormat, type OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 import { xmlEncoding } from '../../domain/previews/data/xml';
+import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import { byteRange, WebPreviewError } from './web/policy';
+import { readSQLite } from './sqlite';
 
 interface Grant {
   dispose?(): void;
@@ -33,6 +36,14 @@ interface Grant {
   assets?: Set<string>;
 }
 const MAX_READ = 4 * 1024 * 1024;
+/** The bundled FFmpeg reads the container; the decoder still probes what it holds. */
+const hasDemuxer = (extension: string) => {
+  try {
+    return !!mediaDemuxer(extension);
+  } catch {
+    return false;
+  }
+};
 export class Resources {
   private grants = new Map<string, Grant>();
   private streams = new Map<string, Map<Readable, string>>();
@@ -53,6 +64,12 @@ export class Resources {
     private derived?: DerivedPreviews,
     private images?: DerivedPreviews,
     private office?: DerivedPreviews,
+    /** The app reads databases in its preview worker; tests read them here. */
+    private database: (
+      file: string,
+      request: SQLiteRequest,
+      signal: AbortSignal,
+    ) => Promise<SQLiteReply> = (file, request, signal) => readSQLite(file, request, { signal }),
   ) {}
   grant(file: string, requestID?: string): Promise<Resource> {
     if (requestID && this.pending.has(requestID))
@@ -362,7 +379,16 @@ export class Resources {
       }
     }
     const sample = buffer.subarray(0, 8192);
-    const encoding = grant.resource.entry.extension === 'xml' ? xmlEncoding(buffer) : 'utf-8';
+    // A byte-order mark names UTF-16 text, which Windows tools and macOS .strings files write: its
+    // zero bytes read as binary without it.
+    const marked =
+      buffer[0] === 0xff && buffer[1] === 0xfe
+        ? 'utf-16le'
+        : buffer[0] === 0xfe && buffer[1] === 0xff
+          ? 'utf-16be'
+          : undefined;
+    const encoding =
+      marked ?? (grant.resource.entry.extension === 'xml' ? xmlEncoding(buffer) : 'utf-8');
     const binary =
       encoding === 'utf-8' &&
       (sample.includes(0) ||
@@ -386,6 +412,29 @@ export class Resources {
     const entries = await this.archives.list(grant.file);
     this.get(id);
     return entries;
+  }
+  /** Tables or a page of rows from the database file this preview was granted. */
+  sqlite(id: string, request: SQLiteRequest): Promise<SQLiteReply> {
+    return this.work.track(this.paths(id), (scope) =>
+      this.coordinated(id, () => this.readDatabase(id, request, scope.signal)),
+    );
+  }
+  private async readDatabase(
+    id: string,
+    request: SQLiteRequest,
+    scope: AbortSignal,
+  ): Promise<SQLiteReply> {
+    const grant = this.get(id);
+    if (!grant.file || grant.data)
+      throw new Error('Databases inside archives and comparisons are not previewed.');
+    await this.access([grant.file]);
+    const signal = AbortSignal.any([scope, this.signal(id)]);
+    const reply = await this.database(fileCoordination.path(grant.file), request, signal);
+    signal.throwIfAborted();
+    await this.access([grant.file]);
+    // A preview closed while its database was read cannot receive the rows.
+    if (this.get(id) !== grant) throw new Error('This preview resource has expired.');
+    return reply;
   }
   archiveEntry(id: string, name: string): Promise<Resource> {
     return this.work.track(this.paths(id), () =>
@@ -430,14 +479,9 @@ export class Resources {
   }
   videoRendition(id: string, requestID: string): Promise<Resource> {
     const grant = this.get(id);
-    if (
-      !grant.resource.entry.mime.startsWith('video/') &&
-      !['mp4', 'm4v', 'mov', 'avi', 'mkv', 'webm', 'ogv', 'mpg', 'mpeg', 'ts', 'm2ts'].includes(
-        grant.resource.entry.extension,
-      )
-    )
+    if (!hasDemuxer(grant.resource.entry.extension))
       return Promise.reject(
-        new Error('Choose a supported video file for a compatibility preview.'),
+        new Error('Choose a supported audio or video file for a compatibility preview.'),
       );
     return this.derivedRendition(id, 'video', requestID);
   }

@@ -1,3 +1,4 @@
+import { zipContainers } from './containers';
 import type { FileEntry, SortKey } from '../contracts';
 import { modelFormats } from '../previews/models/formats';
 
@@ -107,7 +108,7 @@ export function fileFamily(entry: Pick<FileEntry, 'extension' | 'directory' | 'm
   if (entry.directory) return 'folder';
   if (entry.extension === 'dxf') return 'drawing';
   if (modelFormats.includes(entry.extension)) return 'model';
-  if (['zip', 'tar', 'gz', 'tgz'].includes(entry.extension)) return 'archive';
+  if (['zip', 'tar', 'gz', 'tgz', ...zipContainers].includes(entry.extension)) return 'archive';
   if (entry.extension === 'pdf') return 'pdf';
   if (['csv', 'tsv', 'json', 'jsonl'].includes(entry.extension)) return 'data';
   if (

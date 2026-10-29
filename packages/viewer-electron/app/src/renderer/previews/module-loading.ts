@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import type { PreviewContext, PreviewModule } from './contracts';
 import { choosePreview, previewModules } from './registry';
+import { officeFamily, readsOfficeContent } from '../../domain/previews/documents/layout';
 
 type PreviewComponent = ComponentType<PreviewContext>;
 
@@ -38,10 +39,10 @@ export function preloadPreviewFor(entry: FileEntry | undefined): void {
   if (!entry || entry.directory) return;
   const module = choosePreview(entry);
   void preloadPreviewModule(module).catch(() => {});
-  // Word and PowerPoint open in their page layout, which waits seconds for the Office engine to
-  // load: it starts as soon as such a file is selected. Spreadsheets open in Sheet view.
-  if (module.id === 'office' && !['xls', 'xlsx'].includes(entry.extension))
-    void window.viewer.officeWarm?.().catch(() => {});
+  // A document opens in its page layout, which waits seconds for the Office engine to load: it
+  // starts as soon as such a file is selected. A spreadsheet Viewer reads opens in Sheet view.
+  const sheet = officeFamily(entry.extension) === 'workbook' && readsOfficeContent(entry.extension);
+  if (module.id === 'office' && !sheet) void window.viewer.officeWarm?.().catch(() => {});
 }
 
 /** Three.js and the CAD engine are large; they load when a model is first chosen. */

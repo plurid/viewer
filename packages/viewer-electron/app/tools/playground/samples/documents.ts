@@ -103,7 +103,7 @@ function pdf(): Uint8Array {
   return Buffer.from(bytes);
 }
 
-function office(kind: 'docx' | 'xlsx'): Uint8Array {
+export function office(kind: 'docx' | 'xlsx'): Uint8Array {
   const relations = 'http://schemas.openxmlformats.org/package/2006/relationships';
   const officeRelations = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

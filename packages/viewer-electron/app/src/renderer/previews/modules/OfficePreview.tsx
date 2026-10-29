@@ -15,15 +15,17 @@ import OfficeLayoutPreview from './OfficeLayoutPreview';
 import { WorksheetTabs } from '../WorksheetTabs';
 import { worksheetTSV } from '../worksheet-copy';
 import type { TableAddress } from '../../../domain/previews/documents/table-navigation';
+import { officeFamily, readsOfficeContent } from '../../../domain/previews/documents/layout';
 
 export default function OfficePreview(context: PreviewContext) {
   const extension = context.resource.entry.extension;
-  const content = extension === 'docx' || extension === 'xlsx';
-  const workbook = extension === 'xls' || extension === 'xlsx';
+  // OpenDocument and the older formats have the engine's layout only
+  const content = readsOfficeContent(extension);
+  const workbook = officeFamily(extension) === 'workbook';
   const [mode, setMode] = usePreviewState(
     context,
     'office.mode',
-    extension === 'xlsx' || context.evidence ? 'content' : 'layout',
+    (workbook && content) || context.evidence ? 'content' : 'layout',
   );
   if (!context.services.officeLayout && content) return <OfficeContent {...context} />;
   const viewControls = (
@@ -85,7 +87,7 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
           savedRow <= 1048576
         ? savedRow
         : 1;
-  const workbook = context.resource.entry.extension === 'xlsx';
+  const workbook = officeFamily(context.resource.entry.extension) === 'workbook';
   const request = useMemo(
     () => (workbook ? { sheet: requestedSheet || undefined, fromRow, limit: 100 } : undefined),
     [workbook, requestedSheet, fromRow],

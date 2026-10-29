@@ -200,6 +200,7 @@ const api: ViewerAPI = {
   release: (id) => invoke('release', id),
   archive: (id) => invoke('archive', id),
   archiveEntry: (id, name) => invoke('archiveEntry', id, name),
+  sqlite: (id, request) => invoke('sqlite', id, request),
   imageRendition: (id, request) => invoke('imageRendition', id, request),
   videoRendition: (id, requestID) => invoke('videoRendition', id, requestID),
   officeLayout: (id, request) => invoke('officeLayout', id, request),

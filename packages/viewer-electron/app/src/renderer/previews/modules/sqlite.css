@@ -1,0 +1,96 @@
+.sqlite-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  container-type: inline-size;
+}
+.sqlite-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.sqlite-objects {
+  flex: none;
+  width: clamp(150px, 28%, 260px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border-right: 1px solid var(--line);
+}
+.sqlite-object {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 0;
+  font-size: 12px;
+  text-align: left;
+}
+.sqlite-object > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sqlite-object > .muted {
+  flex: none;
+  font-size: 11px;
+}
+.sqlite-object[aria-current='true'] {
+  color: var(--ink);
+  background: var(--selection);
+}
+.sqlite-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.sqlite-content > .data-viewer {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.sqlite-note {
+  margin: 0;
+  padding: 12px 13px;
+  font-size: 12px;
+}
+.sqlite-definition {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.sqlite-definition > summary {
+  padding: 6px 13px;
+  cursor: pointer;
+}
+.sqlite-definition > pre {
+  margin: 0;
+  padding: 0 13px 10px;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* A narrow inspector stacks the table list above the rows. */
+@container (max-width: 520px) {
+  .sqlite-layout {
+    flex-direction: column;
+  }
+  .sqlite-objects {
+    width: auto;
+    max-height: 35%;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

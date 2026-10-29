@@ -3,6 +3,8 @@ import type { PreviewModule } from './contracts';
 import { officeFormats } from '../../domain/previews/documents/layout';
 import { modelFormats } from '../../domain/previews/models/formats';
 import { renderedImageFormats } from '../../domain/previews/images/rendered';
+import { fontFormats } from '../../domain/previews/fonts/formats';
+import { zipContainers } from '../../domain/files/containers';
 import { languageExtensions, languageFor } from '../../domain/editing/languages';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
@@ -68,6 +70,49 @@ const textFormats = [
   // and every language the highlighting table names (rs, lua, diff, ...)
   ...languageExtensions,
 ].filter((format, index, all) => all.indexOf(format) === index);
+/** Media Chromium cannot play, shown through a complete compatibility copy the bundled FFmpeg
+ * makes; some have no audio or video MIME type. */
+const convertedMedia = [
+  'avi',
+  'mkv',
+  'mpg',
+  'mpeg',
+  'm2ts',
+  'wmv',
+  'asf',
+  'flv',
+  '3gp',
+  '3g2',
+  'vob',
+  'mxf',
+  'wma',
+  'aif',
+  'aiff',
+  'caf',
+  'mka',
+  'ac3',
+  'wv',
+];
+const cardFormats = ['ics', 'ical', 'vcf', 'vcard'];
+const subtitleFormats = ['srt', 'vtt', 'ass', 'ssa'];
+/** Ahead of the text module, which claims some of these by their text MIME type. */
+const documentExtension = (formats: readonly string[]) => (entry: FileEntry) =>
+  formats.includes(entry.extension.toLowerCase()) ? 110 : 0;
+/** Images Chromium decodes itself: JFIF and JPE are JPEG; APNG is an animated PNG. */
+const browserImages = [
+  'png',
+  'apng',
+  'jpg',
+  'jpeg',
+  'jpe',
+  'jfif',
+  'gif',
+  'webp',
+  'avif',
+  'bmp',
+  'ico',
+  'svg',
+];
 export const previewModules: PreviewModule[] = [
   {
     id: 'html',
@@ -115,15 +160,25 @@ export const previewModules: PreviewModule[] = [
   {
     id: 'archive',
     label: 'Archive',
-    formats: ['zip', 'tar', 'tar.gz', 'tgz'],
-    detect: (entry) => (/\.(zip|tar|tar\.gz|tgz)$/i.test(entry.name) ? 100 : 0),
+    formats: ['zip', 'tar', 'tar.gz', 'tgz', ...zipContainers],
+    detect: (entry) =>
+      /\.(zip|tar|tar\.gz|tgz)$/i.test(entry.name) || zipContainers.includes(entry.extension)
+        ? 100
+        : 0,
     load: () => import('./modules/ArchivePreview'),
+  },
+  {
+    id: 'font',
+    label: 'Font',
+    formats: fontFormats,
+    detect: extension(fontFormats),
+    load: () => import('./modules/FontPreview'),
   },
   {
     id: 'image',
     label: 'Image',
-    formats: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'svg'],
-    detect: extension(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'svg']),
+    formats: browserImages,
+    detect: extension(browserImages),
     load: () => import('./modules/ImagePreview'),
   },
   {
@@ -156,9 +211,48 @@ export const previewModules: PreviewModule[] = [
       'm4a',
       'aac',
       'opus',
+      ...convertedMedia,
     ],
-    detect: (entry) => (/^(audio|video)\//.test(entry.mime) ? 90 : 0),
+    detect: (entry) =>
+      /^(audio|video)\//.test(entry.mime) || convertedMedia.includes(entry.extension) ? 90 : 0,
     load: () => import('./modules/MediaPreview'),
+  },
+  {
+    id: 'notebook',
+    editing: 'text',
+    label: 'Jupyter notebook',
+    formats: ['ipynb'],
+    detect: documentExtension(['ipynb']),
+    load: () => import('./modules/NotebookPreview'),
+  },
+  {
+    id: 'cards',
+    editing: 'text',
+    label: 'Calendar / contacts',
+    formats: cardFormats,
+    detect: documentExtension(cardFormats),
+    load: () => import('./modules/CardsPreview'),
+  },
+  {
+    id: 'subtitles',
+    editing: 'text',
+    label: 'Subtitles',
+    formats: subtitleFormats,
+    detect: documentExtension(subtitleFormats),
+    load: () => import('./modules/SubtitlesPreview'),
+  },
+  {
+    id: 'sqlite',
+    label: 'SQLite database',
+    formats: ['sqlite', 'sqlite3', 'db3', 'db'],
+    // a .db file is only a hint: the reader checks the header, and other files keep the text view
+    detect: (entry) =>
+      ['sqlite', 'sqlite3', 'db3'].includes(entry.extension)
+        ? 100
+        : entry.extension === 'db'
+          ? 60
+          : 0,
+    load: () => import('./modules/SQLitePreview'),
   },
   {
     id: 'text',

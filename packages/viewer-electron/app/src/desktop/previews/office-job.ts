@@ -3,6 +3,8 @@ import { isOfficeFormat, type OfficeFormat } from '../../domain/previews/documen
 export interface OfficeRenderOptions {
   name?: string;
   sheet?: string;
+  /** Every sheet of a workbook, for a saved PDF copy; a preview shows one at a time. */
+  whole?: boolean;
 }
 
 interface OfficeRenderJob {
@@ -10,6 +12,7 @@ interface OfficeRenderJob {
   inputPath: string;
   inputURL: string;
   sheet?: string;
+  whole?: true;
 }
 
 /** Preserve filename fields without passing host directories into the engine.
@@ -41,5 +44,6 @@ export function createOfficeJob(
     inputPath: '/tmp/viewer-input/' + name,
     inputURL: 'file:///tmp/viewer-input/' + encoded,
     ...(sheet === undefined ? {} : { sheet }),
+    ...(options.whole ? { whole: true as const } : {}),
   };
 }

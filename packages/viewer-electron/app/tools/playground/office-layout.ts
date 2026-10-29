@@ -27,18 +27,39 @@ const records = [
     '55c9b01d60efc8245f5d28097e702e1921e06aebfab522b6de574dcb435d66b7',
   ],
 ] as const;
-export const officeLayoutSamples: RemoteSample[] = records.map(
-  ([name, original, size, sha256]) => ({
-    path: 'previews/documents/' + name,
-    formats: [name.split('.').at(-1)!],
-    size,
-    sha256,
-    preview:
-      'Bundled local Office layout with pagination; Excel includes named worksheet navigation',
-    description:
-      'Unmodified application-authored Apache POI reference. Qualifies this sample, not every document feature.',
-    source: poi + 'test-data/' + original,
-    url: poi + 'test-data/' + original,
-    license: 'Apache-2.0; original notices at ' + poi + 'legal/LICENSE',
+/** Binary Office templates and shows are the same format as their documents: the reference
+ * files under those names. */
+const renamed = [
+  ['FloatingPictures.dot', 0],
+  ['ConditionalFormattingSamples.xlt', 1],
+  ['SampleShow.pps', 2],
+  ['SampleShow.pot', 2],
+] as const;
+const references: RemoteSample[] = records.map(([name, original, size, sha256]) => ({
+  path: 'previews/documents/' + name,
+  formats: [name.split('.').at(-1)!],
+  size,
+  sha256,
+  preview: 'Bundled local Office layout with pagination; Excel includes named worksheet navigation',
+  description:
+    'Unmodified application-authored Apache POI reference. Qualifies this sample, not every document feature.',
+  source: poi + 'test-data/' + original,
+  url: poi + 'test-data/' + original,
+  license: 'Apache-2.0; original notices at ' + poi + 'legal/LICENSE',
+}));
+export const officeLayoutSamples: RemoteSample[] = [
+  ...references,
+  ...renamed.map(([name, index]) => {
+    const [original, path, size, sha256] = records[index];
+    return {
+      ...references[index]!,
+      path: 'previews/documents/' + name,
+      formats: [name.split('.').at(-1)!],
+      size,
+      sha256,
+      description: `The unmodified Apache POI reference ${original}, under a template or show name.`,
+      source: poi + 'test-data/' + path,
+      url: poi + 'test-data/' + path,
+    };
   }),
-);
+];

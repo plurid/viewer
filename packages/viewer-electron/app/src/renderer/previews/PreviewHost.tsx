@@ -69,6 +69,7 @@ const services: PreviewContext['services'] = {
   read: (id, limit) => window.viewer.read(id, limit),
   archive: (id) => window.viewer.archive(id),
   archiveEntry: (id, name) => window.viewer.archiveEntry(id, name),
+  sqlite: (id, request) => window.viewer.sqlite(id, request),
   rendition: (id, request) => window.viewer.imageRendition(id, request),
   videoRendition: (id, requestID) => window.viewer.videoRendition(id, requestID),
   officeLayout: (id, request) => window.viewer.officeLayout(id, request),

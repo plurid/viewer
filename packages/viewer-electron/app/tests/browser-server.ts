@@ -677,6 +677,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return resources.archive(args[0] as string);
     case 'archiveEntry':
       return resourceURL(await resources.archiveEntry(args[0] as string, args[1] as string));
+    case 'sqlite':
+      return resources.sqlite(...schemas.sqlite.parse(args));
     case 'save':
       return storage.save(args[0] as SavedState);
     case 'flushed':

@@ -32,4 +32,13 @@ export const renderedImageFormats = [
   'exr',
   'tga',
   'icns',
+  // ImageIO also reads these, which Chromium does not; JPEG XL, DDS and cursors failed its check
+  'pbm',
+  'pgm',
+  'ppm',
+  'pnm',
+  'ktx',
+  'astc',
+  // gzip around SVG, expanded before the private SVG decoder
+  'svgz',
 ] as const;

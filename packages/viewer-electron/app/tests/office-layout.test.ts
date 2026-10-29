@@ -32,10 +32,15 @@ it('bounds source reads to the captured size and checks cancellation before allo
   expect(read).not.toHaveBeenCalled();
 });
 
-it('opens all six formats in Viewer on new settings and advertises alternate file associations', () => {
+it('opens every Office format in Viewer on new settings and advertises alternate file associations', () => {
   const policy = defaultSettings('/fixture').fileOpening;
   for (const extension of officeFormats)
-    expect(nativeOpening({ extension } as FileEntry, policy)).toBe(false);
+    expect(
+      nativeOpening(
+        { name: 'Report.' + extension, extension, mime: '', directory: false } as FileEntry,
+        policy,
+      ),
+    ).toBe(false);
   const office = documentTypes.find((type) => type.CFBundleTypeName === 'Office document')!;
   expect(office.CFBundleTypeExtensions).toEqual(officeFormats);
   expect(office.LSHandlerRank).toBe('Alternate');

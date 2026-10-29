@@ -15,6 +15,7 @@ import type {
 } from '../../domain/previews/documents/office';
 import type { ImageRenditionRequest } from '../../domain/previews/images/rendered';
 import type { OfficeLayoutRequest } from '../../domain/previews/documents/layout';
+import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {
@@ -58,6 +59,8 @@ export interface PreviewContext {
     read(id: string, limit?: number): Promise<ResourceRead>;
     archive(id: string): Promise<ArchiveListing>;
     archiveEntry(id: string, name: string): Promise<Resource>;
+    /** Present where the desktop SQLite reader is: test hosts and galleries may omit it. */
+    sqlite?(id: string, request: SQLiteRequest): Promise<SQLiteReply>;
     rendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
     videoRendition(id: string, requestID: string): Promise<Resource>;
     officeLayout?(id: string, request: OfficeLayoutRequest): Promise<Resource>;

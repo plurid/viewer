@@ -16,6 +16,7 @@ type ResourceHandlers = Pick<
   | 'release'
   | 'archive'
   | 'archiveEntry'
+  | 'sqlite'
   | 'imageRendition'
   | 'videoRendition'
   | 'officeLayout'
@@ -34,6 +35,7 @@ interface ResourcePorts {
     | 'release'
     | 'archive'
     | 'archiveEntry'
+    | 'sqlite'
     | 'rendition'
     | 'videoRendition'
     | 'officeLayout'
@@ -64,6 +66,7 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
     },
     archive: ([id]) => ports.resources.archive(id),
     archiveEntry: ([id, name]) => ports.resources.archiveEntry(id, name),
+    sqlite: ([id, request]) => ports.resources.sqlite(id, request),
     imageRendition: ([id, request]) => ports.resources.rendition(id, request),
     videoRendition: ([id, requestID]) => ports.resources.videoRendition(id, requestID),
     officeLayout: ([id, request]) => ports.resources.officeLayout(id, request),

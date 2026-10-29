@@ -3,7 +3,7 @@ import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { runProcessor } from '../transforms/process';
 import { mediaDemuxer, mediaInfo } from '../transforms/media';
-import type { Decoder } from './derived';
+import type { Decoder, DerivedRendition, Source } from './derived';
 import { errorMessage } from '../../domain/errors';
 
 export const videoPreviewLimit = 64 * 1024 * 1024;
@@ -42,6 +42,8 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
         { timeout: 30000 },
       );
       const facts = mediaInfo(JSON.parse(probe.toString()), extension);
+      if (!facts.video && facts.audio)
+        return await audioCopy(root, execute, source, demuxer, facts.duration, combined);
       if (
         !facts.video ||
         !facts.width ||
@@ -217,4 +219,122 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
       clearTimeout(timer);
     }
   };
+}
+
+/** Sound Chromium cannot play (WMA, AIFF, CAF, APE and others) as a complete AAC copy, checked
+ * through its final frame like the video copy. */
+async function audioCopy(
+  root: string,
+  execute: typeof runProcessor,
+  source: Source,
+  demuxer: string,
+  duration: number,
+  signal: AbortSignal,
+): Promise<DerivedRendition> {
+  if (!(duration > 0) || duration * 24_000 > videoPreviewLimit - 1024 * 1024)
+    throw new Error(
+      'The complete recording is too long for the 64 MB compatibility-preview limit. Open it in its original app.',
+    );
+  const input = await open(
+    source.file,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
+  let data: Buffer;
+  try {
+    const current = await input.stat();
+    if (
+      current.dev !== source.info.dev ||
+      current.ino !== source.info.ino ||
+      current.mtimeMs !== source.info.mtimeMs ||
+      current.size !== source.info.size
+    )
+      throw new Error('The recording changed before conversion. Reopen its preview.');
+    data = await execute(
+      path.join(root, 'ffmpeg'),
+      [
+        '-nostdin',
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-xerror',
+        '-max_alloc',
+        '268435456',
+        '-threads',
+        '2',
+        '-protocol_whitelist',
+        'fd,pipe',
+        '-f',
+        demuxer,
+        '-fd',
+        '3',
+        '-i',
+        'fd:',
+        '-map',
+        '0:a:0',
+        '-vn',
+        '-sn',
+        '-dn',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '192k',
+        '-ac',
+        '2',
+        '-ar',
+        '48000',
+        '-map_metadata',
+        '-1',
+        '-movflags',
+        'frag_keyframe+empty_moov+default_base_moof',
+        '-f',
+        'mp4',
+        'pipe:1',
+      ],
+      [input.fd],
+      signal,
+      { timeout: 120000, outputLimit: videoPreviewLimit },
+    );
+  } finally {
+    await input.close();
+  }
+  const checked = await execute(
+    path.join(root, 'ffprobe'),
+    [
+      '-v',
+      'error',
+      '-max_alloc',
+      '268435456',
+      '-protocol_whitelist',
+      'pipe',
+      '-f',
+      'mov',
+      '-i',
+      'pipe:0',
+      '-count_frames',
+      '-show_entries',
+      'stream=codec_name,codec_type,sample_rate,nb_read_frames',
+      '-of',
+      'json',
+    ],
+    [],
+    signal,
+    { input: data, timeout: 30000 },
+  );
+  const stream = (
+    JSON.parse(checked.toString()) as {
+      streams?: {
+        codec_name?: string;
+        codec_type?: string;
+        sample_rate?: string;
+        nb_read_frames?: string;
+      }[];
+    }
+  ).streams?.find((item) => item.codec_type === 'audio');
+  // AAC frames hold 1024 samples each
+  const copied = (Number(stream?.nb_read_frames) * 1024) / Number(stream?.sample_rate);
+  if (stream?.codec_name !== 'aac' || !(Math.abs(copied - duration) <= 0.25))
+    throw new Error(
+      'A complete compatibility copy could not be verified. Open this recording in its original app.',
+    );
+  return { data, extension: 'm4a', kind: 'video', decoder: 'FFmpeg 9.0.2' };
 }

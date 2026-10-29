@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { imageConversions } from '../../domain/contracts';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, readlink, rename } from 'node:fs/promises';
@@ -113,7 +114,7 @@ const record = z
         sources: z.array(file).max(10000),
         destination: file.optional(),
         name: z.string().max(255).optional(),
-        conversion: z.enum(['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf']).optional(),
+        conversion: z.enum(imageConversions).optional(),
         transform: transformPlanSchema.optional(),
         reviewedDestination: z
           .object({ path: file, identity: z.string().max(300) })

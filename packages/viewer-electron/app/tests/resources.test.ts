@@ -290,6 +290,23 @@ describe('scoped preview resources', () => {
     await writeFile(binary, Buffer.from([0, 1, 2, 3]));
     expect((await resources.read((await resources.grant(binary)).id)).binary).toBe(true);
   });
+  it('reads UTF-16 text by its byte-order mark, which other tools write', async () => {
+    const strings = path.join(root, 'Localizable.strings'),
+      big = path.join(root, 'notes.txt');
+    await writeFile(
+      strings,
+      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('"Hello" = "Salut";', 'utf16le')]),
+    );
+    await writeFile(
+      big,
+      Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from('Héllo', 'utf16le').swap16()]),
+    );
+    expect(await resources.read((await resources.grant(strings)).id)).toMatchObject({
+      text: '"Hello" = "Salut";',
+      binary: false,
+    });
+    expect((await resources.read((await resources.grant(big)).id)).text).toBe('Héllo');
+  });
   it('uses the target size and format for extensionless symbolic file links', async () => {
     const file = path.join(root, 'model.gltf'),
       link = path.join(root, 'linked-model');

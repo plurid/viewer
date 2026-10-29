@@ -1,8 +1,6 @@
 import { effectiveWindowSettings } from '../../state/effective-ui';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import Prism from 'prismjs';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
@@ -13,62 +11,20 @@ import { FileEditor } from '../../editing/FileEditor';
 import { registerEditingPlane } from '../../editing/planes';
 import { continuesEditing } from '../../editing/sessions';
 import { editorFont } from '../../editing/font';
-import { relativeLinkTarget } from '../../../domain/workspaces/planes';
 import { highlightedLines } from '../highlight';
-import { languageByID, languageFor, loadPrismGrammar } from '../languages';
+import { languageFor, loadPrismGrammar } from '../languages';
+import { MarkdownContent, usePrismGrammar } from '../Markdown';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { StructuredTree } from '../StructuredTree';
+import { decodeBinaryPlist } from '../../../domain/previews/data/plist';
+import {
+  isTransportStream,
+  transportStreamExtensions,
+  transportStreamProbe,
+} from '../../../domain/media/transport-stream';
 import { isStructured, inspectStructured } from '../../../domain/previews/data/structured';
 import type { ApplicationSettings } from '../../../domain/services';
-
-/** A Prism grammar, loaded on first use: the component renders again once it is ready. */
-function usePrismGrammar(id: string | undefined): Prism.Grammar | undefined {
-  const [, setLoaded] = useState(0);
-  useEffect(() => {
-    if (!id || Prism.languages[id]) return;
-    let live = true;
-    void loadPrismGrammar(id).then(() => {
-      if (live) setLoaded((count) => count + 1);
-    });
-    return () => {
-      live = false;
-    };
-  }, [id]);
-  return id ? Prism.languages[id] : undefined;
-}
-
-/** A Markdown fence's code, highlighted in the language it names (`rust`, `ts`, `sh`). */
-function FencedCode({ language, text }: { language: string; text: string }) {
-  const id =
-    languageByID(language)?.prism ??
-    languageFor({ name: '', extension: language })?.prism ??
-    language;
-  const grammar = usePrismGrammar(id);
-  const lines = useMemo(
-    () => (grammar && text.length <= 1_000_000 ? highlightedLines(text, grammar) : null),
-    [grammar, text],
-  );
-  if (!lines) return <code className={`language-${language}`}>{text}</code>;
-  return (
-    <code className={`language-${language}`}>
-      {lines.map((segments, line) => (
-        <span key={line}>
-          {line > 0 && '\n'}
-          {segments.map((segment, index) =>
-            segment.className ? (
-              <span key={index} className={segment.className}>
-                {segment.text}
-              </span>
-            ) : (
-              segment.text
-            ),
-          )}
-        </span>
-      ))}
-    </code>
-  );
-}
 
 function Code({
   text,
@@ -176,12 +132,34 @@ export interface TextPreviewProps extends PreviewContext {
   onEditingChange?(editing: boolean): void;
 }
 
+// a video recorded as .ts or .mts plays in the media module, loaded only for one
+const MediaPreview = lazy(() => import('./MediaPreview'));
+async function transportStream(url: string, signal: AbortSignal) {
+  const response = await fetch(url, {
+    signal,
+    headers: { Range: `bytes=0-${transportStreamProbe - 1}` },
+  });
+  return isTransportStream(new Uint8Array(await response.arrayBuffer()));
+}
+
+/** A binary property list's values as JSON; it must fit in 8 MB. */
+async function binaryPlist(url: string, signal: AbortSignal) {
+  const bytes = new Uint8Array(await (await fetch(url, { signal })).arrayBuffer());
+  if (bytes.length > 8 * 1024 * 1024) throw new Error('The property list is too large.');
+  return JSON.stringify(decodeBinaryPlist(bytes), null, 2);
+}
+
 export default function TextPreview(context: TextPreviewProps) {
   const { resource, signal, services } = context;
-  const [data, setData] = useState<{ text: string; truncated: boolean; binary: boolean } | null>(
-    null,
-  );
+  // a binary property list is decoded here and shown as the JSON it holds, read-only
+  const [data, setData] = useState<{
+    text: string;
+    truncated: boolean;
+    binary: boolean;
+    decoded?: boolean;
+  } | null>(null);
   const [error, setError] = useState('');
+  const [stream, setStream] = useState(false);
   const [raw, setRaw] = usePreviewState(context, 'text.source', false);
   const markdownRef = useRef<HTMLElement>(null);
   const preferences = useViewer((state) => effectiveWindowSettings(state));
@@ -230,14 +208,21 @@ export default function TextPreview(context: TextPreviewProps) {
       services.read(resource.id),
       grammar ? loadPrismGrammar(grammar).catch(() => undefined) : undefined,
     ])
-      .then(([value]) => {
+      .then(async ([value]) => {
+        if (value.binary && transportStreamExtensions.includes(resource.entry.extension))
+          setStream(await transportStream(resource.url, signal).catch(() => false));
+        if (value.binary && resource.entry.extension === 'plist')
+          value = await binaryPlist(resource.url, signal).then(
+            (text) => ({ text, truncated: false, binary: false, decoded: true }),
+            () => value,
+          );
         if (!signal.aborted) setData(value);
       })
       .catch((error) => {
         if (!signal.aborted) setError(error.message);
       });
-  }, [resource.id, resource.entry, services, signal, reading]);
-  const editable = !!paneID && !!data && !data.binary && !data.truncated;
+  }, [resource.id, resource.url, resource.entry, services, signal, reading]);
+  const editable = !!paneID && !!data && !data.binary && !data.truncated && !data.decoded;
   useEffect(() => {
     if (!paneID || editing || !editable) return;
     return registerEditingPlane(paneID, {
@@ -250,7 +235,7 @@ export default function TextPreview(context: TextPreviewProps) {
   const structured = useMemo(
     () =>
       data && !data.truncated && isStructured(resource.entry.extension)
-        ? inspectStructured(data.text, resource.entry.extension)
+        ? inspectStructured(data.text, data.decoded ? 'json' : resource.entry.extension)
         : null,
     [data, resource.entry.extension],
   );
@@ -290,6 +275,12 @@ export default function TextPreview(context: TextPreviewProps) {
     );
   if (error) return <Empty icon="warning" title="Text could not be read" detail={error} />;
   if (!data) return <Loading />;
+  if (stream)
+    return (
+      <Suspense fallback={<Loading />}>
+        <MediaPreview {...context} />
+      </Suspense>
+    );
   if (data.binary)
     return (
       <Empty icon="file" title="Preview unavailable">
@@ -370,41 +361,11 @@ export default function TextPreview(context: TextPreviewProps) {
         />
       ) : markdown && !raw ? (
         <article className="markdown" ref={markdownRef}>
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            skipHtml
-            components={{
-              // Only relative links to local files act, opening them beside this plane.
-              a: ({ children, href }) => {
-                const target =
-                  context.openRelated && relativeLinkTarget(context.resource.entry.path, href);
-                return target ? (
-                  <button
-                    type="button"
-                    className="markdown-link"
-                    title={target}
-                    onClick={() => context.openRelated?.(target)}
-                  >
-                    {children}
-                  </button>
-                ) : (
-                  <span className="markdown-link">{children}</span>
-                );
-              },
-              img: ({ alt }) => <span className="muted">[Image: {alt || 'external image'}]</span>,
-              // a fence that names its language is highlighted in it
-              code: ({ className, children }) => {
-                const fence = /language-([\w+#-]+)/.exec(className ?? '');
-                return fence ? (
-                  <FencedCode language={fence[1]!} text={String(children).replace(/\n$/, '')} />
-                ) : (
-                  <code className={className}>{children}</code>
-                );
-              },
-            }}
-          >
-            {data.text}
-          </ReactMarkdown>
+          <MarkdownContent
+            text={data.text}
+            path={context.resource.entry.path}
+            openRelated={context.openRelated}
+          />
         </article>
       ) : structured && !raw && !structured.error ? (
         <StructuredTree

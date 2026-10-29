@@ -24,7 +24,9 @@ export function conversionOutput(source: string, conversion: ImageConversion): s
       ? `${stem} rotated${['.png', '.jpg', '.jpeg'].includes(extension.toLowerCase()) ? extension : '.png'}`
       : conversion === 'jpeg'
         ? `${stem}.jpg`
-        : `${stem}.png`;
+        : conversion === 'office-pdf'
+          ? `${stem}.pdf`
+          : `${stem}.png`;
   return path.join(path.dirname(source), name);
 }
 /** Rotates a 32-bit bitmap a quarter turn. */

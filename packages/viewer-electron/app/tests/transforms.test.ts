@@ -151,6 +151,17 @@ it('limits typed plans and refuses execution text, excessive dimensions, invalid
     ),
   ).toThrow('Fast keyframe');
   expect(() => mediaDemuxer('m3u8')).toThrow('supported');
+  // containers Chromium cannot play, read for a compatibility copy
+  expect(['wmv', 'flv', '3gp', 'vob', 'mxf', 'mts', 'wma', 'ape'].map(mediaDemuxer)).toEqual([
+    'asf',
+    'flv',
+    'mov',
+    'mpeg',
+    'mxf',
+    'mpegts',
+    'asf',
+    'ape',
+  ]);
 });
 it('copies only a compatible whole clip by default, encodes exact partial cuts and restricts all input/output protocols to held descriptors', () => {
   const full = compileMedia(media(), [facts], (index) => index + 3, 4);

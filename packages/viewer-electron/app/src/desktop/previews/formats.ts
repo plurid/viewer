@@ -10,6 +10,7 @@ import type { DocumentData } from '../../domain/services';
 import { fileCoordination } from '../files/file-coordination';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import { epubReference, epubImagePath, epubImageLimit } from '../../domain/previews/documents/epub';
+import { readsOfficeContent } from '../../domain/previews/documents/layout';
 const run = promisify(execFile);
 const decode = (value: string) =>
   value
@@ -80,7 +81,7 @@ async function extractCoordinated(
     text: '',
     truncated: false,
   };
-  if (extension === '.docx' || extension === '.xlsx') {
+  if (readsOfficeContent(extension.slice(1))) {
     const { extractOffice } = await import('./office');
     return extractOffice(file, options.signal, options.worksheet);
   } else if (extension === '.pdf') {

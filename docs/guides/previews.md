@@ -5,15 +5,23 @@ beside its folder while you go on browsing.
 
 ## Each kind of file has its own controls
 
-| File                   | What you can do                                                            |
-| ---------------------- | -------------------------------------------------------------------------- |
-| PDF                    | Move through pages, show thumbnails and the outline, search the text       |
-| EPUB                   | Move through chapters, **Find in book**, follow footnotes and go **Back**  |
-| Word and PowerPoint    | Read the paginated layout; Word also has a **Reading** view                |
-| Excel                  | Switch sheets; XLSX also has a grid of saved cell values                   |
-| JSON, YAML, XML        | Search the tree, **Expand all**, **Collapse all**, or switch to **Source** |
-| 3D models and drawings | Orbit, zoom, show dimensions and measure                                   |
-| Audio and video        | Play, pause and seek                                                       |
+| File                                      | What you can do                                                            |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| PDF                                       | Move through pages, show thumbnails and the outline, search the text       |
+| EPUB                                      | Move through chapters, **Find in book**, follow footnotes and go **Back**  |
+| Word, PowerPoint and OpenDocument         | Read the paginated layout; Word also has a **Reading** view                |
+| Excel and OpenDocument spreadsheets       | Switch sheets; XLSX also has a grid of saved cell values                   |
+| JSON, YAML, XML, property lists, map data | Search the tree, **Expand all**, **Collapse all**, or switch to **Source** |
+| SQLite database                           | Pick a table, page through its rows, read its definition                   |
+| Notebook                                  | Read cells and their saved outputs                                         |
+| Calendar, contacts                        | Read events by date, or contact cards                                      |
+| Subtitles                                 | Search the cues and see their times                                        |
+| Font                                      | Type your own sample text and change its size                              |
+| 3D models and drawings                    | Orbit, zoom, show dimensions and measure                                   |
+| Audio and video                           | Play, pause and seek                                                       |
+
+Video and audio Chromium cannot play, such as WMV, AVI or WMA, play from a copy Viewer makes on your
+Mac; the original is only read.
 
 [Supported formats](../reference/formats.md) lists every format and what its preview shows.
 
@@ -56,5 +64,6 @@ The preview keeps showing what it last loaded and offers three ways back:
 ## Edit it or open it elsewhere
 
 Press **⌘E** to edit a text file in a plane; **⌘S** saves. For anything Viewer does not edit, choose
-**Open With…** and pick another app. [Make a quick change](create.md) covers the edits Viewer can
-make itself.
+**Open With…** and pick another app. To share an Office or OpenDocument file with someone who has
+neither app, right-click it and choose **Save PDF copy**: the PDF holds every page, and every sheet
+of a workbook. [Make a quick change](create.md) covers the edits Viewer can make itself.

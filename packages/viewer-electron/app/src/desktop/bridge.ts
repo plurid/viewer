@@ -102,7 +102,7 @@ import { GitReviews } from './comparison/review';
 import { AgentSessions } from './agents/sessions';
 import { Resources } from './previews/resources';
 import { DerivedPreviews, rawDecoder } from './previews/derived';
-import { officeDecoder, warmOffice } from './previews/office-renderer';
+import { officeDecoder, officePDFCopy, warmOffice } from './previews/office-renderer';
 import { officeRuntimeName } from './previews/office-runtime-manifest';
 import { videoDecoder } from './previews/video-rendition';
 import { Search } from './search/search';
@@ -453,7 +453,15 @@ export class Desktop {
     );
     this.thumbnails = new Thumbnails(derived, images);
     const office = new DerivedPreviews(access, officeDecoder(assetPath(officeRuntimeName)));
-    this.resources = new Resources(access, undefined, 12000, derived, images, office);
+    this.resources = new Resources(
+      access,
+      undefined,
+      12000,
+      derived,
+      images,
+      office,
+      (file, request, signal) => this.files.sqlite(file, request, signal),
+    );
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
       if (target && !target.isDestroyed())
@@ -630,6 +638,7 @@ export class Desktop {
           : fallbackTrash(file),
       (message) => options.diagnose?.(message),
     );
+    const officePDF = officePDFCopy(assetPath(officeRuntimeName));
     this.operations = new Operations(
       (file, expected) =>
         process.platform === 'darwin'
@@ -649,6 +658,7 @@ export class Desktop {
       new ProtectedPaths(this.home),
       {
         convert: (conversion, sources, output, signal) => {
+          if (conversion === 'office-pdf') return officePDF(sources[0]!, output, signal);
           if (
             conversion === 'pdf' ||
             sources.some((source) => /\.(?:bmp|heic|heif)$/i.test(source))

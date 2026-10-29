@@ -14,6 +14,7 @@ import type { TransformPlan } from './operations/transforms';
 import type { OptimizationOutcome } from './operations/optimization-target';
 import type { OptimizationRequest, OptimizationReply } from './operations/optimization-review';
 import type { WorksheetDocumentRequest } from './previews/documents/office';
+import type { SQLiteReply, SQLiteRequest } from './previews/data/sqlite';
 import type { ImageRenditionRequest } from './previews/images/rendered';
 import type { PreviewDerivationKind } from './previews/derivations';
 import type { OfficeLayoutMetadata, OfficeLayoutRequest } from './previews/documents/layout';
@@ -453,8 +454,16 @@ export type OperationKind =
   | 'convert'
   /** A text save over an existing file, its previous version moved to the Trash. */
   | 'rewrite';
-/** Image quick actions. Each creates a new file; sources are never changed. */
-export const imageConversions = ['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf'] as const;
+/** Quick actions. Each creates a new file; sources are never changed. `office-pdf` saves an Office
+ * document as the PDF the Office engine lays out. */
+export const imageConversions = [
+  'rotate-left',
+  'rotate-right',
+  'jpeg',
+  'png',
+  'pdf',
+  'office-pdf',
+] as const;
 export type ImageConversion = (typeof imageConversions)[number];
 export interface OperationRequest {
   kind: OperationKind;
@@ -814,6 +823,8 @@ export interface ViewerAPI {
   release(id: string): Promise<void>;
   archive(id: string): Promise<ArchiveListing>;
   archiveEntry(id: string, name: string): Promise<Resource>;
+  /** A previewed SQLite file's tables, or a page of a table's rows, read without changing it. */
+  sqlite(id: string, request: SQLiteRequest): Promise<SQLiteReply>;
   /** A system-rendered image of a granted file Chromium cannot decode. */
   imageRendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
   videoRendition(id: string, requestID: string): Promise<Resource>;

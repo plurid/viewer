@@ -1,0 +1,312 @@
+/* Notebooks, calendars and contacts, and subtitles: text files shown as documents. */
+.parsed-document > .text-viewer,
+.parsed-document > .subtitles-viewer {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.notebook-scroll,
+.cards-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  user-select: text;
+}
+
+/* Notebooks */
+.notebook {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+}
+.notebook-cell {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+}
+.notebook-prompt {
+  padding-top: 9px;
+  text-align: right;
+  white-space: pre;
+  color: var(--subtle);
+  font:
+    11px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+.notebook-cell-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.notebook-source,
+.notebook-raw,
+.notebook-output pre {
+  margin: 0;
+  overflow: auto;
+  tab-size: 4;
+  font:
+    12px/1.55 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.notebook-source {
+  padding: 9px 12px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+.notebook-raw {
+  padding: 4px 12px;
+  color: var(--muted);
+  border-left: 2px solid var(--line);
+}
+.notebook-output pre {
+  max-height: 600px;
+  padding: 2px 12px;
+}
+.notebook-output.is-stderr pre,
+.notebook-output.is-error pre {
+  border-left: 2px solid var(--danger);
+}
+.notebook-output.is-error strong {
+  color: var(--danger);
+}
+.notebook-image {
+  display: block;
+  max-width: 100%;
+  max-height: 720px;
+  height: auto;
+  /* plots are drawn for a white page; a transparent one is unreadable on the dark look */
+  background: #fff;
+  border-radius: var(--radius-control);
+}
+.notebook-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.notebook-cell .markdown {
+  flex: none;
+  padding: 0;
+  overflow: visible;
+  line-height: 1.6;
+}
+.notebook-cell .markdown > :first-child {
+  margin-top: 0;
+}
+.notebook-cell .markdown > :last-child {
+  margin-bottom: 0;
+}
+.notebook-cell .markdown h1 {
+  font-size: 22px;
+}
+.markdown-image {
+  max-width: 100%;
+  height: auto;
+}
+.notebook-html summary {
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* Calendars and contacts */
+.cards-scroll {
+  container-type: inline-size;
+}
+.cards {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 18px 24px 48px;
+}
+.cards-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+.cards-heading {
+  margin: 14px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.calendar-events,
+.calendar-tasks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.calendar-event {
+  display: grid;
+  grid-template-columns: minmax(150px, 30%) minmax(0, 1fr);
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+.calendar-when {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.calendar-what {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.calendar-what .is-cancelled,
+.calendar-tasks .is-done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.calendar-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.calendar-tasks li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  font-size: 12px;
+}
+.card-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+.card-field {
+  display: contents;
+}
+.card-field dt {
+  color: var(--muted);
+}
+.card-field dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.contact {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+.contact-photo {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.contact-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.contact-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.contact-body > p {
+  margin: 0;
+  font-size: 12px;
+}
+@container (max-width: 480px) {
+  .calendar-event {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
+/* Subtitles */
+.subtitles-viewer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  container-type: inline-size;
+}
+.subtitles-toolbar input[type='search'] {
+  min-width: 80px;
+  flex: 1 1 140px;
+  max-width: 280px;
+}
+.subtitles-table {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.subtitles-row {
+  display: grid;
+  grid-template-columns: 52px 100px 100px minmax(0, 1fr);
+  gap: 0 12px;
+  padding: 8px 14px;
+  font-size: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
+}
+.subtitles-header {
+  flex: none;
+  padding-block: 6px;
+  color: var(--muted);
+  background: var(--raised);
+  border-bottom-color: var(--line);
+  font-weight: 600;
+}
+.subtitles-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.subtitles-body {
+  position: relative;
+}
+.subtitles-body > .subtitles-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.subtitles-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.subtitles-row mark {
+  color: var(--ink);
+  background: var(--selection);
+}
+.subtitles-empty {
+  margin: 0;
+  padding: 12px 14px;
+}
+@container (max-width: 420px) {
+  .subtitles-row {
+    grid-template-columns: 36px 92px minmax(0, 1fr);
+  }
+  .subtitles-row > :nth-child(3) {
+    display: none;
+  }
+}

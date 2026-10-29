@@ -51,6 +51,7 @@ import { isToolIn, parseToolInput, toolCapability, writeTerminalInput } from './
 import type { AgentSessions } from './sessions';
 import { containsPath } from '../files/containment';
 import { realHome } from '../native/home';
+import { officeFamily, readsOfficeContent } from '../../domain/previews/documents/layout';
 /** Agents see the shape of execution settings, never secrets they may carry:
  * terminal environment values, shell scripts and program arguments (`--token=…`, which were
  * shown as they were until 2026-10-20) often hold tokens. */
@@ -965,7 +966,11 @@ export class AgentBroker {
         if (call.name === 'query_table') {
           const offset = 'offset' in input ? Number(input.offset) : 0,
             limit = 'limit' in input ? Number(input.limit) : 100;
-          if (before.extension === 'xlsx' && document.office?.kind === 'workbook') {
+          if (
+            readsOfficeContent(before.extension) &&
+            officeFamily(before.extension) === 'workbook' &&
+            document.office?.kind === 'workbook'
+          ) {
             const sheets = document.office.sheets;
             const name = 'sheet' in input ? input.sheet : undefined;
             const sheet = name

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { fidelityWorkbook, fidelityWord, fidelityStyles } from './office-fidelity-fixtures';
 import { extractOffice } from '../src/desktop/previews/office';
 import { workbookFormatter } from '../src/desktop/previews/office-formatting';
@@ -122,4 +123,34 @@ it('refuses image relationships that escape the document package', async () => {
     }),
   );
   await expect(extractOffice(file)).rejects.toThrow('escapes');
+});
+it('reads macro and template packages as the documents they are, and checks each declared type', async () => {
+  const swap = (bytes: Uint8Array, from: string, to: string) => {
+    const files = unzipSync(bytes);
+    const types = strFromU8(files['[Content_Types].xml']!);
+    expect(types).toContain(from);
+    return zipSync({ ...files, '[Content_Types].xml': strToU8(types.replace(from, to)) });
+  };
+  const image = await readFile(path.resolve('tools/playground/assets/study.png'));
+  const word = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+  const sheet = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml';
+  for (const [extension, type] of [
+    ['docm', 'application/vnd.ms-word.document.macroEnabled.main+xml'],
+    ['dotx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml'],
+  ] as const) {
+    const file = path.join(root, `Fidelity.${extension}`);
+    await writeFile(file, swap(fidelityWord(image), word, type));
+    expect((await extractOffice(file)).office?.kind).toBe('word');
+  }
+  const book = path.join(root, 'Fidelity.xlsm');
+  await writeFile(
+    book,
+    swap(fidelityWorkbook(), sheet, 'application/vnd.ms-excel.sheet.macroEnabled.main+xml'),
+  );
+  const workbook = await extractOffice(book, undefined, { sheet: 'Report', fromRow: 1, limit: 10 });
+  expect(workbook.office?.kind).toBe('workbook');
+  // a document declared as another type is refused
+  const mismatched = path.join(root, 'Mismatched.docm');
+  await writeFile(mismatched, fidelityWord(image));
+  await expect(extractOffice(mismatched)).rejects.toThrow('does not match');
 });

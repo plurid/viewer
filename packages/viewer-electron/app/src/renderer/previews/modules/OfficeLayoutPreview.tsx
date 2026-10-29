@@ -4,10 +4,11 @@ import { usePreviewState } from '../state';
 import { WorksheetTabs } from '../WorksheetTabs';
 import { Empty, Loading } from '../../ui/primitives';
 import PDFPreview from './PDFPreview';
+import { officeFamily } from '../../../domain/previews/documents/layout';
 
 export default function OfficeLayoutPreview(context: PreviewContext) {
   const [sheet, setSheet] = usePreviewState(context, 'office.sheet', '');
-  const workbook = ['xls', 'xlsx'].includes(context.resource.entry.extension);
+  const workbook = officeFamily(context.resource.entry.extension) === 'workbook';
   const load = useOfficeLayout(context, workbook ? sheet : undefined);
   const selected = sheet || load.metadata?.selectedSheet || '';
   return (

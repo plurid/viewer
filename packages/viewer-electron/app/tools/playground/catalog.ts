@@ -1,16 +1,22 @@
+import { gzipSync } from 'node:zlib';
 import { textLanguages } from '../../src/domain/editing/languages';
 import { cameraRawSamples } from './camera-raw';
 import { assetBytes } from './files';
 import { documentSamples, sample } from './samples/documents';
+import { officeSamples } from './samples/office';
 import { modelSamples } from './samples/models';
+import { packageSamples } from './samples/packages';
 import { projectSamples } from './samples/project';
+import { structuredTextSamples } from './samples/structured-text';
 import { textSamples } from './samples/text';
 import type { RemoteSample, Sample } from './types';
 import { officeLayoutSamples } from './office-layout';
+import { fontSamples } from './fonts';
 
 export const remoteSamples: RemoteSample[] = [
   ...cameraRawSamples,
   ...officeLayoutSamples,
+  ...fontSamples,
   {
     path: 'previews/video/Big Buck Bunny trailer.ogv',
     formats: ['ogv'],
@@ -56,8 +62,11 @@ export async function localSamples(): Promise<Sample[]> {
   const result: Sample[] = [
     ...textSamples(),
     ...documentSamples(await assetBytes('study.jpg')),
+    ...officeSamples(),
     ...(await modelSamples()),
     ...projectSamples(),
+    ...packageSamples(),
+    ...structuredTextSamples(),
   ];
   const imageSpecs = [
     ['png', 'png'],
@@ -77,8 +86,20 @@ export async function localSamples(): Promise<Sample[]> {
     ['exr', 'exr'],
     ['tga', 'tga'],
     ['icns', 'icns'],
+    ['apng', 'apng'],
+    ['jpe', 'jpg'],
+    ['jfif', 'jpg'],
+    ['pbm', 'pbm'],
+    ['pgm', 'pgm'],
+    ['ppm', 'ppm'],
+    ['pnm', 'ppm'],
+    ['ktx', 'ktx'],
+    ['astc', 'astc'],
   ];
-  const systemImages = new Set(['tif', 'tiff', 'heic', 'heif', 'psd', 'jp2', 'exr', 'tga', 'icns']);
+  const systemImages = new Set([
+    ...['tif', 'tiff', 'heic', 'heif', 'psd', 'jp2', 'exr', 'tga', 'icns'],
+    ...['pbm', 'pgm', 'ppm', 'pnm', 'ktx', 'astc'],
+  ]);
   for (const [format, asset] of imageSpecs)
     result.push(
       sample(
@@ -91,30 +112,51 @@ export async function localSamples(): Promise<Sample[]> {
         await assetBytes(`study.${asset}`),
       ),
     );
-  result.push(
-    sample(
-      'previews/images/Image study.svg',
-      ['svg'],
-      'Vector image and source',
-      'Self-contained SVG; no scripts, fonts or linked assets.',
-      `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
   <rect width="640" height="480" fill="#192833"/>
   <rect x="52" y="56" width="536" height="368" rx="24" fill="#263c49" stroke="#81b7cf" stroke-width="3"/>
   <path d="M172 322 320 108 468 322Z" fill="#81b7cf"/>
   <circle cx="320" cy="254" r="28" fill="#d7a56b"/>
   <text x="80" y="382" fill="#e2edf2" font-family="sans-serif" font-size="22">VIEWER / VECTOR STUDY</text>
 </svg>
-`,
+`;
+  result.push(
+    sample(
+      'previews/images/Image study.svg',
+      ['svg'],
+      'Vector image and source',
+      'Self-contained SVG; no scripts, fonts or linked assets.',
+      svg,
     ),
   );
-  for (const format of ['wav', 'mp3', 'ogg', 'flac', 'm4a', 'aac', 'opus'])
+  result.push(
+    sample(
+      'previews/images/Image study.svgz',
+      ['svgz'],
+      'Vector image, expanded before drawing',
+      'The same SVG, gzip-compressed.',
+      gzipSync(svg),
+    ),
+  );
+  for (const [format, asset] of [
+    ...['wav', 'mp3', 'ogg', 'flac', 'm4a', 'aac', 'opus'].map((format) => [format, format]),
+    ...[
+      ['aiff', 'aiff'],
+      ['aif', 'aiff'],
+      ['caf', 'caf'],
+      ['wma', 'wma'],
+      ['mka', 'mka'],
+      ['ac3', 'ac3'],
+      ['wv', 'wv'],
+    ],
+  ])
     result.push(
       sample(
         `previews/audio/Soft tone.${format}`,
         [format],
-        'Audio playback; codec dependent',
+        'Audio playback; codec dependent, or a compatibility copy',
         'Two-second, low-amplitude 440 Hz tone with fade-in/out.',
-        await assetBytes(`tone.${format}`),
+        await assetBytes(`tone.${asset}`),
       ),
     );
   for (const [format, asset] of [
@@ -122,14 +164,36 @@ export async function localSamples(): Promise<Sample[]> {
     ['mov', 'mov'],
     ['m4v', 'm4v'],
     ['webm', 'webm'],
+    ['avi', 'avi'],
+    ['mkv', 'mkv'],
+    ['mpg', 'mpg'],
+    ['mpeg', 'mpg'],
+    ['m2ts', 'm2ts'],
+    ['wmv', 'wmv'],
+    ['asf', 'wmv'],
+    ['flv', 'flv'],
+    ['3gp', '3gp'],
+    ['3g2', '3g2'],
+    ['vob', 'vob'],
+    ['mxf', 'mxf'],
   ])
     result.push(
       sample(
         `previews/video/Motion study.${format}`,
         [format],
         'Video playback; codec dependent',
-        'Two-second synthetic motion pattern. MP4/MOV/M4V contain H.264; WebM contains VP8.',
+        'Two-second synthetic motion pattern. MP4/MOV/M4V/MKV/M2TS contain H.264, WebM VP8; the others hold MPEG-4, MPEG-2, WMV or Flash video for a compatibility copy.',
         await assetBytes(`motion.${asset}`),
+      ),
+    );
+  for (const format of ['sqlite', 'sqlite3', 'db3', 'db'])
+    result.push(
+      sample(
+        `previews/data/Library.${format}`,
+        [format],
+        'Tables and rows, read-only',
+        'Two tables, an index and a view; the view is listed, never run.',
+        await assetBytes('library.sqlite'),
       ),
     );
   result.push(
