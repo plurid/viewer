@@ -7,6 +7,14 @@
   min-height: 0;
   height: 100%;
 }
+/* A plane's content fills its frame: a browser surface grows with flex: 1 from here. Without it
+   the browser plane collapsed to its toolbar and a click on the page landed on the frame. */
+.preview-plane {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--ink);
+}
 .held-preview-layer {
   position: absolute;
   inset: 0;

@@ -96,6 +96,15 @@ try {
     'composited frame',
     10000,
   );
+  // the page fills its plane: a collapsed surface still composites, but shows nothing and takes no
+  // clicks
+  const shown = await evaluate<{ width: number; height: number }>(
+    `(() => { const rect = document.querySelector('.browser-surface').getBoundingClientRect(); return { width: rect.width, height: rect.height }; })()`,
+  );
+  assert.ok(
+    shown.width > 300 && shown.height > 200,
+    'browser surface fills its plane: ' + JSON.stringify(shown),
+  );
   const snapshot = await evaluate('window.viewer.browser({kind:"state",id:"browser"})');
   observations.push(snapshot);
   console.log('Browser state:', JSON.stringify(snapshot));
