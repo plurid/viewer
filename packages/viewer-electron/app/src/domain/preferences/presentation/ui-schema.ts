@@ -90,5 +90,9 @@ export const preferencesSchema = z
       .record(z.string().max(60), z.array(z.string().max(200)).max(8))
       .refine((kinds) => Object.keys(kinds).length <= 40)
       .optional(),
+    insightsDismissed: z
+      .record(localPath, z.array(z.string().min(1).max(60)).max(20))
+      .refine((folders) => Object.keys(folders).length <= 200)
+      .optional(),
   })
   .strict();

@@ -161,8 +161,10 @@ export const previewModules: PreviewModule[] = [
     id: 'archive',
     label: 'Archive',
     formats: ['zip', 'tar', 'tar.gz', 'tgz', ...zipContainers],
+    // by the extension too: a file shown as the archive its bytes say keeps its own name
     detect: (entry) =>
-      /\.(zip|tar|tar\.gz|tgz)$/i.test(entry.name) || zipContainers.includes(entry.extension)
+      /\.(zip|tar|tar\.gz|tgz)$/i.test(entry.name) ||
+      ['zip', 'tar', 'tgz', ...zipContainers].includes(entry.extension)
         ? 100
         : 0,
     load: () => import('./modules/ArchivePreview'),

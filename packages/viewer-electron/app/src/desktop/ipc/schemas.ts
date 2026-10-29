@@ -24,6 +24,7 @@ import { gitSourceSchema, commitPattern } from '../../domain/comparison/git';
 import { gitActionKinds, gitCommitMessageLimit } from '../../domain/comparison/git-actions';
 import { receiptRequestSchema } from '../../domain/automation/receipts';
 import { chatRequestSchema } from '../../domain/models/chat';
+import { modelSuggestionRequestSchema } from '../../domain/suggestions/model';
 import { providerCheckKinds } from '../../domain/models/provider-checks';
 import { flushResultSchema } from '../../domain/persistence/flush';
 import { journalQuerySchema } from '../../domain/journal/events';
@@ -571,6 +572,7 @@ export const schemas = {
   settingsGet: z.tuple([]),
   promptLine: z.tuple([promptRequestSchema]),
   promptCancel: z.tuple([id]),
+  modelSuggestions: z.tuple([modelSuggestionRequestSchema]),
   sessionKeys: z.tuple([]),
   sessionKeysSet: z.tuple([sessionKeysSchema]),
   sessionKeysKeep: z.tuple([]),
@@ -591,6 +593,7 @@ export const schemas = {
   providerModels: z.tuple([id]),
   providerCheck: z.tuple([z.object({ providerID: id, kind: z.enum(providerCheckKinds) }).strict()]),
   providerPermissionGet: z.tuple([id]),
+  identifyFile: z.tuple([localPath]),
   providerPermissionSet: z.tuple([id, z.url().max(4000), z.enum(modelDataLevels).nullable()]),
   providerPermissionAgents: z.tuple([id, z.url().max(4000), z.boolean()]),
   indexStatus: z.tuple([]),
@@ -847,6 +850,7 @@ export const methodWindows = {
   settingsPatch: 'both',
   promptLine: 'viewer',
   promptCancel: 'viewer',
+  modelSuggestions: 'viewer',
   sessionKeys: 'both',
   // the window binds for its session; only Settings writes them to config.jsonc
   sessionKeysSet: 'viewer',
@@ -856,6 +860,7 @@ export const methodWindows = {
   providerModels: 'both',
   providerCheck: 'both',
   providerPermissionGet: 'both',
+  identifyFile: 'viewer',
   providerPermissionSet: 'both',
   providerPermissionAgents: 'settings',
   indexStatus: 'both',

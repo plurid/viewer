@@ -13,6 +13,13 @@ export function forgetSuggestions(): void {
   );
 }
 
+/** Insight cards dismissed in any folder show again. */
+export function showHiddenInsights(): void {
+  changePreferences((ui) =>
+    Object.keys(ui.insightsDismissed ?? {}).length ? { ...ui, insightsDismissed: {} } : ui,
+  );
+}
+
 export function clearLineHistory(): void {
   if (getState().saved.lineHistory?.length) savePatch({ lineHistory: [] });
 }

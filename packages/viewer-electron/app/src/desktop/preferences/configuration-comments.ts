@@ -43,6 +43,11 @@ const descriptions: Record<string, string[]> = {
     'true shows a confirmation before native Trash; false sends selected items straight to Trash.',
     'This never permanently deletes files. Guarded operation Undo remains available in both modes.',
   ],
+  'settings.browsing.modelSuggestions': [
+    'true lets the Ask Viewer model add suggestions. It receives file names and kinds, once per',
+    'folder, and only when Settings → Models allows that provider names.',
+  ],
+  'settings.browsing.insights': ['true shows insight cards, such as old installers, above files.'],
   'settings.browsing.group': [
     'none | kind | modified. Group headings currently appear in List view.',
   ],
@@ -327,6 +332,9 @@ const descriptions: Record<string, string[]> = {
   ],
   'ui.suggestionHistory': [
     'App-managed: the commands chosen for each kind of file, which rise in Suggested. Clearing it forgets them.',
+  ],
+  'ui.insightsDismissed': [
+    'App-managed: the insight cards dismissed in each folder, by folder path. Clearing it shows them again.',
   ],
 };
 

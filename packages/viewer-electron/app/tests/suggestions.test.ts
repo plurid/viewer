@@ -80,9 +80,10 @@ describe('suggestion rules', () => {
     [[file('notes.md')], 'text.edit'],
     [[file('Budget.xlsx'), file('Plan.odt')], 'office.pdf'],
     [[folder('Project')], 'folder.size'],
+    [[folder('Project')], 'folder.explore', { modelReady: true }],
     [[file('a.pdf'), folder('b')], 'items.compress'],
-  ])('%j suggests %s', (selection, rule) => {
-    expect(rules(input(selection as FileEntry[]))).toContain(rule);
+  ])('%j suggests %s', (selection, rule, extra?: Partial<SuggestionInput>) => {
+    expect(rules(input(selection as FileEntry[], extra))).toContain(rule);
   });
 
   it('gives a reason short enough to sit beside the action', () => {
@@ -160,6 +161,41 @@ describe('ranking', () => {
     expect(
       rankSuggestions(applicable, archive, ['rename', 'trash', 'compress'], { limit: 2 }),
     ).toHaveLength(2);
+  });
+});
+
+describe('the model’s picks in ranking', () => {
+  const command = (id: string): ResolvedCommand => ({
+    id,
+    label: id,
+    group: 'Files',
+    aliases: [],
+    primary: false,
+    source: 'folder:pane',
+    context: { scope: 'files', workspaceID: 'w', selection: [], clipboard: null, jobs: [] },
+  });
+  const applicable = ['extract', 'compress', 'save-pdf-copy'].map(command);
+  const model = {
+    provider: 'Test model',
+    picks: [
+      { id: 'compress', reason: 'Smaller to send' },
+      { id: 'missing', reason: 'Not applicable here' },
+    ],
+  };
+
+  it('joins below a strong rule, labelled with the model, and only when it applies', () => {
+    const ranked = rankSuggestions(applicable, input([file('Photos.zip')]), [], { model });
+    expect(ranked.map((item) => [item.command.id, item.reason])).toEqual([
+      ['extract', 'ZIP archive'],
+      ['compress', 'Smaller to send · Test model'],
+    ]);
+  });
+
+  it('raises a rule it agrees with, keeping the rule’s reason', () => {
+    const two = input([file('a.pdf'), file('b.pdf')]);
+    const ranked = rankSuggestions(applicable, two, [], { model });
+    expect(ranked[0]).toMatchObject({ reason: '2 items' });
+    expect(ranked[0]!.command.id).toBe('compress');
   });
 });
 

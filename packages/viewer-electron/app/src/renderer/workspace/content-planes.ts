@@ -1,4 +1,6 @@
 import type { ChatPane } from '../../domain/contracts';
+import type { ChatDocument } from '../../domain/models/chat';
+import { modelPermissionCovers } from '../../domain/models/permissions';
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
 import { browserAddress } from '../../domain/previews/browser';
 import { activeWorkspace, getState } from '../state/store';
@@ -23,6 +25,17 @@ type ContentPlaneActions = Pick<
 interface ContentPlanePorts {
   controller(): Pick<WorkspaceController, 'focusPane' | 'rootID' | 'openDiff' | 'open'>;
   registerContent(pane: Parameters<typeof addContentPane>[0], parentID?: string): void;
+}
+
+/** Sends a conversation's first message when its model may already receive what it needs;
+ * otherwise the message waits as the draft until the person allows it. */
+async function startChat(document: ChatDocument, text: string): Promise<void> {
+  const providers = getState().settings.settings.providers;
+  const provider = providers.find((item) => item.id === document.providerID) ?? providers[0];
+  if (!provider) return;
+  const permission = await window.viewer.providerPermissionGet(provider.id);
+  if (!modelPermissionCovers(permission, provider, document.level)) return;
+  await window.viewer.chat({ kind: 'send', id: document.id, text, providerID: provider.id });
 }
 
 /** Opens or reuses content views within the captured workspace. The Plurid adapter owns placement. */
@@ -118,12 +131,13 @@ export function contentPlaneActions({
         addContentPane({ id, type: 'journal', path: getState().bootstrap.home, filter });
       controller().focusPane(id, { activate: true });
     },
-    async newChat(paths, draft) {
+    async newChat(paths, draft, send) {
       const owner = activeWorkspace().id;
       const document = await window.viewer.chat({ kind: 'create', paths });
       if (Array.isArray(document)) throw new Error('The conversation could not be created.');
       if (draft)
         await window.viewer.chat({ kind: 'draft', id: document.id, text: draft, revision: 1 });
+      if (draft && send) await startChat(document, draft);
       if (owner !== activeWorkspace().id) return;
       const id = crypto.randomUUID();
       addContentPane({ id, type: 'chat', path: document.path, conversationID: document.id });

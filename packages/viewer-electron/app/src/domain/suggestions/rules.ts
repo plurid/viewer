@@ -38,7 +38,18 @@ const extension =
   (...names: string[]) =>
   (entry: FileEntry) =>
     names.includes((entry.extension ?? '').toLowerCase());
-const archive = (entry: FileEntry) => /\.(?:zip|tar|tar\.gz|tgz)$/i.test(entry.name);
+/** A zip or tar archive, compressed or not. */
+export const archive = (entry: FileEntry) => /\.(?:zip|tar|tar\.gz|tgz)$/i.test(entry.name);
+/** A disk image or installer package in Home's Downloads, over a week old. */
+export const oldInstaller = (entry: FileEntry, input: Pick<SuggestionInput, 'now' | 'home'>) =>
+  extension('dmg', 'pkg')(entry) &&
+  // the folder's own name, so a Home on any platform matches
+  /[\\/]Downloads$/.test(entry.parent) &&
+  parentPath(entry.parent) === input.home &&
+  input.now - entry.modified > 7 * day;
+/** A name a copy gets: "Report copy.pdf", "Report copy 2.pdf", "Report (1).pdf". */
+export const copyName = (entry: FileEntry) =>
+  / (?:copy(?: \d+)?|\(\d+\))(?:\.[^.]+)?$/i.test(entry.name);
 const family = (name: string) => (entry: FileEntry) => fileFamily(entry) === name;
 const total = (entries: readonly FileEntry[]) =>
   entries.reduce((sum, entry) => sum + entry.size, 0);
@@ -89,13 +100,7 @@ export const suggestionRules: readonly SuggestionRule[] = [
     commands: ['trash'],
     weight: 75,
     reason: (input) => {
-      // the folder's own name, so a Home on any platform matches
-      const old = (entry: FileEntry) =>
-        extension('dmg', 'pkg')(entry) &&
-        /[\\/]Downloads$/.test(entry.parent) &&
-        parentPath(entry.parent) === input.home &&
-        input.now - entry.modified > 7 * day;
-      if (!everyFile(input, old)) return undefined;
+      if (!everyFile(input, (entry) => oldInstaller(entry, input))) return undefined;
       const days = Math.floor((input.now - Math.max(...files(input).map((e) => e.modified))) / day);
       return `Installer from ${days} days ago`;
     },
@@ -105,9 +110,7 @@ export const suggestionRules: readonly SuggestionRule[] = [
     commands: ['find-duplicates'],
     weight: 70,
     reason: (input) =>
-      input.selection.some(
-        (entry) => !entry.directory && / (?:copy(?: \d+)?|\(\d+\))(?:\.[^.]+)?$/i.test(entry.name),
-      )
+      input.selection.some((entry) => !entry.directory && copyName(entry))
         ? 'Looks like a copy'
         : undefined,
   },
@@ -171,6 +174,15 @@ export const suggestionRules: readonly SuggestionRule[] = [
     weight: 45,
     reason: (input) =>
       input.selection.length === 1 && input.selection[0]!.directory ? 'A repository' : undefined,
+  },
+  {
+    id: 'folder.explore',
+    commands: ['explore-folder'],
+    weight: 40,
+    reason: (input) =>
+      input.modelReady && input.selection.length === 1 && input.selection[0]!.directory
+        ? 'Ask the model what is here'
+        : undefined,
   },
   {
     id: 'video.audio',

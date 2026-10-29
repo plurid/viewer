@@ -1,4 +1,6 @@
 import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-line/prompt';
+import type { ModelSuggestionRequest, ModelSuggestions } from './suggestions/model';
+import type { FileGuess } from './files/file-guess';
 import type { ReviewState, GitReviewRequest, GitReviewReply } from './comparison/review';
 import type { SessionRequest, SessionReply } from './agents/sessions';
 import type { FlushResult } from './persistence/flush';
@@ -425,6 +427,9 @@ export interface UIPreferences {
   /** Commands chosen for each kind of selection (`renderer/commands/suggestions.ts`), most
    * recent first: what a person keeps choosing for PDFs is suggested for PDFs. */
   suggestionHistory?: Record<string, string[]>;
+  /** Insight cards dismissed in each folder (`domain/suggestions/insights.ts`): folder path to
+   * insight ids, the latest folder last. */
+  insightsDismissed?: Record<string, string[]>;
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
@@ -750,6 +755,8 @@ export interface ViewerAPI {
   /** `>` in the palette: a request in words, answered with a line to review. */
   promptLine(request: PromptRequest): Promise<PromptAnswer>;
   promptCancel(id: string): Promise<void>;
+  /** The prompt model's picks for a folder's kinds of file, when Settings allows it. */
+  modelSuggestions(request: ModelSuggestionRequest): Promise<ModelSuggestions>;
   /** `:bind` and `:alias` of this session: kept in memory until quit. */
   sessionKeys(): Promise<SessionKeys>;
   sessionKeysSet(session: SessionKeys): Promise<SessionKeys>;
@@ -760,6 +767,8 @@ export interface ViewerAPI {
   providerModels(id: string): Promise<string[]>;
   providerCheck(request: ProviderCheckRequest): Promise<ProviderCheckResult>;
   providerPermissionGet(id: string): Promise<ModelDataPermission | null>;
+  /** The prompt model's guess at a file from its name, size and first 64 bytes. */
+  identifyFile(file: string): Promise<FileGuess>;
   providerPermissionSet(id: string, endpoint: string, level: ModelDataLevel | null): Promise<void>;
   indexStatus(): Promise<IndexStatus>;
   indexedQuery(query: IndexedQuery): Promise<IndexedResult>;

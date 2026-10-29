@@ -63,6 +63,17 @@ export const Transcript = memo(function Transcript({
           >
             <strong title={message.provider?.model}>{messageAuthor(message)}</strong>
             <p>{message.text}</p>
+            {!!message.links?.length && (
+              <ul className="chat-files" aria-label="Files to open">
+                {message.links.map((link) => (
+                  <li key={link.path}>
+                    <button type="button" title={link.path} onClick={() => onOpen?.(link.path)}>
+                      {link.path.split('/').at(-1)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {message.proposal && (
               <button type="button" onClick={() => onReview(message.proposal!)}>
                 Review proposal

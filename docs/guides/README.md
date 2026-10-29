@@ -7,6 +7,7 @@ Each guide is a set of steps to follow with Viewer open. Start with the first fi
 | [Your first five minutes](getting-started.md) | Open a folder, look inside a file, find things and actions    |
 | [Browse and organize](files.md)               | Select, copy, rename, find, measure and restore files         |
 | [Read and inspect files](previews.md)         | Use each file type's controls and pick up where you left off  |
+| [Explore a folder](explore.md)                | See what needs attention, ask a model, identify unknown files |
 | [Make a quick change](create.md)              | Convert images, shrink files, trim video, rearrange PDFs      |
 | [Keep your work together](workspaces.md)      | Arrange planes, save views, use workspaces, back up your work |
 | [Work on a project](develop.md)               | Edit, run, review Git, start branch tasks, serve a site       |

@@ -95,6 +95,32 @@ is shown as written. Photos show only when they are embedded image data.
 
 **Subtitles.** ASS and SSA style tags are removed from the cue text.
 
+## Files whose name does not say
+
+When no preview reads a file, Viewer reads its first 4 KB and names the format from a table of
+signatures: databases, archives and compressed files, documents, images, audio and video, fonts,
+executables and libraries, and installer packages. Text is shown as text and is never named this
+way.
+
+These formats show in place with **Show as**, whatever the file is called: SQLite; ZIP, JAR, APK,
+tar and compressed tar archives; PDF and DjVu; PNG, JPEG, GIF, WebP, BMP, ICO, AVIF, HEIC, TIFF,
+PSD, JPEG 2000, ICNS and OpenEXR images; MP4, MOV, WebM, M4A, MP3, AAC, FLAC, Ogg, Opus and WAV;
+TrueType, OpenType, WOFF and WOFF2 fonts; binary property lists.
+
+- Images show as a rendered still of at most 4096 pixels on the long side, so an animated GIF or
+  WebP shows its first frame.
+- A PDF shown this way cannot be printed until it is renamed to end in `.pdf`.
+- A gzip file shows as an archive only when its name says `.tar`.
+
+Office, OpenDocument and EPUB files, camera raw photos and the video and audio formats Viewer plays
+through a copy are named but not shown: Viewer reads those by the file's own extension. The message
+names the extension that makes them preview.
+
+**Ask** sends the prompt model the file's name, its size and its first 64 bytes, as hexadecimal and
+as printable characters, with the name of any signature Viewer matched. It needs the excerpts
+permission. The answer is a proposal: what the file is, its usual extension and up to four apps that
+open it.
+
 ## Current text, code and configuration previews
 
 The following extensions are recognized by the registry and shared language catalog. Syntax

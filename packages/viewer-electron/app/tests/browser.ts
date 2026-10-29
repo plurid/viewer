@@ -137,6 +137,7 @@ const api: ViewerAPI = {
   settingsPatch: (patches, revision) => invoke('settingsPatch', patches, revision),
   promptLine: (request) => invoke('promptLine', request),
   promptCancel: (id) => invoke('promptCancel', id),
+  modelSuggestions: (request) => invoke('modelSuggestions', request),
   sessionKeys: () => invoke('sessionKeys'),
   sessionKeysSet: (session) => invoke('sessionKeysSet', session),
   sessionKeysKeep: () => invoke('sessionKeysKeep'),
@@ -145,6 +146,7 @@ const api: ViewerAPI = {
   providerModels: (id) => invoke('providerModels', id),
   providerCheck: (request) => invoke('providerCheck', request),
   providerPermissionGet: (id) => invoke('providerPermissionGet', id),
+  identifyFile: (file) => invoke('identifyFile', file),
   providerPermissionSet: (id, endpoint, level) =>
     invoke('providerPermissionSet', id, endpoint, level),
   indexStatus: () => invoke('indexStatus'),

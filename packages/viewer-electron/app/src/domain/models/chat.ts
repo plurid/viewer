@@ -92,6 +92,7 @@ export const storedChatDocumentSchema = z.union([
 
 export type ChatDocument = z.infer<typeof chatDocumentSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
+export type ChatLink = NonNullable<ChatMessage['links']>[number];
 export type ChatSummary = Pick<ChatDocument, 'id' | 'title' | 'path' | 'updated'> & {
   problem?: string;
 };
@@ -117,6 +118,8 @@ export const chatStepSchema = z
         z.object({ path: z.string().min(1).max(32768), name: z.string().min(1).max(255) }).strict(),
       )
       .max(100),
+    /** With a reply: inspected files worth opening, shown as links under it. */
+    files: z.array(z.string().max(32768)).max(12),
   })
   .strict();
 

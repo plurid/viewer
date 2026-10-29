@@ -24,6 +24,7 @@ const chat = {
   commandID: null,
   patches: [],
   renames: [],
+  files: [],
 };
 const completed = (content: string) =>
   Response.json({ choices: [{ finish_reason: 'stop', message: { content } }] });

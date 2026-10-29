@@ -7,7 +7,15 @@ import {
   type PromptAnswer,
   type PromptRequest,
 } from '../../domain/command-line/prompt';
+import { z } from 'zod';
 import type { ModelDataLevel } from '../../domain/models/permissions';
+import {
+  modelPicks,
+  modelSuggestionAnswerSchema,
+  modelSuggestionInstructions,
+  type ModelSuggestionRequest,
+  type ModelSuggestions,
+} from '../../domain/suggestions/model';
 import type { ApplicationSettings, ModelProvider, RequestActor } from '../../domain/services';
 
 type Generate = (
@@ -20,7 +28,7 @@ type Generate = (
   actor: RequestActor,
 ) => Promise<unknown>;
 /** The model prompts ask: the one Settings → Models names for them, or the first. */
-function promptProvider(settings: ApplicationSettings): ModelProvider | undefined {
+export function promptProvider(settings: ApplicationSettings): ModelProvider | undefined {
   return (
     settings.providers.find((provider) => provider.id === settings.prompts.providerID) ??
     settings.providers[0]
@@ -63,4 +71,33 @@ export async function answerPrompt(
       )
     : undefined;
   return { line, explanation, ...(problem ? { problem } : {}) };
+}
+
+const suggestionSchema = z.toJSONSchema(modelSuggestionAnswerSchema);
+/**
+ * The prompt model's picks for a folder's kinds of file, at the "names" level: only names and
+ * the commands that apply reach it. Ids it was not offered are dropped.
+ */
+export async function suggestWithModel(
+  request: ModelSuggestionRequest,
+  settings: ApplicationSettings,
+  generate: Generate,
+  signal: AbortSignal,
+): Promise<ModelSuggestions> {
+  if (!settings.browsing.modelSuggestions)
+    throw new Error('Turn on model suggestions in Settings → Browsing.');
+  const provider = promptProvider(settings);
+  if (!provider) throw new Error('Add a model in Settings → Models.');
+  const raw = await generate(
+    provider,
+    modelSuggestionInstructions,
+    request,
+    suggestionSchema,
+    signal,
+    'names',
+    'user',
+  );
+  const parsed = modelSuggestionAnswerSchema.safeParse(raw);
+  if (!parsed.success) throw new Error('The model returned invalid suggestions.');
+  return { provider: provider.name, picks: modelPicks(request, parsed.data) };
 }

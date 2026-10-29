@@ -68,12 +68,34 @@ silently choose another executor.
 | `images.rename`       | Batch rename, for three or more images               |
 | `books.rename`        | Rename as book, for PDFs and EPUBs, with a model     |
 | `folder.git`          | Git changes, for a repository folder                 |
+| `folder.explore`      | Explore this folder, for a folder, with a model      |
 | `video.audio`         | Extract audio, for a video                           |
 | `folder.size`         | Calculate Size, for a folder                         |
 | `items.compress`      | Compress to ZIP, for several items                   |
 
 `ui.suggestionHistory` is app-managed: the commands chosen for each kind of file, which rise in
 Suggested. **⌘K** → **Forget learned suggestions** clears it.
+
+`settings.browsing.modelSuggestions` (off by default) lets the model marked **Use for Ask Viewer**
+add picks to Suggested. Once per folder it receives the folder's name, up to twelve kinds of file
+with eight names each, and the ids and labels of the actions that apply to them. It needs the names
+permission in **Settings → Models**. Its picks are kept for the session, two per kind; ids it was
+not offered, and Trash, are never shown.
+
+`settings.browsing.insights` (on by default) shows insight cards above a folder's files. Each rule
+works on the folder's listing alone:
+
+| Insight id             | Shows when                                                                 | Action          |
+| ---------------------- | -------------------------------------------------------------------------- | --------------- |
+| `archives.extracted`   | A zip or tar archive has a folder of the same name beside it               | Move to Trash   |
+| `downloads.installers` | Downloads in your home folder holds dmg or pkg files older than seven days | Move to Trash   |
+| `screenshots`          | Five or more screenshots                                                   | Put in a folder |
+| `pdfs.large`           | PDFs over 10 MB                                                            | Optimize        |
+| `photos.heic`          | Three or more HEIC photos                                                  | Convert to JPEG |
+| `names.copies`         | Two or more names ending " copy" or "(1)"                                  | Find duplicates |
+
+`ui.insightsDismissed` is app-managed: the insights hidden in each folder. **⌘K** → **Show hidden
+insights** clears it.
 
 ## Profiles and workspace choices
 

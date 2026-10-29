@@ -4,78 +4,86 @@
   "source": "Big Buck Bunny © 2008 Blender Foundation · CC BY 3.0",
   "captures": {
     "files": {
-      "frames": 39,
-      "seconds": 6.565090832999999
+      "frames": 41,
+      "seconds": 6.598830292
     },
     "create": {
-      "frames": 69,
-      "seconds": 6.706320541999999
+      "frames": 70,
+      "seconds": 6.670570291999999
     },
     "develop": {
-      "frames": 96,
-      "seconds": 9.311509416999998
+      "frames": 97,
+      "seconds": 9.358175999999997
     }
   },
   "assets": {
     "hero.png": {
-      "bytes": 111727,
-      "sha256": "8d983ddc129888de51eff53020f041df6f7b6081e37ca96729f8aafa1d73e428"
+      "bytes": 111849,
+      "sha256": "4283a5510c3efb0b4340fbb2fd056cfb674716be4916825f4c1bf8b50eb67c33"
     },
     "files.png": {
-      "bytes": 167008,
-      "sha256": "a650d84b4be31e27eec877746380cb6f0f1fd3d3679e1f12bc974b3b2c3aabbe"
+      "bytes": 167041,
+      "sha256": "de3442f5ac88cb58efdc17c08aaa656e701096087a6f671a16bf1175036d51d5"
     },
     "create.png": {
-      "bytes": 507490,
-      "sha256": "c10cf2ac8296f2ab6117a11fe6122e15857e9ab7adea2a9e89684949d2ca4246"
+      "bytes": 521650,
+      "sha256": "8117109fb848185a136a68d6f36f003e904ded6804247d16f9768976f94f0237"
     },
     "develop.png": {
-      "bytes": 148309,
-      "sha256": "a0833775f85e9ec933b774938e9a3e78b683e86b8b91ac27c5de5b63e012a39c"
+      "bytes": 148082,
+      "sha256": "6a828619a36cbd9ccc2bc4d32f33852e1d2d01e39171d98c5daaa124489f7806"
     },
     "columns.png": {
-      "bytes": 203669,
-      "sha256": "7913f20f222f8bf43cea5b41a2a637949b30c1c7feaf12b1ec8e0ce4f58945f7"
+      "bytes": 203659,
+      "sha256": "682333908a58d5832cb50ec804a3a140143ef5491c2c76e40a5822d7fc1c8542"
     },
     "palette.png": {
-      "bytes": 253693,
-      "sha256": "946ecdd43de816f75e830ee533190be1c38fe9818f071c4ca6c2b1e2b67bc6bf"
+      "bytes": 253591,
+      "sha256": "acb44f74b4e8da8e3824d7a62dfca32cdfaae7a6bd31cf615c159493ed67bf3a"
     },
     "optimize.png": {
-      "bytes": 86710,
-      "sha256": "67dceeee8cf336344c4ff0e4249eea3812886bffe7ef3957d7e6e13668bbdf1f"
+      "bytes": 86781,
+      "sha256": "6b90370f92090cbc2b0fb002476a1d7bb372f24b78f2b8165c7c89f2e066787b"
     },
     "suggested.png": {
-      "bytes": 85456,
-      "sha256": "42eb2b5fb725756ab0ed78260cb9699e2a4aa6cc65909e0264cb473d819b5069"
+      "bytes": 85216,
+      "sha256": "8639697d9c4ffab21f9d4e960d8b24e95e924f6423c312c808d7ab768dd43731"
+    },
+    "insights.png": {
+      "bytes": 99178,
+      "sha256": "dd81ea0d1ab00274d6fa12857ea93d7ba59cf9f25a42ae563c14ba541d11f747"
+    },
+    "explore.png": {
+      "bytes": 96477,
+      "sha256": "249d5bdcf84dd83c2f9178bb47d16e9bde45cb3e4ce9b56f23a275e3f46ddfb4"
     },
     "source.jpg": {
       "bytes": 55888,
       "sha256": "5f496dabe35a1537cb908c8b841bdde521361959a64468641b026ab51cb8f0af"
     },
     "files.mp4": {
-      "bytes": 531633,
-      "sha256": "fb6b80e569d92764ecd95079b983c45dc4ab2d8b7e9b6f7a74914ff755131f5d"
+      "bytes": 498060,
+      "sha256": "752960e4fe794c2ef2d8abe59538a97cb273da3fe42160125b39b84c9c6ce5c4"
     },
     "files.gif": {
-      "bytes": 687256,
-      "sha256": "34d5b3ab40a8ba623d939fbbf0f008fd9b31cb7535b25e3df239865184f0da83"
+      "bytes": 635469,
+      "sha256": "b7a4f26533abaaae7e1efacae999cc27abeb908727502d6f88578aa54ac3319b"
     },
     "create.mp4": {
-      "bytes": 1181503,
-      "sha256": "5fa26c838f5dbb7bae25a9d4454a8514ee26887c2226a4dd1ab4a91600de7386"
+      "bytes": 1205424,
+      "sha256": "095bf571d2a9c25e03091fc709bb5ee14bf8c85a2ec089f00c49051a46933fba"
     },
     "create.gif": {
-      "bytes": 1929390,
-      "sha256": "08fa56200656b788705275f648a26a4ed70237587d6b1cf62c2e467aa7e84fee"
+      "bytes": 1889691,
+      "sha256": "b9bd7fd154253240e78479ebe8e71ee5c1ac23ee4dad7ef414681d49e8bfac2d"
     },
     "develop.mp4": {
-      "bytes": 1267261,
-      "sha256": "37759a7d211c29c8eee05e2170ce078fd7271b2ab1f8d1e4d451b512ad8f67c0"
+      "bytes": 1211532,
+      "sha256": "a7ea4e469db2f331e595082daeb8bfbfdca1c22187b08b78f65826f4590bb055"
     },
     "develop.gif": {
-      "bytes": 2031378,
-      "sha256": "12905ebec62ecbf08e986daf4adb48d82b5af3e853d967e6c64c45af13f2f5bf"
+      "bytes": 1644119,
+      "sha256": "bc7d7f1de2c8413f5ef4799420a265fb75234f8e539e7f9c30e0cfbe659b4e59"
     }
   }
 }

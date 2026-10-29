@@ -58,6 +58,10 @@ export interface ApplicationSettings {
     suggestions: boolean;
     /** Suggestion rules turned off by id (`domain/suggestions/rules.ts`). */
     suggestionRulesOff: string[];
+    /** The prompt model may add suggestions, from names, once per folder (opt-in). */
+    modelSuggestions: boolean;
+    /** Insight cards above a folder's files (`domain/suggestions/insights.ts`). */
+    insights: boolean;
     newPlaneLocation:
       | 'current'
       | 'home'
@@ -379,6 +383,8 @@ export function defaultSettings(home: string): ApplicationSettings {
       confirmTrash: true,
       suggestions: true,
       suggestionRulesOff: [],
+      modelSuggestions: false,
+      insights: true,
       newPlaneLocation: 'current',
       newPlanePath: '',
       emptyWorkspaceLocation: 'home',

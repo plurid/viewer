@@ -108,6 +108,30 @@ describe('conversation identity', () => {
   });
 });
 
+describe('files a reply names', () => {
+  it('shows them as buttons that open each file beside the chat', async () => {
+    document.messages[0]!.links = [{ kind: 'file', path: '/fixtures/Field trip.zip' }];
+    const openPath = vi.fn(async () => {});
+    render(
+      createElement(
+        WorkspaceContext.Provider,
+        { value: { openPath } as unknown as WorkspaceController },
+        createElement(ChatPlane, {
+          pane: { id: 'chat', type: 'chat', path: '/fixtures', conversationID: document.id },
+        }),
+      ),
+    );
+    const list = await screen.findByRole('list', { name: 'Files to open' });
+    fireEvent.click(list.querySelector('button')!);
+    expect(list.textContent).toBe('Field trip.zip');
+    expect(openPath).toHaveBeenCalledWith('/fixtures/Field trip.zip', {
+      paneID: 'chat',
+      linked: true,
+      activate: true,
+    });
+  });
+});
+
 describe('Chat controls and state', () => {
   it('keeps the draft editable while checking permission and preserves the consent wording', async () => {
     let permissionLoaded!: (permission: ModelDataPermission | null) => void;

@@ -15,6 +15,9 @@ import { ownedApp, until } from '../../tests/owned-app';
 import { record, screenshot, type Connection } from './record';
 import { temporaryRoot } from '../temporary';
 import { fieldNotesPDF } from './sample';
+import { demoModel } from './model';
+import { modelEndpoint } from '../../src/domain/models/permissions';
+import type { ModelProvider } from '../../src/domain/services';
 import { strToU8, zipSync } from 'fflate';
 
 assert.equal(
@@ -141,13 +144,32 @@ await git('init', '--initial-branch=main', '--template=' + templates);
 await git('add', '--', 'README.md', 'index.html');
 await git('commit', '--no-verify', '--no-gpg-sign', '-m', 'Start a small website');
 
-async function profile(name: string, folder: string, mode?: 'columns') {
+async function profile(name: string, folder: string, mode?: 'columns', model?: ModelProvider) {
   const directory = path.join(root, name);
   await mkdir(directory);
   const ui = normalizePreferences(),
     settings = defaultSettings(root);
   settings.hotkey.enabled = false;
-  settings.providers = [];
+  settings.providers = model ? [model] : [];
+  if (model) {
+    settings.prompts.providerID = model.id;
+    // the person's own approval, as Settings → Models → Data access records it
+    await writeFile(
+      path.join(directory, 'model-permissions-v1.json'),
+      JSON.stringify({
+        version: 1,
+        permissions: [
+          {
+            providerID: model.id,
+            kind: model.kind,
+            endpoint: modelEndpoint(model),
+            level: 'names',
+          },
+        ],
+      }),
+      { flag: 'wx' },
+    );
+  }
   // a folder's view is kept by its path
   if (mode) settings.folders = { [folder]: { mode } };
   settings.search.roots = [folder];
@@ -245,8 +267,8 @@ async function palette(connection: Connection, label: string) {
     'document.querySelector(".command-result[aria-selected=true]").click()',
   );
 }
-async function open(name: string, folder: string, mode?: 'columns') {
-  const directory = await profile(name, folder, mode),
+async function open(name: string, folder: string, mode?: 'columns', model?: ModelProvider) {
+  const directory = await profile(name, folder, mode, model),
     app = await ownedApp(binary, directory);
   const connection = await app.connect();
   await connection.command('Emulation.setDeviceMetricsOverride', {
@@ -510,6 +532,84 @@ try {
   await current.app.close(current.connection);
 }
 
+// Exploring a folder: its insight cards, then a model's look around it. A local stand-in answers
+// as a model would, with a fixed and truthful account of this folder.
+const inbox = path.join(root, 'Inbox');
+await mkdir(path.join(inbox, 'Field trip'), { recursive: true });
+await writeFile(
+  path.join(inbox, 'Field trip.zip'),
+  zipSync({ 'Field trip/notes.txt': strToU8('A short walk, a few photographs.\n') }),
+  { flag: 'wx' },
+);
+await writeFile(path.join(inbox, 'Field trip', 'notes.txt'), 'A short walk, a few photographs.\n', {
+  flag: 'wx',
+});
+const screenshots = [12, 14, 15, 21, 26].map((minute) =>
+  path.join(inbox, `Screenshot 2026-10-21 at 10.${minute}.08.png`),
+);
+for (const file of screenshots) await copyFile(sourceImage, file);
+await copyFile(path.join(examples, 'Field notes.pdf'), path.join(inbox, 'Field notes.pdf'));
+const step = {
+  kind: 'reply',
+  text: '',
+  path: null,
+  query: null,
+  commandID: null,
+  patches: [],
+  renames: [],
+  files: [] as string[],
+};
+const model = await demoModel((instructions, input) => {
+  if (instructions.includes('Suggest file actions')) return { kinds: [] };
+  const { messages } = input as { messages: { role: string }[] };
+  if (!messages.some((message) => message.role === 'tool'))
+    return { ...step, kind: 'list', path: inbox };
+  return {
+    ...step,
+    text:
+      'This folder holds a field trip: Field trip.zip and the Field trip folder it was ' +
+      'extracted to, five screenshots taken within a quarter of an hour, and the field notes ' +
+      'as a PDF.\n\nThe archive is already extracted, so once the folder looks complete it can go ' +
+      'to the Trash. The screenshots belong together and could share a folder.',
+    files: [
+      path.join(inbox, 'Field trip.zip'),
+      path.join(inbox, 'Field trip'),
+      screenshots[0]!,
+      path.join(inbox, 'Field notes.pdf'),
+    ],
+  };
+});
+current = await open('Explore', inbox, undefined, {
+  id: 'demo',
+  name: 'Local model',
+  kind: 'local',
+  endpoint: model.endpoint,
+  model: 'demo',
+  allowContent: false,
+});
+try {
+  const { connection } = current;
+  await until(
+    () => connection.evaluate<number>('document.querySelectorAll(".folder-insight").length'),
+    (count) => count >= 2,
+    'Folder insights',
+  );
+  await delay(900);
+  await screenshot(connection, path.join(output, 'insights.png'));
+  await palette(connection, 'Explore this folder');
+  await until(
+    () => connection.evaluate<number>('document.querySelectorAll(".chat-files button").length'),
+    (count) => count >= 3,
+    'Explore answer',
+    60000,
+  );
+  await delay(1200);
+  await screenshot(connection, path.join(output, 'explore.png'));
+} finally {
+  await current.app.close(current.connection);
+  await model.close();
+}
+
 const assets = [
   'hero.png',
   'files.png',
@@ -519,6 +619,8 @@ const assets = [
   'palette.png',
   'optimize.png',
   'suggested.png',
+  'insights.png',
+  'explore.png',
 ];
 const publicFiles: Record<string, string> = Object.fromEntries(
   assets.map((name) => [name, path.join(output, name)]),

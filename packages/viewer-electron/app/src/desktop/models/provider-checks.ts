@@ -216,7 +216,8 @@ function validResponse(data: unknown, kind: ProviderCheckKind): boolean {
     result.data.query === null &&
     result.data.commandID === null &&
     result.data.patches.length === 0 &&
-    result.data.renames.length === 0
+    result.data.renames.length === 0 &&
+    result.data.files.length === 0
   );
 }
 

@@ -33,6 +33,7 @@ const step = (kind: ChatStep['kind'], extra: Partial<ChatStep> = {}): ChatStep =
   commandID: null,
   patches: [],
   renames: [],
+  files: [],
   ...extra,
 });
 const document = (reply: ChatReply): ChatDocument => {
@@ -155,6 +156,23 @@ describe('read-only Chat', () => {
         model: provider.model,
       });
     expect(result.version).toBe(3);
+  });
+
+  it('links the files a reply names inside its context, and no others', async () => {
+    const inside = path.join(root, 'context', 'notes.txt');
+    const outside = path.join(root, 'private', 'secret.txt');
+    await writeFile(outside, 'Private');
+    generate.mockResolvedValue(
+      step('reply', {
+        text: 'notes.txt holds the draft.',
+        files: [inside, outside, inside, path.join(root, 'context', 'missing.txt')],
+      }),
+    );
+    const conversation = await create();
+    await send(conversation.id);
+    const result = await settled(conversation.id);
+    const reply = result.messages.find((message) => message.role === 'assistant')!;
+    expect(reply.links).toEqual([{ kind: 'file', path: await realpath(inside) }]);
   });
 
   it.each([1, 2])(

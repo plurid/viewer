@@ -10,6 +10,7 @@ export {
 } from './core';
 export {
   changePreferences,
+  dismissInsight,
   receiveSettings,
   rememberCommand,
   rememberLine,

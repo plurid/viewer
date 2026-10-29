@@ -6,6 +6,7 @@ import { getState, report, savePatch, update } from './core';
 import { scopedPresentation } from './folder-presentation';
 import { sameJSON } from '../../domain/json';
 import { rememberSuggestion, selectionKind } from '../../domain/suggestions/rules';
+import { rememberDismissal } from '../../domain/suggestions/insights';
 
 let preferenceTimer: ReturnType<typeof setTimeout> | undefined;
 export const pendingPreferences = new Map<string, unknown>();
@@ -114,6 +115,8 @@ export function changePreferences(transform: (ui: UIPreferences) => UIPreference
     queuePreference('ui.recentCommands', ui.recentCommands);
   if (old.suggestionHistory !== ui.suggestionHistory)
     queuePreference('ui.suggestionHistory', ui.suggestionHistory ?? {});
+  if (old.insightsDismissed !== ui.insightsDismissed)
+    queuePreference('ui.insightsDismissed', ui.insightsDismissed ?? {});
   schedulePreferences();
 }
 /** A command the person ran: first in Recent, and, for a file selection, in its kind's history. */
@@ -123,6 +126,13 @@ export function rememberCommand(id: string, selection: readonly FileEntry[] = []
     ...ui,
     recentCommands: [id, ...ui.recentCommands.filter((item) => item !== id)].slice(0, 20),
     ...(kind ? { suggestionHistory: rememberSuggestion(ui.suggestionHistory, kind, id) } : {}),
+  }));
+}
+/** An insight card dismissed in a folder stays hidden there. */
+export function dismissInsight(folder: string, id: string): void {
+  changePreferences((ui) => ({
+    ...ui,
+    insightsDismissed: rememberDismissal(ui.insightsDismissed, folder, id),
   }));
 }
 /** A line run from the command line, first in its history. */

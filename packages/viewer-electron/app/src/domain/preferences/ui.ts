@@ -181,6 +181,14 @@ export function normalizePreferences(value?: unknown): UIPreferences {
         .slice(0, 40)
         .map(([kind, ids]) => [kind.slice(0, 60), strings(ids, 8, 200)]),
     ),
+    // the latest folders are last (domain/suggestions/insights.ts)
+    insightsDismissed: Object.fromEntries(
+      Object.entries(object(ui.insightsDismissed))
+        .filter(([folder]) => paths([folder]).length)
+        .map(([folder, ids]) => [folder, strings(ids, 20, 60)] as const)
+        .filter(([, ids]) => ids.length)
+        .slice(-200),
+    ),
   };
 }
 

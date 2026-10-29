@@ -9,12 +9,13 @@ import {
 import type { ApiHandlers } from './schemas';
 import type { SettingsService } from '../preferences/settings';
 import type { Credentials, Providers } from '../models/providers';
-import { answerPrompt } from '../models/prompts';
+import { answerPrompt, suggestWithModel } from '../models/prompts';
 
 type CommandLineHandlers = Pick<
   ApiHandlers,
   | 'promptLine'
   | 'promptCancel'
+  | 'modelSuggestions'
   | 'sessionKeys'
   | 'sessionKeysSet'
   | 'sessionKeysKeep'
@@ -58,6 +59,14 @@ export function createCommandLineHandlers(ports: CommandLinePorts): CommandLineH
     promptCancel: ([id]) => {
       prompts.get(id)?.abort();
     },
+    // suggestions decorate a menu: an answer that takes longer is not waited for
+    modelSuggestions: ([request]) =>
+      suggestWithModel(
+        request,
+        ports.settings.snapshot().settings,
+        (...generate) => ports.providers.generate(...generate),
+        AbortSignal.timeout(30000),
+      ),
     sessionKeys: () => ports.sessionKeys(),
     sessionKeysSet: ([keys]) => replaceKeys(keys),
     // Keep, from Settings: the session's bindings written into the keymap, then forgotten

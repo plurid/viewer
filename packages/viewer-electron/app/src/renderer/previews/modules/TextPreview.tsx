@@ -6,7 +6,7 @@ import { PreviewToolbar, usePreviewCommands } from '../controls';
 import type { PreviewContext } from '../contracts';
 import { Empty, Loading } from '../../ui/primitives';
 import { DelimitedTable } from '../DataTable';
-import { activeWorkspace, getState, report, useViewer } from '../../state/store';
+import { activeWorkspace, useViewer } from '../../state/store';
 import { FileEditor } from '../../editing/FileEditor';
 import { registerEditingPlane } from '../../editing/planes';
 import { continuesEditing } from '../../editing/sessions';
@@ -17,6 +17,7 @@ import { MarkdownContent, usePrismGrammar } from '../Markdown';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { StructuredTree } from '../StructuredTree';
+import { UnknownFile } from '../UnknownFile';
 import { decodeBinaryPlist } from '../../../domain/previews/data/plist';
 import {
   isTransportStream,
@@ -281,27 +282,7 @@ export default function TextPreview(context: TextPreviewProps) {
         <MediaPreview {...context} />
       </Suspense>
     );
-  if (data.binary)
-    return (
-      <Empty icon="file" title="Preview unavailable">
-        {getState().bootstrap.platform === 'darwin' && (
-          <button
-            onClick={() => {
-              void window.viewer.nativeFilePanel('preview', [resource.entry.path]).catch(report);
-            }}
-          >
-            Quick Look in macOS
-          </button>
-        )}
-        <button
-          onClick={() => {
-            void window.viewer.openExternal(resource.entry.path).catch(report);
-          }}
-        >
-          Open in Default App
-        </button>
-      </Empty>
-    );
+  if (data.binary) return <UnknownFile {...context} />;
   const ext = resource.entry.extension;
   const markdown = ['md', 'markdown', 'mdx'].includes(ext);
   const language = languageFor(resource.entry)?.prism;

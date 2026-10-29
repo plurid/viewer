@@ -1860,6 +1860,7 @@ export class Desktop {
         credentials: this.credentials,
         providers: this.providers,
         modelPermissions: this.modelPermissions,
+        fileAccess: this.fileAccess,
         window: windowOf,
         emit,
       }),

@@ -531,6 +531,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return settingsPreviewScenario
         ? ['example-long-model-name-for-layout-verification', 'example-second-model']
         : [];
+    case 'identifyFile':
+      throw new Error('Ask a model about a file in the desktop app.');
     case 'providerPermissionGet':
       if (settingsPreviewScenario && args[0] === 'fixture-gemini') {
         const provider = settings

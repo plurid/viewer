@@ -3,7 +3,7 @@ import { redoableTime, undoableTime } from '../../state/jobs';
 import { lastLensRedo, lastLensUndo, redoLens, undoLens } from '../../state/lenses';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
-import { forgetSuggestions } from '../history';
+import { forgetSuggestions, showHiddenInsights } from '../history';
 
 /** Undo and Redo pick the most recent action, whether a file operation or a lens edit. */
 function latest(direction: 'undo' | 'redo') {
@@ -28,6 +28,16 @@ export function historyCommands({ windowScope }: WindowScopes): CommandDefinitio
       when: (context) =>
         windowScope(context) && Object.keys(getState().saved.ui.suggestionHistory ?? {}).length > 0,
       run: () => forgetSuggestions(),
+    },
+    {
+      id: 'show-hidden-insights',
+      label: 'Show hidden insights',
+      group: 'Window',
+      icon: 'eye',
+      aliases: ['insights', 'dismissed insights', 'restore insights'],
+      when: (context) =>
+        windowScope(context) && Object.keys(getState().saved.ui.insightsDismissed ?? {}).length > 0,
+      run: () => showHiddenInsights(),
     },
     {
       id: 'recent-operations',

@@ -6,6 +6,8 @@ import type { SettingsService } from '../preferences/settings';
 import { providerBinding, type Credentials, type Providers } from '../models/providers';
 import type { ModelPermissions } from '../models/model-permissions';
 import { confirmNatively } from '../native/native-confirmation';
+import type { FileAccess } from '../files/file-access';
+import { guessFile } from '../models/file-guess';
 
 type ModelHandlers = Pick<
   ApiHandlers,
@@ -15,12 +17,14 @@ type ModelHandlers = Pick<
   | 'providerPermissionGet'
   | 'providerPermissionSet'
   | 'providerPermissionAgents'
+  | 'identifyFile'
 >;
 interface ModelPorts {
   settings: SettingsService;
   credentials: Credentials;
   providers: Providers;
   modelPermissions: ModelPermissions;
+  fileAccess: Pick<FileAccess, 'require'>;
   window(sender: number): BrowserWindow | undefined;
   emit(event: DesktopEvent): void;
 }
@@ -103,5 +107,14 @@ export function createModelHandlers(ports: ModelPorts): ModelHandlers {
       await ports.modelPermissions.allowAgents(provider, allow);
       ports.emit({ type: 'model-permission', providerID: provider.id });
     },
+    // asked for from a preview Viewer cannot show; an answer that takes longer is not waited for
+    identifyFile: ([file]) =>
+      guessFile(
+        file,
+        ports.settings.snapshot().settings,
+        (...generate) => ports.providers.generate(...generate),
+        (files) => ports.fileAccess.require(files),
+        AbortSignal.timeout(30000),
+      ),
   };
 }

@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { contentPlaneActions } from '../src/renderer/workspace/content-planes';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import type { GitReply } from '../src/domain/comparison/git';
-import { activeWorkspace, flushState, initialize, newWorkspace } from '../src/renderer/state/store';
+import {
+  activeWorkspace,
+  flushState,
+  getState,
+  initialize,
+  newWorkspace,
+  receiveSettings,
+} from '../src/renderer/state/store';
 import { addContentPane } from '../src/renderer/state/panes';
 
 beforeEach(() => {
@@ -32,6 +39,70 @@ function fixture() {
     actions: contentPlaneActions({ controller: () => controller, registerContent }),
   };
 }
+
+describe('Explore', () => {
+  const provider = {
+    id: 'p',
+    name: 'Test model',
+    kind: 'openai' as const,
+    endpoint: 'https://example.invalid/v1',
+    model: 'test',
+    allowContent: false,
+  };
+  const conversation = {
+    version: 3,
+    id: '6d1c3f9e-2f4b-4a51-9f53-1c9c7f0a2b11',
+    title: 'Chat',
+    path: '/fixture',
+    providerID: 'p',
+    scopes: [],
+    messages: [],
+    draft: '',
+    draftRevision: 0,
+    revision: 0,
+    updated: 0,
+    status: 'idle',
+    level: 'names',
+  };
+  beforeEach(() => {
+    Object.assign(window.viewer, {
+      chat: vi.fn(async () => conversation),
+      providerPermissionGet: vi.fn(),
+    });
+    const current = getState().settings;
+    receiveSettings({
+      ...current,
+      revision: current.revision + 1,
+      settings: { ...current.settings, providers: [provider] },
+    });
+  });
+  const sent = () =>
+    vi.mocked(window.viewer.chat).mock.calls.filter(([request]) => request.kind === 'send');
+
+  it('sends its request at once when the model may receive names', async () => {
+    vi.mocked(window.viewer.providerPermissionGet).mockResolvedValue({
+      providerID: 'p',
+      kind: 'openai',
+      endpoint: provider.endpoint,
+      level: 'names',
+    });
+    await fixture().actions.newChat(['/fixture'], 'Explore what is here', true);
+    expect(sent()).toEqual([
+      [{ kind: 'send', id: conversation.id, text: 'Explore what is here', providerID: 'p' }],
+    ]);
+  });
+
+  it('leaves the request as the draft until the person allows the model', async () => {
+    vi.mocked(window.viewer.providerPermissionGet).mockResolvedValue(null);
+    const view = fixture();
+    await view.actions.newChat(['/fixture'], 'Explore what is here', true);
+    expect(sent()).toEqual([]);
+    expect(window.viewer.chat).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'draft', text: 'Explore what is here' }),
+    );
+    expect(view.controller.focusPane).toHaveBeenCalled();
+  });
+});
 
 describe('content-plane opening and reuse', () => {
   it('keeps a server browser attached to its runtime when its address changes', () => {

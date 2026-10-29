@@ -27,6 +27,8 @@ export const browsingSchema = z
     suggestions: z.boolean().default(true),
     // rule ids from domain/suggestions/rules.ts
     suggestionRulesOff: z.array(z.string().min(1).max(80)).max(100).default([]),
+    modelSuggestions: z.boolean().default(false),
+    insights: z.boolean().default(true),
     newPlaneLocation: z
       .enum([
         'current',

@@ -4,6 +4,8 @@ import { matchesQuery } from '../../domain/search/query';
 import { useFileQuery } from './useFileQuery';
 import { nativeOpening } from './opening';
 import { SearchCoverage } from './SearchCoverage';
+import { FolderInsights } from './FolderInsights';
+import { askModelAboutFolder, sampleCommands } from '../commands/model-suggestions';
 import { markStartup } from '../app/startup';
 import {
   memo,
@@ -269,6 +271,27 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       else selecting.click(entry, event, scope);
     },
     [entries, id, selecting, pane?.mode, chooseColumn],
+  );
+  const modelSuggestions = useViewer((state) => state.settings.settings.browsing.modelSuggestions);
+  useEffect(() => {
+    if (!modelSuggestions || listing.loading || listing.unavailable || !listing.entries.length)
+      return;
+    // a folder the person stays in, not one passed on the way to another
+    const timer = setTimeout(
+      () => askModelAboutFolder(path, listing.entries, sampleCommands(registry, id, path)),
+      1500,
+    );
+    return () => clearTimeout(timer);
+  }, [modelSuggestions, listing.loading, listing.unavailable, listing.entries, path, id, registry]);
+  // an insight's action selects what it covers first; in Columns, from the folder's own column
+  const reveal = columns.reveal;
+  const selectInsight = useCallback(
+    (files: readonly FileEntry[]) => {
+      if (!files.length) return selecting.clear();
+      if (pane?.mode === 'columns') reveal(files[0]!);
+      selecting.all(files);
+    },
+    [selecting, pane?.mode, reveal],
   );
   useEffect(() => {
     if (searchOpen) input.current?.focus();
@@ -679,6 +702,14 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           streamed={search.streamed}
           cancelled={search.cancelled}
           request={{ query, root: path, showHidden: pane.showHidden, recursive: true }}
+        />
+      )}
+      {!listing.loading && !listing.unavailable && !query.trim() && (
+        <FolderInsights
+          paneID={id}
+          folder={path}
+          entries={listing.entries}
+          select={selectInsight}
         />
       )}
       <div className="folder-content">

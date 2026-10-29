@@ -189,6 +189,23 @@
   border-color: var(--line);
 }
 
+.chat-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-files button {
+  max-width: 32ch;
+  margin-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-tool {
   margin: 8px 0;
   color: var(--muted);

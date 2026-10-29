@@ -235,6 +235,24 @@ export const settingCatalog: SettingDefinition[] = [
       'Shows a few actions that fit the selection, such as Extract here for an archive, and learns from what you choose.',
     kind: 'boolean',
   },
+  {
+    path: 'settings.browsing.modelSuggestions',
+    category: 'Browsing',
+    section: 'Suggestions',
+    label: 'Let the model suggest actions',
+    detail:
+      'The model you use for Ask Viewer receives the names and kinds of files in a folder, once per folder, and adds its picks to Suggested. Allow it names in Settings → Models first.',
+    kind: 'boolean',
+  },
+  {
+    path: 'settings.browsing.insights',
+    category: 'Browsing',
+    section: 'Suggestions',
+    label: 'Show folder insights',
+    detail:
+      'Cards above a folder’s files point out what may need attention, such as old installers or archives already extracted.',
+    kind: 'boolean',
+  },
   ...listColumns
     .filter((column) => column.id !== 'name' && column.id !== 'git')
     .map((column) => ({

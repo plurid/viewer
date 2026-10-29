@@ -1,6 +1,10 @@
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
+/** What Explore asks; the person sees it as their message and can follow up. */
+const exploreRequest =
+  'Explore what is here: say what it holds, link the files that stand out, and propose what you would do with them.';
+
 export function comparisonCommands({
   actions,
   state,
@@ -21,6 +25,26 @@ export function comparisonCommands({
             : context.directory
               ? [context.directory]
               : [],
+        ),
+    },
+    {
+      id: 'explore-folder',
+      label: (context) =>
+        context.selection.length &&
+        !(context.selection.length === 1 && context.selection[0]!.directory)
+          ? 'Explore selected items'
+          : 'Explore this folder',
+      group: 'Files',
+      icon: 'search',
+      aliases: ['explore', 'agent', 'summarize', 'what is here', 'insights'],
+      when: (context) => paneScope(context) && (!!context.selection.length || !!context.directory),
+      run: (context) =>
+        actions.workspace.newChat(
+          context.selection.length
+            ? context.selection.map((file) => file.path)
+            : [context.directory!],
+          exploreRequest,
+          true,
         ),
     },
     {

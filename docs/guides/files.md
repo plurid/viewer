@@ -62,7 +62,8 @@ reason:
 What you choose for a kind of file rises for that kind next time: if you always rename PDFs, PDFs
 suggest it. The same suggestions appear in **⌘K** before you type, and the best one appears as a
 button in Quick Preview. Turn them off in **Settings → Browsing → Suggestions**; **⌘K** → **Forget
-learned suggestions** clears what Viewer learned.
+learned suggestions** clears what Viewer learned. A folder can also point out what needs attention,
+and a model can add its own picks: see [Explore a folder](explore.md).
 
 **Extract here** puts an archive's contents in a folder named after it, beside the archive. When the
 archive holds one folder with everything inside, that folder's contents are the result, so you never
