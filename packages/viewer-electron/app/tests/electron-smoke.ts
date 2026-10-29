@@ -12,6 +12,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { repeatedPreviewFixture } from './workspace-fixtures';
 import { formatBytes } from '../src/domain/files/entries';
+import { tileTree } from '../src/domain/workspaces/tiling';
 import { reactCommitProbe } from './react-commits';
 import type { OperationJob, Resource, SavedState } from '../src/domain/contracts';
 import type { AgentAccessState } from '../src/domain/agents/clients';
@@ -2982,9 +2983,13 @@ async function verifyCommandLine(): Promise<void> {
   await until(minimap, (shown) => !shown, '⌥M ran :set minimap!');
   await key('µ', 'KeyM', 1);
   await until(minimap, (shown) => shown, '⌥M again');
-  // prefix R: the resize mode, until Escape; 2 h shrinks the main tile twice
-  const main = async () => (await saved()).workspaces[0]!.tiling?.main ?? 0;
-  const before = await main();
+  // prefix R: the resize mode, until Escape; 2 h grows the active right tile left twice
+  const split = async () => {
+    const tiling = (await saved()).workspaces[0]!.tiling;
+    const tree = tiling && (tiling.tree ?? tileTree(tiling.panes, tiling.layout, tiling.main));
+    return tree && 'ratio' in tree ? tree.ratio : 0;
+  };
+  const before = await split();
   await key('b', 'KeyB', 2);
   await key('R', 'KeyR', 8);
   await until(
@@ -2995,9 +3000,9 @@ async function verifyCommandLine(): Promise<void> {
   await key('2', 'Digit2');
   await key('h', 'KeyH');
   await until(
-    main,
+    split,
     (now) => Math.abs(now - (before - 2 / 12)) < 0.001,
-    '2 h shrank the main tile twice',
+    '2 h moved the split between the tiles left twice',
   );
   await snapshot('line-mode.png');
   await key('Escape', 'Escape');

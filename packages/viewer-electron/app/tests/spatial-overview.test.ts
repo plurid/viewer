@@ -91,8 +91,14 @@ function fixture() {
   document.body.append(root);
   vi.spyOn(root, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1000, 600));
   vi.spyOn(map, 'getBoundingClientRect').mockReturnValue(new DOMRect(812, 16, 172, 120));
-  const show = vi.fn();
-  const hide = vi.fn();
+  // jsdom has no Popover API and leaves a closed popover's contents unfocusable;
+  // like a browser, opening one must render it.
+  const show = vi.fn(() => {
+    map.style.display = 'block';
+  });
+  const hide = vi.fn(() => {
+    map.style.removeProperty('display');
+  });
   Object.assign(map, { showPopover: show, hidePopover: hide });
   let engineChanged = () => {};
   const unsubscribe = vi.fn();

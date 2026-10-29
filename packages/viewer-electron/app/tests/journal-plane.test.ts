@@ -11,6 +11,7 @@ import { WorkspaceContext, type WorkspaceController } from '../src/renderer/work
 import JournalPlane from '../src/renderer/journal/JournalPlane';
 import { journalCommands } from '../src/renderer/journal/commands';
 import { windowScopes, type WindowActions } from '../src/renderer/commands/window-commands/scope';
+import { mockElementBox } from './support/layout';
 
 let pane: Pane;
 let records: JournalRecord[];
@@ -21,8 +22,7 @@ const exported = vi.fn<ViewerAPI['journalExportPreview']>();
 const clear = vi.fn(async () => false);
 
 beforeEach(() => {
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(1000);
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(360);
+  mockElementBox(1000, 360);
   focus.mockClear();
   openJournal.mockClear();
   clear.mockClear();

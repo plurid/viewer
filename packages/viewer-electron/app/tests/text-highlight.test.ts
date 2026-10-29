@@ -10,6 +10,7 @@ import type { FileEntry, ResourceRead } from '../src/domain/contracts';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
 import TextPreview from '../src/renderer/previews/modules/TextPreview';
 import { initialize } from '../src/renderer/state/store';
+import { mockElementBox } from './support/layout';
 
 beforeAll(() => {
   // the code view reads the editor's font settings
@@ -17,14 +18,7 @@ beforeAll(() => {
   // the virtualized list measures its scroller; jsdom lays nothing out
   HTMLElement.prototype.getBoundingClientRect = () =>
     ({ width: 800, height: 800, top: 0, left: 0, right: 800, bottom: 800, x: 0, y: 0 }) as DOMRect;
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
-    configurable: true,
-    get: () => 800,
-  });
-  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
-    configurable: true,
-    get: () => 800,
-  });
+  mockElementBox(800, 800);
 });
 afterEach(cleanup);
 
