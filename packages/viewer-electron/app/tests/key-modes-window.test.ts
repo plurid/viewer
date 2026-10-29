@@ -162,7 +162,7 @@ describe(':bind, :unbind and :mode', () => {
     expect((await runLine('mode resize', host())).ok).toBe(true);
     expect(view.container.textContent).toContain('-- RESIZE --');
     expect((await runLine('mode resise', host())).message).toBe(
-      'No mode “resise” — did you mean resize?',
+      'No mode “resise”. Did you mean resize?',
     );
   });
 });

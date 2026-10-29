@@ -71,7 +71,7 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
       if (!lines) {
         const meant = didYouMean(name.name, commands.keys());
         throw new LineError(
-          `No command :${name.name}${meant ? ` — did you mean :${meant}?` : '.'}`,
+          `No command :${name.name}.${meant ? ` Did you mean :${meant}?` : ''}`,
           step.at,
         );
       }
@@ -89,7 +89,7 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
       }
       return {
         step,
-        label: `:${name.name} — ${lines.join(' | ')}`,
+        label: `:${name.name} (${lines.join(' | ')})`,
         run: async (live) => {
           const messages: string[] = [];
           for (const inner of planned)
@@ -105,7 +105,7 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
     if (label === undefined) {
       const meant = didYouMean(name.id, [...verbNames(), ...host.registry.ids()]);
       throw new LineError(
-        `Not a command: ${name.id}${meant ? ` — did you mean ${meant}?` : '.'}`,
+        `Not a command: ${name.id}.${meant ? ` Did you mean ${meant}?` : ''}`,
         step.at,
       );
     }

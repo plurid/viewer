@@ -223,7 +223,7 @@ export function FolderSizeValue({ path }: { path: string }) {
         ? `${formatBytes(task.bytes)}${task.skipped ? ' (partial)' : ''}`
         : task?.status === 'running'
           ? '…'
-          : '—'}
+          : ''}
     </span>
   );
 }

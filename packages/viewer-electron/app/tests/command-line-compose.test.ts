@@ -153,7 +153,7 @@ describe('a person’s command', () => {
     const live = host();
     await runLine('alias Bad frame-al', live);
     expect((await runLine('Bad', live)).message).toBe(
-      ':Bad: Not a command: frame-al — did you mean frame-all?',
+      ':Bad: Not a command: frame-al. Did you mean frame-all?',
     );
     await runLine('alias Loop Loop', live);
     expect((await runLine('Loop', live)).message).toMatch(/too deeply/);

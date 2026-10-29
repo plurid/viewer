@@ -4,6 +4,9 @@ import type { ApplicationSettings } from '../../domain/services';
 import { defaultShortcuts, accelerator, menuShortcuts } from '../../domain/preferences/shortcuts';
 import { planeAlignments, planeSizePresets } from '../../domain/workspaces/plane-layout';
 
+/** A page of the guides, as published with the source. */
+const guide = (page: string) => `https://github.com/plurid/viewer/blob/master/docs/${page}`;
+
 /** Build native menus from the same command IDs and shortcuts as the renderer. */
 export function installApplicationMenu(
   settings: ApplicationSettings | undefined,
@@ -355,6 +358,15 @@ export function installApplicationMenu(
         submenu: [
           { label: 'What Can I Do Here?', click: command('capabilities') },
           { label: 'Commands…', click: command('palette') },
+          { type: 'separator' },
+          {
+            label: 'Getting Started',
+            click: () => void shell.openExternal(guide('guides/getting-started.md')),
+          },
+          {
+            label: 'Keyboard Shortcuts',
+            click: () => void shell.openExternal(guide('reference/shortcuts.md')),
+          },
           { type: 'separator' },
           {
             label: 'Report an Issue…',

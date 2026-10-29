@@ -126,7 +126,7 @@ export class BrowserPlanes {
       height: 740,
       minWidth: 400,
       minHeight: 300,
-      title: address + ' — Viewer',
+      title: address + ' · Viewer',
       show: false,
       backgroundColor: '#ffffff',
       webPreferences: {
@@ -144,7 +144,7 @@ export class BrowserPlanes {
     const title = () => {
       if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
         try {
-          window.setTitle(browserAddress(window.webContents.getURL()) + ' — Viewer');
+          window.setTitle(browserAddress(window.webContents.getURL()) + ' · Viewer');
         } catch {
           /* Preserve the last valid address while navigation is pending. */
         }

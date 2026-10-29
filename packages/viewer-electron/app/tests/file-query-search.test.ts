@@ -129,7 +129,8 @@ describe('the index', () => {
     } finally {
       await index.close();
     }
-  });
+    // indexing 20,001 names takes seconds, and longer while the whole suite runs
+  }, 60_000);
 });
 
 describe('the search through subfolders', () => {

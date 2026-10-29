@@ -235,7 +235,7 @@ describe('a line', () => {
     const result = await runLine('tile-split-right | tile-splt-right', live);
     expect(result).toEqual({
       ok: false,
-      message: 'Not a command: tile-splt-right — did you mean tile-split-right?',
+      message: 'Not a command: tile-splt-right. Did you mean tile-split-right?',
       at: 19,
     });
     expect(ran).toEqual([]);

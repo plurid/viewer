@@ -738,7 +738,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       </div>
       <footer className="folder-status">
         <span>
-          {entries.length.toLocaleString()} items
+          {entries.length.toLocaleString()} {entries.length === 1 ? 'item' : 'items'}
           {selection.length ? ` · ${selection.length} selected` : ''}
         </span>
         <SelectionSize

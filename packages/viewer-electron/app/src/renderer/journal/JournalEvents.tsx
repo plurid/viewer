@@ -6,7 +6,7 @@ import { baseName } from '../../domain/workspaces/planes';
 
 export function journalPlaneName(space: Workspace | undefined, id: string | undefined): string {
   const pane = space?.panes.find((pane) => pane.id === id);
-  if (!pane) return id ? 'Closed plane' : '—';
+  if (!pane) return id ? 'Closed plane' : '';
   if (pane.type === 'journal') return 'Journal';
   if (pane.type === 'chat') return 'Chat';
   if (pane.type === 'scratch') return pane.title ?? 'Untitled';
@@ -112,11 +112,11 @@ export function JournalEvents({
               </span>
               <span role="gridcell">
                 {record.durationMs === undefined
-                  ? '—'
+                  ? ''
                   : `${Math.round(record.durationMs).toLocaleString()} ms`}
               </span>
               <span role="gridcell" title={record.origin.workspaceID}>
-                {space?.name ?? (record.origin.workspaceID ? 'Closed workspace' : '—')}
+                {space?.name ?? (record.origin.workspaceID ? 'Closed workspace' : '')}
               </span>
               <span role="gridcell" title={record.origin.planeID}>
                 {journalPlaneName(space, record.origin.planeID)}

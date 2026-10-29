@@ -245,7 +245,8 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
         </div>
       </div>
       <footer className="git-review-footer">
-        {changes.length} changed {changes.length === 1 ? 'file' : 'files'} · ⌥↑ / ⌥↓ changes file
+        {changes.length} changed {changes.length === 1 ? 'file' : 'files'}
+        {changes.length > 1 && ' · ⌥↑ / ⌥↓ moves between files'}
         {review.view.mode === 'branch' && ' · Includes working changes'}
       </footer>
     </section>

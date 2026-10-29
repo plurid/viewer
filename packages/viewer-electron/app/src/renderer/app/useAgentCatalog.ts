@@ -28,6 +28,39 @@ function commandsWanted(state: ViewerState): boolean {
   );
 }
 
+/** The workspaces as desktop checks see them: Git and agent targets are validated against this. */
+function workspaceSnapshot(state: ViewerState): AgentWorkspaceSnapshot {
+  return {
+    activeWorkspace: state.saved.activeWorkspace,
+    workspaces: state.saved.workspaces.map((space) => ({
+      id: space.id,
+      name: space.name,
+      roots: space.roots,
+      tasks: space.taskAreas?.map((area) => ({
+        id: area.id,
+        name: area.name,
+        path: area.checkout.path,
+        branch: area.checkout.branch,
+        commit: area.checkout.commit,
+      })),
+      panes: space.panes.map((pane) => ({
+        id: pane.id,
+        type: pane.type,
+        path: pane.path,
+        ...(pane.type === 'folder' ? { mode: pane.mode } : {}),
+        ...(pane.type === 'search' ? { allLocations: pane.allLocations } : {}),
+      })),
+    })),
+  };
+}
+
+/** Which planes exist, and the roots: a new plane checks its own target as soon as it mounts. */
+function planeSet(snapshot: AgentWorkspaceSnapshot): string {
+  return JSON.stringify(
+    snapshot.workspaces.map((space) => [space.id, space.roots, space.panes.map((pane) => pane.id)]),
+  );
+}
+
 /** Publish the same registry used by people, with window actions available in every context. */
 export function useAgentCatalog({
   registry,
@@ -40,28 +73,9 @@ export function useAgentCatalog({
       timer = undefined;
       const state = getState();
       const workspace = activeWorkspace(state);
-      const workspaces: AgentWorkspaceSnapshot = {
-        activeWorkspace: state.saved.activeWorkspace,
-        workspaces: state.saved.workspaces.map((space) => ({
-          id: space.id,
-          name: space.name,
-          roots: space.roots,
-          tasks: space.taskAreas?.map((area) => ({
-            id: area.id,
-            name: area.name,
-            path: area.checkout.path,
-            branch: area.checkout.branch,
-            commit: area.checkout.commit,
-          })),
-          panes: space.panes.map((pane) => ({
-            id: pane.id,
-            type: pane.type,
-            path: pane.path,
-            ...(pane.type === 'folder' ? { mode: pane.mode } : {}),
-            ...(pane.type === 'search' ? { allLocations: pane.allLocations } : {}),
-          })),
-        })),
-      };
+      const workspaces = workspaceSnapshot(state);
+      shape = JSON.stringify(workspaces);
+      planes = planeSet(workspaces);
       const context = registry.context(state.activePane) ?? windowContext();
       const pane = workspace.panes.find((pane) => pane.id === state.activePane);
       const hasDirectory = !!context.directory || !!context.folder;
@@ -111,17 +125,53 @@ export function useAgentCatalog({
       timer = setTimeout(publish, publicationDelay);
     };
     const unsubscribe = registry.subscribe(schedule);
-    // the published target follows the active plane, which no longer changes the registry
+    // A new plane's target is checked against the published snapshot as soon as the plane
+    // mounts: Git refused its own new plane as "changed" while the snapshot waited 80 ms. So a
+    // plane added or removed publishes at once, after a microtask in which its owner is
+    // recorded; a path or view mode changing waits for the debounce.
+    let live = true;
+    let queued = false;
+    const publishSoon = () => {
+      clearTimeout(timer);
+      timer = undefined;
+      if (queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        if (live) publish();
+      });
+    };
+    // the target follows the active plane, which no longer changes the registry
     let activePane = getState().activePane;
+    let saved = getState().saved.workspaces;
+    let shape = '';
+    let planes = '';
     const unfollow = subscribe(() => {
-      if (getState().activePane === activePane) return;
-      activePane = getState().activePane;
-      schedule();
+      const state = getState();
+      if (state.saved.workspaces !== saved) {
+        saved = state.saved.workspaces;
+        const snapshot = workspaceSnapshot(state);
+        if (planeSet(snapshot) !== planes) {
+          activePane = state.activePane;
+          publishSoon();
+          return;
+        }
+        if (JSON.stringify(snapshot) !== shape) {
+          activePane = state.activePane;
+          schedule();
+          return;
+        }
+      }
+      if (state.activePane !== activePane) {
+        activePane = state.activePane;
+        schedule();
+      }
     });
     // Human commands can run as soon as the registry is ready. Their desktop
     // ownership and Chat context must exist before the first debounced update.
     publish();
     return () => {
+      live = false;
       unsubscribe();
       unfollow();
       clearTimeout(timer);

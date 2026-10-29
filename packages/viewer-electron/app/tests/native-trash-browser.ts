@@ -263,7 +263,7 @@ try {
   );
   assert.match(
     await evaluate<string>('document.querySelector(".trash-info-dialog").textContent'),
-    /no date was provided/,
+    /No date was recorded/,
   );
   assert.match(
     await evaluate<string>('document.querySelector(".trash-info-dialog").textContent'),

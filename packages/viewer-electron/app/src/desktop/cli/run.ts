@@ -177,7 +177,7 @@ export async function runCLI(
       if (activeID && invocation.wait && !json)
         await write(
           environment.error,
-          'Operation ' + terminalText(activeID) + ' — waiting; review remains in Viewer.\n',
+          'Waiting for operation ' + terminalText(activeID) + '. Review it in Viewer.\n',
         );
       result = await waitFor(invocation, result, call, controller.signal);
     }

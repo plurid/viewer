@@ -21,12 +21,19 @@ const importsFirst = {
     'Program > :not(ImportDeclaration, ExportNamedDeclaration[source], ExportAllDeclaration) ~ ImportDeclaration',
   message: 'Place imports before other statements.',
 };
+// Text people read is written in sentences: a full stop, comma or colon, never an em dash.
+const dashMessage = 'Use a full stop, comma or colon instead of an em dash.';
+const noEmDash = [
+  'Literal[value=/\u2014/]',
+  'TemplateElement[value.raw=/\u2014/]',
+  'JSXText[value=/\u2014/]',
+].map((selector) => ({ selector, message: dashMessage }));
 export default tseslint.config(
   { ignores: ['.vite/**', 'out/**', 'node_modules/**'] },
   ...tseslint.configs.recommended,
   {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
-    rules: { 'no-restricted-syntax': ['error', importType, importsFirst, ...removal] },
+    rules: { 'no-restricted-syntax': ['error', importType, importsFirst, ...noEmDash, ...removal] },
   },
   {
     files: ['tests/**/*.ts', 'tests/**/*.tsx', 'tools/**/*.ts', '*.ts'],
@@ -41,7 +48,7 @@ export default tseslint.config(
     // Type-aware: a promise nobody awaits loses its failure; `void` marks a deliberate one.
     files: ['src/**/*.ts', 'src/**/*.tsx'],
     // the policy tests lint virtual fixtures that belong to no tsconfig
-    ignores: ['src/**/*-fixture.ts'],
+    ignores: ['src/**/*-fixture.ts', 'src/**/*-fixture.tsx'],
     languageOptions: {
       parserOptions: {
         project: ['./tsconfig.main.json', './tsconfig.renderer.json', './tsconfig.preload.json'],
@@ -58,7 +65,7 @@ export default tseslint.config(
   },
   {
     files: ['src/desktop/operations/removal.ts'],
-    rules: { 'no-restricted-syntax': ['error', importType, importsFirst] },
+    rules: { 'no-restricted-syntax': ['error', importType, importsFirst, ...noEmDash] },
   },
   {
     rules: {

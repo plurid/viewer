@@ -46,7 +46,7 @@ export function TrashInformation({
               </span>
             </>
           ) : (
-            'Unavailable — no date was provided for this item.'
+            'No date was recorded for this item.'
           )}
         </dd>
         <dt>Original location</dt>

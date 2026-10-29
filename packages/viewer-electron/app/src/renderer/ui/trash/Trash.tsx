@@ -529,7 +529,7 @@ export function Trash({ onClose }: { onClose(): void }) {
                             {trashDate(dateKind === 'deleted' ? item.deleted : item.addedToTrash)}
                           </span>
                         )}
-                        <span>{item.directory ? '—' : formatBytes(item.size)}</span>
+                        <span>{item.directory ? '' : formatBytes(item.size)}</span>
                       </div>
                     );
                   })}

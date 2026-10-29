@@ -29,6 +29,31 @@ describe('type import policy', () => {
   });
 });
 
+describe('em dashes in text', () => {
+  const filePath = 'src/renderer/text-policy-fixture.tsx';
+
+  it.each([
+    ['a string', 'export const a = "Saved \u2014 now";'],
+    ['a template', 'export const b = (n: number) => `${n} files \u2014 done`;'],
+    ['JSX text', 'export const C = () => <p>Saved \u2014 now</p>;'],
+  ])('refuses one in %s', async (_kind, code) => {
+    const [result] = await eslint.lintText(code, { filePath });
+    expect(result?.messages).toContainEqual(
+      expect.objectContaining({
+        ruleId: 'no-restricted-syntax',
+        message: 'Use a full stop, comma or colon instead of an em dash.',
+      }),
+    );
+  });
+
+  it('allows one in a comment', async () => {
+    const [result] = await eslint.lintText('// Saved \u2014 now\nexport const a = "Saved. Now.";', {
+      filePath,
+    });
+    expect(result?.messages).toEqual([]);
+  });
+});
+
 describe('import order', () => {
   const filePath = 'src/domain/import-policy-fixture.ts';
 

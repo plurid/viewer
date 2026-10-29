@@ -35,7 +35,7 @@ export function cliHelp(topic: readonly string[] = []): string {
         ),
       ]
     : [
-        'Viewer — files, workspaces and reviewed automation from your terminal.',
+        'Viewer: files, workspaces and reviewed automation from your terminal.',
         '',
         'Usage: viewer [PATH…] [--new-window | --workspace NAME] [--terminal]',
         '       viewer COMMAND [OPTIONS]',

@@ -24,9 +24,9 @@ export const asFile = (item: TrashItem): FileEntry => ({
   identity: item.id,
 });
 export const trashDate = (value?: string | number) => {
-  if (!value) return '—';
+  if (!value) return 'No date';
   const time = new Date(value);
-  return Number.isNaN(time.valueOf()) ? '—' : time.toLocaleDateString();
+  return Number.isNaN(time.valueOf()) ? 'No date' : time.toLocaleDateString();
 };
 export type MenuAction = {
   id: string;

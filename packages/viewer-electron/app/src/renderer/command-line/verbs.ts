@@ -97,7 +97,7 @@ function workspaceBy(text: string): string {
   throw new Error(
     starting.length
       ? `“${text}” starts ${starting.length} workspaces’ names.`
-      : `No workspace “${text}”${meant ? ` — did you mean ${meant}?` : '.'}`,
+      : `No workspace “${text}”.${meant ? ` Did you mean ${meant}?` : ''}`,
   );
 }
 /** A command of a family (`theme.`, `profile.`, `layout.`) by its id or its name. */
@@ -120,7 +120,7 @@ function familyCommand(host: LineHost, prefix: string, text: string, what: strin
     lower,
     members.map((command) => name(command.label)),
   );
-  throw new Error(`No ${what} “${text}”${meant ? ` — did you mean ${meant}?` : '.'}`);
+  throw new Error(`No ${what} “${text}”.${meant ? ` Did you mean ${meant}?` : ''}`);
 }
 const defaultName = () => {
   const names = new Set(getState().saved.workspaces.map((space) => space.name));
@@ -353,7 +353,7 @@ export const verbRuns: Record<string, VerbRun> = {
     }
     if (enterKeyMode(name)) return;
     const meant = didYouMean(name, Object.keys(effectiveKeymap().modes));
-    throw new Error(`No mode “${name}”${meant ? ` — did you mean ${meant}?` : '.'}`);
+    throw new Error(`No mode “${name}”.${meant ? ` Did you mean ${meant}?` : ''}`);
   },
   bind: async ({ step, flags, args }) => {
     const [keysWord] = args;

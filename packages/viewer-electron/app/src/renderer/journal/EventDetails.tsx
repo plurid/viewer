@@ -56,7 +56,7 @@ export function EventDetails({
         <dt>Workspace</dt>
         <dd>{space?.name ?? record.origin.workspaceID ?? 'App'}</dd>
         <dt>Plane</dt>
-        <dd>{journalPlaneName(space, record.origin.planeID)}</dd>
+        <dd>{journalPlaneName(space, record.origin.planeID) || 'None'}</dd>
         <dt>Event ID</dt>
         <dd className="journal-id">{record.id}</dd>
         <dt>Trace ID</dt>

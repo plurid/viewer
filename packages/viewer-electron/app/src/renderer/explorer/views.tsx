@@ -170,12 +170,12 @@ export const FileRow = memo(function FileRow({
                 entry[column] ? (
                   date.format(entry[column])
                 ) : (
-                  '—'
+                  ''
                 )
               ) : column === 'kind' ? (
                 kindLabel(entry)
               ) : column === 'extension' ? (
-                entry.extension || '—'
+                entry.extension
               ) : entry.directory ? (
                 <FolderSizeValue path={entry.path} />
               ) : (

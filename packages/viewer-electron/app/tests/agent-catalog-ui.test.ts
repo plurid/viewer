@@ -11,7 +11,7 @@ import { CommandRegistry, type CommandContext } from '../src/renderer/commands/r
 import { folderCommands, type FolderActions } from '../src/renderer/commands/folder';
 import { windowCommands, type WindowActions } from '../src/renderer/commands/window';
 import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
-import { replaceState } from '../src/renderer/state/core';
+import { replaceState, update } from '../src/renderer/state/core';
 import { effectiveWindowUI } from '../src/renderer/state/effective-ui';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 
@@ -190,6 +190,44 @@ describe('agent catalog publication and invocation', () => {
     // ownership and the workspace shape still serve people's own commands
     expect(workspaces!.workspaces.length).toBeGreaterThan(0);
     expect(owners).toBeDefined();
+  });
+
+  it('republishes the workspace shape when planes change, so Git checks see the new plane', async () => {
+    mountPublication();
+    await publishPending();
+    publish.mockClear();
+    const state = getState();
+    const space = activeWorkspace();
+    const added = { id: 'added-folder', type: 'folder' as const, path: '/fixtures/added' };
+    act(() =>
+      update({
+        ...state,
+        saved: {
+          ...state.saved,
+          workspaces: state.saved.workspaces.map((item) =>
+            item.id === space.id
+              ? {
+                  ...item,
+                  panes: [...item.panes, added as never],
+                  roots: [...item.roots, added.id],
+                }
+              : item,
+          ),
+        },
+      }),
+    );
+    // before the debounce: the new plane checks its target as soon as it mounts
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(publish).toHaveBeenCalledOnce();
+    const [, , workspaces, owners] = publish.mock.lastCall!;
+    const published = workspaces!.workspaces.find((item) => item.id === space.id)!;
+    expect(published.panes.map((pane) => pane.id)).toContain('added-folder');
+    expect(owners).toMatchObject({ 'added-folder': 'added-folder' });
+    // a change that leaves the published shape alone sends nothing
+    publish.mockClear();
+    act(() => update({ ...getState() }));
+    await act(async () => vi.advanceTimersByTimeAsync(200));
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it('keeps real folder actions and window scopes together for a file selection', async () => {

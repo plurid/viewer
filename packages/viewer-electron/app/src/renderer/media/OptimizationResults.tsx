@@ -65,7 +65,7 @@ export function OptimizationResults({
                   </td>
                   <td>{sourceRoot ? row.file.path.slice(sourceRoot.length + 1) : row.file.name}</td>
                   <td>{formatOptimizationSize(candidate?.inputBytes ?? row.file.size)}</td>
-                  <td>{candidate ? formatOptimizationSize(candidate.outputBytes) : '—'}</td>
+                  <td>{candidate ? formatOptimizationSize(candidate.outputBytes) : ''}</td>
                   <td>
                     {failure ? (
                       <span className="error">{failure}</span>

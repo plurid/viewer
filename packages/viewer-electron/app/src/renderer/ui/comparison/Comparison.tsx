@@ -252,14 +252,14 @@ export function ComparisonControls() {
                       ? formatBytes(row.left.size)
                       : row.left
                         ? 'Folder'
-                        : '—'}
+                        : ''}
                   </span>
                   <span role="cell">
                     {row.right?.kind === 'file'
                       ? formatBytes(row.right.size)
                       : row.right
                         ? 'Folder'
-                        : '—'}
+                        : ''}
                   </span>
                   <span role="cell">{labels[row.status]}</span>
                 </div>
