@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { latestReplies } from '../../state/requests';
+import { errorMessage } from '../../../domain/errors';
 import type {
   AgentAccessRequest,
   AgentAccessState,
@@ -26,18 +28,15 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
   // The switch and folders are the person's approval, kept by the desktop: config.jsonc only
   // narrows them, so what it asks for beyond them waits here.
   const [access, setAccess] = useState<AgentAccessState>();
-  const change = (request: AgentAccessRequest) => {
-    void window.viewer
-      .agentAccess(request)
-      .then(setAccess)
-      .catch((error: Error) => setError(error.message));
-  };
+  // a slow state read must not undo a change made after it
+  const [request] = useState(latestReplies);
+  const change = (wanted: AgentAccessRequest) =>
+    request(window.viewer.agentAccess(wanted), setAccess, (error) => setError(errorMessage(error)));
   useEffect(() => {
-    void window.viewer
-      .agentAccess({ kind: 'state' })
-      .then(setAccess)
-      .catch((error: Error) => setError(error.message));
-  }, [snapshot.revision, setError]);
+    request(window.viewer.agentAccess({ kind: 'state' }), setAccess, (error) =>
+      setError(errorMessage(error)),
+    );
+  }, [snapshot.revision, setError, request]);
   return (
     <>
       <label className="settings-row">

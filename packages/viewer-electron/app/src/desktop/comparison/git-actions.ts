@@ -17,6 +17,7 @@ import {
 import { entry } from '../files/filesystem';
 import { childEnvironment } from '../terminals/process-environment';
 import { runGit, type GitRunner } from './git';
+import { containsPath } from '../files/containment';
 
 /** Private desktop launch specification. No public IPC accepts any of these program fields. */
 export interface GitTerminalLaunch {
@@ -128,14 +129,6 @@ function boundedArgument(value: unknown, label: string, maximum = 32768): assert
   )
     throw new Error(`${label} is empty, contains a null character or exceeds its size limit.`);
 }
-
-const inside = (root: string, file: string) => {
-  const relative = path.relative(root, file);
-  return (
-    relative === '' ||
-    (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith('..' + path.sep))
-  );
-};
 
 const identity = (value: Stats) => `${value.dev}:${value.ino}`;
 
@@ -275,7 +268,7 @@ export class GitActions {
       readPath(['rev-parse', '--absolute-git-dir']),
       readPath(['rev-parse', '--path-format=absolute', '--git-common-dir']),
     ]);
-    if (!inside(root, cwd))
+    if (!containsPath(root, cwd))
       throw new Error('The selected folder is outside the resolved Git worktree.');
     await this.options.access([root, gitDirectory, commonDirectory]);
     const [rootInfo, gitInfo, commonInfo, head] = await Promise.all([
@@ -326,7 +319,8 @@ export class GitActions {
       )
         throw new Error(`Selection changed: ${captured.name}. Select it again.`);
       const canonical = path.join(await realpath(path.dirname(selected)), path.basename(selected));
-      if (!inside(root, canonical)) throw new Error('A selected path is outside this repository.');
+      if (!containsPath(root, canonical))
+        throw new Error('A selected path is outside this repository.');
       const relative = path.relative(root, canonical).split(path.sep).join('/') || '.';
       boundedArgument(relative, 'Selected Git path');
       paths.push(relative);
@@ -516,8 +510,8 @@ export class GitActions {
     const pending: Promise<unknown>[] = [];
     for (const { ticket } of this.pending.values())
       if (
-        inside(root, ticket.target.directory) ||
-        (ticket.repository && inside(root, ticket.repository))
+        containsPath(root, ticket.target.directory) ||
+        (ticket.repository && containsPath(root, ticket.repository))
       ) {
         ticket.abort.abort();
         pending.push(ticket.promise);

@@ -17,6 +17,7 @@ import { OptimizationComparison } from './OptimizationComparison';
 import { OptimizationResults } from './OptimizationResults';
 import { OptimizationNumberField } from './OptimizationNumberField';
 import './optimization.css';
+import { pathContains } from '../../domain/files/paths';
 
 const presets = [
   { value: 'balanced', label: 'Balanced · high quality' },
@@ -26,10 +27,7 @@ const presets = [
 /** Common ancestry is displayed and explicitly selected, never stored in a recipe. */
 export function optimizationRoot(files: readonly FileEntry[]): string | undefined {
   let root = files[0]?.parent;
-  while (
-    root &&
-    files.some((file) => file.parent !== root && !file.parent.startsWith(root + '/'))
-  ) {
+  while (root && files.some((file) => !pathContains(root!, file.parent))) {
     root = root.slice(0, root.lastIndexOf('/'));
   }
   return root && root !== '/' ? root : undefined;

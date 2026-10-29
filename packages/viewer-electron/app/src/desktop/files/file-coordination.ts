@@ -3,6 +3,7 @@ import path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { lstat, stat, realpath } from 'node:fs/promises';
 import { macFiles, type FileAccessIntent, type MacFiles } from '../native/macos-files';
+import { containsPath } from './containment';
 
 type Binding = Pick<
   MacFiles,
@@ -17,13 +18,6 @@ interface Claim {
   abort: AbortController;
   done: Promise<void>;
 }
-const contains = (parent: string, file: string) => {
-  const relative = path.relative(parent, file);
-  return (
-    relative === '' ||
-    (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative))
-  );
-};
 async function canonical(file: string): Promise<string> {
   try {
     return await realpath(file);
@@ -243,8 +237,8 @@ export class FileCoordination {
       const aliases = await claim.canonical;
       if (
         !normalized ||
-        claim.intents.some((intent) => contains(normalized, intent.path)) ||
-        aliases.some((file) => contains(actual!, file))
+        claim.intents.some((intent) => containsPath(normalized, intent.path)) ||
+        aliases.some((file) => containsPath(actual!, file))
       )
         pending.push(claim);
     }

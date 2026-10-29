@@ -6,6 +6,7 @@ import type {
 } from '../../domain/previews/documents/office';
 import { sourceVersion } from '../../domain/files/inspection';
 import type { PreviewContext } from './contracts';
+import { pathContains } from '../../domain/files/paths';
 
 interface CachedDocument {
   path: string;
@@ -110,10 +111,7 @@ export class PreviewDocumentCache {
     return value;
   }
   invalidate(root?: string): void {
-    const within = (file: string) =>
-      !root ||
-      file === root ||
-      ['/', '\\'].some((separator) => file.startsWith(root.replace(/[/\\]+$/, '') + separator));
+    const within = (file: string) => !root || pathContains(root, file);
     for (const pending of this.pending) if (within(pending.path)) pending.invalidated = true;
     for (const [key, entry] of this.entries)
       if (within(entry.path)) {

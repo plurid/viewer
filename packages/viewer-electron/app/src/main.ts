@@ -53,6 +53,7 @@ import {
   rendererRequestAllowed,
 } from './desktop/windows/web-content-policy';
 import { performanceMeter } from './desktop/diagnostics/performance';
+import { assetPath } from './desktop/native/assets';
 const terminalArguments = process.argv.slice(app.isPackaged ? 1 : 2);
 const mcpMode = terminalArguments[0] === '--mcp';
 const cliMode = !mcpMode && isCLIInvocation(terminalArguments);
@@ -621,7 +622,7 @@ app
       return;
     }
     // Development runs the stock Electron.app; give the Dock Viewer's icon.
-    if (!app.isPackaged) app.dock?.setIcon(path.resolve('assets/icon.png'));
+    if (!app.isPackaged) app.dock?.setIcon(assetPath('icon.png'));
     windowState = new WindowState(path.join(app.getPath('userData'), 'window-state-v1.json'));
     await windowState.load();
     settingsWindowState = new WindowState(
@@ -670,12 +671,8 @@ app
       fileBackend:
         backgroundTest && process.env.VIEWER_TEST_FILE_THREADS === '1' ? 'thread' : undefined,
       terminalWorker: path.join(__dirname, 'terminal-worker.cjs'),
-      ocr: app.isPackaged
-        ? path.join(process.resourcesPath, 'viewer-ocr')
-        : path.resolve('assets/viewer-ocr'),
-      applications: app.isPackaged
-        ? path.join(process.resourcesPath, 'viewer-applications')
-        : path.resolve('assets/viewer-applications'),
+      ocr: assetPath('viewer-ocr'),
+      applications: assetPath('viewer-applications'),
     });
     // Loading the main-thread binding registers public AppKit observers before
     // createWindow can request restoration of a native fullscreen Space.

@@ -38,6 +38,7 @@ import {
   saveCollection,
   useViewer,
 } from '../state/store';
+import { slugID } from '../../domain/ids';
 
 const LazyTasksDialog = lazy(() =>
   import('../tasks/TasksDialog').then((module) => ({ default: module.TasksDialog })),
@@ -291,14 +292,14 @@ export function WindowDialogs({
             name = name.trim();
             if (!name) throw new Error('Enter a name for the macro.');
             const actions = getState().settings.settings.customActions;
-            const slug = name
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, '-')
-              .replace(/^-|-$/g, '');
             const command = commandName(name);
             // a command sequence: it can be given a shortcut or a prefix key in Settings
             const action: CustomAction = {
-              id: `macro-${slug || 'macro'}-${Date.now().toString(36)}`,
+              id: slugID(
+                `macro ${name}`,
+                'macro',
+                actions.map((item) => item.id),
+              ),
               name,
               aliases: ['macro'],
               icon: 'command',

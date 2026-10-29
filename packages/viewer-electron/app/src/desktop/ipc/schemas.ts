@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { backupRequestSchema } from '../../domain/persistence/backup';
 import { officeLayoutRequestSchema } from '../../domain/previews/documents/layout';
 import type { ApiMethod, DesktopEvent, ViewerAPI } from '../../domain/contracts';
-import { paneTypes } from '../../domain/contracts';
+import { imageConversions, paneTypes, rendererOperationKinds } from '../../domain/contracts';
 import { modelDataLevels } from '../../domain/models/permissions';
 import { operationPlanRequestSchema } from '../../domain/operations/operation-plan';
 import { sourceVersionSchema } from '../../domain/files/inspection';
@@ -80,7 +80,7 @@ const sessionKeysSchema = z
   .strict();
 import { stateSchema } from '../persistence/storage';
 import { informationPatchSchema } from '../files/file-information';
-import { localPath, id } from '../schemas';
+import { fileEntrySchema, localPath, id } from '../schemas';
 import { textBufferSchema } from '../editing/text-buffers';
 import { MAX_TEXT_BYTES, textVersionSchema } from '../../domain/editing/documents';
 
@@ -154,26 +154,7 @@ const targetSchema = z.object({
   paneID: id,
   directory: localPath,
   panePath: localPath.optional(),
-  selection: z
-    .array(
-      z.object({
-        path: localPath,
-        name: z.string().max(32768),
-        parent: localPath,
-        extension: z.string().max(100),
-        kind: z.enum(['directory', 'file', 'symlink', 'other']),
-        directory: z.boolean(),
-        size: z.number(),
-        modified: z.number(),
-        created: z.number(),
-        hidden: z.boolean(),
-        mime: z.string().max(100),
-        identity: z.string().max(300),
-        linkTarget: z.string().optional(),
-        error: z.string().optional(),
-      }),
-    )
-    .max(2000),
+  selection: z.array(fileEntrySchema).max(2000),
 });
 const gitActionTargetSchema = z.object({
   id,
@@ -546,26 +527,7 @@ export const schemas = {
       paneID: id,
       panePath: localPath.optional(),
       directory: localPath,
-      selection: z
-        .array(
-          z.object({
-            path: localPath,
-            name: z.string().max(1024),
-            parent: localPath,
-            extension: z.string().max(255),
-            kind: z.enum(['directory', 'file', 'symlink', 'other']),
-            directory: z.boolean(),
-            size: z.number(),
-            modified: z.number(),
-            created: z.number(),
-            hidden: z.boolean(),
-            mime: z.string().max(255),
-            identity: z.string().max(200),
-            linkTarget: z.string().max(32768).optional(),
-            error: z.string().max(4000).optional(),
-          }),
-        )
-        .max(2000),
+      selection: z.array(fileEntrySchema).max(2000),
     }),
     z
       .record(
@@ -588,30 +550,26 @@ export const schemas = {
       .refine((value) => !value.includes('\0')),
     targetSchema.strict(),
   ]),
-  commandDraft: z.union([
-    z.tuple([]),
-    z.tuple([
-      z
-        .object({
-          script: z
-            .string()
-            .min(1)
-            .max(16000)
-            .refine((value) => !value.includes('\0')),
-          name: z.string().trim().min(1).max(100),
-        })
-        .strict(),
-    ]),
+  commandDraft: z.tuple([
+    z
+      .object({
+        script: z
+          .string()
+          .min(1)
+          .max(16000)
+          .refine((value) => !value.includes('\0')),
+        name: z.string().trim().min(1).max(100),
+      })
+      .strict()
+      .optional(),
   ]),
   executionCancel: z.tuple([id]),
-  openSettings: z.union([
-    z.tuple([]),
-    z.tuple([
-      z
-        .string()
-        .max(200)
-        .regex(/^[A-Za-z0-9.]+$/),
-    ]),
+  openSettings: z.tuple([
+    z
+      .string()
+      .max(200)
+      .regex(/^[A-Za-z0-9.]+$/)
+      .optional(),
   ]),
   settingsGet: z.tuple([]),
   promptLine: z.tuple([promptRequestSchema]),
@@ -711,24 +669,11 @@ export const schemas = {
   cancelSearch: z.tuple([id]),
   operate: z.tuple([
     z.object({
-      kind: z.enum([
-        'copy',
-        'move',
-        'transfer',
-        'duplicate',
-        'alias',
-        'rename',
-        'mkdir',
-        'mkfile',
-        'trash',
-        'compress',
-        'extract',
-        'convert',
-      ]),
+      kind: z.enum(rendererOperationKinds),
       sources: z.array(localPath).max(10000),
       destination: localPath.optional(),
       name: z.string().max(255).optional(),
-      conversion: z.enum(['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf']).optional(),
+      conversion: z.enum(imageConversions).optional(),
       transform: transformPlanSchema.optional(),
       expectedSources: z
         .array(z.object({ path: localPath, version: sourceVersionSchema }).strict())
@@ -1006,3 +951,14 @@ export type ApiHandlers = {
     senderID: number,
   ) => Awaited<ReturnType<ViewerAPI[K]>> | Promise<Awaited<ReturnType<ViewerAPI[K]>>>;
 };
+
+/**
+ * Every method's schema accepts what `ViewerAPI` lets a renderer send, checked when compiling.
+ * `fileDropPaths` is the exception: the preload turns its `File`s into paths.
+ */
+type PreloadAdapted = 'fileDropPaths';
+type Accepts<K extends ApiMethod> =
+  Parameters<ViewerAPI[K]> extends z.input<(typeof schemas)[K]> ? K : never;
+type Disagreeing = Exclude<ApiMethod, PreloadAdapted | { [K in ApiMethod]: Accepts<K> }[ApiMethod]>;
+export const schemasAgreeWithAPI: [Disagreeing] extends [never] ? true : { [K in Disagreeing]: K } =
+  true;

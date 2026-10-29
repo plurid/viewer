@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ExecutionTask } from '../../domain/automation/actions';
 import { report } from '../state/store';
+import { followSnapshot } from '../state/requests';
+import type { DesktopEvent } from '../../domain/contracts';
 import { IconButton } from '../ui/primitives';
 import { useWorkspace } from '../workspace/context';
 export function ExecutionPanel() {
@@ -24,17 +26,25 @@ export function ExecutionPanel() {
     return () => clearInterval(timer);
   }, [running]);
   useEffect(() => {
-    void window.viewer.executionList().then(setTasks).catch(report);
-    return window.viewer.onEvent((event) => {
-      if (event.type === 'execution') {
-        setDismissed(false);
-        setTasks((tasks) =>
-          tasks.some((task) => task.id === event.task.id)
-            ? tasks.map((task) => (task.id === event.task.id ? event.task : task))
-            : [...tasks, event.task].slice(-20),
-        );
-      }
+    const following = followSnapshot<ExecutionTask[], DesktopEvent>({
+      load: () => window.viewer.executionList(),
+      subscribe: (listener) => window.viewer.onEvent(listener),
+      apply: (tasks, event) => {
+        if (event.type !== 'execution') return tasks;
+        return tasks.some((task) => task.id === event.task.id)
+          ? tasks.map((task) => (task.id === event.task.id ? event.task : task))
+          : [...tasks, event.task].slice(-20);
+      },
+      set: setTasks,
+      failed: report,
     });
+    const unsubscribe = window.viewer.onEvent((event) => {
+      if (event.type === 'execution') setDismissed(false);
+    });
+    return () => {
+      following.stop();
+      unsubscribe();
+    };
   }, []);
   if (!tasks.length || dismissed) return null;
   return (

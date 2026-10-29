@@ -1,4 +1,5 @@
 import type { IndexedQuery, IndexedResult, IndexStatus } from '../services';
+import { pathContains } from '../files/paths';
 
 export interface SearchCoverage {
   state: 'complete' | 'partial' | 'unavailable';
@@ -7,11 +8,6 @@ export interface SearchCoverage {
   roots: IndexStatus['roots'];
 }
 
-const within = (file: string, root: string) => {
-  const base = root.replace(/[/\\]+$/, '');
-  return file === root || file.startsWith(base + '/') || file.startsWith(base + '\\');
-};
-
 /** Coverage is scoped to this search, rather than indexing work elsewhere in the app. */
 export function indexedCoverage(
   result: IndexedResult,
@@ -19,7 +15,10 @@ export function indexedCoverage(
   contentRoots: readonly string[],
 ): SearchCoverage {
   const roots = result.status.roots.filter(
-    (root) => !request.root || within(request.root, root.path) || within(root.path, request.root),
+    (root) =>
+      !request.root ||
+      pathContains(root.path, request.root) ||
+      pathContains(request.root, root.path),
   );
   const reasons: string[] = [];
   const unavailable = !result.indexed || !roots.length;
@@ -35,7 +34,7 @@ export function indexedCoverage(
     reasons.push('The query reached its 20,000-candidate scan limit. Narrow the query.');
   if (request.content) {
     const locations = request.root ? [request.root] : roots.map((root) => root.path);
-    if (locations.some((location) => !contentRoots.some((root) => within(location, root))))
+    if (locations.some((location) => !contentRoots.some((root) => pathContains(root, location))))
       reasons.push('Document text is not enabled for every location in this search.');
     reasons.push('Document text covers supported formats and bounded extracts, without OCR.');
   }

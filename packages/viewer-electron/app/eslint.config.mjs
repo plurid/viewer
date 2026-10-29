@@ -32,6 +32,25 @@ export default tseslint.config(
     rules: { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'error' },
   },
   {
+    // Type-aware: a promise nobody awaits loses its failure; `void` marks a deliberate one.
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    // the policy tests lint virtual fixtures that belong to no tsconfig
+    ignores: ['src/**/*-fixture.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.main.json', './tsconfig.renderer.json', './tsconfig.preload.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: true }],
+      '@typescript-eslint/switch-exhaustiveness-check': [
+        'error',
+        { considerDefaultExhaustiveForUnions: true },
+      ],
+    },
+  },
+  {
     files: ['src/desktop/operations/removal.ts'],
     rules: { 'no-restricted-syntax': ['error', importType] },
   },

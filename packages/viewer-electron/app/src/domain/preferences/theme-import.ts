@@ -5,6 +5,7 @@ import {
   type TerminalToken,
   type Theme,
 } from './themes';
+import { slugID } from '../ids';
 
 const hex = (value: number) =>
   Math.round(Math.min(1, Math.max(0, value)) * 255)
@@ -15,11 +16,6 @@ const lookOf = (color: string): 'dark' | 'light' => {
   const [r, g, b] = [1, 3, 5].map((at) => parseInt(color.slice(at, at + 2), 16) / 255);
   return 0.2126 * r! + 0.7152 * g! + 0.0722 * b! > 0.5 ? 'light' : 'dark';
 };
-const slug = (name: string) =>
-  name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') || 'theme';
 const ansi: readonly TerminalToken[] = [
   'black',
   'red',
@@ -43,7 +39,7 @@ const ansi: readonly TerminalToken[] = [
  * background, foreground, cursor and selection become the terminal's palette, and the shell takes
  * its space, text and accent from them.
  */
-export function importItermColors(xml: string, name: string): Theme {
+export function importItermColors(xml: string, name: string, taken: Iterable<string> = []): Theme {
   const colors = new Map<string, string>();
   for (const block of xml.matchAll(/<key>([^<]+)<\/key>\s*<dict>([\s\S]*?)<\/dict>/g)) {
     const channel = (component: string) =>
@@ -72,7 +68,7 @@ export function importItermColors(xml: string, name: string): Theme {
     if (color) terminal[token] = color;
   });
   return {
-    id: `${slug(name)}-${Date.now().toString(36)}`,
+    id: slugID(name, 'theme', taken),
     name,
     look: lookOf(background),
     shell: {
@@ -133,7 +129,11 @@ const syntaxScopes: [SyntaxToken, string[]][] = [
  * A vs code theme: its workbench colours become the shell's, its token colours the
  * code colours, and its terminal colours the terminal's palette.
  */
-export function importVSCodeTheme(text: string, fallbackName = 'Imported theme'): Theme {
+export function importVSCodeTheme(
+  text: string,
+  fallbackName = 'Imported theme',
+  taken: Iterable<string> = [],
+): Theme {
   const json = parseJSONC(text) as {
     name?: unknown;
     type?: unknown;
@@ -182,5 +182,5 @@ export function importVSCodeTheme(text: string, fallbackName = 'Imported theme')
       : shell.space
         ? lookOf(shell.space)
         : 'dark';
-  return { id: `${slug(name)}-${Date.now().toString(36)}`, name, look, shell, syntax, terminal };
+  return { id: slugID(name, 'theme', taken), name, look, shell, syntax, terminal };
 }

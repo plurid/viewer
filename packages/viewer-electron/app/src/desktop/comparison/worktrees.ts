@@ -17,6 +17,7 @@ import { inspectReviewedFile } from '../native/reviewed-file';
 import { entry } from '../files/filesystem';
 import { GitReader, type GitRunner } from './git';
 import { addWorktree } from './worktree-process';
+import { containsPath } from '../files/containment';
 
 interface CheckoutIdentity {
   path: string;
@@ -52,13 +53,6 @@ interface WorktreePorts {
 
 const leaseLifetime = 5 * 60_000;
 const identityOf = (info: { dev: number; ino: number }) => `${info.dev}:${info.ino}`;
-const inside = (root: string, file: string) => {
-  const relative = path.relative(root, file);
-  return (
-    relative === '' ||
-    (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith('..' + path.sep))
-  );
-};
 
 /** Owner-bound discovery and explicit human creation. Never switches, prunes or removes. */
 export class GitWorktrees {
@@ -221,7 +215,7 @@ export class GitWorktrees {
       if (Date.now() - lease.issued > leaseLifetime) this.catalogs.delete(key);
     if (this.catalogs.size >= 16) this.catalogs.delete(this.catalogs.keys().next().value!);
     const current = worktrees
-      .filter((tree) => inside(tree.path, registry.currentPath))
+      .filter((tree) => containsPath(tree.path, registry.currentPath))
       .sort((left, right) => right.path.length - left.path.length)[0];
     let branches: WorktreeBranch[] = [],
       creationProblem: string | undefined;
@@ -323,7 +317,7 @@ export class GitWorktrees {
     if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink())
       throw new Error('Choose an ordinary existing parent folder.');
     const destination = path.join(canonicalParent, path.basename(request.destination));
-    if (inside(lease.common, destination))
+    if (containsPath(lease.common, destination))
       throw new Error('A worktree cannot be created inside Git administration.');
     const absent = async () => {
       try {
@@ -416,7 +410,10 @@ export class GitWorktrees {
   async quiesce(root?: string): Promise<void> {
     const done: Promise<unknown>[] = [];
     for (const [abort, write] of this.writes)
-      if (!root || write.paths.some((file) => inside(root, file) || inside(file, root))) {
+      if (
+        !root ||
+        write.paths.some((file) => containsPath(root, file) || containsPath(file, root))
+      ) {
         abort.abort(new Error('Worktree creation stopped because folder access changed.'));
         if (write.done) done.push(write.done);
       }

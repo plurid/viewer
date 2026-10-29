@@ -28,10 +28,17 @@ export function captureCurrentLayout(name: string): LayoutTemplate {
       return seen.length ? [...new Set(seen)] : space.roots;
     })();
   const settings = effectiveWindowSettings(getState()).tiling;
-  return captureTemplate(name, space.panes, order, getState().bootstrap.home, {
-    layout: space.tiling?.layout ?? (order.length > 3 ? 'tiled' : settings.defaultLayout),
-    main: space.tiling?.main ?? 0.6,
-  });
+  return captureTemplate(
+    name,
+    space.panes,
+    order,
+    getState().bootstrap.home,
+    {
+      layout: space.tiling?.layout ?? (order.length > 3 ? 'tiled' : settings.defaultLayout),
+      main: space.tiling?.main ?? 0.6,
+    },
+    getState().settings.settings.layouts.map((layout) => layout.id),
+  );
 }
 async function saveLayouts(layouts: LayoutTemplate[]): Promise<void> {
   receiveSettings(

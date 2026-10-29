@@ -9,6 +9,7 @@ import { DocumentCache } from '../previews/document-cache';
 import { workerPort } from './worker-port';
 import { errorMessage } from '../../domain/errors';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
+import { containsPath } from '../files/containment';
 interface Request {
   id: string;
   method:
@@ -111,10 +112,7 @@ port.on('message', async (event) => {
       if (
         watchedStatus(index.status()).roots.some(
           (root) =>
-            root.status === 'offline' &&
-            (!query.root ||
-              query.root === root.path ||
-              query.root.startsWith(root.path.replace(/\/$/, '') + '/')),
+            root.status === 'offline' && (!query.root || containsPath(root.path, query.root)),
         )
       )
         throw new Error(

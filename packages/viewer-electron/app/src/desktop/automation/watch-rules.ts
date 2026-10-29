@@ -20,14 +20,8 @@ import {
 import type { WorkflowDocument, WorkflowRun } from '../../domain/automation/workflows';
 import type { ActionRecipe } from '../../domain/services';
 import type { Workflows } from './workflows';
+import { containsPath } from '../files/containment';
 
-const within = (root: string, file: string) => {
-  const relative = path.relative(root, file);
-  return (
-    !relative ||
-    (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith('..' + path.sep))
-  );
-};
 const pending = (status?: WorkflowRun['status']) =>
   !!status && ['running', 'paused', 'waiting-review'].includes(status);
 function publicRule(rule: StoredWatchRule): WatchRule {
@@ -178,9 +172,9 @@ export class WatchRules {
         'The workflow changed. Review its current definition and enable the rule again.',
       );
     const privateRoot = await realpath(this.directory);
-    if (within(privateRoot, scope.root))
+    if (containsPath(privateRoot, scope.root))
       throw new Error('Choose a folder outside Viewer’s private application data.');
-    if (within(privateRoot, scope.file) || (await realpath(scope.file)) !== scope.file)
+    if (containsPath(privateRoot, scope.file) || (await realpath(scope.file)) !== scope.file)
       throw new Error('Choose a workflow outside Viewer’s private application data.');
     const names = new Set(document.definition.bindings.map((binding) => binding.name));
     if (
@@ -237,10 +231,10 @@ export class WatchRules {
         if (!folder) throw new Error('Choose the destination folder binding.');
         await this.dependencies.access([folder]);
         const target = await realpath(folder);
-        if (within(privateRoot, target))
+        if (containsPath(privateRoot, target))
           throw new Error('Choose a destination outside Viewer’s private application data.');
         if (!(await lstat(target)).isDirectory()) throw new Error('Choose a destination folder.');
-        if (within(target, scope.root))
+        if (containsPath(target, scope.root))
           throw new Error(
             'The copy destination must be outside or strictly inside the watched folder, not the watched folder itself or its parent.',
           );
@@ -287,8 +281,8 @@ export class WatchRules {
     );
     for (const file of run.context.sources) {
       if (
-        !within(rule.scope.root, file) ||
-        excluded.some((root) => within(root, file)) ||
+        !containsPath(rule.scope.root, file) ||
+        excluded.some((root) => containsPath(root, file)) ||
         (needsSelection && ((await realpath(file)) !== file || !(await lstat(file)).isFile()))
       )
         throw new Error('A changed file moved outside the watched folder or became unavailable.');
@@ -308,7 +302,7 @@ export class WatchRules {
     const walk = async (folder: string, depth: number) => {
       if (depth > 32 || ++visited > 5000)
         throw new Error('The watched tree is too large. Choose a smaller folder.');
-      if (excluded.some((root) => within(root, folder))) return;
+      if (excluded.some((root) => containsPath(root, folder))) return;
       await this.dependencies.access([folder]);
       if ((await realpath(folder)) !== folder)
         throw new Error('The watched tree changed while scanning. Enable the rule again.');
@@ -316,7 +310,7 @@ export class WatchRules {
         const file = path.join(folder, item.name);
         if (++visited > 5000)
           throw new Error('The watched tree is too large. Choose a smaller folder.');
-        if (excluded.some((root) => within(root, file)) || item.isSymbolicLink()) continue;
+        if (excluded.some((root) => containsPath(root, file)) || item.isSymbolicLink()) continue;
         if (item.isDirectory()) {
           if (rule.scope.recursive) await walk(file, depth + 1);
           continue;
@@ -340,7 +334,7 @@ export class WatchRules {
     const owned = {} as OwnedWatch;
     owned.watcher = (this.dependencies.watch ?? watchDirectory)(rule.scope.root, {
       recursive: rule.scope.recursive,
-      ignored: (file) => within(this.directory, file) || file === rule.scope.file,
+      ignored: (file) => containsPath(this.directory, file) || file === rule.scope.file,
       changed: () => {
         if (this.watches.get(rule.id) === owned) this.schedule(rule);
       },
@@ -400,7 +394,8 @@ export class WatchRules {
       for (const step of result?.steps ?? [])
         if (step.status === 'completed')
           for (const output of step.outputs)
-            if (within(rule.scope.root, output.path)) previous.set(output.path, output.version);
+            if (containsPath(rule.scope.root, output.path))
+              previous.set(output.path, output.version);
       const changed = snapshot.filter((file) => {
         const before = previous.get(file.path);
         return !before || !sameSourceVersion(before, file.version);
@@ -469,7 +464,7 @@ export class WatchRules {
     for (const rule of this.rules.values())
       if (
         [rule.scope.root, rule.scope.file, ...Object.values(rule.scope.bindings)].some((file) =>
-          within(root, file),
+          containsPath(root, file),
         )
       ) {
         rule.enabled = false;
@@ -479,7 +474,7 @@ export class WatchRules {
       for (const rule of this.rules.values())
         if (
           [rule.scope.root, rule.scope.file, ...Object.values(rule.scope.bindings)].some((file) =>
-            within(root, file),
+            containsPath(root, file),
           )
         )
           await this.stop(

@@ -187,10 +187,11 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
             try {
               const text = await chosen.text();
               const name = chosen.name.replace(/\.[^.]+$/, '');
+              const taken = themes.map((theme) => theme.id);
               add(
                 chosen.name.endsWith('.itermcolors')
-                  ? importItermColors(text, name)
-                  : importVSCodeTheme(text, name),
+                  ? importItermColors(text, name, taken)
+                  : importVSCodeTheme(text, name, taken),
               );
             } catch (failure) {
               error((failure as Error).message);

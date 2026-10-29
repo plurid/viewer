@@ -152,7 +152,7 @@ export class Trash {
   async copyPaths(itemIDs: string[]): Promise<void> {
     const items = itemIDs.map((itemID) => this.#get(itemID));
     for (const item of items) await this.#verify(item);
-    clipboard.writeText(items.map((item) => item.file).join('\n'));
+    await clipboard.writeText(items.map((item) => item.file).join('\n'));
   }
   /** "Restore to…": the folder, chosen before the move takes the file operations lock. Chosen inside
    * it, the picker held every queued file operation while it was open. */

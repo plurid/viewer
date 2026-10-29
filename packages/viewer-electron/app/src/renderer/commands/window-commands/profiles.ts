@@ -17,6 +17,7 @@ import type { WindowScopes } from './scope';
 import { changeSetting, settingNow } from './settings';
 import { builtInTheme } from '../../../domain/preferences/themes';
 import { stopTour } from '../../workspace/tour';
+import { slugID } from '../../../domain/ids';
 
 const profiles = () => presentationProfiles(getState().settings.settings.profiles);
 /** Selects a window-local overlay; canonical configuration remains untouched. */
@@ -37,13 +38,9 @@ export async function leaveProfile(): Promise<void> {
 }
 /** The current values of what a profile holds, as a new profile. */
 export function captureProfile(name: string): SettingProfile {
-  const slug =
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'profile';
+  const taken = getState().settings.settings.profiles.map((profile) => profile.id);
   return {
-    id: `${slug}-${Date.now().toString(36)}`,
+    id: slugID(name, 'profile', taken),
     name,
     values: Object.fromEntries(
       profilePaths.map((path) => [path, (settingNow(path) ?? null) as JSONValue]),

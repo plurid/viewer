@@ -447,7 +447,8 @@ export type OperationKind =
   /** A text save over an existing file, its previous version moved to the Trash. */
   | 'rewrite';
 /** Image quick actions. Each creates a new file; sources are never changed. */
-export type ImageConversion = 'rotate-left' | 'rotate-right' | 'jpeg' | 'png' | 'pdf';
+export const imageConversions = ['rotate-left', 'rotate-right', 'jpeg', 'png', 'pdf'] as const;
+export type ImageConversion = (typeof imageConversions)[number];
 export interface OperationRequest {
   kind: OperationKind;
   sources: string[];
@@ -470,6 +471,27 @@ export interface OperationRequest {
   textSHA256?: string;
   textBytes?: number;
 }
+/** The operations a renderer may start; a text save (`rewrite`) belongs to the editing service. */
+export const rendererOperationKinds = [
+  'copy',
+  'move',
+  'transfer',
+  'duplicate',
+  'alias',
+  'rename',
+  'mkdir',
+  'mkfile',
+  'trash',
+  'compress',
+  'extract',
+  'convert',
+] as const satisfies readonly OperationKind[];
+export type RendererOperationKind = (typeof rendererOperationKinds)[number];
+/** What `operate` accepts from a renderer: the desktop supplies the reviewed and prepared fields. */
+export type RendererOperationRequest = Pick<
+  OperationRequest,
+  'sources' | 'destination' | 'name' | 'conversion' | 'transform' | 'expectedSources'
+> & { kind: RendererOperationKind };
 export type CollisionDecision = 'skip' | 'keep-both' | 'replace' | 'cancel';
 export interface Collision {
   source: string;
@@ -773,7 +795,7 @@ export interface ViewerAPI {
   unwatch(subscriber: string): Promise<void>;
   search(request: SearchRequest): Promise<void>;
   cancelSearch(id: string): Promise<void>;
-  operate(request: OperationRequest): Promise<string>;
+  operate(request: RendererOperationRequest): Promise<string>;
   jobs(): Promise<OperationJob[]>;
   cancelJob(id: string): Promise<void>;
   resolveCollision(id: string, decision: CollisionDecision, applyAll: boolean): Promise<void>;

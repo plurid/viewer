@@ -18,6 +18,7 @@ import {
 } from '../../domain/comparison/git-actions';
 import type { GitTerminalLaunch } from '../comparison/git-actions';
 import type { TerminalWorkerRequest } from './terminal-protocol';
+import { containsPath } from '../files/containment';
 
 interface PendingTerminal {
   owner: number;
@@ -383,8 +384,7 @@ export class Terminals {
     }
   }
   async quiesce(root: string): Promise<void> {
-    const related = (file: string) =>
-      file === root || file.startsWith(root.replace(/\/$/, '') + '/');
+    const related = (file: string) => containsPath(root, file);
     const work: Promise<void>[] = [];
     for (const pending of this.pending.values())
       if (related(pending.request.cwd)) {

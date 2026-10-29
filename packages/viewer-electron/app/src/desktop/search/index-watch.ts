@@ -1,12 +1,7 @@
-import path from 'node:path';
 import type { ApplicationSettings } from '../../domain/services';
 import { watchDirectory, type DirectoryWatch } from '../files/directory-watch';
 import { searchExclusions } from './exclusions';
-
-const inside = (file: string, root: string) => {
-  const relative = path.relative(root, file);
-  return relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
-};
+import { containsPath } from '../files/containment';
 
 /** Coalesce event bursts into bounded, serial index reconciliations. */
 export class IndexWatcher {
@@ -56,7 +51,7 @@ export class IndexWatcher {
           const parents: string[] = [];
           for (const file of [...files].sort((a, b) => a.length - b.length)) {
             if (this.closed) return;
-            if (parents.some((parent) => inside(file, parent))) continue;
+            if (parents.some((parent) => containsPath(parent, file))) continue;
             parents.push(file);
             await this.changed(file);
           }

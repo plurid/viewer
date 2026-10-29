@@ -65,6 +65,12 @@ export function receiveJob(job: OperationJob): void {
   if (job.undoable && !old?.undoable) undoableSince.set(job.id, Date.now());
   if (job.redoable && !old?.redoable) redoableSince.set(job.id, Date.now());
   const jobs = [job, ...getState().jobs.filter((item) => item.id !== job.id)].slice(0, 100);
+  // a job that fell off the list can no longer be undone from this window
+  if (undoableSince.size > jobs.length || redoableSince.size > jobs.length) {
+    const listed = new Set(jobs.map((item) => item.id));
+    for (const times of [undoableSince, redoableSince])
+      for (const id of times.keys()) if (!listed.has(id)) times.delete(id);
+  }
   const needsDecision =
     job.status === 'collision' ||
     (job.status === 'queued' && jobs.some((item) => item.status === 'collision'));

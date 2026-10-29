@@ -14,6 +14,7 @@ import { entry, absolute } from '../files/filesystem';
 import { executablePath } from '../terminals/terminal-launch';
 import { childEnvironment } from '../terminals/process-environment';
 import { errorMessage } from '../../domain/errors';
+import { containsPath } from '../files/containment';
 /** User-authored executables are subprocesses. Only the explicit shell executor interprets code. */
 export class Executions {
   private tasks = new Map<string, ExecutionTask>();
@@ -300,8 +301,7 @@ export class Executions {
     for (const [id, taskOwner] of this.owners) if (taskOwner === owner) this.cancel(id, owner);
   }
   async quiesce(root: string): Promise<void> {
-    const related = (file: string) =>
-      file === root || file.startsWith(root.replace(/\/$/, '') + '/');
+    const related = (file: string) => containsPath(root, file);
     const work: Promise<void>[] = [];
     for (const ticket of this.preparing)
       if (

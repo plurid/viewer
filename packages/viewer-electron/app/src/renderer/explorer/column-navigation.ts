@@ -3,6 +3,7 @@ import type { FileEntry } from '../../domain/contracts';
 import { browsable } from '../../domain/files/entries';
 import { browseSession, useBrowseField } from '../workspace/sessions';
 import type { FileModifiers, FileSelection } from './selection';
+import { pathContains } from '../../domain/files/paths';
 
 const plain = { shiftKey: false, metaKey: false, ctrlKey: false };
 /** The active column owns selection, traversal and operation destinations together. */
@@ -54,11 +55,7 @@ export function useColumnNavigation(
       if (child && !scope.some((entry) => browsable(entry) && entry.path === child)) {
         selecting.removeBranch(child);
         setTrail((value) => value.slice(0, depth));
-        if (
-          !scopes.has(session.columnScope) ||
-          session.columnScope === child ||
-          session.columnScope.startsWith(child + '/')
-        )
+        if (!scopes.has(session.columnScope) || pathContains(child, session.columnScope))
           session.columnScope = directory;
         setDirectory(directory);
         pending.current = undefined;

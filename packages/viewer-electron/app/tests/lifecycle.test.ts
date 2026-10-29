@@ -96,6 +96,7 @@ const application = Object.assign(new EventEmitter(), {
   setName: vi.fn(),
   requestSingleInstanceLock: () => true,
   getPath: () => native.profile,
+  getAppPath: () => process.cwd(),
   whenReady: () => Promise.resolve(),
   terminated: false,
   quit(): void {

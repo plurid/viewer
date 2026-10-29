@@ -13,6 +13,7 @@ import {
   webLimits,
   WebPreviewError,
 } from './policy';
+import { containsPath } from '../../files/containment';
 
 export type WebAccess = (files: readonly string[]) => Promise<void>;
 export interface ReadBudget {
@@ -25,13 +26,6 @@ export interface StaticRootIdentity {
   identity: string;
 }
 
-export const containsPath = (root: string, file: string): boolean => {
-  const relative = path.relative(root, file);
-  return (
-    !relative ||
-    (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith('..' + path.sep))
-  );
-};
 const identity = (info: Stats) => `${info.dev}:${info.ino}`;
 const stable = (before: Stats, after: Stats) =>
   identity(before) === identity(after) &&

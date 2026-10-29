@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { mkdir, open, opendir, readFile, realpath, rename } from 'node:fs/promises';
 import { z } from 'zod';
+import { fileEntrySchema } from '../schemas';
 import type { FileEntry } from '../../domain/contracts';
 import {
   recipeReadsContent,
@@ -23,6 +24,7 @@ import type { Operations } from '../operations/operations';
 import { fileCoordination } from '../files/file-coordination';
 import { errorMessage } from '../../domain/errors';
 import { removePrivateData } from '../operations/removal';
+import { containsPath } from '../files/containment';
 const output = z.object({
   rows: z
     .array(
@@ -58,8 +60,6 @@ const output = z.object({
     .max(2000),
 });
 const compact = (value: string) => value.replace(/\s+/g, ' ').trim();
-const contained = (file: string, root: string) =>
-  file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 const same = (a: FileEntry, b: FileEntry) =>
   a.identity === b.identity && a.size === b.size && a.modified === b.modified && a.kind === b.kind;
 interface Dependencies {
@@ -83,22 +83,6 @@ interface Dependencies {
   emit(plan: ActionPlan): void;
   changed(changes: FileChange[]): void;
 }
-const sourceSchema = z.object({
-  path: z.string(),
-  name: z.string(),
-  parent: z.string(),
-  extension: z.string(),
-  kind: z.enum(['file', 'directory', 'symlink', 'other']),
-  directory: z.boolean(),
-  size: z.number().min(0),
-  modified: z.number(),
-  created: z.number(),
-  hidden: z.boolean(),
-  mime: z.string(),
-  identity: z.string(),
-  linkTarget: z.string().optional(),
-  error: z.string().optional(),
-});
 const stepSchema = z.object({
   row: z.string(),
   stagedPath: z.string().optional(),
@@ -134,7 +118,7 @@ const planSchema = z.object({
     .array(
       z.object({
         id: z.string(),
-        source: sourceSchema.optional(),
+        source: fileEntrySchema.optional(),
         kind: z.enum(['rename', 'move', 'mkdir', 'summary']),
         destination: z.string(),
         text: z.string().optional(),
@@ -151,7 +135,7 @@ const planSchema = z.object({
     .max(4000),
   outputRoot: z.string().optional(),
   summary: z.string().optional(),
-  summaryInputs: z.array(sourceSchema).max(2000).optional(),
+  summaryInputs: z.array(fileEntrySchema).max(2000).optional(),
   error: z.string().optional(),
   undoable: z.boolean(),
 });
@@ -372,8 +356,7 @@ export class ActionPlanner {
     }
   }
   async quiesce(root: string): Promise<void> {
-    const related = (file: string) =>
-      file === root || file.startsWith(root.replace(/\/$/, '') + '/');
+    const related = (file: string) => containsPath(root, file);
     const work: Promise<unknown>[] = [];
     for (const [id, plan] of this.plans)
       if (
@@ -603,7 +586,7 @@ export class ActionPlanner {
           if (path.extname(name) !== path.extname(file.name))
             issue = 'Keep the original extension.';
           const destination = path.resolve(file.parent, name);
-          if (!contained(destination, file.parent))
+          if (!containsPath(file.parent, destination))
             issue = 'The destination is outside this action’s scope.';
           plan.rows.push(this.row(file, destination, evidence, issue));
         }
@@ -671,7 +654,7 @@ export class ActionPlanner {
       : canonical
         ? (roots ?? [])
         : await Promise.all((roots || []).map((root) => realpath(root)));
-    if (!allowed.some((root) => contained(actual, root)))
+    if (!allowed.some((root) => containsPath(root, actual)))
       throw new Error('The destination escapes the selected file scope through a symbolic link.');
   }
   private async scopeRow(plan: ActionPlan, row: ProposedChange): Promise<void> {

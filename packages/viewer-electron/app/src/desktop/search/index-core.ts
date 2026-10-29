@@ -21,13 +21,12 @@ import type {
 } from '../../domain/services';
 import { absolute, entry } from '../files/filesystem';
 import { searchExclusions, searchExclusionRules } from './exclusions';
+import { containsPath } from '../files/containment';
 const fold = (value: string) =>
   value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase();
-const inside = (file: string, root: string) =>
-  file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 export class FileIndex {
   private db: DatabaseSync;
   /**
@@ -251,7 +250,9 @@ export class FileIndex {
     const root = request.root;
     const indexed =
       !root ||
-      !!this.config?.roots.some((indexedRoot) => inside(root, indexedRoot) && !this.excluded(root));
+      !!this.config?.roots.some(
+        (indexedRoot) => containsPath(indexedRoot, root) && !this.excluded(root),
+      );
     // THE FILE QUERY LANGUAGE: domain/search/query.ts, as the folder filter reads it
     let parsed: FileQuery;
     try {
@@ -406,7 +407,8 @@ export class FileIndex {
     if (
       result.status.running ||
       result.status.roots.some(
-        (root) => (!request.root || inside(request.root, root.path)) && root.status !== 'ready',
+        (root) =>
+          (!request.root || containsPath(root.path, request.root)) && root.status !== 'ready',
       )
     )
       throw new Error(
@@ -552,7 +554,7 @@ export class FileIndex {
               !item.directory &&
               item.kind === 'file' &&
               item.size <= 16000000 &&
-              this.config?.contentRoots.some((root) => inside(file, root))
+              this.config?.contentRoots.some((root) => containsPath(root, file))
             )
               // A document whose text is stored for this version keeps it: every crawl (each
               // launch, each configuration) extracted every document under the content roots again.
@@ -625,7 +627,7 @@ export class FileIndex {
           this.emit(this.status());
           return;
         }
-        const root = this.config?.roots.find((root) => inside(file, root));
+        const root = this.config?.roots.find((root) => containsPath(root, file));
         if (!root || this.excluded(file) || this.config?.paused) return;
         try {
           const generation = this.generation;
@@ -639,7 +641,7 @@ export class FileIndex {
             !item.directory &&
             item.kind === 'file' &&
             item.size <= 16000000 &&
-            this.config?.contentRoots.some((root) => inside(file, root))
+            this.config?.contentRoots.some((root) => containsPath(root, file))
           )
             content = (await this.extract?.(file).catch(() => '')) ?? '';
           if (generation !== this.generation) return;

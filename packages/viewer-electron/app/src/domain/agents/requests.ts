@@ -4,6 +4,14 @@ import type { Pane, ViewMode, FileEntry, OperationJob } from '../contracts';
 import type { TransformPlan } from '../operations/transforms';
 import type { SpeechSetup } from '../speech/models';
 import type { AgentTaskSetup, AgentTaskResult } from './task-workflow';
+
+/** A proposal's outcome, once it no longer waits for review or runs. */
+export const finalProposalStatuses = ['completed', 'failed', 'rejected', 'cancelled'] as const;
+export type FinalProposalStatus = (typeof finalProposalStatuses)[number];
+export type ProposalStatus = 'review' | 'running' | FinalProposalStatus;
+export function isFinalProposalStatus(status: ProposalStatus): status is FinalProposalStatus {
+  return (finalProposalStatuses as readonly string[]).includes(status);
+}
 /** Live navigation discovery excludes history, camera/layout and unrelated preferences. */
 export interface AgentPlane {
   id: string;
@@ -60,7 +68,7 @@ export interface AgentProposal {
   terminalID?: string;
   data?: string;
   detail: string;
-  status: 'review' | 'running' | 'completed' | 'rejected' | 'failed' | 'cancelled';
+  status: ProposalStatus;
   taskID?: string;
   task?: ExecutionTask;
   operationID?: string;

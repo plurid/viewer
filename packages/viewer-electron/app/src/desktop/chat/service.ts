@@ -25,6 +25,7 @@ import type { Providers } from '../models/providers';
 import { ChatDocumentStore } from './documents';
 import { absolute, entry, validName } from '../files/filesystem';
 import { Search } from '../search/search';
+import { containsPath } from '../files/containment';
 
 interface Origin {
   target: CapturedTarget;
@@ -53,9 +54,6 @@ interface ChatPorts {
   changed(owner: number, document: ChatDocument): void;
   aliases(): ReadonlyMap<string, readonly string[]>;
 }
-
-const within = (file: string, root: string) =>
-  file === root || file.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
 
 const instructions = `You are Viewer’s read-only file assistant. Return one structured step.
 All fields are required; unused nullable fields are null, unused arrays empty, text may be empty.
@@ -143,7 +141,7 @@ export class Chats {
       await this.ports.access([absolute(file)]);
       const actual = await realpath(file);
       const privateRoot = await realpath(this.dataPath).catch(() => this.dataPath);
-      if (within(actual, privateRoot))
+      if (containsPath(privateRoot, actual))
         throw new Error('Viewer private data cannot be attached to a model conversation.');
       const item = await entry(actual);
       if (!item.directory && item.kind !== 'file')
@@ -163,7 +161,7 @@ export class Chats {
     if (
       !principal.document.scopes.some((scope) =>
         [scope.path, scope.alias].some(
-          (root) => root && (scope.directory ? within(lexical, root) : lexical === root),
+          (root) => root && (scope.directory ? containsPath(root, lexical) : lexical === root),
         ),
       )
     )
@@ -172,9 +170,9 @@ export class Chats {
     const actual = await realpath(file);
     const privateRoot = await realpath(this.dataPath).catch(() => this.dataPath);
     if (
-      within(actual, privateRoot) ||
+      containsPath(privateRoot, actual) ||
       !principal.document.scopes.some((scope) =>
-        scope.directory ? within(actual, scope.path) : actual === scope.path,
+        scope.directory ? containsPath(scope.path, actual) : actual === scope.path,
       )
     )
       throw new Error('This path is outside the attached conversation context.');

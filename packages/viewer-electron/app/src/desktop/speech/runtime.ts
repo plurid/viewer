@@ -13,15 +13,13 @@ import {
   type SpeechRuntimeStatus,
   type SpeechTranscript,
 } from '../../domain/speech/recognition';
-import { speechRuntimeArchive, speechRuntimeName, speechRuntimeVersion } from './runtime-manifest';
+import { speechRuntimeArchive, speechRuntimeVersion } from './runtime-manifest';
 import { verifySpeechPackage } from './signed-resources';
 
 const transcript = z.object({ text: z.string().max(48000), language: z.string().max(20) }).strict();
 export class SpeechRuntime {
   private proof?: Promise<{ helper: string; library: string }>;
-  constructor(
-    private root = path.join(process.resourcesPath ?? path.resolve('assets'), speechRuntimeName()),
-  ) {}
+  constructor(private root: string) {}
   private verify() {
     return (this.proof ??= (async () => {
       const folder = await lstat(this.root);

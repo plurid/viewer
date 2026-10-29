@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { latestReplies } from '../../state/requests';
+import { errorMessage } from '../../../domain/errors';
 import type { ExecutionGrant } from '../../../domain/agents/requests';
 import type { ApplicationSettings } from '../../../domain/services';
 import { sharedClientID } from '../../../domain/agents/clients';
@@ -18,18 +20,19 @@ export function AgentGrants({
   useEffect(() => {
     if (!roots.includes(root)) setRoot(roots[0] || '');
   }, [roots, root]);
+  // the first read must not undo a grant saved while it was loading
+  const [request] = useState(latestReplies);
   useEffect(() => {
-    void window.viewer
-      .agentGrants()
-      .then(setGrants)
-      .catch((error: Error) => setError(error.message));
-  }, []);
+    request(window.viewer.agentGrants(), setGrants, (error) => setError(errorMessage(error)));
+  }, [request]);
   const save = (id: string, capability: ExecutionGrant['capability'], allow: boolean) => {
-    void window.viewer
-      .agentGrant(id, root, capability, allow, clientID)
-      .then(() => window.viewer.agentGrants())
-      .then(setGrants)
-      .catch((error: Error) => setError(error.message));
+    request(
+      window.viewer
+        .agentGrant(id, root, capability, allow, clientID)
+        .then(() => window.viewer.agentGrants()),
+      setGrants,
+      (error) => setError(errorMessage(error)),
+    );
   };
   const allowed = (id: string, capability: ExecutionGrant['capability']) =>
     grants.some(

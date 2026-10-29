@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FinalProposalStatus } from './requests';
 export const agentCapabilities = [
   'metadata',
   'content',
@@ -71,7 +72,7 @@ export interface AgentAudit {
   at: number;
   clientID: string;
   tool: string;
-  status: 'completed' | 'failed' | 'rejected' | 'cancelled';
+  status: FinalProposalStatus;
   detail: string;
 }
 /** The shared connection's access: what config.jsonc asks for, as far as the person approved it. */

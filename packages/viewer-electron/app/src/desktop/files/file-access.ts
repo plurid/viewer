@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { DocumentStore } from '../persistence/document-store';
 import type { TrashReceipt } from '../native/macos-files';
 import { localPath } from '../schemas';
+import { containsPath } from './containment';
 
 const document = z
   .object({
@@ -29,13 +30,6 @@ export class FileAccessRequired extends Error {
     super('Allow access to this folder using the folder picker, then try again.');
   }
 }
-const contains = (root: string, file: string) => {
-  const relative = path.relative(root, file);
-  return (
-    relative === '' ||
-    (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))
-  );
-};
 async function existingParent(file: string): Promise<string> {
   try {
     return await realpath(file);
@@ -65,7 +59,7 @@ export class FileAccess {
   private nativeRevision = 0;
   private held = new Map<string, number>();
   private blocked(file: string): boolean {
-    return [...this.denied, ...this.held.keys()].some((root) => contains(root, file));
+    return [...this.denied, ...this.held.keys()].some((root) => containsPath(root, file));
   }
   async withBlocked<T>(file: string, work: () => Promise<T>): Promise<T> {
     const root = path.resolve(localPath.parse(file));
@@ -181,10 +175,10 @@ export class FileAccess {
       if (this.closed) throw new Error('Folder access has closed.');
       const file = path.resolve(localPath.parse(input));
       if (this.blocked(file)) throw new FileAccessRequired(file);
-      if (this.internalRoots.some((root) => contains(root, file))) {
+      if (this.internalRoots.some((root) => containsPath(root, file))) {
         const actual = await existingParent(file);
         const roots = await Promise.all(this.internalRoots.map((root) => existingParent(root)));
-        if (roots.some((root) => contains(root, actual))) continue;
+        if (roots.some((root) => containsPath(root, actual))) continue;
         throw new FileAccessRequired(file);
       }
       const exact = this.incoming.get(file);
@@ -194,7 +188,7 @@ export class FileAccess {
         ...this.temporary.values(),
         ...(exact && !exact.directory ? [exact] : []),
       ]
-        .filter((grant) => (grant.directory ? contains(grant.path, file) : grant.path === file))
+        .filter((grant) => (grant.directory ? containsPath(grant.path, file) : grant.path === file))
         .sort((a, b) => b.path.length - a.path.length);
       let allowed = false;
       for (const grant of candidates) {
@@ -211,7 +205,7 @@ export class FileAccess {
           // Canonical filesystem reads can outlive revocation. A released scope
           // cannot approve the old caller after the temporary deny has cleared.
           if (this.active.get(grant.path) !== active) continue;
-          if (grant.directory ? contains(root, actual) : root === actual) {
+          if (grant.directory ? containsPath(root, actual) : root === actual) {
             allowed = true;
             break;
           }
@@ -304,7 +298,7 @@ export class FileAccess {
         await this.store.save({ version: 1, grants });
         this.grants = grants;
         for (const file of this.incoming.keys())
-          if (contains(root, file)) {
+          if (containsPath(root, file)) {
             this.incoming.delete(file);
             this.incomingDirectories.delete(file);
             this.active.get(file)?.stop();

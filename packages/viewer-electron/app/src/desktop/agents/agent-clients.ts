@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
+import { finalProposalStatuses } from '../../domain/agents/requests';
 import { DocumentStore } from '../persistence/document-store';
 import {
   agentClientInputSchema,
@@ -56,7 +57,7 @@ export class AgentClients {
               at: z.number(),
               clientID: storedClientID,
               tool: z.string().max(200),
-              status: z.enum(['completed', 'failed', 'rejected', 'cancelled']),
+              status: z.enum(finalProposalStatuses),
               detail: z.string().max(1000),
             })
             .strict(),

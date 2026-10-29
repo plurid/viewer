@@ -1,16 +1,10 @@
 import path from 'node:path';
 import { FileAccessRequired } from '../files/file-access';
+import { containsPath } from '../files/containment';
 
 type Source = 'clipboard' | 'drag';
 type Selection = { source: Source; version: number; revision: number; board?: Board };
 type Board = { version?: number; roots: Set<string>; bytes: number; all: boolean };
-const contains = (root: string, file: string) => {
-  const relative = path.relative(root, file);
-  return (
-    relative === '' ||
-    (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative))
-  );
-};
 
 /** Revocation applies to the current native selection. Background rereads must
  * not restore it; a new OS copy/drag or explicit picker grant can authorize again. */
@@ -38,9 +32,9 @@ export class NativeSelections {
         board = { version, roots: new Set(), bytes: 0, all: false };
         this.boards.set(source, board);
       } else if (version === undefined) board.version = undefined;
-      if (board.all || [...board.roots].some((parent) => contains(parent, root))) continue;
+      if (board.all || [...board.roots].some((parent) => containsPath(parent, root))) continue;
       for (const previous of board.roots)
-        if (contains(root, previous)) {
+        if (containsPath(root, previous)) {
           board.roots.delete(previous);
           board.bytes -= Buffer.byteLength(previous);
         }
@@ -72,7 +66,7 @@ export class NativeSelections {
     const board = selection.board;
     const denied = files.find((file) => {
       const normalized = path.resolve(file);
-      return board?.all || [...(board?.roots ?? [])].some((root) => contains(root, normalized));
+      return board?.all || [...(board?.roots ?? [])].some((root) => containsPath(root, normalized));
     });
     if (selection.revision !== this.revision || denied)
       throw new FileAccessRequired(denied ?? files[0] ?? '');

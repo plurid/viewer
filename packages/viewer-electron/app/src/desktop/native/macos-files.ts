@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import type { ReviewedFileExpectation } from './reviewed-file';
 import { guardNativeTestRemovals } from './test-removal-policy';
 import type { FullscreenPhase } from '../windows/fullscreen-transition';
+import { assetPath } from './assets';
 export interface NativeVolume {
   path: string;
   name: string;
@@ -71,13 +72,11 @@ export interface TrashReceipt {
 export type ReceiptAccess = <T>(receipt: TrashReceipt, work: () => Promise<T>) => Promise<T>;
 export function macFiles(): MacFiles {
   if (process.platform !== 'darwin') throw new Error('This file service requires macOS.');
-  const assets = process.versions.electron ? process.resourcesPath : path.resolve('assets');
+  // Unit tests load the addon in plain Node, from the source tree they run in.
+  const assets = process.versions.electron ? assetPath() : path.resolve('assets');
   // The production main bundle is CommonJS, where import.meta.url is absent.
   // The addon path is absolute; resolution needs only a stable absolute base.
   const require = createRequire(path.join(assets, 'viewer-native.cjs'));
-  const file =
-    process.versions.electron && !process.defaultApp
-      ? path.join(assets, 'viewer-macos-files.node')
-      : path.resolve('assets/viewer-macos-files.node');
+  const file = path.join(assets, 'viewer-macos-files.node');
   return (binding ??= guardNativeTestRemovals(require(file) as MacFiles));
 }

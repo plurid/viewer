@@ -51,8 +51,7 @@ import { agentTools } from './agent-tools';
 import { transformPlanSchema } from '../../domain/operations/transforms';
 import { sessionReportSchema } from '../../domain/agents/sessions';
 import type { AgentSessions } from './sessions';
-const within = (file: string, root: string) =>
-  file === root || file.startsWith(root.replace(/\/$/, '') + '/');
+import { containsPath } from '../files/containment';
 /** The person's Home folder; a Mac App Store build's os.homedir() is its container. */
 const realHome = () => (process.mas ? os.userInfo().homedir : os.homedir());
 /** Agents see the shape of execution settings, never secrets they may carry:
@@ -155,7 +154,9 @@ export class AgentBroker {
     for (const root of paths) {
       const actual = await realpath(absolute(root));
       if (!(await stat(actual)).isDirectory()) throw new Error('Choose a folder for the client.');
-      if (within(actual, await realpath(this.dataPath).catch(() => path.resolve(this.dataPath))))
+      if (
+        containsPath(await realpath(this.dataPath).catch(() => path.resolve(this.dataPath)), actual)
+      )
         throw new Error('Private Viewer data cannot be an agent folder.');
     }
   }
@@ -399,12 +400,12 @@ export class AgentBroker {
     for (const file of files) {
       const actual = await this.authorize(file);
       const trash =
-        within(actual, path.join(realHome(), '.Trash')) ||
-        within(actual, path.join(realHome(), '.local/share/Trash')) ||
+        containsPath(path.join(realHome(), '.Trash'), actual) ||
+        containsPath(path.join(realHome(), '.local/share/Trash'), actual) ||
         (process.platform === 'linux' &&
           process.env.XDG_DATA_HOME &&
           path.isAbsolute(process.env.XDG_DATA_HOME) &&
-          within(actual, path.join(process.env.XDG_DATA_HOME, 'Trash'))) ||
+          containsPath(path.join(process.env.XDG_DATA_HOME, 'Trash'), actual)) ||
         actual
           .split(path.sep)
           .some(
@@ -440,7 +441,7 @@ export class AgentBroker {
     this.admissions.getStore()?.throwIfAborted();
     const access = await this.access.state();
     if (!access.enabled) throw new Error('Agent access is disabled.');
-    if (within(absolute(file), path.resolve(this.dataPath)))
+    if (containsPath(path.resolve(this.dataPath), absolute(file)))
       throw new Error(
         'Private Viewer credentials, grants and recovery data are unavailable to generic agent file tools.',
       );
@@ -457,20 +458,20 @@ export class AgentBroker {
       const lexical = absolute(file);
       if (
         [...roots, ...configured.map((root) => absolute(root))].some(
-          (root) => root && within(lexical, root),
+          (root) => root && containsPath(root, lexical),
         )
       )
         throw error;
       throw new Error('This file is outside the agent’s authorized folders.');
     }
     const privateRoot = await realpath(this.dataPath).catch(() => path.resolve(this.dataPath));
-    if (within(actual, privateRoot))
+    if (containsPath(privateRoot, actual))
       throw new Error('Private Viewer data is unavailable to generic agent file tools.');
     if (!(await this.access.state()).enabled) throw new Error('Agent access is disabled.');
     const latest = await this.clients.get();
     if (client && latest?.revision !== client.revision)
       throw new Error('Client folder permissions changed. Try again.');
-    if (!roots.some((root) => root && within(actual, root)))
+    if (!roots.some((root) => root && containsPath(root, actual)))
       throw new Error('This file is outside the agent’s authorized folders.');
     this.admissions.getStore()?.throwIfAborted();
     return actual;

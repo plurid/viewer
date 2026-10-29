@@ -3,9 +3,10 @@ import type { FileEntry } from '../../domain/contracts';
 import type { FolderSizeTask } from '../../domain/files/metadata';
 import { formatBytes } from '../../domain/files/entries';
 import { parentPath } from '../../domain/workspaces/planes';
-import { getState, report } from '../state/store';
+import { report } from '../state/store';
 import { IconButton } from '../ui/primitives';
 import { errorMessage } from '../../domain/errors';
+import { pathContains } from '../../domain/files/paths';
 
 type Measurement = { task: FolderSizeTask; stale: boolean };
 const measurements = new Map<string, Measurement>();
@@ -61,11 +62,9 @@ export function receiveFolderSize(task: FolderSizeTask) {
   }
 }
 export function invalidateFolderSizes(path: string) {
-  const separator = getState().bootstrap.platform === 'win32' ? '\\' : '/';
-  const within = (a: string, b: string) =>
-    a === b || b.startsWith(a.endsWith(separator) ? a : a + separator);
   for (const [key, value] of measurements) {
-    if (!value.stale && value.task.paths.some((root) => within(root, path) || within(path, root))) {
+    const related = (root: string) => pathContains(root, path) || pathContains(path, root);
+    if (!value.stale && value.task.paths.some(related)) {
       publish(key, { ...value, stale: true });
     }
   }

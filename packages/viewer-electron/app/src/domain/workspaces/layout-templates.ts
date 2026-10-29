@@ -1,5 +1,6 @@
 import type { Pane } from '../contracts';
 import type { TileLayout } from './tiling';
+import { slugID } from '../ids';
 
 /** A plane a template opens: by kind and folder, not by identity, so it opens anywhere. */
 export type TemplatePlane =
@@ -43,6 +44,7 @@ export function captureTemplate(
   order: readonly string[],
   home: string,
   tiling: { layout: TileLayout; main: number },
+  taken: Iterable<string> = [],
 ): LayoutTemplate {
   const planes = order.flatMap((id): TemplatePlane[] => {
     const pane = panes.find((item) => item.id === id);
@@ -65,13 +67,8 @@ export function captureTemplate(
       ];
     return [];
   });
-  const slug =
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'layout';
   return {
-    id: `${slug}-${Date.now().toString(36)}`,
+    id: slugID(name, 'layout', taken),
     name,
     planes: planes.slice(0, 30),
     layout: tiling.layout,

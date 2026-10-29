@@ -10,7 +10,8 @@ import type {
 import { htmlCapability } from '../../../domain/previews/html-address';
 import { LoopbackServer } from './loopback-server';
 import { errorResponse, htmlFile, webLimits, WebPreviewError } from './policy';
-import { containsPath, StaticRoot, type ReadBudget, type WebAccess } from './static-root';
+import { StaticRoot, type ReadBudget, type WebAccess } from './static-root';
+import { containsPath } from '../../files/containment';
 
 interface HtmlGrant {
   owner: number;

@@ -18,6 +18,7 @@ import {
 import type { Transforms } from './transforms';
 import type { Operations } from '../operations/operations';
 import type { Resources } from '../previews/resources';
+import { containsPath } from '../files/containment';
 
 /** Private drafts contain decisions and source versions, never copied media bytes.
  * Export submits ordinary guarded operations; closing an editor keeps its draft. */
@@ -279,7 +280,7 @@ export class MediaDocuments {
   invalidate(root?: string) {
     for (const value of this.previews.values()) value.abort.abort();
     for (const [key, value] of this.cache)
-      if (!root || value.path === root || value.path.startsWith(root.replace(/\/$/, '') + '/')) {
+      if (!root || containsPath(root, value.path)) {
         this.cache.delete(key);
         this.cacheBytes -= value.cost;
       }

@@ -3,6 +3,7 @@ import type { FileEntry } from '../../domain/contracts';
 import { gitBadge, type GitResult, type GitStatus } from '../../domain/comparison/git';
 import { useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
+import { pathContains } from '../../domain/files/paths';
 
 interface GitView {
   result: GitResult;
@@ -59,7 +60,7 @@ async function refresh(path: string, subscription: Subscription): Promise<void> 
     subscription.signature = signature;
     if (reply.kind === 'ready' && reply.canonical && reply.canonical !== path) {
       for (const [file, status] of [...statuses]) {
-        if (file === reply.canonical || file.startsWith(reply.canonical + '/'))
+        if (pathContains(reply.canonical, file))
           statuses.set(path.replace(/\/$/, '') + file.slice(reply.canonical.length), status);
       }
     }

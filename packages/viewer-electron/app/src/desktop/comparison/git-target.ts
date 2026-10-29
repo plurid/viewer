@@ -2,6 +2,7 @@ import type { CapturedTarget } from '../../domain/automation/actions';
 import type { AgentWorkspaceSnapshot } from '../../domain/agents/requests';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { containsPath } from '../files/containment';
 
 export interface GitTargetWindow {
   originID: string;
@@ -12,13 +13,6 @@ export interface GitTargetWindow {
 }
 
 type CanonicalPath = (file: string) => Promise<string>;
-const inside = (root: string, file: string): boolean => {
-  const relative = path.relative(root, file);
-  return (
-    relative === '' ||
-    (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith('..' + path.sep))
-  );
-};
 
 /** Recheck the captured folder without requiring it to keep keyboard focus during review. */
 export async function validateGitTarget(
@@ -49,11 +43,11 @@ export async function validateGitTarget(
     canonical(pane.path),
     canonical(target.directory),
   ]);
-  if (!inside(source, directory))
+  if (!containsPath(source, directory))
     throw new Error('Choose a folder inside the originating folder plane.');
   for (const file of target.selection) {
     const parent = await canonical(path.dirname(path.resolve(file.path)));
-    if (!inside(directory, parent))
+    if (!containsPath(directory, parent))
       throw new Error('A selected Git path is outside the captured folder. Select it again.');
   }
 }

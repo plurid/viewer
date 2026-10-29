@@ -4,6 +4,9 @@ import { Field } from './SettingField';
 import { IconButton } from '../primitives';
 import type { SettingsEditor } from './editor';
 import { commonSearchExclusions } from '../../../domain/search/exclusions';
+import type { DesktopEvent } from '../../../domain/contracts';
+import { errorMessage } from '../../../domain/errors';
+import { followSnapshot } from '../../state/requests';
 
 /** Search scope, traversal exclusions and permission to index document contents. */
 export function SearchSettings({ editor }: { editor: SettingsEditor }) {
@@ -11,15 +14,17 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
   const settings = snapshot.settings;
   const recommended = [...new Set([...settings.search.exclusions, ...commonSearchExclusions])];
   const [index, setIndex] = useState<IndexStatus>();
-  useEffect(() => {
-    void window.viewer
-      .indexStatus()
-      .then(setIndex)
-      .catch((error) => setError(error.message));
-    return window.viewer.onEvent((event) => {
-      if (event.type === 'index') setIndex(event.status);
-    });
-  }, [setError]);
+  useEffect(
+    () =>
+      followSnapshot<IndexStatus | undefined, DesktopEvent>({
+        load: () => window.viewer.indexStatus(),
+        subscribe: (listener) => window.viewer.onEvent(listener),
+        apply: (status, event) => (event.type === 'index' ? event.status : status),
+        set: setIndex,
+        failed: (error) => setError(errorMessage(error)),
+      }).stop,
+    [setError],
+  );
   return (
     <>
       <h2>Indexed locations</h2>

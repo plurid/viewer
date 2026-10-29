@@ -4,6 +4,8 @@ import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
 import { createWebHandlers } from './ipc/web-handlers';
 import { sendEvent } from './ipc/events';
+import { assetPath, processorFolder } from './native/assets';
+import { settleAll } from '../domain/settle';
 import { performanceMeter } from './diagnostics/performance';
 import { WebPreviews } from './previews/web/service';
 import { BrowserPlanes } from './browser/browser-planes';
@@ -50,6 +52,7 @@ import {
   type BrowserWindow,
 } from 'electron';
 import type { AgentProposal } from '../domain/agents/requests';
+import { isFinalProposalStatus } from '../domain/agents/requests';
 import { FileServices } from './files/file-services';
 import { Applications } from './native/applications';
 import { SettingsService } from './preferences/settings';
@@ -142,6 +145,23 @@ import { JournalStore } from './journal/store';
 import { JournalActivity } from './journal/activity';
 import { createJournalHandlers } from './journal/handlers';
 
+type WindowRole = 'viewer' | 'settings';
+
+/** One renderer window, and what it has told the desktop. */
+interface WindowRecord {
+  window: BrowserWindow;
+  originID: string;
+  role: WindowRole;
+  workspaceID?: string;
+  ready?: boolean;
+  paths: string[];
+  launches: LaunchRequest[];
+  catalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
+  workspaceCatalog?: AgentWorkspaceSnapshot;
+  planeOwners?: Record<string, string>;
+  context?: ActionContext;
+}
+
 export class Desktop {
   readonly journal: JournalStore;
   private readonly activity: JournalActivity;
@@ -197,22 +217,7 @@ export class Desktop {
   readonly search: Search;
   readonly storage: Storage;
   private ready = false;
-  private windows = new Map<
-    number,
-    {
-      window: BrowserWindow;
-      originID: string;
-      role: 'viewer' | 'settings';
-      workspaceID?: string;
-      ready?: boolean;
-      paths: string[];
-      launches: LaunchRequest[];
-      catalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
-      workspaceCatalog?: AgentWorkspaceSnapshot;
-      planeOwners?: Record<string, string>;
-      context?: ActionContext;
-    }
-  >();
+  private windows = new Map<number, WindowRecord>();
   private window?: BrowserWindow;
   private bootstrapped = false;
   readonly settings: SettingsService;
@@ -413,27 +418,20 @@ export class Desktop {
       emit({ type: 'folder-changed', path: path.dirname(file) });
       void this.files.update(file).catch(() => {});
     });
-    const previewAssets = app.isPackaged
-      ? process.resourcesPath
-      : path.join(app.getAppPath(), 'assets');
-    const raw = rawDecoder(
-      path.join(previewAssets, `viewer-raw-v3-darwin-${process.arch}`, 'viewer-raw'),
-    );
-    const video = videoDecoder(
-      path.join(previewAssets, `viewer-processors-${process.platform}-${process.arch}`),
-    );
+    const raw = rawDecoder(assetPath(`viewer-raw-v3-darwin-${process.arch}`, 'viewer-raw'));
+    const video = videoDecoder(assetPath(processorFolder));
     const derived = new DerivedPreviews(access, (source, mode, signal) =>
       mode === 'video' ? video(source, mode, signal) : raw(source, mode, signal),
     );
     const images = new DerivedPreviews(
       access,
       imageDecoder(
-        path.join(previewAssets, 'viewer-image-preview'),
-        path.join(previewAssets, `viewer-processors-${process.platform}-${process.arch}`, 'ffmpeg'),
+        assetPath('viewer-image-preview'),
+        assetPath(processorFolder, 'ffmpeg'),
         (bytes, size, signal) =>
           svgPreviewProcess(
             path.join(path.dirname(options.worker), 'image-worker.cjs'),
-            path.join(previewAssets, `viewer-processors-${process.platform}-${process.arch}`),
+            assetPath(processorFolder),
             bytes,
             size,
             signal,
@@ -443,10 +441,7 @@ export class Desktop {
       64 * 1024 * 1024,
     );
     this.thumbnails = new Thumbnails(derived, images);
-    const office = new DerivedPreviews(
-      access,
-      officeDecoder(path.join(previewAssets, officeRuntimeName)),
-    );
+    const office = new DerivedPreviews(access, officeDecoder(assetPath(officeRuntimeName)));
     this.resources = new Resources(access, undefined, 12000, derived, images, office);
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
@@ -489,21 +484,7 @@ export class Desktop {
               message: 'Agent server could not start. Check Settings → Agents.',
             }),
           );
-        void this.configureIndex(snapshot.settings.search).catch(() =>
-          emit({
-            type: 'index',
-            status: {
-              roots: snapshot.settings.search.roots.map((path) => ({
-                path,
-                status: 'offline',
-                count: 0,
-                errors: 1,
-              })),
-              count: 0,
-              running: false,
-            },
-          }),
-        );
+        void this.reconfigureIndex();
       },
     );
     const confirmations = new ExecutionConfirmations(dataPath, (summary) =>
@@ -604,10 +585,7 @@ export class Desktop {
       }
     };
     const fallbackTrash = guardTestTrash((file: string) => shell.trashItem(file));
-    const processorRoot = path.join(
-      app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'assets'),
-      `viewer-processors-${process.platform}-${process.arch}`,
-    );
+    const processorRoot = assetPath(processorFolder);
     this.transforms = new Transforms(
       processorRoot,
       access,
@@ -683,7 +661,7 @@ export class Desktop {
       this.resources,
       access,
       async (owner, media) => {
-        const result = await dialog.showOpenDialog(this.windows.get(owner)!.window, {
+        const result = await dialog.showOpenDialog(this.requireWindow(owner), {
           title: media === 'audio' ? 'Choose audio' : 'Add media',
           properties: ['openFile', 'multiSelections'],
           securityScopedBookmarks: this.fileAccess.scoped,
@@ -777,12 +755,7 @@ export class Desktop {
         return Array.isArray(runs) ? runs : [];
       },
     });
-    const speechRuntime = new SpeechRuntime(
-      path.join(
-        app.isPackaged ? process.resourcesPath : path.resolve('assets'),
-        speechRuntimeName(),
-      ),
-    );
+    const speechRuntime = new SpeechRuntime(assetPath(speechRuntimeName()));
     const speechChanged = () => this.emit({ type: 'speech-changed' });
     this.speechModels = new SpeechModels(
       dataPath,
@@ -1156,7 +1129,7 @@ export class Desktop {
           if (typeof method !== 'string' || !Object.hasOwn(schemas, method))
             throw new Error('Unknown Viewer API method.');
           const name = method as ApiMethod;
-          const role = this.windows.get(event.sender.id)!.role;
+          const role = this.requireRecord(event.sender.id).role;
           const allowed = methodWindows[name];
           if (role === 'settings' && allowed === 'viewer')
             throw new Error('This API is unavailable in Settings.');
@@ -1178,6 +1151,65 @@ export class Desktop {
       },
     );
   }
+  /** The record of a window that is still open: an await can outlive the window that asked. */
+  private requireRecord(owner: number): WindowRecord {
+    const record = this.windows.get(owner);
+    if (!record || record.window.isDestroyed())
+      throw new Error('The window closed before Viewer could finish.');
+    return record;
+  }
+  private requireWindow(owner: number): BrowserWindow {
+    return this.requireRecord(owner).window;
+  }
+  /**
+   * Stops everything that holds work, handles or watchers under `root`, before its access is
+   * revoked or its volume ejected. One list serves both, so neither can miss a service.
+   */
+  private async quiesceRoot(root: string): Promise<void> {
+    this.mediaDocuments.invalidate(root);
+    this.taskRequests.close();
+    await settleAll([
+      fileCoordination.quiesce(root),
+      this.resources.quiesce(root),
+      this.webPreviews.quiesce(root),
+      this.transforms.quiesce(root),
+      this.optimizationReviews.invalidate(root),
+      this.thumbnails.quiesce(root),
+      this.watchers.revoke(root),
+      this.watchRules.revoke(root),
+      this.search.quiesce(),
+      this.actions.quiesce(root),
+      this.operations.quiesce(root),
+      this.executions.quiesce(root),
+      this.gitActions.quiesce(root),
+      this.worktrees.quiesce(root),
+      this.agentTaskWorkflows.quiesce(),
+      this.personTaskWorkflows.quiesce(),
+      this.gitReviews.quiesce(root),
+      this.terminals.quiesce(root),
+      this.externalTerminals.quiesce(),
+    ]);
+  }
+  /**
+   * Reconfigures the index from the current settings. A failure shows the locations offline
+   * and goes to the diagnostic log, rather than failing whatever changed them.
+   */
+  private async reconfigureIndex(): Promise<void> {
+    const search = this.settings.snapshot().settings.search;
+    try {
+      await this.configureIndex(search);
+    } catch (error) {
+      this.options.diagnose?.(`Index configuration failed: ${errorMessage(error)}`);
+      this.emit({
+        type: 'index',
+        status: {
+          roots: search.roots.map((path) => ({ path, status: 'offline', count: 0, errors: 1 })),
+          count: 0,
+          running: false,
+        },
+      });
+    }
+  }
   private async configureIndex(
     config: ApplicationSettings['search'],
     rebuild = false,
@@ -1196,7 +1228,7 @@ export class Desktop {
     }
   }
   private async chooseFolder(senderID: number, defaultPath?: string): Promise<string | null> {
-    const result = await dialog.showOpenDialog(this.windows.get(senderID)!.window, {
+    const result = await dialog.showOpenDialog(this.requireWindow(senderID), {
       properties: ['openDirectory'],
       defaultPath,
       securityScopedBookmarks: this.fileAccess.scoped,
@@ -1206,7 +1238,7 @@ export class Desktop {
     await this.fileAccess.require([result.filePaths[0]]);
     // Granting a configured index root can unblock its watcher/indexer.
     this.indexConfiguration = '';
-    void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
+    void this.reconfigureIndex();
     this.emit({ type: 'folder-changed', path: result.filePaths[0] });
     return result.filePaths[0];
   }
@@ -1329,7 +1361,7 @@ export class Desktop {
   operationsDrained(): Promise<void> {
     return this.operations.drained();
   }
-  attach(window: BrowserWindow, role: 'viewer' | 'settings', workspaceID?: string): void {
+  attach(window: BrowserWindow, role: WindowRole, workspaceID?: string): void {
     const sender = window.webContents.id;
     if (role === 'viewer' && workspaceID) this.workspaceSessions.reserve(sender, workspaceID);
     this.windows.set(sender, {
@@ -1514,7 +1546,7 @@ export class Desktop {
     this.trash.close();
     if (process.platform === 'darwin') macFiles().dismissFilePanels();
     this.settings.close();
-    this.resources.clear();
+    await this.resources.clear();
     this.comparisons.close();
     this.duplicates.close();
     await this.watchRules.close();
@@ -1584,7 +1616,8 @@ export class Desktop {
   private audited = new Set<string>();
   /** Each reviewed agent request leaves one durable record of its outcome. */
   private auditProposal(proposal: AgentProposal): void {
-    if (!['completed', 'failed', 'rejected', 'cancelled'].includes(proposal.status)) return;
+    const status = proposal.status;
+    if (!isFinalProposalStatus(status)) return;
     if (this.audited.has(proposal.id)) return;
     this.audited.add(proposal.id);
     if (this.audited.size > 2000) this.audited.delete(this.audited.values().next().value!);
@@ -1597,13 +1630,10 @@ export class Desktop {
       .filter(Boolean)
       .join(' · ');
     void this.agents.clients
-      .audit(
-        'review:' + proposal.kind,
-        proposal.status as 'completed' | 'failed' | 'rejected' | 'cancelled',
-        detail,
-        proposal.clientID ?? sharedClientID,
-      )
-      .catch(() => {});
+      .audit('review:' + proposal.kind, status, detail, proposal.clientID ?? sharedClientID)
+      .catch((error) =>
+        this.options.diagnose?.(`An agent review record was not saved: ${errorMessage(error)}`),
+      );
   }
   private async sendAgentCommand(
     command: string,
@@ -1867,7 +1897,7 @@ export class Desktop {
         if (request.kind === 'read') return this.projects.read(request.file);
         if (request.kind === 'save')
           return this.projects.save(request.file, request.revision, request.definition);
-        const result = await dialog.showOpenDialog(this.windows.get(senderID)!.window, {
+        const result = await dialog.showOpenDialog(this.requireWindow(senderID), {
           title: request.mode === 'open' ? 'Open Project Folder' : 'Create Project in Folder',
           buttonLabel: request.mode === 'open' ? 'Open Project' : 'Choose Folder',
           properties: ['openDirectory'],
@@ -1879,7 +1909,7 @@ export class Desktop {
         return path.join(result.filePaths[0], 'viewer.project.jsonc');
       },
       commandsPublish: (args, sender) => {
-        const record = this.windows.get(sender)!;
+        const record = this.requireRecord(sender);
         record.catalog = {
           target: { ...args[0], originID: record.originID },
           commands: args[1],
@@ -2036,7 +2066,7 @@ export class Desktop {
               perItem: false,
             },
           };
-          this.options.openSettings('settings.customActions');
+          await this.options.openSettings('settings.customActions');
           return;
         }
         if (role !== 'settings') throw new Error('Review command drafts in Settings.');
@@ -2063,30 +2093,10 @@ export class Desktop {
         await this.fileAccess.revoke(root, async () => {
           resources = await this.resources.affected(root);
           this.emit({ type: 'file-access', path: root, resources });
-          await Promise.all([
-            fileCoordination.quiesce(root),
-            this.resources.quiesce(root),
-            this.webPreviews.quiesce(root),
-            (this.mediaDocuments.invalidate(root), this.transforms.quiesce(root)),
-            this.optimizationReviews.invalidate(root),
-            this.thumbnails.quiesce(root),
-            this.watchers.revoke(root),
-            this.watchRules.revoke(root),
-            this.search.quiesce(),
-            this.actions.quiesce(root),
-            this.operations.quiesce(root),
-            this.executions.quiesce(root),
-            this.gitActions.quiesce(root),
-            this.worktrees.quiesce(root),
-            this.agentTaskWorkflows.quiesce(),
-            (this.taskRequests.close(), this.personTaskWorkflows.quiesce()),
-            this.gitReviews.quiesce(root),
-            this.terminals.quiesce(root),
-            this.externalTerminals.quiesce(),
-          ]);
+          await this.quiesceRoot(root);
           await this.files.reset();
           this.indexConfiguration = '';
-          await this.configureIndex(this.settings.snapshot().settings.search);
+          await this.reconfigureIndex();
         });
         this.emit({ type: 'file-access', path: root, resources });
         return;
@@ -2094,21 +2104,26 @@ export class Desktop {
       volumesList: () => (process.platform === 'darwin' ? macFiles().volumes() : []),
       trashList: (args) => this.trash.list(args[0]),
       trashConfirmation: (args, senderID) =>
-        this.trash.confirmation(this.windows.get(senderID)!.window, args[0]),
+        this.trash.confirmation(this.requireWindow(senderID), args[0]),
       trashPreview: (args) => this.trash.preview(args[0]),
       trashCopyPaths: (args) => this.trash.copyPaths(args[0]),
       trashRestore: async (args, senderID) => {
-        const window = this.windows.get(senderID)!.window;
         // the folder is chosen before the operations queue is held: a panel left open blocked it
         const folder =
-          args[1] === 'choose' ? await this.trash.chooseRestoreFolder(window) : undefined;
+          args[1] === 'choose'
+            ? await this.trash.chooseRestoreFolder(this.requireWindow(senderID))
+            : undefined;
         if (args[1] === 'choose' && !folder) return { restored: 0, cancelled: true };
         return this.operations.exclusive(() =>
-          this.trash.restore(window, args[0], folder ? { folder } : 'original'),
+          this.trash.restore(
+            this.requireWindow(senderID),
+            args[0],
+            folder ? { folder } : 'original',
+          ),
         );
       },
       trashAccess: (args, senderID) =>
-        this.trash.requestAccess(this.windows.get(senderID)!.window, args[0]),
+        this.trash.requestAccess(this.requireWindow(senderID), args[0]),
       volumeEject: async (args) => {
         const root = args[0];
         const volume = (await macFiles().volumes()).find((volume) => volume.path === root);
@@ -2119,33 +2134,13 @@ export class Desktop {
             this.emit({ type: 'file-access', path: root });
             resources = await this.resources.affected(root);
             this.emit({ type: 'file-access', path: root, resources });
-            const previews = this.resources.quiesce(root);
-            const webPreviews = this.webPreviews.quiesce(root);
-            this.mediaDocuments.invalidate(root);
-            await this.optimizationReviews.invalidate(root);
-            const transforms = this.transforms.quiesce(root);
-            const thumbnails = this.thumbnails.quiesce(root);
-            const coordinated = fileCoordination.quiesce(root);
-            await this.actions.quiesce(root);
-            await this.operations.quiesce(root);
-            await this.executions.quiesce(root);
-            await this.gitActions.quiesce(root);
-            await this.worktrees.quiesce(root);
-            await this.agentTaskWorkflows.quiesce();
-            this.taskRequests.close();
-            await this.personTaskWorkflows.quiesce();
-            await this.gitReviews.quiesce(root);
-            await this.terminals.quiesce(root);
-            await this.externalTerminals.quiesce();
-            await this.watchers.revoke(root);
-            await this.search.quiesce();
+            await this.quiesceRoot(root);
             await this.files.reset();
-            await Promise.all([previews, webPreviews, transforms, thumbnails, coordinated]);
             await macFiles().eject(root);
           });
         } finally {
           this.indexConfiguration = '';
-          await this.configureIndex(this.settings.snapshot().settings.search);
+          await this.reconfigureIndex();
           this.emit({ type: 'file-access', path: root, resources });
         }
         return;
@@ -2232,7 +2227,7 @@ export class Desktop {
               ? { ...request, context: { ...request.context, actor: 'user', clientID: undefined } }
               : request,
           );
-        const result = await dialog.showOpenDialog(this.windows.get(senderID)!.window, {
+        const result = await dialog.showOpenDialog(this.requireWindow(senderID), {
           title: request.mode === 'create' ? 'Create Workflow in Folder' : 'Open Workflow',
           buttonLabel: request.mode === 'create' ? 'Choose Folder' : 'Open Workflow',
           properties: request.mode === 'create' ? ['openDirectory'] : ['openFile'],
@@ -2296,7 +2291,7 @@ export class Desktop {
       },
       contextPublish: (args, sender) => {
         const context: ActionContext = { ...args[0], actor: 'user' };
-        this.windows.get(sender)!.context = context;
+        this.requireRecord(sender).context = context;
         if (this.window?.webContents.id === sender) this.context = context;
         return;
       },
@@ -2405,13 +2400,13 @@ export class Desktop {
             look: this.settings.snapshot().look,
             preferencesRevision: this.settings.snapshot().revision,
           };
-        void this.configureIndex(this.settings.snapshot().settings.search).catch(() => {});
+        void this.reconfigureIndex();
         await this.actions.load();
         await this.watchRules.start();
         this.options.settingsChanged?.();
         await this.configureAgents();
         performanceMeter.mark('bootstrap:services');
-        const record = this.windows.get(sender)!;
+        const record = this.requireRecord(sender);
         const paths = [...record.paths.splice(0), ...this.openPaths.splice(0)];
         const launches = record.launches.splice(0);
         if (this.window?.webContents.id === sender) this.selectWindow(sender);
@@ -2528,10 +2523,10 @@ export class Desktop {
         const item = await entry(this.applications.location(id));
         return this.appIcons.get(item.path, 'small', item.modified);
       },
-      chooseApplication: async () => {
+      chooseApplication: async (_args, senderID) => {
         if (process.platform !== 'darwin')
           throw new Error('Application selection is not available on this platform yet.');
-        const result = await dialog.showOpenDialog(this.window!, {
+        const result = await dialog.showOpenDialog(this.requireWindow(senderID), {
           title: 'Choose Application',
           defaultPath: '/Applications',
           properties: ['openFile'],

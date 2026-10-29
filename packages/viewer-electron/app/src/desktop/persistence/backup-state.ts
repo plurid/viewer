@@ -8,6 +8,7 @@ import type { TileSplit } from '../../domain/workspaces/tiling';
 import { pathMapper, type FileChange } from '../../domain/files/changes';
 import { fileViewValues } from '../../domain/previews/history';
 import type { JSONValue } from '../../domain/workspaces/project';
+import { containsPath } from '../files/containment';
 
 const portableView = (values: Record<string, JSONValue>) => {
   const { _sourceVersion: _version, ...position } = fileViewValues(values);
@@ -296,11 +297,10 @@ export function backupRoots(
       );
     space.taskAreas?.forEach((area) => folders.add(area.checkout.path));
   }
-  const within = (file: string, root: string) => file === root || file.startsWith(root + path.sep);
   const candidates = [...folders]
-    .filter((file) => path.isAbsolute(file) && !within(file, privateRoot))
+    .filter((file) => path.isAbsolute(file) && !containsPath(privateRoot, file))
     .sort((a, b) => a.length - b.length || a.localeCompare(b));
   return candidates.filter(
-    (file, index) => !candidates.slice(0, index).some((parent) => within(file, parent)),
+    (file, index) => !candidates.slice(0, index).some((parent) => containsPath(parent, file)),
   );
 }

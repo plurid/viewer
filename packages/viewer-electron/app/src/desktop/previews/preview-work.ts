@@ -114,6 +114,7 @@ export class PreviewWork {
   }
   stop(): void {
     this.closed = true;
-    this.invalidate();
+    // without a root there is no path to resolve: the promise only settles
+    void this.invalidate();
   }
 }

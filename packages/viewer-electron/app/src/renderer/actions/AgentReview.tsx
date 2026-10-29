@@ -2,24 +2,27 @@ import { useEffect, useState } from 'react';
 import type { AgentProposal } from '../../domain/agents/requests';
 import { Dialog } from '../ui/primitives';
 import { report } from '../state/store';
+import { followSnapshot } from '../state/requests';
+import type { DesktopEvent } from '../../domain/contracts';
 export function AgentReview() {
   const [proposals, setProposals] = useState<AgentProposal[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
-    const refresh = () => void window.viewer.agentReviewList().then(setProposals).catch(report);
-    refresh();
-    window.addEventListener('viewer:agent-review', refresh);
-    const unsubscribe = window.viewer.onEvent((event) => {
-      if (event.type === 'agent-proposal')
-        setProposals((items) => [
-          ...items.filter((item) => item.id !== event.proposal.id),
-          event.proposal,
-        ]);
+    const following = followSnapshot<AgentProposal[], DesktopEvent>({
+      load: () => window.viewer.agentReviewList(),
+      subscribe: (listener) => window.viewer.onEvent(listener),
+      apply: (items, event) =>
+        event.type === 'agent-proposal'
+          ? [...items.filter((item) => item.id !== event.proposal.id), event.proposal]
+          : items,
+      set: setProposals,
+      failed: report,
     });
+    window.addEventListener('viewer:agent-review', following.reload);
     return () => {
-      window.removeEventListener('viewer:agent-review', refresh);
-      unsubscribe();
+      window.removeEventListener('viewer:agent-review', following.reload);
+      following.stop();
     };
   }, []);
   const proposal = proposals.find((item) => item.status === 'review');

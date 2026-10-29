@@ -1,8 +1,7 @@
-import { app } from 'electron';
-import path from 'node:path';
 import type { AppIconSize } from './app-icons';
 import { runProcessor } from '../transforms/process';
 import { imageDimensions } from '../previews/image-dimensions';
+import { assetPath } from './assets';
 
 /**
  * A bundle's own NSWorkspace icon, rendered by the bounded private helper.
@@ -15,9 +14,8 @@ export async function nativeAppIcon(
   signal = new AbortController().signal,
 ): Promise<string> {
   const pixels = size === 'large' ? 256 : 64;
-  const root = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'assets');
   const data = await runProcessor(
-    path.join(root, 'viewer-image-preview'),
+    assetPath('viewer-image-preview'),
     ['icon', String(pixels)],
     [],
     signal,

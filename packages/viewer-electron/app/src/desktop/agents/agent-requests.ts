@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { AgentNavigation, AgentProposal, ExecutionGrant } from '../../domain/agents/requests';
+import { isFinalProposalStatus } from '../../domain/agents/requests';
 import type { CapturedTarget, ExecutionTask } from '../../domain/automation/actions';
 import type { SettingsPatch } from '../../domain/services';
 import { DocumentStore } from '../persistence/document-store';
@@ -26,12 +27,11 @@ import { speechSetupSchema, type SpeechSetup } from '../../domain/speech/models'
 import { validName } from '../files/filesystem';
 import type { AgentTaskSetup, AgentTaskResult } from '../../domain/agents/task-workflow';
 import { taskWorkflowReviewDetail } from '../../domain/agents/task-workflow';
+import { containsPath } from '../files/containment';
 const fingerprint = (value: unknown) =>
   createHash('sha256')
     .update(JSON.stringify(value ?? null))
     .digest('hex');
-const within = (file: string, root: string) =>
-  file === root || file.startsWith(root.replace(/\/$/, '') + '/');
 /** Counts a folder's contents for review, without following links. */
 async function folderContents(root: string): Promise<{ items: number; bytes: number } | null> {
   let items = 0,
@@ -213,7 +213,7 @@ export class AgentRequests {
         grant.capability === capability &&
         (grant.clientID ?? sharedClientID) === (this.authority?.actor() ?? sharedClientID) &&
         grant.actionID === actionID &&
-        within(root, grant.root) &&
+        containsPath(grant.root, root) &&
         (capability !== 'execute' || grant.fingerprint === this.actionFingerprint(actionID)),
     );
   }
@@ -234,9 +234,7 @@ export class AgentRequests {
     )
       throw new Error('Review pending proposals before submitting another.');
     while (this.proposals.size >= 200) {
-      const old = [...this.proposals].find(
-        ([, value]) => !['review', 'running'].includes(value.status),
-      );
+      const old = [...this.proposals].find(([, value]) => isFinalProposalStatus(value.status));
       if (!old) break;
       this.proposals.delete(old[0]);
       this.contents.delete(old[0]);
@@ -585,7 +583,7 @@ export class AgentRequests {
     for (const proposal of this.proposals.values()) {
       if (
         (proposal.clientID ?? sharedClientID) !== clientID ||
-        !['review', 'running'].includes(proposal.status)
+        isFinalProposalStatus(proposal.status)
       )
         continue;
       try {
@@ -601,7 +599,7 @@ export class AgentRequests {
     const proposal = this.get(id);
     if ((proposal.clientID ?? sharedClientID) !== clientID)
       throw new Error('Proposal belongs to another actor.');
-    if (!['review', 'running'].includes(proposal.status)) return;
+    if (isFinalProposalStatus(proposal.status)) return;
     // Retire admission before calling owners: one failed cancellation must not leave
     // this proposal executable or prevent other independent owners from stopping.
     proposal.status = 'cancelled';
