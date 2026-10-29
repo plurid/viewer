@@ -1,9 +1,10 @@
 // Two-way sync of settings and interface preferences with the desktop configuration.
-import type { UIPreferences } from '../../domain/contracts';
+import type { UIPreferences, Look } from '../../domain/contracts';
 import type { SettingsSnapshot } from '../../domain/services';
 import { panePresentation } from '../../domain/preferences/folder-presentation';
 import { getState, report, savePatch, update } from './core';
 import { scopedPresentation } from './folder-presentation';
+import { sameJSON } from '../../domain/json';
 
 let preferenceTimer: ReturnType<typeof setTimeout> | undefined;
 export const pendingPreferences = new Map<string, unknown>();
@@ -125,14 +126,13 @@ export function rememberLine(line: string): void {
   const previous = getState().saved.lineHistory ?? [];
   savePatch({ lineHistory: [text, ...previous.filter((item) => item !== text)].slice(0, 200) });
 }
-export function setLook(look: 'dark' | 'light'): void {
+export function setLook(look: Look): void {
   savePatch({ look });
   queuePreference('settings.appearance', look);
   schedulePreferences();
 }
 export function receiveSettings(snapshot: SettingsSnapshot): void {
   if (snapshot.revision < getState().settings.revision) return;
-  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const next = structuredClone({ ui: snapshot.ui, settings: snapshot.settings });
   for (const [path, value] of new Map([...activePreferences, ...pendingPreferences])) {
     const keys: string[] = path.startsWith('@') ? JSON.parse(path.slice(1)) : path.split('.');
@@ -147,13 +147,13 @@ export function receiveSettings(snapshot: SettingsSnapshot): void {
   const { ui, settings } = next;
   for (const [path, override] of Object.entries(settings.folders)) {
     const current = getState().settings.settings.folders[path];
-    if (current && same(override, current)) settings.folders[path] = current;
+    if (current && sameJSON(override, current)) settings.folders[path] = current;
   }
   for (const key of Object.keys(ui) as (keyof typeof ui)[])
-    if (same(ui[key], getState().saved.ui[key]))
+    if (sameJSON(ui[key], getState().saved.ui[key]))
       Object.assign(ui, { [key]: getState().saved.ui[key] });
   for (const key of Object.keys(settings) as (keyof typeof settings)[])
-    if (same(settings[key], getState().settings.settings[key]))
+    if (sameJSON(settings[key], getState().settings.settings[key]))
       Object.assign(settings, { [key]: getState().settings.settings[key] });
   const workspaces = getState().saved.workspaces.map((space) => {
     let changed = false;

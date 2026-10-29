@@ -39,7 +39,6 @@ import {
 import { sourceVersion, sameSourceVersion } from '../../domain/files/inspection';
 import { parseDelimited } from '../../domain/previews/data/delimited';
 import type { RelationshipsResult, FileRelation } from '../../domain/files/relationships';
-import { drawingGeometryOptionsSchema } from '../../domain/previews/drawings/geometry';
 import { agentCommandID, agentRemovalPolicy } from '../../domain/agents/safety';
 import { isEmptyAgentOrigin } from '../../domain/agents/origin';
 import { serviceToolNames } from './service-catalog';
@@ -48,12 +47,10 @@ import type { WorkflowRun } from '../../domain/automation/workflows';
 import { discardOwnTemporaryFile, removeEmptyDirectory } from '../operations/removal';
 import { nativeTestRemovalsBlocked } from '../native/test-removal-policy';
 import { agentTools } from './agent-tools';
-import { transformPlanSchema } from '../../domain/operations/transforms';
-import { sessionReportSchema } from '../../domain/agents/sessions';
+import { isToolIn, parseToolInput, toolCapability, writeTerminalInput } from './tool-catalog';
 import type { AgentSessions } from './sessions';
 import { containsPath } from '../files/containment';
-/** The person's Home folder; a Mac App Store build's os.homedir() is its container. */
-const realHome = () => (process.mas ? os.userInfo().homedir : os.homedir());
+import { realHome } from '../native/home';
 /** Agents see the shape of execution settings, never secrets they may carry:
  * terminal environment values, shell scripts and program arguments (`--token=…`, which were
  * shown as they were until 2026-10-20) often hold tokens. */
@@ -630,31 +627,7 @@ export class AgentBroker {
       .object({ name: z.string(), arguments: z.record(z.string(), z.unknown()).optional() })
       .parse(message.params);
     const args = call.arguments || {};
-    const capability: AgentCapability | undefined = [
-      'get_task',
-      'cancel_task',
-      'get_proposal',
-      'cancel_proposal',
-    ].includes(call.name)
-      ? undefined
-      : ['read_terminal'].includes(call.name)
-        ? 'terminal-read'
-        : ['write_terminal'].includes(call.name)
-          ? 'terminal-write'
-          : ['inspect_file', 'read_content', 'query_table', 'read_drawing_geometry'].includes(
-                call.name,
-              )
-            ? 'content'
-            : [
-                  'propose_open_path',
-                  'propose_selection',
-                  'propose_focus_plane',
-                  'propose_workspace_switch',
-                ].includes(call.name)
-              ? 'navigation'
-              : call.name.startsWith('propose_') || call.name === 'run_action'
-                ? 'propose'
-                : 'metadata';
+    const capability = toolCapability(call.name);
     if (capability) await this.clients.require(capability);
     else await this.clients.get();
     let value: unknown;
@@ -676,17 +649,14 @@ export class AgentBroker {
       value = await this.extension.sessions.report(
         this.clients.actor(),
         client?.name ?? 'Shared local client',
-        sessionReportSchema.parse(args),
+        parseToolInput('report_session', args),
         (file) => this.authorize(file),
       );
-    } else if (['list_workspaces', 'list_planes'].includes(call.name)) {
+    } else if (isToolIn(call.name, ['list_workspaces', 'list_planes'])) {
       const input =
         call.name === 'list_planes'
-          ? z
-              .object({ workspaceID: z.string().min(1).max(200).optional() })
-              .strict()
-              .parse(args)
-          : (z.object({}).strict().parse(args), { workspaceID: undefined });
+          ? parseToolInput('list_planes', args)
+          : (parseToolInput('list_workspaces', args), { workspaceID: undefined });
       const state = await this.extension?.workspaceState?.();
       if (!state) throw new Error('Workspace state is unavailable.');
       const workspaces = [];
@@ -722,12 +692,12 @@ export class AgentBroker {
       }
       value = call.name === 'list_workspaces' ? workspaces : workspaces[0]?.panes || [];
     } else if (
-      [
+      isToolIn(call.name, [
         'propose_open_path',
         'propose_selection',
         'propose_focus_plane',
         'propose_workspace_switch',
-      ].includes(call.name)
+      ])
     ) {
       const extension = this.extension,
         catalog = extension?.catalog();
@@ -735,20 +705,11 @@ export class AgentBroker {
       let request: AgentNavigation;
       let target: CapturedTarget = structuredClone({ ...catalog.target, selection: [] });
       if (call.name === 'propose_open_path') {
-        const input = z
-          .object({
-            path: z.string().min(1).max(32768),
-            placement: z.enum(['current', 'root', 'linked']).default('current'),
-          })
-          .strict()
-          .parse(args);
+        const input = parseToolInput('propose_open_path', args);
         await this.authorize(input.path);
         request = { kind: 'open-path', ...input };
       } else if (call.name === 'propose_selection') {
-        const input = z
-          .object({ paths: z.array(z.string().min(1).max(32768)).max(2000) })
-          .strict()
-          .parse(args);
+        const input = parseToolInput('propose_selection', args);
         const files = [];
         const directory = await this.authorize(target.directory);
         for (const file of new Set(input.paths)) {
@@ -761,10 +722,7 @@ export class AgentBroker {
         request = { kind: 'select-files', files };
         target = { ...target, selection: files };
       } else if (call.name === 'propose_focus_plane') {
-        const input = z
-          .object({ paneID: z.string().min(1).max(200) })
-          .strict()
-          .parse(args);
+        const input = parseToolInput('propose_focus_plane', args);
         const state = await extension.workspaceState?.();
         const pane = state?.workspaces
           .find((space) => space.id === target.workspaceID)
@@ -772,17 +730,7 @@ export class AgentBroker {
         if (!pane) throw new Error('Choose a plane in the active workspace from list_planes.');
         request = { kind: 'focus-plane', pane: structuredClone(pane) };
       } else {
-        const input = z
-          .object({
-            workspaceID: z.string().min(1).max(200).optional(),
-            name: z.string().min(1).max(200).optional(),
-          })
-          .strict()
-          .refine(
-            (input) => !!input.workspaceID !== !!input.name,
-            'Provide one workspace ID or name.',
-          )
-          .parse(args);
+        const input = parseToolInput('propose_workspace_switch', args);
         const state = await extension.workspaceState?.();
         const matches =
           state?.workspaces.filter((space) =>
@@ -815,15 +763,7 @@ export class AgentBroker {
       const extension = this.extension,
         catalog = extension?.catalog();
       if (!extension || !catalog) throw new Error('Open a workspace in Viewer first.');
-      const input = z
-        .object({
-          sources: z.array(z.string().min(1).max(32768)).min(1).max(16),
-          destination: z.string().min(1).max(32768),
-          name: z.string().min(1).max(255),
-          plan: transformPlanSchema,
-        })
-        .strict()
-        .parse(args);
+      const input = parseToolInput('propose_transform', args);
       await this.clients.require('content');
       await this.authorizeTarget(catalog.target);
       await this.authorize(input.destination);
@@ -837,7 +777,7 @@ export class AgentBroker {
         selection,
       });
       this.own((value as { id: string }).id);
-    } else if (['list_commands', 'explain_command', 'propose_command'].includes(call.name)) {
+    } else if (isToolIn(call.name, ['list_commands', 'explain_command', 'propose_command'])) {
       const extension = this.extension;
       const catalog = extension?.catalog();
       if (!extension || !catalog) throw new Error('Open a workspace in Viewer first.');
@@ -850,18 +790,16 @@ export class AgentBroker {
           return false;
         }
       });
-      if (call.name === 'list_commands')
+      if (call.name === 'list_commands') {
+        parseToolInput('list_commands', args);
         value = {
           target: catalog.target,
           commands,
           reviewByDefault: true,
           removalPolicy: agentRemovalPolicy,
         };
-      else {
-        const input = z
-          .object({ commandID: z.string().max(200) })
-          .strict()
-          .parse(args);
+      } else {
+        const input = parseToolInput(call.name, args);
         const command = catalog.commands.find((command) => command.id === input.commandID);
         if (!command) throw new Error('Command is unavailable in the captured context.');
         const resolved = agentCommandID(command.id, this.settings().customActions);
@@ -885,6 +823,7 @@ export class AgentBroker {
       }
     } else if (call.name === 'read_config') {
       if (!this.extension) throw new Error('Configuration API is unavailable.');
+      parseToolInput('read_config', args);
       const snapshot = this.extension.config.snapshot();
       value = {
         version: 1,
@@ -892,24 +831,9 @@ export class AgentBroker {
         ui: snapshot.ui,
         revision: snapshot.revision,
       };
-    } else if (['validate_config', 'propose_config'].includes(call.name)) {
+    } else if (isToolIn(call.name, ['validate_config', 'propose_config'])) {
       if (!this.extension) throw new Error('Configuration API is unavailable.');
-      const input = z
-        .object({
-          patches: z
-            .array(
-              z
-                .object({
-                  path: z.string().max(200),
-                  keys: z.array(z.string().max(32768)).max(10).optional(),
-                  value: z.unknown(),
-                })
-                .strict(),
-            )
-            .max(100),
-        })
-        .strict()
-        .parse(args);
+      const input = parseToolInput(call.name, args);
       if (call.name === 'validate_config') value = this.extension.config.preview(input.patches);
       else {
         value = this.extension.requests.configuration(input.patches);
@@ -917,10 +841,10 @@ export class AgentBroker {
       }
     } else if (['read_terminal', 'write_terminal'].includes(call.name)) {
       if (!this.extension) throw new Error('Terminal API is unavailable.');
-      const input = z
-        .object({ id: z.string(), data: z.string().max(65536).optional() })
-        .strict()
-        .parse(args);
+      const input =
+        call.name === 'read_terminal'
+          ? parseToolInput('read_terminal', args)
+          : writeTerminalInput.parse(args);
       const terminal = this.extension.requests;
       await this.authorize(terminal.terminalDirectory(input.id));
       if (call.name === 'read_terminal') {
@@ -934,7 +858,7 @@ export class AgentBroker {
       }
     } else if (call.name === 'get_proposal' || call.name === 'cancel_proposal') {
       if (!this.extension) throw new Error('Proposal API is unavailable.');
-      const input = z.object({ id: z.string() }).strict().parse(args);
+      const input = parseToolInput(call.name, args);
       if (this.owned.get(input.id) !== this.clients.actor())
         throw new Error('Proposal belongs to another actor.');
       if (call.name === 'cancel_proposal') {
@@ -942,10 +866,7 @@ export class AgentBroker {
         value = { id: input.id, status: this.extension.requests.get(input.id).status };
       } else value = this.extension.requests.get(input.id);
     } else if (call.name === 'get_relationships') {
-      const input = z
-        .object({ path: z.string().min(1).max(32768), content: z.boolean().default(false) })
-        .strict()
-        .parse(args);
+      const input = parseToolInput('get_relationships', args);
       await this.authorize(input.path);
       const client = await this.clients.get();
       if (input.content) {
@@ -986,6 +907,7 @@ export class AgentBroker {
       )
         throw new Error('The relationship result exceeds the client read budget.');
     } else if (call.name === 'get_context') {
+      parseToolInput('get_context', args);
       const context = this.context();
       const sources: string[] = [];
       for (const file of context?.sources || []) {
@@ -997,7 +919,8 @@ export class AgentBroker {
         }
       }
       value = context ? { ...context, actor: 'agent', sources } : null;
-    } else if (call.name === 'list_actions')
+    } else if (call.name === 'list_actions') {
+      parseToolInput('list_actions', args);
       value = this.settings().recipes.map((recipe) => ({
         id: recipe.id,
         name: recipe.name,
@@ -1005,15 +928,12 @@ export class AgentBroker {
         data: recipe.data,
         kind: recipe.kind,
       }));
-    else if (call.name === 'read_metadata') {
-      const input = z.object({ path: z.string() }).strict().parse(args);
+    } else if (call.name === 'read_metadata') {
+      const input = parseToolInput('read_metadata', args);
       await this.authorize(input.path);
       value = await entry(input.path);
     } else if (call.name === 'read_drawing_geometry') {
-      const input = drawingGeometryOptionsSchema
-        .extend({ path: z.string().min(1).max(32768) })
-        .strict()
-        .parse(args);
+      const input = parseToolInput('read_drawing_geometry', args);
       const client = await this.clients.get();
       if (!client)
         throw new Error('Use a named client with content permission for drawing geometry.');
@@ -1028,22 +948,8 @@ export class AgentBroker {
         throw new Error(
           'Geometry exceeds the client read budget. Request fewer entities or omit points.',
         );
-    } else if (['inspect_file', 'read_content', 'query_table'].includes(call.name)) {
-      const input = z
-        .object({
-          path: z.string().min(1).max(32768),
-          ...(call.name === 'inspect_file'
-            ? { ocr: z.boolean().default(false) }
-            : call.name === 'query_table'
-              ? {
-                  offset: z.number().int().min(0).max(100000).default(0),
-                  limit: z.number().int().min(1).max(200).default(100),
-                  sheet: z.string().min(1).max(200).optional(),
-                }
-              : {}),
-        })
-        .strict()
-        .parse(args);
+    } else if (isToolIn(call.name, ['inspect_file', 'read_content', 'query_table'])) {
+      const input = parseToolInput(call.name, args);
       const client = await this.clients.get();
       if (!client)
         throw new Error(
@@ -1124,15 +1030,7 @@ export class AgentBroker {
           'This result exceeds the client read budget. Request a smaller table window or increase its budget in Settings.',
         );
     } else if (call.name === 'search_files') {
-      const input = z
-        .object({
-          query: z.string().max(300),
-          root: z.string(),
-          offset: z.number().int().min(0).optional(),
-          content: z.boolean().optional(),
-        })
-        .strict()
-        .parse(args);
+      const input = parseToolInput('search_files', args);
       await this.authorize(input.root);
       const client = await this.clients.get();
       if (input.content) {
@@ -1168,15 +1066,7 @@ export class AgentBroker {
     } else if (call.name === 'run_action') {
       value = await this.admitTask(async () => {
         await this.clients.require('propose');
-        const input = z
-          .object({
-            recipeID: z.string(),
-            sources: z.array(z.string()).min(1).max(2000),
-            instructions: z.string().max(12000).optional(),
-            recursive: z.boolean().optional(),
-          })
-          .strict()
-          .parse(args);
+        const input = parseToolInput('run_action', args);
         for (const file of input.sources) await this.authorize(file);
         const recipe = this.settings().recipes.find((recipe) => recipe.id === input.recipeID);
         if (!recipe || recipeReadsContent(recipe)) await this.clients.require('content');
@@ -1210,7 +1100,7 @@ export class AgentBroker {
         return { id, applyRequiresUserReview: true };
       });
     } else if (call.name === 'get_task' || call.name === 'cancel_task') {
-      const input = z.object({ id: z.string() }).strict().parse(args);
+      const input = parseToolInput(call.name, args);
       const plan = await this.actions.get(input.id);
       if (
         this.owned.get(input.id) !== this.clients.actor() &&

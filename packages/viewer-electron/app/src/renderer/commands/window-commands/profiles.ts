@@ -30,7 +30,7 @@ export async function applyProfile(profile: SettingProfile): Promise<void> {
   if (issues.length) report(new Error(issues.map((issue) => issue.message).join(' ')));
 }
 /** Back to what was there before the first profile. */
-export async function leaveProfile(): Promise<void> {
+async function leaveProfile(): Promise<void> {
   const active = getState().saved.profile;
   if (!active) return;
   savePatch({ profile: undefined });

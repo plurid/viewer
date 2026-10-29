@@ -20,7 +20,7 @@ import {
   initialize,
   receiveSettings,
 } from '../src/renderer/state/store';
-import { layoutTemplateSchema } from '../src/desktop/preferences/settings';
+import { layoutTemplateSchema } from '../src/desktop/preferences/settings-schema';
 
 describe('a template', () => {
   const panes = [

@@ -1,5 +1,4 @@
 import { WindowDialogs, type WindowDialog } from './app/WindowDialogs';
-import type { TaskWorkflowDraft } from '../domain/command-line/task';
 import { SpeechControls } from './speech/SpeechControls';
 import { routeFileKeyboard } from './explorer/selection';
 import { AgentReview } from './actions/AgentReview';
@@ -15,7 +14,6 @@ import { errorMessage } from '../domain/errors';
 import { failedFlush } from '../domain/persistence/flush';
 import { prepareNoteTrash, finishNoteTrash } from './notes/sessions';
 import { savePatch } from './state/core';
-import type { CapturedTarget } from '../domain/automation/actions';
 import { receiveWorkspaces } from './state/workspaces';
 import type { LaunchRequest } from '../domain/workspaces/launch';
 import { parentPath } from '../domain/workspaces/planes';
@@ -96,6 +94,8 @@ import { OpenWithDialog } from './ui/navigation/OpenWithDialog';
 import { Volumes } from './ui/navigation/Volumes';
 import { Trash } from './ui/trash/Trash';
 import { openWorkspacePath } from './workspace/open-path';
+import { requestRefresh } from './state/refresh';
+import { useWindowEvent } from './app/window-events';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 import { commandShortcutID } from '../domain/preferences/shortcuts';
 import { dialogOpen, overlayOpen } from './ui/modal';
@@ -126,16 +126,8 @@ function AppWindow() {
   const registry = useCommands();
   const [volumesOpen, setVolumesOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
-  useEffect(() => {
-    const open = () => setTrashOpen(true);
-    window.addEventListener('viewer:trash', open);
-    return () => window.removeEventListener('viewer:trash', open);
-  }, []);
-  useEffect(() => {
-    const open = () => setVolumesOpen(true);
-    window.addEventListener('viewer:volumes', open);
-    return () => window.removeEventListener('viewer:volumes', open);
-  }, []);
+  useWindowEvent('viewer:trash', () => setTrashOpen(true));
+  useWindowEvent('viewer:volumes', () => setVolumesOpen(true));
   const [openWithPaths, setOpenWithPaths] = useState<string[]>();
   const engine = useRef<PluridApplicationHandle>(null);
   const surface = useRef<HTMLDivElement>(null);
@@ -151,22 +143,12 @@ function AppWindow() {
     void recoverBuffers().catch(report);
   }, [ready]);
   const [windowDialog, setWindowDialog] = useState<WindowDialog>();
-  useEffect(() => {
-    const open = (event: Event) => {
-      const draft = (event as CustomEvent<TaskWorkflowDraft>).detail;
-      setWindowDialog({ type: 'task-request', id: crypto.randomUUID(), draft });
-    };
-    window.addEventListener('viewer:task-request', open);
-    return () => window.removeEventListener('viewer:task-request', open);
-  }, []);
-  useEffect(() => {
-    const run = (event: Event) => {
-      const target = (event as CustomEvent<CapturedTarget>).detail;
-      if (target?.paneID) setWindowDialog({ type: 'run-command', target });
-    };
-    window.addEventListener('viewer:run-command', run);
-    return () => window.removeEventListener('viewer:run-command', run);
-  }, []);
+  useWindowEvent('viewer:task-request', (draft) => {
+    setWindowDialog({ type: 'task-request', id: crypto.randomUUID(), draft });
+  });
+  useWindowEvent('viewer:run-command', (target) => {
+    if (target.paneID) setWindowDialog({ type: 'run-command', target });
+  });
   const recordingMacro = useMacroRecording();
   const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -545,7 +527,7 @@ function AppWindow() {
         previewDocuments.invalidate(event.path);
         invalidateThumbnails(event.path);
         invalidateFolderSizes(event.path);
-        window.dispatchEvent(new Event('viewer:refresh'));
+        requestRefresh();
       } else if (event.type === 'settings') receiveSettings(event.snapshot);
       else if (event.type === 'session-keys') receiveSessionKeys(event.session);
       else if (event.type === 'workspaces') receiveWorkspaces(event.state);

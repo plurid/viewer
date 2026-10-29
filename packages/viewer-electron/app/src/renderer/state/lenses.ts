@@ -84,9 +84,6 @@ function load(folder: string): void {
       }
     });
 }
-export function reloadLenses(folder: string): void {
-  if (folders.get(folder)?.listeners.size) load(folder);
-}
 export function useLenses(folder: string): LensView {
   const subscribe = useCallback(
     (listener: () => void) => {
@@ -146,7 +143,7 @@ export function useLenses(folder: string): LensView {
   );
   return useSyncExternalStore(subscribe, () => folders.get(folder)?.state ?? empty);
 }
-export function lensSnapshot(folder: string): LensFolder | null {
+function lensSnapshot(folder: string): LensFolder | null {
   return folders.get(folder)?.state.data ?? null;
 }
 /** The lens grouping a folder, if it is grouped by one. */
@@ -219,26 +216,10 @@ interface HistoryEntry {
 }
 const undoStack: HistoryEntry[] = [];
 const redoStack: HistoryEntry[] = [];
-const historyListeners = new Set<() => void>();
-let historyVersion = 0;
-function historyChanged() {
-  historyVersion++;
-  historyListeners.forEach((listener) => listener());
-}
-export function useLensHistory(): number {
-  return useSyncExternalStore(
-    (listener) => {
-      historyListeners.add(listener);
-      return () => historyListeners.delete(listener);
-    },
-    () => historyVersion,
-  );
-}
 function remember(entry: Omit<HistoryEntry, 'time'>) {
   undoStack.push({ ...entry, time: Date.now() });
   if (undoStack.length > 200) undoStack.shift();
   redoStack.length = 0;
-  historyChanged();
 }
 export function lastLensUndo(): HistoryEntry | undefined {
   return undoStack.at(-1);
@@ -249,20 +230,16 @@ export function lastLensRedo(): HistoryEntry | undefined {
 export async function undoLens(): Promise<void> {
   const entry = undoStack.pop();
   if (!entry) return;
-  historyChanged();
   await entry.undo();
   if (entry.redo) {
     redoStack.push({ ...entry, time: Date.now() });
-    historyChanged();
   }
 }
 export async function redoLens(): Promise<void> {
   const entry = redoStack.pop();
   if (!entry?.redo) return;
-  historyChanged();
   await entry.redo();
   undoStack.push({ ...entry, time: Date.now() });
-  historyChanged();
 }
 
 /** Applies edits immediately here and saves them in the background. */

@@ -15,11 +15,11 @@ import { receiptSchema } from '../../domain/automation/receipts';
 import { pathMapper } from '../../domain/files/changes';
 import { inspectReviewedFile } from '../native/reviewed-file';
 import { textBufferSchema } from '../editing/text-buffers';
-import { settingsSchema, validateCustomProfiles } from '../preferences/settings';
+import { settingsSchema, validateCustomProfiles } from '../preferences/settings-schema';
 import { stateSchema } from './storage';
 import { backupIdentityMap, backupRoots, restoreBackupState } from './backup-state';
 
-export const maximumBackupBytes = 64 * 1024 * 1024;
+const maximumBackupBytes = 64 * 1024 * 1024;
 const documentKinds = {
   notes: { directory: 'notes', schema: noteSchema },
   drafts: { directory: 'text-buffers', schema: textBufferSchema },

@@ -1,8 +1,26 @@
 import { createGitHandlers } from './ipc/git-handlers';
-import { PersonalBackups } from './persistence/backup';
 import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
 import { createWebHandlers } from './ipc/web-handlers';
+import { createJournalHandlers } from './journal/handlers';
+import { createAccessHandlers } from './ipc/access-handlers';
+import { createActionHandlers } from './ipc/action-handlers';
+import { createAgentHandlers } from './ipc/agent-handlers';
+import { createApplicationHandlers } from './ipc/application-handlers';
+import { createAutomationHandlers } from './ipc/automation-handlers';
+import { createCommandLineHandlers } from './ipc/command-line-handlers';
+import { createComparisonHandlers } from './ipc/comparison-handlers';
+import { createFileHandlers } from './ipc/file-handlers';
+import { createMediaHandlers } from './ipc/media-handlers';
+import { createNoteHandlers } from './ipc/note-handlers';
+import { createOperationHandlers } from './ipc/operation-handlers';
+import { createPasteboardHandlers } from './ipc/pasteboard-handlers';
+import { createResourceHandlers } from './ipc/resource-handlers';
+import { createSearchHandlers } from './ipc/search-handlers';
+import { createSettingHandlers } from './ipc/setting-handlers';
+import { createTerminalHandlers } from './ipc/terminal-handlers';
+import { createWindowHandlers } from './ipc/window-handlers';
+import { PersonalBackups } from './persistence/backup';
 import { sendEvent } from './ipc/events';
 import { assetPath, processorFolder } from './native/assets';
 import { settleAll } from '../domain/settle';
@@ -18,18 +36,12 @@ import {
 } from './transforms/image-process';
 import { MediaDocuments } from './transforms/media-documents';
 import { imageTransformSchema } from '../domain/operations/transforms';
-import { answerPrompt } from './models/prompts';
 import { namedLines } from '../domain/command-line/prompt';
-import {
-  emptySessionKeys,
-  keepAliases,
-  withSessionKeys,
-  type SessionKeys,
-} from '../domain/preferences/session-keys';
+import { emptySessionKeys, type SessionKeys } from '../domain/preferences/session-keys';
 import type { FileChange } from '../domain/files/changes';
 import { AgentRequests } from './agents/agent-requests';
 import { agentCommandID } from '../domain/agents/safety';
-import type { CapturedTarget, CustomAction } from '../domain/automation/actions';
+import type { CapturedTarget } from '../domain/automation/actions';
 import type {
   AgentNavigation,
   AgentWorkspaceSnapshot,
@@ -45,7 +57,6 @@ import {
   app,
   nativeTheme,
   safeStorage,
-  dialog,
   ipcMain,
   shell,
   systemPreferences,
@@ -68,20 +79,19 @@ import { AgentBroker } from './agents/agent-broker';
 import { Comparisons } from './comparison/comparison';
 import { Duplicates } from './comparison/duplicates';
 import { OperationPlans } from './operations/operation-plans';
-import { sameSourceVersion, sourceVersion } from '../domain/files/inspection';
-import {
-  sharedClientID,
-  type AgentAccessRequest,
-  type AgentClient,
-} from '../domain/agents/clients';
+import { sourceVersion } from '../domain/files/inspection';
+import { sharedClientID, type AgentAccessRequest } from '../domain/agents/clients';
 import { newPlaneFolder, type ActionContext, type ApplicationSettings } from '../domain/services';
 import { randomUUID } from 'node:crypto';
-import os from 'node:os';
 import path from 'node:path';
-import type { ApiMethod, ApiResult, DesktopEvent, FileEntry, Resource } from '../domain/contracts';
-import { absolute, entry, list } from './files/filesystem';
-import { isPackage } from '../domain/files/entries';
-import { spotlightTagged } from './search/spotlight';
+import type {
+  ApiMethod,
+  ApiResult,
+  Bootstrap,
+  DesktopEvent,
+  SavedState,
+} from '../domain/contracts';
+import { absolute } from './files/filesystem';
 import { nativeImageConverter } from './native/native-image-convert';
 import { imageDecoder } from './native/quick-look-render';
 import { Operations } from './operations/operations';
@@ -95,7 +105,6 @@ import { DerivedPreviews, rawDecoder } from './previews/derived';
 import { officeDecoder } from './previews/office-renderer';
 import { officeRuntimeName } from './previews/office-runtime-manifest';
 import { videoDecoder } from './previews/video-rendition';
-import { officeImageParts } from '../domain/previews/documents/office';
 import { Search } from './search/search';
 import { Storage } from './persistence/storage';
 import { Watchers } from './files/watchers';
@@ -106,6 +115,7 @@ import { FileAccess } from './files/file-access';
 import { NativeSelections } from './native/native-selections';
 import { Pasteboard } from './native/pasteboard';
 import { confirmAgentProposal, confirmNatively } from './native/native-confirmation';
+import { chooseRemembered, chooseRememberedFiles, openOnce, saveOnce } from './native/dialogs';
 import { AgentAccess } from './agents/agent-access';
 import { fileCoordination } from './files/file-coordination';
 import { FileInformationService } from './files/file-information';
@@ -117,12 +127,11 @@ import { WatchRules } from './automation/watch-rules';
 import { Relationships } from './workspaces/relationships';
 import { boundedRename } from './actions/rename-preview';
 import { methodWindows, schemas, settingsEvents, type ApiHandlers } from './ipc/schemas';
-import { serverAddress } from '../domain/files/volumes';
 import { errorMessage } from '../domain/errors';
 import { GitReader } from './comparison/git';
 import { GitWorktrees } from './comparison/worktrees';
 import { GitActions } from './comparison/git-actions';
-import { bindGitTarget, validateGitTarget, type GitTargetWindow } from './comparison/git-target';
+import { validateGitTarget, type GitTargetWindow } from './comparison/git-target';
 import { mergeChanged, WorkspaceSessions } from './windows/workspace-sessions';
 import { ShellCommand } from './windows/shell-command';
 import { SpeechModels } from './speech/models';
@@ -143,7 +152,7 @@ import { modelEndpoint } from '../domain/models/permissions';
 import { WindowFlushRequests } from './windows/flush-requests';
 import { JournalStore } from './journal/store';
 import { JournalActivity } from './journal/activity';
-import { createJournalHandlers } from './journal/handlers';
+import { realHome } from './native/home';
 
 type WindowRole = 'viewer' | 'settings';
 
@@ -161,6 +170,10 @@ interface WindowRecord {
   planeOwners?: Record<string, string>;
   context?: ActionContext;
 }
+
+/** Saved keys are encrypted with the operating system's keychain. */
+const encryptSecret = (value: string) => safeStorage.encryptStringAsync(value);
+const decryptSecret = async (value: Buffer) => (await safeStorage.decryptStringAsync(value)).result;
 
 export class Desktop {
   readonly journal: JournalStore;
@@ -182,8 +195,6 @@ export class Desktop {
   private pasteboard: Pasteboard;
   /** `:bind` and `:alias` of this session: in memory only, until quit. */
   private sessionKeys: SessionKeys = emptySessionKeys;
-  /** Prompts being answered, to cancel. */
-  private prompts = new Map<string, AbortController>();
   readonly agentRequests: AgentRequests;
   private commandCatalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
   private workspaceCatalog?: AgentWorkspaceSnapshot;
@@ -233,10 +244,9 @@ export class Desktop {
   readonly taskRequests: TaskRequests;
   readonly thumbnails: Thumbnails;
   private appIcons = new AppIcons(nativeAppIcon);
-  private diagnosticReports = new Map<number, number[]>();
   // HOME becomes the container in App Sandbox. Sidebar/default paths describe
   // the actual user's folders; knowing those paths does not confer access.
-  private readonly home = process.mas ? os.userInfo().homedir : os.homedir();
+  private readonly home = realHome();
   private readonly trash: Trash;
   private context?: ActionContext;
   private indexConfiguration = '';
@@ -246,7 +256,6 @@ export class Desktop {
     { finish(error?: string): void; owner: number; command: string }
   >();
   private agentsEnabled?: boolean;
-  private pendingCommandDraft?: CustomAction;
   private agentsConfiguration: Promise<void> = Promise.resolve();
   private readonly flushes = new WindowFlushRequests();
   private flushing?: Promise<void>;
@@ -545,8 +554,8 @@ export class Desktop {
     );
     this.credentials = new Credentials(
       dataPath,
-      (value) => safeStorage.encryptStringAsync(value),
-      async (value) => (await safeStorage.decryptStringAsync(value)).result,
+      encryptSecret,
+      decryptSecret,
       // a key saved before keys were tied to an endpoint is tied only once the person allows it
       (provider) =>
         confirmNatively(
@@ -662,27 +671,24 @@ export class Desktop {
       this.operations,
       this.resources,
       access,
-      async (owner, media) => {
-        const result = await dialog.showOpenDialog(this.requireWindow(owner), {
-          title: media === 'audio' ? 'Choose audio' : 'Add media',
-          properties: ['openFile', 'multiSelections'],
-          securityScopedBookmarks: this.fileAccess.scoped,
-          filters: [
-            {
-              name: 'Media',
-              extensions:
-                media === 'audio'
-                  ? ['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aif', 'aiff', 'caf', 'mp4', 'mov']
-                  : ['mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'mp3', 'wav', 'm4a', 'flac'],
-            },
-          ],
-        });
-        if (result.canceled) return [];
-        if (result.filePaths.length > 16) throw new Error('Choose at most 16 media files.');
-        for (const [index, file] of result.filePaths.entries())
-          await this.fileAccess.remember(file, false, result.bookmarks?.[index]);
-        return result.filePaths;
-      },
+      async (owner, media) =>
+        chooseRememberedFiles(
+          this.fileAccess,
+          this.requireWindow(owner),
+          {
+            title: media === 'audio' ? 'Choose audio' : 'Add media',
+            filters: [
+              {
+                name: 'Media',
+                extensions:
+                  media === 'audio'
+                    ? ['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aif', 'aiff', 'caf', 'mp4', 'mov']
+                    : ['mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'mp3', 'wav', 'm4a', 'flac'],
+              },
+            ],
+          },
+          { count: 16, message: 'Choose at most 16 media files.' },
+        ),
     );
     this.texts = new TextFiles(this.operations, access);
     this.buffers = new TextBuffers(dataPath, async (reviewed) => {
@@ -768,11 +774,7 @@ export class Desktop {
     );
     const speechProviders = new SpeechProviders(
       dataPath,
-      new Credentials(
-        path.join(dataPath, 'speech-private'),
-        (value) => safeStorage.encryptStringAsync(value),
-        async (value) => (await safeStorage.decryptStringAsync(value)).result,
-      ),
+      new Credentials(path.join(dataPath, 'speech-private'), encryptSecret, decryptSecret),
       {
         changed: speechChanged,
         invalidated: (id) => this.speech?.invalidateProvider(id),
@@ -797,9 +799,7 @@ export class Desktop {
       speechRuntime,
       {
         settings: (owner) => this.windows.get(owner)?.role === 'settings',
-        human: (owner) =>
-          this.windows.has(owner) &&
-          ![...this.agentCommands.values()].some((item) => item.owner === owner),
+        human: (owner) => this.windows.has(owner) && !this.isAgentDriven(owner),
         foreground: (owner) => !!this.windows.get(owner)?.window.isFocused(),
         microphone: () =>
           process.platform === 'darwin'
@@ -810,17 +810,10 @@ export class Desktop {
         chooseModel: async (owner) => {
           const window = this.windows.get(owner)?.window;
           if (!window) throw new Error('The speech settings window closed.');
-          const result = await dialog.showOpenDialog(window, {
+          return openOnce(this.fileAccess, window, {
             title: 'Import a verified Whisper model',
-            properties: ['openFile'],
             filters: [{ name: 'Whisper model', extensions: ['bin'] }],
-            securityScopedBookmarks: this.fileAccess.scoped,
           });
-          const file = result.filePaths[0];
-          if (result.canceled || !file) return;
-          await this.fileAccess.allowOnce(file, result.bookmarks?.[0]);
-          await this.fileAccess.require([file]);
-          return file;
         },
         event: (owner, event) => {
           const window = this.windows.get(owner)?.window;
@@ -884,7 +877,7 @@ export class Desktop {
           record.window.isDestroyed() ||
           !record.workspaceID ||
           !record.workspaceCatalog ||
-          [...this.agentCommands.values()].some((item) => item.owner === owner)
+          this.isAgentDriven(owner)
         )
           return;
         return {
@@ -1063,22 +1056,14 @@ export class Desktop {
       flush: async () => {
         // Snapshot editors without cancelling an active conversation or its process ownership.
         await Promise.all(
-          [...this.windows.values()]
-            .filter((item) => item.ready && item.role === 'viewer')
-            .map(({ window }) =>
-              this.flushes.request(window.webContents.id, 'flush', (token) =>
-                sendEvent(window.webContents, { type: 'flush', token }),
-              ),
+          this.readyWindows().map((window) =>
+            this.flushes.request(window.webContents.id, 'flush', (token) =>
+              sendEvent(window.webContents, { type: 'flush', token }),
             ),
+          ),
         );
-        await Promise.all([
-          this.storage.flush(),
-          this.settings.flush(),
-          this.buffers.flush(),
-          this.notes.flush(),
-          this.chats.flush(),
-          this.receipts.flush(),
-        ]);
+        // a backup also copies the command receipts
+        await Promise.all([this.flushWindowStores(), this.receipts.flush()]);
       },
       state: async () => (await this.storage.load()).state,
       settings: () => ({ ...this.settings.snapshot(), credentials: this.credentials.ids() }),
@@ -1095,27 +1080,18 @@ export class Desktop {
         if (kind === 'folder') return this.chooseFolder(owner);
         const window = this.windows.get(owner)?.window;
         if (!window || window.isDestroyed()) throw new Error('The backup window closed.');
-        if (kind === 'export') {
-          const result = await dialog.showSaveDialog(window, {
-            title: 'Save personal backup',
-            defaultPath: 'Viewer-' + new Date().toISOString().slice(0, 10) + '.viewer-backup.json',
-            securityScopedBookmarks: this.fileAccess.scoped,
-          });
-          if (result.canceled || !result.filePath) return null;
-          await this.fileAccess.allowOnce(result.filePath, result.bookmark);
-          await this.fileAccess.require([result.filePath]);
-          return result.filePath;
-        }
-        const result = await dialog.showOpenDialog(window, {
-          title: 'Open personal backup',
-          properties: ['openFile'],
-          filters: [{ name: 'Viewer backup', extensions: ['json'] }],
-          securityScopedBookmarks: this.fileAccess.scoped,
-        });
-        if (result.canceled || !result.filePaths[0]) return null;
-        await this.fileAccess.allowOnce(result.filePaths[0], result.bookmarks?.[0]);
-        await this.fileAccess.require([result.filePaths[0]]);
-        return result.filePaths[0];
+        const file =
+          kind === 'export'
+            ? await saveOnce(this.fileAccess, window, {
+                title: 'Save personal backup',
+                defaultPath:
+                  'Viewer-' + new Date().toISOString().slice(0, 10) + '.viewer-backup.json',
+              })
+            : await openOnce(this.fileAccess, window, {
+                title: 'Open personal backup',
+                filters: [{ name: 'Viewer backup', extensions: ['json'] }],
+              });
+        return file ?? null;
       },
     });
     ipcMain.handle(
@@ -1162,6 +1138,25 @@ export class Desktop {
   }
   private requireWindow(owner: number): BrowserWindow {
     return this.requireRecord(owner).window;
+  }
+  /** Workspace windows whose renderer has published its commands, and so answers a flush. */
+  private readyWindows(): BrowserWindow[] {
+    return [...this.windows.values()]
+      .filter((item) => item.role === 'viewer' && item.ready)
+      .map(({ window }) => window);
+  }
+  /** `owner` is carrying out an agent's command; work private to the person refuses it. */
+  private isAgentDriven(owner: number): boolean {
+    return [...this.agentCommands.values()].some((item) => item.owner === owner);
+  }
+  private withPreferences(state: SavedState): SavedState {
+    const snapshot = this.settings.snapshot();
+    return {
+      ...state,
+      ui: snapshot.ui,
+      look: snapshot.look,
+      preferencesRevision: snapshot.revision,
+    };
   }
   /**
    * Stops everything that holds work, handles or watchers under `root`, before its access is
@@ -1212,6 +1207,16 @@ export class Desktop {
       });
     }
   }
+  /** Reconfigures the index although its settings are unchanged: access to a root changed. */
+  private refreshIndex(): Promise<void> {
+    this.indexConfiguration = '';
+    return this.reconfigureIndex();
+  }
+  /** A requested rebuild: unlike a reconfiguration, its failure reaches the person who asked. */
+  private rebuildIndex(): Promise<void> {
+    this.indexConfiguration = '';
+    return this.configureIndex(this.settings.snapshot().settings.search, true);
+  }
   private async configureIndex(
     config: ApplicationSettings['search'],
     rebuild = false,
@@ -1230,19 +1235,18 @@ export class Desktop {
     }
   }
   private async chooseFolder(senderID: number, defaultPath?: string): Promise<string | null> {
-    const result = await dialog.showOpenDialog(this.requireWindow(senderID), {
-      properties: ['openDirectory'],
-      defaultPath,
-      securityScopedBookmarks: this.fileAccess.scoped,
-    });
-    if (result.canceled || !result.filePaths[0]) return null;
-    await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
-    await this.fileAccess.require([result.filePaths[0]]);
+    const folder = await chooseRemembered(
+      this.fileAccess,
+      this.requireWindow(senderID),
+      { properties: ['openDirectory'], defaultPath },
+      true,
+    );
+    if (!folder) return null;
+    await this.fileAccess.require([folder]);
     // Granting a configured index root can unblock its watcher/indexer.
-    this.indexConfiguration = '';
-    void this.reconfigureIndex();
-    this.emit({ type: 'folder-changed', path: result.filePaths[0] });
-    return result.filePaths[0];
+    void this.refreshIndex();
+    this.emit({ type: 'folder-changed', path: folder });
+    return folder;
   }
   /**
    * Settings → Agents changes the approval itself (`AgentAccess`) and mirrors it into config.jsonc.
@@ -1419,12 +1423,7 @@ export class Desktop {
         const state = this.workspaceSessions.snapshot();
         if (state)
           void this.storage
-            .save({
-              ...state,
-              ui: this.settings.snapshot().ui,
-              look: this.settings.snapshot().look,
-              preferencesRevision: this.settings.snapshot().revision,
-            })
+            .save(this.withPreferences(state))
             .catch((error) => this.options.diagnose?.(String(error)));
       }
       if (this.window === window) {
@@ -1508,6 +1507,10 @@ export class Desktop {
       await this.flushes.request(owner, 'flush', (token) => {
         sendEvent(window.webContents, { type: 'flush', token });
       });
+    await this.flushWindowStores();
+  }
+  /** The stores a workspace window writes: flushed as it closes, and before a backup. */
+  private async flushWindowStores(): Promise<void> {
     await Promise.all([
       this.storage.flush(),
       this.settings.flush(),
@@ -1529,11 +1532,8 @@ export class Desktop {
         .filter((item) => item.role === 'settings')
         .map((item) => this.flushSettings(item.window)),
     );
-    await Promise.all(
-      [...this.windows.values()]
-        .filter((item) => item.role === 'viewer' && item.ready)
-        .map(({ window }) => this.flushWindow(window)),
-    );
+    await Promise.all(this.readyWindows().map((window) => this.flushWindow(window)));
+    // notes and chats also flush as dispose closes them
     await Promise.all([this.storage.flush(), this.settings.flush(), this.buffers.flush()]);
   }
   dispose(): Promise<void> {
@@ -1703,82 +1703,207 @@ export class Desktop {
       });
     });
   }
+  /** A workspace window's start: its saved state, settings and the paths it opens with. */
+  private async bootstrap(sender: number): Promise<Bootstrap> {
+    performanceMeter.mark('bootstrap:start');
+    const home = this.home;
+    await this.fileAccess.load();
+    const early = this.storedEarly;
+    this.storedEarly = undefined;
+    const stored = await (early ?? this.storage.load());
+    performanceMeter.mark('bootstrap:state');
+    await this.settings.load(stored.state || undefined);
+    this.settingsPrepared ??= Promise.resolve();
+    if (stored.state) {
+      const spaces = [...stored.state.workspaces].sort(
+        (a, b) =>
+          Number(a.id === stored.state!.activeWorkspace) -
+          Number(b.id === stored.state!.activeWorkspace),
+      );
+      await this.settings.seedFolders(
+        spaces.flatMap((space) =>
+          [...space.panes].sort(
+            (a, b) => Number(a.id === space.activePane) - Number(b.id === space.activePane),
+          ),
+        ),
+      );
+    }
+    await this.credentials.load();
+    performanceMeter.mark('bootstrap:settings');
+    this.workspaceSessions.seed(stored.state);
+    stored.state = this.workspaceSessions.open(
+      sender,
+      this.initialFolder(),
+      this.windows.get(sender)?.workspaceID,
+    );
+    this.assignWorkspace(sender, stored.state.activeWorkspace);
+    stored.state = this.withPreferences(stored.state);
+    void this.reconfigureIndex();
+    await this.actions.load();
+    await this.watchRules.start();
+    this.options.settingsChanged?.();
+    await this.configureAgents();
+    performanceMeter.mark('bootstrap:services');
+    const record = this.requireRecord(sender);
+    const paths = [...record.paths.splice(0), ...this.openPaths.splice(0)];
+    const launches = record.launches.splice(0);
+    if (this.window?.webContents.id === sender) this.selectWindow(sender);
+    const freshSession =
+      !this.bootstrapped && !this.settings.snapshot().settings.browsing.restoreSession;
+    this.bootstrapped = true;
+    performanceMeter.mark('bootstrap:done');
+    return {
+      ...stored,
+      launches,
+      home,
+      freshSession,
+      gitActionsAvailable: !process.mas,
+      settings: this.settings.snapshot(this.credentials.ids()),
+      platform: process.platform as DesktopPlatform,
+      locations: [
+        { name: 'Home', path: home },
+        ...['Desktop', 'Documents', 'Downloads', 'Pictures', 'Movies', 'Music'].map((name) => ({
+          name,
+          path: path.join(home, name),
+        })),
+        {
+          name: 'Applications',
+          path: applicationsPath(
+            process.platform as DesktopPlatform,
+            home,
+            process.env.ProgramFiles,
+          ),
+        },
+        {
+          name: process.platform === 'darwin' ? 'Volumes' : 'Computer',
+          path: process.platform === 'darwin' ? '/Volumes' : path.parse(home).root,
+        },
+        { name: trashName(process.platform as DesktopPlatform), path: trashLocation },
+      ],
+      openPaths: paths,
+    };
+  }
+  private async saveWorkspaces(input: SavedState, sender: number): Promise<void> {
+    this.chats.retain(
+      sender,
+      new Set(
+        input.workspaces.flatMap((space) =>
+          space.panes.flatMap((pane) => (pane.type === 'chat' ? [pane.conversationID] : [])),
+        ),
+      ),
+    );
+    const active = input.workspaces.find((space) => space.id === input.activeWorkspace);
+    const state = await this.activity.at(
+      { workspaceID: input.activeWorkspace, planeID: active?.activePane },
+      () =>
+        this.activity.run('workspace', 'save', () =>
+          this.workspaceSessions.persist(sender, input, (state) =>
+            this.storage.save(this.withPreferences(state)),
+          ),
+        ),
+    );
+    // the saving window already holds what it sent; it hears back only what the merge changed
+    this.emit({ type: 'workspaces', state }, mergeChanged(input, state) ? undefined : sender);
+    this.assignWorkspace(sender, input.activeWorkspace);
+    this.options.settingsChanged?.();
+  }
   /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
   private createHandlers(): ApiHandlers {
+    const windowOf = (owner: number) => this.windows.get(owner)?.window;
+    const requireWindow = (owner: number) => this.requireWindow(owner);
+    const isSettings = (owner: number) => this.windows.get(owner)?.role === 'settings';
+    const isAgent = (owner: number) => this.isAgentDriven(owner);
+    const emit = (event: DesktopEvent) => this.emit(event);
     return {
-      speech: ([request], owner) => this.speech.request(request, owner),
-      createTask: ([input], owner) => this.taskRequests.create(input, owner),
-      ...createGitHandlers({
-        reader: this.git,
-        worktrees: this.worktrees,
-        reviews: this.gitReviews,
-        actions: this.gitActions,
+      ...createWindowHandlers({
+        host: this.options,
+        shellCommand: this.shellCommand,
+        sessions: this.workspaceSessions,
+        flushes: this.flushes,
+        window: windowOf,
+        isSettings,
+        assignWorkspace: (owner, workspaceID) => this.assignWorkspace(owner, workspaceID),
+        createWorkspace: () => this.createWorkspace(),
+      }),
+      ...createSettingHandlers({
+        settings: this.settings,
+        credentials: this.credentials,
+        backups: this.backups,
+        fileAccess: this.fileAccess,
+        window: windowOf,
+        isSettings,
+      }),
+      ...createCommandLineHandlers({
+        settings: this.settings,
+        credentials: this.credentials,
+        providers: this.providers,
+        sessionKeys: () => this.sessionKeys,
+        setSessionKeys: (keys) => {
+          this.sessionKeys = keys;
+        },
+        emit,
+      }),
+      ...createModelHandlers({
+        settings: this.settings,
+        credentials: this.credentials,
+        providers: this.providers,
+        modelPermissions: this.modelPermissions,
+        window: windowOf,
+        emit,
+      }),
+      ...createFileHandlers({
+        fileAccess: this.fileAccess,
+        files: this.files,
+        information: this.information,
+        watchers: this.watchers,
+      }),
+      ...createApplicationHandlers({
+        applications: this.applications,
+        icons: this.appIcons,
+        fileAccess: this.fileAccess,
+        requireWindow,
+      }),
+      ...createPasteboardHandlers({
+        pasteboard: this.pasteboard,
+        fileAccess: this.fileAccess,
+        window: windowOf,
+      }),
+      ...createAccessHandlers({
+        fileAccess: this.fileAccess,
+        selections: this.nativeSelections,
         resources: this.resources,
-        activity: this.activity,
-        window: (owner) => this.gitWindow(owner),
-        isAgent: (owner) =>
-          [...this.agentCommands.values()].some((pending) => pending.owner === owner),
-        retainResource: (id) => {
-          this.gitResources.add(id);
+        files: this.files,
+        operations: this.operations,
+        trash: this.trash,
+        requireWindow,
+        quiesceRoot: (root) => this.quiesceRoot(root),
+        refreshIndex: () => this.refreshIndex(),
+        emit,
+      }),
+      ...createSearchHandlers({
+        files: this.files,
+        search: this.search,
+        fileAccess: this.fileAccess,
+        rebuildIndex: () => this.rebuildIndex(),
+      }),
+      ...createResourceHandlers({
+        resources: this.resources,
+        thumbnails: this.thumbnails,
+        webPreviews: this.webPreviews,
+        files: this.files,
+        fileAccess: this.fileAccess,
+        forgetGitResource: (id) => {
+          this.gitResources.delete(id);
         },
       }),
-      receipts: ([request]) => this.receipts.request(request),
-      notes: async ([request], owner) => {
-        if ([...this.agentCommands.values()].some((item) => item.owner === owner))
-          throw new Error('Notes are private to the person.');
-        if (request.kind !== 'trash') return this.notes.request(request);
-        let trashed = false;
-        try {
-          const results = await Promise.allSettled(
-            [...this.windows.values()]
-              .filter((item) => item.role === 'viewer' && item.ready)
-              .map(({ window }) =>
-                this.flushes.request(window.webContents.id, `note-trash:${request.id}`, (token) =>
-                  sendEvent(window.webContents, {
-                    type: 'prepare-note-trash',
-                    id: request.id,
-                    token,
-                  }),
-                ),
-              ),
-          );
-          const failure = results.find((result) => result.status === 'rejected');
-          if (failure?.status === 'rejected') throw failure.reason;
-          const reply = await this.notes.request(request);
-          trashed = reply.kind === 'trashed';
-          return reply;
-        } finally {
-          this.emit({ type: 'note-trash-finished', id: request.id, trashed });
-        }
-      },
-      ...createJournalHandlers({
-        store: this.journal,
-        allowHuman: (owner) => {
-          if ([...this.agentCommands.values()].some((item) => item.owner === owner))
-            throw new Error('Journal access is available only to the person.');
-        },
-        chooseExport: async (owner) => {
-          const window = this.windows.get(owner)?.window;
-          if (!window || window.isDestroyed()) throw new Error('The export window closed.');
-          const result = await dialog.showSaveDialog(window, {
-            title: 'Export Journal',
-            defaultPath: `viewer-journal-${new Date().toISOString().slice(0, 10)}.json`,
-            filters: [{ name: 'Journal JSON', extensions: ['json'] }],
-            securityScopedBookmarks: this.fileAccess.scoped,
-          });
-          if (result.canceled || !result.filePath) return;
-          await this.fileAccess.allowOnce(result.filePath, result.bookmark);
-          await this.fileAccess.require([result.filePath]);
-          return result.filePath;
-        },
-        confirmClear: (owner, file) =>
-          confirmNatively(
-            this.windows.get(owner)?.window,
-            'Move Journal history to the Trash?',
-            `Move this exact file, including all recorded events, to the OS Trash:\n${file}\n\nA new empty Journal will be created. Operation receipts, consent records and other logs are kept.`,
-            'Move to Trash',
-          ),
-        trash: (reviewed) => this.operations.trashReviewedFile(reviewed),
+      ...createMediaHandlers({
+        browsers: this.browsers,
+        documents: this.mediaDocuments,
+        optimization: this.optimizationReviews,
+        transforms: this.transforms,
+        resources: this.resources,
+        fileAccess: this.fileAccess,
+        window: windowOf,
       }),
       ...createWebHandlers({
         activity: this.activity,
@@ -1787,134 +1912,110 @@ export class Desktop {
         openURL: (url) => shell.openExternal(url),
         copyURL: (url) => this.pasteboard.copyText([url]),
       }),
-      browser: ([request], owner) => this.browsers.request(owner, request),
-      media: ([request], owner) => this.mediaDocuments.request(request, owner),
-      optimization: ([request], owner) => this.optimizationReviews.request(request, owner),
-      imageInspect: async ([file]) => {
-        const before = sourceVersion(await entry(file));
-        const value = await this.transforms.inspectImage(file);
-        if (!sameSourceVersion(before, sourceVersion(await entry(file))))
-          throw new Error('The image changed while being read. Try again.');
-        const preview = await this.resources.grantBytes(
-          file,
-          'image-preview.png',
-          Buffer.from(value.preview),
-        );
-        return { width: value.width, height: value.height, alpha: value.alpha, preview };
-      },
-      pdfInspect: async ([file]) => {
-        await this.fileAccess.require([file]);
-        const version = sourceVersion(await entry(file));
-        const value = await this.transforms.pdfInspect(file);
-        if (!sameSourceVersion(version, sourceVersion(await entry(file))))
-          throw new Error('The PDF changed while being read. Inspect it again.');
-        return { ...value, version };
-      },
-      choosePDFs: async (_args, owner) => {
-        const window = this.windows.get(owner)?.window;
-        if (!window || window.isDestroyed()) throw new Error('The PDF tools window closed.');
-        const result = await dialog.showOpenDialog(window, {
-          title: 'Add PDFs',
-          properties: ['openFile', 'multiSelections'],
-          filters: [{ name: 'PDF documents', extensions: ['pdf'] }],
-          securityScopedBookmarks: this.fileAccess.scoped,
-        });
-        if (result.canceled) return [];
-        if (result.filePaths.length > 16) throw new Error('Choose at most 16 PDFs.');
-        for (const [index, file] of result.filePaths.entries())
-          await this.fileAccess.remember(file, false, result.bookmarks?.[index]);
-        return result.filePaths;
-      },
+      ...createEditingHandlers({
+        home: this.home,
+        resources: this.resources,
+        fileAccess: this.fileAccess,
+        texts: this.texts,
+        buffers: this.buffers,
+        window: windowOf,
+        emit,
+      }),
+      ...createNoteHandlers({
+        notes: this.notes,
+        receipts: this.receipts,
+        flushes: this.flushes,
+        readyWindows: () => this.readyWindows(),
+        isAgent,
+        emit,
+      }),
+      ...createJournalHandlers({
+        store: this.journal,
+        allowHuman: (owner) => {
+          if (isAgent(owner)) throw new Error('Journal access is available only to the person.');
+        },
+        chooseExport: async (owner) => {
+          const window = windowOf(owner);
+          if (!window || window.isDestroyed()) throw new Error('The export window closed.');
+          return saveOnce(this.fileAccess, window, {
+            title: 'Export Journal',
+            defaultPath: `viewer-journal-${new Date().toISOString().slice(0, 10)}.json`,
+            filters: [{ name: 'Journal JSON', extensions: ['json'] }],
+          });
+        },
+        confirmClear: (owner, file) =>
+          confirmNatively(
+            windowOf(owner),
+            'Move Journal history to the Trash?',
+            `Move this exact file, including all recorded events, to the OS Trash:\n${file}\n\nA new empty Journal will be created. Operation receipts, consent records and other logs are kept.`,
+            'Move to Trash',
+          ),
+        trash: (reviewed) => this.operations.trashReviewedFile(reviewed),
+      }),
+      ...createOperationHandlers({
+        operations: this.operations,
+        plans: this.operationPlans,
+        checkpoints: this.checkpoints,
+      }),
+      ...createActionHandlers({ actions: this.actions }),
+      ...createComparisonHandlers({
+        comparisons: this.comparisons,
+        duplicates: this.duplicates,
+      }),
+      ...createGitHandlers({
+        reader: this.git,
+        worktrees: this.worktrees,
+        reviews: this.gitReviews,
+        actions: this.gitActions,
+        resources: this.resources,
+        activity: this.activity,
+        window: (owner) => this.gitWindow(owner),
+        isAgent,
+        retainResource: (id) => {
+          this.gitResources.add(id);
+        },
+      }),
+      ...createAutomationHandlers({
+        lenses: this.lenses,
+        projects: this.projects,
+        workflows: this.workflows,
+        watchRules: this.watchRules,
+        relationships: this.relationships,
+        fileAccess: this.fileAccess,
+        requireWindow,
+      }),
+      ...createTerminalHandlers({
+        terminals: this.terminals,
+        external: this.externalTerminals,
+        executions: this.executions,
+        gitActions: this.gitActions,
+        activity: this.activity,
+        fileAccess: this.fileAccess,
+        settings: this.settings,
+        isAgent,
+        gitWindow: (owner) => this.gitWindow(owner),
+        isViewer: (owner) => this.windows.get(owner)?.role === 'viewer',
+        isSettings,
+        originID: (owner) => this.windows.get(owner)?.originID,
+        openSettings: (focus) => this.options.openSettings(focus),
+      }),
+      ...createAgentHandlers({
+        sessions: this.agentSessions,
+        requests: this.agentRequests,
+        broker: this.agents,
+        isAgent,
+        changeAccess: (request, owner) => this.changeAgentAccess(request, owner),
+      }),
+      speech: ([request], owner) => this.speech.request(request, owner),
+      createTask: ([input], owner) => this.taskRequests.create(input, owner),
+      chooseFolder: (args, senderID) => this.chooseFolder(senderID, args[0]),
+      // window records, the selected window and pending agent commands stay with the bridge
       chat: ([request], sender) => {
         const work = () => this.chats.request(request, sender, this.windows.get(sender)?.catalog);
         return request.kind === 'send' ? this.activity.send(request.id, work) : work();
       },
-      shellCommand: ([action], sender) => {
-        if (action === 'uninstall' && this.windows.get(sender)?.role !== 'settings')
-          throw new Error('Uninstall the Viewer CLI from Settings → Navigation.');
-        return this.shellCommand[action]();
-      },
-      hotkeyStatus: () => this.options.hotkeyStatus?.() ?? { registered: false, shortcut: '' },
-      restoreWindow: () => this.options.restoreWindow?.(),
-      workspaceClaim: ([workspaceID], sender) => {
-        const owner = this.workspaceSessions.owner(workspaceID);
-        if (owner !== undefined && owner !== sender) {
-          const target = this.windows.get(owner)?.window;
-          if (target && !target.isDestroyed()) {
-            target.show();
-            target.focus();
-          }
-          return false;
-        }
-        const claimed = this.workspaceSessions.claim(sender, workspaceID);
-        if (claimed) this.assignWorkspace(sender, workspaceID);
-        return claimed;
-      },
-      newWindow: async () => {
-        if (!this.options.newWindow) throw new Error('New windows are unavailable.');
-        await this.options.newWindow(this.createWorkspace());
-      },
-      agentSessions: ([request], owner) => {
-        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
-          throw new Error('Saved agent transcripts are available only to the person.');
-        return this.agentSessions.request(request);
-      },
-      compare: (args) => {
-        const request = args[0];
-        if (request.kind === 'cancel') {
-          this.comparisons.cancel(request.id);
-          return null;
-        }
-        return this.comparisons.run(request.id, request.left, request.right, request.hashes);
-      },
-      duplicates: (args) => {
-        const request = args[0];
-        if (request.kind === 'cancel') {
-          this.duplicates.cancel(request.id);
-          return null;
-        }
-        return this.duplicates.run(request.id, request.roots);
-      },
-      operationPlan: (args) => this.operationPlans.request(args[0]),
-      checkpoints: async (args) => {
-        const request = args[0];
-        if (request.kind === 'list') return this.checkpoints.list();
-        if (request.kind === 'estimate') return this.checkpoints.estimate(request.paths);
-        if (request.kind === 'remove') {
-          await this.checkpoints.remove(request.id);
-          return null;
-        }
-        return this.checkpoints.restore(request.id, request.destination, this.operations);
-      },
-      inspect: (args) => this.files.inspect(args[0], args[1], args[2]),
-      lens: async (args) => {
-        const request = args[0];
-        if (request.kind === 'list') return this.lenses.list(request.folder);
-        if (request.kind === 'create')
-          return this.lenses.create(request.folder, request.name, request.ops);
-        if (request.kind === 'apply')
-          return this.lenses.apply(request.folder, request.file, request.ops);
-        if (request.kind === 'trash') return this.lenses.trash(request.folder, request.file);
-        if (request.kind === 'share') return this.lenses.share(request.folder, request.file);
-        await this.lenses.collapse(request.lens, request.groups);
-        return null;
-      },
-      project: async (args, senderID) => {
-        const request = args[0];
-        if (request.kind === 'read') return this.projects.read(request.file);
-        if (request.kind === 'save')
-          return this.projects.save(request.file, request.revision, request.definition);
-        const result = await dialog.showOpenDialog(this.requireWindow(senderID), {
-          title: request.mode === 'open' ? 'Open Project Folder' : 'Create Project in Folder',
-          buttonLabel: request.mode === 'open' ? 'Open Project' : 'Choose Folder',
-          properties: ['openDirectory'],
-          defaultPath: request.defaultPath,
-          securityScopedBookmarks: this.fileAccess.scoped,
-        });
-        if (result.canceled || !result.filePaths[0]) return null;
-        await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
-        return path.join(result.filePaths[0], 'viewer.project.jsonc');
-      },
+      bootstrap: (_args, sender) => this.bootstrap(sender),
+      save: ([input], sender) => this.saveWorkspaces(input, sender),
       commandsPublish: (args, sender) => {
         const record = this.requireRecord(sender);
         record.catalog = {
@@ -1929,6 +2030,12 @@ export class Desktop {
         if (this.window?.webContents.id === sender) this.selectWindow(sender);
         return;
       },
+      contextPublish: (args, sender) => {
+        const context: ActionContext = { ...args[0], actor: 'user' };
+        this.requireRecord(sender).context = context;
+        if (this.window?.webContents.id === sender) this.context = context;
+        return;
+      },
       agentCommandResult: (args, senderID) => {
         const request = this.agentCommands.get(args[0]);
         if (!request || request.owner !== senderID)
@@ -1936,716 +2043,6 @@ export class Desktop {
         request.finish(args[1]);
         return;
       },
-      agentReviewList: () => this.agentRequests.list(),
-      agentReview: (args) => this.agentRequests.review(args[0], args[1]),
-      agentGrants: () => this.agentRequests.listGrants(),
-      agentClients: async (args) => {
-        const request = args[0];
-        const reply = await this.agents.clientRequest(request);
-        if (request.kind === 'create') {
-          await this.agents.start();
-          const created = reply as {
-            client: AgentClient;
-            token: string;
-          };
-          return {
-            ...created,
-            configuration: JSON.stringify(
-              {
-                mcpServers: {
-                  viewer: {
-                    command: process.execPath,
-                    args: ['--mcp'],
-                    env: {
-                      VIEWER_AGENT_TOKEN: created.token,
-                      ...(process.env.VIEWER_DATA_DIRECTORY
-                        ? { VIEWER_DATA_DIRECTORY: process.env.VIEWER_DATA_DIRECTORY }
-                        : {}),
-                    },
-                  },
-                },
-              },
-              null,
-              2,
-            ),
-          };
-        }
-        return reply;
-      },
-      agentAudit: (args) => this.agents.clients.history(args[0]),
-      agentStop: (args) => this.agents.stop(args[0]),
-      agentGrant: (args) => {
-        return this.agentRequests.grant(args[0], args[1], args[2], args[3], args[4]);
-      },
-      configOpen: async () => {
-        await this.settings.load();
-        const error = await shell.openPath(this.settings.snapshot().config!.path);
-        if (error) throw new Error(error);
-        return;
-      },
-      configValidate: () => this.settings.reload(),
-      configRestore: () => this.settings.restoreConfiguration(),
-      configTransfer: async (args, senderID) => {
-        if (args[0] === 'export') {
-          const { canceled, filePath, bookmark } = await dialog.showSaveDialog({
-            title: 'Export configuration',
-            defaultPath: 'config.jsonc',
-            securityScopedBookmarks: this.fileAccess.scoped,
-          });
-          if (!canceled && filePath) {
-            await this.fileAccess.allowOnce(filePath, bookmark);
-            await this.fileAccess.require([filePath]);
-            await this.settings.exportConfiguration(filePath);
-          }
-        } else {
-          const { canceled, filePaths, bookmarks } = await dialog.showOpenDialog({
-            title: 'Import configuration',
-            properties: ['openFile'],
-            filters: [{ name: 'Configuration', extensions: ['jsonc', 'json'] }],
-            securityScopedBookmarks: this.fileAccess.scoped,
-          });
-          if (!canceled && filePaths[0]) {
-            await this.fileAccess.allowOnce(filePaths[0], bookmarks?.[0]);
-            await this.fileAccess.require([filePaths[0]]);
-            return this.settings.importConfiguration(filePaths[0], (changes) =>
-              confirmNatively(
-                this.windows.get(senderID)?.window,
-                'Import this configuration?',
-                'It changes ' +
-                  changes.join('; ') +
-                  '.\n\nThe current config.jsonc is kept beside it as config.jsonc.before-import-….',
-                'Import',
-              ),
-            );
-          }
-        }
-        return this.settings.snapshot();
-      },
-      backup: ([request], owner) => this.backups.request(request, owner),
-      terminalApplication: () => this.externalTerminals.application(),
-      terminalExternal: async (args) => {
-        await this.fileAccess.require([args[0]]);
-        return this.externalTerminals.open(args[0], args[1]);
-      },
-      terminalStart: (args, senderID) => this.terminals.start(args[0], senderID),
-      terminalWrite: (args, senderID) => this.terminals.write(args[0], args[1], senderID),
-      terminalResize: (args, senderID) =>
-        this.terminals.resize(args[0], args[1], args[2], senderID),
-      terminalAck: (args, senderID) => this.terminals.ack(args[0], args[1], senderID),
-      terminalClose: (args, senderID) => {
-        this.gitActions.stop(args[0], senderID);
-        this.terminals.stop(args[0], senderID);
-        this.activity.cancelGit(args[0], this.windows.get(senderID)?.originID);
-      },
-      customExecute: async (args, owner) => {
-        // never on an agent's request: its approval was for a recipe or a command, not a program
-        if ([...this.agentCommands.values()].some((pending) => pending.owner === owner))
-          throw new Error('Agents cannot run programs or shell scripts.');
-        return this.executions.start(args[0], args[1], args[2], owner);
-      },
-      runCommand: async ([script, input], owner) => {
-        if ([...this.agentCommands.values()].some((request) => request.owner === owner))
-          throw new Error('Agents cannot run shell commands.');
-        const target = await bindGitTarget(input, this.gitWindow(owner));
-        return this.executions.startManual(script, target, owner);
-      },
-      commandDraft: async ([request], owner) => {
-        const role = this.windows.get(owner)?.role;
-        if (request) {
-          if (role !== 'viewer') throw new Error('Create a command draft from a workspace window.');
-          const settings = this.settings.snapshot().settings;
-          const profile = settings.terminals.profiles.find(
-            (item) => item.id === settings.terminals.profileID,
-          );
-          this.pendingCommandDraft = {
-            id: randomUUID(),
-            name: request.name,
-            aliases: [],
-            icon: 'terminal',
-            shortcut: '',
-            order: settings.customActions.length,
-            pinned: false,
-            when: { target: 'any', extensions: [], min: 0, max: 2000 },
-            executor: {
-              kind: 'shell',
-              executable: profile?.executable || process.env.SHELL || '/bin/sh',
-              script: request.script,
-              perItem: false,
-            },
-          };
-          await this.options.openSettings('settings.customActions');
-          return;
-        }
-        if (role !== 'settings') throw new Error('Review command drafts in Settings.');
-        const draft = this.pendingCommandDraft;
-        this.pendingCommandDraft = undefined;
-        return draft;
-      },
-      executionList: (_args, owner) => this.executions.list(owner),
-      executionCancel: (args, owner) => this.executions.cancel(args[0], owner),
-      openSettings: ([focus]) => this.options.openSettings(focus),
-      settingsCategory: ([category]) => this.options.settingsCategory?.(category),
-      settingsGet: async () => {
-        await this.settings.load();
-        await this.credentials.load();
-        return this.settings.snapshot(this.credentials.ids());
-      },
-      fileAccessList: () => this.fileAccess.list(),
-      fileAccessRevoke: async (args) => {
-        const root = args[0];
-        if (process.platform === 'darwin') macFiles().dismissFilePanels();
-        if (this.fileAccess.scoped) this.nativeSelections.revoke(root);
-        let resources: string[] = [];
-        this.emit({ type: 'file-access', path: root });
-        await this.fileAccess.revoke(root, async () => {
-          resources = await this.resources.affected(root);
-          this.emit({ type: 'file-access', path: root, resources });
-          await this.quiesceRoot(root);
-          await this.files.reset();
-          this.indexConfiguration = '';
-          await this.reconfigureIndex();
-        });
-        this.emit({ type: 'file-access', path: root, resources });
-        return;
-      },
-      volumesList: () => (process.platform === 'darwin' ? macFiles().volumes() : []),
-      trashList: (args) => this.trash.list(args[0]),
-      trashConfirmation: (args, senderID) =>
-        this.trash.confirmation(this.requireWindow(senderID), args[0]),
-      trashPreview: (args) => this.trash.preview(args[0]),
-      trashCopyPaths: (args) => this.trash.copyPaths(args[0]),
-      trashRestore: async (args, senderID) => {
-        // the folder is chosen before the operations queue is held: a panel left open blocked it
-        const folder =
-          args[1] === 'choose'
-            ? await this.trash.chooseRestoreFolder(this.requireWindow(senderID))
-            : undefined;
-        if (args[1] === 'choose' && !folder) return { restored: 0, cancelled: true };
-        return this.operations.exclusive(() =>
-          this.trash.restore(
-            this.requireWindow(senderID),
-            args[0],
-            folder ? { folder } : 'original',
-          ),
-        );
-      },
-      trashAccess: (args, senderID) =>
-        this.trash.requestAccess(this.requireWindow(senderID), args[0]),
-      volumeEject: async (args) => {
-        const root = args[0];
-        const volume = (await macFiles().volumes()).find((volume) => volume.path === root);
-        if (!volume?.ejectable || root === '/') throw new Error('Choose an ejectable volume.');
-        let resources: string[] = [];
-        try {
-          await this.fileAccess.withBlocked(root, async () => {
-            this.emit({ type: 'file-access', path: root });
-            resources = await this.resources.affected(root);
-            this.emit({ type: 'file-access', path: root, resources });
-            await this.quiesceRoot(root);
-            await this.files.reset();
-            await macFiles().eject(root);
-          });
-        } finally {
-          this.indexConfiguration = '';
-          await this.reconfigureIndex();
-          this.emit({ type: 'file-access', path: root, resources });
-        }
-        return;
-      },
-      // `>` in the palette: a request in words answered with a line to review
-      promptLine: async (args) => {
-        const request = args[0];
-        const controller = new AbortController();
-        this.prompts.get(request.id)?.abort();
-        this.prompts.set(request.id, controller);
-        try {
-          return await answerPrompt(
-            request,
-            this.settings.snapshot().settings,
-            (...generate) => this.providers.generate(...generate),
-            controller.signal,
-            namedLines(this.settings.snapshot().settings.customActions, this.sessionKeys.aliases),
-          );
-        } finally {
-          if (this.prompts.get(request.id) === controller) this.prompts.delete(request.id);
-        }
-      },
-      promptCancel: (args) => {
-        this.prompts.get(args[0])?.abort();
-      },
-      sessionKeys: () => this.sessionKeys,
-      sessionKeysSet: (args) => {
-        this.sessionKeys = args[0];
-        this.emit({ type: 'session-keys', session: this.sessionKeys });
-        return this.sessionKeys;
-      },
-      // Keep, from Settings: the session's bindings written into the keymap, then forgotten
-      sessionKeysKeep: async () => {
-        const current = this.settings.snapshot();
-        const snapshot = await this.settings.patch(
-          [
-            {
-              path: 'settings.keymap',
-              value: withSessionKeys(current.settings.keymap, this.sessionKeys),
-            },
-            {
-              path: 'settings.customActions',
-              value: keepAliases(current.settings.customActions, this.sessionKeys),
-            },
-          ],
-          current.revision,
-        );
-        this.sessionKeys = emptySessionKeys;
-        this.emit({ type: 'session-keys', session: this.sessionKeys });
-        return { ...snapshot, credentials: this.credentials.ids() };
-      },
-      sessionKeysDiscard: () => {
-        this.sessionKeys = emptySessionKeys;
-        this.emit({ type: 'session-keys', session: this.sessionKeys });
-        return this.sessionKeys;
-      },
-      settingsPatch: async (args, senderID) => {
-        return {
-          ...(await this.settings.patch(
-            args[0],
-            args[1],
-            this.windows.get(senderID)?.role === 'settings' ? undefined : 'workspace',
-          )),
-          credentials: this.credentials.ids(),
-        };
-      },
-      ...createModelHandlers({
-        settings: this.settings,
-        credentials: this.credentials,
-        providers: this.providers,
-        modelPermissions: this.modelPermissions,
-        window: (sender) => this.windows.get(sender)?.window,
-        emit: (event) => this.emit(event),
-      }),
-      indexedQuery: (args) => this.files.query(args[0]),
-      querySnapshot: (args) => this.files.snapshot(args[0]),
-      watchRules: (args) => this.watchRules.request(args[0]),
-      relationships: (args) => this.relationships.request(args[0]),
-      workflow: async (args, senderID) => {
-        const request = args[0];
-        if (request.kind !== 'choose')
-          return this.workflows.request(
-            request.kind === 'start'
-              ? { ...request, context: { ...request.context, actor: 'user', clientID: undefined } }
-              : request,
-          );
-        const result = await dialog.showOpenDialog(this.requireWindow(senderID), {
-          title: request.mode === 'create' ? 'Create Workflow in Folder' : 'Open Workflow',
-          buttonLabel: request.mode === 'create' ? 'Choose Folder' : 'Open Workflow',
-          properties: request.mode === 'create' ? ['openDirectory'] : ['openFile'],
-          defaultPath: request.defaultPath,
-          securityScopedBookmarks: this.fileAccess.scoped,
-          ...(request.mode === 'open'
-            ? { filters: [{ name: 'Workflow JSONC', extensions: ['jsonc', 'json'] }] }
-            : {}),
-        });
-        if (result.canceled || !result.filePaths[0]) return null;
-        await this.fileAccess.remember(
-          result.filePaths[0],
-          request.mode === 'create',
-          result.bookmarks?.[0],
-        );
-        return request.mode === 'create'
-          ? path.join(result.filePaths[0], 'viewer.workflow.jsonc')
-          : result.filePaths[0];
-      },
-      indexStatus: () => this.files.status(),
-      indexRebuild: () => {
-        this.indexConfiguration = '';
-        return this.configureIndex(this.settings.snapshot().settings.search, true);
-      },
-      actionStart: (args) => {
-        return this.actions.start({
-          ...args[0],
-          context: { ...args[0].context, actor: 'user' },
-        });
-      },
-      actionGet: (args) => this.actions.get(args[0]),
-      actionList: () => this.actions.all(),
-      actionApply: (args) => this.actions.apply(args[0]),
-      actionCancel: (args) => {
-        this.actions.cancel(args[0]);
-        return;
-      },
-      actionUndo: (args) => this.actions.undo(args[0]),
-      actionRecover: (args) => this.actions.recovery(args[0]),
-      actionExportSummary: (args) => this.actions.exportSummary(args[0], args[1]),
-      agentToken: async () => {
-        await this.agents.start();
-        return JSON.stringify(
-          {
-            mcpServers: {
-              viewer: {
-                command: process.execPath,
-                args: ['--mcp'],
-                env: {
-                  VIEWER_AGENT_TOKEN: await this.agents.credential(),
-                  ...(process.env.VIEWER_DATA_DIRECTORY
-                    ? { VIEWER_DATA_DIRECTORY: process.env.VIEWER_DATA_DIRECTORY }
-                    : {}),
-                },
-              },
-            },
-          },
-          null,
-          2,
-        );
-      },
-      contextPublish: (args, sender) => {
-        const context: ActionContext = { ...args[0], actor: 'user' };
-        this.requireRecord(sender).context = context;
-        if (this.window?.webContents.id === sender) this.context = context;
-        return;
-      },
-      diagnosticReport: ([detail], senderID) => {
-        // A window in an error loop cannot flood the log: 30 reports a minute each.
-        const now = Date.now();
-        const recent = (this.diagnosticReports.get(senderID) ?? []).filter(
-          (at) => now - at < 60_000,
-        );
-        if (recent.length >= 30) return;
-        this.diagnosticReports.set(senderID, [...recent, now]);
-        this.options.diagnose?.(detail);
-      },
-      appIcon: async ([file, size]) => {
-        await this.fileAccess.require([file]);
-        const item = await entry(file);
-        if (!isPackage(item))
-          throw new Error('Icons are offered for applications and other bundles only.');
-        const icon = await this.appIcons.get(item.path, size, item.modified);
-        await this.fileAccess.require([file]);
-        return icon;
-      },
-      thumbnail: async (args) => {
-        await this.fileAccess.require([args[0]]);
-        const thumbnail = await this.thumbnails.get(args[0], args[1]);
-        await this.fileAccess.require([args[0]]);
-        return thumbnail;
-      },
-      document: async (args) => {
-        const request = args[1];
-        if (request) {
-          const { requestID, ...worksheet } = request;
-          return this.resources.documentRead(args[0], requestID, (file, signal) =>
-            this.files.extract(file, signal, true, worksheet),
-          );
-        }
-        const file = this.resources.documentSource(args[0]);
-        const document = await this.files.extract(file, this.resources.signal(args[0]), true);
-        this.resources.documentSource(args[0]);
-        return document;
-      },
-      cancelDocument: async ([id, requestID]) => this.resources.cancelDocument(id, requestID),
-      officeImage: async ([id, part, requestID]) => {
-        let child: Resource | undefined;
-        try {
-          return await this.resources.documentRead(id, requestID, async (file, signal) => {
-            if (path.extname(file).toLowerCase() !== '.docx')
-              throw new Error('Embedded document images require a DOCX file.');
-            const document = await this.files.extract(file, signal, true);
-            if (!officeImageParts(document.office).includes(part))
-              throw new Error('This image is not a supported embedded document relationship.');
-            const resource = await this.resources.archiveEntry(id, part);
-            child = resource;
-            signal.throwIfAborted();
-            if (
-              !['png', 'jpg', 'jpeg'].includes(resource.entry.extension) ||
-              !resource.dimensions ||
-              resource.entry.size > 8 * 1024 * 1024 ||
-              resource.dimensions.width * resource.dimensions.height > 64000000
-            )
-              throw new Error('The embedded image exceeds the supported PNG/JPEG preview bounds.');
-            return resource;
-          });
-        } catch (error) {
-          if (child) this.resources.release(child.id);
-          throw error;
-        }
-      },
-      bootstrap: async (_args, sender) => {
-        performanceMeter.mark('bootstrap:start');
-        const home = this.home;
-        await this.fileAccess.load();
-        const early = this.storedEarly;
-        this.storedEarly = undefined;
-        const stored = await (early ?? this.storage.load());
-        performanceMeter.mark('bootstrap:state');
-        await this.settings.load(stored.state || undefined);
-        this.settingsPrepared ??= Promise.resolve();
-        if (stored.state) {
-          const spaces = [...stored.state.workspaces].sort(
-            (a, b) =>
-              Number(a.id === stored.state!.activeWorkspace) -
-              Number(b.id === stored.state!.activeWorkspace),
-          );
-          await this.settings.seedFolders(
-            spaces.flatMap((space) =>
-              [...space.panes].sort(
-                (a, b) => Number(a.id === space.activePane) - Number(b.id === space.activePane),
-              ),
-            ),
-          );
-        }
-        await this.credentials.load();
-        performanceMeter.mark('bootstrap:settings');
-        this.workspaceSessions.seed(stored.state);
-        stored.state = this.workspaceSessions.open(
-          sender,
-          this.initialFolder(),
-          this.windows.get(sender)?.workspaceID,
-        );
-        this.assignWorkspace(sender, stored.state.activeWorkspace);
-        if (stored.state)
-          stored.state = {
-            ...stored.state,
-            ui: this.settings.snapshot().ui,
-            look: this.settings.snapshot().look,
-            preferencesRevision: this.settings.snapshot().revision,
-          };
-        void this.reconfigureIndex();
-        await this.actions.load();
-        await this.watchRules.start();
-        this.options.settingsChanged?.();
-        await this.configureAgents();
-        performanceMeter.mark('bootstrap:services');
-        const record = this.requireRecord(sender);
-        const paths = [...record.paths.splice(0), ...this.openPaths.splice(0)];
-        const launches = record.launches.splice(0);
-        if (this.window?.webContents.id === sender) this.selectWindow(sender);
-        const freshSession =
-          !this.bootstrapped && !this.settings.snapshot().settings.browsing.restoreSession;
-        this.bootstrapped = true;
-        performanceMeter.mark('bootstrap:done');
-        return {
-          ...stored,
-          launches,
-          home,
-          freshSession,
-          gitActionsAvailable: !process.mas,
-          settings: this.settings.snapshot(this.credentials.ids()),
-          platform: process.platform as DesktopPlatform,
-          locations: [
-            { name: 'Home', path: home },
-            ...['Desktop', 'Documents', 'Downloads', 'Pictures', 'Movies', 'Music'].map((name) => ({
-              name,
-              path: path.join(home, name),
-            })),
-            {
-              name: 'Applications',
-              path: applicationsPath(
-                process.platform as DesktopPlatform,
-                home,
-                process.env.ProgramFiles,
-              ),
-            },
-            {
-              name: process.platform === 'darwin' ? 'Volumes' : 'Computer',
-              path: process.platform === 'darwin' ? '/Volumes' : path.parse(home).root,
-            },
-            { name: trashName(process.platform as DesktopPlatform), path: trashLocation },
-          ],
-          openPaths: paths,
-        };
-      },
-      list: async (args) => {
-        await this.fileAccess.require([args[0]]);
-        return list(args[0]);
-      },
-      stat: async (args) => {
-        await this.fileAccess.require([args[0]]);
-        return entry(args[0]);
-      },
-      fileInformation: (args) => this.information.get(args[0]),
-      fileInformationUpdate: (args) => this.information.update(args[0], args[1], args[2]),
-      chooseFolder: (args, senderID) => this.chooseFolder(senderID, args[0]),
-      agentAccess: async ([request], senderID) => {
-        await this.changeAgentAccess(request, senderID);
-        return this.agents.access.state();
-      },
-      reveal: async (args) => {
-        await this.fileAccess.require([args[0]]);
-        shell.showItemInFolder(args[0]);
-        return;
-      },
-      connectServer: async (args) => {
-        // Only file-sharing addresses: the system mounts them and asks for credentials.
-        await shell.openExternal(serverAddress(args[0]));
-        return;
-      },
-      taggedFiles: async (args) => {
-        const [tag, roots] = args;
-        await this.fileAccess.require(roots);
-        const found = new Set<string>();
-        for (const root of roots)
-          for (const file of await spotlightTagged(absolute(root), tag)) {
-            if (found.size >= 10000) break;
-            found.add(file);
-          }
-        // Spotlight can lag behind the disk; only current, accessible items are returned.
-        const entries: FileEntry[] = [];
-        for (const file of found)
-          try {
-            await this.fileAccess.require([file]);
-            entries.push(await entry(file));
-          } catch {
-            // Gone, or outside granted folders.
-          }
-        return entries;
-      },
-      openExternal: async (args) => {
-        await this.fileAccess.require([args[0]]);
-        const error = await shell.openPath(args[0]);
-        if (error) throw new Error(error);
-        return;
-      },
-      nativeFilePanel: async (args) => {
-        const files = args[1];
-        await this.fileAccess.require(files);
-        macFiles().filePanel(args[0], files);
-        return;
-      },
-      folderSizeStart: (args) => this.files.sizeStart(args[0]),
-      folderSizeGet: (args) => this.files.sizeGet(args[0]),
-      folderSizeCancel: (args) => this.files.sizeCancel(args[0]),
-      applications: async (args) => {
-        await this.fileAccess.require(args[0]);
-        return this.applications.list(args[0]);
-      },
-      openWith: async (args) => {
-        await this.fileAccess.require(args[0]);
-        return this.applications.open(args[0], args[1]);
-      },
-      // the path comes from Launch Services' own listing, never from the renderer
-      windowButtons: ([visible], senderID) => {
-        // a hidden title bar takes the window buttons with it; they come back with it
-        if (process.platform === 'darwin')
-          this.windows.get(senderID)?.window.setWindowButtonVisibility(visible);
-      },
-      applicationIcon: async ([id]) => {
-        const item = await entry(this.applications.location(id));
-        return this.appIcons.get(item.path, 'small', item.modified);
-      },
-      chooseApplication: async (_args, senderID) => {
-        if (process.platform !== 'darwin')
-          throw new Error('Application selection is not available on this platform yet.');
-        const result = await dialog.showOpenDialog(this.requireWindow(senderID), {
-          title: 'Choose Application',
-          defaultPath: '/Applications',
-          properties: ['openFile'],
-          filters: [{ name: 'Applications', extensions: ['app'] }],
-          securityScopedBookmarks: this.fileAccess.scoped,
-        });
-        if (result.canceled || !result.filePaths[0]) return null;
-        await this.fileAccess.remember(result.filePaths[0], true, result.bookmarks?.[0]);
-        await this.fileAccess.require([result.filePaths[0]]);
-        return this.applications.register(result.filePaths[0]);
-      },
-      watch: async (args) => {
-        await this.fileAccess.require([args[0]]);
-        await this.watchers.add(args[0], args[1]);
-        try {
-          await this.fileAccess.require([args[0]]);
-        } catch (error) {
-          await this.watchers.remove(args[1]);
-          throw error;
-        }
-        return;
-      },
-      unwatch: (args) => this.watchers.remove(args[0]),
-      search: async (args) => {
-        await this.fileAccess.require([args[0].root]);
-        return this.search.start(args[0]);
-      },
-      cancelSearch: (args) => this.search.cancel(args[0]),
-      operate: (args) => this.operations.start(args[0]),
-      jobs: async () => {
-        await this.operations.load();
-        return this.operations.all();
-      },
-      cancelJob: (args) => this.operations.cancel(args[0]),
-      resolveCollision: (args) => this.operations.resolve(args[0], args[1], args[2]),
-      undo: (args) => this.operations.undo(args[0]),
-      redo: (args) => this.operations.redo(args[0]),
-      resource: (args) => this.resources.grant(args[0], args[1]),
-      read: (args) => this.resources.read(args[0], args[1]),
-      release: async (args) => {
-        this.gitResources.delete(args[0]);
-        this.resources.release(args[0]);
-        await this.webPreviews.releaseResource(args[0]);
-      },
-      archive: (args) => this.resources.archive(args[0]),
-      archiveEntry: (args) => this.resources.archiveEntry(args[0], args[1]),
-      imageRendition: (args) => this.resources.rendition(args[0], args[1]),
-      videoRendition: ([id, requestID]) => this.resources.videoRendition(id, requestID),
-      officeLayout: ([id, request]) => this.resources.officeLayout(id, request),
-      printPDF: async (args) => {
-        if (process.platform !== 'darwin') throw new Error('Printing PDFs requires macOS.');
-        const file = await this.resources.printableFile(args[0]);
-        macFiles().printPDF(file, args[1]);
-        return;
-      },
-      save: async (args, sender) => {
-        this.chats.retain(
-          sender,
-          new Set(
-            args[0].workspaces.flatMap((space) =>
-              space.panes.flatMap((pane) => (pane.type === 'chat' ? [pane.conversationID] : [])),
-            ),
-          ),
-        );
-        const active = args[0].workspaces.find((space) => space.id === args[0].activeWorkspace);
-        const state = await this.activity.at(
-          { workspaceID: args[0].activeWorkspace, planeID: active?.activePane },
-          () =>
-            this.activity.run('workspace', 'save', () =>
-              this.workspaceSessions.persist(sender, args[0], (state) =>
-                this.storage.save({
-                  ...state,
-                  ui: this.settings.snapshot().ui,
-                  look: this.settings.snapshot().look,
-                  preferencesRevision: this.settings.snapshot().revision,
-                } as Parameters<Storage['save']>[0]),
-              ),
-            ),
-        );
-        // the saving window already holds what it sent; it hears back only what the merge changed
-        this.emit({ type: 'workspaces', state }, mergeChanged(args[0], state) ? undefined : sender);
-        this.assignWorkspace(sender, args[0].activeWorkspace);
-        this.options.settingsChanged?.();
-      },
-      flushed: (args, sender) => {
-        this.flushes.acknowledge(args[0], sender, args[1] ?? { ok: true });
-      },
-      clipboardWrite: (args) => this.pasteboard.write(args[0], args[1]),
-      clipboardRead: () => this.pasteboard.read(),
-      fileDropPaths: (args) => this.pasteboard.dropped(args[0]),
-      copyPaths: (args) => this.pasteboard.copyText(args[0]),
-      fileDragStart: async (args, senderID) => {
-        const paths = args[0];
-        await this.fileAccess.require(paths);
-        const window = this.windows.get(senderID)?.window;
-        if (!window || window.isDestroyed()) throw new Error('The file view has closed.');
-        const [first] = paths;
-        if (!first) return;
-        // Native file objects carry all selected paths to Finder and other apps.
-        const icon = await app.getFileIcon(first, { size: 'normal' });
-        window.webContents.startDrag({ file: first, files: paths, icon });
-        return;
-      },
-      ...createEditingHandlers({
-        home: this.home,
-        resources: this.resources,
-        fileAccess: this.fileAccess,
-        texts: this.texts,
-        buffers: this.buffers,
-        window: (sender) => this.windows.get(sender)?.window,
-        emit: (event) => this.emit(event),
-      }),
     };
   }
   private handlerTable?: ApiHandlers;

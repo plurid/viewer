@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ViewerAPI } from '../../../domain/contracts';
 import { Icon } from '../Icon';
+import { errorMessage } from '../../../domain/errors';
 type Grant = Awaited<ReturnType<ViewerAPI['fileAccessList']>>[number];
 export function FilePermissions({ error }: { error(message: string): void }) {
   const [grants, setGrants] = useState<Grant[]>([]);
@@ -18,7 +19,7 @@ export function FilePermissions({ error }: { error(message: string): void }) {
         if (live) setGrants(grants);
       })
       .catch((value) => {
-        if (live) error((value as Error).message);
+        if (live) error(errorMessage(value));
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -35,7 +36,7 @@ export function FilePermissions({ error }: { error(message: string): void }) {
       await window.viewer.chooseFolder(path);
       await load();
     } catch (value) {
-      error((value as Error).message);
+      error(errorMessage(value));
     } finally {
       setBusy('');
     }
@@ -105,7 +106,7 @@ export function FilePermissions({ error }: { error(message: string): void }) {
                     await window.viewer.fileAccessRevoke(grant.path);
                     await load();
                   } catch (value) {
-                    error((value as Error).message);
+                    error(errorMessage(value));
                     await load().catch(() => {});
                   } finally {
                     setBusy('');

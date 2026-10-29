@@ -23,7 +23,7 @@ export function childNames(folder: string, paths: readonly string[]): string[] {
   return [...new Set(paths.filter((file) => parentPath(file) === folder).map(baseName))];
 }
 /** Puts items in a lens group (null: Unsorted), letting the layout choose their places. */
-export function placeInGroup(
+function placeInGroup(
   folder: string,
   document: LensDocument,
   paths: readonly string[],

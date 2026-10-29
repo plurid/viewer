@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { gitActionKinds, gitTerminalProfileID } from '../comparison/git-actions';
 import type { FolderOverride } from '../preferences/folder-presentation';
+import { viewModes } from '../contracts';
 
 const id = z
   .string()
@@ -105,7 +106,7 @@ export const previewValuesSchema = z
 // Shared presentation validation lives in the domain, including partial list fields.
 export const folderOverrideSchema = z
   .object({
-    mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']).optional(),
+    mode: z.enum(viewModes).optional(),
     sort: z.enum(['name', 'modified', 'created', 'size', 'kind', 'extension']).optional(),
     descending: z.boolean().optional(),
     showHidden: z.boolean().optional(),

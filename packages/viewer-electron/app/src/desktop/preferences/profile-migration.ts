@@ -10,7 +10,8 @@ import {
 import { presentationProfiles } from '../../domain/preferences/presentation/resolver';
 import { preferencesSchema } from '../../domain/preferences/presentation/ui-schema';
 import { browsingSchema } from '../../domain/preferences/presentation/settings-schemas';
-import { profileSchema, settingsSchema } from './settings';
+import { profileSchema, settingsSchema } from './settings-schema';
+import { sameJSON } from '../../domain/json';
 
 type AppliedProfile = NonNullable<SavedState['profile']>;
 
@@ -32,8 +33,6 @@ const legacyFields = {
   'settings.layouts': settingsSchema.shape.layouts,
   'settings.profiles': settingsSchema.shape.profiles,
 };
-
-const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
 interface Participant {
   before: AppliedProfile;
@@ -87,9 +86,9 @@ export function planLegacyProfileRestoration(
       }
       for (const [field, previous] of Object.entries(parsed.values)) {
         const current = settingValue(snapshot, field);
-        if (same(current, previous)) continue;
+        if (sameJSON(current, previous)) continue;
         participant.remaining[field] = previous;
-        if (!Object.hasOwn(applied, field) || !same(current, applied[field])) {
+        if (!Object.hasOwn(applied, field) || !sameJSON(current, applied[field])) {
           warnings.add(
             `${field}: a newer preference was preserved; its earlier profile value was retained.`,
           );
@@ -104,7 +103,7 @@ export function planLegacyProfileRestoration(
         const pending = proposals.get(field);
         if (pending) {
           pending.owners.push(participant);
-          if (!same(pending.value, previous)) pending.conflict = true;
+          if (!sameJSON(pending.value, previous)) pending.conflict = true;
         } else proposals.set(field, { value: previous, owners: [participant], conflict: false });
       }
     }
@@ -124,7 +123,7 @@ export function planLegacyProfileRestoration(
   const result = (profile: AppliedProfile | undefined): AppliedProfile | undefined => {
     if (!profile) return profile;
     const participant = participants.get(profile);
-    return !participant || same(profile.previous, participant.remaining)
+    return !participant || sameJSON(profile.previous, participant.remaining)
       ? profile
       : { ...profile, previous: participant.remaining };
   };
@@ -135,7 +134,7 @@ export function planLegacyProfileRestoration(
       )
     : undefined;
   const next =
-    nextProfile === state.profile && same(nextWindows, state.windowProfiles)
+    nextProfile === state.profile && sameJSON(nextWindows, state.windowProfiles)
       ? state
       : { ...state, profile: nextProfile, windowProfiles: nextWindows };
   return { patches, state: next, warnings: [...warnings] };

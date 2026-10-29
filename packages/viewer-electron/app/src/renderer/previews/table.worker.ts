@@ -4,6 +4,7 @@ import {
   tableSearchIndex,
   type DelimitedPreview,
 } from './table-data';
+import { errorMessage } from '../../domain/errors';
 
 let parsed: DelimitedPreview | undefined;
 let index: string[][] | undefined;
@@ -29,6 +30,6 @@ self.onmessage = (
       self.postMessage({ id: request.id, value }, { transfer: [value.buffer] });
     }
   } catch (error) {
-    self.postMessage({ id: request.id, error: (error as Error).message });
+    self.postMessage({ id: request.id, error: errorMessage(error) });
   }
 };

@@ -30,6 +30,7 @@ import { routeExplorerInput } from './input';
 import { useCommands } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
 import { useContextPublish } from './context-publish';
+import { requestRefresh } from '../state/refresh';
 const emptyEntries: FileEntry[] = [];
 export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string }) {
   const pane = useViewer((state) => activeWorkspace(state).panes.find((pane) => pane.id === id)) as
@@ -107,7 +108,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
           },
           path: () => {},
           search: () => {},
-          refresh: () => window.dispatchEvent(new Event('viewer:refresh')),
+          refresh: () => requestRefresh(),
           selectAll: () => {
             if (!pane || (!offset && !search.result?.more)) {
               selecting.all(entries);

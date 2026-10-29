@@ -5,6 +5,7 @@ import { fileCoordination } from '../files/file-coordination';
 import { contentHash } from '../files/content-hash';
 import { duplicateGroups, type DuplicateResult } from '../../domain/comparison/duplicates';
 import type { FileEntry } from '../../domain/contracts';
+import { errorMessage } from '../../domain/errors';
 
 const maximumFiles = 100_000;
 const headBytes = 64 * 1024;
@@ -45,7 +46,7 @@ export class Duplicates {
     const fail = (file: string, error: unknown) => {
       abort.signal.throwIfAborted();
       if (result.errors.length < 1000)
-        result.errors.push({ path: file, message: (error as Error).message });
+        result.errors.push({ path: file, message: errorMessage(error) });
       result.coverage = 'partial';
     };
     try {

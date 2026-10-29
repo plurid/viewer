@@ -6,6 +6,7 @@ import type { PreviewContext } from '../contracts';
 import { PreviewHost } from '../PreviewHost';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
+import { errorMessage } from '../../../domain/errors';
 
 export default function ArchivePreview({ resource, services, signal, active }: PreviewContext) {
   const [listing, setListing] = useState<ArchiveListing | null>(null);
@@ -103,7 +104,7 @@ export default function ArchivePreview({ resource, services, signal, active }: P
                     selected.current = value;
                     setChild(value);
                   } catch (error) {
-                    if (!signal.aborted) setEntryError((error as Error).message);
+                    if (!signal.aborted) setEntryError(errorMessage(error));
                   } finally {
                     if (!signal.aborted) setOpening(false);
                   }

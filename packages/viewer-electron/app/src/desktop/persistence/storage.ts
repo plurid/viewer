@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { gitActionKinds } from '../../domain/comparison/git-actions';
 import { promptHistoryEntrySchema } from '../../domain/command-line/prompt';
 import { reviewStateSchema } from '../../domain/comparison/review';
-import { CURRENT_STATE_VERSION, type SavedState } from '../../domain/contracts';
+import { CURRENT_STATE_VERSION, type SavedState, viewModes } from '../../domain/contracts';
 import { collectionSchema, basketItemSchema } from '../../domain/workspaces/collections';
 import { evidenceNavigationSchema } from '../../domain/files/inspection';
 import {
@@ -163,7 +163,7 @@ const pane = z.discriminatedUnion('type', [
     id,
     type: z.literal('folder'),
     path: localPath,
-    mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']),
+    mode: z.enum(viewModes),
     sort: z.enum(['name', 'modified', 'created', 'size', 'kind', 'extension']),
     descending: z.boolean(),
     showHidden: z.boolean(),
@@ -322,9 +322,7 @@ const savedStateSchema = z
 export const stateSchema = z.preprocess(migratePlaneNavigation, savedStateSchema);
 /** Keeps every workspace that is valid on its own when another one is not, so one
  * damaged pane cannot discard all saved workspaces. */
-export function salvageState(
-  original: unknown,
-): { state: SavedState; dropped: number } | undefined {
+function salvageState(original: unknown): { state: SavedState; dropped: number } | undefined {
   if (!original || typeof original !== 'object') return;
   const saved = original as { workspaces?: unknown; activeWorkspace?: unknown };
   if (!Array.isArray(saved.workspaces)) return;

@@ -29,6 +29,7 @@ import { Empty, Loading } from '../ui/primitives';
 import type { PreviewContext } from './contracts';
 import { usePreviewScroll } from './scroll';
 import { usePreviewState } from './state';
+import { errorMessage } from '../../domain/errors';
 type CellAnchor = Extract<EvidenceAnchor, { kind: 'cells' }>;
 const noMerges: readonly WorkbookMerge[] = [];
 
@@ -142,7 +143,7 @@ export function DataTable({
           if (!abort.signal.aborted) setFiltered({ rows, query, indices });
         },
         (error) => {
-          if (!abort.signal.aborted) setFiltered({ rows, query, error: (error as Error).message });
+          if (!abort.signal.aborted) setFiltered({ rows, query, error: errorMessage(error) });
         },
       );
     }, 0);
@@ -322,8 +323,7 @@ export function DataTable({
       await navigator.clipboard.writeText(text);
       if (!abort.signal.aborted) setCopyStatus(`Copied ${rangeLabel(range)}`);
     } catch (error) {
-      if (!abort.signal.aborted)
-        setCopyStatus((error as Error).message || 'Could not copy. Try again.');
+      if (!abort.signal.aborted) setCopyStatus(errorMessage(error) || 'Could not copy. Try again.');
     } finally {
       if (copying.current === abort) copying.current = undefined;
       if (!abort.signal.aborted) setCopyBusy(false);
@@ -752,12 +752,12 @@ export function DelimitedTable({
         (error) => {
           if (live) {
             owned.close();
-            setLoaded({ request, error: (error as Error).message });
+            setLoaded({ request, error: errorMessage(error) });
           }
         },
       );
     } catch (error) {
-      setLoaded({ request, error: (error as Error).message });
+      setLoaded({ request, error: errorMessage(error) });
     }
     return () => {
       live = false;

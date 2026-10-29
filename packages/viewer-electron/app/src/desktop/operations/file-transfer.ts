@@ -12,10 +12,11 @@ import {
   utimes,
 } from 'node:fs/promises';
 import path from 'node:path';
-import { exists, message } from '../files/filesystem';
+import { exists } from '../files/filesystem';
 import { macFiles } from '../native/macos-files';
 import { fileCoordination } from '../files/file-coordination';
 import { removeEmptyDirectory, unlinkVerified } from './removal';
+import { errorMessage } from '../../domain/errors';
 
 export type Access = (files: readonly string[]) => Promise<void>;
 /** What a transfer needs from the job that runs it. */
@@ -113,7 +114,7 @@ export async function publish(
       await unlinkVerified(source);
     } catch (error) {
       throw new Error(
-        `The destination is complete, but the original could not be removed: ${message(error)}`,
+        `The destination is complete, but the original could not be removed: ${errorMessage(error)}`,
       );
     }
     return;
@@ -247,7 +248,7 @@ export async function copyTree(
 }
 /** Streams one regular file into a new, exclusively created `target`, verifying
  * that the source did not change; a failed copy removes only its own output. */
-export async function copyFile(
+async function copyFile(
   source: string,
   target: string,
   info: Stats,

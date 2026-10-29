@@ -4,6 +4,7 @@ import {
   type FullscreenPhase,
   type FullscreenWindow,
 } from './fullscreen-transition';
+import { errorMessage } from '../../domain/errors';
 
 export interface WindowBounds {
   x: number;
@@ -94,7 +95,7 @@ export class HotkeyWindow {
         const generation = this.generation;
         void this.toggle().catch((error) => {
           if (!this.current(generation)) return;
-          this.status = { ...this.status, problem: (error as Error).message };
+          this.status = { ...this.status, problem: errorMessage(error) };
           this.changed(this.snapshot());
         });
       });

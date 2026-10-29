@@ -3,6 +3,7 @@ import type { FileEntry } from '../../domain/contracts';
 import { fileGroup } from '../../domain/files/entries';
 import { lensGroupTree, type Lens, type ResolvedLens } from '../../domain/files/lenses';
 import { FILE_DRAG } from './file-drop';
+import type { FileGrouping } from '../../domain/files/entries';
 
 /** A heading in a grouped view: a kind or date group, or a lens group. */
 export interface ViewSection {
@@ -106,7 +107,7 @@ export function gridStep(
 /** Kind and date groups, in the order the sorted entries meet them. */
 export function fixedSections(
   entries: readonly FileEntry[],
-  group: 'none' | 'kind' | 'modified',
+  group: FileGrouping,
   depths?: ReadonlyMap<string, number>,
 ): ViewSections | undefined {
   if (group === 'none') return undefined;

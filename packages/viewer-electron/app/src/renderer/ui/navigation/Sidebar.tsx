@@ -24,12 +24,13 @@ import { measureLocalX, type Point } from '../projectedResize';
 import { baseName } from '../../../domain/workspaces/planes';
 import { effectiveWindowUI } from '../../state/effective-ui';
 import { changeSetting } from '../../commands/window-commands/settings';
+import { sendWindowEvent } from '../../app/window-events';
 
 const titles = { locations: 'Locations', favorites: 'Favorites', recents: 'Recent' };
 export const SIDEBAR_DRAG = 'application/x-viewer-sidebar';
-export const SHORTCUT_DRAG = 'application/x-viewer-shortcuts';
+const SHORTCUT_DRAG = 'application/x-viewer-shortcuts';
 type SidebarDrag = { section: SidebarSection; path?: string };
-export function readSidebarDrag(data: string): SidebarDrag | null {
+function readSidebarDrag(data: string): SidebarDrag | null {
   try {
     const value: unknown = JSON.parse(data);
     if (!value || typeof value !== 'object') return null;
@@ -255,11 +256,11 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                     }}
                     onClick={(event) => {
                       if (item.path === trashLocation) {
-                        window.dispatchEvent(new Event('viewer:trash'));
+                        sendWindowEvent('viewer:trash');
                         return;
                       }
                       if (item.path === '/Volumes' && bootstrap.platform === 'darwin') {
-                        window.dispatchEvent(new Event('viewer:volumes'));
+                        sendWindowEvent('viewer:volumes');
                         return;
                       }
                       void workspace

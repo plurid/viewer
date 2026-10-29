@@ -18,6 +18,7 @@ import { entry } from '../files/filesystem';
 import { GitReader, type GitRunner } from './git';
 import { addWorktree } from './worktree-process';
 import { containsPath } from '../files/containment';
+import { errorMessage } from '../../domain/errors';
 
 interface CheckoutIdentity {
   path: string;
@@ -240,7 +241,7 @@ export class GitWorktrees {
           commit: current.commit,
         });
     } catch (error) {
-      creationProblem = (error as Error).message;
+      creationProblem = errorMessage(error);
     }
     this.catalogs.set(id, {
       owner,
@@ -386,7 +387,7 @@ export class GitWorktrees {
           entry: await entry(created.path),
         };
       } catch (error) {
-        const message = (error as Error).message;
+        const message = errorMessage(error);
         throw new Error(
           started
             ? `${message}\nInspect ${destination} and Refresh worktrees. Viewer kept any files or branch created by Git.`

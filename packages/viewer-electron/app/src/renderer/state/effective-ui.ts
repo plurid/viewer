@@ -1,8 +1,7 @@
-import type { UIPreferences, Workspace } from '../../domain/contracts';
+import type { UIPreferences, Look } from '../../domain/contracts';
 import type { ApplicationSettings } from '../../domain/services';
 import {
   createWindowPreferencesResolver,
-  resolveWindowPreferences,
   type WindowPreferences,
 } from '../../domain/preferences/presentation/resolver';
 import { activeWorkspace, type ViewerState } from './core';
@@ -38,22 +37,6 @@ export function effectiveWindowSettings(state: ViewerState): ApplicationSettings
   return effectiveWindowPreferences(state).settings;
 }
 
-export function effectiveWindowLook(state: ViewerState): 'dark' | 'light' {
+export function effectiveWindowLook(state: ViewerState): Look {
   return effectiveWindowPreferences(state).look;
-}
-
-/** Resolve another workspace while configuration changes refresh its retained folder panes. */
-export function windowPreferencesFor(
-  state: ViewerState,
-  workspace: Workspace,
-  settings = state.settings.settings,
-  ui = state.saved.ui,
-): WindowPreferences {
-  return resolveWindowPreferences({
-    settings,
-    ui,
-    systemLook: state.settings.systemLook ?? state.settings.look,
-    workspace,
-    profileID: workspace.id === state.saved.activeWorkspace ? state.saved.profile?.id : undefined,
-  });
 }

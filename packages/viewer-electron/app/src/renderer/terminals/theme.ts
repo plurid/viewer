@@ -1,11 +1,12 @@
 import { builtInTheme, type Theme } from '../../domain/preferences/themes';
 import type { ApplicationSettings } from '../../domain/services';
+import type { Look } from '../../domain/contracts';
 
 /**
  * xterm colours for each Viewer look, from the theme: its terminal palette over the
  * built-in one, and scrollbars in the theme's text colour.
  */
-export function terminalTheme(look: 'dark' | 'light', palette?: Theme['terminal']) {
+export function terminalTheme(look: Look, palette?: Theme['terminal']) {
   const colors = { ...builtInTheme(look).terminal, ...palette };
   const ink = look === 'dark' ? '230, 232, 235' : '37, 40, 46';
   return {
@@ -28,7 +29,7 @@ export const terminalFontOptions = (font: ApplicationSettings['terminalFont']) =
 });
 
 /** Find's highlights: every match, and the current one stronger, in the overview ruler too. */
-export const searchDecorations = (look: 'dark' | 'light') =>
+export const searchDecorations = (look: Look) =>
   look === 'dark'
     ? {
         matchBackground: '#4b5b2f',

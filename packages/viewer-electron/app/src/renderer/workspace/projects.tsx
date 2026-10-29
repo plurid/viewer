@@ -38,11 +38,13 @@ import {
 } from '../state/store';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { useWorkspace } from './context';
+import { errorMessage } from '../../domain/errors';
+import { sendWindowEvent, useWindowEvent } from '../app/window-events';
 
 export type ProjectCommand =
   'open' | 'create' | 'save' | 'reload' | 'close' | 'arrangements' | 'bindings';
 export function requestProject(command: ProjectCommand): void {
-  window.dispatchEvent(new CustomEvent('viewer:project', { detail: command }));
+  sendWindowEvent('viewer:project', command);
 }
 /** External edits are discovered through the existing bounded folder watcher, never auto-applied. */
 export function ProjectFileNotice() {
@@ -334,106 +336,101 @@ export function ProjectControls() {
     setBusy(false);
     setError('');
   }, [space.id]);
-  useEffect(() => {
-    const listener = (event: Event) => {
-      const command = (event as CustomEvent<ProjectCommand>).detail;
-      if (command === 'close') {
-        operation.current++;
-        closeProject();
-        setPanel(null);
-        setReload(undefined);
-        setNaming(false);
-        setBusy(false);
-        setError('');
-        return;
-      }
-      if (command === 'arrangements' || command === 'bindings') {
-        setPanel(command);
-        return;
-      }
-      if (busy) return;
-      const token = ++operation.current;
-      const owner = activeWorkspace().id;
-      const isCurrent = () => token === operation.current && activeWorkspace().id === owner;
-      setBusy(true);
+  useWindowEvent('viewer:project', (command) => {
+    if (command === 'close') {
+      operation.current++;
+      closeProject();
+      setPanel(null);
+      setReload(undefined);
+      setNaming(false);
+      setBusy(false);
       setError('');
-      void (async () => {
-        if (command === 'open') {
-          const file = await window.viewer.project({ kind: 'choose', mode: 'open' });
-          if (typeof file === 'string' && isCurrent()) {
-            const document = await readProject(file);
-            if (!isCurrent()) return;
-            await installProject(document);
-            if (
-              document.definition.bindings.some(
-                (binding) => !activeWorkspace().project?.bindings[binding.name],
-              )
+      return;
+    }
+    if (command === 'arrangements' || command === 'bindings') {
+      setPanel(command);
+      return;
+    }
+    if (busy) return;
+    const token = ++operation.current;
+    const owner = activeWorkspace().id;
+    const isCurrent = () => token === operation.current && activeWorkspace().id === owner;
+    setBusy(true);
+    setError('');
+    void (async () => {
+      if (command === 'open') {
+        const file = await window.viewer.project({ kind: 'choose', mode: 'open' });
+        if (typeof file === 'string' && isCurrent()) {
+          const document = await readProject(file);
+          if (!isCurrent()) return;
+          await installProject(document);
+          if (
+            document.definition.bindings.some(
+              (binding) => !activeWorkspace().project?.bindings[binding.name],
             )
-              setPanel('bindings');
-          }
-          return;
+          )
+            setPanel('bindings');
         }
-        const current = activeWorkspace();
-        let project = current.project;
-        if (command === 'reload') {
-          if (project) {
-            const document = await readProject(project.file);
-            if (isCurrent()) setReload(document);
-          }
-          return;
+        return;
+      }
+      const current = activeWorkspace();
+      let project = current.project;
+      if (command === 'reload') {
+        if (project) {
+          const document = await readProject(project.file);
+          if (isCurrent()) setReload(document);
         }
-        if (!project || command === 'create') {
-          const file = await window.viewer.project({
-            kind: 'choose',
-            mode: 'create',
-            defaultPath: current.panes.find((pane) => pane.type === 'folder')?.path,
-          });
-          if (typeof file !== 'string' || !isCurrent()) return;
-          const root = parentPath(file);
-          const bindings = projectBindings(root, current.panes);
-          project = {
-            file,
-            root,
-            revision: '',
-            bindings,
-            dirty: true,
-            folders: Object.fromEntries(
-              current.panes
-                .filter((pane) => pane.type === 'folder')
-                .map((pane) => [pane.path, folderPresentation(pane.path)]),
-            ),
-            definition: {
-              version: 1,
-              id: crypto.randomUUID(),
-              name: current.name,
-              bindings: Object.keys(bindings).map((name) => ({ name, label: name })),
-              planes: [],
-              folders: [],
-              layout: { placements: [] },
-              arrangements: {},
-            },
-          };
-        }
-        const input = definition(project, workspace.captureLayout());
-        const reply = await window.viewer.project({
-          kind: 'save',
-          file: project.file,
-          revision: project.revision,
-          definition: input,
+        return;
+      }
+      if (!project || command === 'create') {
+        const file = await window.viewer.project({
+          kind: 'choose',
+          mode: 'create',
+          defaultPath: current.panes.find((pane) => pane.type === 'folder')?.path,
         });
-        if (!reply || typeof reply !== 'object') throw new Error('The project was not saved.');
-        if (isCurrent()) associateProject({ ...project, ...reply, dirty: false });
-      })()
-        .catch((error) => {
-          if (isCurrent()) report(error);
-        })
-        .finally(() => {
-          if (isCurrent()) setBusy(false);
-        });
-    };
-    window.addEventListener('viewer:project', listener);
-    return () => window.removeEventListener('viewer:project', listener);
-  }, [workspace, busy]);
+        if (typeof file !== 'string' || !isCurrent()) return;
+        const root = parentPath(file);
+        const bindings = projectBindings(root, current.panes);
+        project = {
+          file,
+          root,
+          revision: '',
+          bindings,
+          dirty: true,
+          folders: Object.fromEntries(
+            current.panes
+              .filter((pane) => pane.type === 'folder')
+              .map((pane) => [pane.path, folderPresentation(pane.path)]),
+          ),
+          definition: {
+            version: 1,
+            id: crypto.randomUUID(),
+            name: current.name,
+            bindings: Object.keys(bindings).map((name) => ({ name, label: name })),
+            planes: [],
+            folders: [],
+            layout: { placements: [] },
+            arrangements: {},
+          },
+        };
+      }
+      const input = definition(project, workspace.captureLayout());
+      const reply = await window.viewer.project({
+        kind: 'save',
+        file: project.file,
+        revision: project.revision,
+        definition: input,
+      });
+      if (!reply || typeof reply !== 'object') throw new Error('The project was not saved.');
+      if (isCurrent()) associateProject({ ...project, ...reply, dirty: false });
+    })()
+      .catch((error) => {
+        if (isCurrent()) report(error);
+      })
+      .finally(() => {
+        if (isCurrent()) setBusy(false);
+      });
+  });
   const project = space.project;
   if (reload)
     return (
@@ -602,7 +599,7 @@ export function ProjectControls() {
                       if (layout) workspace.restoreLayout(layout);
                       setPanel(null);
                     } catch (error) {
-                      setError((error as Error).message);
+                      setError(errorMessage(error));
                     }
                   }}
                 >

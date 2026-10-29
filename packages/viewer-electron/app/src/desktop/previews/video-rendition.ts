@@ -4,6 +4,7 @@ import path from 'node:path';
 import { runProcessor } from '../transforms/process';
 import { mediaDemuxer, mediaInfo } from '../transforms/media';
 import type { Decoder } from './derived';
+import { errorMessage } from '../../domain/errors';
 
 export const videoPreviewLimit = 64 * 1024 * 1024;
 /** Complete local compatibility copy, never a shortened excerpt. Fixed vectors
@@ -202,7 +203,7 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
         throw new Error(
           'Local video conversion exceeded two minutes. Open the file in its original app.',
         );
-      const message = (error as Error).message;
+      const message = errorMessage(error);
       if (message.includes('output exceeded'))
         throw new Error(
           'The complete compatibility copy exceeds 64 MB. Open this video in its original app.',

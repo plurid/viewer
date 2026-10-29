@@ -5,6 +5,10 @@ import type { TransformPlan } from '../operations/transforms';
 import type { SpeechSetup } from '../speech/models';
 import type { AgentTaskSetup, AgentTaskResult } from './task-workflow';
 
+/** What an execution grant allows: running a program, or reading or typing into its terminal. */
+export const executionCapabilities = ['execute', 'terminal-read', 'terminal-write'] as const;
+export type ExecutionCapability = (typeof executionCapabilities)[number];
+
 /** A proposal's outcome, once it no longer waits for review or runs. */
 export const finalProposalStatuses = ['completed', 'failed', 'rejected', 'cancelled'] as const;
 export type FinalProposalStatus = (typeof finalProposalStatuses)[number];
@@ -84,5 +88,5 @@ export interface ExecutionGrant {
   /** The folder as it was chosen, when that was a link or alias to `root`. */
   chosen?: string;
   fingerprint: string;
-  capability: 'execute' | 'terminal-read' | 'terminal-write';
+  capability: ExecutionCapability;
 }

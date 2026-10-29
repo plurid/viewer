@@ -19,6 +19,7 @@ import {
   officeRuntimeFiles,
   officeRuntimeVersion,
 } from './office-runtime-manifest';
+import { isolatedContent } from '../windows/web-content-policy';
 
 export function officeRequestAllowed(url: string, origin: string): boolean {
   try {
@@ -194,11 +195,8 @@ export async function renderOffice(
       width: 1024,
       height: 768,
       webPreferences: {
+        ...isolatedContent,
         session: isolated,
-        sandbox: true,
-        contextIsolation: true,
-        nodeIntegration: false,
-        webSecurity: true,
         backgroundThrottling: false,
       },
     });

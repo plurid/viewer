@@ -4,6 +4,7 @@ import { lstat, mkdir, open, realpath, symlink } from 'node:fs/promises';
 import { runGit } from './git';
 import { gitBlobs } from './git-blobs';
 import { assertNoGitFilters } from './git-filters';
+import { commitPattern } from '../../domain/comparison/git';
 
 interface TreeFile {
   name: string;
@@ -22,7 +23,7 @@ export async function assertAgentCheckoutSafe(repo: string, signal: AbortSignal)
 /** Checkout filters and post-checkout hooks are executable code. Agent worktrees
  * materialize raw blobs instead; Git LFS pointers remain pointers until a person fetches them. */
 async function treeFiles(repo: string, commit: string, signal: AbortSignal): Promise<TreeFile[]> {
-  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)) throw new Error('Invalid task revision.');
+  if (!commitPattern.test(commit)) throw new Error('Invalid task revision.');
   const bytes = await runGit(
     repo,
     ['ls-tree', '-rz', '-l', '--full-tree', commit],

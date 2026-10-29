@@ -1,22 +1,7 @@
-import { useSyncExternalStore } from 'react';
 import type { WorkspaceController } from './context';
 
 let touring: { stop(): void } | null = null;
-const listeners = new Set<() => void>();
-const publish = () => {
-  for (const listener of listeners) listener();
-};
 export const tourActive = () => !!touring;
-export const useTourActive = () =>
-  useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-    () => !!touring,
-  );
 export function stopTour(): void {
   touring?.stop();
 }
@@ -42,7 +27,6 @@ export function startTour(
     window.removeEventListener('pointerdown', stop, true);
     window.removeEventListener('wheel', stop, true);
     touring = null;
-    publish();
   };
   const next = () => {
     if (stopped) return;
@@ -61,7 +45,6 @@ export function startTour(
     if (!flown) timer = setTimeout(next, 0);
   };
   touring = { stop };
-  publish();
   // after the key that started it, so that key does not end it
   setTimeout(() => {
     if (stopped) return;

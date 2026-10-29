@@ -1,27 +1,21 @@
-import type { QuerySnapshot } from '../../domain/workspaces/collections';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
-import type {
-  DrawingGeometryOptions,
-  DrawingGeometryPage,
-} from '../../domain/previews/drawings/geometry';
+import type { DrawingGeometryOptions } from '../../domain/previews/drawings/geometry';
 import path from 'node:path';
 import { UtilityClient } from '../workers/utility-client';
+import type { IndexMethods } from '../workers/index-protocol';
+import type { FolderSizeMethods } from './folder-size-worker';
 import { entry } from './filesystem';
 import { spotlightTagged } from '../search/spotlight';
 import { parseFileQuery } from '../../domain/search/query';
-import {
-  sameSourceVersion,
-  sourceVersion,
-  type InspectionResult,
-} from '../../domain/files/inspection';
+import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
 import type { FolderSizeTask } from '../../domain/files/metadata';
 import type {
   ApplicationSettings,
   DocumentData,
   IndexedQuery,
-  IndexedResult,
   IndexStatus,
 } from '../../domain/services';
+import type { WorkerBackend } from '../workers/utility-client';
 
 /** How often windows hear of indexing progress; a start or finish is sent at once. */
 const indexStatusInterval = 250;
@@ -56,8 +50,8 @@ export function coalescedIndexStatus(
 }
 
 export class FileServices {
-  private index: UtilityClient;
-  private measurement: UtilityClient;
+  private index: UtilityClient<IndexMethods>;
+  private measurement: UtilityClient<FolderSizeMethods>;
   private configuration?: ApplicationSettings['search'];
   private configurations: Promise<void> = Promise.resolve();
   private unavailable: string[] = [];
@@ -66,8 +60,8 @@ export class FileServices {
   private lifecycle: Promise<void> = Promise.resolve();
   private revision = 0;
   private accessRevision = 0;
-  private createIndex: () => UtilityClient;
-  private createMeasurement: () => UtilityClient;
+  private createIndex: () => UtilityClient<IndexMethods>;
+  private createMeasurement: () => UtilityClient<FolderSizeMethods>;
   constructor(
     private dataPath: string,
     worker: string,
@@ -75,13 +69,13 @@ export class FileServices {
     emit: (status: IndexStatus) => void,
     sizeChanged: (task: FolderSizeTask) => void = () => {},
     private options: {
-      backend?: 'process' | 'thread';
+      backend?: WorkerBackend;
       access?(paths: readonly string[]): Promise<void>;
     } = {},
   ) {
     const status = coalescedIndexStatus(emit);
     this.createIndex = () =>
-      new UtilityClient(worker, {
+      new UtilityClient<IndexMethods>(worker, {
         name: 'Viewer file services',
         backend: options.backend,
         initialize: async (client) => {
@@ -94,27 +88,30 @@ export class FileServices {
       });
     this.index = this.createIndex();
     this.createMeasurement = () =>
-      new UtilityClient(path.join(path.dirname(worker), 'folder-size-worker.cjs'), {
-        name: 'Viewer folder sizes',
-        backend: options.backend,
-        timeout: 10000,
-        event: (reply) => {
-          if (reply.event !== 'folder-size') return;
-          const task = reply.value as FolderSizeTask;
-          if (task.status === 'running') this.sizes.set(task.id, task);
-          else this.sizes.delete(task.id);
-          sizeChanged(task);
+      new UtilityClient<FolderSizeMethods>(
+        path.join(path.dirname(worker), 'folder-size-worker.cjs'),
+        {
+          name: 'Viewer folder sizes',
+          backend: options.backend,
+          timeout: 10000,
+          event: (reply) => {
+            if (reply.event !== 'folder-size') return;
+            const task = reply.value as FolderSizeTask;
+            if (task.status === 'running') this.sizes.set(task.id, task);
+            else this.sizes.delete(task.id);
+            sizeChanged(task);
+          },
+          stopped: () => {
+            for (const task of this.sizes.values())
+              sizeChanged({
+                ...task,
+                status: 'failed',
+                error: 'The size worker stopped. Calculate Size to retry.',
+              });
+            this.sizes.clear();
+          },
         },
-        stopped: () => {
-          for (const task of this.sizes.values())
-            sizeChanged({
-              ...task,
-              status: 'failed',
-              error: 'The size worker stopped. Calculate Size to retry.',
-            });
-          this.sizes.clear();
-        },
-      });
+      );
     this.measurement = this.createMeasurement();
   }
   /** `rebuild`: crawl every root and extract every document again, whatever is stored. */
@@ -198,7 +195,7 @@ export class FileServices {
   async query(value: IndexedQuery) {
     const revision = this.revision;
     if (value.root) await this.options.access?.([value.root]);
-    const result = await this.index.call<IndexedResult>('query', [await this.tagged(value)]);
+    const result = await this.index.call('query', [await this.tagged(value)]);
     if (revision !== this.revision) throw new Error('Search configuration changed. Search again.');
     if (value.root) await this.options.access?.([value.root]);
     await this.options.access?.(result.entries.map((entry) => entry.path));
@@ -207,9 +204,7 @@ export class FileServices {
   async snapshot(value: IndexedQuery) {
     const revision = this.revision;
     if (value.root) await this.options.access?.([value.root]);
-    const snapshot = await this.index.call<QuerySnapshot>('query-snapshot', [
-      await this.tagged(value),
-    ]);
+    const snapshot = await this.index.call('query-snapshot', [await this.tagged(value)]);
     await this.options.access?.(snapshot.entries.map((item) => item.path));
     let cursor = 0;
     await Promise.all(
@@ -231,20 +226,20 @@ export class FileServices {
   }
   async sizeStart(paths: string[]) {
     await this.options.access?.(paths);
-    return this.measurement.call<FolderSizeTask>('size-start', [paths]);
+    return this.measurement.call('size-start', [paths]);
   }
   sizeGet(id: string) {
-    return this.measurement.call<FolderSizeTask>('size-get', [id]);
+    return this.measurement.call('size-get', [id]);
   }
-  sizeCancel(id: string) {
-    return this.measurement.call<void>('size-cancel', [id]);
+  async sizeCancel(id: string) {
+    await this.measurement.call('size-cancel', [id]);
   }
   async status() {
-    return this.withUnavailable(await this.index.call<IndexStatus>('status'));
+    return this.withUnavailable(await this.index.call('status'));
   }
   async update(file: string, removed = false) {
     await this.options.access?.([file]);
-    return this.index.call<void>('update', [file, removed]);
+    await this.index.call('update', [file, removed]);
   }
   async extract(
     file: string,
@@ -254,7 +249,7 @@ export class FileServices {
   ): Promise<DocumentData> {
     await this.options.access?.([file]);
     const revision = this.accessRevision;
-    const result = await this.index.call<DocumentData>(
+    const result = await this.index.call(
       'extract',
       worksheet ? [file, undefined, chapters, worksheet] : [file, undefined, chapters],
       signal,
@@ -269,7 +264,7 @@ export class FileServices {
     // Explicit inspection is independent of index preferences. Reset/revocation
     // still retires its results, and the native grant is checked again below.
     const revision = this.accessRevision;
-    const result = await this.index.call<InspectionResult>('inspect', [file, content, ocr], signal);
+    const result = await this.index.call('inspect', [file, content, ocr], signal);
     if (revision !== this.accessRevision) throw new Error('File access changed. Inspect again.');
     await this.options.access?.([file]);
     return result;
@@ -277,11 +272,7 @@ export class FileServices {
   async drawingGeometry(file: string, options: DrawingGeometryOptions = {}, signal?: AbortSignal) {
     await this.options.access?.([file]);
     const revision = this.accessRevision;
-    const result = await this.index.call<DrawingGeometryPage>(
-      'drawing-geometry',
-      [file, options],
-      signal,
-    );
+    const result = await this.index.call('drawing-geometry', [file, options], signal);
     if (revision !== this.accessRevision)
       throw new Error('File access changed. Read the geometry again.');
     await this.options.access?.([file]);

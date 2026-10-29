@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ImageTransform } from '../../domain/operations/transforms';
 import { launchWorker } from '../workers/utility-client';
 import type { ImageInspection } from './image';
+import type { WorkerBackend } from '../workers/utility-client';
 
 /** One bounded utility process per conversion. Cancelling terminates libvips work,
  * rather than merely discarding a reply while the decoder keeps consuming CPU. */
@@ -11,7 +12,7 @@ export function imageProcess(
   bytes: Buffer,
   plan: ImageTransform,
   signal: AbortSignal,
-  backend?: 'process' | 'thread',
+  backend?: WorkerBackend,
 ): Promise<Buffer> {
   return requestImage<Uint8Array>(worker, root, bytes, plan, signal, backend).then((value) =>
     Buffer.from(value),
@@ -22,7 +23,7 @@ export function imageInspectionProcess(
   root: string,
   bytes: Buffer,
   signal: AbortSignal,
-  backend?: 'process' | 'thread',
+  backend?: WorkerBackend,
 ): Promise<ImageInspection> {
   return requestImage<ImageInspection>(worker, root, bytes, undefined, signal, backend);
 }
@@ -32,7 +33,7 @@ export function svgPreviewProcess(
   bytes: Buffer,
   size: number,
   signal: AbortSignal,
-  backend?: 'process' | 'thread',
+  backend?: WorkerBackend,
 ): Promise<Buffer> {
   return requestImage<Uint8Array>(worker, root, bytes, undefined, signal, backend, size).then(
     (value) => Buffer.from(value),
@@ -44,7 +45,7 @@ function requestImage<T>(
   bytes: Buffer,
   plan: ImageTransform | undefined,
   signal: AbortSignal,
-  backend?: 'process' | 'thread',
+  backend?: WorkerBackend,
   previewSize?: number,
 ): Promise<T> {
   signal.throwIfAborted();

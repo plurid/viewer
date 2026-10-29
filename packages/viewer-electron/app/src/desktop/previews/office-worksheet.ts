@@ -29,7 +29,7 @@ interface Cell {
   hasInline: boolean;
   rawOverflow: boolean;
 }
-export function cellAddress(reference: string): { row: number; column: number } {
+function cellAddress(reference: string): { row: number; column: number } {
   const match = reference.match(/^([A-Z]{1,3})([1-9]\d{0,6})$/);
   if (!match) throw new Error('Invalid worksheet cell address.');
   const column = [...match[1]!].reduce((n, letter) => n * 26 + letter.charCodeAt(0) - 64, 0),

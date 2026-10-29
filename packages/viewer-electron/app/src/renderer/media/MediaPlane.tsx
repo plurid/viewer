@@ -13,6 +13,7 @@ import { SourceStrip } from './SourceStrip';
 import { Timecode } from './Timecode';
 import './media.css';
 import { isActiveJob } from '../../domain/operations/jobs';
+import { errorMessage } from '../../domain/errors';
 
 export default function MediaPlane({ pane, active }: { pane: Pane; active: boolean }) {
   const workspace = useWorkspace();
@@ -156,7 +157,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
       );
       session.replace(value);
     } catch (error) {
-      setMessage(String((error as Error).message || error));
+      setMessage(String(errorMessage(error) || error));
     } finally {
       setBusy(false);
     }
@@ -202,7 +203,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
       if (!value || !('jobs' in value)) throw new Error('The export could not be started.');
       setJobs(value.jobs);
     } catch (error) {
-      setMessage(String((error as Error).message || error));
+      setMessage(String(errorMessage(error) || error));
     } finally {
       setBusy(false);
     }

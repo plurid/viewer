@@ -1,6 +1,7 @@
 import type { FileEntry } from '../contracts';
 import type { GitSnapshot } from './git';
 import type { CapturedTarget } from '../automation/actions';
+import { commitPattern } from './git';
 
 export const maximumWorktrees = 256;
 
@@ -126,8 +127,7 @@ export function parseGitWorktrees(output: string): GitWorktreeRecord[] {
     if (!location || location.length > 32768 || paths.has(location))
       throw new Error('Invalid or repeated Git worktree location.');
     const head = fields.get('HEAD');
-    if (head && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(head))
-      throw new Error('Invalid Git worktree commit.');
+    if (head && !commitPattern.test(head)) throw new Error('Invalid Git worktree commit.');
     const branch = fields.get('branch');
     if (
       branch &&

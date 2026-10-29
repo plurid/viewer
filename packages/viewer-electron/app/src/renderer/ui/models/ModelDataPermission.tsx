@@ -7,6 +7,7 @@ import {
   type ModelDataPermission,
 } from '../../../domain/models/permissions';
 import { ChoiceButton } from '../ChoiceMenu';
+import { errorMessage } from '../../../domain/errors';
 
 export function useModelPermission(provider?: ModelProvider) {
   const identity = provider ? `${provider.id}:${provider.kind}:${provider.endpoint}` : '';
@@ -31,7 +32,7 @@ export function useModelPermission(provider?: ModelProvider) {
           setState({ identity, permission, loading: false, error: '' });
       } catch (error) {
         if (live && request === sequence.current)
-          setState({ identity, permission: null, loading: false, error: (error as Error).message });
+          setState({ identity, permission: null, loading: false, error: errorMessage(error) });
       }
     };
     void load();
@@ -64,7 +65,7 @@ export function ProviderDataPermission({
     try {
       await window.viewer.providerPermissionSet(provider.id, provider.endpoint, level);
     } catch (value) {
-      error((value as Error).message);
+      error(errorMessage(value));
     } finally {
       setBusy(false);
     }

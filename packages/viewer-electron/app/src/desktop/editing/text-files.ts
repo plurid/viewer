@@ -13,7 +13,7 @@ import { fileCoordination } from '../files/file-coordination';
 import { keepMetadata } from '../files/file-metadata';
 import { discardOwnTemporaryFile } from '../operations/removal';
 import type { Operations } from '../operations/operations';
-import { message } from '../files/filesystem';
+import { errorMessage } from '../../domain/errors';
 
 /** Why a file is not edited where it is: shown beside the preview, never as a failure. */
 class NotEditable extends Error {}
@@ -136,7 +136,7 @@ export class TextFiles {
       };
     } catch (error) {
       if (error instanceof NotEditable) return { editable: false, reason: error.message };
-      return { editable: false, reason: message(error) };
+      return { editable: false, reason: errorMessage(error) };
     }
   }
   /** Saves over the version `expected` names, as editor `session`; resolves with the new version. */

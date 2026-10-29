@@ -4,6 +4,7 @@ import { gitBadge, type GitResult, type GitStatus } from '../../domain/compariso
 import { useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { pathContains } from '../../domain/files/paths';
+import { errorMessage } from '../../domain/errors';
 
 interface GitView {
   result: GitResult;
@@ -94,7 +95,7 @@ async function refresh(path: string, subscription: Subscription): Promise<void> 
     if (!subscription.listeners.size) return;
     subscription.signature = '';
     subscription.value = {
-      result: { kind: 'unavailable', message: (error as Error).message },
+      result: { kind: 'unavailable', message: errorMessage(error) },
       statuses: new Map(),
     };
     for (const listener of subscription.listeners) listener();
@@ -104,7 +105,7 @@ async function refresh(path: string, subscription: Subscription): Promise<void> 
 }
 
 /** Rows share one subscription and one indexed snapshot for each displayed folder. */
-export function useGitStatus(path: string | undefined): GitView | null {
+function useGitStatus(path: string | undefined): GitView | null {
   const enabled = useViewer((state) => state?.settings.settings.git.enabled ?? false);
   return useSyncExternalStore(
     useCallback(

@@ -1,31 +1,15 @@
-import type { ApplicationSettings, IndexedQuery, IndexStatus } from '../../domain/services';
+import type { ApplicationSettings, IndexStatus } from '../../domain/services';
 import { FileIndex } from '../search/index-core';
 import { IndexWatcher } from '../search/index-watch';
 import { extractDocument } from '../previews/formats';
 import { inspectFile } from '../files/inspection';
 import { readDrawingGeometry } from '../previews/drawing-geometry';
-import type { DrawingGeometryOptions } from '../../domain/previews/drawings/geometry';
 import { DocumentCache } from '../previews/document-cache';
 import { workerPort } from './worker-port';
+import type { ClientMethods, WorkerRequest } from './utility-client';
+import type { IndexMethods } from './index-protocol';
 import { errorMessage } from '../../domain/errors';
-import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import { containsPath } from '../files/containment';
-interface Request {
-  id: string;
-  method:
-    | 'init'
-    | 'configure'
-    | 'query'
-    | 'query-snapshot'
-    | 'status'
-    | 'update'
-    | 'extract'
-    | 'inspect'
-    | 'drawing-geometry'
-    | 'cancel'
-    | 'close';
-  args: unknown[];
-}
 let index: FileIndex | undefined;
 let watcher: IndexWatcher | undefined;
 let ocr: string | undefined;
@@ -79,16 +63,16 @@ function configure(value: ApplicationSettings['search'], rebuild = false): Promi
   return work;
 }
 port.on('message', async (event) => {
-  const request = event.data as Request;
+  const request = event.data as WorkerRequest<IndexMethods & ClientMethods>;
   try {
     let value: unknown;
     if (request.method === 'init') {
-      ocr = request.args[1] as string;
+      ocr = request.args[1];
       // A retried initialization keeps an index that already opened.
       if (!index) {
         let ready = false;
         index = await FileIndex.open(
-          request.args[0] as string,
+          request.args[0],
           (value) => {
             if (ready) port.postMessage({ event: 'index', value: watchedStatus(value) });
           },
@@ -102,13 +86,13 @@ port.on('message', async (event) => {
       value = true;
     } else if (!index) throw new Error('File services are not ready.');
     else if (request.method === 'configure') {
-      await configure(request.args[0] as ApplicationSettings['search'], request.args[1] === true);
+      await configure(request.args[0], request.args[1] === true);
       value = true;
     } else if (request.method === 'query') {
-      const result = index.query(request.args[0] as IndexedQuery);
+      const result = index.query(request.args[0]);
       value = { ...result, status: watchedStatus(result.status) };
     } else if (request.method === 'query-snapshot') {
-      const query = request.args[0] as IndexedQuery;
+      const query = request.args[0];
       if (
         watchedStatus(index.status()).roots.some(
           (root) =>
@@ -121,13 +105,13 @@ port.on('message', async (event) => {
       value = index.snapshot(query);
     } else if (request.method === 'status') value = watchedStatus(index.status());
     else if (request.method === 'update') {
-      await index.update(request.args[0] as string, request.args[1] as boolean);
+      await index.update(request.args[0], request.args[1]);
       value = true;
     } else if (request.method === 'inspect') {
       const abort = new AbortController();
       controllers.set(request.id, abort);
       try {
-        value = await inspectFile(request.args[0] as string, {
+        value = await inspectFile(request.args[0], {
           content: request.args[1] === true,
           ocr: request.args[2] === true ? ocr : undefined,
           signal: abort.signal,
@@ -139,31 +123,22 @@ port.on('message', async (event) => {
       const abort = new AbortController();
       controllers.set(request.id, abort);
       try {
-        value = await readDrawingGeometry(
-          request.args[0] as string,
-          request.args[1] as DrawingGeometryOptions,
-          abort.signal,
-        );
+        value = await readDrawingGeometry(request.args[0], request.args[1], abort.signal);
       } finally {
         controllers.delete(request.id);
       }
     } else if (request.method === 'extract') {
-      const file = request.args[0] as string;
+      const file = request.args[0];
       const abort = new AbortController();
       controllers.set(request.id, abort);
       try {
-        const document = await extracted.read(
-          file,
-          request.args[1] as number | undefined,
-          abort.signal,
-          request.args[3] as WorksheetWindow | undefined,
-        );
+        const document = await extracted.read(file, request.args[1], abort.signal, request.args[3]);
         value = request.args[2] ? document : { ...document, chapters: undefined };
       } finally {
         controllers.delete(request.id);
       }
     } else if (request.method === 'cancel') {
-      controllers.get(request.args[0] as string)?.abort();
+      controllers.get(request.args[0])?.abort();
       value = true;
     } else if (request.method === 'close') {
       extracted.invalidate();

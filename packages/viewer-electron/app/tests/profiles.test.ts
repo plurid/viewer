@@ -9,7 +9,7 @@ import { act } from '@testing-library/react';
 import { builtInProfiles, profilePaths } from '../src/domain/preferences/profiles';
 import { defaultShortcuts } from '../src/domain/preferences/shortcuts';
 import { agentCommandID } from '../src/domain/agents/safety';
-import { profileSchema } from '../src/desktop/preferences/settings';
+import { profileSchema } from '../src/desktop/preferences/settings-schema';
 import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';

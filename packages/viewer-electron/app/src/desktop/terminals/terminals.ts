@@ -17,7 +17,7 @@ import {
   type GitActionKind,
 } from '../../domain/comparison/git-actions';
 import type { GitTerminalLaunch } from '../comparison/git-actions';
-import type { TerminalWorkerRequest } from './terminal-protocol';
+import type { TerminalWorkerReply, TerminalWorkerRequest } from './terminal-protocol';
 import { containsPath } from '../files/containment';
 
 interface PendingTerminal {
@@ -38,7 +38,7 @@ interface TerminalSession {
 
 export class Terminals {
   private closed = false;
-  private worker?: OwnedWorker;
+  private worker?: OwnedWorker<TerminalWorkerReply>;
   private groups = new Map<string, number>();
   /** Keep a repository reserved until all descendants are confirmed stopped, even after exit. */
   private gitMutations = new Map<string, string>();
@@ -255,11 +255,11 @@ export class Terminals {
       env,
     });
   }
-  private ensureWorker(): OwnedWorker {
+  private ensureWorker(): OwnedWorker<TerminalWorkerReply> {
     if (this.worker) return this.worker;
     // One PTY worker per desktop. MAS threads share dynamic picker grants;
     // node-pty is never loaded concurrently by multiple terminal threads.
-    const worker = launchWorker(
+    const worker = launchWorker<TerminalWorkerReply>(
       this.workerPath,
       'Viewer terminals',
       process.mas ? 'thread' : undefined,
@@ -274,14 +274,11 @@ export class Terminals {
     };
     if (worker.thread) worker.thread.stderr?.on('data', capture);
     else worker.process?.stderr?.on('data', capture);
-    worker.message((reply) => {
-      const internal = reply as unknown as { type: string; id: string; pid?: number };
-      if (internal.type === 'started') {
-        if (Number.isSafeInteger(internal.pid) && internal.pid! > 1)
-          this.groups.set(internal.id, internal.pid!);
+    worker.message((event) => {
+      if (event.type === 'started') {
+        if (Number.isSafeInteger(event.pid) && event.pid > 1) this.groups.set(event.id, event.pid);
         return;
       }
-      const event = reply as unknown as TerminalEvent;
       if (event.type === 'exit') {
         this.reap(event.id, event);
         return;
@@ -330,8 +327,7 @@ export class Terminals {
           error: error as Error,
         });
         stopping?.fail(error as Error);
-        if (session)
-          this.emit(session.owner, { type: 'error', id, message: (error as Error).message });
+        if (session) this.emit(session.owner, { type: 'error', id, message: errorMessage(error) });
       } finally {
         if (this.groups.get(id) === pid) this.groups.delete(id);
       }

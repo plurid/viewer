@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { workflowUsesSelection, type WorkflowDocument } from '../../../domain/automation/workflows';
 import type { WatchRule } from '../../../domain/automation/watch-rules';
 import { ChoiceButton } from '../ChoiceMenu';
+import { errorMessage } from '../../../domain/errors';
 
 export function WatchRuleControls({
   document,
@@ -54,7 +55,7 @@ export function WatchRuleControls({
       const reply = await window.viewer.watchRules({ kind: 'list' });
       if (Array.isArray(reply)) setRules(reply);
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setBusy(false);
     }

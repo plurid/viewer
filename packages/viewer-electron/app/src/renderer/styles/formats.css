@@ -198,8 +198,7 @@
   display: flex;
 }
 .pdf-thumbnails,
-.pdf-outline,
-.pdf-sidebar-empty {
+.pdf-outline {
   width: 168px;
   flex: none;
   overflow: auto;
@@ -401,9 +400,6 @@
     SFMono-Regular,
     Menlo,
     monospace;
-}
-.json-node {
-  min-width: max-content;
 }
 .json-value {
   display: flex;

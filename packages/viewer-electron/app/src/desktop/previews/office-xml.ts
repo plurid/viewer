@@ -61,14 +61,3 @@ export function attribute(node: XMLNode, name: string): string | undefined {
 export function xmlText(node: XMLNode): string {
   return node.children.map((item) => (typeof item === 'string' ? item : xmlText(item))).join('');
 }
-export function descendants(node: XMLNode, name: string): XMLNode[] {
-  const found: XMLNode[] = [];
-  const visit = (item: XMLNode) => {
-    for (const nested of children(item)) {
-      if (localName(nested) === name) found.push(nested);
-      else visit(nested);
-    }
-  };
-  visit(node);
-  return found;
-}

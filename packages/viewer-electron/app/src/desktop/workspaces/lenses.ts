@@ -38,6 +38,7 @@ import {
   type LensFolder,
   type LensOp,
 } from '../../domain/files/lenses';
+import { errorMessage } from '../../domain/errors';
 
 const readme = `# Viewer
 
@@ -223,7 +224,7 @@ export class Lenses {
         const { lens, repairs } = normalizeLens(document.definition);
         into.lenses.push({ file, revision: document.revision, lens, local, writable, repairs });
       } catch (error) {
-        into.broken.push({ file, message: (error as Error).message });
+        into.broken.push({ file, message: errorMessage(error) });
       }
     }
   }

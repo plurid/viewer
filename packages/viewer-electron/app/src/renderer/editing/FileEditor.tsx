@@ -25,9 +25,9 @@ import { report, updatePane, useViewer } from '../state/store';
 import { discardBuffer, keepBuffer, readBuffer } from './buffers';
 import { registerEditingPlane, type EditorHandle } from './planes';
 import { continueEditing, sessionContinues, takeSession } from './sessions';
+import type { TextEditorProps } from '../previews/editor/TextEditor';
 
 const TextEditor = lazy(() => import('../previews/editor/TextEditor'));
-import type { TextEditorProps } from '../previews/editor/TextEditor';
 
 /**
  * Editing a previewed file. The file opens for editing where it is, when the desktop

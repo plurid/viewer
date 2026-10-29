@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { builtInThemes, themeVariables, themeFor } from '../src/domain/preferences/themes';
 import { importItermColors, importVSCodeTheme } from '../src/domain/preferences/theme-import';
-import { themeSchema } from '../src/desktop/preferences/settings';
+import { themeSchema } from '../src/desktop/preferences/settings-schema';
 import { defaultSettings } from '../src/domain/services';
 
 const component = (name: string, r: number, g: number, b: number) =>

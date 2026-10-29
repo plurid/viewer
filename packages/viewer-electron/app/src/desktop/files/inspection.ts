@@ -8,6 +8,7 @@ import { unitInfo } from '../../domain/previews/drawings/dxf/units';
 import { readImageDimensions } from '../previews/image-dimensions';
 import { fileCoordination } from './file-coordination';
 import { parseDelimited } from '../../domain/previews/data/delimited';
+import { errorMessage } from '../../domain/errors';
 export async function inspectFile(
   file: string,
   options: {
@@ -165,7 +166,7 @@ export async function inspectFile(
         };
       } catch (error) {
         signal?.throwIfAborted();
-        result.coverage = { content: 'unsupported', reason: (error as Error).message };
+        result.coverage = { content: 'unsupported', reason: errorMessage(error) };
       }
     },
     options.signal,

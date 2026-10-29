@@ -188,13 +188,7 @@ export const FileRow = memo(function FileRow({
   );
 });
 /** A group heading. Lens groups collapse, take items dropped on them and have their own menu. */
-export function SectionHeader({
-  section,
-  sections,
-}: {
-  section: ViewSection;
-  sections: ViewSections;
-}) {
+function SectionHeader({ section, sections }: { section: ViewSection; sections: ViewSections }) {
   const [over, setOver] = useState(false);
   const lens = section.group !== undefined;
   const droppable = lens && !!sections.drop;

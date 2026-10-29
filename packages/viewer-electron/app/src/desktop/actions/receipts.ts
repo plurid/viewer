@@ -10,6 +10,7 @@ import {
   type ReceiptReply,
 } from '../../domain/automation/receipts';
 import { DocumentStore } from '../persistence/document-store';
+import { errorMessage } from '../../domain/errors';
 
 /** Private human-command evidence. Closing a view never removes a receipt or replays a command. */
 export class CommandReceipts {
@@ -97,7 +98,7 @@ export class CommandReceipts {
       .catch((error) => {
         this.latest.delete(receipt.id);
         this.live.delete(receipt.id);
-        this.failures.set(receipt.id, (error as Error).message);
+        this.failures.set(receipt.id, errorMessage(error));
         this.changed(receipt.id);
         throw error;
       })

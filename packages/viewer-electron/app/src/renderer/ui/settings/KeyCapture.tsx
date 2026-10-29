@@ -7,7 +7,7 @@ const placeKey = (event: KeyboardEvent) =>
   /^Digit(\d)$/.exec(event.code)?.[1] ??
   (event.key === ' ' ? 'Space' : event.key.length === 1 ? event.key.toUpperCase() : event.key);
 /** A chord as shortcuts write it, from a key press: `Ctrl+A`, `Shift+Cmd+Z`, `Ctrl+Space`. */
-export function chordFrom(event: KeyboardEvent): string | undefined {
+function chordFrom(event: KeyboardEvent): string | undefined {
   if (['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return undefined;
   return [
     event.ctrlKey && 'Ctrl',

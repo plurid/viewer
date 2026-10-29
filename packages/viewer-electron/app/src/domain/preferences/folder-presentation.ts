@@ -1,5 +1,6 @@
 import type { FolderPane, ListColumn, SortKey, UIPreferences, ViewMode } from '../contracts';
 import type { ApplicationSettings } from '../services';
+import type { FileGrouping } from '../files/entries';
 
 /** Shared folder appearance; selection/history/scroll belong to the explorer session. */
 export interface FolderPresentation {
@@ -9,7 +10,7 @@ export interface FolderPresentation {
   showHidden: boolean;
   density: 'comfortable' | 'compact';
   foldersFirst: boolean;
-  group: 'none' | 'kind' | 'modified' | 'lens';
+  group: FileGrouping | 'lens';
   /** The lens grouping this folder when `group` is `lens`. */
   lens?: string;
   columnWidth: number;

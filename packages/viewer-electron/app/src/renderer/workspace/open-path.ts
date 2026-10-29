@@ -1,6 +1,7 @@
 import type { FileEntry } from '../../domain/contracts';
 import { needsFolderAccess } from '../../domain/files/access';
 import { activeWorkspace, getState, navigate } from '../state/store';
+import { requestRefresh } from '../state/refresh';
 import type { WorkspaceController } from './context';
 
 /** Permission recovery keeps the workspace/plane captured before the native
@@ -28,7 +29,7 @@ export async function openWorkspacePath(
     const selected = await window.viewer.chooseFolder(path);
     if (!selected || !current()) return false;
     entry = await window.viewer.stat(selected);
-    window.dispatchEvent(new Event('viewer:refresh'));
+    requestRefresh();
   }
   if (!current()) return false;
   const pane = activeWorkspace().panes.find((pane) => pane.id === paneID);

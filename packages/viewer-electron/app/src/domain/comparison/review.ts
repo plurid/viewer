@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { gitRelativePath } from './git';
+import { gitRelativePath, commitPattern } from './git';
 import type { CapturedTarget } from '../automation/actions';
 
 export const reviewModes = ['unstaged', 'staged', 'branch'] as const;
@@ -7,10 +7,7 @@ export type ReviewMode = (typeof reviewModes)[number];
 export const reviewStateSchema = z
   .object({
     mode: z.enum(reviewModes),
-    baseCommit: z
-      .string()
-      .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/)
-      .optional(),
+    baseCommit: z.string().regex(commitPattern).optional(),
     baseName: z.string().max(300).optional(),
     selectedPath: z.string().refine(gitRelativePath).optional(),
   })

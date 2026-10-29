@@ -30,6 +30,7 @@ import type { CustomAction } from '../../../domain/automation/actions';
 import { useTheme, useThemeVariables } from '../theme';
 import { settingsDiscovery } from './discovery';
 import { SpeechSettings } from '../../speech/SpeechSettings';
+import { errorMessage } from '../../../domain/errors';
 
 const noThemes = { themes: [], theme: { dark: '', light: '' } };
 export function SettingsWindow() {
@@ -120,7 +121,7 @@ export function SettingsWindow() {
             () => window.viewer.flushed(event.token, { ok: true }),
             (error) => window.viewer.flushed(event.token, failedFlush(error)),
           )
-          .catch((error) => setError((error as Error).message));
+          .catch((error) => setError(errorMessage(error)));
       }
     });
   }, []);

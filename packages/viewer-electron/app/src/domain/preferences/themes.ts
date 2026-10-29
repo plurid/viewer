@@ -1,4 +1,5 @@
 import type { ApplicationSettings } from '../services';
+import type { Look } from '../contracts';
 
 export const shellTokens = [
   'space',
@@ -72,7 +73,7 @@ export type TerminalToken = (typeof terminalTokens)[number];
 export interface Theme {
   id: string;
   name: string;
-  look: 'dark' | 'light';
+  look: Look;
   shell: Partial<Record<ShellToken, string>>;
   syntax: Partial<Record<SyntaxToken, string>>;
   terminal: Partial<Record<TerminalToken, string>>;
@@ -206,12 +207,11 @@ export const builtInThemes: readonly [Theme, Theme] = [
     },
   },
 ];
-export const builtInTheme = (look: 'dark' | 'light') =>
-  look === 'dark' ? builtInThemes[0] : builtInThemes[1];
+export const builtInTheme = (look: Look) => (look === 'dark' ? builtInThemes[0] : builtInThemes[1]);
 /** The theme for an appearance, every token filled from the built-in theme. */
 export function themeFor(
   settings: Pick<ApplicationSettings, 'themes' | 'theme'>,
-  look: 'dark' | 'light',
+  look: Look,
 ): Theme {
   const base = builtInTheme(look);
   const id = settings.theme[look];

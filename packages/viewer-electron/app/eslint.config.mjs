@@ -15,12 +15,18 @@ const importType = {
   selector: 'TSImportType',
   message: 'Use a top-level import type declaration.',
 };
+// A module's dependencies are read in one place; re-exports may sit among them.
+const importsFirst = {
+  selector:
+    'Program > :not(ImportDeclaration, ExportNamedDeclaration[source], ExportAllDeclaration) ~ ImportDeclaration',
+  message: 'Place imports before other statements.',
+};
 export default tseslint.config(
   { ignores: ['.vite/**', 'out/**', 'node_modules/**'] },
   ...tseslint.configs.recommended,
   {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
-    rules: { 'no-restricted-syntax': ['error', importType, ...removal] },
+    rules: { 'no-restricted-syntax': ['error', importType, importsFirst, ...removal] },
   },
   {
     files: ['tests/**/*.ts', 'tests/**/*.tsx', 'tools/**/*.ts', '*.ts'],
@@ -52,7 +58,7 @@ export default tseslint.config(
   },
   {
     files: ['src/desktop/operations/removal.ts'],
-    rules: { 'no-restricted-syntax': ['error', importType] },
+    rules: { 'no-restricted-syntax': ['error', importType, importsFirst] },
   },
   {
     rules: {

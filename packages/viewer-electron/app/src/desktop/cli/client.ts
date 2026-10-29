@@ -1,5 +1,6 @@
 import { PassThrough, Writable } from 'node:stream';
 import { runMCPClient } from '../agents/mcp-client';
+import { errorMessage } from '../../domain/errors';
 
 export class CLIConnectionError extends Error {}
 export class CLIServiceError extends Error {}
@@ -22,7 +23,7 @@ export function cliClient(dataPath: string, token: string): CLICall {
       await runMCPClient(dataPath, { input, output, token, signal });
     } catch (error) {
       signal.throwIfAborted();
-      throw new CLIConnectionError((error as Error).message);
+      throw new CLIConnectionError(errorMessage(error));
     } finally {
       input.destroy();
       output.destroy();

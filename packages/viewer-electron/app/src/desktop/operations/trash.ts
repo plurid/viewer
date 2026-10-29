@@ -21,6 +21,39 @@ import { errorMessage } from '../../domain/errors';
 
 const run = promisify(execFile);
 const limit = 4000;
+
+/** Windows: restores one Recycle Bin item through the shell, then waits for it to leave. */
+const restoreRecycledItem = [
+  "$ErrorActionPreference='Stop'",
+  '$shell=New-Object -ComObject Shell.Application',
+  '$bin=$shell.Namespace(10)',
+  '$item=@($bin.Items() | Where-Object { $_.Path -ceq $env:VIEWER_TRASH_SOURCE })',
+  "if($item.Count -ne 1){throw 'Recycle Bin item changed.'}",
+  '$target=$shell.Namespace($env:VIEWER_TRASH_DESTINATION)',
+  "if($null -eq $target){throw 'Destination is unavailable.'}",
+  '$target.MoveHere($item[0],8)',
+  '$deadline=[DateTime]::UtcNow.AddSeconds(90)',
+  "while(Test-Path -LiteralPath $env:VIEWER_TRASH_SOURCE){if([DateTime]::UtcNow -gt $deadline){throw 'Restore was not completed. Refresh Recycle Bin.'}; Start-Sleep -Milliseconds 100}",
+].join('; ');
+
+/** Windows: empties the Recycle Bin through the shell API. */
+const emptyRecycleBin = [
+  'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public class ViewerRecycleBin { [DllImport("shell32.dll", CharSet=CharSet.Unicode)] public static extern int SHEmptyRecycleBin(IntPtr hwnd, string root, uint flags); }\'',
+  '$result=[ViewerRecycleBin]::SHEmptyRecycleBin([IntPtr]::Zero,$null,0)',
+  'if($result -ne 0){throw "Windows did not empty the Recycle Bin ($result)."}',
+].join('; ');
+
+/** Windows: the Recycle Bin items as JSON, refused beyond the review limit. */
+const listRecycleBin = [
+  "$ErrorActionPreference='Stop'",
+  '[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)',
+  '$bin=(New-Object -ComObject Shell.Application).Namespace(10)',
+  "if($null -eq $bin){throw 'Recycle Bin is unavailable.'}",
+  '$items=@($bin.Items())',
+  `if($items.Count -gt ${limit}){throw 'Recycle Bin is too large to review safely in Viewer.'}`,
+  "$output=@($items | ForEach-Object { $bytes=$_.ExtendedProperty('System.Size'); @{ id=$_.Path; name=$_.Name; directory=[bool]$_.IsFolder; size=$(if($null -eq $bytes){0}else{[long]$bytes}); originalPath=$_.ExtendedProperty('System.Recycle.DeletedFrom'); deleted=$_.ExtendedProperty('System.Recycle.DateDeleted') } })",
+  'ConvertTo-Json -InputObject $output -Depth 3 -Compress',
+].join('; ');
 type ReviewedItem = { name: string; identity: string; size: number; modified: number };
 type ReviewedRoot = { path: string; identity: string; items: ReviewedItem[] };
 type ReadResult = {
@@ -279,12 +312,7 @@ export class Trash {
           // never Yes-to-All, replacement flags, or a raw $Recycle.Bin deletion.
           await run(
             this.#powershell(),
-            [
-              '-NoProfile',
-              '-NonInteractive',
-              '-Command',
-              `$ErrorActionPreference='Stop'; $shell=New-Object -ComObject Shell.Application; $bin=$shell.Namespace(10); $item=@($bin.Items() | Where-Object { $_.Path -ceq $env:VIEWER_TRASH_SOURCE }); if($item.Count -ne 1){throw 'Recycle Bin item changed.'}; $target=$shell.Namespace($env:VIEWER_TRASH_DESTINATION); if($null -eq $target){throw 'Destination is unavailable.'}; $target.MoveHere($item[0],8); $deadline=[DateTime]::UtcNow.AddSeconds(90); while(Test-Path -LiteralPath $env:VIEWER_TRASH_SOURCE){if([DateTime]::UtcNow -gt $deadline){throw 'Restore was not completed. Refresh Recycle Bin.'}; Start-Sleep -Milliseconds 100}`,
-            ],
+            ['-NoProfile', '-NonInteractive', '-Command', restoreRecycledItem],
             {
               timeout: 100000,
               windowsHide: true,
@@ -463,12 +491,7 @@ export class Trash {
         // filesystem paths or arbitrary script text supplied by a renderer.
         await run(
           this.#powershell(),
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-Command',
-            `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class ViewerRecycleBin { [DllImport("shell32.dll", CharSet=CharSet.Unicode)] public static extern int SHEmptyRecycleBin(IntPtr hwnd, string root, uint flags); }'; $result=[ViewerRecycleBin]::SHEmptyRecycleBin([IntPtr]::Zero,$null,0); if($result -ne 0){throw "Windows did not empty the Recycle Bin ($result)."}`,
-          ],
+          ['-NoProfile', '-NonInteractive', '-Command', emptyRecycleBin],
           { timeout: 120000, windowsHide: true },
         );
       } else {
@@ -696,12 +719,7 @@ export class Trash {
   async #readWindows(): Promise<ReadResult> {
     const { stdout } = await run(
       this.#powershell(),
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $bin=(New-Object -ComObject Shell.Application).Namespace(10); if($null -eq $bin){throw 'Recycle Bin is unavailable.'}; $items=@($bin.Items()); if($items.Count -gt ${limit}){throw 'Recycle Bin is too large to review safely in Viewer.'}; $output=@($items | ForEach-Object { $bytes=$_.ExtendedProperty('System.Size'); @{ id=$_.Path; name=$_.Name; directory=[bool]$_.IsFolder; size=$(if($null -eq $bytes){0}else{[long]$bytes}); originalPath=$_.ExtendedProperty('System.Recycle.DeletedFrom'); deleted=$_.ExtendedProperty('System.Recycle.DateDeleted') } }); ConvertTo-Json -InputObject $output -Depth 3 -Compress`,
-      ],
+      ['-NoProfile', '-NonInteractive', '-Command', listRecycleBin],
       { maxBuffer: 8 * 1024 * 1024, timeout: 15000, windowsHide: true },
     );
     const values: unknown = JSON.parse(stdout || '[]');

@@ -3,8 +3,7 @@ import path from 'node:path';
 import { lookup } from 'mime-types';
 import type { FileEntry, FolderListing } from '../../domain/contracts';
 
-import { errorMessage as message } from '../../domain/errors';
-export { message };
+import { errorMessage } from '../../domain/errors';
 export function absolute(input: string): string {
   if (!input || input.includes('\0') || !path.isAbsolute(input))
     throw new Error('An absolute local path is required.');
@@ -41,7 +40,7 @@ export async function entry(file: string): Promise<FileEntry> {
     try {
       directory = (await stat(normalized)).isDirectory();
     } catch (cause) {
-      error = message(cause);
+      error = errorMessage(cause);
     }
   }
   const name = path.basename(normalized) || normalized;
@@ -97,7 +96,7 @@ export async function list(folder: string): Promise<FolderListing> {
               hidden: name.startsWith('.'),
               mime: 'application/octet-stream',
               identity: '',
-              error: message(error),
+              error: errorMessage(error),
             });
         }
       }

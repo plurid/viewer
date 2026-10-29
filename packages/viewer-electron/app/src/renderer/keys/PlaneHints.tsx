@@ -56,7 +56,6 @@ export function startPlaneHints(choose: (paneID: string) => void): boolean {
   });
   return true;
 }
-export const planeHintsActive = () => !!hints;
 export function PlaneHints() {
   const current = useSyncExternalStore(subscribe, () => hints);
   useEffect(() => {

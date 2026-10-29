@@ -1,4 +1,4 @@
-import type { UIPreferences } from '../../domain/contracts';
+import type { UIPreferences, Look } from '../../domain/contracts';
 
 type Backdrop = UIPreferences['space']['backdrop'];
 
@@ -7,7 +7,7 @@ type Backdrop = UIPreferences['space']['backdrop'];
  * what is behind the window; a clear backdrop needs a window created transparent. The renderer then
  * draws the space at the chosen opacity, the planes opaque over it.
  */
-export function backdropWindowOptions(backdrop: Backdrop, look: 'dark' | 'light') {
+export function backdropWindowOptions(backdrop: Backdrop, look: Look) {
   if (backdrop === 'clear')
     return {
       transparent: true,

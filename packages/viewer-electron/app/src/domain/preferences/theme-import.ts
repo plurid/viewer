@@ -6,13 +6,14 @@ import {
   type Theme,
 } from './themes';
 import { slugID } from '../ids';
+import type { Look } from '../contracts';
 
 const hex = (value: number) =>
   Math.round(Math.min(1, Math.max(0, value)) * 255)
     .toString(16)
     .padStart(2, '0');
 /** Light or dark, by the relative luminance of the background. */
-const lookOf = (color: string): 'dark' | 'light' => {
+const lookOf = (color: string): Look => {
   const [r, g, b] = [1, 3, 5].map((at) => parseInt(color.slice(at, at + 2), 16) / 255);
   return 0.2126 * r! + 0.7152 * g! + 0.0722 * b! > 0.5 ? 'light' : 'dark';
 };

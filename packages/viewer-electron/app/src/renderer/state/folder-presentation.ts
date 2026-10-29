@@ -1,5 +1,5 @@
 // Pure folder presentation: safe to use during bootstrap and configuration updates.
-import type { UIPreferences, Workspace } from '../../domain/contracts';
+import type { UIPreferences, Workspace, Look } from '../../domain/contracts';
 import type { ApplicationSettings } from '../../domain/services';
 import {
   resolveFolderPresentation,
@@ -12,7 +12,7 @@ export function scopedPresentation(
   settings: ApplicationSettings,
   ui: UIPreferences,
   space: Workspace,
-  options: { profileID?: string; systemLook?: 'dark' | 'light' } = {},
+  options: { profileID?: string; systemLook?: Look } = {},
 ): FolderPresentation {
   const effective = resolveWindowPreferences({
     settings,

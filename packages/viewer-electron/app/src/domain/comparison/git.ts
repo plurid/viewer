@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** A full Git object name: SHA-1 or SHA-256 hex. */
+export const commitPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
 export type GitStatus =
   'modified' | 'added' | 'deleted' | 'untracked' | 'conflict' | 'renamed' | 'copied';
 export interface GitChange {
@@ -32,7 +35,7 @@ export const gitSourceSchema = z
   .object({
     kind: z.literal('git'),
     repository: z.string().min(1).max(32768),
-    commit: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+    commit: z.string().regex(commitPattern),
     path: z.string().refine(gitRelativePath, 'Invalid repository path.'),
   })
   .strict();
@@ -75,7 +78,7 @@ export function parseGitStatus(output: string, root: string): GitSnapshot {
     if (row.startsWith('# branch.head ')) result.branch = row.slice(14);
     else if (row.startsWith('# branch.oid ')) {
       const oid = row.slice(13);
-      if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(oid)) result.commit = oid;
+      if (commitPattern.test(oid)) result.commit = oid;
       else if (oid !== '(initial)') throw new Error('Invalid Git commit identifier.');
     } else if (row.startsWith('# branch.ab ')) {
       const match = /^# branch.ab \+(\d+) -(\d+)$/.exec(row);

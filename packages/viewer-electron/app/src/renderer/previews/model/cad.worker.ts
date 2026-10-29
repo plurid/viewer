@@ -1,6 +1,7 @@
 import createOcct from 'occt-import-js';
 import wasmURL from 'occt-import-js/dist/occt-import-js.wasm?url';
 import { cadMeshes, type CadReply } from './cad-data';
+import { errorMessage } from '../../../domain/errors';
 
 // The worker is disposable: conversion, its WASM heap and source bytes leave together.
 self.onmessage = async (event: MessageEvent<{ buffer: ArrayBuffer; extension: string }>) => {
@@ -28,7 +29,7 @@ self.onmessage = async (event: MessageEvent<{ buffer: ArrayBuffer; extension: st
     });
   } catch (error) {
     self.postMessage({
-      error: (error as Error).message || 'This CAD file could not be read.',
+      error: errorMessage(error) || 'This CAD file could not be read.',
     } satisfies CadReply);
   }
 };

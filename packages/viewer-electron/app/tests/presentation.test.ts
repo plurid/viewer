@@ -18,7 +18,7 @@ import {
   resolveWindowPreferences,
   type WindowPreferencesInput,
 } from '../src/domain/preferences/presentation/resolver';
-import { profileSchema } from '../src/desktop/preferences/settings';
+import { profileSchema } from '../src/desktop/preferences/settings-schema';
 
 function input(values: Record<string, JSONValue> = {}): WindowPreferencesInput {
   return {

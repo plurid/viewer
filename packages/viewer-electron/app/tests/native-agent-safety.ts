@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences/ui';
-import { settingsSchema } from '../src/desktop/preferences/settings';
+import { settingsSchema } from '../src/desktop/preferences/settings-schema';
 import type { AgentClientReply } from '../src/domain/agents/clients';
 import type { AgentProposal } from '../src/domain/agents/requests';
 import type { CustomAction } from '../src/domain/automation/actions';

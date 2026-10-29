@@ -2,6 +2,7 @@ import { basketEntries, addToBasket, saveCollection } from '../../state/store';
 import { sourceVersion } from '../../../domain/files/inspection';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
+import { sendWindowEvent } from '../../app/window-events';
 
 /** File tools, inspection dialogs and action tasks. */
 export function toolsCommands({
@@ -45,9 +46,7 @@ export function toolsCommands({
           : context.path
             ? [context.path]
             : [];
-        window.dispatchEvent(
-          new CustomEvent('viewer:relationships', { detail: { paths, paneID: context.paneID } }),
-        );
+        sendWindowEvent('viewer:relationships', { paths, paneID: context.paneID });
       },
     },
     {
@@ -59,18 +58,11 @@ export function toolsCommands({
       when: (context) => !['workspace', 'sidebar'].includes(context.scope),
       run: (context) => {
         const [only] = context.selection;
-        window.dispatchEvent(
-          new CustomEvent('viewer:workflows', {
-            detail: {
-              context,
-              ...(context.selection.length === 1 &&
-              only &&
-              /(?:^|\.)workflow\.jsonc$/.test(only.name)
-                ? { file: only.path }
-                : {}),
-            },
-          }),
-        );
+        const file =
+          context.selection.length === 1 && only && /(?:^|\.)workflow\.jsonc$/.test(only.name)
+            ? only.path
+            : undefined;
+        sendWindowEvent('viewer:workflows', { context, file });
       },
     },
     {
@@ -92,7 +84,7 @@ export function toolsCommands({
       aliases: ['collection', 'basket', 'virtual folder'],
       when: windowScope,
       run: () => {
-        window.dispatchEvent(new Event('viewer:collections'));
+        sendWindowEvent('viewer:collections');
       },
     },
     {
@@ -156,10 +148,9 @@ export function toolsCommands({
         (!!context.directory || context.selection.some((file) => file.directory)),
       run: (context) => {
         const folders = context.selection.filter((file) => file.directory).map((file) => file.path);
-        window.dispatchEvent(
-          new CustomEvent('viewer:duplicates', {
-            detail: folders.length ? folders : context.directory ? [context.directory] : [],
-          }),
+        sendWindowEvent(
+          'viewer:duplicates',
+          folders.length ? folders : context.directory ? [context.directory] : [],
         );
       },
     },
@@ -171,15 +162,13 @@ export function toolsCommands({
       aliases: ['compare folders', 'diff', 'reconcile'],
       when: (context) => !['workspace', 'sidebar'].includes(context.scope),
       run: (context) => {
-        window.dispatchEvent(
-          new CustomEvent('viewer:compare', {
-            detail:
-              context.selection.length === 2
-                ? context.selection.map((file) => file.path)
-                : context.directory
-                  ? [context.directory]
-                  : [],
-          }),
+        sendWindowEvent(
+          'viewer:compare',
+          context.selection.length === 2
+            ? context.selection.map((file) => file.path)
+            : context.directory
+              ? [context.directory]
+              : [],
         );
       },
     },
@@ -191,7 +180,7 @@ export function toolsCommands({
       aliases: ['recovery', 'snapshots', 'restore checkpoint'],
       when: windowScope,
       run: () => {
-        window.dispatchEvent(new Event('viewer:checkpoints'));
+        sendWindowEvent('viewer:checkpoints');
       },
     },
     {
@@ -203,11 +192,8 @@ export function toolsCommands({
       when: (context) =>
         context.selection.length === 1 || (context.scope === 'preview' && !!context.path),
       run: (context) => {
-        window.dispatchEvent(
-          new CustomEvent('viewer:inspect', {
-            detail: context.selection[0]?.path || context.path,
-          }),
-        );
+        const path = context.selection[0]?.path || context.path;
+        if (path) sendWindowEvent('viewer:inspect', path);
       },
     },
     {
@@ -218,7 +204,7 @@ export function toolsCommands({
       aliases: ['annotate', 'notes'],
       when: paneScope,
       run: (context) => {
-        window.dispatchEvent(new CustomEvent('viewer:notes', { detail: context.paneID }));
+        if (context.paneID) sendWindowEvent('viewer:notes', context.paneID);
       },
     },
   ];
@@ -230,7 +216,7 @@ export function toolsCommands({
     aliases: ['history', 'proposals'],
     when: windowScope,
     run: () => {
-      window.dispatchEvent(new Event('viewer:tasks'));
+      sendWindowEvent('viewer:tasks');
     },
   });
   return commands;

@@ -1,5 +1,4 @@
 import { runGit, type GitRunner } from './git-process';
-export { runGit, gitEnvironment, gitSafeOptions, type GitRunner } from './git-process';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { runGitInspection } from './git-inspection';
@@ -11,7 +10,10 @@ import {
   type GitResult,
   type GitSource,
   type GitSnapshot,
+  commitPattern,
 } from '../../domain/comparison/git';
+import { errorMessage } from '../../domain/errors';
+export { runGit, gitEnvironment, gitSafeOptions, type GitRunner } from './git-process';
 
 const maximumStatus = 8 * 1024 * 1024;
 
@@ -186,7 +188,7 @@ export class GitReader {
         if (this.pending.get(actual) === scan) this.pending.delete(actual);
       }
     } catch (error) {
-      const message = (error as Error).message;
+      const message = errorMessage(error);
       return {
         kind: /not a git repository/i.test(message)
           ? 'outside'
@@ -215,8 +217,7 @@ export class GitReader {
         ),
       )
       .trim();
-    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit))
-      throw new Error('Git returned an invalid base commit.');
+    if (!commitPattern.test(commit)) throw new Error('Git returned an invalid base commit.');
     const patch = new TextDecoder('utf-8', { fatal: true }).decode(
       await this.run(
         root,
@@ -274,7 +275,7 @@ export class GitReader {
         !ref?.startsWith('refs/heads/') ||
         !commit ||
         extra !== undefined ||
-        !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)
+        !commitPattern.test(commit)
       )
         throw new Error('Git returned an invalid local branch.');
       return { name: ref.slice(11), commit };

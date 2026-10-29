@@ -28,7 +28,7 @@ export function configChanges(
   return [{ keys, value: after }];
 }
 /** The properties `after` has and `before` lacks, as dotted paths. */
-export function addedPaths(before: unknown, after: unknown, keys: string[] = []): string[] {
+function addedPaths(before: unknown, after: unknown, keys: string[] = []): string[] {
   if (!plain(after)) return [];
   return Object.keys(after).flatMap((key) =>
     !plain(before) || !(key in before)

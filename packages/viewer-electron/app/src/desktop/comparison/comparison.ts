@@ -10,6 +10,7 @@ import {
 } from '../../domain/comparison/folders';
 import { sourceVersion, sameSourceVersion } from '../../domain/files/inspection';
 import type { FileEntry } from '../../domain/contracts';
+import { errorMessage } from '../../domain/errors';
 /** Bounded traversal never follows child symlinks or presents offline paths as equal. */
 export class Comparisons {
   private running = new Map<string, AbortController>();
@@ -88,14 +89,14 @@ export class Comparisons {
                   incomplete.add(root);
                 }
               } catch (error) {
-                result.errors.push({ path: child, message: (error as Error).message });
+                result.errors.push({ path: child, message: errorMessage(error) });
                 result.coverage = 'partial';
                 incomplete.add(root);
               }
             }
           } catch (error) {
             abort.signal.throwIfAborted();
-            result.errors.push({ path: file, message: (error as Error).message });
+            result.errors.push({ path: file, message: errorMessage(error) });
             result.coverage = 'partial';
             incomplete.add(root);
           }
@@ -124,7 +125,7 @@ export class Comparisons {
               'Symlinks, special files or unavailable content require separate inspection.';
         } catch (error) {
           abort.signal.throwIfAborted();
-          row.reason = (error as Error).message;
+          row.reason = errorMessage(error);
           result.coverage = 'partial';
         }
         if (

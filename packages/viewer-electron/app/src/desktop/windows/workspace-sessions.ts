@@ -1,13 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { boundPreviewHistory } from '../../domain/previews/history';
 import { CURRENT_STATE_VERSION, type SavedState, type Workspace } from '../../domain/contracts';
+import { sameJSON } from '../../domain/json';
 
 interface Session {
   workspaceID: string;
   baseline: SavedState;
 }
-
-const equal = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
 /** The parts of a saved state shared between windows: what a merge can change for the sender. */
 const shared = (state: SavedState) => ({
@@ -18,7 +17,7 @@ const shared = (state: SavedState) => ({
 });
 /** Whether the merged state holds anything the saving window did not send. */
 export function mergeChanged(sent: SavedState, merged: SavedState): boolean {
-  return !equal(shared(sent), shared(merged));
+  return !sameJSON(shared(sent), shared(merged));
 }
 
 /** Native windows own workspaces; a stale whole-window snapshot never replaces another owner. */
@@ -203,7 +202,7 @@ export class WorkspaceSessions {
     for (const space of input.workspaces) {
       const other = this.owner(space.id);
       if (other !== undefined && other !== owner) continue;
-      if (!equal(space, previous.get(space.id))) next.set(space.id, structuredClone(space));
+      if (!sameJSON(space, previous.get(space.id))) next.set(space.id, structuredClone(space));
     }
     for (const id of previous.keys()) {
       if (incoming.has(id)) continue;
@@ -220,7 +219,7 @@ export class WorkspaceSessions {
     };
     // Shared lists merge only this window's changes, retaining unrelated additions and removals.
     for (const key of ['favorites', 'recents', 'lineHistory'] as const) {
-      if (equal(input[key], baseline[key])) continue;
+      if (sameJSON(input[key], baseline[key])) continue;
       const identity = (value: unknown) =>
         typeof value === 'string' ? value : (value as { path: string }).path;
       const old = new Set((baseline[key] ?? []).map(identity));
@@ -240,7 +239,7 @@ export class WorkspaceSessions {
     const visits = { ...merged.visits };
     for (const [path, visit] of Object.entries(input.visits ?? {})) {
       const previous = baseline.visits?.[path];
-      if (equal(previous, visit)) continue;
+      if (sameJSON(previous, visit)) continue;
       visits[path] = {
         count: (visits[path]?.count ?? 0) + Math.max(0, visit.count - (previous?.count ?? 0)),
         last: Math.max(visits[path]?.last ?? 0, visit.last),
@@ -261,7 +260,7 @@ export class WorkspaceSessions {
     merged.previewStates = previewStates;
     const previewHistory = { ...merged.previewHistory };
     for (const [workspace, entries] of Object.entries(input.previewHistory ?? {})) {
-      if (equal(entries, baseline.previewHistory?.[workspace])) continue;
+      if (sameJSON(entries, baseline.previewHistory?.[workspace])) continue;
       const other = this.owner(workspace);
       if (next.has(workspace) && (other === undefined || other === owner))
         previewHistory[workspace] = entries;

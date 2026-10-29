@@ -26,8 +26,9 @@ A **plane** is a view record. Its engine route, framing and geometry belong to
 is scoped to that root. Keep engine IDs inside the adapter.
 
 Content-plane opening and reuse live in `src/renderer/workspace/content-planes.ts`; asynchronous
-results keep their originating workspace. Git IPC dispatch lives in
-`src/desktop/ipc/git-handlers.ts`, with sender validation still owned by the desktop bridge.
+results keep their originating workspace. IPC dispatch lives in feature groups,
+`src/desktop/ipc/*-handlers.ts`, each given only the services it needs. The desktop bridge still
+validates the sender and window role, and owns window records and root quiescence.
 
 An **explorer session** owns selection, cursor, range anchor, scroll and column trail. **Folder
 presentation** is shared by path and owns view/sort/column choices. Navigation and operation

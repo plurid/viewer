@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { ModelProvider } from '../../domain/services';
+import type { ModelProvider, RequestActor } from '../../domain/services';
 import {
   providerModelID,
   providerPresets,
@@ -287,7 +287,7 @@ export class Providers {
     schema: Record<string, unknown>,
     signal: AbortSignal,
     level: ModelDataLevel = 'full-text',
-    actor: 'user' | 'agent' = 'user',
+    actor: RequestActor = 'user',
   ): Promise<unknown> {
     this.endpoint(provider, providerPresets[provider.kind].protocol);
     if (!this.permissions) throw new ModelPermissionRequired();

@@ -1,7 +1,13 @@
 import type { EvidenceNavigation } from '../../domain/files/inspection';
 import type { DocumentData } from '../../domain/services';
 import type { ComponentType } from 'react';
-import type { ArchiveListing, FileEntry, Resource, ResourceRead } from '../../domain/contracts';
+import type {
+  ArchiveListing,
+  FileEntry,
+  Resource,
+  ResourceRead,
+  Look,
+} from '../../domain/contracts';
 import type { HtmlPreview } from '../../domain/previews/web';
 import type {
   WorksheetDocumentRequest,
@@ -29,7 +35,7 @@ export interface PreviewContext {
   active: boolean;
   interactive: boolean;
   signal: AbortSignal;
-  look: 'dark' | 'light';
+  look: Look;
   commands?: { header?: HTMLElement; register(commands: readonly PreviewCommand[]): () => void };
   /** A workspace preview plane's own: its text may be edited where it is. Quick
    * Preview and folder galleries pass none. */

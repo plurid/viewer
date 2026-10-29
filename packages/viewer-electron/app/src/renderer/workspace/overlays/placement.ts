@@ -1,6 +1,6 @@
-export const overviewInset = 16;
-export const overviewClearance = 8;
-export const overviewCorners = ['top-right', 'bottom-left', 'top-left', 'bottom-right'] as const;
+const overviewInset = 16;
+const overviewClearance = 8;
+const overviewCorners = ['top-right', 'bottom-left', 'top-left', 'bottom-right'] as const;
 
 export type OverviewCorner = (typeof overviewCorners)[number];
 

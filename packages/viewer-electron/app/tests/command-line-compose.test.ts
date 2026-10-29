@@ -31,7 +31,7 @@ import {
   initialize,
   receiveSettings,
 } from '../src/renderer/state/store';
-import { importChanges } from '../src/desktop/preferences/settings';
+import { importChanges } from '../src/desktop/preferences/import-changes';
 import { defaultSettings } from '../src/domain/services';
 import type { CustomAction } from '../src/domain/automation/actions';
 

@@ -9,6 +9,7 @@ import { reviewOperationPlan } from '../ui/operations/OperationReview';
 import { useWorkspace } from '../workspace/context';
 import { chatDraft, flushChatDraft, keepChatDraft } from './drafts';
 import { messageAuthor } from './presentation';
+import { sendWindowEvent } from '../app/window-events';
 
 const draftDelay = 250;
 
@@ -140,7 +141,7 @@ export function useConversation(pane: ChatPane) {
         if (proposal.kind === 'operation') {
           const plan = await window.viewer.operationPlan({ kind: 'get', id: proposal.id });
           if (!Array.isArray(plan)) reviewOperationPlan(plan);
-        } else window.dispatchEvent(new Event('viewer:agent-review'));
+        } else sendWindowEvent('viewer:agent-review');
       }),
     [run],
   );

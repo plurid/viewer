@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { defaultShortcuts, matchesShortcut } from '../../domain/preferences/shortcuts';
 import { activeWorkspace, useViewer } from '../state/store';
 import { DictationDialog } from './DictationDialog';
+import { onWindowEvent } from '../app/window-events';
 
 export function SpeechControls({ onUse }: { onUse(text: string): void }) {
   const shortcut = useViewer(
@@ -42,12 +43,12 @@ export function SpeechControls({ onUse }: { onUse(text: string): void }) {
     };
     window.addEventListener('keydown', down, true);
     window.addEventListener('keyup', up, true);
-    window.addEventListener('viewer:dictate', invoke);
+    const stopDictate = onWindowEvent('viewer:dictate', invoke);
     window.addEventListener('blur', blur);
     return () => {
       window.removeEventListener('keydown', down, true);
       window.removeEventListener('keyup', up, true);
-      window.removeEventListener('viewer:dictate', invoke);
+      stopDictate();
       window.removeEventListener('blur', blur);
     };
   }, [shortcut]);

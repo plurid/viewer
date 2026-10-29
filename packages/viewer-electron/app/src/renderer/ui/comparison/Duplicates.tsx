@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { DuplicateGroup, DuplicateResult } from '../../../domain/comparison/duplicates';
 import { sourceVersion } from '../../../domain/files/inspection';
 import { formatBytes } from '../../../domain/files/entries';
 import { Dialog, Loading } from '../primitives';
 import { prepareOperationReview } from '../operations/OperationReview';
+import { errorMessage } from '../../../domain/errors';
+import { useWindowEvent } from '../../app/window-events';
 
 const page = 100;
 const reclaimable = (groups: readonly DuplicateGroup[], chosen?: ReadonlySet<string>) =>
@@ -27,19 +29,14 @@ export function DuplicateControls() {
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [shown, setShown] = useState(page);
   const [error, setError] = useState('');
-  useEffect(() => {
-    const show = (event: Event) => {
-      const folders = (event as CustomEvent<string[]>).detail ?? [];
-      setRoots(folders);
-      setResult(undefined);
-      setChosen(new Set());
-      setShown(page);
-      setError('');
-      setOpen(true);
-    };
-    window.addEventListener('viewer:duplicates', show);
-    return () => window.removeEventListener('viewer:duplicates', show);
-  }, []);
+  useWindowEvent('viewer:duplicates', (folders) => {
+    setRoots(folders);
+    setResult(undefined);
+    setChosen(new Set());
+    setShown(page);
+    setError('');
+    setOpen(true);
+  });
   if (!open) return null;
   const close = () => {
     if (running) void window.viewer.duplicates({ kind: 'cancel', id: running });
@@ -55,7 +52,7 @@ export function DuplicateControls() {
       const value = await window.viewer.duplicates({ kind: 'run', id, roots });
       if (value) setResult(value);
     } catch (value) {
-      setError((value as Error).message);
+      setError(errorMessage(value));
     } finally {
       setRunning('');
     }
@@ -93,7 +90,7 @@ export function DuplicateControls() {
       ]);
       setOpen(false);
     } catch (value) {
-      setError((value as Error).message);
+      setError(errorMessage(value));
     }
   };
   return (

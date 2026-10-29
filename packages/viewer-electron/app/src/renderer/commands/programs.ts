@@ -22,6 +22,7 @@ import {
   type ImageExportPreset,
   type PDFExportPreset,
 } from '../../domain/operations/export-presets';
+import { sendWindowEvent } from '../app/window-events';
 export { captureTarget } from './target';
 export interface ProgramTools {
   showTasks?(target?: ReturnType<typeof captureTarget>): void;
@@ -215,7 +216,7 @@ export function programCommands(
       aliases: ['running commands', 'command output', 'background commands'],
       when: () => true,
       run: () => {
-        window.dispatchEvent(new Event('viewer:command-progress'));
+        sendWindowEvent('viewer:command-progress');
       },
     },
     {

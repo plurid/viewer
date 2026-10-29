@@ -2,7 +2,7 @@ import { projectDefinitionSchema, type ProjectDefinition } from '../../domain/wo
 import { DefinitionFiles, decodeDefinition } from '../persistence/definition-files';
 import { fileCoordination } from '../files/file-coordination';
 
-export const projectComments =
+const projectComments =
   [
     '// Viewer project, version 1. Save Project writes this file only when requested.',
     '// Paths are relative to this file. Moving the whole folder preserves them.',

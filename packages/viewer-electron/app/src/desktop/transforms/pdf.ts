@@ -114,7 +114,7 @@ export async function inspectPDF(
 }
 
 /** JPEG dimensions are read from its frame header, never guessed from a PDF dictionary. */
-export function jpegFrame(
+function jpegFrame(
   bytes: Buffer,
 ): { width: number; height: number; components: number } | undefined {
   if (bytes.length < 4 || bytes.readUInt16BE(0) !== 0xffd8) return;

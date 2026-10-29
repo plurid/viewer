@@ -21,6 +21,7 @@ import { TrashMenu } from './TrashMenu';
 import { TrashPreview } from './TrashPreview';
 import { TrashInformation } from './TrashInformation';
 import { trashMenuActions } from './menu-actions';
+import { errorMessage } from '../../../domain/errors';
 
 export function Trash({ onClose }: { onClose(): void }) {
   const workspace = useWorkspace();
@@ -81,7 +82,7 @@ export function Trash({ onClose }: { onClose(): void }) {
       }
     } catch (error) {
       if (live.current && requested === folder.current) {
-        setError((error as Error).message);
+        setError(errorMessage(error));
         setSnapshot(undefined);
       }
     } finally {
@@ -164,7 +165,7 @@ export function Trash({ onClose }: { onClose(): void }) {
     try {
       await work();
     } catch (error) {
-      if (live.current) setActionError((error as Error).message);
+      if (live.current) setActionError(errorMessage(error));
     } finally {
       await refresh();
       if (live.current) setBusy(false);

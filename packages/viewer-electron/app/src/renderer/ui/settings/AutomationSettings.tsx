@@ -14,6 +14,7 @@ import {
   terminalProfilesEdit,
   type SettingsChange,
 } from './settings-edits';
+import { defaultSettings } from '../../../domain/services';
 interface Props {
   snapshot: SettingsSnapshot;
   save(patches: SettingsPatch[]): void;
@@ -688,7 +689,6 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
     </>
   );
 }
-import { defaultSettings } from '../../../domain/services';
 export function FolderOverrideSettings({ snapshot, save }: Props) {
   const folders = snapshot.settings.folders;
   const count = Object.keys(folders).length;

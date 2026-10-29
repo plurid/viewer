@@ -17,6 +17,3 @@ export function pathMapper(changes: readonly FileChange[]): (value: string) => s
     return value;
   };
 }
-export function remapPath(value: string, changes: readonly FileChange[]): string {
-  return pathMapper(changes)(value);
-}

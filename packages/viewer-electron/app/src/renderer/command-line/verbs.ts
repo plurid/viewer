@@ -37,6 +37,7 @@ import { activeWorkspace, addPane, addRootFolder, getState, navigate } from '../
 import { renameWorkspace, setWorkspaceOverride } from '../state/workspaces';
 import { Stopped, type LineHost } from './host';
 import { taskLineDraft } from '../../domain/command-line/task';
+import { sendWindowEvent } from '../app/window-events';
 
 export interface VerbInput {
   step: Step;
@@ -184,15 +185,11 @@ async function setSettings(words: Word[], host: LineHost, local: boolean): Promi
 export const verbRuns: Record<string, VerbRun> = {
   'task-new': async ({ step }, host) => {
     const draft = taskLineDraft(step.words, (word) => pathOf(word, host));
-    window.dispatchEvent(
-      new CustomEvent('viewer:task-request', {
-        detail: {
-          ...draft,
-          repo: draft.repo ?? places(host).folder,
-          workspace: draft.workspace ?? activeWorkspace().id,
-        },
-      }),
-    );
+    sendWindowEvent('viewer:task-request', {
+      ...draft,
+      repo: draft.repo ?? places(host).folder,
+      workspace: draft.workspace ?? activeWorkspace().id,
+    });
   },
   quit: async ({ bang }, host) => closing(closePlanes(host.workspace, [activeID(host)], bang)),
   qall: async ({ bang }, host) =>

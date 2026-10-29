@@ -23,6 +23,8 @@ import { Loading, Empty } from '../ui/primitives';
 import { isPackage, sortEntries } from '../../domain/files/entries';
 import { nativeOpening } from './opening';
 import { useContextPublish } from './context-publish';
+import { errorMessage } from '../../domain/errors';
+import { onWindowEvent } from '../app/window-events';
 export function CollectionExplorer({ id }: { id: string }) {
   const active = useViewer((state) => state.activePane);
   const pane = useViewer((state) => activeWorkspace(state).panes.find((pane) => pane.id === id)) as
@@ -75,7 +77,7 @@ export function CollectionExplorer({ id }: { id: string }) {
               try {
                 items.push(await window.viewer.stat(file));
               } catch (error) {
-                errors.push(file + ': ' + (error as Error).message);
+                errors.push(file + ': ' + errorMessage(error));
               }
             }
           }),
@@ -121,11 +123,11 @@ export function CollectionExplorer({ id }: { id: string }) {
     const stop = window.viewer.onEvent((event) => {
       if (event.type === 'index') again();
     });
-    window.addEventListener('viewer:refresh', again);
+    const stopRefresh = onWindowEvent('viewer:refresh', again);
     return () => {
       clearTimeout(timer);
       stop();
-      window.removeEventListener('viewer:refresh', again);
+      stopRefresh();
     };
   }, [live]);
   const selected = useMemo(

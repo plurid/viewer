@@ -28,3 +28,28 @@ describe('type import policy', () => {
     expect(declared?.messages).toEqual([]);
   });
 });
+
+describe('import order', () => {
+  const filePath = 'src/domain/import-policy-fixture.ts';
+
+  it('refuses an import after other statements', async () => {
+    const [late] = await eslint.lintText(
+      'import { a } from "./a"; export const b = a; import { c } from "./c"; export const d = c;',
+      { filePath },
+    );
+    expect(late?.messages).toContainEqual(
+      expect.objectContaining({
+        ruleId: 'no-restricted-syntax',
+        message: 'Place imports before other statements.',
+      }),
+    );
+  });
+
+  it('allows re-exports among the imports', async () => {
+    const [ordered] = await eslint.lintText(
+      'import { a } from "./a"; export { e } from "./e"; import { c } from "./c"; export const d = [a, c];',
+      { filePath },
+    );
+    expect(ordered?.messages).toEqual([]);
+  });
+});

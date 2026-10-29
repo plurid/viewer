@@ -3,7 +3,6 @@ import {
   compilePresentationValues,
   presentationPath,
   presentationPaths,
-  type PresentationPath,
   type PresentationValues,
 } from './presentation/profile-fields';
 import { applyPresentationValues } from './presentation/resolver';
@@ -21,7 +20,6 @@ export const workspaceLookPaths = [
   'ui.space.backdropOpacity',
 ] as const;
 export const overridablePaths = presentationPaths;
-export type OverridablePath = PresentationPath;
 export type WorkspaceOverrides = PresentationValues;
 export const overridable = presentationPath;
 

@@ -36,7 +36,6 @@ import { Empty } from '../ui/primitives';
 import { Sidebar } from '../ui/navigation/Sidebar';
 import { PlaneHeader } from './PlaneHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
-export { frameWorkspace } from './framing';
 import { focusFiles } from './sessions';
 import { applyTiling } from './tiling';
 import { useWorkspace } from './context';
@@ -46,6 +45,7 @@ import { routeFileKeyboard } from '../explorer/selection';
 import { flattenTree, hostID } from './tree';
 import { allowTerminalStart, terminalStartDeferred } from '../terminals/sessions';
 import { paneRoute } from './tree';
+export { frameWorkspace } from './framing';
 export { flattenTree, hostID } from './tree';
 const FolderScene = memo(function FolderScene({ id }: { id: string }) {
   return (

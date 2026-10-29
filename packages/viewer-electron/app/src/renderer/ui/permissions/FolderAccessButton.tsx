@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { report } from '../../state/store';
+import { requestRefresh } from '../../state/refresh';
 
 export { needsFolderAccess } from '../../../domain/files/access';
 
@@ -20,7 +21,7 @@ export function FolderAccessButton({
           .chooseFolder(folder)
           .then((selected) => {
             if (selected) {
-              window.dispatchEvent(new Event('viewer:refresh'));
+              requestRefresh();
               onGranted?.(selected);
             }
           })

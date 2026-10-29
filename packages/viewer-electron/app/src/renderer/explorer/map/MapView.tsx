@@ -139,7 +139,9 @@ export const MapView = memo(function MapView({
     // Restore once per folder; measuring follows scrolling and zoom below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  useEffect(measure, [zoom, layout]); // eslint-disable-line react-hooks/exhaustive-deps
+  // `measure` reads the scroll element at this zoom; a new layout changes what it sees
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(measure, [zoom, layout]);
   const latest = useRef({ measure, zoomTo: (_value: number, _anchor?: Point) => {}, zoom });
   const zoomTo = (next: number, anchor?: Point) => {
     const element = scroll.current;

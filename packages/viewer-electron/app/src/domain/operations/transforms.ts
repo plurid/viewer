@@ -179,14 +179,63 @@ export function validateTransform(value: unknown, sources: number): TransformPla
   }
   return plan;
 }
+/** A plan in words, for review: its parts joined by ` · `. */
 export function transformDescription(plan: TransformPlan): string {
-  if (plan.kind === 'pdf-pages')
-    return `PDF · ${plan.pages.length} pages in order: ${plan.pages.map((page) => `${page.source + 1}:${page.page}${page.rotate ? ` (+${page.rotate}°)` : ''}`).join(', ')} · creates a new document; bookmarks, forms and document tags are not retained`;
+  return transformParts(plan).join(' · ');
+}
+function transformParts(plan: TransformPlan): string[] {
+  if (plan.kind === 'pdf-pages') {
+    const pages = plan.pages.map(
+      (page) => `${page.source + 1}:${page.page}` + (page.rotate ? ` (+${page.rotate}°)` : ''),
+    );
+    return [
+      'PDF',
+      `${plan.pages.length} pages in order: ${pages.join(', ')}`,
+      'creates a new document; bookmarks, forms and document tags are not retained',
+    ];
+  }
   if (plan.kind === 'pdf')
-    return `Optimize PDF · ${plan.preset === 'lossless' ? 'lossless structure compression' : plan.preset + ' image compression'}${plan.recompressImages ? ` · recompress compatible JPEG scans, maximum edge ${plan.maxImageEdge}px` : ''} · preserve searchable text and vector pages · save only if smaller`;
+    return [
+      'Optimize PDF',
+      plan.preset === 'lossless'
+        ? 'lossless structure compression'
+        : plan.preset + ' image compression',
+      ...(plan.recompressImages
+        ? [`recompress compatible JPEG scans, maximum edge ${plan.maxImageEdge}px`]
+        : []),
+      'preserve searchable text and vector pages',
+      'save only if smaller',
+    ];
   if (plan.kind === 'image')
-    return `${plan.format.toUpperCase()} · ${[plan.width, plan.height].some(Boolean) ? `${plan.width || 'auto'} × ${plan.height || 'auto'}` : 'original size'}${plan.crop ? ` · crop ${plan.crop.width} × ${plan.crop.height} at ${plan.crop.x}, ${plan.crop.y}` : ''}${plan.rotate ? ` · rotate ${plan.rotate}°` : ''} · ${plan.metadata === 'safe' ? 'keep color and credit, remove GPS' : plan.metadata === 'strip' ? 'remove metadata' : 'keep all metadata including location'}`;
-  return `${plan.format.toUpperCase()} · ${plan.segments.map((segment) => `source ${segment.source + 1}: ${mediaTime(segment.start)}–${mediaTime(segment.end)}`).join(', ')} · ${plan.cut === 'exact' ? 'exact cuts' : 'fast keyframe cuts'} · audio ${plan.audio.mode}${plan.audio.source === undefined ? '' : ` from source ${plan.audio.source + 1}, offset ${plan.audio.offset}s, gain ${plan.audio.gain}`}`;
+    return [
+      plan.format.toUpperCase(),
+      [plan.width, plan.height].some(Boolean)
+        ? `${plan.width || 'auto'} × ${plan.height || 'auto'}`
+        : 'original size',
+      ...(plan.crop
+        ? [`crop ${plan.crop.width} × ${plan.crop.height} at ${plan.crop.x}, ${plan.crop.y}`]
+        : []),
+      ...(plan.rotate ? [`rotate ${plan.rotate}°`] : []),
+      plan.metadata === 'safe'
+        ? 'keep color and credit, remove GPS'
+        : plan.metadata === 'strip'
+          ? 'remove metadata'
+          : 'keep all metadata including location',
+    ];
+  const segments = plan.segments.map(
+    (segment) =>
+      `source ${segment.source + 1}: ${mediaTime(segment.start)}–${mediaTime(segment.end)}`,
+  );
+  const audioSource =
+    plan.audio.source === undefined
+      ? ''
+      : ` from source ${plan.audio.source + 1}, offset ${plan.audio.offset}s, gain ${plan.audio.gain}`;
+  return [
+    plan.format.toUpperCase(),
+    segments.join(', '),
+    plan.cut === 'exact' ? 'exact cuts' : 'fast keyframe cuts',
+    `audio ${plan.audio.mode}${audioSource}`,
+  ];
 }
 export const transformExtension = (format: TransformPlan['format']) =>
   format === 'jpeg' ? 'jpg' : format;

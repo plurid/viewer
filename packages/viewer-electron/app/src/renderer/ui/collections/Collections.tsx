@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   activeWorkspace,
@@ -12,6 +12,8 @@ import { useWorkspace } from '../../workspace/context';
 import { Dialog, Loading } from '../primitives';
 import { prepareOperationReview } from '../operations/OperationReview';
 import type { Collection } from '../../../domain/workspaces/collections';
+import { errorMessage } from '../../../domain/errors';
+import { useWindowEvent } from '../../app/window-events';
 /** Every basket reference stays reachable, however many there are. */
 function BasketList({ paths, busy }: { paths: string[]; busy: boolean }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -60,21 +62,17 @@ export function CollectionControls() {
     [content, setContent] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  useEffect(() => {
-    const show = () => {
-      setOpen(true);
-      setError('');
-    };
-    window.addEventListener('viewer:collections', show);
-    return () => window.removeEventListener('viewer:collections', show);
-  }, []);
+  useWindowEvent('viewer:collections', () => {
+    setOpen(true);
+    setError('');
+  });
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
     setError('');
     try {
       await work();
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -169,7 +167,7 @@ export function CollectionControls() {
               try {
                 save('explicit');
               } catch (error) {
-                setError((error as Error).message);
+                setError(errorMessage(error));
               }
             }}
           >
@@ -216,7 +214,7 @@ export function CollectionControls() {
                 try {
                   save('query');
                 } catch (error) {
-                  setError((error as Error).message);
+                  setError(errorMessage(error));
                 }
               }}
             >

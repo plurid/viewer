@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { AgentNavigation, AgentProposal, ExecutionGrant } from '../../domain/agents/requests';
-import { isFinalProposalStatus } from '../../domain/agents/requests';
+import { isFinalProposalStatus, executionCapabilities } from '../../domain/agents/requests';
 import type { CapturedTarget, ExecutionTask } from '../../domain/automation/actions';
 import type { SettingsPatch } from '../../domain/services';
 import { DocumentStore } from '../persistence/document-store';
@@ -50,7 +50,7 @@ async function folderContents(root: string): Promise<{ items: number; bytes: num
   return { items, bytes };
 }
 /** Commands and configuration changes can alter files or later execution; navigation cannot. */
-export const needsNativeConfirmation = (proposal: AgentProposal) =>
+const needsNativeConfirmation = (proposal: AgentProposal) =>
   proposal.kind === 'command' ||
   proposal.kind === 'configuration' ||
   proposal.kind === 'speech' ||
@@ -109,7 +109,7 @@ export class AgentRequests {
             root: z.string(),
             chosen: z.string().optional(),
             fingerprint: z.string(),
-            capability: z.enum(['execute', 'terminal-read', 'terminal-write']),
+            capability: z.enum(executionCapabilities),
           }),
         )
         .parse(value),

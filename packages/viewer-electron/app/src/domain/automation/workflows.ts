@@ -4,6 +4,7 @@ import { sourceVersionSchema } from '../files/inspection';
 import type { DefinitionDocument } from '../definitions';
 import type { ActionContext } from '../services';
 import { transformPlanSchema } from '../operations/transforms';
+import { requestActors } from '../services';
 const id = z
   .string()
   .min(1)
@@ -181,7 +182,7 @@ export const workflowRunSchema = z
         rootID: z.string(),
         paneID: z.string(),
         sources: z.array(z.string()).max(2000),
-        actor: z.enum(['user', 'agent']),
+        actor: z.enum(requestActors),
         clientID: z.string().optional(),
         recursive: z.boolean().optional(),
       })

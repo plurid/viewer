@@ -5,6 +5,7 @@ import type { SettingsEditor } from './editor';
 import { ChoiceButton } from '../ChoiceMenu';
 import { ColorField } from '../ColorField';
 import { looks } from '../../workspace/look';
+import { errorMessage } from '../../../domain/errors';
 
 const toolbarIcons: Record<string, IconName> = {
   parent: 'parent-plane',
@@ -60,7 +61,7 @@ export function CatalogSettings({
             { path: 'settings.browsing.' + field, value: 'custom' },
           ]);
       })
-      .catch((error) => setError((error as Error).message));
+      .catch((error) => setError(errorMessage(error)));
   };
   return (
     <div className="settings-group">

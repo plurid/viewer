@@ -1,7 +1,8 @@
 import type { CSSProperties } from 'react';
+import type { Look } from '../../domain/contracts';
 
 /** Space colours that suit each appearance: quiet, so planes and their text stay the focus. */
-export const spaceSwatches = {
+const spaceSwatches = {
   dark: [
     ['Graphite', '#1e2024'],
     ['Midnight', '#141a24'],
@@ -38,7 +39,7 @@ export function ColorField({
   label: string;
   /** `#rrggbb`, or empty for the automatic colour. */
   value: string;
-  look: 'dark' | 'light';
+  look: Look;
   /** The automatic choice's name: "Automatic", "General colour". */
   automatic: string;
   /** What the automatic choice is now, shown on it and offered first by the picker. */

@@ -3,6 +3,7 @@ import type { Volume } from '../../../domain/files/volumes';
 import { formatBytes } from '../../../domain/files/entries';
 import { Dialog, IconButton, Loading } from '../primitives';
 import { Icon } from '../Icon';
+import { errorMessage } from '../../../domain/errors';
 export function Volumes({
   onClose,
   open,
@@ -25,7 +26,7 @@ export function Volumes({
         if (clearError) setError('');
       }
     } catch (value) {
-      if (live.current && ticket === sequence.current) setError((value as Error).message);
+      if (live.current && ticket === sequence.current) setError(errorMessage(value));
     } finally {
       if (live.current && ticket === sequence.current) setLoading(false);
     }
@@ -71,7 +72,7 @@ export function Volumes({
                   try {
                     if (await open(volume.path)) onClose();
                   } catch (value) {
-                    setError((value as Error).message);
+                    setError(errorMessage(value));
                   } finally {
                     setBusy('');
                   }
@@ -96,7 +97,7 @@ export function Volumes({
                       await window.viewer.volumeEject(volume.path);
                       await refresh(true);
                     } catch (value) {
-                      setError((value as Error).message);
+                      setError(errorMessage(value));
                     } finally {
                       setBusy('');
                     }

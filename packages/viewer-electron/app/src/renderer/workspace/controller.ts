@@ -54,6 +54,18 @@ import { taskController } from '../tasks/controller';
  * plane clicked from stayed active. Plurid's selection, for moving planes, is left as
  * it is. A plane just spawned is activated once it is in the tree.
  */
+/** Asks the engine to place a new plane as a child of `parentPlaneID`, without moving the camera. */
+function spawnChildPlane(
+  api: PluridApplicationHandle,
+  route: string,
+  parentPlaneID: string,
+  link?: string,
+): void {
+  api.pubsub.publish({
+    topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
+    data: { route, parentPlaneID, link, framing: 'none' },
+  });
+}
 function activatePlane(engine: RefObject<PluridApplicationHandle | null>, id: string): void {
   const until = performance.now() + 1500;
   const attempt = () => {
@@ -77,6 +89,12 @@ export function useWorkspaceController({
   readyRef: RefObject<boolean>;
 }): WorkspaceController {
   const pendingOwners = useRef(new Map<string, Map<string, string>>());
+  /** Records the root a spawning plane belongs to, until the engine has placed it. */
+  const ownPending = (workspaceID: string, paneID: string, root: string) => {
+    const pending = pendingOwners.current.get(workspaceID) ?? new Map<string, string>();
+    pendingOwners.current.set(workspaceID, pending);
+    pending.set(paneID, root);
+  };
   const serverStarts = useRef(new Map<string, Promise<void>>());
   const serverParents = useRef(new Map<string, { workspaceID: string; parentID: string }>());
   const waitForPlanes = useCallback(
@@ -128,15 +146,7 @@ export function useWorkspaceController({
         pendingOwners.current.set(space.id, pending);
         pending.set(pane.id, root ?? parentID!);
         try {
-          api.pubsub.publish({
-            topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
-            data: {
-              route: paneRoute(pane.type, pane.id),
-              parentPlaneID: parent.planeID,
-              link: '.plane-controls',
-              framing: 'none',
-            },
-          });
+          spawnChildPlane(api, paneRoute(pane.type, pane.id), parent.planeID, '.plane-controls');
         } catch (error) {
           pending.delete(pane.id);
           removePanes([pane.id]);
@@ -364,18 +374,8 @@ export function useWorkspaceController({
           profileID || getState().settings.settings.terminals.profileID,
           !parent,
         );
-        const pending = pendingOwners.current.get(target.workspaceID) || new Map<string, string>();
-        pendingOwners.current.set(target.workspaceID, pending);
-        pending.set(pane.id, parent ? target.rootID : pane.id);
-        if (parent)
-          api.pubsub.publish({
-            topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
-            data: {
-              route: paneRoute('terminal', pane.id),
-              parentPlaneID: parent.planeID,
-              framing: 'none',
-            },
-          });
+        ownPending(target.workspaceID, pane.id, parent ? target.rootID : pane.id);
+        if (parent) spawnChildPlane(api, paneRoute('terminal', pane.id), parent.planeID);
         frameWorkspace(engine, surface, [pane.id]);
       },
       async newGitAction(target, action) {
@@ -411,18 +411,8 @@ export function useWorkspaceController({
                 id,
                 gitAction: action.kind,
               });
-              const pending =
-                pendingOwners.current.get(captured.workspaceID) ?? new Map<string, string>();
-              pendingOwners.current.set(captured.workspaceID, pending);
-              pending.set(pane.id, captured.rootID);
-              api.pubsub.publish({
-                topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
-                data: {
-                  route: paneRoute('terminal', pane.id),
-                  parentPlaneID: parent.planeID,
-                  framing: 'none',
-                },
-              });
+              ownPending(captured.workspaceID, pane.id, captured.rootID);
+              spawnChildPlane(api, paneRoute('terminal', pane.id), parent.planeID);
               frameWorkspace(engine, surface, [pane.id]);
             } catch (error) {
               throw new Error(
@@ -516,23 +506,18 @@ export function useWorkspaceController({
                 );
           connectLocalServers();
           if (!existing) {
-            const owners = pendingOwners.current.get(space.id) ?? new Map<string, string>();
-            pendingOwners.current.set(space.id, owners);
-            owners.set(pane.id, captured.rootID);
+            ownPending(space.id, pane.id, captured.rootID);
             serverParents.current.set(pane.id, {
               workspaceID: space.id,
               parentID: captured.paneID,
             });
             try {
-              api.pubsub.publish({
-                topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
-                data: {
-                  route: paneRoute('server', pane.id),
-                  parentPlaneID: parent.planeID,
-                  link: captured.selection.length ? fileSelector(folder.path) : '.plane-controls',
-                  framing: 'none',
-                },
-              });
+              spawnChildPlane(
+                api,
+                paneRoute('server', pane.id),
+                parent.planeID,
+                captured.selection.length ? fileSelector(folder.path) : '.plane-controls',
+              );
             } catch (error) {
               removePanes([pane.id]);
               serverParents.current.delete(pane.id);
@@ -808,15 +793,12 @@ export function useWorkspaceController({
           continueEditing(pane.id, crypto.randomUUID());
         setActivePane(pane.id);
         if (api && linked) {
-          api.pubsub.publish({
-            topic: PLURID_PUBSUB_TOPIC.SPACE_SPAWN_PLANE,
-            data: {
-              route: paneRoute(entry.directory ? 'folder' : 'preview', pane.id),
-              parentPlaneID: parent!.planeID,
-              link: options?.link,
-              framing: 'none',
-            },
-          });
+          spawnChildPlane(
+            api,
+            paneRoute(entry.directory ? 'folder' : 'preview', pane.id),
+            parent!.planeID,
+            options?.link,
+          );
           const liveParent = flattenTree(api.tree.get()).find(
             (node) => hostID(node) === parentPaneID,
           );

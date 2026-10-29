@@ -4,6 +4,7 @@ import type { BrowserRequest, BrowserSnapshot } from '../../domain/previews/brow
 import { browserAddress } from '../../domain/previews/browser';
 import { errorMessage } from '../../domain/errors';
 import { sendEvent } from '../ipc/events';
+import { isolatedContent } from '../windows/web-content-policy';
 
 interface Page {
   owner: number;
@@ -129,11 +130,8 @@ export class BrowserPlanes {
       show: false,
       backgroundColor: '#ffffff',
       webPreferences: {
+        ...isolatedContent,
         session: this.profile(),
-        sandbox: true,
-        contextIsolation: true,
-        nodeIntegration: false,
-        webSecurity: true,
         spellcheck: true,
       },
     });
@@ -208,12 +206,9 @@ export class BrowserPlanes {
         height: request.height,
         backgroundColor: '#ffffff',
         webPreferences: {
+          ...isolatedContent,
           session: this.profile(),
           offscreen: { useSharedTexture: texture },
-          sandbox: true,
-          contextIsolation: true,
-          nodeIntegration: false,
-          webSecurity: true,
           backgroundThrottling: false,
           spellcheck: true,
         },

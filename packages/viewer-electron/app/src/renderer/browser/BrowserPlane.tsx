@@ -10,6 +10,7 @@ import { browserFrames } from './frames';
 import { connectBrowsers } from './runtime';
 import { WorkspaceContext } from '../workspace/context';
 import './browser.css';
+import { errorMessage } from '../../domain/errors';
 
 const modifiers = (event: {
   altKey: boolean;
@@ -135,6 +136,7 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
       void opening.current?.then(() =>
         command({ kind: 'navigate', id: pane.id, url: destination }),
       );
+    // only a server's start or move navigates; the page's own navigation changes `pane.url`
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server?.url, server?.state]);
   const local = (event: { clientX: number; clientY: number }) => {
@@ -157,7 +159,7 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
             setProblem('');
             void command({ kind: 'navigate', id: pane.id, url: destination });
           } catch (error) {
-            setProblem(String((error as Error).message));
+            setProblem(String(errorMessage(error)));
           }
         }}
       >

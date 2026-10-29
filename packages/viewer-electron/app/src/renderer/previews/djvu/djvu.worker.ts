@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import init, { WasmDocument } from 'djvu-rs';
 import { djvuLimits, type DjVuReply, type DjVuRequest } from './protocol';
+import { errorMessage } from '../../../domain/errors';
 
 // The decoder is memory-safe Rust compiled to WebAssembly, running in this worker of the
 // sandboxed renderer. The preview terminates the worker when it closes.
@@ -50,7 +51,7 @@ scope.onmessage = async ({ data }: MessageEvent<DjVuRequest>) => {
     reply({
       kind: 'error',
       id: data.id,
-      message: (error as Error).message || 'DjVu decoding failed.',
+      message: errorMessage(error) || 'DjVu decoding failed.',
     });
   }
 };

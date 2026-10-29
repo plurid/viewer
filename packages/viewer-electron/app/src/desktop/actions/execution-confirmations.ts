@@ -18,7 +18,7 @@ export const terminalConfirmation = ({
 }: Pick<TerminalProfile, 'executable' | 'args' | 'env'>): string =>
   fingerprint({ terminal: { executable, args, env } });
 /** The built-in login profile starts the person's own shell, which configuration cannot change. */
-export function loginShell(profile: TerminalProfile): boolean {
+function loginShell(profile: TerminalProfile): boolean {
   return (
     !profile.executable &&
     !Object.keys(profile.env).length &&
@@ -26,7 +26,7 @@ export function loginShell(profile: TerminalProfile): boolean {
   );
 }
 /** Describes exactly what a terminal profile starts, for a native confirmation. */
-export function terminalSummary(profile: TerminalProfile): Summary {
+function terminalSummary(profile: TerminalProfile): Summary {
   const command = [...environment(profile.env), profile.executable || '$SHELL', ...profile.args];
   return {
     title: `Start terminal profile “${profile.name}” for the first time?`,

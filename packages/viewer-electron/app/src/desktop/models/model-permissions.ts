@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { z } from 'zod';
-import type { ModelProvider } from '../../domain/services';
+import type { ModelProvider, RequestActor } from '../../domain/services';
 import { providerKinds } from '../../domain/models/providers';
 import {
   modelDataLevels,
@@ -29,7 +29,6 @@ const schema = z
       .max(128),
   })
   .strict();
-type RequestActor = 'user' | 'agent';
 type ActiveRequest = { provider: ModelProvider; actor: RequestActor };
 
 export class ModelPermissionRequired extends Error {

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { CheckpointRecord } from '../../../domain/operations/change-plan';
 import { formatBytes } from '../../../domain/files/entries';
 import { report, setOperationsOpen } from '../../state/store';
 import { Dialog, Loading } from '../primitives';
+import { useWindowEvent } from '../../app/window-events';
 export function CheckpointControls() {
   const [open, setOpen] = useState(false);
   const [records, setRecords] = useState<CheckpointRecord[]>();
@@ -16,15 +17,11 @@ export function CheckpointControls() {
       setUsage(formatBytes(reply.usedBytes) + ' of ' + formatBytes(reply.budgetBytes));
     }
   };
-  useEffect(() => {
-    const show = () => {
-      setOpen(true);
-      setError('');
-      void refresh().catch(report);
-    };
-    window.addEventListener('viewer:checkpoints', show);
-    return () => window.removeEventListener('viewer:checkpoints', show);
-  }, []);
+  useWindowEvent('viewer:checkpoints', () => {
+    setOpen(true);
+    setError('');
+    void refresh().catch(report);
+  });
   if (!open) return null;
   return (
     <Dialog title="Content checkpoints" onClose={() => !busy && setOpen(false)}>

@@ -5,6 +5,7 @@ import { copyPathCommand } from '../copy-path';
 import type { CommandDefinition } from '../registry';
 import { requestProject, type ProjectCommand } from '../../workspace/projects';
 import type { WindowScopes } from './scope';
+import { sendWindowEvent } from '../../app/window-events';
 
 /** Projects, opening places, the palette, settings and navigation chrome. */
 export function navigationCommands({
@@ -65,7 +66,7 @@ export function navigationCommands({
       aliases: ['disks', 'drives', 'eject', 'mounts'],
       when: () => state.bootstrap.platform === 'darwin',
       run: () => {
-        window.dispatchEvent(new Event('viewer:volumes'));
+        sendWindowEvent('viewer:volumes');
       },
     },
     {
@@ -141,7 +142,7 @@ export function navigationCommands({
       aliases: ['speech', 'voice', 'microphone', 'talk'],
       when: windowScope,
       run: () => {
-        window.dispatchEvent(new Event('viewer:dictate'));
+        sendWindowEvent('viewer:dictate');
       },
     },
     {

@@ -209,20 +209,6 @@
 .optimize-options .media-destination input {
   flex: 1;
 }
-.optimize-resize {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.optimize-resize label {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.optimize-resize input[type='number'] {
-  width: 90px;
-}
 .optimize-scan-options {
   display: grid;
   gap: 8px;

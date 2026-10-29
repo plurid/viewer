@@ -10,7 +10,7 @@ import type {
   OperationProgress,
   OperationRequest,
 } from '../../domain/contracts';
-import { absolute, exists, message, validName, entry } from '../files/filesystem';
+import { absolute, exists, validName, entry } from '../files/filesystem';
 import {
   sourceVersion,
   sameSourceVersion,
@@ -54,6 +54,7 @@ import {
   type TransferJob,
 } from './file-transfer';
 import { isActiveJob } from '../../domain/operations/jobs';
+import { errorMessage } from '../../domain/errors';
 
 interface UndoStep {
   from: string;
@@ -219,7 +220,7 @@ export class Operations {
     )
       .then(() => {})
       .catch((error) => {
-        throw new ReceiptFailure(message(error));
+        throw new ReceiptFailure(errorMessage(error));
       });
   }
   /** A finished job's log becomes one line; the uncompacted log stays valid on failure. */
@@ -570,7 +571,7 @@ export class Operations {
           task.intent = undefined;
         } catch (error) {
           failure = error;
-          job.errors.push({ path: file, message: message(error).slice(0, 4000) });
+          job.errors.push({ path: file, message: errorMessage(error).slice(0, 4000) });
         } finally {
           if (stage) await this.disposeStage(task, stage);
         }
@@ -892,7 +893,7 @@ export class Operations {
       task.job.errors.push({
         path: file,
         message:
-          `Moved to the Trash at ${receipt.path}, but Undo is unavailable: ${message(error)}`.slice(
+          `Moved to the Trash at ${receipt.path}, but Undo is unavailable: ${errorMessage(error)}`.slice(
             0,
             4000,
           ),
@@ -940,7 +941,7 @@ export class Operations {
     } catch (error) {
       if (replaced && !(await this.restoreReplaced(task, destination)))
         throw new Error(
-          `${message(error)} The replaced item is in the Trash; Undo in Recent file operations can restore it.`,
+          `${errorMessage(error)} The replaced item is in the Trash; Undo in Recent file operations can restore it.`,
         );
       throw error;
     }
@@ -1220,7 +1221,7 @@ export class Operations {
     try {
       kept = await stage.dispose();
     } catch (error) {
-      task.job.errors.push({ path: path.dirname(stage.file), message: message(error) });
+      task.job.errors.push({ path: path.dirname(stage.file), message: errorMessage(error) });
       return;
     }
     if (kept)
@@ -1579,7 +1580,7 @@ export class Operations {
             // original failure before those details, without reordering earlier items.
             job.errors.splice(priorErrors, 0, {
               path: source || request.destination!,
-              message: message(error).slice(0, 4000),
+              message: errorMessage(error).slice(0, 4000),
             });
             job.itemsDone++;
           }
@@ -1612,7 +1613,7 @@ export class Operations {
             path: task.job.current || task.job.destination || task.job.sources[0] || '',
             message:
               'Operation receipts could not be saved. Further file changes were stopped. ' +
-              message(error),
+              errorMessage(error),
           });
           task.job.recovery = task.intent ?? task.job.recovery;
           task.job.undoable = !!task.undo.length;

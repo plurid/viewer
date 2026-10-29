@@ -1,6 +1,7 @@
 import type { ViewerAPI } from '../../domain/contracts';
 import type { MediaDraft, MediaReply } from '../../domain/media/documents';
 import type { MediaTransform } from '../../domain/operations/transforms';
+import { errorMessage } from '../../domain/errors';
 interface Snapshot {
   draft?: MediaDraft;
   loading: boolean;
@@ -72,7 +73,7 @@ class DraftSession {
       if (request !== this.reloads) return;
       this.publish({
         loading: false,
-        error: String((error as Error).message || error),
+        error: String(errorMessage(error) || error),
         unavailable: true,
       });
     }
@@ -113,7 +114,7 @@ class DraftSession {
             error: undefined,
           });
         } catch (error) {
-          this.publish({ saving: false, error: String((error as Error).message || error) });
+          this.publish({ saving: false, error: String(errorMessage(error) || error) });
           throw error;
         }
       }

@@ -5,6 +5,8 @@ import { useWorkspace } from '../../workspace/context';
 import { Dialog, Loading } from '../primitives';
 import { RelationshipMap } from './RelationshipMap';
 import { relationshipBasis as basis } from './relationship-labels';
+import { errorMessage } from '../../../domain/errors';
+import { useWindowEvent } from '../../app/window-events';
 const filename = (path: string) => path.split('/').pop() ?? path;
 export function RelationshipControls() {
   const workspace = useWorkspace();
@@ -20,22 +22,17 @@ export function RelationshipControls() {
     [view, setView] = useState<'list' | 'map'>('list');
   const [target, setTarget] = useState(''),
     [note, setNote] = useState('');
-  useEffect(() => {
-    const show = (event: Event) => {
-      const detail = (event as CustomEvent<{ paths: string[]; paneID?: string }>).detail;
-      if (!detail?.paths[0]) return;
-      setFile(detail.paths[0]);
-      setTarget(detail.paths[1] ?? '');
-      setNote('');
-      setOrigin(detail.paneID);
-      setContent(false);
-      setPage(0);
-      setView('list');
-      setError('');
-    };
-    window.addEventListener('viewer:relationships', show);
-    return () => window.removeEventListener('viewer:relationships', show);
-  }, []);
+  useWindowEvent('viewer:relationships', ({ paths, paneID }) => {
+    if (!paths[0]) return;
+    setFile(paths[0]);
+    setTarget(paths[1] ?? '');
+    setNote('');
+    setOrigin(paneID);
+    setContent(false);
+    setPage(0);
+    setView('list');
+    setError('');
+  });
   useEffect(() => {
     if (!file) return;
     let alive = true;
@@ -65,7 +62,7 @@ export function RelationshipControls() {
     try {
       await work();
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setBusy(false);
     }

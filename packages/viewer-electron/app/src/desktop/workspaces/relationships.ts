@@ -18,6 +18,7 @@ import {
 import type { ActionPlan } from '../../domain/services';
 import type { WorkflowRun } from '../../domain/automation/workflows';
 import { resolveProjectPath } from '../../domain/workspaces/project';
+import { errorMessage } from '../../domain/errors';
 const noteSchema = z
   .array(
     fileRelationSchema.refine(
@@ -247,7 +248,7 @@ export class Relationships {
         files.push({
           path: target,
           status: 'unavailable',
-          reason: (error as Error).message.slice(0, 1000),
+          reason: errorMessage(error).slice(0, 1000),
         });
       }
     }

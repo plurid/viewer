@@ -1,4 +1,13 @@
+import type { WebPreferences } from 'electron';
 import { htmlCapability } from '../../domain/previews/html-address';
+
+/** Every window and page Viewer opens: sandboxed, isolated from its preload, without Node. */
+export const isolatedContent = {
+  sandbox: true,
+  contextIsolation: true,
+  nodeIntegration: false,
+  webSecurity: true,
+} as const satisfies WebPreferences;
 
 interface FrameLocation {
   readonly url: string;

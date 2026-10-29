@@ -44,14 +44,34 @@ restoration. Explorer session state and shared path-keyed folder presentation ha
 Input selection and camera input stay separate.
 
 `workspace/content-planes.ts` owns content-view reuse and checks asynchronous results against the
-captured workspace. It delegates placement to the workspace adapter. Desktop IPC groups, including
-`ipc/git-handlers.ts`, keep feature dispatch together; the bridge validates sender and window role
-before calling them. Git mutations still bind and validate the captured target before service entry.
+captured workspace. It delegates placement to the workspace adapter.
+
+Desktop IPC is grouped by feature in `desktop/ipc/*-handlers.ts`. Each group receives ports, the few
+services and bridge callbacks it uses, so its authority is visible in its signature. The bridge
+validates sender and window role before calling a group, and keeps what needs its private state:
+window records, bootstrap and save, published commands and context, and `quiesceRoot`. Native panels
+go through `desktop/native/dialogs.ts`, which grants access to exactly what was chosen. Git
+mutations still bind and validate the captured target before service entry.
 
 Views are not resources. Notes, task references and command receipts can outlive their views.
 Terminals and window-owned servers have different close behavior. Preview leases, decoders, browser
 guests and cancellation release their own work. Restoring a task or project never authorizes replay
 of commands or agent input.
+
+## Typed boundaries
+
+Each boundary has one typed definition that both sides use.
+
+- Parts of one renderer window signal each other through `renderer/app/window-events.ts`.
+  `WindowEvents` names each event and its detail. Send with `sendWindowEvent`; listen with
+  `useWindowEvent` or `onWindowEvent`.
+- A worker's requests form a method map (`WorkerMethods` in `desktop/workers/utility-client.ts`).
+  The client's `call` checks the arguments and types the reply; the worker narrows its
+  `WorkerRequest` by `method`. The file-services map is `desktop/workers/index-protocol.ts`.
+- `desktop/agents/tool-catalog.ts` holds each agent tool's capability and zod input. The broker
+  parses with it and `tools/list` advertises its JSON Schema, so the two cannot drift.
+- Every window and page starts from `isolatedContent` in `desktop/windows/web-content-policy.ts`:
+  sandboxed, context-isolated, without Node.
 
 ## Persistence and authority
 

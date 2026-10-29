@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { EPUBChapter } from '../../domain/previews/documents/epub';
 import type { EPUBBookmark } from '../../domain/previews/documents/epub-bookmarks';
 import { saveEPUBBookmark } from '../../domain/previews/documents/epub-bookmarks';
+import { errorMessage } from '../../domain/errors';
 
 export function EPUBBookmarks({
   bookmarks,
@@ -38,7 +39,7 @@ export function EPUBBookmarks({
             setName('');
             setError('');
           } catch (error) {
-            setError((error as Error).message);
+            setError(errorMessage(error));
           }
         }}
       >

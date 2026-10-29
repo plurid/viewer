@@ -25,6 +25,8 @@ import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
+import type { Look } from '../../../domain/contracts';
+import { errorMessage } from '../../../domain/errors';
 
 interface ModelSession {
   frame(): void;
@@ -34,7 +36,7 @@ interface ModelSession {
   active(value: boolean, interactive: boolean): void;
   measure(value: boolean): void;
   clearMeasure(): void;
-  background(look: 'dark' | 'light'): void;
+  background(look: Look): void;
 }
 const backgrounds = { dark: '#292d34', light: '#e9edf1' } as const;
 function disposeObject(object: THREE.Object3D): void {
@@ -175,7 +177,7 @@ export default function ModelPreview(context: PreviewContext) {
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     } catch (error) {
-      setError(`3D graphics are unavailable: ${(error as Error).message}`);
+      setError(`3D graphics are unavailable: ${errorMessage(error)}`);
       setLoading(false);
       return;
     }
@@ -338,7 +340,7 @@ export default function ModelPreview(context: PreviewContext) {
           renderer.render(scene, camera);
         } catch (error) {
           graphicsFailed = true;
-          setError((error as Error).message);
+          setError(errorMessage(error));
           setLoading(false);
           return;
         }

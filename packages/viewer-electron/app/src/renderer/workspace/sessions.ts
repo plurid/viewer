@@ -138,7 +138,7 @@ export function focusFiles(id: string): void {
   requestAnimationFrame(focus);
 }
 /** A pane's plane on the page, by the id its content carries: headers may be hidden. */
-export function planeElement(id: string): HTMLElement | undefined {
+function planeElement(id: string): HTMLElement | undefined {
   const marker = Array.from(document.querySelectorAll<HTMLElement>('[data-viewer-pane]')).find(
     (element) => element.dataset.viewerPane === id,
   );

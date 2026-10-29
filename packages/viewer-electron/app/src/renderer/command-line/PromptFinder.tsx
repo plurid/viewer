@@ -12,6 +12,7 @@ import type { LineHost } from './host';
 import { planLine, userCommands } from './run';
 import { clearPromptHistory, rememberPrompt } from './prompt-history';
 import { DictationButton } from '../speech/DictationButton';
+import { errorMessage } from '../../domain/errors';
 
 const examples = [
   'sort by date modified, newest first',
@@ -103,7 +104,7 @@ export function PromptFinder({
           rememberPrompt({ prompt, line: answer.line, explanation: answer.explanation });
       }
     } catch (error) {
-      if (asking.current === id) setState({ kind: 'failed', message: (error as Error).message });
+      if (asking.current === id) setState({ kind: 'failed', message: errorMessage(error) });
     } finally {
       if (asking.current === id) asking.current = undefined;
     }

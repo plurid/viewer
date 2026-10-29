@@ -12,6 +12,7 @@ import {
   type Measurement,
   type Tool,
 } from '../../../domain/previews/drawings/dxf/units';
+import type { Look } from '../../../domain/contracts';
 
 export interface DrawingView {
   center: Point;
@@ -21,7 +22,7 @@ export interface DrawingView {
 export interface CanvasOptions {
   active: boolean;
   interactive: boolean;
-  look: 'dark' | 'light';
+  look: Look;
   tool: Tool;
   grid: boolean;
   snap: boolean;

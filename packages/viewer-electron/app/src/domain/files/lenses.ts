@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { FileEntry } from '../contracts';
 import { fileFamily } from './entries';
+import { sameJSON } from '../json';
 
 /**
  * A lens groups the items directly inside one folder without moving them. Its groups form a
@@ -355,7 +356,6 @@ function subtreeHeight(groups: ReadonlyMap<string, LensGroup>, id: string): numb
   return height;
 }
 
-const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 /** Edits turning `from` into `to`; used for Undo, so they touch only what differs. */
 export function diffLensOps(from: Lens, to: Lens): LensOp[] {
   const ops: LensOp[] = [];

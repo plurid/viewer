@@ -1,17 +1,24 @@
 import { pathContains } from '../../domain/files/paths';
 import { parentPath } from '../../domain/workspaces/planes';
+import type { WindowEvents } from '../app/window-events';
+import { sendWindowEvent, windowEventDetail } from '../app/window-events';
+
+type RefreshRequest = WindowEvents['viewer:refresh'];
 
 /**
  * Asks open folders to list again. With `paths`, only the folders they are in or under do:
  * a finished copy once re-listed every open folder, each a full read of its entries.
  */
 export function requestRefresh(paths?: readonly string[]): void {
-  window.dispatchEvent(new CustomEvent('viewer:refresh', { detail: paths && { paths } }));
+  sendWindowEvent('viewer:refresh', paths && { paths });
 }
 
-/** Whether a refresh request concerns the folder at `folder`. */
-export function refreshConcerns(event: Event, folder: string): boolean {
-  const paths = (event as CustomEvent<{ paths: readonly string[] } | undefined>).detail?.paths;
+/** Whether a refresh request, or the event carrying it, concerns the folder at `folder`. */
+export function refreshConcerns(request: RefreshRequest | Event, folder: string): boolean {
+  if (request instanceof Event) {
+    return refreshConcerns(windowEventDetail('viewer:refresh', request), folder);
+  }
+  const paths = request?.paths;
   return (
     !paths ||
     paths.some(

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../domain/errors';
 interface DifferenceInput {
   left: ImageBitmap | null;
   right: ImageBitmap | null;
@@ -39,7 +40,7 @@ self.onmessage = (event: MessageEvent<DifferenceInput>) => {
     const bitmap = first.transferToImageBitmap();
     self.postMessage({ bitmap }, { transfer: [bitmap] });
   } catch (error) {
-    self.postMessage({ error: (error as Error).message });
+    self.postMessage({ error: errorMessage(error) });
   } finally {
     left?.close();
     right?.close();

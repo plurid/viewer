@@ -3,6 +3,7 @@ import {
   parseFileQuery,
   QueryError,
   withoutTopWords,
+  foldText,
   type FileQuery,
 } from '../../domain/search/query';
 import type { QuerySnapshot } from '../../domain/workspaces/collections';
@@ -22,11 +23,6 @@ import type {
 import { absolute, entry } from '../files/filesystem';
 import { searchExclusions, searchExclusionRules } from './exclusions';
 import { containsPath } from '../files/containment';
-const fold = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase();
 export class FileIndex {
   private db: DatabaseSync;
   /**
@@ -60,9 +56,19 @@ export class FileIndex {
     this.excluded = searchExclusions(initialScope?.exclusions ?? []);
     this.db = new DatabaseSync(file);
     try {
-      this.db.exec(
-        "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=2000; CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, root TEXT, name TEXT, extension TEXT, size INTEGER, modified REAL, hidden INTEGER, directory INTEGER, data TEXT, seen INTEGER); CREATE INDEX IF NOT EXISTS files_root ON files(root); CREATE INDEX IF NOT EXISTS files_ext ON files(extension); CREATE INDEX IF NOT EXISTS files_name ON files(name,path); CREATE VIRTUAL TABLE IF NOT EXISTS names USING fts5(name, content, path UNINDEXED, tokenize='trigram');",
-      );
+      this.db.exec(`
+        PRAGMA journal_mode=WAL;
+        PRAGMA busy_timeout=2000;
+        CREATE TABLE IF NOT EXISTS files(
+          path TEXT PRIMARY KEY, root TEXT, name TEXT, extension TEXT, size INTEGER,
+          modified REAL, hidden INTEGER, directory INTEGER, data TEXT, seen INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS files_root ON files(root);
+        CREATE INDEX IF NOT EXISTS files_ext ON files(extension);
+        CREATE INDEX IF NOT EXISTS files_name ON files(name,path);
+        CREATE VIRTUAL TABLE IF NOT EXISTS names
+          USING fts5(name, content, path UNINDEXED, tokenize='trigram');
+      `);
       this.db.exec(
         'CREATE TABLE IF NOT EXISTS source_documents(path TEXT PRIMARY KEY, version TEXT NOT NULL, document TEXT NOT NULL)',
       );
@@ -71,9 +77,18 @@ export class FileIndex {
       );
       if (version < 2) {
         // Reconcile the disposable search index without touching any source file.
-        this.db.exec(
-          "BEGIN; CREATE TEMP TABLE previous_content AS SELECT path,content FROM names; CREATE INDEX previous_content_path ON previous_content(path); DELETE FROM names; INSERT INTO names(rowid,name,content,path) SELECT files.rowid,files.name,coalesce(previous_content.content,''),files.path FROM files LEFT JOIN previous_content ON files.path=previous_content.path; DROP TABLE previous_content; PRAGMA user_version=2; COMMIT;",
-        );
+        this.db.exec(`
+          BEGIN;
+          CREATE TEMP TABLE previous_content AS SELECT path,content FROM names;
+          CREATE INDEX previous_content_path ON previous_content(path);
+          DELETE FROM names;
+          INSERT INTO names(rowid,name,content,path)
+            SELECT files.rowid,files.name,coalesce(previous_content.content,''),files.path
+            FROM files LEFT JOIN previous_content ON files.path=previous_content.path;
+          DROP TABLE previous_content;
+          PRAGMA user_version=2;
+          COMMIT;
+        `);
       }
     } catch (error) {
       this.db.close();
@@ -126,7 +141,10 @@ export class FileIndex {
       'DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)',
     );
     const file = this.db.prepare(
-      'INSERT INTO files VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET root=excluded.root,name=excluded.name,extension=excluded.extension,size=excluded.size,modified=excluded.modified,hidden=excluded.hidden,directory=excluded.directory,data=excluded.data,seen=excluded.seen',
+      `INSERT INTO files VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET
+        root=excluded.root, name=excluded.name, extension=excluded.extension,
+        size=excluded.size, modified=excluded.modified, hidden=excluded.hidden,
+        directory=excluded.directory, data=excluded.data, seen=excluded.seen`,
     );
     const name = this.db.prepare(
       'INSERT INTO names(rowid,name,content,path) VALUES((SELECT rowid FROM files WHERE path=?),?,?,?)',
@@ -138,7 +156,7 @@ export class FileIndex {
         file.run(
           item.path,
           root,
-          fold(item.name),
+          foldText(item.name),
           item.extension,
           item.size,
           item.modified,
@@ -158,7 +176,12 @@ export class FileIndex {
                 truncated: content.length > 150000,
               }
             : content;
-        name.run(item.path, fold(item.name), fold(original.text.slice(0, 150000)), item.path);
+        name.run(
+          item.path,
+          foldText(item.name),
+          foldText(original.text.slice(0, 150000)),
+          item.path,
+        );
         this.db.prepare('DELETE FROM source_documents WHERE path=?').run(item.path);
         if (original.text) {
           let remaining = 150000;

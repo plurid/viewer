@@ -6,19 +6,24 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { settleAll } from '../src/domain/settle';
 
-const bridge = readFileSync(new URL('../src/desktop/bridge.ts', import.meta.url), 'utf8');
+const source = (file: string) =>
+  readFileSync(new URL(`../src/desktop/${file}`, import.meta.url), 'utf8');
+const bridge = source('bridge.ts');
+const handlers = source('ipc/access-handlers.ts');
 
 function body(name: string): string {
-  const start = bridge.indexOf(`      ${name}: async`);
+  const start = handlers.indexOf(`    ${name}: async`);
   expect(start).toBeGreaterThan(0);
-  return bridge.slice(start, bridge.indexOf('\n      },\n', start));
+  return handlers.slice(start, handlers.indexOf('\n    },\n', start));
 }
 
 describe('quiescing a root', () => {
   it('serves both revoke and eject', () => {
-    expect(body('fileAccessRevoke')).toContain('this.quiesceRoot(root)');
-    expect(body('volumeEject')).toContain('this.quiesceRoot(root)');
+    expect(body('fileAccessRevoke')).toContain('ports.quiesceRoot(root)');
+    expect(body('volumeEject')).toContain('ports.quiesceRoot(root)');
+    expect(bridge).toContain('quiesceRoot: (root) => this.quiesceRoot(root)');
     const start = bridge.indexOf('  private async quiesceRoot(');
+    expect(start).toBeGreaterThan(0);
     const method = bridge.slice(start, bridge.indexOf('\n  }\n', start));
     for (const service of ['watchRules.revoke', 'watchers.revoke', 'terminals.quiesce'])
       expect(method).toContain(`this.${service}(root)`);

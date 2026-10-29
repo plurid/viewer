@@ -1,5 +1,6 @@
 import type { FileEntry } from '../contracts';
 import { searchPattern, type SearchPattern } from './pattern';
+import { errorMessage } from '../errors';
 
 /**
  * The file query language: one parser for the folder filter, the search through
@@ -339,10 +340,7 @@ export function parseFileQuery(text: string, now = Date.now()): FileQuery {
       try {
         return { kind: 'regex', regex: searchPattern(token.text), source: token.text };
       } catch (error) {
-        throw new QueryError(
-          `~${token.text} is not a pattern. ${(error as Error).message}`,
-          token.at,
-        );
+        throw new QueryError(`~${token.text} is not a pattern. ${errorMessage(error)}`, token.at);
       }
     }
     if (token.kind === 'word') {
@@ -519,14 +517,4 @@ export function parsePattern(text: string, now = Date.now()): FileQuery {
     tags: [],
     needsStat: false,
   };
-}
-/** A query's error said where: the message, and the column. */
-export function queryProblem(text: string): { message: string; at: number } | undefined {
-  try {
-    parseFileQuery(text);
-    return undefined;
-  } catch (error) {
-    if (error instanceof QueryError) return { message: error.message, at: error.at };
-    throw error;
-  }
 }

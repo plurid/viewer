@@ -20,7 +20,7 @@ const decode = (value: string) =>
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_all, value) => String.fromCodePoint(Math.min(0x10ffff, Number(value))));
-export const plainText = (html: string) =>
+const plainText = (html: string) =>
   decode(
     html
       .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
@@ -296,7 +296,7 @@ async function extractCoordinated(
     .slice(0, 150000);
   return result;
 }
-export function initials(value: string): string {
+function initials(value: string): string {
   return value
     .split(';')
     .map((author) => {
@@ -325,7 +325,7 @@ export function localBookFields(document: DocumentData): Record<string, string> 
     publisher: metadata.publisher || '',
   };
 }
-export async function verifyDocument(file: string): Promise<void> {
+async function verifyDocument(file: string): Promise<void> {
   const info = await lstat(file);
   if (!info.isFile() || info.isSymbolicLink()) throw new Error('Select a regular document.');
 }

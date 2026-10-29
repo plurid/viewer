@@ -4,6 +4,7 @@ import { Dialog } from '../ui/primitives';
 import { report } from '../state/store';
 import { followSnapshot } from '../state/requests';
 import type { DesktopEvent } from '../../domain/contracts';
+import { onWindowEvent } from '../app/window-events';
 export function AgentReview() {
   const [proposals, setProposals] = useState<AgentProposal[]>([]);
   const [busy, setBusy] = useState(false);
@@ -19,9 +20,9 @@ export function AgentReview() {
       set: setProposals,
       failed: report,
     });
-    window.addEventListener('viewer:agent-review', following.reload);
+    const stopReview = onWindowEvent('viewer:agent-review', following.reload);
     return () => {
-      window.removeEventListener('viewer:agent-review', following.reload);
+      stopReview();
       following.stop();
     };
   }, []);

@@ -1,5 +1,6 @@
 import type { CustomAction, TerminalProfile } from '../../../domain/automation/actions';
 import type { SettingsPatch, SettingsSnapshot } from '../../../domain/services';
+import { errorMessage } from '../../../domain/errors';
 
 export type SettingsChange = (snapshot: SettingsSnapshot) => SettingsPatch[];
 
@@ -28,11 +29,11 @@ export function saveSettingsChange(
       try {
         writer.accept(await writer.write(patches, current.revision));
       } catch (error) {
-        writer.error((error as Error).message);
+        writer.error(errorMessage(error));
         writer.accept(await writer.refresh());
       }
     })
-    .catch((error) => writer.error((error as Error).message));
+    .catch((error) => writer.error(errorMessage(error)));
 }
 
 export function customActionEdit(

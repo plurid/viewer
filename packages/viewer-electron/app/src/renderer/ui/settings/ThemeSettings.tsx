@@ -12,6 +12,8 @@ import { ChoiceButton } from '../ChoiceMenu';
 import { Field } from './SettingField';
 import type { SettingsEditor } from './editor';
 import type { SettingsPatch, SettingsSnapshot } from '../../../domain/services';
+import type { Look } from '../../../domain/contracts';
+import { errorMessage } from '../../../domain/errors';
 
 const words: Record<string, string> = {
   space: 'Space',
@@ -133,7 +135,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
     });
     setOpen(id);
   };
-  const chooser = (look: 'dark' | 'light') => (
+  const chooser = (look: Look) => (
     <label className="settings-row">
       <span>{look === 'dark' ? 'Dark theme' : 'Light theme'}</span>
       <ChoiceButton
@@ -194,7 +196,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
                   : importVSCodeTheme(text, name, taken),
               );
             } catch (failure) {
-              error((failure as Error).message);
+              error(errorMessage(failure));
             }
           }}
         />

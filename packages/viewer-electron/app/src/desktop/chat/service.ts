@@ -26,6 +26,7 @@ import { ChatDocumentStore } from './documents';
 import { absolute, entry, validName } from '../files/filesystem';
 import { Search } from '../search/search';
 import { containsPath } from '../files/containment';
+import { errorMessage } from '../../domain/errors';
 
 interface Origin {
   target: CapturedTarget;
@@ -241,7 +242,7 @@ export class Chats {
                 title: 'Conversation unavailable',
                 path: this.store(id).file,
                 updated: 0,
-                problem: (error as Error).message,
+                problem: errorMessage(error),
               });
             }
           }
@@ -416,7 +417,7 @@ export class Chats {
       await this.edit(id, (current) => ({
         ...current,
         status: signal.aborted ? 'stopped' : 'failed',
-        error: (error as Error).message.slice(0, 2000),
+        error: errorMessage(error).slice(0, 2000),
       }));
     }
   }

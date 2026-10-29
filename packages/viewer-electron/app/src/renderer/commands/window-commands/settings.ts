@@ -23,7 +23,7 @@ const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1
 /** A number's or colour's value as its palette row shows it; an empty colour is the automatic one. */
 const shown = (value: unknown) => (value === '' ? 'Automatic' : String(value ?? ''));
 /** A setting's name away from its Settings page: "Plane toolbar › Back button". */
-export const settingName = (definition: SettingDefinition) => {
+const settingName = (definition: SettingDefinition) => {
   const context = settingContext(definition);
   return context ? `${context} › ${definition.label}` : definition.label;
 };
@@ -62,10 +62,6 @@ export async function changeSetting(path: string, value: unknown): Promise<void>
   receiveSettings(
     await window.viewer.settingsPatch([{ path, value }], getState().settings.revision),
   );
-}
-/** Several settings at once: the UI's in one preference change, the rest in one patch. */
-export async function changeSettings(values: Readonly<Record<string, unknown>>): Promise<void> {
-  for (const [path, value] of Object.entries(values)) await changeSetting(path, value);
 }
 /** A setting's value as it is now, from the settings or the window's preferences. */
 export const settingNow = (path: string) => current(path);

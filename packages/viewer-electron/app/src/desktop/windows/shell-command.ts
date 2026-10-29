@@ -7,6 +7,7 @@ import {
   type InspectedFile,
   type ReviewedFile,
 } from '../native/reviewed-file';
+import { errorMessage } from '../../domain/errors';
 
 export type { ReviewedFile } from '../native/reviewed-file';
 
@@ -62,7 +63,7 @@ export class ShellCommand {
             : undefined,
       };
     } catch (error) {
-      return { path: this.file, installed: false, problem: (error as Error).message };
+      return { path: this.file, installed: false, problem: errorMessage(error) };
     }
   }
 

@@ -1,6 +1,7 @@
 import { watchDirectory, type DirectoryWatch } from './directory-watch';
-import { absolute, message } from './filesystem';
+import { absolute } from './filesystem';
 import type { DesktopEvent } from '../../domain/contracts';
+import { errorMessage } from '../../domain/errors';
 
 interface SharedWatch {
   watcher: DirectoryWatch;
@@ -53,7 +54,7 @@ export class Watchers {
         this.emit({
           type: 'watch-error',
           path: folder,
-          message: message(error),
+          message: errorMessage(error),
           code: (error as NodeJS.ErrnoException).code,
         });
       },

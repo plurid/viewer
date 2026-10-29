@@ -183,6 +183,7 @@ export function LineFinder({
         users: [...userCommands().keys()],
         modes: Object.keys(effectiveKeymap().modes ?? {}),
       }),
+    // the places, like the commands, are the window's as the palette opened
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [query, commands, workspaces, listing],
   );

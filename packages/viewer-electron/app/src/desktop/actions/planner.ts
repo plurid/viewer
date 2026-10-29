@@ -14,6 +14,7 @@ import {
   type DocumentEvidence,
   type ModelProvider,
   type ProposedChange,
+  requestActors,
 } from '../../domain/services';
 import type { FileChange } from '../../domain/files/changes';
 import { absolute, entry, exists, validName } from '../files/filesystem';
@@ -25,6 +26,7 @@ import { fileCoordination } from '../files/file-coordination';
 import { errorMessage } from '../../domain/errors';
 import { removePrivateData } from '../operations/removal';
 import { containsPath } from '../files/containment';
+import type { RequestActor } from '../../domain/services';
 const output = z.object({
   rows: z
     .array(
@@ -77,7 +79,7 @@ interface Dependencies {
     signal: AbortSignal,
     level: ActionRecipe['data'],
     /** Who started it: an agent's action needs the data approved for agents too. */
-    actor: 'user' | 'agent',
+    actor: RequestActor,
   ): Promise<unknown>;
   operations: Pick<Operations, 'exclusive'>;
   emit(plan: ActionPlan): void;
@@ -100,7 +102,7 @@ const planSchema = z.object({
     rootID: z.string(),
     paneID: z.string(),
     sources: z.array(z.string()).max(2000),
-    actor: z.enum(['user', 'agent']),
+    actor: z.enum(requestActors),
     clientID: z.string().max(200).optional(),
     recursive: z.boolean().optional(),
   }),
@@ -609,7 +611,7 @@ export class ActionPlanner {
         if (Buffer.byteLength(path.basename(row.destination), 'utf8') > 255)
           throw new Error('The filename is too long.');
       } catch (error) {
-        row.issue = (error as Error).message;
+        row.issue = errorMessage(error);
       }
       const key = row.destination.normalize('NFC').toLowerCase();
       const duplicate = targets.get(key);

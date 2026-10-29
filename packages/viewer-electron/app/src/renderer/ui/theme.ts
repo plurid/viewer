@@ -1,11 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import { themeFor, themeVariables, type Theme } from '../../domain/preferences/themes';
 import type { ApplicationSettings } from '../../domain/services';
+import type { Look } from '../../domain/contracts';
 
 /** The theme for an appearance, the same object while its settings are. */
 export function useTheme(
   settings: Pick<ApplicationSettings, 'themes' | 'theme'>,
-  look: 'dark' | 'light',
+  look: Look,
 ): Theme {
   const { themes, theme } = settings;
   return useMemo(() => themeFor({ themes, theme }, look), [themes, theme, look]);

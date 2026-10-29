@@ -2,7 +2,7 @@ import type { Pane } from '../../domain/contracts';
 import type { CommandContext, CommandRequest } from './registry';
 import { previewModules } from '../previews/registry';
 import { getState, receiveSettings } from '../state/store';
-import { toolbarCommands, toolbarsSchema } from '../../domain/preferences/toolbars';
+import { toolbarsSchema } from '../../domain/preferences/toolbars';
 
 export function toolbarRequest(
   pane: Pane,
@@ -41,8 +41,6 @@ export function toolbarKind(pane: Pane | undefined): string | undefined {
   const module = previewModules.find((item) => item.formats.includes(extension));
   return 'preview:' + (module?.id ?? 'fallback');
 }
-export const pinnedCommands = (kind: string) =>
-  toolbarCommands(getState().settings.settings.toolbars, kind);
 export async function saveToolbar(
   kind: string,
   commands: readonly string[] | undefined,

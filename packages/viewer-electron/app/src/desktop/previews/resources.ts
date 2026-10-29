@@ -20,6 +20,7 @@ import {
 import type { DerivedPreviews, DerivedMode } from './derived';
 import { isOfficeFormat, type OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 import { xmlEncoding } from '../../domain/previews/data/xml';
+import { byteRange, WebPreviewError } from './web/policy';
 
 interface Grant {
   dispose?(): void;
@@ -632,31 +633,17 @@ export class Resources {
       }
       this.get(url.hostname);
       const size = grant.data?.length ?? info!.size;
-      let start = 0,
-        end = size - 1,
-        partial = false;
-      const range = request.headers.get('range');
-      if (range) {
-        const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-        if (!match || (!match[1] && !match[2]))
-          return new Response(null, {
-            status: 416,
-            headers: { 'Content-Range': `bytes */${size}` },
-          });
-        start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
-        end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
-        if (
-          start > end ||
-          start >= size ||
-          !Number.isSafeInteger(start) ||
-          !Number.isSafeInteger(end)
-        )
-          return new Response(null, {
-            status: 416,
-            headers: { 'Content-Range': `bytes */${size}` },
-          });
-        partial = true;
+      let selected: ReturnType<typeof byteRange>;
+      try {
+        selected = byteRange(request.headers.get('range'), size);
+      } catch (error) {
+        if (!(error instanceof WebPreviewError)) throw error;
+        return new Response(null, {
+          status: 416,
+          headers: { 'Content-Range': `bytes */${size}` },
+        });
       }
+      const { start, end, partial } = selected;
       const headers: Record<string, string> = {
         'Content-Type': lookup(relative) || 'application/octet-stream',
         'Content-Length': String(Math.max(0, end - start + 1)),

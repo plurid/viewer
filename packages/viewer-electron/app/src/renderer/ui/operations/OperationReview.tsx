@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { OperationIntent, OperationPlan } from '../../../domain/operations/operation-plan';
 import { Dialog, Loading } from '../primitives';
-import { setOperationsOpen, report } from '../../state/store';
+import { setOperationsOpen } from '../../state/store';
 import { transformDescription } from '../../../domain/operations/transforms';
+import { sendWindowEvent, useWindowEvent } from '../../app/window-events';
 export function reviewOperationPlan(plan: OperationPlan) {
-  window.dispatchEvent(new CustomEvent('viewer:operation-plan', { detail: plan }));
+  sendWindowEvent('viewer:operation-plan', plan);
 }
 export async function prepareOperationReview(title: string, intents: OperationIntent[]) {
   const plan = await window.viewer.operationPlan({ kind: 'prepare', title, intents });
@@ -16,16 +17,12 @@ export function OperationReviewControls() {
   const [error, setError] = useState('');
   const [checkpoint, setCheckpoint] = useState(false);
   const [page, setPage] = useState(0);
-  useEffect(() => {
-    const show = (event: Event) => {
-      setPlan((event as CustomEvent<OperationPlan>).detail);
-      setError('');
-      setCheckpoint(false);
-      setPage(0);
-    };
-    window.addEventListener('viewer:operation-plan', show);
-    return () => window.removeEventListener('viewer:operation-plan', show);
-  }, []);
+  useWindowEvent('viewer:operation-plan', (plan) => {
+    setPlan(plan);
+    setError('');
+    setCheckpoint(false);
+    setPage(0);
+  });
   if (!plan) return null;
   const selected = plan.rows.filter((row) => row.approved),
     start = page * 100;
@@ -190,16 +187,4 @@ export function OperationReviewControls() {
       </form>
     </Dialog>
   );
-}
-export function showOperationPlans() {
-  void window.viewer
-    .operationPlan({ kind: 'list' })
-    .then((value) => {
-      if (Array.isArray(value)) {
-        const plan = value.findLast((plan) => plan.status === 'review');
-        if (plan) reviewOperationPlan(plan);
-        else report(new Error('No pending operation plans.'));
-      }
-    })
-    .catch(report);
 }

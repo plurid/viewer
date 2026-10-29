@@ -6,7 +6,7 @@ import type { LayoutTemplate } from './workspaces/layout-templates';
 import type { TileLayout } from './workspaces/tiling';
 import { defaultKeymap, type Keymap } from './preferences/keymap';
 import type { SearchEvidence, EvidenceAnchor } from './files/inspection';
-import type { FileEntry, UIPreferences, ViewMode, SortKey } from './contracts';
+import type { FileEntry, UIPreferences, ViewMode, SortKey, Look } from './contracts';
 import type { FolderOverride } from './preferences/folder-presentation';
 import type { CustomAction, TerminalProfile } from './automation/actions';
 import type { ProviderKind } from './models/providers';
@@ -14,6 +14,7 @@ import type { ChangePlan } from './operations/change-plan';
 import type { OfficeContent } from './previews/documents/office';
 import type { EPUBChapter, EPUBImage } from './previews/documents/epub';
 import type { OptimizationRecipe } from './operations/optimization';
+import type { FileGrouping } from './files/entries';
 export type { ProviderKind } from './models/providers';
 export interface ModelProvider {
   id: string;
@@ -39,13 +40,13 @@ export interface ActionRecipe {
 export interface ApplicationSettings {
   toolbars: Toolbars;
   checkpoints: { budgetBytes: number };
-  appearance: 'system' | 'dark' | 'light';
+  appearance: 'system' | Look;
   browsing: {
     /** The default for folders without their own view; Map is chosen per folder. */
     mode: Exclude<ViewMode, 'map'>;
     sort: SortKey;
     descending: boolean;
-    group: 'none' | 'kind' | 'modified';
+    group: FileGrouping;
     columnWidth: number;
     density: 'comfortable' | 'compact';
     scrollbars: 'system' | 'always';
@@ -166,9 +167,9 @@ export interface SettingsSnapshot {
   revision: number;
   settings: ApplicationSettings;
   ui: UIPreferences;
-  look: 'dark' | 'light';
+  look: Look;
   /** The OS appearance, independent of the shared appearance preference. */
-  systemLook?: 'dark' | 'light';
+  systemLook?: Look;
   credentials: string[];
   config?: {
     path: string;
@@ -235,12 +236,15 @@ export interface DocumentData {
   coverageReason?: string;
   truncated: boolean;
 }
+/** Who asked: the person, or an agent acting through Viewer's tools. */
+export const requestActors = ['user', 'agent'] as const;
+export type RequestActor = (typeof requestActors)[number];
 export interface ActionContext {
   workspaceID: string;
   rootID: string;
   paneID: string;
   sources: string[];
-  actor: 'user' | 'agent';
+  actor: RequestActor;
   clientID?: string;
   recursive?: boolean;
 }

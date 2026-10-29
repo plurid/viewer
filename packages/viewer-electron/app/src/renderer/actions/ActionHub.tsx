@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ActionContext, ActionPlan, ActionRequest, ActionRecipe } from '../../domain/services';
-import type { CommandContext } from '../commands/registry';
 import { activeWorkspace, report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { Dialog, Empty, IconButton, Loading, NameDialog } from '../ui/primitives';
@@ -13,6 +12,8 @@ import type { CheckpointEstimate } from '../../domain/operations/change-plan';
 import { formatBytes } from '../../domain/files/entries';
 import { baseName } from '../../domain/workspaces/planes';
 import { planOrigin } from './commands';
+import { errorMessage } from '../../domain/errors';
+import { onWindowEvent } from '../app/window-events';
 const busy = (plan: ActionPlan) => ['planning', 'applying'].includes(plan.status);
 const name = (path: string) => baseName(path);
 function destinationParts(path: string) {
@@ -49,10 +50,7 @@ export function ActionHub() {
         if (alive) for (const plan of value) merge(plan);
       })
       .catch(report);
-    const task = (event: Event) => {
-      const { recipeID, context } = (
-        event as CustomEvent<{ recipeID: string; context: CommandContext }>
-      ).detail;
+    const stopRequests = onWindowEvent('viewer:action-request', ({ recipeID, context }) => {
       if (!context.paneID || context.workspaceID !== activeWorkspace().id) return;
       const rootID = workspace.rootID(context.paneID);
       if (!rootID) {
@@ -69,19 +67,16 @@ export function ActionHub() {
           sources: context.selection.map((file) => file.path),
         },
       });
-    };
-    const show = (event: Event) => {
+    });
+    const stopTasks = onWindowEvent('viewer:tasks', (id) => {
       setOpen(true);
-      const id = (event as CustomEvent<string | undefined>).detail;
-      setSelected(typeof id === 'string' ? id : undefined);
-    };
-    window.addEventListener('viewer:action-request', task);
-    window.addEventListener('viewer:tasks', show);
+      setSelected(id);
+    });
     return () => {
       alive = false;
       remove();
-      window.removeEventListener('viewer:action-request', task);
-      window.removeEventListener('viewer:tasks', show);
+      stopRequests();
+      stopTasks();
     };
   }, [workspace]);
   const pending = plans.filter((plan) =>
@@ -212,7 +207,7 @@ function ConfigureTask({
             });
             onStart(id);
           } catch (error) {
-            setError((error as Error).message);
+            setError(errorMessage(error));
             setStarting(false);
           }
         }}
@@ -473,7 +468,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
     try {
       await run();
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setWorking(false);
     }

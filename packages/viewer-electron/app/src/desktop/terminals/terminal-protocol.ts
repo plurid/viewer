@@ -1,4 +1,4 @@
-import type { TerminalStart } from '../../domain/automation/actions';
+import type { TerminalEvent, TerminalStart } from '../../domain/automation/actions';
 
 /** Private main-to-worker messages. Public terminal IPC never accepts a program or environment. */
 export type TerminalWorkerRequest =
@@ -15,3 +15,6 @@ export type TerminalWorkerRequest =
   | { kind: 'resize'; id: string; cols: number; rows: number }
   | { kind: 'ack'; id: string; bytes: number }
   | { kind: 'close' | 'kill'; id: string };
+
+/** Worker-to-main messages: a session's events, and its process ID once it starts. */
+export type TerminalWorkerReply = TerminalEvent | { type: 'started'; id: string; pid: number };

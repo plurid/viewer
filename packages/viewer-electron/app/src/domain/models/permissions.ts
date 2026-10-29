@@ -1,4 +1,4 @@
-import type { ModelProvider } from '../services';
+import type { ModelProvider, RequestActor } from '../services';
 
 export const modelDataLevels = ['names', 'excerpts', 'full-text'] as const;
 export type ModelDataLevel = (typeof modelDataLevels)[number];
@@ -22,7 +22,7 @@ export function modelPermissionCovers(
   permission: ModelDataPermission | null,
   provider: Pick<ModelProvider, 'id' | 'kind' | 'endpoint'>,
   level: ModelDataLevel,
-  actor: 'user' | 'agent' = 'user',
+  actor: RequestActor = 'user',
 ): boolean {
   return (
     !!permission &&

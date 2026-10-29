@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { ComparisonResult, ComparisonRow } from '../../../domain/comparison/folders';
 import type { OperationIntent } from '../../../domain/operations/operation-plan';
 import { sourceVersion } from '../../../domain/files/inspection';
@@ -6,6 +6,8 @@ import { formatBytes } from '../../../domain/files/entries';
 import { useWorkspace } from '../../workspace/context';
 import { Dialog, Loading } from '../primitives';
 import { prepareOperationReview } from '../operations/OperationReview';
+import { errorMessage } from '../../../domain/errors';
+import { useWindowEvent } from '../../app/window-events';
 const labels: Record<ComparisonRow['status'], string> = {
   'left-only': 'Only on left',
   'right-only': 'Only on right',
@@ -25,19 +27,14 @@ export function ComparisonControls() {
   const [running, setRunning] = useState('');
   const [error, setError] = useState('');
   const [page, setPage] = useState(0);
-  useEffect(() => {
-    const show = (event: Event) => {
-      setOpen(true);
-      setError('');
-      const files = (event as CustomEvent<string[]>).detail;
-      if (files?.length) {
-        setLeft(files[0] ?? '');
-        setRight(files[1] ?? '');
-      }
-    };
-    window.addEventListener('viewer:compare', show);
-    return () => window.removeEventListener('viewer:compare', show);
-  }, []);
+  useWindowEvent('viewer:compare', (files) => {
+    setOpen(true);
+    setError('');
+    if (files.length) {
+      setLeft(files[0] ?? '');
+      setRight(files[1] ?? '');
+    }
+  });
   if (!open) return null;
   const close = () => {
     if (running) void window.viewer.compare({ kind: 'cancel', id: running });
@@ -68,7 +65,7 @@ export function ComparisonControls() {
         setPage(0);
       }
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setRunning('');
     }
@@ -115,7 +112,7 @@ export function ComparisonControls() {
       await prepareOperationReview('Copy selected changes from left to right', intents);
       setOpen(false);
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     }
   };
   const start = page * 100;

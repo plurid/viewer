@@ -5,20 +5,17 @@ import { followSnapshot } from '../state/requests';
 import type { DesktopEvent } from '../../domain/contracts';
 import { IconButton } from '../ui/primitives';
 import { useWorkspace } from '../workspace/context';
+import { useWindowEvent } from '../app/window-events';
 export function ExecutionPanel() {
   const workspace = useWorkspace();
   const [tasks, setTasks] = useState<ExecutionTask[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const show = () => {
-      setDismissed(false);
-      setExpanded(true);
-    };
-    window.addEventListener('viewer:command-progress', show);
-    return () => window.removeEventListener('viewer:command-progress', show);
-  }, []);
+  useWindowEvent('viewer:command-progress', () => {
+    setDismissed(false);
+    setExpanded(true);
+  });
   const running = tasks.filter((task) => task.status === 'running').length;
   useEffect(() => {
     if (!running) return;

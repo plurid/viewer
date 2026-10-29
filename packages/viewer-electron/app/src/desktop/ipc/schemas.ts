@@ -4,7 +4,12 @@ import { z } from 'zod';
 import { backupRequestSchema } from '../../domain/persistence/backup';
 import { officeLayoutRequestSchema } from '../../domain/previews/documents/layout';
 import type { ApiMethod, DesktopEvent, ViewerAPI } from '../../domain/contracts';
-import { imageConversions, paneTypes, rendererOperationKinds } from '../../domain/contracts';
+import {
+  imageConversions,
+  paneTypes,
+  rendererOperationKinds,
+  viewModes,
+} from '../../domain/contracts';
 import { modelDataLevels } from '../../domain/models/permissions';
 import { operationPlanRequestSchema } from '../../domain/operations/operation-plan';
 import { sourceVersionSchema } from '../../domain/files/inspection';
@@ -15,7 +20,7 @@ import { projectDefinitionSchema } from '../../domain/workspaces/project';
 import { lensGroupIDSchema, lensOpSchema } from '../../domain/files/lenses';
 import { rootKey, validKeymapKey } from '../../domain/preferences/keymap';
 import { lineSchema } from '../preferences/keymap-schema';
-import { gitSourceSchema } from '../../domain/comparison/git';
+import { gitSourceSchema, commitPattern } from '../../domain/comparison/git';
 import { gitActionKinds, gitCommitMessageLimit } from '../../domain/comparison/git-actions';
 import { receiptRequestSchema } from '../../domain/automation/receipts';
 import { chatRequestSchema } from '../../domain/models/chat';
@@ -30,6 +35,14 @@ import { worksheetDocumentRequestSchema } from '../../domain/previews/documents/
 import { noteRequestSchema } from '../../domain/editing/notes';
 import { speechRequestSchema } from '../../domain/speech/recognition';
 import { taskWorkflowInputSchema } from '../../domain/agents/task-workflow';
+import { stateSchema } from '../persistence/storage';
+import { informationPatchSchema } from '../files/file-information';
+import { fileEntrySchema, localPath, id } from '../schemas';
+import { textBufferSchema } from '../editing/text-buffers';
+import { MAX_TEXT_BYTES, textVersionSchema } from '../../domain/editing/documents';
+import { executionCapabilities } from '../../domain/agents/requests';
+import { requestActors } from '../../domain/services';
+import { reviewModes } from '../../domain/comparison/review';
 
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
@@ -78,11 +91,6 @@ const sessionKeysSchema = z
       .max(100),
   })
   .strict();
-import { stateSchema } from '../persistence/storage';
-import { informationPatchSchema } from '../files/file-information';
-import { fileEntrySchema, localPath, id } from '../schemas';
-import { textBufferSchema } from '../editing/text-buffers';
-import { MAX_TEXT_BYTES, textVersionSchema } from '../../domain/editing/documents';
 
 /** Text an editor saves: at most what Viewer reads, counted in bytes. */
 const editedText = z.string().refine((text) => Buffer.byteLength(text, 'utf8') <= MAX_TEXT_BYTES, {
@@ -115,10 +123,7 @@ const workspaceSnapshotSchema = z.object({
               name: z.string().min(1).max(100),
               path: localPath,
               branch: z.string().max(1024).optional(),
-              commit: z
-                .string()
-                .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/)
-                .optional(),
+              commit: z.string().regex(commitPattern).optional(),
             }),
           )
           .max(50)
@@ -129,7 +134,7 @@ const workspaceSnapshotSchema = z.object({
               id,
               type: z.enum(paneTypes),
               path: localPath,
-              mode: z.enum(['list', 'grid', 'columns', 'gallery', 'map']).optional(),
+              mode: z.enum(viewModes).optional(),
               allLocations: z.boolean().optional(),
             }),
           )
@@ -144,7 +149,7 @@ const contextSchema = z.object({
   rootID: id,
   paneID: id,
   sources: z.array(localPath).max(2000),
-  actor: z.enum(['user', 'agent']),
+  actor: z.enum(requestActors),
   recursive: z.boolean().optional(),
 });
 const targetSchema = z.object({
@@ -253,12 +258,9 @@ export const schemas = {
         .object({
           kind: z.literal('read'),
           reviewID: z.uuid(),
-          mode: z.enum(['unstaged', 'staged', 'branch']),
+          mode: z.enum(reviewModes),
           baseID: z.uuid().optional(),
-          baseCommit: z
-            .string()
-            .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/)
-            .optional(),
+          baseCommit: z.string().regex(commitPattern).optional(),
         })
         .strict(),
       z
@@ -463,13 +465,7 @@ export const schemas = {
   ]),
   agentAudit: z.tuple([id.optional()]),
   agentStop: z.tuple([id]),
-  agentGrant: z.tuple([
-    id,
-    localPath,
-    z.enum(['execute', 'terminal-read', 'terminal-write']),
-    z.boolean(),
-    id.optional(),
-  ]),
+  agentGrant: z.tuple([id, localPath, z.enum(executionCapabilities), z.boolean(), id.optional()]),
   configOpen: z.tuple([]),
   configValidate: z.tuple([]),
   configTransfer: z.tuple([z.enum(['import', 'export'])]),

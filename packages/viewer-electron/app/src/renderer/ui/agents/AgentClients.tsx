@@ -8,6 +8,7 @@ import {
 import type { ApplicationSettings } from '../../../domain/services';
 import { AgentGrants } from './AgentGrants';
 import { IconButton } from '../primitives';
+import { errorMessage } from '../../../domain/errors';
 
 const descriptions = {
   metadata: [
@@ -63,7 +64,7 @@ export function AgentClientSettings({
     try {
       await work();
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setBusy(false);
     }

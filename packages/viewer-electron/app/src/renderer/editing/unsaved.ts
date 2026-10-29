@@ -17,7 +17,7 @@ import { editingPlane } from './planes';
 import { flushNote, flushNotes } from '../notes/sessions';
 
 /** The name a plane's unsaved text is asked about under. */
-export const unsavedName = (pane: Pane) =>
+const unsavedName = (pane: Pane) =>
   pane.type === 'scratch' ? (pane.title ?? 'Untitled') : baseName(pane.path);
 /** A scratch plane's file name for Save As: its title, and the configured extension when it is one
  * of the plane's language, its language's own otherwise. */

@@ -8,7 +8,7 @@ import {
 import { nativeOpening } from '../src/renderer/explorer/opening';
 import { keyCommand, routeExplorerInput } from '../src/renderer/explorer/input';
 import { browseSession, clearSessions, remapSessions } from '../src/renderer/workspace/sessions';
-import { settingsSchema } from '../src/desktop/preferences/settings';
+import { settingsSchema } from '../src/desktop/preferences/settings-schema';
 import {
   activeWorkspace,
   addRootFolder,

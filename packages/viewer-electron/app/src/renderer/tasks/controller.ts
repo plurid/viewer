@@ -18,6 +18,7 @@ import type { WorkspaceController } from '../workspace/context';
 import { browserAddress } from '../../domain/previews/browser';
 import { attachTaskPlane, attachTaskReference, changeTaskArea } from './state';
 import { initializeTaskNote } from '../notes/sessions';
+import { sendWindowEvent } from '../app/window-events';
 
 type Methods = Pick<
   WorkspaceController,
@@ -450,7 +451,7 @@ export function taskController(ports: {
         directory: value.checkout.path,
         selection: [],
       };
-      window.dispatchEvent(new CustomEvent('viewer:run-command', { detail: target }));
+      sendWindowEvent('viewer:run-command', target);
     },
   };
   return methods;

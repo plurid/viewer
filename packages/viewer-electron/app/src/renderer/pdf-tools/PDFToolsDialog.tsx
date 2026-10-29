@@ -14,6 +14,7 @@ import { useWorkspace } from '../workspace/context';
 import { PDFPagePreview } from './PDFPagePreview';
 import './pdf-tools.css';
 import { isActiveJob } from '../../domain/operations/jobs';
+import { errorMessage } from '../../domain/errors';
 
 export function PDFToolsDialog({
   files,
@@ -142,7 +143,7 @@ export function PDFToolsDialog({
       setError('');
       rows.scrollToIndex(first);
     } catch (reason) {
-      setError(String((reason as Error).message || reason));
+      setError(String(errorMessage(reason) || reason));
     }
   };
   const add = async () => {
@@ -155,7 +156,7 @@ export function PDFToolsDialog({
       setInputs(next);
       setPages((pages) => [...pages, ...initialPages(next.slice(inputs.length), inputs.length)]);
     } catch (reason) {
-      setError(String((reason as Error).message || reason));
+      setError(String(errorMessage(reason) || reason));
     } finally {
       setLoading(false);
     }
@@ -191,7 +192,7 @@ export function PDFToolsDialog({
         if (current.cancelled) await window.viewer.cancelJob(id);
       }
     } catch (reason) {
-      setError(String((reason as Error).message || reason));
+      setError(String(errorMessage(reason) || reason));
     } finally {
       setBusy(false);
     }

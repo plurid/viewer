@@ -15,6 +15,7 @@ import { report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import './image-tools.css';
 import { isActiveJob } from '../../domain/operations/jobs';
+import { errorMessage } from '../../domain/errors';
 
 export function ImageToolsDialog({
   files,
@@ -169,7 +170,7 @@ export function ImageToolsDialog({
       });
       setJobID(id);
     } catch (error) {
-      setError(String((error as Error).message || error));
+      setError(String(errorMessage(error) || error));
     } finally {
       setBusy(false);
     }

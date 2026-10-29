@@ -20,7 +20,7 @@ let flushRequested = false;
 let flushing: Promise<void> | undefined;
 let nextArrangementRevision = 0;
 /** Saves after a quiet period; a later request replaces an earlier one. */
-export function schedulePersist(flushEngine: boolean): void {
+function schedulePersist(flushEngine: boolean): void {
   pendingEngineFlush ||= flushEngine;
   clearTimeout(persistTimer);
   if (flushing) {

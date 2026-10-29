@@ -48,7 +48,7 @@ export function registerEditingPlane(paneID: string, plane: EditingPlane): () =>
 export const editingPlane = (paneID: string | undefined) =>
   paneID ? planes.get(paneID) : undefined;
 /** The plane whose editor has the keyboard focus. */
-export function focusedEditingPlane(): EditingPlane | undefined {
+function focusedEditingPlane(): EditingPlane | undefined {
   for (const plane of planes.values()) if (plane.editor?.hasFocus()) return plane;
 }
 /** Commands re-evaluate when an editor opens or closes. */

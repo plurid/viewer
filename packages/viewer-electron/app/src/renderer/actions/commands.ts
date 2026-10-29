@@ -1,6 +1,7 @@
 import { getState } from '../state/store';
 import type { CommandContext, CommandDefinition } from '../commands/registry';
 import type { ActionContext } from '../../domain/services';
+import { sendWindowEvent } from '../app/window-events';
 /** Who a plan was made for: a watch rule runs as the person, and was labelled “Your selection”
  *. */
 export function planOrigin(context: Pick<ActionContext, 'actor' | 'workspaceID'>): string {
@@ -8,11 +9,10 @@ export function planOrigin(context: Pick<ActionContext, 'actor' | 'workspaceID'>
   return context.workspaceID === 'watch-rule' ? 'Watch rule' : 'Your selection';
 }
 export function requestAction(recipeID: string, context: CommandContext): void {
-  window.dispatchEvent(
-    new CustomEvent('viewer:action-request', {
-      detail: { recipeID, context: { ...context, selection: [...context.selection] } },
-    }),
-  );
+  sendWindowEvent('viewer:action-request', {
+    recipeID,
+    context: { ...context, selection: [...context.selection] },
+  });
 }
 /** The same catalog supplies right-click, palette, native menu and agent-facing IDs. */
 export function actionCommands(): CommandDefinition[] {

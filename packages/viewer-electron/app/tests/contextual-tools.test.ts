@@ -6,7 +6,7 @@ import {
   toolbarCommands,
   moveToolbarCommand,
 } from '../src/domain/preferences/toolbars';
-import { settingsSchema } from '../src/desktop/preferences/settings';
+import { settingsSchema } from '../src/desktop/preferences/settings-schema';
 import { defaultSettings } from '../src/domain/services';
 import { workspaceMayChange } from '../src/domain/preferences/catalog';
 import { toolbarRequest } from '../src/renderer/commands/toolbar';

@@ -5,6 +5,7 @@ import { report, updatePane } from '../state/store';
 import { useGitReview } from './useGitReview';
 import type { ReviewMode } from '../../domain/comparison/review';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 export default function GitChanges({
   path,
@@ -250,4 +251,3 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
     </section>
   );
 }
-import { useVirtualizer } from '@tanstack/react-virtual';

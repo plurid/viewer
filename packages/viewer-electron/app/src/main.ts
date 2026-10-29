@@ -18,6 +18,7 @@ import {
   globalShortcut,
   systemPreferences,
 } from 'electron';
+import type { WebPreferences } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
@@ -50,6 +51,7 @@ import { speechMediaAllowed } from './desktop/speech/media-policy';
 import {
   frameLocationURLs,
   frameNavigationAllowed,
+  isolatedContent,
   rendererRequestAllowed,
 } from './desktop/windows/web-content-policy';
 import { performanceMeter } from './desktop/diagnostics/performance';
@@ -101,6 +103,17 @@ const renderTest = process.env.VIEWER_RENDER_TEST === '1';
 const backgroundTest =
   renderTest && process.env.VIEWER_BACKGROUND_TEST === '1' && !!process.env.VIEWER_DATA_DIRECTORY;
 if (backgroundTest && process.platform === 'darwin') app.setActivationPolicy('accessory');
+/** The workspace and Settings windows: Viewer's own pages, reaching main only through the preload. */
+const appWebPreferences = (): WebPreferences => ({
+  ...isolatedContent,
+  preload: path.join(__dirname, 'preload.cjs'),
+  webviewTag: false,
+  spellcheck: false,
+  // Functional QA renders without showing windows or taking native focus.
+  // Normal launches retain background throttling and visible windows.
+  offscreen: backgroundTest,
+  backgroundThrottling: !renderTest,
+});
 const defaultUserData = app.getPath('userData');
 // An optional, main-process-only profile supports portable installations and isolated QA.
 if (process.env.VIEWER_DATA_DIRECTORY) {
@@ -327,19 +340,7 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 20 },
     show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true,
-      webviewTag: false,
-      spellcheck: false,
-      // Functional QA renders without showing windows or taking native focus.
-      // Normal launches retain background throttling and visible windows.
-      offscreen: backgroundTest,
-      backgroundThrottling: !renderTest,
-    },
+    webPreferences: appWebPreferences(),
   });
   performanceMeter.mark('main:window');
   const createdWindow = window;
@@ -469,17 +470,7 @@ async function openSettingsWindow(focus?: string): Promise<void> {
     title: 'Settings',
     backgroundColor: '#272a30',
     show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true,
-      webviewTag: false,
-      spellcheck: false,
-      offscreen: backgroundTest,
-      backgroundThrottling: !renderTest,
-    },
+    webPreferences: appWebPreferences(),
   });
   settingsWindow = created;
   desktop.attach(created, 'settings');

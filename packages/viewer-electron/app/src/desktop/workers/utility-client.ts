@@ -2,6 +2,26 @@ import { utilityProcess, type UtilityProcess } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 
+/** Where a worker runs: a utility process, or a thread for tests that cannot spawn one. */
+export type WorkerBackend = 'process' | 'thread';
+
+/** A worker's requests by method: the arguments each takes and the value it replies. */
+export type WorkerMethods = Record<string, { args: unknown[]; reply: unknown }>;
+/** Sent by the client itself, so every worker answers them. */
+export type ClientMethods = {
+  cancel: { args: [id: string]; reply: unknown };
+  close: { args: []; reply: unknown };
+};
+type MethodName<Methods extends WorkerMethods> = keyof Methods & string;
+/** A request as the worker receives it: narrowing `method` types its `args`. */
+export type WorkerRequest<Methods extends WorkerMethods> = {
+  [M in MethodName<Methods>]: { id: string; method: M; args: Methods[M]['args'] };
+}[MethodName<Methods>];
+/** A method without arguments may be called without them. */
+type CallArguments<Args extends unknown[]> = [] extends Args
+  ? [args?: Args, signal?: AbortSignal]
+  : [args: Args, signal?: AbortSignal];
+
 interface Reply {
   id?: string;
   value?: unknown;
@@ -9,18 +29,19 @@ interface Reply {
   code?: string;
   event?: string;
 }
-export interface OwnedWorker {
+/** A worker's process or thread; `Message` is what it posts back. */
+export interface OwnedWorker<Message = Reply> {
   process?: UtilityProcess;
   thread?: Worker;
   postMessage(value: unknown): void;
-  message(listener: (reply: Reply) => void): void;
+  message(listener: (reply: Message) => void): void;
   exit(listener: () => void, once?: boolean): void;
 }
-export function launchWorker(
+export function launchWorker<Message = Reply>(
   worker: string,
   name: string,
-  backend?: 'process' | 'thread',
-): OwnedWorker {
+  backend?: WorkerBackend,
+): OwnedWorker<Message> {
   if (backend === 'thread') {
     const child = new Worker(worker, { name, stdout: true, stderr: true });
     if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
@@ -49,7 +70,7 @@ export function launchWorker(
 
 /** Owns one read-only worker. MAS threads share the main process's dynamic
  * sandbox grants; direct builds keep utility-process crash isolation. */
-export class UtilityClient {
+export class UtilityClient<Methods extends WorkerMethods = WorkerMethods> {
   private child?: OwnedWorker;
   private ready?: Promise<unknown>;
   private closed = false;
@@ -67,9 +88,9 @@ export class UtilityClient {
     private worker: string,
     private options: {
       name: string;
-      backend?: 'process' | 'thread';
+      backend?: WorkerBackend;
       timeout?: number;
-      initialize?(client: UtilityClient): Promise<unknown>;
+      initialize?(client: UtilityClient<Methods>): Promise<unknown>;
       event?(reply: Reply): void;
       stopped?(): void;
     },
@@ -115,11 +136,22 @@ export class UtilityClient {
       this.rejectPending('Background file services stopped. Retry the operation.'),
     );
   }
-  async call<T>(method: string, args: unknown[] = [], signal?: AbortSignal): Promise<T> {
+  async call<M extends MethodName<Methods>>(
+    method: M,
+    ...[args, signal]: CallArguments<Methods[M]['args']>
+  ): Promise<Methods[M]['reply']> {
     await this.start();
-    return (await this.post(method, args, signal)) as T;
+    return this.post(method, args ?? ([] as Methods[M]['args']), signal);
   }
-  post(
+  /** Sends without starting the worker: for its own initialization. */
+  async post<M extends MethodName<Methods>>(
+    method: M,
+    args: Methods[M]['args'],
+    signal?: AbortSignal,
+  ): Promise<Methods[M]['reply']> {
+    return (await this.send(method, args, signal)) as Methods[M]['reply'];
+  }
+  private send(
     method: string,
     args: unknown[],
     signal?: AbortSignal,
@@ -182,7 +214,7 @@ export class UtilityClient {
     return (this.closing = (async () => {
       // Workers only read source files and write derived metadata. Allow a
       // checkpoint, then stop only this owned worker if reads are stuck.
-      await this.post('close', [], undefined, 2000).catch(() => {});
+      await this.send('close', [], undefined, 2000).catch(() => {});
       if (child.thread) {
         await child.thread.terminate();
         return;

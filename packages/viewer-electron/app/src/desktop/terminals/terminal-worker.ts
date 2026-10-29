@@ -2,7 +2,7 @@ import * as pty from 'node-pty';
 import type { TerminalEvent } from '../../domain/automation/actions';
 import { workerPort } from '../workers/worker-port';
 import { errorMessage } from '../../domain/errors';
-import type { TerminalWorkerRequest } from './terminal-protocol';
+import type { TerminalWorkerReply, TerminalWorkerRequest } from './terminal-protocol';
 import { TerminalOutputBudget } from './terminal-output';
 interface Session {
   process: pty.IPty;
@@ -16,7 +16,8 @@ interface Session {
 }
 const sessions = new Map<string, Session>();
 const port = workerPort;
-const emit = (event: TerminalEvent) => port.postMessage(event);
+const post = (reply: TerminalWorkerReply) => port.postMessage(reply);
+const emit = (event: TerminalEvent) => post(event);
 function drain(id: string, value: Session): void {
   clearTimeout(value.timer);
   value.timer = undefined;
@@ -66,7 +67,7 @@ port.on('message', (message) => {
             ),
           request.timeoutMs,
         );
-      port.postMessage({ type: 'started', id: request.id, pid: process.pid });
+      post({ type: 'started', id: request.id, pid: process.pid });
       process.onData((data) => {
         if (value.stopped) return;
         const accepted = value.budget.accept(data);

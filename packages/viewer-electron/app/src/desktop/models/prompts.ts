@@ -8,7 +8,7 @@ import {
   type PromptRequest,
 } from '../../domain/command-line/prompt';
 import type { ModelDataLevel } from '../../domain/models/permissions';
-import type { ApplicationSettings, ModelProvider } from '../../domain/services';
+import type { ApplicationSettings, ModelProvider, RequestActor } from '../../domain/services';
 
 type Generate = (
   provider: ModelProvider,
@@ -17,10 +17,10 @@ type Generate = (
   schema: Record<string, unknown>,
   signal: AbortSignal,
   level: ModelDataLevel,
-  actor: 'user' | 'agent',
+  actor: RequestActor,
 ) => Promise<unknown>;
 /** The model prompts ask: the one Settings → Models names for them, or the first. */
-export function promptProvider(settings: ApplicationSettings): ModelProvider | undefined {
+function promptProvider(settings: ApplicationSettings): ModelProvider | undefined {
   return (
     settings.providers.find((provider) => provider.id === settings.prompts.providerID) ??
     settings.providers[0]
@@ -36,7 +36,7 @@ export async function answerPrompt(
   generate: Generate,
   signal: AbortSignal,
   userCommands: ReadonlyMap<string, readonly string[]> = new Map(),
-  actor: 'user' | 'agent' = 'user',
+  actor: RequestActor = 'user',
 ): Promise<PromptAnswer> {
   const provider = promptProvider(settings);
   if (!provider) throw new Error('Add a model in Settings → Models to ask in words.');

@@ -10,6 +10,7 @@ import { operationRoots, type Operations } from './operations';
 import type { CheckpointEstimate, CheckpointRecord } from '../../domain/operations/change-plan';
 import { assertTestRemovalAllowed, removePrivateData } from './removal';
 import { isActiveJob } from '../../domain/operations/jobs';
+import { errorMessage } from '../../domain/errors';
 const recordSchema = z
   .object({
     id: z.uuid(),
@@ -180,7 +181,7 @@ export class Checkpoints {
         entries += items.length;
         if (entries > 10000) throw new Error('Checkpoint exceeds the total 10,000 item limit.');
       } catch (error) {
-        issues.push((error as Error).message);
+        issues.push(errorMessage(error));
       }
     }
     const availableBytes = Math.max(0, status.budgetBytes - status.usedBytes);

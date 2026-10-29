@@ -117,9 +117,7 @@ button[aria-pressed='true'] {
   outline: none;
 }
 .dialog :focus,
-.dialog :focus-visible,
-.settings-shell :focus,
-.settings-shell :focus-visible {
+.dialog :focus-visible {
   outline: none;
   box-shadow: none;
 }
@@ -129,7 +127,6 @@ button[aria-pressed='true'] {
   background: var(--selection);
 }
 .dialog :is(button, select, summary, a[href], [role='button']):focus-visible,
-.settings-shell :is(button, select, summary, a[href], [role='button']):focus-visible,
 .dialog label:has(input[type='checkbox']:focus-visible, input[type='radio']:focus-visible) {
   color: var(--accent);
   background: var(--raised);
@@ -217,7 +214,6 @@ select {
   :is(
     .file-scroll,
     .pdf-scroll,
-    .settings-content,
     .settings-navigation,
     .settings-page,
     .dialog-body,
@@ -243,8 +239,7 @@ select {
   height: 6px;
 }
 .dialog footer > button:not(.primary),
-.media-destination > button,
-.action-button {
+.media-destination > button {
   border-color: var(--line);
   background: var(--field);
 }

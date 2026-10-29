@@ -1,4 +1,4 @@
-import type { UIPreferences, Workspace } from '../../contracts';
+import type { UIPreferences, Workspace, Look } from '../../contracts';
 import type { ApplicationSettings } from '../../services';
 import { builtInProfileIDs, builtInProfiles, type SettingProfile } from '../profiles';
 import {
@@ -11,14 +11,14 @@ import {
 export interface WindowPreferences {
   settings: ApplicationSettings;
   ui: UIPreferences;
-  look: 'dark' | 'light';
+  look: Look;
   diagnostics: readonly ProfileDiagnostic[];
 }
 
 export interface WindowPreferencesInput {
   settings: ApplicationSettings;
   ui: UIPreferences;
-  systemLook: 'dark' | 'light';
+  systemLook: Look;
   workspace: Pick<Workspace, 'profileID' | 'overrides'>;
   profileID?: string;
   includeOverrides?: boolean;

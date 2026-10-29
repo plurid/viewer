@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Pane } from '../contracts';
 import { diffSourceSchema } from '../comparison/diff';
+import { commitPattern } from '../comparison/git';
 const local = z
   .string()
   .min(1)
@@ -67,10 +68,7 @@ export const taskAreaSchema = z
       .object({
         path: local,
         branch: z.string().max(1024).optional(),
-        commit: z
-          .string()
-          .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/)
-          .optional(),
+        commit: z.string().regex(commitPattern).optional(),
         observed: z.number().finite(),
         identity: z.string().max(100).optional(),
       })

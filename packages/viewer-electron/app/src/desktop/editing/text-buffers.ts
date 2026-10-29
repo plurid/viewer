@@ -5,9 +5,10 @@ import { DocumentStore } from '../persistence/document-store';
 import { assertTestRemovalAllowed } from '../operations/removal';
 import { inspectReviewedFile, type ReviewedFile } from '../native/reviewed-file';
 import { localPath } from '../schemas';
-import { message } from '../files/filesystem';
+
 import { MAX_TEXT_BYTES, textVersionSchema } from '../../domain/editing/documents';
 import type { TextBuffer, TextBufferSummary } from '../../domain/editing/documents';
+import { errorMessage } from '../../domain/errors';
 
 export type { TextBuffer, TextBufferSummary } from '../../domain/editing/documents';
 
@@ -96,7 +97,7 @@ export class TextBuffers {
         summaries.push({ ...summary, bytes: Buffer.byteLength(text, 'utf8') });
       } catch (error) {
         this.unreadable.push(
-          `Unsaved text in ${path.join(this.directory, name)} could not be read, so it was kept there: ${message(error)}`,
+          `Unsaved text in ${path.join(this.directory, name)} could not be read, so it was kept there: ${errorMessage(error)}`,
         );
       }
     }

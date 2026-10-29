@@ -129,7 +129,9 @@ export function selectedRange(entries: FileEntry[], anchor: string, target: stri
     : entries.slice(Math.min(a, b), Math.max(a, b) + 1).map((entry) => entry.path);
 }
 
-export function fileGroup(entry: FileEntry, group: 'none' | 'kind' | 'modified'): string {
+/** How a folder's items are grouped in its view. */
+export type FileGrouping = 'none' | 'kind' | 'modified';
+export function fileGroup(entry: FileEntry, group: FileGrouping): string {
   if (group === 'none') return '';
   if (group === 'kind')
     return browsable(entry)
@@ -146,10 +148,7 @@ export function fileGroup(entry: FileEntry, group: 'none' | 'kind' | 'modified')
     .map((part, index) => String(part).padStart(index ? 2 : 4, '0'))
     .join('-');
 }
-export function groupEntries(
-  entries: FileEntry[],
-  group: 'none' | 'kind' | 'modified',
-): FileEntry[] {
+export function groupEntries(entries: FileEntry[], group: FileGrouping): FileEntry[] {
   return group === 'none'
     ? entries
     : entries.toSorted(

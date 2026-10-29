@@ -16,7 +16,7 @@ function headerCount(request: Pick<IncomingMessage, 'rawHeaders'>, name: string)
   return count;
 }
 
-export function authorizeLoopbackRequest(
+function authorizeLoopbackRequest(
   request: Pick<IncomingMessage, 'headers' | 'rawHeaders'>,
   port: number,
 ): void {

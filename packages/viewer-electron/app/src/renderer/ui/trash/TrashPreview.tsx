@@ -4,6 +4,7 @@ import type { TrashItem } from '../../../domain/files/trash';
 import { formatBytes } from '../../../domain/files/entries';
 import { PreviewHost } from '../../previews/PreviewHost';
 import { Dialog, Empty, IconButton, Loading } from '../primitives';
+import { errorMessage } from '../../../domain/errors';
 
 /** Quick Look for files in the Trash, read through the desktop's scoped Trash resource. */
 export function TrashPreview({
@@ -41,7 +42,7 @@ export function TrashPreview({
         setResource(value);
       })
       .catch((error) => {
-        if (!closed) setError((error as Error).message);
+        if (!closed) setError(errorMessage(error));
       });
     return () => {
       closed = true;
@@ -80,7 +81,7 @@ export function TrashPreview({
                 .then((restored) => {
                   if (restored) onClose();
                 })
-                .catch((error) => setRestoreError((error as Error).message))
+                .catch((error) => setRestoreError(errorMessage(error)))
                 .finally(() => setBusy(false));
             }}
           >

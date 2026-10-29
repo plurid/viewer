@@ -820,10 +820,3 @@
   resize: vertical;
   font: inherit;
 }
-.workflow-artifact {
-  max-height: 260px;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-}

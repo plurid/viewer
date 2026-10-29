@@ -3,7 +3,7 @@ import { imageDimensions } from '../previews/image-dimensions';
 import type { Decoder } from '../previews/derived';
 
 /** The longest edge of a rendered preview. */
-export const renditionSize = 4096;
+const renditionSize = 4096;
 /** This module formerly invoked Quick Look. Its replacement receives only an
  * already-open source descriptor and terminates the owned helper on cancellation. */
 export function imageDecoder(

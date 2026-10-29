@@ -21,6 +21,7 @@ import type { WorkflowDocument, WorkflowRun } from '../../domain/automation/work
 import type { ActionRecipe } from '../../domain/services';
 import type { Workflows } from './workflows';
 import { containsPath } from '../files/containment';
+import { errorMessage } from '../../domain/errors';
 
 const pending = (status?: WorkflowRun['status']) =>
   !!status && ['running', 'paused', 'waiting-review'].includes(status);
@@ -101,7 +102,7 @@ export class WatchRules {
           this.attach(rule);
           this.schedule(rule);
         } catch (error) {
-          await this.stop(rule, (error as Error).message);
+          await this.stop(rule, errorMessage(error));
         }
       }
     });
@@ -441,7 +442,7 @@ export class WatchRules {
       this.dependencies.changed(publicRule(rule));
       this.schedule(rule);
     } catch (error) {
-      await this.stop(rule, (error as Error).message);
+      await this.stop(rule, errorMessage(error));
     }
   }
   private async detach(id: string) {

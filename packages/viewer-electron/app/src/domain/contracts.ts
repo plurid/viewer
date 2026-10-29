@@ -121,7 +121,8 @@ export interface FolderListing {
   parent: string;
   entries: FileEntry[];
 }
-export type ViewMode = 'list' | 'grid' | 'columns' | 'gallery' | 'map';
+export const viewModes = ['list', 'grid', 'columns', 'gallery', 'map'] as const;
+export type ViewMode = (typeof viewModes)[number];
 export type SortKey = 'name' | 'modified' | 'created' | 'size' | 'kind' | 'extension';
 export type ListColumn = SortKey | 'git';
 export interface FolderPane {
@@ -339,6 +340,8 @@ export interface Workspace {
 }
 /** Current saved-state format. Increment with a compatible migration and preserved input. */
 export const CURRENT_STATE_VERSION = 11 as const;
+/** The interface's colour scheme. */
+export type Look = 'dark' | 'light';
 export interface SavedState {
   version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
@@ -360,7 +363,7 @@ export interface SavedState {
   lineHistory?: string[];
   /** Requests and reviewed answers, retained privately without replaying a model request. */
   promptHistory?: PromptHistoryEntry[];
-  look: 'dark' | 'light';
+  look: Look;
   ui?: UIPreferences;
 }
 export type SidebarSection = 'locations' | 'favorites' | 'recents';

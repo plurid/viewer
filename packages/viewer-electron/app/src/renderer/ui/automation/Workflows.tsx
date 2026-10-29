@@ -8,7 +8,6 @@ import {
   type WorkflowRun,
 } from '../../../domain/automation/workflows';
 import type { ActionContext } from '../../../domain/services';
-import type { CommandContext } from '../../commands/registry';
 import { activeWorkspace } from '../../state/store';
 import { useWorkspace } from '../../workspace/context';
 import { Dialog, Loading } from '../primitives';
@@ -17,6 +16,8 @@ import { WorkflowArtifact } from './WorkflowArtifact';
 import { WatchRuleControls } from './WatchRules';
 import { ChoiceButton } from '../ChoiceMenu';
 import type { WatchRule } from '../../../domain/automation/watch-rules';
+import { errorMessage } from '../../../domain/errors';
+import { sendWindowEvent, useWindowEvent } from '../../app/window-events';
 const statusLabel: Record<WorkflowRun['status'] | WorkflowRun['steps'][number]['status'], string> =
   {
     running: 'Running',
@@ -60,43 +61,36 @@ export function WorkflowControls() {
     try {
       await work();
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setBusy(false);
     }
   };
-  useEffect(() => {
-    const show = (event: Event) => {
-      const detail = (
-        event as CustomEvent<{ file?: string; runID?: string; context?: CommandContext }>
-      ).detail;
-      const space = activeWorkspace();
-      setContext({
-        workspaceID: space.id,
-        paneID: detail?.context?.paneID ?? 'workflow',
-        rootID: detail?.context?.paneID
-          ? (workspace.rootID(detail.context.paneID) ?? 'workflow')
-          : 'workflow',
-        actor: 'user',
-        sources: detail?.context?.selection.map((file) => file.path) ?? [],
-      });
-      setOpen(true);
-      setError('');
-      if (detail?.runID) setSelected(detail.runID);
-      if (detail?.file)
-        void window.viewer
-          .workflow({ kind: 'read', file: detail.file })
-          .then((reply) => {
-            setDocument(documentReply(reply));
-            setBindings({});
-            setEditor(undefined);
-            setSelected(undefined);
-          })
-          .catch((error) => setError(error.message));
-    };
-    window.addEventListener('viewer:workflows', show);
-    return () => window.removeEventListener('viewer:workflows', show);
-  }, [workspace]);
+  useWindowEvent('viewer:workflows', (detail) => {
+    const space = activeWorkspace();
+    setContext({
+      workspaceID: space.id,
+      paneID: detail.context?.paneID ?? 'workflow',
+      rootID: detail.context?.paneID
+        ? (workspace.rootID(detail.context.paneID) ?? 'workflow')
+        : 'workflow',
+      actor: 'user',
+      sources: detail.context?.selection.map((file) => file.path) ?? [],
+    });
+    setOpen(true);
+    setError('');
+    if (detail.runID) setSelected(detail.runID);
+    if (detail.file)
+      void window.viewer
+        .workflow({ kind: 'read', file: detail.file })
+        .then((reply) => {
+          setDocument(documentReply(reply));
+          setBindings({});
+          setEditor(undefined);
+          setSelected(undefined);
+        })
+        .catch((error) => setError(error.message));
+  });
   useEffect(
     () =>
       window.viewer.onEvent((event) => {
@@ -122,7 +116,7 @@ export function WorkflowControls() {
           if (alive) setRun(result);
         }
       } catch (error) {
-        if (alive) setError((error as Error).message);
+        if (alive) setError(errorMessage(error));
       }
       if (alive) timer = setTimeout(() => void refresh(), 1500);
     };
@@ -144,9 +138,7 @@ export function WorkflowControls() {
         </span>
         <button
           onClick={() => {
-            window.dispatchEvent(
-              new CustomEvent('viewer:workflows', { detail: { runID: notice.runID } }),
-            );
+            sendWindowEvent('viewer:workflows', { runID: notice.runID });
             setNotice(undefined);
           }}
         >
@@ -465,10 +457,7 @@ export function WorkflowControls() {
                             });
                             if (Array.isArray(plan)) throw new Error('The task is unavailable.');
                             reviewOperationPlan(plan);
-                          } else
-                            window.dispatchEvent(
-                              new CustomEvent('viewer:tasks', { detail: record.taskID }),
-                            );
+                          } else sendWindowEvent('viewer:tasks', record.taskID);
                           setOpen(false);
                         })
                       }

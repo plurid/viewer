@@ -2,6 +2,7 @@ import JSON5 from 'json5';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import { parseAllDocuments } from 'yaml';
 import { parseXML, type XMLNode } from './xml';
+import { errorMessage } from '../../errors';
 
 export const structuredFormats = ['json', 'jsonc', 'json5', 'yaml', 'yml', 'xml'] as const;
 export const isStructured = (extension: string) =>
@@ -118,7 +119,7 @@ export function inspectStructured(
     }
     if (pending.length) result.limited = true;
   } catch (error) {
-    result.error = String((error as Error).message || error);
+    result.error = String(errorMessage(error) || error);
   }
   return result;
 }

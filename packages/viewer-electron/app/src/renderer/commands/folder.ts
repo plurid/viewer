@@ -6,7 +6,6 @@ import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath, baseName } from '../../domain/workspaces/planes';
 import { convertibleImage } from '../../domain/operations/image-conversions';
-export { parentPath } from '../../domain/workspaces/planes';
 import {
   favorite,
   getState,
@@ -20,6 +19,7 @@ import {
   writeFileClipboard,
 } from '../state/store';
 import type { CommandContext, CommandDefinition } from './registry';
+export { parentPath } from '../../domain/workspaces/planes';
 
 export interface FolderActions {
   open(entries: readonly FileEntry[], linked: boolean, another?: boolean): void;

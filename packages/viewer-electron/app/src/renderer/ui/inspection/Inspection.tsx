@@ -3,6 +3,7 @@ import type { InspectionResult } from '../../../domain/files/inspection';
 import { activeWorkspace, previewValues, report, savePreviewValue } from '../../state/store';
 import { useWorkspace } from '../../workspace/context';
 import { Dialog, Loading } from '../primitives';
+import { useWindowEvent } from '../../app/window-events';
 export function InspectionControls() {
   const workspace = useWorkspace();
   const [file, setFile] = useState<string>();
@@ -16,30 +17,20 @@ export function InspectionControls() {
     text: string;
     error?: string;
   }>();
-  useEffect(() => {
-    const inspect = (event: Event) => {
-      const path = (event as CustomEvent<string>).detail;
-      setResult(undefined);
-      setError('');
-      setContent(false);
-      setOCR(false);
-      setFile(path);
-    };
-    const notes = (event: Event) => {
-      const paneID = (event as CustomEvent<string>).detail;
-      setNote({
-        paneID,
-        owner: activeWorkspace().id,
-        text: String(previewValues(paneID)['notes.text'] || ''),
-      });
-    };
-    window.addEventListener('viewer:inspect', inspect);
-    window.addEventListener('viewer:notes', notes);
-    return () => {
-      window.removeEventListener('viewer:inspect', inspect);
-      window.removeEventListener('viewer:notes', notes);
-    };
-  }, []);
+  useWindowEvent('viewer:inspect', (path) => {
+    setResult(undefined);
+    setError('');
+    setContent(false);
+    setOCR(false);
+    setFile(path);
+  });
+  useWindowEvent('viewer:notes', (paneID) => {
+    setNote({
+      paneID,
+      owner: activeWorkspace().id,
+      text: String(previewValues(paneID)['notes.text'] || ''),
+    });
+  });
   useEffect(() => {
     if (!file) return;
     let live = true;

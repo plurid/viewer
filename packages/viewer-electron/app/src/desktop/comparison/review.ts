@@ -3,7 +3,7 @@ import { lstat, realpath } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import type { CapturedTarget } from '../../domain/automation/actions';
-import { gitRelativePath } from '../../domain/comparison/git';
+import { gitRelativePath, commitPattern } from '../../domain/comparison/git';
 import {
   parseReviewPatch,
   type GitReviewReply,
@@ -19,7 +19,6 @@ import { GitReader, runGit, gitEnvironment, gitSafeOptions } from './git';
 
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 const identity = (info: { dev: number; ino: number }) => `${info.dev}:${info.ino}`;
-const commitPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const diffOptions = [
   '--no-ext-diff',
   '--no-textconv',
@@ -56,7 +55,7 @@ interface Ports {
 }
 
 /** Fixed index-only write. It cannot run a shell, hook, external diff, filter or transport. */
-export function applyReviewPatch(
+function applyReviewPatch(
   root: string,
   patch: string,
   reverse: boolean,

@@ -3,6 +3,7 @@ import type { SettingsEditor } from './editor';
 import { useEffect, useState } from 'react';
 import type { ViewerAPI } from '../../../domain/contracts';
 import { KeyCapture } from './KeyCapture';
+import { errorMessage } from '../../../domain/errors';
 
 /** Sidebar section visibility and navigation defaults. */
 export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
@@ -39,7 +40,7 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
     try {
       setCommand(await window.viewer.shellCommand(action));
     } catch (failure) {
-      setError((failure as Error).message);
+      setError(errorMessage(failure));
     } finally {
       setBusy(false);
     }

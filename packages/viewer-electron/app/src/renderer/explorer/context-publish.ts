@@ -5,7 +5,7 @@ import { useWorkspace } from '../workspace/context';
 
 /** The desktop accepts at most this many published sources. A larger selection is
  * not described at all, rather than as a misleading partial list. */
-export const publishedSelectionLimit = 2000;
+const publishedSelectionLimit = 2000;
 
 /** A held arrow key changes the selection every few milliseconds; publish once it settles. */
 const settleDelay = 100;
