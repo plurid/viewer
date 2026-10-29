@@ -16,6 +16,13 @@ import type {
   WorkbookMerge,
 } from '../../domain/previews/documents/office';
 import { columnName } from '../../domain/previews/documents/office';
+import type { TableBounds } from '../../domain/previews/documents/table-selection';
+import {
+  tableBounds,
+  rangesIntersect,
+  rangeLabel,
+  tableTSV,
+} from '../../domain/previews/documents/table-selection';
 import { createTableSession } from './table-session';
 import { delimitedRows, type DelimitedPreview } from './table-data';
 import { Empty, Loading } from '../ui/primitives';
@@ -36,6 +43,7 @@ interface TableView {
   query?: string;
   row?: number;
   column?: number;
+  anchor?: TableAddress;
 }
 /** Keep addresses and filters, never duplicate cell values into workspace state. */
 export function rememberTableView(
@@ -71,6 +79,7 @@ export function DataTable({
   renderControls,
   target,
   navigate,
+  copyRange,
 }: {
   rows: readonly WorkbookRow[];
   headers: readonly string[];
@@ -87,12 +96,19 @@ export function DataTable({
   renderControls?(controls: TableControls): ReactNode;
   target?: TableAddress;
   navigate?(target: TableAddress): void;
+  copyRange?(range: TableBounds, signal: AbortSignal): Promise<string>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
   const [address, setAddress] = useState('');
   const [addressError, setAddressError] = useState('');
   const selectedTarget = useRef<TableAddress | undefined>(undefined);
+  const dragging = useRef(false);
+  const dragged = useRef(false);
+  const copying = useRef<AbortController | undefined>(undefined);
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [copyStatus, setCopyStatus] = useState('');
+  useEffect(() => () => copying.current?.abort(), []);
   const [views, setViews] = usePreviewState<Record<string, TableView>>(
     { state },
     'table.views',
@@ -240,19 +256,36 @@ export function DataTable({
     selection || (addressToInspect && resolveTableCell(addressToInspect, rows, merges));
   const activeRow = current?.row ?? rows[0]?.row ?? 1;
   const activeColumn = current?.cell?.column ?? remembered?.column ?? 1;
+  const range = tableBounds(
+    {
+      anchor: remembered?.anchor ?? { row: activeRow, column: activeColumn },
+      focus: { row: activeRow, column: activeColumn },
+    },
+    merges,
+  );
+  const persistSelection = useCallback(
+    (destination: TableAddress, extend: boolean) => {
+      const start = extend
+        ? (remembered?.anchor ?? { row: activeRow, column: activeColumn })
+        : destination;
+      setViews((previous) => rememberTableView(previous, label, { ...destination, anchor: start }));
+      setCopyStatus('');
+    },
+    [remembered?.anchor, activeRow, activeColumn, setViews, label],
+  );
   const selectCell = useCallback(
-    (requested: TableAddress, focus = true) => {
+    (requested: TableAddress, focus = true, extend = false) => {
       const selected = resolveTableCell(requested, rows, merges);
       const row = selected.row,
         column = selected.cell.column;
       setSelection(selected);
-      setViews((previous) => rememberTableView(previous, label, { row, column }));
+      persistSelection({ row, column }, extend);
       const index = body.findIndex((item) => item.row >= requested.row);
       if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });
       horizontal.scrollToIndex(column - 1, { align: 'auto' });
       if (focus) ref.current?.focus({ preventScroll: true });
     },
-    [merges, rows, body, setViews, label, virtual, horizontal],
+    [merges, rows, body, persistSelection, virtual, horizontal],
   );
   useEffect(() => {
     setAddress(columnName(activeColumn) + activeRow);
@@ -260,18 +293,41 @@ export function DataTable({
   useEffect(() => {
     if (target && selectedTarget.current !== target) {
       selectedTarget.current = target;
-      selectCell(target);
+      selectCell(target, true, true);
     }
   }, [target, selectCell]);
-  const go = (destination: TableAddress) => {
+  const go = (destination: TableAddress, extend = false) => {
     setAddressError('');
     if (query) setQuery('');
     if (
       navigate &&
       (destination.row < (rows[0]?.row ?? 1) || destination.row > (rows.at(-1)?.row ?? 0))
-    )
+    ) {
+      persistSelection(destination, extend);
       navigate(destination);
-    else selectCell(destination);
+    } else selectCell(destination, true, extend);
+  };
+  const copy = async () => {
+    if (copying.current) return;
+    const abort = new AbortController();
+    copying.current = abort;
+    setCopyBusy(true);
+    setCopyStatus('');
+    try {
+      const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
+      const text = copyRange
+        ? await copyRange(range, signal)
+        : tableTSV(range, rows, merges, formatted);
+      signal.throwIfAborted();
+      await navigator.clipboard.writeText(text);
+      if (!abort.signal.aborted) setCopyStatus(`Copied ${rangeLabel(range)}`);
+    } catch (error) {
+      if (!abort.signal.aborted)
+        setCopyStatus((error as Error).message || 'Could not copy. Try again.');
+    } finally {
+      if (copying.current === abort) copying.current = undefined;
+      if (!abort.signal.aborted) setCopyBusy(false);
+    }
   };
   const display = (cell: WorkbookCell) =>
     formatted && cell.formatted !== undefined ? cell.formatted : cell.value;
@@ -324,12 +380,32 @@ export function DataTable({
             />
             <button type="submit">Go</button>
           </form>
+          <div className="workbook-copy">
+            <span aria-label="Selected range">{rangeLabel(range)}</span>
+            <button onClick={() => void copy()} disabled={copyBusy}>
+              Copy
+            </button>
+            {copyBusy && (
+              <button
+                onClick={() => {
+                  copying.current?.abort();
+                  copying.current = undefined;
+                  setCopyBusy(false);
+                  setCopyStatus('Copy cancelled');
+                }}
+              >
+                Cancel copy
+              </button>
+            )}
+          </div>
           {current?.cell && (
             <>
               <span>
                 {current.cell.formula !== undefined
                   ? `${current.cell.cached ? 'Saved value: ' + current.cell.value : 'No saved value'} · Formula: ${current.cell.formula || '(shared formula)'}`
-                  : current.cell.value || 'Empty cell'}
+                  : current.cell.value
+                    ? 'Value: ' + current.cell.value
+                    : 'Empty cell'}
                 {current.cell.formatted !== undefined &&
                   current.cell.formatted !== current.cell.value &&
                   ` · Formatted: ${current.cell.formatted || '(empty)'}`}
@@ -340,6 +416,11 @@ export function DataTable({
             </>
           )}
         </div>
+      )}
+      {numbered && copyStatus && (
+        <p className="workbook-copy-status" role="status">
+          {copyStatus}
+        </p>
       )}
       {addressError && (
         <p className="inline-warning" role="alert">
@@ -357,11 +438,26 @@ export function DataTable({
         role={numbered ? 'grid' : 'table'}
         tabIndex={numbered ? 0 : undefined}
         aria-readonly={numbered ? true : undefined}
+        aria-multiselectable={numbered ? true : undefined}
         aria-activedescendant={numbered ? `${id}-${activeRow}-${activeColumn}` : undefined}
         onKeyDown={
           numbered
             ? (event) => {
-                if (event.altKey || event.shiftKey || event.target !== event.currentTarget) return;
+                if (event.altKey || event.target !== event.currentTarget) return;
+                if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void copy();
+                  return;
+                }
+                if (
+                  event.key === 'Escape' &&
+                  (range.fromRow !== range.toRow || range.fromColumn !== range.toColumn)
+                ) {
+                  event.stopPropagation();
+                  selectCell({ row: activeRow, column: activeColumn });
+                  return;
+                }
                 if (event.ctrlKey && (event.key === 'PageUp' || event.key === 'PageDown')) return;
                 const merge = merges.find(
                   (merge) => activeRow === merge.fromRow && activeColumn === merge.fromColumn,
@@ -382,11 +478,17 @@ export function DataTable({
                 if (next) {
                   event.preventDefault();
                   event.stopPropagation();
-                  go(next);
+                  go(next, event.shiftKey);
                 }
               }
             : undefined
         }
+        onPointerUp={() => {
+          dragging.current = false;
+        }}
+        onPointerCancel={() => {
+          dragging.current = false;
+        }}
         aria-label={label}
         aria-rowcount={numbered ? (sourceLastRow ?? rows.at(-1)?.row ?? 0) + 1 : rows.length + 1}
         aria-colcount={columns + (numbered ? 1 : 0)}
@@ -503,10 +605,23 @@ export function DataTable({
                       id={numbered ? `${id}-${sourceRow}-${cell.column}` : undefined}
                       aria-selected={
                         numbered
-                          ? activeRow === sourceRow && activeColumn === cell.column
+                          ? rangesIntersect(
+                              range,
+                              merge?.merge ?? {
+                                fromRow: sourceRow,
+                                toRow: sourceRow,
+                                fromColumn: cell.column,
+                                toColumn: cell.column,
+                              },
+                            )
                           : undefined
                       }
                       aria-colindex={index + (numbered ? 2 : 1)}
+                      data-active-cell={
+                        numbered && activeRow === sourceRow && activeColumn === cell.column
+                          ? true
+                          : undefined
+                      }
                       aria-colspan={
                         merge ? merge.merge.toColumn - merge.merge.fromColumn + 1 : undefined
                       }
@@ -538,8 +653,32 @@ export function DataTable({
                           className={`workbook-cell${merge ? ' workbook-merged-cell' : ''}`}
                           tabIndex={-1}
                           aria-label={`${columnName(cell.column)}${sourceRow}: ${cell.formula !== undefined && !cell.cached ? 'No saved value' : display(cell) || 'Empty'}${mergeLabel ? ' · Merged ' + mergeLabel : ''}`}
-                          onClick={() => {
-                            selectCell({ row: sourceRow, column: cell.column });
+                          onPointerDown={(event) => {
+                            if (event.button !== 0) return;
+                            event.preventDefault();
+                            dragging.current = true;
+                            dragged.current = false;
+                            selectCell(
+                              { row: sourceRow, column: cell.column },
+                              true,
+                              event.shiftKey,
+                            );
+                          }}
+                          onPointerEnter={(event) => {
+                            if (!dragging.current || !(event.buttons & 1)) return;
+                            dragged.current = true;
+                            selectCell({ row: sourceRow, column: cell.column }, true, true);
+                          }}
+                          onClick={(event) => {
+                            if (dragged.current) {
+                              dragged.current = false;
+                              return;
+                            }
+                            selectCell(
+                              { row: sourceRow, column: cell.column },
+                              true,
+                              event.shiftKey,
+                            );
                           }}
                         >
                           {continuation && (

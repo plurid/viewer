@@ -13,6 +13,7 @@ import { WorksheetNavigation } from '../WorksheetNavigation';
 import { WordBlock } from '../WordBlock';
 import OfficeLayoutPreview from './OfficeLayoutPreview';
 import { WorksheetTabs } from '../WorksheetTabs';
+import { worksheetTSV } from '../worksheet-copy';
 import type { TableAddress } from '../../../domain/previews/documents/table-navigation';
 
 export default function OfficePreview(context: PreviewContext) {
@@ -326,6 +327,11 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
           formatted={formatted}
           merges={sheet.merges}
           renderControls={toolbar}
+          copyRange={
+            page
+              ? (range, signal) => worksheetTSV(context, sheet.name, range, formatted, signal)
+              : undefined
+          }
           target={cellTarget}
           navigate={
             page

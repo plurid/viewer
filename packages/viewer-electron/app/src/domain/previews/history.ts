@@ -29,6 +29,7 @@ const recalledKeys = new Set([
   'epub.chapter',
   'epub.size',
   'epub.contents',
+  'epub.bookmarks',
   'office.formatted',
   'office.mode',
   'office.sheet',
@@ -52,8 +53,12 @@ const recalledKeys = new Set([
   'tree.scroll',
   'tree.query',
 ]);
+/** Reading markers and private notes survive a source revision; transient coordinates reset. */
+export function preservePreviewValue(key: string): boolean {
+  return key.startsWith('notes.') || key === 'epub.bookmarks';
+}
 
-/** Positions and presentation only. Private notes, edits and resource capabilities stay with their owners. */
+/** Reading markers, positions and presentation. Private edits and capabilities stay with their owners. */
 export function fileViewValues(values: Record<string, JSONValue>): Record<string, JSONValue> {
   return Object.fromEntries(
     Object.entries(values).filter(

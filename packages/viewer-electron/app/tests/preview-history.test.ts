@@ -65,6 +65,23 @@ it('keeps existing plane positions independent while new views recall the latest
   const third = addPane(file.path, 'preview', true, { keepSeparate: true });
   expect(previewState(third.id, file).get('pdf.page')).toBe(9);
 });
+it.each(['plane', 'transient'])(
+  'retains EPUB bookmarks across a changed source in a %s view',
+  (kind) => {
+    const id = kind === 'plane' ? addPane(file.path, 'preview', true).id : 'bookmark-quick';
+    const bookmarks = [
+      { id: 'one', name: 'Saved position', chapter: 1, path: 'Book/part.xhtml', top: 230, left: 0 },
+    ];
+    const before = previewState(id, file);
+    before.set('epub.bookmarks', bookmarks);
+    before.set('epub.chapter', 1);
+    const after = previewState(id, { ...file, modified: 500 });
+    expect(after.get('epub.bookmarks')).toEqual(bookmarks);
+    expect(after.get('epub.chapter')).toBeUndefined();
+    after.set('epub.chapter', 0);
+    expect(after.get('epub.bookmarks')).toEqual(bookmarks);
+  },
+);
 
 it('recalls Quick Preview positions through a fresh transient view and a changed source resets them', () => {
   previewState('quick-one', file).set('media.position', 12.5);

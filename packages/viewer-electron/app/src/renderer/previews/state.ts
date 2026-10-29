@@ -9,6 +9,7 @@ import {
 import { activeWorkspace, getState, previewValues, savePreviewValue } from '../state/store';
 import { rememberPreviewFile } from '../state/persistence';
 import type { JSONValue } from '../../domain/workspaces/project';
+import { preservePreviewValue } from '../../domain/previews/history';
 const views = new Map<string, Map<string, unknown>>();
 export function previewState(id: string, file?: FileEntry): NonNullable<PreviewContext['state']> {
   const owner = getState() && activeWorkspace().id;
@@ -21,7 +22,7 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
           file &&
           before &&
           !sameSourceVersion(before, sourceVersion(file)) &&
-          !key.startsWith('notes.')
+          !preservePreviewValue(key)
         )
           return;
         return values[key];
@@ -55,8 +56,7 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
     for (const [key, value] of Object.entries(remembered ?? {}))
       if (!view.has(key)) view.set(key, value);
   }
-  // A new version of the file resets its view, notes aside, as in a workspace plane above: Quick
-  // Preview, Gallery and Columns kept stale measurements, pages and sheets.
+  // Reset transient coordinates after a source revision, retaining notes and reading markers.
   return {
     get: (key) => {
       const before = view!.get('_sourceVersion') as SourceVersion | undefined;
@@ -64,7 +64,7 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
         file &&
         before &&
         !sameSourceVersion(before, sourceVersion(file)) &&
-        !key.startsWith('notes.')
+        !preservePreviewValue(key)
       )
         return;
       return view!.get(key);
@@ -73,7 +73,7 @@ export function previewState(id: string, file?: FileEntry): NonNullable<PreviewC
       const before = view!.get('_sourceVersion') as SourceVersion | undefined;
       if (file && !(before && sameSourceVersion(before, sourceVersion(file)))) {
         if (before)
-          for (const old of [...view!.keys()]) if (!old.startsWith('notes.')) view!.delete(old);
+          for (const old of [...view!.keys()]) if (!preservePreviewValue(old)) view!.delete(old);
         view!.set('_sourceVersion', sourceVersion(file));
       }
       view!.set(key, value);

@@ -97,6 +97,31 @@ it('resolves encoded book-local references and rejects external URLs and travers
   ])
     expect(epubReference('Book/start.xhtml', value)).toBeUndefined();
 });
+it('saves, renames and reopens a named bookmark at the original reading position', async () => {
+  const current = context();
+  const view = render(<EPUBPreview {...current} />);
+  await screen.findByRole('link', { name: 'Footnote one' });
+  document.querySelector('.epub-chapter')!.scrollTop = 345;
+  fireEvent.click(screen.getByRole('button', { name: 'Bookmarks' }));
+  fireEvent.change(screen.getByLabelText('Bookmark name'), {
+    target: { value: 'Circuit reference' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Add bookmark' }));
+  expect(screen.getByRole('button', { name: 'Circuit reference' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Rename bookmark Circuit reference' }));
+  fireEvent.change(screen.getByLabelText('Bookmark name'), { target: { value: 'Read again' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+  view.unmount();
+  render(<EPUBPreview {...current} />);
+  await screen.findByRole('link', { name: 'Footnote one' });
+  fireEvent.click(screen.getByRole('button', { name: 'Next chapter' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Bookmarks' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Read again' }));
+  expect(document.querySelector('.epub-chapter')!.scrollTop).toBe(345);
+  expect(screen.getByRole('link', { name: 'Footnote one' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove bookmark Read again' }));
+  expect(screen.queryByRole('button', { name: 'Read again' })).toBeNull();
+});
 it('mounts only safe text and book links, without source scripts, styling or external resources', () => {
   const html =
     '<script>bad()</script><style>body{display:none}</style><iframe src="https://example.invalid"></iframe><p id="safe" onclick="bad()" style="color:red">Readable</p><img src="https://example.invalid/tracker" alt="Blocked picture"><a href="javascript:bad()">Blocked link</a>';

@@ -74,6 +74,15 @@ restoration and unchanged fixture hashes. Set `VIEWER_TEST_WARM_BUDGET_MS` to en
 renderer-ready budget; these hidden-window measurements do not measure physical compositor frame
 rate.
 
+`tests/native/reader-actions.ts` checks worksheet range selection/copy and named EPUB bookmark
+creation/return in the packaged readers, including normal/minimum-width light/dark captures and
+retention through reopen, restart and a changed source copy. It uses a generated workbook, a
+verified public EPUB copy and an isolated profile. Supply `VIEWER_TEST_BINARY` and both preservation
+variables above; `VIEWER_TEST_READER_CORPUS` can select the retained public-book corpus. The
+scenario captures requested clipboard text through a test adapter without replacing the person's OS
+clipboard, so it does not qualify native clipboard integration. Inputs, captures and results remain
+retained.
+
 The app's `tests/native/` directory contains scenario drivers for Office layout, preview
 restoration/recovery, mixed workspaces, task workflows, media and other features. Run them with the
 same preservation variables and candidate binary. Their result identifies retained inputs, captures

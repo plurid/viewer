@@ -68,6 +68,30 @@ can skip gaps; page filtering searches loaded values. The compact address/detail
 selected cell's saved value and formula. Bounded merged ranges retain their anchor, including a
 **Continued from…** value when the anchor is on an earlier page.
 
+### Select and copy a range
+
+Drag across cells, Shift-click or use Shift + arrow keys to extend the selection. The shared fill
+marks the selected range; the focused grid outlines its active cell. The detail row shows the source
+range beside **Copy** and the active cell's saved value. Escape collapses a multi-cell range to its
+active cell. With a single cell selected, Escape continues the normal preview-close behavior.
+
+Choose **Copy** or press Control/Command + C while the grid has focus. The clipboard receives
+tab-separated values using the current **Formatted values** or **Stored values** setting. Fields
+containing tabs, line breaks or quotes are quoted, with embedded quotes doubled. Blank cells and
+source row/column gaps remain empty fields. Merged values appear only in the upper-left cell of
+their range. Formulas are never evaluated or copied in place of values; formulas without cached
+values copy as empty cells.
+
+Selections use source coordinates. A display filter does not remove intervening source rows from the
+copied rectangle. Known merged cells expand the selection to their full range. A selection can span
+pages: copying fetches additional bounded pages without moving the visible page. Incomplete
+extraction rejects the copy. If a merge discovered on a later page extends beyond the selection,
+select its entire range before copying.
+
+Copy is limited to 10,000 cells, 1 MiB of UTF-8 text and a 15-second timeout. Use **Cancel copy**
+while a copy is pending. Status or failure appears below the detail row; copying never changes the
+source workbook.
+
 ## Evidence, search and limits
 
 Inspection, content indexing and agent readers use the bounded semantic reader, not rendered layout.

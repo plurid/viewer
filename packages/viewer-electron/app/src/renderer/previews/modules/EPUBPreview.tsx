@@ -8,6 +8,8 @@ import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { useOfficeDocument } from '../useOfficeDocument';
+import { EPUBBookmarks } from '../EPUBBookmarks';
+import { readEPUBBookmarks } from '../../../domain/previews/documents/epub-bookmarks';
 export { chapterNodes } from '../epub-content';
 const emptyChapters: EPUBChapter[] = [];
 
@@ -19,6 +21,9 @@ export default function EPUBPreview(context: PreviewContext) {
   }, [context.evidence, setChapter]);
   const [size, setSize] = usePreviewState(context, 'epub.size', context.reading?.fontSize ?? 16);
   const [contents, setContents] = usePreviewState(context, 'epub.contents', true);
+  const [savedBookmarks, setBookmarks] = usePreviewState<unknown>(context, 'epub.bookmarks', []);
+  const bookmarks = useMemo(() => readEPUBBookmarks(savedBookmarks), [savedBookmarks]);
+  const [marking, setMarking] = useState(false);
   const chapters = document?.chapters || emptyChapters;
   const position = Math.min(chapter, Math.max(0, chapters.length - 1));
   const html = chapters[position]?.html || '';
@@ -133,10 +138,20 @@ export default function EPUBPreview(context: PreviewContext) {
           run: () => setFinding(true),
         },
         {
+          id: 'epub-bookmarks',
+          label: 'Show bookmarks',
+          aliases: ['save reading position', 'epub'],
+          available: !!chapters.length,
+          run: () => setMarking(true),
+        },
+        {
           id: 'epub-contents',
           label: 'Show / hide contents',
           available: !!chapters.length,
-          run: () => setContents((value) => !value),
+          run: () => {
+            setContents(marking ? true : !contents);
+            setMarking(false);
+          },
         },
         {
           id: 'epub-next',
@@ -151,7 +166,7 @@ export default function EPUBPreview(context: PreviewContext) {
           run: () => setChapter(position - 1),
         },
       ],
-      [chapters.length, position, setChapter, setContents],
+      [chapters.length, position, setChapter, setContents, contents, marking],
     ),
   );
   if (error)
@@ -167,8 +182,11 @@ export default function EPUBPreview(context: PreviewContext) {
         <IconButton
           icon="sidebar"
           label="Show contents"
-          aria-pressed={contents}
-          onClick={() => setContents(!contents)}
+          aria-pressed={contents && !marking}
+          onClick={() => {
+            setContents(marking ? true : !contents);
+            setMarking(false);
+          }}
         />
         <IconButton
           icon="left"
@@ -200,6 +218,9 @@ export default function EPUBPreview(context: PreviewContext) {
           </button>
         )}
         <span className="toolbar-spacer" />
+        <button aria-pressed={marking} onClick={() => setMarking(!marking)}>
+          Bookmarks
+        </button>
         <button aria-pressed={finding} onClick={() => setFinding(!finding)}>
           Find in book
         </button>
@@ -263,18 +284,43 @@ export default function EPUBPreview(context: PreviewContext) {
         </section>
       )}
       <div className="epub-body">
-        {contents && (
-          <nav aria-label="EPUB contents">
-            {chapters.map((item, index) => (
-              <button
-                key={index}
-                aria-current={position === index ? 'page' : undefined}
-                onClick={() => setChapter(index)}
-              >
-                {item.title}
-              </button>
-            ))}
-          </nav>
+        {marking ? (
+          <EPUBBookmarks
+            bookmarks={bookmarks}
+            chapters={chapters}
+            current={() => ({
+              chapter: position,
+              path: chapters[position]?.path ?? '',
+              top: Math.max(0, Math.round(chapterRef.current?.scrollTop ?? 0)),
+              left: Math.max(0, Math.round(chapterRef.current?.scrollLeft ?? 0)),
+            })}
+            change={setBookmarks}
+            open={(bookmark) => {
+              const chapter = bookmark.path
+                ? chapters.findIndex((item) => item.path === bookmark.path)
+                : bookmark.chapter;
+              if (chapter < 0 || !chapters[chapter]) return;
+              saveReturn();
+              setMatch(undefined);
+              setNavigationError('');
+              setChapter(chapter);
+              setJump({ chapter, top: bookmark.top, left: bookmark.left });
+            }}
+          />
+        ) : (
+          contents && (
+            <nav aria-label="EPUB contents">
+              {chapters.map((item, index) => (
+                <button
+                  key={index}
+                  aria-current={position === index ? 'page' : undefined}
+                  onClick={() => setChapter(index)}
+                >
+                  {item.title}
+                </button>
+              ))}
+            </nav>
+          )
         )}
         <article
           ref={chapterRef}

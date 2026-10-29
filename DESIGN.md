@@ -342,9 +342,19 @@ controls remain visible in short views.
 addressing and explicit saved formula details. Keyboard sheet changes and page loading retain grid
 focus.
 
+**The Worksheet Range Rule.** Keep the virtualized source grid dominant. Use the shared selection
+fill for the range and a thin accent outline for the active cell while the grid has focus. Keep the
+source range, Copy and saved-value detail together in the existing wrapping detail row; show copy
+progress, cancellation and errors beside that work.
+
 **The Book Reading Rule.** Use authorized local illustrations and safe internal chapter and footnote
 links. Keep book search bounded and cancellable, label partial search, highlight the selected
 passage and preserve chapter and scroll position for Back after a link or result jump.
+
+**The Book Bookmark Rule.** Manage named positions in the existing reader sidebar with ordinary
+labeled fields and Add, Rename and Remove actions. Let names wrap, keep the reading content beside
+the sidebar at narrow desktop widths, and show unavailable chapters as disabled bookmarks with an
+explanation.
 
 Show source imagery in creative tools. Tie export, progress, optimization savings and output links
 to real jobs. Label camera previews, RAW renditions and video compatibility copies accurately.

@@ -234,6 +234,42 @@
 .epub-search li button strong {
   margin-right: 8px;
 }
+.epub-body .epub-bookmarks form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 0 12px;
+}
+.epub-bookmarks label {
+  width: 100%;
+}
+.epub-bookmarks input {
+  width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+}
+.epub-bookmarks ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.epub-bookmarks li {
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+}
+.epub-bookmarks li > button {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.epub-body .epub-bookmark-actions {
+  display: flex;
+  gap: 4px;
+}
+.epub-body .epub-bookmark-actions button {
+  width: auto;
+  font-size: 12px;
+  padding: 4px;
+}
 @media (max-width: 800px) {
   .epub-body nav {
     width: 150px;

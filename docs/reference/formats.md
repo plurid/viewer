@@ -13,7 +13,7 @@ thumbnail is different from full semantic inspection. See [platform status](plat
 | Extended images  | `.tif`, `.tiff`, `.heic`, `.heif`, `.psd`, `.jp2`, `.exr`, `.tga`, `.icns` | System-rendered bitmap; PSD coverage is its rendered composite.                                                                        |
 | Camera RAW       | `.dng`, `.cr2`, `.cr3`, `.nef`, `.arw`, `.raf`, `.orf`, `.rw2`             | Independent LibRaw camera image or half-size RAW rendition, up to 4096px. Exact camera/encoding coverage still requires qualification. |
 | PDF              | `.pdf`                                                                     | Pages, text-layer search/selection, thumbnails and outline navigation.                                                                 |
-| Books            | `.epub`                                                                    | Chapters, local illustrations, internal links/footnotes and book search.                                                               |
+| Books            | `.epub`                                                                    | Chapters, local illustrations, internal links/footnotes, book search and named bookmarks.                                              |
 | DjVu             | `.djvu`, `.djv`                                                            | Page rendering and text-layer search.                                                                                                  |
 | Word             | `.doc`, `.docx`                                                            | Local paginated layout; DOCX also has bounded Reading view.                                                                            |
 | Excel            | `.xls`, `.xlsx`                                                            | Local print layout with worksheet navigation; XLSX also has stored-value cell inspection.                                              |
@@ -50,6 +50,18 @@ available sanitized chapters, including text split by inline formatting. It show
 and identifies partial coverage. Loading illustrations releases their resources when the chapter or
 preview closes. Chapter, text size and supported scroll position remain in versioned preview
 history.
+
+Named bookmarks store a chapter path and horizontal/vertical scroll coordinates in the file's
+preview state within the workspace. Names are limited to 80 characters; a blank name uses the
+current chapter title. Up to 32 bookmarks share a 4096-byte saved marker budget, so long names and
+chapter paths can fill it sooner. The sidebar supports opening, renaming and removing markers.
+
+Bookmarks survive preview closure, reopen, app restart and changed source revisions. Transient
+reader coordinates still reset after a source change. A marker whose chapter path is unavailable
+stays visible and disabled with **Chapter unavailable**, rather than opening a guessed chapter.
+Saved coordinates are positions, not text anchors, so edited chapter content can move the passage.
+Adding or removing bookmarks does not change the original EPUB. See
+[saving a book position](../guides/previews.md#save-a-book-position) for the controls.
 
 ## Current text, code and configuration previews
 

@@ -604,12 +604,38 @@ button.markdown-link {
   flex: none;
   border-top: 1px solid var(--line);
   min-height: 34px;
+  flex-wrap: wrap;
+  align-items: center;
 }
-.workbook-cell-detail form {
+.workbook-copy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.workbook-copy-status {
+  order: 3;
+  margin: 0;
+  padding: 4px 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.data-scroll:focus [data-active-cell] {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.workbook-cell {
+  touch-action: none;
+}
+.data-viewer .workbook-cell-detail form {
   display: flex;
   align-items: center;
   gap: 4px;
   flex: none;
+  padding: 0;
+}
+.office-viewer .worksheet-navigation form {
+  padding: 0;
 }
 .workbook-cell-detail input {
   width: 84px;

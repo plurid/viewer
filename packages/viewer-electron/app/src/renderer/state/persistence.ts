@@ -8,7 +8,11 @@ import { previewValuesSchema, type JSONValue } from '../../domain/workspaces/pro
 import { activeWorkspace, getState, replaceState, report } from './core';
 import { flushPreferences } from './preferences';
 import { installPersistenceScheduler } from './persistence-request';
-import { boundPreviewHistory, rememberFileView } from '../../domain/previews/history';
+import {
+  boundPreviewHistory,
+  rememberFileView,
+  preservePreviewValue,
+} from '../../domain/previews/history';
 
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingEngineFlush = false;
@@ -167,7 +171,7 @@ export function savePreviewValue(
   const previous = previewValues(paneID, owner);
   const values = {
     ...(resetView
-      ? Object.fromEntries(Object.entries(previous).filter(([key]) => key.startsWith('notes.')))
+      ? Object.fromEntries(Object.entries(previous).filter(([key]) => preservePreviewValue(key)))
       : previous),
     [key]: value,
   };
